@@ -1,0 +1,136 @@
+---
+/**
+ * Book detail page (spec 2: Book Detail + PDF; SSR).
+ *
+ * Fetches a single book by slug for the active locale and renders its cover,
+ * title, author, and description. A 404 is returned when the slug matches no
+ * document (spec 2: Slug not found).
+ *
+ * PASS GATE (spec 3: premium-pass-access): the PDF section is server-gated on
+ * `getPassState(Astro.request)`, which verifies the signed `chu_pass` cookie
+ * (design decision #6). Behavior is fail-closed (decision #8):
+ *   - valid pass + PDF present -> real download link
+ *   - valid pass + no PDF      -> "no PDF available yet" message
+ *   - invalid pass (default)   -> locked-content placeholder (no leak)
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ThemeToggle from '@components/islands/ThemeToggle';
+import AdModal from '@components/islands/AdModal';
+import { isValidLang, type Lang } from '@lib/i18n';
+import { getBookBySlug } from '@lib/sanity';
+import { getPassState } from '@lib/pass';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const slug = Astro.params.slug;
+if (!slug) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const book = await getBookBySlug(slug, lang);
+
+// Slug not found -> 404 (spec 2: Slug not found).
+if (!book) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Resolve the premium pass from the signed cookie (spec 3, decision #6/#8).
+const passState = getPassState(Astro.request);
+const hasPass = passState === 'valid';
+const hasPdf = typeof book.pdfUrl === 'string' && book.pdfUrl.length > 0;
+
+const COPY = {
+  es: {
+    by: 'por',
+    locked: 'Contenido premium — mira un anuncio para desbloquear',
+    download: 'Descargar PDF',
+    noPdf: 'Este libro no tiene PDF disponible aún',
+    back: 'Volver a libros',
+  },
+  en: {
+    by: 'by',
+    locked: 'Premium content — watch an ad to unlock',
+    download: 'Download PDF',
+    noPdf: 'This book has no PDF available yet',
+    back: 'Back to books',
+  },
+} as const;
+
+const t = COPY[lang];
+---
+
+<BaseLayout lang={lang} title={book.title}>
+  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
+  <article class="flex flex-col gap-8 md:flex-row md:gap-10">
+    <div class="w-full max-w-xs shrink-0">
+      <div class="aspect-[3/4] overflow-hidden rounded-lg border border-base-muted bg-base-muted">
+        <img
+          src={book.coverUrl}
+          alt={`Portada de ${book.title}`}
+          class="h-full w-full object-cover"
+        />
+      </div>
+    </div>
+
+    <div class="flex flex-1 flex-col gap-4">
+      <h1 class="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
+        {book.title}
+      </h1>
+      <p class="text-lg text-zinc-400">{t.by} {book.author}</p>
+      <p class="leading-relaxed text-zinc-300">{book.description}</p>
+
+      {/* Pass-gated PDF section (spec 3). Fail-closed: default is locked. */}
+      {
+        hasPass && hasPdf ? (
+          <a
+            href={book.pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="mt-4 inline-flex w-fit items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-accent-hover"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              class="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 3a.75.75 0 0 1 .75.75v7.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V3.75A.75.75 0 0 1 10 3ZM3.5 14.25a.75.75 0 0 1 .75.75v.75c0 .414.336.75.75.75h10a.75.75 0 0 0 .75-.75V15a.75.75 0 0 1 1.5 0v.75A2.25 2.25 0 0 1 15 18H5a2.25 2.25 0 0 1-2.25-2.25V15a.75.75 0 0 1 .75-.75Z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            {t.download}
+          </a>
+        ) : hasPass && !hasPdf ? (
+          <div class="mt-4 rounded-lg border border-base-muted bg-base-muted/40 p-4 text-center text-sm font-medium text-zinc-400">
+            {t.noPdf}
+          </div>
+        ) : (
+          <>
+            {/* Fallback text stays visible behind the interactive modal. */}
+            <div class="mt-4 rounded-lg border border-dashed border-accent/50 bg-accent/5 p-4 text-center text-sm font-medium text-accent">
+              {t.locked}
+            </div>
+            {/* Rewarded-ads island (spec 4): watch an ad -> mint pass -> reload. */}
+            <AdModal client:load lang={lang} />
+          </>
+        )
+      }
+
+      <a
+        href={`/${lang}/libros`}
+        class="mt-2 text-sm font-semibold text-accent hover:text-accent-hover"
+      >
+        &larr; {t.back}
+      </a>
+    </div>
+  </article>
+</BaseLayout>

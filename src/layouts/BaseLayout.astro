@@ -1,0 +1,154 @@
+---
+/**
+ * BaseLayout — wraps every page (spec 7: BaseLayout requirement).
+ *
+ * Responsibilities:
+ *  - `<html lang>` driven by the `lang` prop (i18n, defaults to "es").
+ *  - Global Tailwind styles are injected by `@astrojs/tailwind`
+ *    (`applyBaseStyles: true` in astro.config.mjs), so no manual CSS import.
+ *  - A `<slot name="head">` for page-specific meta/title/link tags.
+ *  - A `<slot name="theme-toggle">` forwarded into the Header masthead so pages
+ *    can drop the ThemeToggle island there without importing Header directly.
+ *  - The default `<slot>` for body content, wrapped by Header + Footer.
+ *  - A no-flash inline script (design decision #9) that reads the persisted
+ *    theme from localStorage and applies the `dark` class BEFORE first paint.
+ *    This is ONLY the read + class application — the interactive ThemeToggle
+ *    island is delivered in the theme-system work unit (PR 4).
+ *  - SEO/social meta + a11y polish (design decision #7, PR 5): optional
+ *    `description` / `ogImage` props feed the meta description and Open Graph /
+ *    Twitter card tags; a skip-to-content link is the FIRST body element and
+ *    targets `<main id="content">`; the favicon is an inline SVG data-URI (no
+ *    binary asset).
+ *  - Scroll-reveal motion (design decision #6, PR 5): an inline module script
+ *    runs `initReveals()` on `DOMContentLoaded` and again after Astro View
+ *    Transitions swaps (`astro:after-swap`) so `.reveal` elements fade up.
+ */
+import Header from '@components/layout/Header.astro';
+import Footer from '@components/layout/Footer.astro';
+// Visual-identity styles (PR 2). `fonts.css` self-hosts Fraunces Variable
+// (font-display: swap baked into the @font-face blocks); `global.css` applies
+// the display-font heading rule, the Andean pattern mask, and the skip-link
+// helper. Astro bundles these once and injects them into every page's <head>.
+import '@styles/fonts.css';
+import '@styles/global.css';
+import { UI_LABELS, type Lang } from '@lib/i18n';
+
+interface Props {
+  /** Active locale for the `<html lang>` attribute. */
+  lang?: Lang;
+  /** Optional document title. */
+  title?: string;
+  /**
+   * Optional meta description for SEO / social cards (decision #7). Falls back
+   * to the localized site description when omitted.
+   */
+  description?: string;
+  /** Optional absolute/relative image URL for `og:image` + Twitter card. */
+  ogImage?: string;
+}
+
+const {
+  lang = 'es',
+  title = 'ChuyoCode',
+  description,
+  ogImage,
+} = Astro.props;
+
+// Localized fallback description keeps every page indexable even when a page
+// forgets to pass its own (decision #7: meta description always present).
+const metaDescription = description ?? UI_LABELS[lang].meta.siteDescription;
+
+// Canonical URL for og:url — resolved from the current request when available.
+const canonicalUrl = Astro.url?.href;
+
+// Inline SVG favicon (decision #7: no binary asset). A rounded terracotta tile
+// with a display-serif "C" mark. Encoded as a data-URI so it ships in the HTML.
+const faviconSvg =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23c1552e'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23fafafa'%3EC%3C/text%3E%3C/svg%3E";
+---
+
+<!doctype html>
+<html lang={lang} class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+
+    {/* SEO + social meta (decision #7). Description falls back to the localized
+        site description; OG/Twitter tags let shared links render rich cards. */}
+    <meta name="description" content={metaDescription} />
+    <link rel="icon" href={faviconSvg} type="image/svg+xml" />
+
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={metaDescription} />
+    <meta property="og:type" content="website" />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    {ogImage && <meta property="og:image" content={ogImage} />}
+
+    <meta
+      name="twitter:card"
+      content={ogImage ? 'summary_large_image' : 'summary'}
+    />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={metaDescription} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+    {/* No-flash theme script: runs before paint so dark users never see a
+        light flash on load (spec 6: no-flash). The interactive toggle that
+        writes this value ships in PR 4. */}
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var prefersDark =
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (stored === 'dark' || (!stored && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {
+          /* localStorage may be unavailable (private mode); default to light. */
+        }
+      })();
+    </script>
+    <slot name="head" />
+  </head>
+  <body
+    class="min-h-screen bg-base text-zinc-100 antialiased transition-theme duration-theme dark:bg-base"
+  >
+    {/* Skip-to-content link — FIRST focusable body element (decision #7 / a11y).
+        Off-screen until focused (`.skip-link` in global.css), then jumps keyboard
+        and screen-reader users straight to <main id="content">. */}
+    <a href="#content" class="skip-link">
+      {lang === 'en' ? 'Skip to content' : 'Saltar al contenido'}
+    </a>
+    <Header lang={lang}>
+      {/* Forward the page's theme-toggle island into the Header slot so the
+          toggle lives in the masthead without pages reaching into Header. */}
+      <slot name="theme-toggle" slot="theme-toggle" />
+    </Header>
+    <main id="content" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+      <slot />
+    </main>
+    <Footer lang={lang} />
+
+    {/* Scroll-reveal init (decision #6). A module script so we can import
+        `initReveals`; runs on first load and again after every Astro View
+        Transitions swap so `.reveal` elements on the incoming page animate. */}
+    <script>
+      import { initReveals } from '@lib/reveal';
+
+      const run = () => initReveals();
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once: true });
+      } else {
+        run();
+      }
+
+      // Re-run after client-side navigations (View Transitions safety).
+      document.addEventListener('astro:after-swap', run);
+    </script>
+  </body>
+</html>

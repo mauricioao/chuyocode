@@ -1,0 +1,50 @@
+---
+/**
+ * Localized 404 page (spec 5: invalid lang / slug not found).
+ *
+ * Shown for unmatched routes and invalid lang segments. Because a 404 can fire
+ * on a non-localized URL (where middleware never set `locals.lang`), the
+ * language is resolved defensively: prefer a valid `[lang]` URL segment, then
+ * the request's `Accept-Language`, then the default (es).
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import Button from '@components/ui/Button.astro';
+import ThemeToggle from '@components/islands/ThemeToggle';
+import { isValidLang, resolveLang, type Lang } from '@lib/i18n';
+
+const segment = Astro.url.pathname.split('/')[1] ?? '';
+const lang: Lang = isValidLang(segment)
+  ? segment
+  : resolveLang(Astro.request.headers.get('accept-language'));
+
+const COPY = {
+  es: {
+    title: 'Página no encontrada',
+    body: 'La página que buscás no existe o fue movida.',
+    home: 'Volver al inicio',
+  },
+  en: {
+    title: 'Page not found',
+    body: 'The page you are looking for does not exist or was moved.',
+    home: 'Back to home',
+  },
+} as const;
+
+const t = COPY[lang];
+---
+
+<BaseLayout lang={lang} title={`404 — ${t.title}`}>
+  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
+  <section
+    class="flex flex-col items-center gap-6 py-16 text-center sm:py-24"
+  >
+    <p class="text-6xl font-bold text-accent">404</p>
+    <h1 class="text-2xl font-semibold text-zinc-100 sm:text-3xl">
+      {t.title}
+    </h1>
+    <p class="max-w-md text-zinc-400">{t.body}</p>
+    <Button variant="secondary" href={`/${lang}/`}>
+      {t.home}
+    </Button>
+  </section>
+</BaseLayout>

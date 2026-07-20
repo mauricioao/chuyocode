@@ -1,0 +1,14 @@
+---
+/**
+ * Root redirect (spec 5: root redirect).
+ *
+ * `/` -> `/es/` (302). The middleware also handles this, but a real root route
+ * is required by Astro's `i18n.routing.prefixDefaultLocale: true` config so the
+ * default locale is never served unprefixed. This page satisfies that
+ * requirement and keeps the redirect working even if middleware ordering
+ * changes.
+ */
+import { DEFAULT_LANG } from '@lib/i18n';
+
+return Astro.redirect(`/${DEFAULT_LANG}/`, 302);
+---

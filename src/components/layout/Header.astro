@@ -1,0 +1,148 @@
+---
+/**
+ * Header — site masthead (spec 7: Header requirement).
+ *
+ * Renders:
+ *  - The "ChuyoCode" logo text, linked to the localized home (`/{lang}/`).
+ *  - Primary, localized nav links (Inicio, Libros, Noticias).
+ *  - A disabled "English" nav slot (design decision #9): a non-interactive
+ *    `<span>` with a "Pronto/Soon" badge, rendered after News in both the
+ *    desktop and mobile menus. It advertises the future independent English
+ *    section without navigating anywhere — `aria-disabled`, `tabindex="-1"`,
+ *    no `href`, so it is zero-JS correct and unreachable by keyboard/tab.
+ *  - A `<slot name="theme-toggle">` placeholder for the ThemeToggle island,
+ *    filled in the theme-system work unit (PR 4).
+ *  - A mobile hamburger button (structure + JS toggle stub only).
+ *
+ * i18n note: nav labels come from the shared `src/lib/i18n.ts` (`UI_LABELS`),
+ * the single source of truth for localized chrome. The previous inline
+ * NAV_LABELS map was removed once i18n.ts landed (Phase 3).
+ */
+import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = DEFAULT_LANG } = Astro.props;
+
+const labels = UI_LABELS[lang].nav;
+const base = `/${lang}`;
+
+const navLinks = [
+  { href: `${base}/`, label: labels.home },
+  { href: `${base}/libros`, label: labels.books },
+  { href: `${base}/noticias`, label: labels.news },
+];
+
+// Disabled English slot (design decision #9): advertises the future English
+// section. Non-interactive by construction — no href, aria-disabled, removed
+// from the tab order. Shared shape reused by desktop + mobile menus below.
+const englishNav = { label: labels.english, badge: labels.soon };
+---
+
+<header
+  class="sticky top-0 z-40 border-b border-base-muted bg-base/95 backdrop-blur transition-theme duration-theme"
+>
+  <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
+    <a
+      href={`${base}/`}
+      class="text-xl font-bold tracking-tight text-accent hover:text-accent-hover"
+    >
+      ChuyoCode
+    </a>
+
+    <nav class="hidden items-center gap-6 md:flex" aria-label="Primary">
+      {
+        navLinks.map((link) => (
+          <a
+            href={link.href}
+            class="text-sm font-medium text-zinc-300 transition-theme duration-theme hover:text-accent"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      <span
+        aria-disabled="true"
+        tabindex="-1"
+        class="inline-flex cursor-not-allowed select-none items-center gap-2 rounded-full border border-dashed border-amaranto/50 px-3 py-1 text-sm font-medium text-zinc-500 opacity-70"
+      >
+        {englishNav.label}
+        <span
+          class="rounded-full bg-amaranto-soft/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amaranto"
+        >
+          {englishNav.badge}
+        </span>
+      </span>
+      <slot name="theme-toggle" />
+    </nav>
+
+    {/* Mobile: hamburger button + JS toggle stub. The toggle just flips the
+        `hidden` class on the mobile menu; no framework, no island. */}
+    <button
+      type="button"
+      id="mobile-menu-button"
+      class="inline-flex items-center justify-center rounded-md p-2 text-zinc-300 hover:text-accent md:hidden"
+      aria-label="Toggle navigation menu"
+      aria-controls="mobile-menu"
+      aria-expanded="false"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-6 w-6"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  </div>
+
+  <nav
+    id="mobile-menu"
+    class="hidden flex-col gap-2 border-t border-base-muted px-4 py-3 md:hidden"
+    aria-label="Mobile"
+  >
+    {
+      navLinks.map((link) => (
+        <a
+          href={link.href}
+          class="py-1 text-sm font-medium text-zinc-300 hover:text-accent"
+        >
+          {link.label}
+        </a>
+      ))
+    }
+    <span
+      aria-disabled="true"
+      tabindex="-1"
+      class="inline-flex w-fit cursor-not-allowed select-none items-center gap-2 rounded-full border border-dashed border-amaranto/50 px-3 py-1 text-sm font-medium text-zinc-500 opacity-70"
+    >
+      {englishNav.label}
+      <span
+        class="rounded-full bg-amaranto-soft/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amaranto"
+      >
+        {englishNav.badge}
+      </span>
+    </span>
+    <div class="pt-2">
+      <slot name="theme-toggle" />
+    </div>
+  </nav>
+</header>
+
+<script is:inline>
+  // Hamburger toggle stub: flips the mobile menu visibility + aria-expanded.
+  (function () {
+    var btn = document.getElementById('mobile-menu-button');
+    var menu = document.getElementById('mobile-menu');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', function () {
+      var open = menu.classList.toggle('hidden') === false;
+      btn.setAttribute('aria-expanded', String(open));
+    });
+  })();
+</script>

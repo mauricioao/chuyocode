@@ -1,0 +1,54 @@
+---
+/**
+ * Footer — site footer (spec 7: Footer requirement).
+ *
+ * Renders the copyright line and secondary links (Términos, Privacidad).
+ * Simple zinc-900 background surface.
+ *
+ * The secondary links point at the single localized legal route
+ * `/[lang]/legal/[page]` (design decision #9). They previously targeted
+ * `/[lang]/terminos` and `/[lang]/privacidad`, which had no backing page and
+ * 404'd; they now resolve to real `terms` / `privacy` documents.
+ *
+ * i18n note: secondary link labels come from the shared `src/lib/i18n.ts`
+ * (`UI_LABELS`). The previous inline FOOTER_LABELS map was removed once
+ * i18n.ts landed (Phase 3).
+ */
+import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = DEFAULT_LANG } = Astro.props;
+
+const labels = UI_LABELS[lang].footer;
+const base = `/${lang}`;
+
+const secondaryLinks = [
+  { href: `${base}/legal/terms`, label: labels.terms },
+  { href: `${base}/legal/privacy`, label: labels.privacy },
+];
+---
+
+<footer
+  class="border-t border-base-muted bg-base-soft transition-theme duration-theme"
+>
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row"
+  >
+    <p class="text-sm text-zinc-400">&copy; 2026 ChuyoCode</p>
+    <nav class="flex items-center gap-6" aria-label="Secondary">
+      {
+        secondaryLinks.map((link) => (
+          <a
+            href={link.href}
+            class="text-sm text-zinc-400 transition-theme duration-theme hover:text-accent"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+</footer>

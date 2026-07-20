@@ -1,0 +1,34 @@
+---
+/**
+ * AndeanPattern — decorative geometric texture overlay (design decision #3).
+ *
+ * Renders a token-driven, chakana-inspired stepped-diamond pattern tiled via
+ * the `.andean-pattern` mask defined in `src/styles/global.css`. The pattern
+ * ink follows `currentColor`, so callers set the color with a text-color
+ * utility (e.g. `class="text-terracotta"`) — the SVG mask shows that color at
+ * 4% opacity.
+ *
+ * Purely decorative: `aria-hidden="true"` keeps it out of the accessibility
+ * tree and `pointer-events-none` guarantees it never intercepts clicks. It is
+ * absolutely positioned to fill its positioned ancestor (hero bg, footer band,
+ * section dividers) without affecting layout.
+ *
+ * API: <AndeanPattern class="..." /> — extra classes (position container hooks,
+ * text-color token, etc.) merge onto the wrapper.
+ */
+interface Props {
+  /** Extra classes merged onto the pattern wrapper (e.g. a color token). */
+  class?: string;
+}
+
+const { class: className = '' } = Astro.props;
+---
+
+<div
+  aria-hidden="true"
+  class:list={[
+    'andean-pattern pointer-events-none absolute inset-0',
+    className,
+  ]}
+>
+</div>

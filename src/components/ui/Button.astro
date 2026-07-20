@@ -1,0 +1,46 @@
+---
+/**
+ * Button — primary / secondary variants (spec 7: UI Components).
+ *
+ * Renders as an `<a>` when `href` is provided, otherwise a `<button>`.
+ * Styling is Tailwind-only (no inline styles):
+ *  - primary:   orange-600 background, white text, hover orange-700.
+ *  - secondary: transparent background, orange-600 border, hover fill change.
+ *
+ * Any extra HTML attributes (type, aria-*, data-*, etc.) pass through to the
+ * rendered element via `...rest`.
+ */
+interface Props {
+  variant?: 'primary' | 'secondary';
+  href?: string;
+  class?: string;
+  [key: string]: unknown;
+}
+
+const { variant = 'primary', href, class: className, ...rest } = Astro.props;
+
+const baseClasses =
+  'inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-theme duration-theme focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-60';
+
+const variantClasses = {
+  primary: 'bg-orange-600 text-white hover:bg-orange-700',
+  secondary:
+    'border border-orange-600 bg-transparent text-orange-600 hover:bg-orange-600 hover:text-white',
+} as const;
+
+const classes = [baseClasses, variantClasses[variant], className]
+  .filter(Boolean)
+  .join(' ');
+---
+
+{
+  href ? (
+    <a href={href} class={classes} {...rest}>
+      <slot />
+    </a>
+  ) : (
+    <button class={classes} {...rest}>
+      <slot />
+    </button>
+  )
+}

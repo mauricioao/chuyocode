@@ -1,0 +1,63 @@
+---
+/**
+ * Books catalog page (spec 2: Books Catalog; spec 5: localized routing).
+ *
+ * SSR-renders a grid of BookCard components from Sanity for the active locale.
+ * Handles the empty catalog gracefully (spec 2: Empty catalog — localized
+ * message, no broken layout). The ThemeToggle island is forwarded into the
+ * Header masthead via BaseLayout's `theme-toggle` slot.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import BookCard from '@components/ui/BookCard.astro';
+import ThemeToggle from '@components/islands/ThemeToggle';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getBooks } from '@lib/sanity';
+
+// Prefer the middleware-validated lang; fall back to the route param and 404
+// if neither is a supported language (defensive — middleware normally sets it).
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const COPY = {
+  es: { title: 'Libros', empty: 'No hay libros disponibles' },
+  en: { title: 'Books', empty: 'No books available' },
+} as const;
+
+const t = COPY[lang];
+const books = await getBooks(lang);
+---
+
+<BaseLayout
+  lang={lang}
+  title={t.title}
+  description={UI_LABELS[lang].meta.booksDescription}
+>
+  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
+  <section class="reveal flex flex-col gap-8">
+    <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+      {t.title}
+    </h1>
+
+    {
+      books.length === 0 ? (
+        <p class="py-16 text-center text-lg text-zinc-400">{t.empty}</p>
+      ) : (
+        <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+          {books.map((book) => (
+            <BookCard
+              title={book.title}
+              coverUrl={book.coverUrl}
+              author={book.author}
+              href={`/${lang}/libros/${book.slug}`}
+            />
+          ))}
+        </div>
+      )
+    }
+  </section>
+</BaseLayout>

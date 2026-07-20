@@ -1,0 +1,227 @@
+---
+/**
+ * Streaming home (design decisions #3, #4; spec 5: Valid lang prefix).
+ *
+ * Replaces the placeholder hero with a "streaming" layout composed of a
+ * storytelling hero and stacked ContentRows:
+ *   1. Hero — localized headline/subline, primary CTA (/libros) + secondary
+ *      CTA (/noticias), AndeanPattern as a subtle background, placeholder art.
+ *   2. Featured books row  — getFeaturedBooks() → BookCard.
+ *   3. Latest articles row — getLatestArticles() → NewsCard.
+ *   4. Courses teaser row  — STATIC "coming soon" card (no Sanity yet).
+ *   5. English teaser      — STATIC, disabled home teaser (English is an
+ *      independent section; this only advertises it, links nowhere).
+ *
+ * Sanity-backed rows degrade gracefully: an empty result hides that row so the
+ * page never shows an empty scroller (spec: graceful empty content).
+ *
+ * All copy is localized via `UI_LABELS[lang]` (spec 5: no hardcoded UI strings).
+ * ThemeToggle is forwarded into the Header masthead via BaseLayout's slot.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import Button from '@components/ui/Button.astro';
+import ContentRow from '@components/ui/ContentRow.astro';
+import BookCard from '@components/ui/BookCard.astro';
+import NewsCard from '@components/ui/NewsCard.astro';
+import AndeanPattern from '@components/ui/AndeanPattern.astro';
+import ThemeToggle from '@components/islands/ThemeToggle';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getFeaturedBooks, getLatestArticles } from '@lib/sanity';
+
+// The middleware validates and injects `locals.lang`; fall back to the route
+// param for safety, and 404 if somehow neither is a supported language.
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].home;
+const coursesT = UI_LABELS[lang].courses.teaser;
+const englishT = UI_LABELS[lang].english.teaser;
+const description = UI_LABELS[lang].meta.siteDescription;
+
+// SSR-fetch featured books + latest articles. Both helpers are fail-safe
+// (return [] on error), so empty results simply hide their row.
+const [featuredBooks, latestArticles] = await Promise.all([
+  getFeaturedBooks(lang, 8),
+  getLatestArticles(6, lang),
+]);
+
+/** Format an ISO timestamp for display in the active locale. */
+function formatDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+---
+
+<BaseLayout lang={lang} title="ChuyoCode" description={description}>
+  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
+
+  <div class="flex flex-col gap-16 py-8 sm:gap-20 sm:py-12">
+    {/* --- Hero (storytelling, decision #3 background) ------------------- */}
+    <section
+      class="reveal relative overflow-hidden rounded-2xl border border-base-muted bg-base-soft"
+    >
+      <AndeanPattern class="text-terracotta" />
+      <div
+        class="relative grid items-center gap-8 p-8 sm:p-12 lg:grid-cols-2 lg:gap-12"
+      >
+        <div class="flex flex-col gap-6">
+          <h1
+            class="font-display text-4xl font-bold tracking-tight text-zinc-100 sm:text-5xl lg:text-6xl"
+          >
+            {t.hero.headline}
+          </h1>
+          <p class="max-w-xl text-lg text-zinc-300 sm:text-xl">
+            {t.hero.subline}
+          </p>
+          <div class="flex flex-wrap gap-4">
+            <Button variant="primary" href={`/${lang}/libros`}>
+              {t.hero.primaryCta}
+            </Button>
+            <Button variant="secondary" href={`/${lang}/noticias`}>
+              {t.hero.secondaryCta}
+            </Button>
+          </div>
+        </div>
+        <div
+          class="aspect-[4/3] w-full overflow-hidden rounded-xl border border-base-muted bg-base-muted"
+        >
+          <img
+            src="/assets/placeholder-hero.jpg"
+            alt={t.hero.imageAlt}
+            loading="eager"
+            class="h-full w-full object-cover"
+          />
+        </div>
+      </div>
+    </section>
+
+    {/* --- Featured books (Sanity → hide when empty) -------------------- */}
+    {
+      featuredBooks.length > 0 && (
+        <div class="reveal" style="--reveal-delay:80ms">
+          <ContentRow
+            title={t.rows.featuredBooks}
+            href={`/${lang}/libros`}
+            lang={lang}
+          >
+            {featuredBooks.map((book) => (
+              <div class="w-40 shrink-0 snap-start sm:w-48">
+                <BookCard
+                  title={book.title}
+                  coverUrl={book.coverUrl}
+                  author={book.author}
+                  href={`/${lang}/libros/${book.slug}`}
+                />
+              </div>
+            ))}
+          </ContentRow>
+        </div>
+      )
+    }
+
+    {/* --- Latest articles (Sanity → hide when empty) ------------------- */}
+    {
+      latestArticles.length > 0 && (
+        <div class="reveal" style="--reveal-delay:120ms">
+          <ContentRow
+            title={t.rows.latestArticles}
+            href={`/${lang}/noticias`}
+            lang={lang}
+          >
+            {latestArticles.map((article) => (
+              <div class="w-72 shrink-0 snap-start sm:w-80">
+                <NewsCard
+                  title={article.title}
+                  excerpt={article.excerpt}
+                  date={formatDate(article.publishedAt)}
+                  href={`/${lang}/noticias/articulo/${article.slug}`}
+                  lang={lang}
+                />
+              </div>
+            ))}
+          </ContentRow>
+        </div>
+      )
+    }
+
+    {/* --- Courses teaser (STATIC — no Sanity yet) ---------------------- */}
+    <div class="reveal" style="--reveal-delay:160ms">
+      <ContentRow title={t.rows.courses}>
+        <article
+          class="flex w-72 shrink-0 snap-start flex-col overflow-hidden rounded-lg border border-base-muted bg-base-soft sm:w-80"
+        >
+          <div class="aspect-[16/9] w-full overflow-hidden bg-base-muted">
+            <img
+              src="/assets/placeholder-cursos.jpg"
+              alt={coursesT.imageAlt}
+              loading="lazy"
+              class="h-full w-full object-cover"
+            />
+          </div>
+          <div class="flex flex-col gap-2 p-5">
+            <span
+              class="w-fit rounded-full bg-ocre-soft/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-ocre"
+            >
+              {coursesT.badge}
+            </span>
+            <h3 class="font-display text-lg font-semibold text-zinc-100">
+              {coursesT.title}
+            </h3>
+            <p class="text-sm text-zinc-400">{coursesT.description}</p>
+          </div>
+        </article>
+      </ContentRow>
+    </div>
+
+    {/* --- English teaser (STATIC, disabled — independent section) ------ */}
+    <section class="reveal" aria-labelledby="english-teaser-title">
+      <div
+        class="flex flex-col gap-6 overflow-hidden rounded-2xl border border-base-muted bg-base-soft p-8 sm:flex-row sm:items-center sm:p-10"
+      >
+        <div
+          class="aspect-[4/3] w-full shrink-0 overflow-hidden rounded-xl border border-base-muted bg-base-muted sm:w-64"
+        >
+          <img
+            src="/assets/placeholder-english.jpg"
+            alt={englishT.imageAlt}
+            loading="lazy"
+            class="h-full w-full object-cover"
+          />
+        </div>
+        <div class="flex flex-col gap-3">
+          <span
+            class="w-fit rounded-full bg-amaranto-soft/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amaranto"
+          >
+            {englishT.badge}
+          </span>
+          <h2
+            id="english-teaser-title"
+            class="font-display text-2xl font-semibold text-zinc-100 sm:text-3xl"
+          >
+            {englishT.title}
+          </h2>
+          <p class="max-w-2xl text-base text-zinc-300">
+            {englishT.description}
+          </p>
+          <span
+            aria-disabled="true"
+            class="w-fit cursor-not-allowed rounded-md border border-base-muted px-4 py-2 text-sm font-semibold text-zinc-500"
+          >
+            {coursesT.badge}
+          </span>
+        </div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>

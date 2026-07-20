@@ -1,0 +1,130 @@
+---
+/**
+ * Paginated news (spec 2: News Pagination; SSR).
+ *
+ * Rest route `[...page]` matches both `/[lang]/noticias` and
+ * `/[lang]/noticias/N`. Renders a list of NewsCard components, page size 10,
+ * with prev/next navigation. Edge cases (spec 2):
+ *  - Page 1 has no "prev" link.
+ *  - The last page has no "next" link.
+ *  - A page beyond the last page (or a non-numeric segment) -> 404.
+ *
+ * ThemeToggle is forwarded into the Header masthead via BaseLayout's slot.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import NewsCard from '@components/ui/NewsCard.astro';
+import ThemeToggle from '@components/islands/ThemeToggle';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getNews } from '@lib/sanity';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// `[...page]` yields undefined for `/noticias`, or the trailing segment(s)
+// for `/noticias/N`. Only a bare positive integer is a valid page; anything
+// else (e.g. `abc`, `1/2`) is a 404.
+const rawPage = Astro.params.page;
+let page = 1;
+if (rawPage !== undefined && rawPage !== '') {
+  if (!/^\d+$/.test(rawPage)) {
+    return new Response(null, { status: 404, statusText: 'Not Found' });
+  }
+  page = Number.parseInt(rawPage, 10);
+  if (page < 1) {
+    return new Response(null, { status: 404, statusText: 'Not Found' });
+  }
+}
+
+const result = await getNews(page, lang);
+
+// Beyond the last page -> 404 (spec 2: Beyond last page). Page 1 is always
+// valid even with zero articles so the empty state can render.
+if (page > 1 && page > result.pageCount) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const hasPrev = page > 1;
+const hasNext = page < result.pageCount;
+
+const COPY = {
+  es: { title: 'Noticias', empty: 'No hay noticias disponibles', prev: 'Anterior', next: 'Siguiente' },
+  en: { title: 'News', empty: 'No news available', prev: 'Previous', next: 'Next' },
+} as const;
+
+const t = COPY[lang];
+
+/** Format an ISO timestamp for display in the active locale. */
+function formatDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+---
+
+<BaseLayout
+  lang={lang}
+  title={t.title}
+  description={UI_LABELS[lang].meta.newsDescription}
+>
+  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
+  <section class="reveal flex flex-col gap-8">
+    <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+      {t.title}
+    </h1>
+
+    {
+      result.articles.length === 0 ? (
+        <p class="py-16 text-center text-lg text-zinc-400">{t.empty}</p>
+      ) : (
+        <div class="flex flex-col gap-5">
+          {result.articles.map((article) => (
+            <NewsCard
+              title={article.title}
+              excerpt={article.excerpt}
+              date={formatDate(article.publishedAt)}
+              href={`/${lang}/noticias/articulo/${article.slug}`}
+              lang={lang}
+            />
+          ))}
+        </div>
+      )
+    }
+
+    {
+      (hasPrev || hasNext) && (
+        <nav class="flex items-center justify-between border-t border-base-muted pt-6">
+          {hasPrev ? (
+            <a
+              href={`/${lang}/noticias/${page - 1}`}
+              class="text-sm font-semibold text-accent hover:text-accent-hover"
+            >
+              &larr; {t.prev}
+            </a>
+          ) : (
+            <span />
+          )}
+          {hasNext ? (
+            <a
+              href={`/${lang}/noticias/${page + 1}`}
+              class="text-sm font-semibold text-accent hover:text-accent-hover"
+            >
+              {t.next} &rarr;
+            </a>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )
+    }
+  </section>
+</BaseLayout>

@@ -1,0 +1,17 @@
+/**
+ * Fonts — self-hosted Fraunces Variable (design decision #1).
+ *
+ * Google Fonts CDN is banned (render-blocking), so Fraunces is bundled via
+ * `@fontsource-variable/fraunces`. Fontsource emits multiple `@font-face`
+ * blocks split by `unicode-range` and each carries `font-display: swap`, so
+ * text renders immediately in the fallback (Georgia/serif) and swaps to
+ * Fraunces once the variable file loads — no invisible-text flash.
+ *
+ * `index.css` exposes the weight (`wght`) axis, which is all the display
+ * headings need. It maps to the CSS family name "Fraunces Variable", wired
+ * into Tailwind as `fontFamily.display` (tailwind.config.cjs).
+ *
+ * The body keeps the system-sans stack (no extra web-font weight) per the
+ * font-loading decision.
+ */
+@import '@fontsource-variable/fraunces/index.css';

@@ -1,0 +1,76 @@
+---
+/**
+ * ContentRow — generic horizontal scroll-snap row (design decision #4).
+ *
+ * A streaming-style row: an optional heading with a "view all" link, and a
+ * CSS-only horizontal scroller for its items. The default slot receives the
+ * caller's cards (BookCard, NewsCard, teaser cards, …) so the row stays shape-
+ * agnostic — it never couples to a specific card type the way Carousel.astro
+ * did (decision #4: replace Carousel with a generic row).
+ *
+ * The track is pure CSS scroll-snap: `overflow-x-auto snap-x` on the track and
+ * `snap-start` on each direct child (callers add `snap-start shrink-0` to the
+ * wrapper they slot in). No JavaScript, no client island — it is fully
+ * server-rendered and degrades gracefully. Arrow buttons are intentionally
+ * deferred (decision #4: "No arrow buttons v1"); mouse/trackpad/touch scroll
+ * plus keyboard focus scrolling cover navigation.
+ *
+ * The scrollbar is hidden for a cleaner streaming aesthetic via the
+ * `.contentrow-track` rule below (cross-browser: WebKit + Firefox + IE/Edge),
+ * while scrolling itself stays fully functional and accessible.
+ *
+ * API:
+ *   <ContentRow title="Featured" href="/es/libros">
+ *     <div class="snap-start shrink-0 w-40">…card…</div>
+ *   </ContentRow>
+ */
+import { UI_LABELS, type Lang } from '@lib/i18n';
+
+interface Props {
+  /** Row heading rendered above the track. */
+  title: string;
+  /** Optional "view all" destination; renders a trailing link when present. */
+  href?: string;
+  /** Locale for the "view all" label; omit to skip the label entirely. */
+  lang?: Lang;
+}
+
+const { title, href, lang } = Astro.props;
+const viewAll = lang ? UI_LABELS[lang].home.rows.viewAll : undefined;
+---
+
+<section class="flex flex-col gap-4">
+  <div class="flex items-baseline justify-between gap-4">
+    <h2 class="font-display text-2xl font-semibold text-zinc-100 sm:text-3xl">
+      {title}
+    </h2>
+    {
+      href && viewAll && (
+        <a
+          href={href}
+          class="shrink-0 text-sm font-semibold text-terracotta transition-theme duration-theme hover:text-terracotta-hover"
+        >
+          {viewAll} &rarr;
+        </a>
+      )
+    }
+  </div>
+  <div
+    class="contentrow-track flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2"
+  >
+    <slot />
+  </div>
+</section>
+
+<style>
+  /* Hide the scrollbar while keeping scroll fully functional (decision #4:
+   * clean streaming aesthetic). Cross-browser: Firefox + IE/Edge legacy +
+   * WebKit/Blink. Scoped to the track so it never affects the whole page. */
+  .contentrow-track {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE / legacy Edge */
+  }
+  .contentrow-track::-webkit-scrollbar {
+    display: none; /* Chrome / Safari / Edge */
+  }
+</style>

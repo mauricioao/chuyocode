@@ -1,0 +1,55 @@
+---
+/**
+ * Carousel — horizontal scrollable row of BookCards (spec 7: UI Components).
+ *
+ * @deprecated Use `ContentRow.astro` instead (design decision #4). `ContentRow`
+ * is card-shape agnostic (default slot vs. this component's hard-coded BookCard
+ * mapping) and localizes its "view all" link. This file is intentionally kept —
+ * not deleted — to avoid breaking any lingering imports; do NOT add new
+ * consumers. New streaming rows MUST compose `ContentRow`.
+ *
+ * Props:
+ *  - items: the books to render, each mapped to a <BookCard>.
+ *
+ * Named slot `title` renders the carousel heading above the track. The track
+ * itself is a CSS overflow-x scroller — no JS, no island — so it degrades
+ * gracefully and stays server-rendered. `author` is optional per item; it
+ * falls back to an empty string for the BookCard prop contract.
+ */
+import BookCard from './BookCard.astro';
+
+interface CarouselItem {
+  title: string;
+  coverUrl: string;
+  author?: string;
+  href: string;
+}
+
+interface Props {
+  items: CarouselItem[];
+}
+
+const { items } = Astro.props;
+---
+
+<section class="flex flex-col gap-4">
+  <div class="flex items-center justify-between">
+    <slot name="title" />
+  </div>
+  <div
+    class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:thin]"
+  >
+    {
+      items.map((item) => (
+        <div class="w-40 shrink-0 snap-start sm:w-48">
+          <BookCard
+            title={item.title}
+            coverUrl={item.coverUrl}
+            author={item.author ?? ''}
+            href={item.href}
+          />
+        </div>
+      ))
+    }
+  </div>
+</section>

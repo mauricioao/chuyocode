@@ -1,0 +1,43 @@
+---
+/**
+ * NewsCard — news article card (spec 7: UI Components).
+ *
+ * Displays the article title, publish date, excerpt, and a "read more" link
+ * to `href`. Tailwind-only styling, typed props, no inline styles.
+ *
+ * The `date` prop is the display string; formatting/localization of the raw
+ * timestamp is the caller's responsibility (news pagination work unit). The
+ * "read more" label is localized via `UI_LABELS[lang].news.readMore` — no
+ * hardcoded UI strings (spec 5: UI Labels).
+ */
+import { UI_LABELS, type Lang } from '@lib/i18n';
+
+interface Props {
+  title: string;
+  excerpt: string;
+  date: string;
+  href: string;
+  lang: Lang;
+}
+
+const { title, excerpt, date, href, lang } = Astro.props;
+const readMore = UI_LABELS[lang].news.readMore;
+---
+
+<article
+  class="flex flex-col gap-3 rounded-lg border border-base-muted bg-base-soft p-5 transition-theme duration-theme hover:border-accent"
+>
+  <time class="text-xs font-medium uppercase tracking-wide text-zinc-500">
+    {date}
+  </time>
+  <h3 class="text-lg font-semibold text-zinc-100">
+    <a href={href} class="hover:text-accent">{title}</a>
+  </h3>
+  <p class="line-clamp-3 text-sm text-zinc-400">{excerpt}</p>
+  <a
+    href={href}
+    class="mt-auto text-sm font-semibold text-accent hover:text-accent-hover"
+  >
+    {readMore} &rarr;
+  </a>
+</article>

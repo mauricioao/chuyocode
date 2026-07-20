@@ -1,0 +1,103 @@
+/**
+ * Global CSS — cross-cutting styles that sit on top of Tailwind's base layer
+ * (`@astrojs/tailwind` injects Tailwind; this file is imported after it in
+ * BaseLayout). Scope for PR 2 (visual-identity):
+ *
+ *   1. Display font rule for headings (design decision #1 + #4).
+ *   2. `.andean-pattern` decorative tiled SVG (design decision #3).
+ *   3. `.skip-link` visually-hidden-until-focus helper for the skip-to-content
+ *      link (design decision #7).
+ *   4. `.reveal` / `.revealed` scroll-reveal motion (design decision #6).
+ */
+
+/* --- Display headings (decision #4) -------------------------------------- *
+ * h1–h3 use the Fraunces display face globally so every page (home, libros,
+ * noticias, 404) inherits it without per-file class churn. `font-display:
+ * swap` lives in the @font-face blocks (fonts.css); the serif fallback keeps
+ * headings readable before the variable file loads. */
+h1,
+h2,
+h3 {
+  font-family:
+    'Fraunces Variable',
+    Georgia,
+    'Times New Roman',
+    serif;
+}
+
+/* --- Andean decorative pattern (decision #3) ----------------------------- *
+ * A stepped-diamond (chakana-inspired) geometric motif, tiled as a 64×64
+ * data-URI SVG. The SVG is applied as a CSS `mask` (not a background-image)
+ * so `background-color: currentColor` shows through it — that makes the
+ * pattern TOKEN-DRIVEN: whatever accent/terracotta/ocre text color the
+ * wrapping element carries becomes the ink of the tiles (decision #3:
+ * "token-driven colors, currentColor stroke"). A data-URI background-image
+ * cannot inherit currentColor, so the mask approach is what actually honors
+ * the contract. Opacity is capped at 4% so it reads as texture, never
+ * content — the component sets aria-hidden and pointer-events:none. */
+.andean-pattern {
+  background-color: currentColor;
+  opacity: 0.04;
+  --andean-tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M32 4 L44 16 L32 28 L20 16 Z'/%3E%3Cpath d='M32 36 L44 48 L32 60 L20 48 Z'/%3E%3Cpath d='M4 24 L12 32 L4 40'/%3E%3Cpath d='M60 24 L52 32 L60 40'/%3E%3Cpath d='M0 32 L20 32 M44 32 L64 32'/%3E%3C/svg%3E");
+  -webkit-mask-image: var(--andean-tile);
+  mask-image: var(--andean-tile);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-size: 64px 64px;
+  mask-size: 64px 64px;
+}
+
+/* --- Skip-to-content link (decision #7, wired in PR 5) ------------------- *
+ * Off-screen until keyboard focus, then snaps to the top-left so keyboard and
+ * screen-reader users can jump past the masthead. Defined now so PR 5 only
+ * adds the markup. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background-color: #09090b;
+  color: #fafafa;
+  border-radius: 0 0 0.375rem 0;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* --- Scroll reveal motion (decision #6) --------------------------------- *
+ * Elements tagged `.reveal` start slightly lowered and transparent; once
+ * `reveal.ts` adds `.revealed` (via IntersectionObserver) they fade up into
+ * place. Motion is capped at 300ms per decision #6. `--reveal-delay` lets a
+ * caller stagger siblings so rows cascade (e.g. inline `style="--reveal-delay:
+ * 120ms"` on each item); it defaults to 0ms so a lone element reveals at once.
+ *
+ * Under `prefers-reduced-motion: reduce` we neutralize everything: no offset,
+ * no opacity dip, no transition, no delay. reveal.ts ALSO short-circuits and
+ * marks elements `.revealed` immediately, so this media query is the belt to
+ * that suspenders — content is visible and motionless for those users. */
+.reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 300ms ease-out,
+    transform 300ms ease-out;
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.revealed {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    transition-delay: 0ms;
+  }
+}
