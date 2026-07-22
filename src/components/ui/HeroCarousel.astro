@@ -1,0 +1,318 @@
+---
+/**
+ * HeroCarousel — auto-rotating full-image billboard for featured content
+ * (spec: hero-carousel; design decisions #1 and #10).
+ *
+ * Renders each featured item as an edge-to-edge full-bleed slide: the cover
+ * fills the frame (wide variant via {@link buildImage}) with a bottom-to-top
+ * opacity gradient, and an info panel pinned to the LEFT HALF carries the
+ * title, tagline, and a primary CTA that deep-links to the item's detail page.
+ * Below the slides sits one indicator dot per slide; the active dot is visually
+ * distinct and clicking a dot jumps directly to that slide.
+ *
+ * Autoplay is driven by a single dependency-free `is:inline` vanilla script
+ * (design decision #1 — no island, no drag library). Rules (design decision
+ * #10, spec: Auto-Rotation):
+ *   - Advances every `data-interval` ms (configurable prop, DEFAULT 6000).
+ *   - Pauses on `mouseenter` and `focusin` (focus-within, covers keyboard).
+ *   - Pauses when the document is hidden (`visibilitychange`).
+ *   - Resumes on `mouseleave` / `focusout` / document visible.
+ *   - When `prefers-reduced-motion: reduce` is active, autoplay is DISABLED
+ *     entirely (no timer is ever started); dot navigation still works.
+ * Slide switching only toggles an `.is-active` class over absolutely-stacked
+ * slides, so there is NO layout shift on advance.
+ *
+ * Edge cases (spec: Edge-Case Item Counts):
+ *   - 0 items: NO carousel DOM is rendered — a fallback placeholder renders in
+ *     its place instead.
+ *   - 1 item: the single slide renders WITHOUT indicator dots and WITHOUT the
+ *     autoplay script (no rotation to drive).
+ *
+ * API:
+ *   <HeroCarousel
+ *     interval={6000}
+ *     items={[
+ *       { _id, href: "/es/libros/el-libro", title, tagline?, ctaLabel?,
+ *         asset: { url, metadata: { lqip } } },
+ *     ]}
+ *   />
+ */
+import { buildImage, type SanityAssetRef } from '@lib/image';
+
+interface HeroSlide {
+  /** Document id; keys the View Transition name and the dot controls. */
+  _id?: string;
+  /** CTA deep-link to the content detail page (book or news article). */
+  href: string;
+  /** Slide heading. */
+  title: string;
+  /** Short editorial tagline shown under the title (optional). */
+  tagline?: string;
+  /** Primary CTA label; falls back to a neutral default when omitted. */
+  ctaLabel?: string;
+  /** Resolved cover asset (`{ url, metadata: { lqip } }`) for buildImage. */
+  asset?: SanityAssetRef | null;
+}
+
+interface Props {
+  /** Featured slides. 0 → placeholder only; 1 → no rotation/indicators. */
+  items: HeroSlide[];
+  /** Auto-advance interval in milliseconds. Default 6000 (spec default 6 s). */
+  interval?: number;
+}
+
+const { items, interval = 6000 } = Astro.props;
+
+const count = items.length;
+const isEmpty = count === 0;
+// A single slide is static: no rotation, no indicators, no autoplay script.
+const isStatic = count <= 1;
+
+// Only render the autoplay-driving markup (data-interval + script) when there
+// is more than one slide to rotate between.
+const autoInterval = interval;
+
+// Autoplay driver source (dependency-free vanilla JS). It lives in a
+// frontmatter constant injected via set:html because Astro does NOT evaluate
+// `{}` expressions inside <script> content: a template-literal wrapper there
+// ships as a literal, never-executing string (caught in review R2-001/R3-001).
+const AUTOPLAY_SCRIPT = `
+(function () {
+  var root = document.currentScript
+    ? document.currentScript.previousElementSibling
+    : null;
+  // currentScript is null under some renderers; fall back to a query.
+  if (!root || !root.hasAttribute('data-hero-carousel')) {
+    var all = document.querySelectorAll('[data-hero-carousel]');
+    root = all[all.length - 1] || null;
+  }
+  if (!root) return;
+
+  var slides = root.querySelectorAll('[data-hero-slide]');
+  var dots = root.querySelectorAll('[data-hero-dot]');
+  if (slides.length < 2) return;
+
+  var interval = parseInt(root.getAttribute('data-interval'), 10);
+  if (!interval || interval < 1000) interval = 6000;
+
+  var current = 0;
+  var timer = null;
+
+  var reduceMotion =
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function show(next) {
+    if (next === current) return;
+    for (var i = 0; i < slides.length; i++) {
+      var active = i === next;
+      slides[i].classList.toggle('is-active', active);
+      slides[i].setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+    for (var j = 0; j < dots.length; j++) {
+      var on = j === next;
+      dots[j].classList.toggle('is-active', on);
+      dots[j].setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    current = next;
+  }
+
+  function advance() {
+    show((current + 1) % slides.length);
+  }
+
+  function start() {
+    if (reduceMotion || timer) return;
+    timer = window.setInterval(advance, interval);
+  }
+
+  function stop() {
+    if (timer) {
+      window.clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  // Pause on hover / focus-within; resume on leave / blur.
+  root.addEventListener('mouseenter', stop);
+  root.addEventListener('mouseleave', start);
+  root.addEventListener('focusin', stop);
+  root.addEventListener('focusout', start);
+
+  // Pause when the tab/document is hidden; resume when visible again.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      stop();
+    } else {
+      start();
+    }
+  });
+
+  // Dot click jumps directly to that slide (spec: Indicator navigation).
+  for (var k = 0; k < dots.length; k++) {
+    (function (dot) {
+      dot.addEventListener('click', function () {
+        var idx = parseInt(dot.getAttribute('data-index'), 10) || 0;
+        show(idx);
+      });
+    })(dots[k]);
+  }
+
+  // Reduced motion disables autoplay entirely (no timer ever starts).
+  if (!reduceMotion && !document.hidden) start();
+})();
+`;
+
+const slides = items.map((item, index) => {
+  const image = buildImage({ asset: item.asset, _id: item._id }, 'wide');
+  // Only paint the LQIP blur-up backdrop when the projection provided one.
+  const lqipStyle = image.lqip
+    ? `background-image:url(${image.lqip});background-size:cover;background-position:center;`
+    : undefined;
+  return { ...item, index, image, lqipStyle };
+});
+---
+
+{
+  isEmpty ? (
+    /* Zero featured items: NO carousel DOM. A neutral placeholder holds the
+       slot so the layout below (rows, spotlight) still flows (spec: Zero
+       items → no carousel DOM rendered). */
+    <div
+      class="hero-carousel-placeholder flex aspect-[21/9] w-full items-center justify-center rounded-xl bg-base-muted ring-1 ring-white/5"
+      data-hero-placeholder
+    >
+      <span class="text-sm text-zinc-400">No featured content</span>
+    </div>
+  ) : (
+    <section
+      class="hero-carousel relative w-full overflow-hidden rounded-xl ring-1 ring-white/5 shadow-elevation-2"
+      data-hero-carousel
+      data-interval={isStatic ? undefined : String(autoInterval)}
+      aria-roledescription="carousel"
+      aria-label="Featured content"
+    >
+      <div class="hero-carousel-viewport relative aspect-[21/9] w-full">
+        {slides.map((slide) => (
+          <article
+            class:list={[
+              'hero-slide absolute inset-0',
+              slide.index === 0 && 'is-active',
+            ]}
+            data-hero-slide
+            data-index={String(slide.index)}
+            aria-roledescription="slide"
+            aria-hidden={slide.index === 0 ? 'false' : 'true'}
+          >
+            {/* Full-bleed cover fills the frame edge-to-edge. LQIP blur-up
+                backdrop paints behind the img until the full image loads. */}
+            <div class="absolute inset-0" style={slide.lqipStyle}>
+              {slide.image.src && (
+                <img
+                  src={slide.image.src}
+                  srcset={slide.image.srcset}
+                  sizes={slide.image.sizes}
+                  alt={slide.title}
+                  loading={slide.index === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  transition:name={
+                    slide._id ? `cover-${slide._id}` : undefined
+                  }
+                  class="h-full w-full object-cover"
+                />
+              )}
+            </div>
+
+            {/* Bottom-to-top opacity gradient so the info panel stays legible
+                over any cover (spec: no layout shift — gradient is an overlay). */}
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+
+            {/* Info panel pinned to the LEFT HALF: title, tagline, CTA. */}
+            <div class="absolute inset-y-0 left-0 flex w-full flex-col justify-end gap-3 p-6 sm:w-1/2 sm:p-10">
+              <h2 class="text-2xl font-semibold text-zinc-50 sm:text-4xl">
+                {slide.title}
+              </h2>
+              {slide.tagline && (
+                <p class="max-w-prose text-sm text-zinc-300 sm:text-base">
+                  {slide.tagline}
+                </p>
+              )}
+              <a
+                href={slide.href}
+                class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-base outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
+                data-hero-cta
+              >
+                {slide.ctaLabel ?? 'View'}
+              </a>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {/* Indicator dots — one per slide, only when there is more than one
+          slide (spec: 1 item → no indicators). Clicking a dot jumps to it. */}
+      {!isStatic && (
+        <div
+          class="hero-dots absolute inset-x-0 bottom-4 z-10 flex items-center justify-center gap-2"
+          role="tablist"
+          aria-label="Choose slide"
+          data-hero-dots
+        >
+          {slides.map((slide) => (
+            <button
+              type="button"
+              class:list={[
+                'hero-dot h-2.5 w-2.5 rounded-full bg-white/40 outline-none transition-colors duration-200',
+                'hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-accent',
+                slide.index === 0 && 'is-active',
+              ]}
+              data-hero-dot
+              data-index={String(slide.index)}
+              role="tab"
+              aria-selected={slide.index === 0 ? 'true' : 'false'}
+              aria-label={`Go to slide ${slide.index + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+{
+  /* Autoplay driver — dependency-free vanilla, only shipped when there are 2+
+     slides to rotate. `is:inline` keeps it out of the bundler like BaseLayout's
+     no-flash script (design decision #1). Reduced-motion disables autoplay
+     entirely; dot navigation always works. The JS source lives in the
+     AUTOPLAY_SCRIPT frontmatter constant and is injected via set:html so this
+     conditional expression ships executable code, not a literal string. */
+  !isEmpty && !isStatic && <script is:inline set:html={AUTOPLAY_SCRIPT} />
+}
+
+<style>
+  /* Slides are absolutely stacked; only `.is-active` is visible. Switching
+   * toggles opacity, so advancing never reflows the layout (no layout shift). */
+  .hero-slide {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 400ms ease;
+  }
+
+  .hero-slide.is-active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Active indicator dot is visually distinct from the rest. */
+  .hero-dot.is-active {
+    background-color: rgb(255 255 255 / 0.95);
+    transform: scale(1.2);
+  }
+
+  /* Reduced motion: no cross-fade animation on slide switch. */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-slide {
+      transition: none;
+    }
+  }
+</style>
