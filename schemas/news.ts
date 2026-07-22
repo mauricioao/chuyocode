@@ -51,6 +51,41 @@ export default {
       title: 'Imagen',
       options: { hotspot: true },
     },
+    // frontend-v3 (content-schema delta): additive OPTIONAL discovery fields.
+    // All are optional so existing documents without them keep rendering; GROQ
+    // applies coalesce() safe defaults (featured->false, tagline->"").
+    {
+      name: 'featured',
+      type: 'boolean',
+      title: 'Destacado',
+      description: 'Incluir en el carrusel destacado de la home.',
+      initialValue: false,
+    },
+    {
+      name: 'tagline',
+      type: 'object',
+      title: 'Lema',
+      description: 'Frase editorial corta para hero/spotlight (opcional).',
+      fields: [
+        { name: 'es', type: 'string', title: 'Español' },
+        { name: 'en', type: 'string', title: 'English' },
+      ],
+    },
+    {
+      name: 'themeTag',
+      type: 'string',
+      title: 'Tema',
+      description: 'Agrupa el contenido en filas editoriales (opcional).',
+      options: {
+        list: [
+          { title: 'Arquitectura', value: 'architecture' },
+          { title: 'Testing', value: 'testing' },
+          { title: 'Frontend', value: 'frontend' },
+          { title: 'Backend', value: 'backend' },
+          { title: 'Carrera', value: 'career' },
+        ],
+      },
+    },
   ],
   orderings: [
     { title: 'Fecha, nuevo primero', name: 'publishedAtDesc', by: [{ field: 'publishedAt', direction: 'desc' }] },

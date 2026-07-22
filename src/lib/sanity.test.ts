@@ -35,6 +35,13 @@ import {
   getFeaturedBooks,
   getLatestArticles,
   renderBody,
+  MEDIA_CARD_FRAGMENT,
+  HERO_FRAGMENT,
+  SPOTLIGHT_FRAGMENT,
+  getHeroItems,
+  getRowsByTheme,
+  getSpotlight,
+  getRanked,
 } from './sanity';
 
 // ---------------------------------------------------------------------------
@@ -449,5 +456,249 @@ describe('renderBody', () => {
     expect(renderBody(undefined)).toBe('');
     expect(renderBody(42)).toBe('');
     expect(renderBody({ foo: 'bar' })).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Discovery GROQ fragments (frontend-v3 home-discovery, design decision #6).
+// Fragments are the single source of truth for the projected shape; these
+// asserts pin their composition so hero/card/spotlight stay in sync.
+// ---------------------------------------------------------------------------
+describe('discovery GROQ fragments', () => {
+  it('MEDIA_CARD_FRAGMENT projects the buildImage asset shape and safe defaults', () => {
+    // Cover projected into buildImage's nested `{ url, metadata: { lqip } }`
+    // shape (coalescing cover/image so books and news both resolve).
+    expect(MEDIA_CARD_FRAGMENT).toContain(
+      'coalesce(cover.asset, image.asset)->{ url, "metadata": { "lqip": metadata.lqip } }',
+    );
+    // Coalesced safe defaults per the content-schema delta.
+    expect(MEDIA_CARD_FRAGMENT).toContain('coalesce(featured, false)');
+    expect(MEDIA_CARD_FRAGMENT).toContain('coalesce(tagline[$lang], tagline.es, "")');
+    // Localized title with es fallback and a final empty-string guard.
+    expect(MEDIA_CARD_FRAGMENT).toContain('coalesce(title[$lang], title.es, title, "")');
+    expect(MEDIA_CARD_FRAGMENT).toContain('themeTag');
+  });
+
+  it('HERO_FRAGMENT composes the card fragment plus a synopsis', () => {
+    // Fragment composition: HERO extends MEDIA_CARD (DRY, design decision #6).
+    expect(HERO_FRAGMENT).toContain(MEDIA_CARD_FRAGMENT);
+    expect(HERO_FRAGMENT).toContain('"synopsis": coalesce(description[$lang], description.es, "")');
+  });
+
+  it('SPOTLIGHT_FRAGMENT composes the hero fragment', () => {
+    expect(SPOTLIGHT_FRAGMENT).toContain(HERO_FRAGMENT);
+    // Transitively includes the card fields (featured is in the base card).
+    expect(SPOTLIGHT_FRAGMENT).toContain('coalesce(featured, false)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getHeroItems — featured mixed items, shape, coalesce defaults, fail-safe.
+// ---------------------------------------------------------------------------
+describe('getHeroItems', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    sanityCache.clear();
+  });
+
+  it('maps raw docs into MediaItems with a resolved detail href', async () => {
+    fetchMock.mockResolvedValue([
+      {
+        _id: 'b1',
+        kind: 'book',
+        title: 'Featured Book',
+        slug: 'featured-book',
+        tagline: 'A tagline',
+        featured: true,
+        themeTag: 'architecture',
+        synopsis: 'Long synopsis',
+        asset: { url: 'https://cdn/cover.jpg', metadata: { lqip: 'data:blur' } },
+      },
+    ]);
+    const items = await getHeroItems('es');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({
+      _id: 'b1',
+      kind: 'book',
+      title: 'Featured Book',
+      slug: 'featured-book',
+      href: '/es/libros/featured-book',
+      asset: { url: 'https://cdn/cover.jpg', metadata: { lqip: 'data:blur' } },
+      tagline: 'A tagline',
+      synopsis: 'Long synopsis',
+      themeTag: 'architecture',
+      featured: true,
+    });
+  });
+
+  it('builds a noticias href for news-kind items', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'n1', kind: 'news', title: 'N', slug: 'la-noticia', tagline: '', featured: true },
+    ]);
+    const [item] = await getHeroItems('en');
+    expect(item?.href).toBe('/en/noticias/la-noticia');
+  });
+
+  it('applies safe defaults for docs missing the optional fields', async () => {
+    // Simulates a doc where coalesce already produced false/"" and no asset.
+    fetchMock.mockResolvedValue([
+      { _id: 'b2', kind: 'book', title: 'Bare', slug: 'bare', tagline: '', featured: false },
+    ]);
+    const [item] = await getHeroItems('es');
+    expect(item?.tagline).toBe('');
+    expect(item?.featured).toBe(false);
+    expect(item?.asset).toBeUndefined();
+    expect(item?.synopsis).toBeUndefined();
+    expect(item?.themeTag).toBeUndefined();
+  });
+
+  it('passes lang and limit to the GROQ query', async () => {
+    fetchMock.mockResolvedValue([]);
+    await getHeroItems('en', 4);
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), {
+      lang: 'en',
+      limit: 4,
+    });
+  });
+
+  it('returns [] (fail-safe) on a Sanity error', async () => {
+    fetchMock.mockRejectedValue(new Error('down'));
+    expect(await getHeroItems('es')).toEqual([]);
+  });
+
+  it('serves a second identical call from cache (no extra fetch)', async () => {
+    fetchMock.mockResolvedValue([]);
+    await getHeroItems('es');
+    await getHeroItems('es');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRowsByTheme — mixed-type grouping, order, fail-safe.
+// ---------------------------------------------------------------------------
+describe('getRowsByTheme', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    sanityCache.clear();
+  });
+
+  it('groups mixed book + news items into rows by themeTag', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'b1', kind: 'book', title: 'Book A', slug: 'a', tagline: '', featured: false, themeTag: 'testing' },
+      { _id: 'n1', kind: 'news', title: 'News B', slug: 'b', tagline: '', featured: false, themeTag: 'testing' },
+      { _id: 'b2', kind: 'book', title: 'Book C', slug: 'c', tagline: '', featured: false, themeTag: 'frontend' },
+    ]);
+    const rows = await getRowsByTheme('es');
+    expect(rows).toHaveLength(2);
+    const testing = rows.find((r) => r.themeTag === 'testing');
+    expect(testing?.items).toHaveLength(2);
+    // Mixed content types share one row (spec: Mixed-type editorial row).
+    expect(testing?.items.map((i) => i.kind)).toEqual(['book', 'news']);
+    expect(rows.find((r) => r.themeTag === 'frontend')?.items).toHaveLength(1);
+  });
+
+  it('preserves first-seen tag order', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: '1', kind: 'book', title: 'X', slug: 'x', tagline: '', featured: false, themeTag: 'backend' },
+      { _id: '2', kind: 'book', title: 'Y', slug: 'y', tagline: '', featured: false, themeTag: 'career' },
+    ]);
+    const rows = await getRowsByTheme('es');
+    expect(rows.map((r) => r.themeTag)).toEqual(['backend', 'career']);
+  });
+
+  it('returns [] when no document carries a themeTag', async () => {
+    fetchMock.mockResolvedValue([]);
+    expect(await getRowsByTheme('es')).toEqual([]);
+  });
+
+  it('returns [] (fail-safe) on a Sanity error', async () => {
+    fetchMock.mockRejectedValue(new Error('boom'));
+    expect(await getRowsByTheme('es')).toEqual([]);
+  });
+
+  it('passes the active lang to the GROQ query', async () => {
+    fetchMock.mockResolvedValue([]);
+    await getRowsByTheme('en');
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), { lang: 'en' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSpotlight — single featured item, null fallback, fail-safe.
+// ---------------------------------------------------------------------------
+describe('getSpotlight', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    sanityCache.clear();
+  });
+
+  it('returns a MediaItem when a featured doc exists', async () => {
+    fetchMock.mockResolvedValue({
+      _id: 's1',
+      kind: 'book',
+      title: 'Spot',
+      slug: 'spot',
+      tagline: 'lede',
+      featured: true,
+      synopsis: 'editorial synopsis',
+      asset: { url: 'https://cdn/s.jpg' },
+    });
+    const item = await getSpotlight('es');
+    expect(item?._id).toBe('s1');
+    expect(item?.href).toBe('/es/libros/spot');
+    expect(item?.synopsis).toBe('editorial synopsis');
+    expect(item?.featured).toBe(true);
+  });
+
+  it('returns null when nothing is featured', async () => {
+    fetchMock.mockResolvedValue(null);
+    expect(await getSpotlight('es')).toBeNull();
+  });
+
+  it('returns null (fail-safe) on a Sanity error', async () => {
+    fetchMock.mockRejectedValue(new Error('down'));
+    expect(await getSpotlight('es')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRanked — ordered books, cap, fail-safe, caching.
+// ---------------------------------------------------------------------------
+describe('getRanked', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    sanityCache.clear();
+  });
+
+  it('maps ranked books into MediaItems', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'b1', kind: 'book', title: 'A', slug: 'a', tagline: '', featured: false },
+      { _id: 'b2', kind: 'book', title: 'B', slug: 'b', tagline: '', featured: false },
+    ]);
+    const items = await getRanked('es', 5);
+    expect(items).toHaveLength(2);
+    expect(items[0]?.href).toBe('/es/libros/a');
+  });
+
+  it('passes lang and limit to the GROQ query', async () => {
+    fetchMock.mockResolvedValue([]);
+    await getRanked('en', 3);
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), {
+      lang: 'en',
+      limit: 3,
+    });
+  });
+
+  it('returns [] (fail-safe) on a Sanity error', async () => {
+    fetchMock.mockRejectedValue(new Error('boom'));
+    expect(await getRanked('es')).toEqual([]);
+  });
+
+  it('serves a second identical call from cache (no extra fetch)', async () => {
+    fetchMock.mockResolvedValue([]);
+    await getRanked('es', 10);
+    await getRanked('es', 10);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
