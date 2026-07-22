@@ -23,6 +23,7 @@
  *    runs `initReveals()` on `DOMContentLoaded` and again after Astro View
  *    Transitions swaps (`astro:after-swap`) so `.reveal` elements fade up.
  */
+import { ClientRouter } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
 import Footer from '@components/layout/Footer.astro';
 // Visual-identity styles (PR 2). `fonts.css` self-hosts Fraunces Variable
@@ -79,6 +80,11 @@ const faviconSvg =
     <meta name="description" content={metaDescription} />
     <link rel="icon" href={faviconSvg} type="image/svg+xml" />
 
+    {/* SPA-feel navigation via native View Transitions (frontend-v3 PR3.5).
+        reveal.ts already re-runs on astro:after-swap, so scroll reveals keep
+        working across client-side navigations. */}
+    <ClientRouter />
+
     <meta property="og:title" content={title} />
     <meta property="og:description" content={metaDescription} />
     <meta property="og:type" content="website" />
@@ -95,7 +101,7 @@ const faviconSvg =
     {/* No-flash theme script: runs before paint so dark users never see a
         light flash on load (spec 6: no-flash). The interactive toggle that
         writes this value ships in PR 4. */}
-    <script is:inline>
+    <script is:inline data-astro-rerun>
       (function () {
         try {
           var stored = localStorage.getItem('theme');

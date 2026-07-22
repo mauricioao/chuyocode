@@ -140,13 +140,20 @@ const AUTOPLAY_SCRIPT = `
   root.addEventListener('focusout', start);
 
   // Pause when the tab/document is hidden; resume when visible again.
-  document.addEventListener('visibilitychange', function () {
+  // Self-removes once its carousel root is swapped out of the document, so
+  // stale handlers never pile up (or retain detached DOM) across navigations.
+  function onVisibility() {
+    if (!root.isConnected) {
+      document.removeEventListener('visibilitychange', onVisibility);
+      return;
+    }
     if (document.hidden) {
       stop();
     } else {
       start();
     }
-  });
+  }
+  document.addEventListener('visibilitychange', onVisibility);
 
   // Dot click jumps directly to that slide (spec: Indicator navigation).
   for (var k = 0; k < dots.length; k++) {
@@ -286,7 +293,9 @@ const slides = items.map((item, index) => {
      entirely; dot navigation always works. The JS source lives in the
      AUTOPLAY_SCRIPT frontmatter constant and is injected via set:html so this
      conditional expression ships executable code, not a literal string. */
-  !isEmpty && !isStatic && <script is:inline set:html={AUTOPLAY_SCRIPT} />
+  !isEmpty && !isStatic && (
+    <script is:inline data-astro-rerun set:html={AUTOPLAY_SCRIPT} />
+  )
 }
 
 <style>
