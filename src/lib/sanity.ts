@@ -43,6 +43,12 @@ export interface Book {
   slug: string;
   author: string;
   coverUrl: string;
+  /**
+   * Base64 LQIP blur-up placeholder from the cover asset's Sanity metadata
+   * (frontend-v3 sanity-image-pipeline). Optional: absent when the asset has no
+   * `metadata.lqip`, in which case the image pipeline falls back gracefully.
+   */
+  coverLqip?: string;
   /** Present only when the book has an attached PDF asset. */
   pdfUrl?: string;
   description: string;
@@ -62,6 +68,12 @@ export interface NewsArticle {
   body: unknown;
   publishedAt: string;
   imageUrl: string;
+  /**
+   * Base64 LQIP blur-up placeholder from the article image's Sanity metadata
+   * (frontend-v3 sanity-image-pipeline). Optional: absent when the asset has no
+   * `metadata.lqip`, in which case the image pipeline falls back gracefully.
+   */
+  imageLqip?: string;
 }
 
 /** A page of news plus the metadata pages need for prev/next navigation. */
@@ -182,12 +194,17 @@ async function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
 // Localized string fields are modeled as `{ es, en }` objects in Sanity. The
 // `coalesce(field[$lang], field.es)` pattern applies the requested locale and
 // falls back to es when the field is absent for that lang (spec 5 fallback).
+// Cover projection (frontend-v3 sanity-image-pipeline): keep the flat
+// backward-compatible `coverUrl` AND surface the asset's LQIP blur-up
+// placeholder as `coverLqip`. Existing consumers reading `coverUrl` are
+// unaffected; the image pipeline uses `coverLqip` when present.
 const BOOKS_QUERY = `*[_type == "book" && !(_id in path("drafts.**"))] | order(title asc) {
   _id,
   "title": coalesce(title[$lang], title.es, title),
   "slug": slug.current,
   "author": coalesce(author[$lang], author.es, author),
   "coverUrl": cover.asset->url,
+  "coverLqip": cover.asset->metadata.lqip,
   "pdfUrl": pdf.asset->url,
   "description": coalesce(description[$lang], description.es, description)
 }`;
@@ -198,6 +215,7 @@ const BOOK_BY_SLUG_QUERY = `*[_type == "book" && slug.current == $slug && !(_id 
   "slug": slug.current,
   "author": coalesce(author[$lang], author.es, author),
   "coverUrl": cover.asset->url,
+  "coverLqip": cover.asset->metadata.lqip,
   "pdfUrl": pdf.asset->url,
   "description": coalesce(description[$lang], description.es, description)
 }`;
@@ -210,7 +228,8 @@ const NEWS_QUERY = `{
     "excerpt": coalesce(excerpt[$lang], excerpt.es, excerpt),
     "body": coalesce(body[$lang], body.es, body),
     publishedAt,
-    "imageUrl": image.asset->url
+    "imageUrl": image.asset->url,
+    "imageLqip": image.asset->metadata.lqip
   },
   "total": count(*[_type == "news" && !(_id in path("drafts.**"))])
 }`;
@@ -226,7 +245,8 @@ const ARTICLE_BY_SLUG_QUERY = `*[_type == "news" && slug.current == $slug && !(_
   "excerpt": coalesce(excerpt[$lang], excerpt.es, excerpt),
   "body": coalesce(body[$lang], body.es, body),
   publishedAt,
-  "imageUrl": image.asset->url
+  "imageUrl": image.asset->url,
+  "imageLqip": image.asset->metadata.lqip
 }`;
 
 /**
@@ -236,12 +256,17 @@ const ARTICLE_BY_SLUG_QUERY = `*[_type == "news" && slug.current == $slug && !(_
  */
 function toBook(raw: Record<string, unknown>): Book {
   const pdfUrl = typeof raw.pdfUrl === 'string' ? raw.pdfUrl : undefined;
+  const coverLqip =
+    typeof raw.coverLqip === 'string' && raw.coverLqip.length > 0
+      ? raw.coverLqip
+      : undefined;
   return {
     _id: String(raw._id ?? ''),
     title: String(raw.title ?? ''),
     slug: String(raw.slug ?? ''),
     author: String(raw.author ?? ''),
     coverUrl: String(raw.coverUrl ?? ''),
+    ...(coverLqip ? { coverLqip } : {}),
     ...(pdfUrl ? { pdfUrl } : {}),
     description: String(raw.description ?? ''),
   };
@@ -255,6 +280,10 @@ function toBook(raw: Record<string, unknown>): Book {
  * turn it into HTML.
  */
 function toNewsArticle(raw: Record<string, unknown>): NewsArticle {
+  const imageLqip =
+    typeof raw.imageLqip === 'string' && raw.imageLqip.length > 0
+      ? raw.imageLqip
+      : undefined;
   return {
     _id: String(raw._id ?? ''),
     title: String(raw.title ?? ''),
@@ -263,6 +292,7 @@ function toNewsArticle(raw: Record<string, unknown>): NewsArticle {
     body: raw.body ?? '',
     publishedAt: String(raw.publishedAt ?? ''),
     imageUrl: String(raw.imageUrl ?? ''),
+    ...(imageLqip ? { imageLqip } : {}),
   };
 }
 

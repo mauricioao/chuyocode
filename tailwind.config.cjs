@@ -59,6 +59,15 @@ module.exports = {
           'sans-serif',
         ],
       },
+      boxShadow: {
+        // Depth system (frontend-v3 design decision #9). The shademanga
+        // reference conveys hierarchy with layered shadows + a hairline ring
+        // instead of flat borders. Cards/rows pair these with `ring-1
+        // ring-white/5`; higher levels lift more prominent surfaces.
+        'elevation-1': '0 1px 2px 0 rgb(0 0 0 / 0.4)',
+        'elevation-2': '0 4px 12px -2px rgb(0 0 0 / 0.5)',
+        'elevation-3': '0 12px 32px -4px rgb(0 0 0 / 0.6)',
+      },
       transitionProperty: {
         // Smooth theme transitions (spec 6: CSS transition <= 300ms).
         theme: 'background-color, border-color, color, fill, stroke',

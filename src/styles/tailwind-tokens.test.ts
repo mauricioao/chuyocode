@@ -13,12 +13,14 @@ const config = require('../../tailwind.config.cjs') as {
     extend: {
       colors: Record<string, Record<string, string>>;
       fontFamily: Record<string, string[]>;
+      boxShadow: Record<string, string>;
     };
   };
 };
 
 const colors = config.theme.extend.colors;
 const fontFamily = config.theme.extend.fontFamily;
+const boxShadow = config.theme.extend.boxShadow;
 
 describe('tailwind theme tokens', () => {
   it('preserves the existing accent scale unchanged (no renames)', () => {
@@ -63,4 +65,14 @@ describe('tailwind theme tokens', () => {
     expect(fontFamily.sans).toContain('system-ui');
     expect(fontFamily.sans).toContain('sans-serif');
   });
+
+  // frontend-v3 design decision #9 — depth tokens replace flat borders.
+  it.each(['elevation-1', 'elevation-2', 'elevation-3'])(
+    'adds the %s boxShadow depth token',
+    (token) => {
+      expect(boxShadow[token]).toBeDefined();
+      expect(typeof boxShadow[token]).toBe('string');
+      expect(boxShadow[token]).not.toBe('');
+    },
+  );
 });
