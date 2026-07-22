@@ -19,6 +19,10 @@
  * `.contentrow-track` rule below (cross-browser: WebKit + Firefox + IE/Edge),
  * while scrolling itself stays fully functional and accessible.
  *
+ * The track carries depth via `ring-1 ring-white/5` + `shadow-elevation-1`
+ * (frontend-v3 design decision #9) instead of a flat `border` — the redesign
+ * conveys hierarchy with a hairline ring and layered shadow.
+ *
  * API:
  *   <ContentRow title="Featured" href="/es/libros">
  *     <div class="snap-start shrink-0 w-40">…card…</div>
@@ -56,7 +60,7 @@ const viewAll = lang ? UI_LABELS[lang].home.rows.viewAll : undefined;
     }
   </div>
   <div
-    class="contentrow-track flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2"
+    class="contentrow-track flex snap-x snap-mandatory gap-4 overflow-x-auto rounded-lg p-2 ring-1 ring-white/5 shadow-elevation-1"
   >
     <slot />
   </div>

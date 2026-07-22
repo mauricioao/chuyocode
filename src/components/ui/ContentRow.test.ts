@@ -69,4 +69,18 @@ describe('ContentRow.astro', () => {
     // Without a lang there is no localized label, so no link is rendered.
     expect(html).not.toContain('href="/es/libros"');
   });
+
+  // frontend-v3 design decision #9: the track adopts depth tokens (hairline
+  // ring + layered shadow) from PR1 instead of a flat border.
+  it('applies the ring + elevation depth tokens on the track (no flat border)', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(ContentRow, {
+      props: { title: 'Row' },
+    });
+    expect(html).toContain('ring-1');
+    expect(html).toContain('ring-white/5');
+    expect(html).toContain('shadow-elevation-1');
+    // The flat border approach is replaced, not augmented.
+    expect(html).not.toContain('border-base-muted');
+  });
 });
