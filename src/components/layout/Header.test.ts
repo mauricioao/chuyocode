@@ -53,6 +53,17 @@ describe('Header.astro — English nav slot', () => {
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('builds language switch paths without double slashes on nested pages', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+      request: new Request('http://localhost/es/libros'),
+    });
+    expect(html).toContain('href="/en/libros"');
+    expect(html).not.toContain('es//');
+    expect(html).not.toContain('en//');
+  });
+
   it('renders no hydration island when the theme-toggle slot is empty', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
