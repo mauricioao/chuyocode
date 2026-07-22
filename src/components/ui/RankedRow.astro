@@ -1,0 +1,102 @@
+---
+/**
+ * RankedRow — numbered "top N" rail of poster cards (spec: home-discovery;
+ * design decision #3). Each item is a {@link MediaCard} in the `ranked` variant
+ * fronted by a large index number (1, 2, 3…), so the row reads as an ordered
+ * chart. An optional side description block sits before the rail to frame the
+ * list.
+ *
+ * The rail is a pure CSS scroll-snap track (`overflow-x-auto snap-x`,
+ * `snap-start shrink-0` per item) — no island, no layout JS, degrades
+ * gracefully. The big numbers are decorative (`aria-hidden`), so the accessible
+ * name of each entry comes from the card's own anchor label (the title).
+ *
+ * Graceful empty: an empty `items` array renders NOTHING — the home page skips
+ * the section rather than showing an empty rail.
+ *
+ * API:
+ *   <RankedRow title="Top books" items={ranked} description="…" />
+ */
+import MediaCard from '@components/ui/MediaCard.astro';
+import type { MediaItem } from '@lib/sanity';
+
+interface Props {
+  /** Section heading rendered above the rail. */
+  title: string;
+  /** Ordered items; index drives the visible rank number. */
+  items: MediaItem[];
+  /** Optional framing copy shown beside the rail. */
+  description?: string;
+}
+
+const { title, items, description } = Astro.props;
+
+const hasItems = items.length > 0;
+---
+
+{
+  hasItems && (
+    <section class="ranked-row flex flex-col gap-4" data-ranked-row>
+      <h2 class="font-display text-2xl font-semibold text-zinc-100 sm:text-3xl">
+        {title}
+      </h2>
+
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        {description && (
+          <p class="max-w-xs shrink-0 text-sm text-zinc-400 lg:w-64">
+            {description}
+          </p>
+        )}
+
+        <div
+          class="ranked-track flex snap-x snap-mandatory gap-6 overflow-x-auto py-1"
+          data-ranked-track
+        >
+          {items.map((item, index) => (
+            <div
+              class="ranked-item relative flex shrink-0 snap-start items-end"
+              data-ranked-item
+            >
+              {/* Big decorative rank number. Hidden from a11y tree — the card
+                  anchor already exposes the title as its accessible name. */}
+              <span
+                class="ranked-number font-display font-black leading-none text-white/10"
+                aria-hidden="true"
+              >
+                {index + 1}
+              </span>
+              <div class="ranked-card -ml-4 w-32 sm:w-36">
+                <MediaCard
+                  variant="ranked"
+                  _id={item._id}
+                  href={item.href}
+                  title={item.title}
+                  author={item.tagline}
+                  asset={item.asset}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+<style>
+  /* Hide the scrollbar while keeping scroll fully functional (matches the
+   * streaming aesthetic of the other rows). Cross-browser. */
+  .ranked-track {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE / legacy Edge */
+  }
+  .ranked-track::-webkit-scrollbar {
+    display: none; /* Chrome / Safari / Edge */
+  }
+
+  /* Oversized chart numeral. Clamps across breakpoints; the negative card
+   * margin above overlaps the poster so the digit reads as a rank marker. */
+  .ranked-number {
+    font-size: clamp(4rem, 10vw, 7rem);
+  }
+</style>

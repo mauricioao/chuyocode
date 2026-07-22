@@ -1,0 +1,99 @@
+---
+/**
+ * Spotlight — single featured document as an editorial hero block (spec:
+ * home-discovery; design decisions #3, #5). One wide cover on the left paired
+ * with a long editorial synopsis and a primary CTA deep-link on the right.
+ *
+ * The cover is delivered through {@link buildImage} (wide variant): responsive
+ * `srcset`/`sizes` plus an LQIP blur-up placeholder, so no raw full-resolution
+ * Sanity CDN URL is shipped. The cover `<img>` carries
+ * `transition:name="cover-<_id>"` so navigating to the detail page whose hero
+ * shares the name produces a native View Transition cross-fade (decision #8).
+ *
+ * Graceful empty: when `item` is `null`/`undefined` (nothing featured, or a
+ * fail-safe empty read) the component renders NOTHING — the home page simply
+ * skips the Spotlight section rather than showing an empty block.
+ *
+ * API:
+ *   <Spotlight item={spotlight} ctaLabel="Read more" heading="Spotlight" />
+ */
+import { buildImage } from '@lib/image';
+import type { MediaItem } from '@lib/sanity';
+
+interface Props {
+  /** The featured item, or null/undefined when nothing is featured. */
+  item?: MediaItem | null;
+  /** Small eyebrow heading above the title (optional). */
+  heading?: string;
+  /** Primary CTA label; falls back to a neutral default when omitted. */
+  ctaLabel?: string;
+}
+
+const { item, heading, ctaLabel } = Astro.props;
+
+// Long editorial copy: prefer the synopsis, fall back to the tagline so the
+// block is never left with an empty text column when only a tagline exists.
+const body = item?.synopsis || item?.tagline || '';
+const image = item ? buildImage({ asset: item.asset, _id: item._id }, 'wide') : null;
+const lqipStyle = image?.lqip
+  ? `background-image:url(${image.lqip});background-size:cover;background-position:center;`
+  : undefined;
+---
+
+{
+  item && (
+    <section
+      class="spotlight grid items-center gap-6 overflow-hidden rounded-xl bg-base-soft ring-1 ring-white/5 shadow-elevation-2 sm:gap-10 lg:grid-cols-2"
+      aria-labelledby="spotlight-title"
+      data-spotlight
+    >
+      {/* Wide cover, left column. */}
+      <a
+        href={item.href}
+        class="spotlight-cover group relative block aspect-[16/9] w-full overflow-hidden bg-base-muted outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        aria-label={item.title}
+        tabindex="-1"
+      >
+        <div class="absolute inset-0" style={lqipStyle}>
+          {image?.src && (
+            <img
+              src={image.src}
+              srcset={image.srcset}
+              sizes={image.sizes}
+              alt={item.title}
+              loading="lazy"
+              decoding="async"
+              transition:name={item._id ? `cover-${item._id}` : undefined}
+              class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          )}
+        </div>
+      </a>
+
+      {/* Editorial column: eyebrow, title, long synopsis, CTA. */}
+      <div class="flex flex-col gap-4 p-6 sm:p-10">
+        {heading && (
+          <span class="w-fit text-xs font-semibold uppercase tracking-wide text-accent">
+            {heading}
+          </span>
+        )}
+        <h2
+          id="spotlight-title"
+          class="font-display text-2xl font-semibold text-zinc-100 sm:text-4xl"
+        >
+          {item.title}
+        </h2>
+        {body && (
+          <p class="max-w-prose text-base text-zinc-300">{body}</p>
+        )}
+        <a
+          href={item.href}
+          class="spotlight-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-base outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
+          data-spotlight-cta
+        >
+          {ctaLabel ?? 'Read more'}
+        </a>
+      </div>
+    </section>
+  )
+}

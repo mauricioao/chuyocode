@@ -1,0 +1,175 @@
+---
+/**
+ * EditorialRow — titled horizontal discovery row (spec: home-discovery;
+ * design decision #4). Extends the ContentRow pattern with three additions the
+ * image-first redesign needs: a section title, prev/next arrow controls, and
+ * edge-fade masks over a CSS scroll-snap track of {@link MediaCard}s.
+ *
+ * The track is pure CSS scroll-snap (`overflow-x-auto snap-x` on the track,
+ * `snap-start shrink-0` on each card wrapper) — no island, no layout JS. A tiny
+ * dependency-free `is:inline` script only wires the two arrow buttons to
+ * `scrollBy` on the track; scroll itself works without JS. The script is
+ * idempotent and carries `data-astro-rerun` so it re-binds after a View
+ * Transition swap (design decision #8).
+ *
+ * The arrows are visible on hover/focus-within and hidden at rest so the row
+ * stays clean; keyboard users still reach them via Tab (focus reveals them).
+ * An edge-fade `mask-image` gradient hints that content continues past both
+ * edges of the viewport.
+ *
+ * Mixed content: `items` are already-normalized {@link MediaItem}s, so a single
+ * row can carry books AND news (spec: Mixed-type editorial row) — the row is
+ * shape-agnostic and simply maps each item into a poster MediaCard.
+ *
+ * API:
+ *   <EditorialRow title="Architecture" items={items} />
+ */
+import MediaCard from '@components/ui/MediaCard.astro';
+import type { MediaItem } from '@lib/sanity';
+
+interface Props {
+  /** Section heading rendered above the track. */
+  title: string;
+  /** Normalized discovery items; rendered as poster MediaCards. */
+  items: MediaItem[];
+}
+
+const { title, items } = Astro.props;
+
+// Nothing to render for an empty row — the home page also guards this, but the
+// component stays self-safe so it degrades gracefully when used standalone.
+const hasItems = items.length > 0;
+
+// Arrow wiring only (scroll works without JS). Idempotent: guards against a
+// double-bind if the script runs twice (initial load + astro:after-swap). The
+// source lives in a frontmatter constant injected via set:html because Astro
+// does not evaluate `{}` expressions inside <script> content.
+const ARROW_SCRIPT = `
+(function () {
+  var rows = document.querySelectorAll('[data-editorial-row]');
+  for (var r = 0; r < rows.length; r++) {
+    (function (row) {
+      if (row.getAttribute('data-arrows-bound') === '1') return;
+      var track = row.querySelector('[data-editorial-track]');
+      if (!track) return;
+      var prev = row.querySelector('[data-editorial-prev]');
+      var next = row.querySelector('[data-editorial-next]');
+      function step(dir) {
+        var amount = Math.max(240, Math.round(track.clientWidth * 0.8));
+        track.scrollBy({ left: dir * amount, behavior: 'smooth' });
+      }
+      if (prev) prev.addEventListener('click', function () { step(-1); });
+      if (next) next.addEventListener('click', function () { step(1); });
+      row.setAttribute('data-arrows-bound', '1');
+    })(rows[r]);
+  }
+})();
+`;
+---
+
+{
+  hasItems && (
+    <section class="editorial-row group/row flex flex-col gap-4" data-editorial-row>
+      <h2 class="font-display text-2xl font-semibold text-zinc-100 sm:text-3xl">
+        {title}
+      </h2>
+
+      <div class="relative">
+        {/* Prev arrow — hidden at rest, revealed on hover/focus-within. */}
+        <button
+          type="button"
+          class="editorial-arrow editorial-arrow-prev absolute left-2 top-1/2 z-10 -translate-y-1/2 hidden h-10 w-10 items-center justify-center rounded-full bg-black/60 text-zinc-50 outline-none ring-1 ring-white/10 backdrop-blur transition-opacity duration-200 hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-accent sm:flex"
+          data-editorial-prev
+          aria-label="Scroll left"
+        >
+          <span aria-hidden="true">&larr;</span>
+        </button>
+
+        {/* Next arrow — mirror of prev. */}
+        <button
+          type="button"
+          class="editorial-arrow editorial-arrow-next absolute right-2 top-1/2 z-10 -translate-y-1/2 hidden h-10 w-10 items-center justify-center rounded-full bg-black/60 text-zinc-50 outline-none ring-1 ring-white/10 backdrop-blur transition-opacity duration-200 hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-accent sm:flex"
+          data-editorial-next
+          aria-label="Scroll right"
+        >
+          <span aria-hidden="true">&rarr;</span>
+        </button>
+
+        {/* Edge-fade masked scroll-snap track of poster MediaCards. */}
+        <div
+          class="editorial-track flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth py-1"
+          data-editorial-track
+        >
+          {items.map((item) => (
+            <div class="w-40 shrink-0 snap-start sm:w-48">
+              <MediaCard
+                variant="poster"
+                _id={item._id}
+                href={item.href}
+                title={item.title}
+                author={item.tagline}
+                synopsis={item.synopsis}
+                asset={item.asset}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+{
+  hasItems && (
+    <script is:inline data-astro-rerun set:html={ARROW_SCRIPT} />
+  )
+}
+
+<style>
+  /* Hide the scrollbar while keeping scroll fully functional (matches the
+   * ContentRow streaming aesthetic). Cross-browser. */
+  .editorial-track {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE / legacy Edge */
+  }
+  .editorial-track::-webkit-scrollbar {
+    display: none; /* Chrome / Safari / Edge */
+  }
+
+  /* Edge-fade masks: fade the track's content into transparency at both
+   * horizontal edges to hint there is more to scroll (spec: EditorialRow edge
+   * fades). Uses mask-image so it never paints a solid bar over the cards. */
+  .editorial-track {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 2.5rem,
+      #000 calc(100% - 2.5rem),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 2.5rem,
+      #000 calc(100% - 2.5rem),
+      transparent 100%
+    );
+  }
+
+  /* Arrows appear on hover of the row or when any child receives focus, so
+   * keyboard users can reach them. Rest state keeps the row clean. */
+  .editorial-arrow {
+    opacity: 0;
+  }
+  .editorial-row:hover .editorial-arrow,
+  .editorial-row:focus-within .editorial-arrow {
+    opacity: 1;
+  }
+
+  /* Reduced motion: no smooth-scroll animation on arrow steps. */
+  @media (prefers-reduced-motion: reduce) {
+    .editorial-track {
+      scroll-behavior: auto;
+    }
+  }
+</style>
