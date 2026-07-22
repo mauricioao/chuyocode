@@ -102,6 +102,7 @@ export const UI_LABELS = {
       news: 'Noticias',
       english: 'English',
       soon: 'Pronto',
+      switchTo: 'Cambiar a',
     },
     footer: { terms: 'Términos', privacy: 'Privacidad' },
     legal: {
@@ -164,6 +165,7 @@ export const UI_LABELS = {
       news: 'News',
       english: 'English',
       soon: 'Soon',
+      switchTo: 'Switch to',
     },
     footer: { terms: 'Terms', privacy: 'Privacy' },
     legal: {

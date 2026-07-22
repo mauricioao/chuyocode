@@ -19,6 +19,7 @@
  * NAV_LABELS map was removed once i18n.ts landed (Phase 3).
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
+import LangToggle from '@components/ui/LangToggle.astro';
 
 interface Props {
   lang?: Lang;
@@ -28,6 +29,13 @@ const { lang = DEFAULT_LANG } = Astro.props;
 
 const labels = UI_LABELS[lang].nav;
 const base = `/${lang}`;
+
+// Language switch: each flag always points to its own lang version of the
+// current page (strip the leading `/[lang]` and re-prefix with the target).
+// Strip the leading `/es` or `/en` segment plus any leading slash on the rest.
+const currentPath = Astro.url.pathname.replace(/^\/(es|en)(?=\/|$)/, '').replace(/^\/+/, '');
+const esPath = `/es/${currentPath}`;
+const enPath = `/en/${currentPath}`;
 
 const navLinks = [
   { href: `${base}/`, label: labels.home },
@@ -75,6 +83,7 @@ const englishNav = { label: labels.english, badge: labels.soon };
           {englishNav.badge}
         </span>
       </span>
+      <LangToggle lang={lang} esPath={esPath} enPath={enPath} />
       <slot name="theme-toggle" />
     </nav>
 
@@ -128,6 +137,9 @@ const englishNav = { label: labels.english, badge: labels.soon };
         {englishNav.badge}
       </span>
     </span>
+    <div class="pt-2">
+      <LangToggle lang={lang} esPath={esPath} enPath={enPath} />
+    </div>
     <div class="pt-2">
       <slot name="theme-toggle" />
     </div>
