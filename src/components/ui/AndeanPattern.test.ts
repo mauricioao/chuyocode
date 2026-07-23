@@ -22,9 +22,9 @@ describe('AndeanPattern.astro', () => {
   it('merges caller-supplied classes (color token API)', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(AndeanPattern, {
-      props: { class: 'text-terracotta' },
+      props: { class: 'text-accent' },
     });
-    expect(html).toContain('text-terracotta');
+    expect(html).toContain('text-accent');
     // still keeps its own base classes
     expect(html).toContain('andean-pattern');
   });

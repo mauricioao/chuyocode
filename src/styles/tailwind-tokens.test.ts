@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
 // PR 2 (visual-identity) — design decision #2 (additive tokens) + #1 (display
-// font). The Tailwind config is CommonJS, so require() it and assert the theme
-// contract as pure logic. This guards against accidental renames of the
-// existing `accent` scale (which has 20+ call sites) and confirms the new
-// Andean tokens + display font family are present.
+// font), updated for the shademanga visual overhaul (yellow accent, warm
+// sub-tokens removed). The Tailwind config is CommonJS, so require() it and
+// assert the theme contract as pure logic. This guards against accidental
+// renames of the existing `accent` scale (which has 20+ call sites) and
+// confirms the display font family + elevation depth tokens are present.
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const config = require('../../tailwind.config.cjs') as {
@@ -23,16 +24,15 @@ const fontFamily = config.theme.extend.fontFamily;
 const boxShadow = config.theme.extend.boxShadow;
 
 describe('tailwind theme tokens', () => {
-  it('preserves the existing accent scale unchanged (no renames)', () => {
+  it('preserves the accent scale shape with the yellow streaming values', () => {
     expect(colors.accent).toMatchObject({
-      DEFAULT: '#ea580c',
-      hover: '#c2410c',
-      soft: '#fb923c',
-      terracotta: '#b45309',
+      DEFAULT: '#FACC15',
+      hover: '#EAB308',
+      soft: '#FDE047',
     });
   });
 
-  it('preserves the base surface scale', () => {
+  it('keeps the base surface scale', () => {
     expect(colors.base).toMatchObject({
       DEFAULT: '#09090b',
       soft: '#18181b',
@@ -41,20 +41,11 @@ describe('tailwind theme tokens', () => {
   });
 
   it.each(['terracotta', 'ocre', 'amaranto'])(
-    'adds the %s Andean token with DEFAULT/soft/hover',
+    'does not define the removed %s warm token',
     (token) => {
-      expect(colors[token]).toBeDefined();
-      expect(colors[token]).toHaveProperty('DEFAULT');
-      expect(colors[token]).toHaveProperty('soft');
-      expect(colors[token]).toHaveProperty('hover');
+      expect(colors[token]).toBeUndefined();
     },
   );
-
-  it('does not collide top-level terracotta with accent.terracotta', () => {
-    // accent.terracotta is a shade string; top-level terracotta is a scale.
-    expect(typeof colors.accent.terracotta).toBe('string');
-    expect(typeof colors.terracotta).toBe('object');
-  });
 
   it('exposes a Fraunces display font family with a serif fallback', () => {
     expect(fontFamily.display[0]).toBe('Fraunces Variable');

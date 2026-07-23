@@ -63,7 +63,7 @@ function formatDate(iso: string): string {
   ogImage={article.imageUrl}
 >
   <ThemeToggle slot="theme-toggle" client:load lang={lang} />
-  <article class="reveal mx-auto flex w-full max-w-3xl flex-col gap-6">
+  <article class="reveal mx-auto flex w-full max-w-3xl flex-col gap-6 px-4">
     <header class="flex flex-col gap-3">
       <time class="text-xs font-medium uppercase tracking-wide text-zinc-500">
         {formatDate(article.publishedAt)}

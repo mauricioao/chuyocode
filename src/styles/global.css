@@ -29,7 +29,7 @@ h3 {
  * A stepped-diamond (chakana-inspired) geometric motif, tiled as a 64×64
  * data-URI SVG. The SVG is applied as a CSS `mask` (not a background-image)
  * so `background-color: currentColor` shows through it — that makes the
- * pattern TOKEN-DRIVEN: whatever accent/terracotta/ocre text color the
+ * pattern TOKEN-DRIVEN: whatever accent text color the
  * wrapping element carries becomes the ink of the tiles (decision #3:
  * "token-driven colors, currentColor stroke"). A data-URI background-image
  * cannot inherit currentColor, so the mask approach is what actually honors

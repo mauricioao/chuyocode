@@ -14,32 +14,13 @@ module.exports = {
           soft: '#18181b', // zinc-900
           muted: '#27272a', // zinc-800
         },
-        // High-contrast Andean accent: orange / terracotta (chullo reference).
-        // NOTE: kept as-is (DEFAULT/hover/soft/terracotta) so the 20+ existing
-        // `accent-*` call sites don't break — decision #2 is ADDITIVE only.
+        // High-contrast energetic accent: streaming yellow (shademanga
+        // reference). Kept as DEFAULT/hover/soft so the 20+ existing
+        // `accent-*` call sites don't break.
         accent: {
-          DEFAULT: '#ea580c', // orange-600
-          hover: '#c2410c', // orange-700
-          soft: '#fb923c', // orange-400
-          terracotta: '#b45309', // amber-700 / red-earth
-        },
-        // Andean identity palette (design decision #2) — new top-level tokens,
-        // siblings of `accent`, so headings/patterns/section accents can pull
-        // from a warm earth range without restructuring `accent`.
-        terracotta: {
-          DEFAULT: '#b45309', // amber-700 — red-earth
-          soft: '#d97706', // amber-600
-          hover: '#92400e', // amber-800
-        },
-        ocre: {
-          DEFAULT: '#ca8a04', // yellow-600 — ochre clay
-          soft: '#eab308', // yellow-500
-          hover: '#a16207', // yellow-700
-        },
-        amaranto: {
-          DEFAULT: '#be123c', // rose-700 — amaranth / kiwicha bloom
-          soft: '#e11d48', // rose-600
-          hover: '#9f1239', // rose-800
+          DEFAULT: '#FACC15', // yellow-400
+          hover: '#EAB308', // yellow-500
+          soft: '#FDE047', // yellow-300
         },
       },
       fontFamily: {

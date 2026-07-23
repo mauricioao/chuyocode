@@ -62,10 +62,11 @@ const metaDescription = description ?? UI_LABELS[lang].meta.siteDescription;
 // Canonical URL for og:url — resolved from the current request when available.
 const canonicalUrl = Astro.url?.href;
 
-// Inline SVG favicon (decision #7: no binary asset). A rounded terracotta tile
-// with a display-serif "C" mark. Encoded as a data-URI so it ships in the HTML.
+// Inline SVG favicon (decision #7: no binary asset). A rounded accent-yellow
+// tile with a display-serif "C" mark. Encoded as a data-URI so it ships in
+// the HTML.
 const faviconSvg =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23c1552e'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23fafafa'%3EC%3C/text%3E%3C/svg%3E";
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23FACC15'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%2309090b'%3EC%3C/text%3E%3C/svg%3E";
 ---
 
 <!doctype html>
@@ -134,7 +135,7 @@ const faviconSvg =
           toggle lives in the masthead without pages reaching into Header. */}
       <slot name="theme-toggle" slot="theme-toggle" />
     </Header>
-    <main id="content" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+    <main id="content" class="w-full flex-1">
       <slot />
     </main>
     <Footer lang={lang} />

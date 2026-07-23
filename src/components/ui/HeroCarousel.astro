@@ -186,20 +186,20 @@ const slides = items.map((item, index) => {
        slot so the layout below (rows, spotlight) still flows (spec: Zero
        items → no carousel DOM rendered). */
     <div
-      class="hero-carousel-placeholder flex aspect-[21/9] w-full items-center justify-center rounded-xl bg-base-muted ring-1 ring-white/5"
+      class="hero-carousel-placeholder flex h-[72vh] min-h-[420px] w-full items-center justify-center bg-base-muted"
       data-hero-placeholder
     >
       <span class="text-sm text-zinc-400">No featured content</span>
     </div>
   ) : (
     <section
-      class="hero-carousel relative w-full overflow-hidden rounded-xl ring-1 ring-white/5 shadow-elevation-2"
+      class="hero-carousel relative w-full overflow-hidden"
       data-hero-carousel
       data-interval={isStatic ? undefined : String(autoInterval)}
       aria-roledescription="carousel"
       aria-label="Featured content"
     >
-      <div class="hero-carousel-viewport relative aspect-[21/9] w-full">
+      <div class="hero-carousel-viewport relative h-[72vh] min-h-[420px] w-full">
         {slides.map((slide) => (
           <article
             class:list={[
@@ -232,11 +232,15 @@ const slides = items.map((item, index) => {
 
             {/* Bottom-to-top opacity gradient so the info panel stays legible
                 over any cover (spec: no layout shift — gradient is an overlay). */}
-            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
+
+            {/* Left-to-right gradient so the left info panel stays legible
+                over bright cover art. */}
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/70 via-black/20 to-transparent" />
 
             {/* Info panel pinned to the LEFT HALF: title, tagline, CTA. */}
             <div class="absolute inset-y-0 left-0 flex w-full flex-col justify-end gap-3 p-6 sm:w-1/2 sm:p-10">
-              <h2 class="text-2xl font-semibold text-zinc-50 sm:text-4xl">
+              <h2 class="text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
                 {slide.title}
               </h2>
               {slide.tagline && (
@@ -246,7 +250,7 @@ const slides = items.map((item, index) => {
               )}
               <a
                 href={slide.href}
-                class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-base outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
+                class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-black outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
                 data-hero-cta
               >
                 {slide.ctaLabel ?? 'View'}
