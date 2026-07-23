@@ -10,7 +10,7 @@ module.exports = {
         // Base surface: "modo oscuro" that avoids the boring pure-black look.
         // Zinc-950 anchors the palette per the PRD identity notes.
         base: {
-          DEFAULT: '#09090b', // zinc-950
+          DEFAULT: '#000000', // pure black — eliminates the hero-gradient seam
           soft: '#18181b', // zinc-900
           muted: '#27272a', // zinc-800
         },
@@ -24,10 +24,11 @@ module.exports = {
         },
       },
       fontFamily: {
-        // Display face for headings (decision #1). Fraunces Variable loads via
-        // fonts.css; Georgia/serif is the swap fallback. `sans` mirrors
-        // Tailwind's default system stack so body copy stays web-font-free.
-        display: ['Fraunces Variable', 'Georgia', 'serif'],
+        // Display face for headings (decision #1). Raleway Variable loads via
+        // fonts.css; the system-sans stack is the swap fallback (Raleway is a
+        // sans, so the fallback must be sans too). `sans` mirrors Tailwind's
+        // default system stack so body copy stays web-font-free.
+        display: ['Raleway Variable', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: [
           'ui-sans-serif',
           'system-ui',

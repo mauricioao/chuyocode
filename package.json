@@ -25,7 +25,7 @@
     "@astrojs/node": "^9.5.5",
     "@astrojs/react": "^4.4.1",
     "@astrojs/tailwind": "^6.0.2",
-    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/raleway": "^5.3.0",
     "@sanity/client": "^7.11.0",
     "@sanity/image-url": "^2.1.1",
     "@supabase/supabase-js": "^2.58.0",

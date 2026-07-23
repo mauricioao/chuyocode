@@ -5,8 +5,9 @@
  *
  * Renders each featured item as an edge-to-edge full-bleed slide: the cover
  * fills the frame (wide variant via {@link buildImage}) with a bottom-to-top
- * opacity gradient, and an info panel pinned to the LEFT HALF carries the
- * title, tagline, and a primary CTA that deep-links to the item's detail page.
+ * opacity gradient that fades into pure black, and a CENTERED info block
+ * (anchored toward the bottom third) carries the title, tagline, and a primary
+ * CTA that deep-links to the item's detail page.
  * Below the slides sits one indicator dot per slide; the active dot is visually
  * distinct and clicking a dot jumps directly to that slide.
  *
@@ -230,31 +231,33 @@ const slides = items.map((item, index) => {
               )}
             </div>
 
-            {/* Bottom-to-top opacity gradient so the info panel stays legible
-                over any cover (spec: no layout shift — gradient is an overlay). */}
-            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
+            {/* Bottom-to-top opacity gradient so the centered info block stays
+                legible over any cover AND fades into PURE BLACK so the page
+                background below the hero joins seamlessly (no tonal seam). The
+                fade is tall (2/3 height, bottom-anchored) so the first content
+                row can overlap it and float above the fade for depth. */}
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black from-10% via-black/60 to-transparent" />
 
-            {/* Left-to-right gradient so the left info panel stays legible
-                over bright cover art. */}
-            <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/70 via-black/20 to-transparent" />
-
-            {/* Info panel pinned to the LEFT HALF: title, tagline, CTA. */}
-            <div class="absolute inset-y-0 left-0 flex w-full flex-col justify-end gap-3 p-6 sm:w-1/2 sm:p-10">
-              <h2 class="text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
-                {slide.title}
-              </h2>
-              {slide.tagline && (
-                <p class="max-w-prose text-sm text-zinc-300 sm:text-base">
-                  {slide.tagline}
-                </p>
-              )}
-              <a
-                href={slide.href}
-                class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-black outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
-                data-hero-cta
-              >
-                {slide.ctaLabel ?? 'View'}
-              </a>
+            {/* Info panel CENTERED horizontally, anchored toward the bottom
+                third: title, tagline, CTA. */}
+            <div class="absolute inset-x-0 bottom-0 flex flex-col items-center gap-4 p-6 text-center sm:pb-16">
+              <div class="flex max-w-2xl flex-col items-center gap-4">
+                <h2 class="text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
+                  {slide.title}
+                </h2>
+                {slide.tagline && (
+                  <p class="max-w-prose text-sm text-zinc-300 sm:text-base">
+                    {slide.tagline}
+                  </p>
+                )}
+                <a
+                  href={slide.href}
+                  class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-black outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
+                  data-hero-cta
+                >
+                  {slide.ctaLabel ?? 'View'}
+                </a>
+              </div>
             </div>
           </article>
         ))}

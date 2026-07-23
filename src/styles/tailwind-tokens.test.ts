@@ -34,7 +34,7 @@ describe('tailwind theme tokens', () => {
 
   it('keeps the base surface scale', () => {
     expect(colors.base).toMatchObject({
-      DEFAULT: '#09090b',
+      DEFAULT: '#000000',
       soft: '#18181b',
       muted: '#27272a',
     });
@@ -47,9 +47,9 @@ describe('tailwind theme tokens', () => {
     },
   );
 
-  it('exposes a Fraunces display font family with a serif fallback', () => {
-    expect(fontFamily.display[0]).toBe('Fraunces Variable');
-    expect(fontFamily.display).toContain('serif');
+  it('exposes a Raleway display font family with a sans fallback', () => {
+    expect(fontFamily.display[0]).toBe('Raleway Variable');
+    expect(fontFamily.display).toContain('sans-serif');
   });
 
   it('keeps a system-sans stack for body copy (web-font-free)', () => {

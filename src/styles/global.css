@@ -11,18 +11,19 @@
  */
 
 /* --- Display headings (decision #4) -------------------------------------- *
- * h1–h3 use the Fraunces display face globally so every page (home, libros,
+ * h1–h3 use the Raleway display face globally so every page (home, libros,
  * noticias, 404) inherits it without per-file class churn. `font-display:
- * swap` lives in the @font-face blocks (fonts.css); the serif fallback keeps
- * headings readable before the variable file loads. */
+ * swap` lives in the @font-face blocks (fonts.css); the system-sans fallback
+ * keeps headings readable before the variable file loads (Raleway is a sans,
+ * so the fallback stack matches the tailwind `display` token). */
 h1,
 h2,
 h3 {
   font-family:
-    'Fraunces Variable',
-    Georgia,
-    'Times New Roman',
-    serif;
+    'Raleway Variable',
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
 }
 
 /* --- Andean decorative pattern (decision #3) ----------------------------- *
@@ -57,7 +58,7 @@ h3 {
   top: 0;
   z-index: 100;
   padding: 0.5rem 1rem;
-  background-color: #09090b;
+  background-color: #000000;
   color: #fafafa;
   border-radius: 0 0 0.375rem 0;
 }
