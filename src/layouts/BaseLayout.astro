@@ -58,11 +58,10 @@ const metaDescription = description ?? UI_LABELS[lang].meta.siteDescription;
 // Canonical URL for og:url — resolved from the current request when available.
 const canonicalUrl = Astro.url?.href;
 
-// Inline SVG favicon (decision #7: no binary asset). A rounded accent-yellow
-// tile with a display-serif "C" mark. Encoded as a data-URI so it ships in
-// the HTML.
+// SVG favicon from public/chuyocode.svg (decision #7: no binary asset).
+// Served at the root URL so the browser can cache it across pages.
 const faviconSvg =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23FACC15'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%2309090b'%3EC%3C/text%3E%3C/svg%3E";
+  "/chuyocode.svg";
 ---
 
 <!doctype html>
