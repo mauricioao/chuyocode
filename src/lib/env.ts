@@ -1,10 +1,21 @@
 /**
  * Typed environment validator for ChuyoCode.
  *
- * Reads from `import.meta.env` (Astro/Vite) and fails fast with a descriptive
- * error when a required variable is missing. Per spec 1 (Project Bootstrap),
- * missing required vars MUST throw at build/startup time so the server never
- * boots in a misconfigured state.
+ * Reads from a merged view of `import.meta.env` (Astro/Vite) and `process.env`
+ * and fails fast with a descriptive error when a required variable is missing.
+ * Per spec 1 (Project Bootstrap), missing required vars MUST throw at
+ * build/startup time so the server never boots in a misconfigured state.
+ *
+ * Why the merge: the SSR entry is deployed as a Netlify Function. Only the
+ * variables Vite statically inlined at build time survive in
+ * `import.meta.env`; everything configured in the Netlify UI arrives at
+ * runtime through `process.env`. Reading a single source would return blanks
+ * in the serverless runtime and throw `MissingEnvError` on every request.
+ *
+ * Resolution order per key: use `import.meta.env` when it holds a non-empty
+ * string, otherwise fall back to `process.env`. A blank/absent value in one
+ * source never shadows a valid value in the other. An explicit `source`
+ * argument bypasses the merge entirely and is used verbatim.
  *
  * Required vars (spec 1 table):
  *   - SANITY_PROJECT_ID
@@ -68,13 +79,67 @@ function readString(source: EnvSource, key: string): string {
   return raw.trim();
 }
 
+/** True only for strings that carry an actual value once trimmed. */
+function isUsable(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/** Minimal structural view of Node's `process`, so no @types/node is needed. */
+interface ProcessLike {
+  env?: Record<string, string | undefined>;
+}
+
+/** `process.env` when running under Node/Netlify Functions, else empty. */
+function readProcessEnv(): EnvSource {
+  const proc = (globalThis as { process?: ProcessLike }).process;
+  if (!proc || !proc.env) {
+    return {};
+  }
+  return proc.env as EnvSource;
+}
+
+/**
+ * Merge two env sources: `buildTimeEnv` wins per key, but only when it holds a
+ * usable value, so a blank there cannot shadow a valid `runtimeEnv` value.
+ *
+ * Pure and exported so the resolution rule is testable without touching the
+ * ambient `import.meta.env` / `process.env` globals.
+ */
+export function mergeEnvSources(
+  buildTimeEnv: EnvSource,
+  runtimeEnv: EnvSource,
+): EnvSource {
+  const merged: EnvSource = { ...runtimeEnv };
+
+  for (const key of Object.keys(buildTimeEnv)) {
+    const value = buildTimeEnv[key];
+    if (isUsable(value)) {
+      merged[key] = value;
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * The merged `import.meta.env` + `process.env` view used when `loadEnv` is
+ * called without an explicit source.
+ */
+export function defaultEnvSource(): EnvSource {
+  return mergeEnvSources(
+    (import.meta.env ?? {}) as EnvSource,
+    readProcessEnv(),
+  );
+}
+
 /**
  * Validate and return the typed environment.
  *
- * @param source - Env source to read from. Defaults to `import.meta.env`.
+ * @param source - Env source to read from. Defaults to the merged
+ *   `import.meta.env` + `process.env` view (see {@link defaultEnvSource}).
  * @throws {MissingEnvError} when any required variable is missing or blank.
  */
-export function loadEnv(source: EnvSource = import.meta.env as EnvSource): Env {
+export function loadEnv(source: EnvSource = defaultEnvSource()): Env {
   const missing: string[] = [];
 
   for (const key of REQUIRED_ENV_KEYS) {

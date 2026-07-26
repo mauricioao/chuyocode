@@ -1,0 +1,19 @@
+# Netlify deploy config for ChuyoCode.
+#
+# The site is SSR (`output: 'server'` in astro.config.mjs). `@astrojs/netlify`
+# compiles the SSR entry into a Netlify Function under `.netlify/` at build
+# time and emits the matching routing manifest itself, so `publish = "dist"`
+# only covers the static assets.
+#
+# Do NOT add manual [[redirects]] rules here. The adapter owns routing; a
+# catch-all SPA redirect would shadow the SSR handler and break every gated
+# page.
+
+[build]
+  command = "pnpm build"
+  publish = "dist"
+
+[build.environment]
+  # package.json engines.node is ">=20"; 22 is the version this project is
+  # developed and verified against.
+  NODE_VERSION = "22"

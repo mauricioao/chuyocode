@@ -1,19 +1,20 @@
 import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
+import netlify from '@astrojs/netlify';
 import react from '@astrojs/react';
 import tailwind from '@astrojs/tailwind';
 
-// ChuyoCode runs in SSR mode: every gated page checks the 24h pass per request
-// against Supabase, so static output is not an option (see design decision #1).
+// ChuyoCode runs in SSR mode: every gated page verifies the access cookie per
+// request against Supabase, so static output is not an option (design
+// decision #1). The Netlify adapter compiles that SSR entry into a Netlify
+// Function, and `dist/` keeps only the prerendered/static assets that Netlify
+// serves from its CDN.
 export default defineConfig({
   output: 'server',
-  adapter: node({
-    mode: 'standalone',
-  }),
+  adapter: netlify(),
   integrations: [
     // React powers the islands only (AdModal).
     react(),
-    // Tailwind with a JS config so darkMode:'class' and the zinc/orange
+    // Tailwind with a JS config so darkMode:'class' and the zinc/yellow
     // palette live in tailwind.config.cjs.
     tailwind({
       applyBaseStyles: true,
