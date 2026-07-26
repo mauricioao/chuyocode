@@ -39,9 +39,9 @@ async function render(props: Record<string, unknown>): Promise<string> {
 }
 
 describe('MediaCard.astro — variants', () => {
-  it('renders a poster with the 3/4 aspect ratio', async () => {
+  it('renders a poster with the 2/3 aspect ratio', async () => {
     const html = await render({ ...baseProps, variant: 'poster' });
-    expect(html).toContain('aspect-[3/4]');
+    expect(html).toContain('aspect-[2/3]');
     expect(html).toContain('data-variant="poster"');
   });
 
@@ -51,9 +51,9 @@ describe('MediaCard.astro — variants', () => {
     expect(html).toContain('data-variant="wide"');
   });
 
-  it('renders a ranked variant with the 3/4 aspect ratio', async () => {
+  it('renders a ranked variant with the 2/3 aspect ratio', async () => {
     const html = await render({ ...baseProps, variant: 'ranked' });
-    expect(html).toContain('aspect-[3/4]');
+    expect(html).toContain('aspect-[2/3]');
     expect(html).toContain('data-variant="ranked"');
   });
 
@@ -75,32 +75,44 @@ describe('MediaCard.astro — variants', () => {
   });
 });
 
-describe('MediaCard.astro — image-only rest state + overlay reveal', () => {
-  it('renders the reveal overlay markup with the reveal class', async () => {
+describe('MediaCard.astro — always-visible caption', () => {
+  it('renders an always-visible caption block (not a hover overlay)', async () => {
     const html = await render({ ...baseProps, variant: 'poster' });
-    // The fine-pointer overlay exists in markup (revealed via CSS on
-    // hover/focus-within — invisible at rest, not absent).
-    expect(html).toContain('mediacard-overlay');
+    // The caption is a permanent block below the image, not an overlay.
+    expect(html).toContain('mediacard-caption');
+    // The old hover-reveal + coarse-pointer mechanisms are gone.
+    expect(html).not.toContain('mediacard-overlay');
+    expect(html).not.toContain('mediacard-coarse-label');
     // The single anchor is the focus target and provides group-* context.
     expect(html).toContain('group');
     expect(html).toContain('focus-visible:ring');
   });
 
-  it('places title, author, and synopsis inside the overlay', async () => {
+  it('renders the title and author inside the caption, never opacity-gated', async () => {
     const html = await render({ ...baseProps, variant: 'poster' });
     expect(html).toContain('El Libro');
     expect(html).toContain('Autora Ejemplo');
-    expect(html).toContain('Una sinopsis editorial de ejemplo.');
-    expect(html).toContain('mediacard-synopsis');
+    // Title + author live in the always-visible caption block.
+    const captionStart = html.indexOf('mediacard-caption');
+    const caption = html.slice(captionStart);
+    expect(caption).toContain('El Libro');
+    expect(caption).toContain('Autora Ejemplo');
   });
 
-  it('omits the synopsis paragraph when no synopsis is provided', async () => {
+  it('omits the author paragraph when no author is provided', async () => {
     const html = await render({
       ...baseProps,
-      synopsis: undefined,
+      author: undefined,
       variant: 'poster',
     });
-    expect(html).not.toContain('mediacard-synopsis');
+    expect(html).not.toContain('Autora Ejemplo');
+  });
+
+  it('does not render the synopsis in the visible markup', async () => {
+    const html = await render({ ...baseProps, variant: 'poster' });
+    // synopsis is retained as a prop for call-site compatibility but no longer
+    // rendered (the overlay that showed it was removed).
+    expect(html).not.toContain('Una sinopsis editorial de ejemplo.');
   });
 
   it('exposes the title as the anchor accessible name', async () => {
@@ -109,39 +121,38 @@ describe('MediaCard.astro — image-only rest state + overlay reveal', () => {
   });
 });
 
-describe('MediaCard.astro — coarse-pointer label', () => {
-  it('renders a persistent title-only coarse-pointer label', async () => {
-    const html = await render({ ...baseProps, variant: 'poster' });
-    expect(html).toContain('mediacard-coarse-label');
-    // The compact label carries the title.
-    expect(html).toContain('El Libro');
+describe('MediaCard.astro — type tag', () => {
+  it('renders a "Libro" tag when kind="book"', async () => {
+    const html = await render({ ...baseProps, variant: 'poster', kind: 'book' });
+    expect(html).toContain('Libro');
+    // High-contrast: solid accent background + black text.
+    expect(html).toContain('bg-accent');
+    expect(html).toContain('text-black');
   });
 
-  it('keeps the coarse label as a distinct element from the full overlay', async () => {
+  it('renders a "Noticia" tag when kind="news"', async () => {
+    const html = await render({ ...baseProps, variant: 'poster', kind: 'news' });
+    expect(html).toContain('Noticia');
+  });
+
+  it('renders NO tag when kind is undefined', async () => {
     const html = await render({ ...baseProps, variant: 'poster' });
-    // Both surfaces exist in markup; CSS (scoped <style>, not inlined by the
-    // Container API) decides which one is visible per pointer type. The coarse
-    // label MUST be its own node so it can persist while the overlay is hidden.
-    expect(html).toContain('mediacard-coarse-label');
-    expect(html).toContain('mediacard-overlay');
-    // The coarse label is title-only: it carries the title but not the author
-    // or synopsis (those belong to the fine-pointer overlay only).
-    const labelStart = html.indexOf('mediacard-coarse-label');
-    const label = html.slice(labelStart);
-    expect(label).toContain('El Libro');
-    expect(label).not.toContain('Autora Ejemplo');
+    // The tag chip is the only element carrying the high-contrast classes, so
+    // their absence proves no tag was emitted (baseProps.title contains the word
+    // "Libro", so we key off the chip styling rather than the label text).
+    expect(html).not.toContain('text-black');
+    expect(html).not.toContain('Noticia');
   });
 });
 
 describe('MediaCard.astro — reduced motion', () => {
-  // The reduced-motion + coarse-pointer behavior lives in the component's scoped
-  // <style> block, which the Astro Container API does NOT inline into the
-  // returned string. Assert the transition-bearing hooks the CSS targets exist,
-  // so the stylesheet has classes to key off (`mediacard-overlay`,
-  // `mediacard-img`). Full media-query behavior is covered by the E2E layer.
-  it('renders the transition-bearing hooks the reduced-motion CSS targets', async () => {
+  // The reduced-motion behavior lives in the component's scoped <style> block,
+  // which the Astro Container API does NOT inline into the returned string.
+  // Assert the transition-bearing hook the CSS targets exists (`mediacard-img`),
+  // so the stylesheet has a class to key off. Full media-query behavior is
+  // covered by the E2E layer.
+  it('renders the transition-bearing hook the reduced-motion CSS targets', async () => {
     const html = await render({ ...baseProps, variant: 'poster' });
-    expect(html).toContain('mediacard-overlay');
     expect(html).toContain('mediacard-img');
   });
 });

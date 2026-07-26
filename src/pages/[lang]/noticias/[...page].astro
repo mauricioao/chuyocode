@@ -8,12 +8,9 @@
  *  - Page 1 has no "prev" link.
  *  - The last page has no "next" link.
  *  - A page beyond the last page (or a non-numeric segment) -> 404.
- *
- * ThemeToggle is forwarded into the Header masthead via BaseLayout's slot.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import NewsCard from '@components/ui/NewsCard.astro';
-import ThemeToggle from '@components/islands/ThemeToggle';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getNews } from '@lib/sanity';
 
@@ -76,7 +73,6 @@ function formatDate(iso: string): string {
   title={t.title}
   description={UI_LABELS[lang].meta.newsDescription}
 >
-  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
   <section class="reveal mx-auto flex w-full max-w-6xl flex-col gap-8 px-4">
     <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
       {t.title}

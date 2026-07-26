@@ -3,23 +3,24 @@
  * Header — site masthead (spec 7: Header requirement).
  *
  * Renders:
- *  - The "ChuyoCode" logo text, linked to the localized home (`/{lang}/`).
- *  - Primary, localized nav links (Inicio, Libros, Noticias).
- *  - A disabled "English" nav slot (design decision #9): a non-interactive
- *    `<span>` with a "Pronto/Soon" badge, rendered after News in both the
- *    desktop and mobile menus. It advertises the future independent English
- *    section without navigating anywhere — `aria-disabled`, `tabindex="-1"`,
- *    no `href`, so it is zero-JS correct and unreachable by keyboard/tab.
- *  - A `<slot name="theme-toggle">` placeholder for the ThemeToggle island,
- *    filled in the theme-system work unit (PR 4).
+ *  - The masthead logo (small image + "ChuyoCode" wordmark), linked to the
+ *    localized home (`/{lang}/`). The image points at `/logo.svg`, which is
+ *    intentionally absent until the real asset is dropped in `public/` — it
+ *    renders as a broken-image placeholder on purpose in the meantime.
+ *  - Primary, localized nav links (Libros, Noticias, Cursos, Inglés). The
+ *    Cursos/Inglés routes are intentional future links (they 404 until their
+ *    pages land).
  *  - A mobile hamburger button (structure + JS toggle stub only).
+ *
+ * The site is dark-only and Spanish-only in the chrome: there is no theme
+ * toggle, no language toggle, and no disabled English slot. (The `/en/` routes
+ * stay functional at the routing level; only the UI toggle was removed.)
  *
  * i18n note: nav labels come from the shared `src/lib/i18n.ts` (`UI_LABELS`),
  * the single source of truth for localized chrome. The previous inline
  * NAV_LABELS map was removed once i18n.ts landed (Phase 3).
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
-import LangToggle from '@components/ui/LangToggle.astro';
 
 interface Props {
   lang?: Lang;
@@ -30,34 +31,27 @@ const { lang = DEFAULT_LANG } = Astro.props;
 const labels = UI_LABELS[lang].nav;
 const base = `/${lang}`;
 
-// Language switch: each flag always points to its own lang version of the
-// current page (strip the leading `/[lang]` and re-prefix with the target).
-// Strip the leading `/es` or `/en` segment plus any leading slash on the rest.
-const currentPath = Astro.url.pathname.replace(/^\/(es|en)(?=\/|$)/, '').replace(/^\/+/, '');
-const esPath = `/es/${currentPath}`;
-const enPath = `/en/${currentPath}`;
-
 const navLinks = [
-  { href: `${base}/`, label: labels.home },
   { href: `${base}/libros`, label: labels.books },
   { href: `${base}/noticias`, label: labels.news },
+  { href: `${base}/cursos`, label: labels.courses },
+  { href: `${base}/ingles`, label: labels.englishLink },
 ];
-
-// Disabled English slot (design decision #9): advertises the future English
-// section. Non-interactive by construction — no href, aria-disabled, removed
-// from the tab order. Shared shape reused by desktop + mobile menus below.
-const englishNav = { label: labels.english, badge: labels.soon };
 ---
 
 <header
   class="sticky top-0 z-40 border-b border-base-muted bg-base/95 backdrop-blur transition-theme duration-theme"
 >
   <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
+    {/* Masthead: small logo image (left) + wordmark (right), vertically
+        centered. `/logo.svg` is intentionally absent for now — it renders as a
+        broken-image placeholder until the real asset lands in `public/`. */}
     <a
       href={`${base}/`}
-      class="text-xl font-bold tracking-tight text-accent hover:text-accent-hover"
+      class="flex items-center gap-2 text-xl font-bold tracking-tight text-accent hover:text-accent-hover"
     >
-      ChuyoCode
+      <img src="/logo.svg" alt="ChuyoCode" class="h-8 w-8 object-contain" />
+      <span>ChuyoCode</span>
     </a>
 
     <nav class="hidden items-center gap-6 md:flex" aria-label="Primary">
@@ -71,20 +65,6 @@ const englishNav = { label: labels.english, badge: labels.soon };
           </a>
         ))
       }
-      <span
-        aria-disabled="true"
-        tabindex="-1"
-        class="inline-flex cursor-not-allowed select-none items-center gap-2 rounded-full border border-dashed border-accent/50 px-3 py-1 text-sm font-medium text-zinc-500 opacity-70"
-      >
-        {englishNav.label}
-        <span
-          class="rounded-full bg-accent-soft/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent"
-        >
-          {englishNav.badge}
-        </span>
-      </span>
-      <LangToggle lang={lang} esPath={esPath} enPath={enPath} />
-      <slot name="theme-toggle" />
     </nav>
 
     {/* Mobile: hamburger button + JS toggle stub. The toggle just flips the
@@ -125,24 +105,6 @@ const englishNav = { label: labels.english, badge: labels.soon };
         </a>
       ))
     }
-    <span
-      aria-disabled="true"
-      tabindex="-1"
-      class="inline-flex w-fit cursor-not-allowed select-none items-center gap-2 rounded-full border border-dashed border-accent/50 px-3 py-1 text-sm font-medium text-zinc-500 opacity-70"
-    >
-      {englishNav.label}
-      <span
-        class="rounded-full bg-accent-soft/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent"
-      >
-        {englishNav.badge}
-      </span>
-    </span>
-    <div class="pt-2">
-      <LangToggle lang={lang} esPath={esPath} enPath={enPath} />
-    </div>
-    <div class="pt-2">
-      <slot name="theme-toggle" />
-    </div>
   </nav>
 </header>
 

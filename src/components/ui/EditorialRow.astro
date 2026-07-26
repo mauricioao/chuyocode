@@ -7,15 +7,20 @@
  *
  * The track is pure CSS scroll-snap (`overflow-x-auto snap-x` on the track,
  * `snap-start shrink-0` on each card wrapper) — no island, no layout JS. A tiny
- * dependency-free `is:inline` script only wires the two arrow buttons to
- * `scrollBy` on the track; scroll itself works without JS. The script is
- * idempotent and carries `data-astro-rerun` so it re-binds after a View
- * Transition swap (design decision #8).
+ * dependency-free `is:inline` script only wires the arrow buttons to `scrollBy`
+ * on the track; scroll itself works without JS. The script is idempotent and
+ * carries `data-astro-rerun` so it re-binds after a View Transition swap
+ * (design decision #8).
  *
- * The arrows are visible on hover/focus-within and hidden at rest so the row
- * stays clean; keyboard users still reach them via Tab (focus reveals them).
- * An edge-fade `mask-image` gradient hints that content continues past both
- * edges of the viewport.
+ * Layout (shademanga row pattern):
+ *   - Cards start from a LEFT GUTTER aligned with the row title (they are not
+ *     flush to the viewport edge).
+ *   - The RIGHT edge carries a gradient fade to black so the last visible card
+ *     visually cuts off, hinting there is more content past the edge.
+ *   - A PROMINENT accent-yellow chevron button on the right is ALWAYS VISIBLE
+ *     (the "there's more" affordance) and scrolls the row right on click. A
+ *     left chevron mirrors it but stays hover/focus-gated since it is only
+ *     useful once the row has already been scrolled.
  *
  * Mixed content: `items` are already-normalized {@link MediaItem}s, so a single
  * row can carry books AND news (spec: Mixed-type editorial row) — the row is
@@ -75,35 +80,49 @@ const ARROW_SCRIPT = `
       </h2>
 
       <div class="relative">
-        {/* Prev arrow — hidden at rest, revealed on hover/focus-within. */}
+        {/* Prev arrow — hover/focus-gated: only useful once already scrolled. */}
         <button
           type="button"
-          class="editorial-arrow editorial-arrow-prev absolute left-2 top-1/2 z-10 -translate-y-1/2 hidden h-10 w-10 items-center justify-center rounded-full bg-black/60 text-zinc-50 outline-none ring-1 ring-white/10 backdrop-blur transition-opacity duration-200 hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-accent sm:flex"
+          class="editorial-arrow editorial-arrow-prev absolute left-2 top-1/2 z-20 -translate-y-1/2 hidden h-10 w-10 items-center justify-center rounded-full bg-black/60 text-zinc-50 outline-none ring-1 ring-white/10 backdrop-blur transition-opacity duration-200 hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-accent sm:flex"
           data-editorial-prev
           aria-label="Scroll left"
         >
-          <span aria-hidden="true">&larr;</span>
+          <span aria-hidden="true">&lsaquo;</span>
         </button>
 
-        {/* Next arrow — mirror of prev. */}
+        {/* Right-edge gradient fade to black: the last visible card cuts off
+            into the fade, hinting there is more to scroll. Non-interactive so it
+            never eats clicks aimed at the card underneath. */}
+        <div
+          class="editorial-fade pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-black to-transparent sm:w-24"
+          aria-hidden="true"
+        />
+
+        {/* Next arrow — ALWAYS VISIBLE accent-yellow chevron: the "there's
+            more" affordance. Sits over the right fade and scrolls the row. */}
         <button
           type="button"
-          class="editorial-arrow editorial-arrow-next absolute right-2 top-1/2 z-10 -translate-y-1/2 hidden h-10 w-10 items-center justify-center rounded-full bg-black/60 text-zinc-50 outline-none ring-1 ring-white/10 backdrop-blur transition-opacity duration-200 hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-accent sm:flex"
+          class="editorial-arrow-next absolute right-2 top-1/2 z-20 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl font-bold leading-none text-accent outline-none ring-1 ring-accent/40 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-2 focus-visible:ring-accent"
           data-editorial-next
           aria-label="Scroll right"
         >
-          <span aria-hidden="true">&rarr;</span>
+          <span aria-hidden="true">&rsaquo;</span>
         </button>
 
-        {/* Edge-fade masked scroll-snap track of poster MediaCards. */}
+        {/* Left-gutter scroll-snap track of poster MediaCards. The leading
+            padding aligns the first card with the row title (px-4 sm:px-6) so
+            cards start from a gutter, not flush to the viewport edge. Extra
+            trailing padding leaves room so the last card can rest under the
+            fade/arrow. */}
         <div
-          class="editorial-track flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth py-1"
+          class="editorial-track flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth py-1 pl-4 pr-16 sm:pl-6 sm:pr-24"
           data-editorial-track
         >
           {items.map((item) => (
-            <div class="w-40 shrink-0 snap-start sm:w-48">
+            <div class="w-[130px] shrink-0 snap-start sm:w-[200px] lg:w-[270px]">
               <MediaCard
                 variant="poster"
+                kind={item.kind}
                 _id={item._id}
                 href={item.href}
                 title={item.title}
@@ -136,28 +155,15 @@ const ARROW_SCRIPT = `
     display: none; /* Chrome / Safari / Edge */
   }
 
-  /* Edge-fade masks: fade the track's content into transparency at both
-   * horizontal edges to hint there is more to scroll (spec: EditorialRow edge
-   * fades). Uses mask-image so it never paints a solid bar over the cards. */
-  .editorial-track {
-    -webkit-mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 2.5rem,
-      #000 calc(100% - 2.5rem),
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 2.5rem,
-      #000 calc(100% - 2.5rem),
-      transparent 100%
-    );
-  }
-
-  /* Arrows appear on hover of the row or when any child receives focus, so
-   * keyboard users can reach them. Rest state keeps the row clean. */
+  /* The right-edge fade is a real element (`.editorial-fade`) rather than a
+   * track mask so it does not fight the left gutter (`pl-*` on the track). Only
+   * the right side fades to black — the left side starts from a clean gutter
+   * aligned with the row title (shademanga row pattern).
+   *
+   * The prev arrow appears on hover of the row or when any child receives focus
+   * so keyboard users can reach it; rest state keeps the left side clean. The
+   * next arrow is ALWAYS visible (no opacity gate) — it is the primary
+   * "there's more" affordance. */
   .editorial-arrow {
     opacity: 0;
   }

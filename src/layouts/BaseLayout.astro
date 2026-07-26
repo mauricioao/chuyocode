@@ -7,13 +7,9 @@
  *  - Global Tailwind styles are injected by `@astrojs/tailwind`
  *    (`applyBaseStyles: true` in astro.config.mjs), so no manual CSS import.
  *  - A `<slot name="head">` for page-specific meta/title/link tags.
- *  - A `<slot name="theme-toggle">` forwarded into the Header masthead so pages
- *    can drop the ThemeToggle island there without importing Header directly.
  *  - The default `<slot>` for body content, wrapped by Header + Footer.
- *  - A no-flash inline script (design decision #9) that reads the persisted
- *    theme from localStorage and applies the `dark` class BEFORE first paint.
- *    This is ONLY the read + class application — the interactive ThemeToggle
- *    island is delivered in the theme-system work unit (PR 4).
+ *  - Dark mode is HARDCODED: `<html class="dark">` ships on every page and the
+ *    site is dark-only (no theme toggle, no persistence, no no-flash script).
  *  - SEO/social meta + a11y polish (design decision #7, PR 5): optional
  *    `description` / `ogImage` props feed the meta description and Open Graph /
  *    Twitter card tags; a skip-to-content link is the FIRST body element and
@@ -70,7 +66,7 @@ const faviconSvg =
 ---
 
 <!doctype html>
-<html lang={lang} class="scroll-smooth">
+<html lang={lang} class="dark scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -99,26 +95,6 @@ const faviconSvg =
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={metaDescription} />
     {ogImage && <meta name="twitter:image" content={ogImage} />}
-    {/* No-flash theme script: runs before paint so dark users never see a
-        light flash on load (spec 6: no-flash). The interactive toggle that
-        writes this value ships in PR 4. */}
-    <script is:inline data-astro-rerun>
-      (function () {
-        try {
-          var stored = localStorage.getItem('theme');
-          var prefersDark =
-            window.matchMedia &&
-            window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (stored === 'dark' || (!stored && prefersDark)) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        } catch (e) {
-          /* localStorage may be unavailable (private mode); default to light. */
-        }
-      })();
-    </script>
     <slot name="head" />
   </head>
   <body
@@ -130,11 +106,7 @@ const faviconSvg =
     <a href="#content" class="skip-link">
       {lang === 'en' ? 'Skip to content' : 'Saltar al contenido'}
     </a>
-    <Header lang={lang}>
-      {/* Forward the page's theme-toggle island into the Header slot so the
-          toggle lives in the masthead without pages reaching into Header. */}
-      <slot name="theme-toggle" slot="theme-toggle" />
-    </Header>
+    <Header lang={lang} />
     <main id="content" class="w-full flex-1">
       <slot />
     </main>

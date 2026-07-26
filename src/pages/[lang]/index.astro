@@ -30,7 +30,6 @@ import HeroCarousel from '@components/ui/HeroCarousel.astro';
 import EditorialRow from '@components/ui/EditorialRow.astro';
 import Spotlight from '@components/ui/Spotlight.astro';
 import RankedRow from '@components/ui/RankedRow.astro';
-import ThemeToggle from '@components/islands/ThemeToggle';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   getHeroItems,
@@ -79,8 +78,6 @@ function rowTitle(tag: string): string {
 ---
 
 <BaseLayout lang={lang} title="ChuyoCode" description={description}>
-  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
-
   <div class="flex flex-col">
     {/* --- 1. HeroCarousel — featured billboard, flush to the top so it fills
         below the navbar edge-to-edge and its bottom gradient fades into pure
@@ -92,11 +89,14 @@ function rowTitle(tag: string): string {
 
     {/* --- Discovery rows — pulled UP with a negative margin so the first row
         overlaps the hero's bottom fade (cards float above the gradient for
-        depth). `relative z-10` keeps the rows/cards above the gradient overlay.
-        `pointer-events-none` on the wrapper lets the transparent overlap band
-        pass clicks through to the hero dots/CTA underneath; each row child
-        re-enables `pointer-events-auto` so cards stay fully interactive. --- */}
-    <div class="pointer-events-none relative z-10 -mt-24 flex flex-col gap-12 py-8 [&>*]:pointer-events-auto sm:-mt-32 sm:gap-16 sm:py-12">
+        depth). Since the hero fade now starts LOWER, the overlap is gentler so
+        the first row sits further down (the shademanga look) instead of
+        crowding the billboard. `relative z-10` keeps the rows/cards above the
+        gradient overlay. `pointer-events-none` on the wrapper lets the
+        transparent overlap band pass clicks through to the hero dots/CTA
+        underneath; each row child re-enables `pointer-events-auto` so cards
+        stay fully interactive. --- */}
+    <div class="pointer-events-none relative z-10 -mt-12 flex flex-col gap-12 py-8 [&>*]:pointer-events-auto sm:-mt-20 sm:gap-16 sm:py-12">
       {/* --- 2. EditorialRows — one titled row per themeTag (mixed content).
           Each row self-hides when it has no items. --------------------- */}
       {

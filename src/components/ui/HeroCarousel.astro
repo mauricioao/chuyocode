@@ -234,9 +234,11 @@ const slides = items.map((item, index) => {
             {/* Bottom-to-top opacity gradient so the centered info block stays
                 legible over any cover AND fades into PURE BLACK so the page
                 background below the hero joins seamlessly (no tonal seam). The
-                fade is tall (2/3 height, bottom-anchored) so the first content
-                row can overlap it and float above the fade for depth. */}
-            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black from-10% via-black/60 to-transparent" />
+                fade STARTS LOWER (half height, bottom-anchored, with the solid
+                black stop pushed toward the very bottom) so more of the featured
+                art stays visible up top — the shademanga billboard look. The
+                first content row still overlaps this lower fade for depth. */}
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black from-25% via-black/50 to-transparent" />
 
             {/* Info panel CENTERED horizontally, anchored toward the bottom
                 third: title, tagline, CTA. */}

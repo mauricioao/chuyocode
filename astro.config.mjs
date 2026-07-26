@@ -11,7 +11,7 @@ export default defineConfig({
     mode: 'standalone',
   }),
   integrations: [
-    // React powers the islands only (AdModal, ThemeToggle).
+    // React powers the islands only (AdModal).
     react(),
     // Tailwind with a JS config so darkMode:'class' and the zinc/orange
     // palette live in tailwind.config.cjs.

@@ -36,7 +36,7 @@ const hasItems = items.length > 0;
 
 {
   hasItems && (
-    <section class="ranked-row flex flex-col gap-4" data-ranked-row>
+    <section class="ranked-row flex flex-col gap-4 px-4 sm:px-6" data-ranked-row>
       <h2 class="font-display text-2xl font-semibold text-zinc-100 sm:text-3xl">
         {title}
       </h2>
@@ -68,6 +68,7 @@ const hasItems = items.length > 0;
               <div class="ranked-card -ml-4 w-32 sm:w-36">
                 <MediaCard
                   variant="ranked"
+                  kind={item.kind}
                   _id={item._id}
                   href={item.href}
                   title={item.title}

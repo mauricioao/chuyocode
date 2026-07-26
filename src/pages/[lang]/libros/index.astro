@@ -4,12 +4,10 @@
  *
  * SSR-renders a grid of BookCard components from Sanity for the active locale.
  * Handles the empty catalog gracefully (spec 2: Empty catalog — localized
- * message, no broken layout). The ThemeToggle island is forwarded into the
- * Header masthead via BaseLayout's `theme-toggle` slot.
+ * message, no broken layout).
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import BookCard from '@components/ui/BookCard.astro';
-import ThemeToggle from '@components/islands/ThemeToggle';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getBooks } from '@lib/sanity';
 
@@ -37,7 +35,6 @@ const books = await getBooks(lang);
   title={t.title}
   description={UI_LABELS[lang].meta.booksDescription}
 >
-  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
   <section class="reveal mx-auto flex w-full max-w-6xl flex-col gap-8 px-4">
     <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
       {t.title}

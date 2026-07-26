@@ -11,11 +11,8 @@
  * placeholder ("Legal content pending" + a short generic privacy note) until
  * the real legal copy is authored. All strings come from `UI_LABELS[lang].legal`
  * (spec 5: no hardcoded UI strings).
- *
- * ThemeToggle is forwarded into the Header masthead via BaseLayout's slot.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import ThemeToggle from '@components/islands/ThemeToggle';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 
 const routeLang = Astro.params.lang;
@@ -41,7 +38,6 @@ const title = legal.titles[legalPage];
 ---
 
 <BaseLayout lang={lang} title={title}>
-  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
   <section class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4">
     <h1 class="font-display text-3xl font-bold tracking-tight text-accent sm:text-4xl">
       {title}

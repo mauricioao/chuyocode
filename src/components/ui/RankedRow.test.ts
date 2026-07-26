@@ -62,6 +62,12 @@ describe('RankedRow.astro', () => {
     expect(html).toContain('href="/es/libros/book-1"');
   });
 
+  it('passes item kind through to the MediaCard type tag', async () => {
+    const html = await render({ title: 'Top', items: [item(1)] });
+    expect(html).toContain('Libro');
+    expect(html).toContain('text-black');
+  });
+
   it('renders an optional side description', async () => {
     const html = await render({
       title: 'Top',

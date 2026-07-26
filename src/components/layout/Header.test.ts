@@ -3,68 +3,68 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import Header from './Header.astro';
 import { UI_LABELS } from '@lib/i18n';
 
-// PR 4 (nav-structure) — design decision #9.
-// Header is a pure Astro component: the ThemeToggle island arrives via the
-// `theme-toggle` slot, so Header rendered alone (no slot) has no island and
-// the Container API renders it fully. These tests pin the disabled English
-// nav slot behavior (non-interactive, badged, present in desktop + mobile).
-describe('Header.astro — English nav slot', () => {
+// Header is a pure Astro component with dark-only, Spanish-only chrome: no theme
+// toggle, no language toggle, and no disabled English slot. These tests pin the
+// primary nav and the absence of the removed controls.
+describe('Header.astro — nav', () => {
   it('renders the primary nav labels for the active locale', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
-    expect(html).toContain(UI_LABELS.es.nav.home);
     expect(html).toContain(UI_LABELS.es.nav.books);
     expect(html).toContain(UI_LABELS.es.nav.news);
+    expect(html).toContain(UI_LABELS.es.nav.courses);
+    expect(html).toContain(UI_LABELS.es.nav.englishLink);
   });
 
-  it('renders a disabled, badged English slot (aria-disabled, no href)', async () => {
+  it('drops the Inicio (home) nav link', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
-    expect(html).toContain(UI_LABELS.es.nav.english);
-    expect(html).toContain(UI_LABELS.es.nav.soon);
-    // Non-interactive by construction: exposed as disabled + removed from tab order.
-    expect(html).toContain('aria-disabled="true"');
-    expect(html).toContain('tabindex="-1"');
-    expect(html).toContain('cursor-not-allowed');
-    // No navigation: the English slot must not be an anchor with an href.
-    expect(html).not.toContain('/es/english');
+    // The home link was removed; the masthead logo now carries the home route.
+    expect(html).not.toContain(`>${UI_LABELS.es.nav.home}<`);
   });
 
-  it('localizes the English badge (en -> Soon)', async () => {
-    const container = await AstroContainer.create();
-    const html = await container.renderToString(Header, {
-      props: { lang: 'en' },
-    });
-    expect(html).toContain('Soon');
-  });
-
-  it('renders the disabled English slot in both desktop and mobile menus', async () => {
+  it('links Cursos and Inglés to their (future) localized routes', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
-    // The slot is duplicated across the desktop <nav> and the mobile <nav>,
-    // so the disabled marker must appear at least twice.
-    const matches = html.match(/aria-disabled="true"/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain('href="/es/cursos"');
+    expect(html).toContain('href="/es/ingles"');
   });
 
-  it('builds language switch paths without double slashes on nested pages', async () => {
+  it('renders the masthead logo image pointing at /logo.svg', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
-      request: new Request('http://localhost/es/libros'),
     });
-    expect(html).toContain('href="/en/libros"');
-    expect(html).not.toContain('es//');
-    expect(html).not.toContain('en//');
+    expect(html).toContain('src="/logo.svg"');
+    expect(html).toContain('alt="ChuyoCode"');
   });
 
-  it('renders no hydration island when the theme-toggle slot is empty', async () => {
+  it('renders no language toggle', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    expect(html).not.toContain('lang-toggle');
+    // No language-switch anchors remain in the chrome.
+    expect(html).not.toContain('href="/en/"');
+  });
+
+  it('renders no disabled English slot', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    expect(html).not.toContain('aria-disabled="true"');
+    expect(html).not.toContain('cursor-not-allowed');
+  });
+
+  it('renders no hydration island (no theme toggle)', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },

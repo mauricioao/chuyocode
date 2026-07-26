@@ -2,24 +2,25 @@
 /**
  * MediaCard — image-first content card (spec: media-card, design decision #3/#4).
  *
- * Renders a full-bleed cover image with NO visible text at rest on fine-pointer
- * devices. On hover or keyboard `focus-visible` it reveals a bottom gradient
- * overlay carrying title, author, and (when present) synopsis via a CSS
- * transition ≤300ms. Coarse-pointer (touch) devices instead get a persistent,
- * always-visible TITLE-ONLY compact label — never the full overlay — so the
- * card is legible without hover. When `prefers-reduced-motion: reduce` is
- * active the overlay appears instantly with no transition.
+ * Renders a full-bleed cover image with an ALWAYS-VISIBLE caption BELOW the
+ * image carrying the title and, when present, the author. The caption is a
+ * permanent block (not an overlay, not hover-gated), so every card is legible
+ * at rest on every pointer type. A small, high-contrast TYPE TAG floats over
+ * the top-left corner of the image to differentiate content kinds (book →
+ * "Libro", news → "Noticia"); it is only rendered when `kind` is provided.
  *
  * A single `<a>` wrapper is the only focus target (`focus-visible:ring`), so
- * keyboard users get one clean tab stop and the overlay reveals via
- * `:focus-within` on that anchor. Screen readers derive the accessible name
- * from the anchor's `aria-label` (the title), matching the visual title.
+ * keyboard users get one clean tab stop. Screen readers derive the accessible
+ * name from the anchor's `aria-label` (the title), matching the visual title.
  *
  * The cover is delivered through {@link buildImage} (PR1): responsive
  * `srcset`/`sizes` plus an LQIP blur-up placeholder, so no raw full-resolution
  * Sanity CDN URL is shipped. When `lqip` is present it paints as a blurred
  * `background-image` behind the `<img>` until the full image loads; when it is
  * missing the image simply loads without a placeholder (graceful fallback).
+ *
+ * A subtle `group-hover:scale-105` zoom on the image adds a streaming-style
+ * touch; it is disabled under `prefers-reduced-motion: reduce`.
  *
  * View Transitions (design decision #8): the `<img>` carries
  * `transition:name="cover-<_id>"` so navigating to a detail page whose hero img
@@ -28,11 +29,11 @@
  * API:
  *   <MediaCard
  *     variant="poster"
+ *     kind="book"
  *     _id="doc-123"
  *     href="/es/libros/el-libro"
  *     title="El Libro"
  *     author="Autor"
- *     synopsis="…"
  *     asset={{ url, metadata: { lqip } }}
  *   />
  */
@@ -41,32 +42,46 @@ import { buildImage, type MediaVariant, type SanityAssetRef } from '@lib/image';
 interface Props {
   /** Card context: drives aspect ratio, responsive widths, and `sizes`. */
   variant: MediaVariant;
+  /** Content kind; drives the high-contrast type tag (book → "Libro", news → "Noticia"). */
+  kind?: 'book' | 'news';
   /** Document id; keys the View Transition name (`cover-<_id>`). */
   _id?: string;
   /** Destination for the whole-card link. */
   href: string;
-  /** Title — overlay heading, coarse-pointer label, and accessible name. */
+  /** Title — caption heading and accessible name. */
   title: string;
-  /** Author/byline shown in the overlay (optional). */
+  /** Author/byline shown below the title in the caption (optional). */
   author?: string;
-  /** Editorial synopsis shown below the author in the overlay (optional). */
+  /**
+   * Editorial synopsis. Retained for call-site compatibility but no longer
+   * rendered (the hover overlay that showed it was removed).
+   */
   synopsis?: string;
   /** Resolved cover asset (`{ url, metadata: { lqip } }`) for buildImage. */
   asset?: SanityAssetRef | null;
 }
 
-const { variant, _id, href, title, author, synopsis, asset } = Astro.props;
+const { variant, kind, _id, href, title, author, asset } = Astro.props;
 
 const image = buildImage({ asset, _id }, variant);
 
-// Aspect ratio per variant: posters are tall (3/4), wide is landscape (16/9),
-// ranked posters are tall like posters but sit in a numbered rail.
+// Aspect ratio per variant: posters are tall (2/3, the shademanga cover ratio),
+// wide is landscape (16/9), ranked posters share the poster 2/3 ratio but sit in
+// a numbered rail (kept consistent so covers read the same across rows).
 const ASPECT: Record<MediaVariant, string> = {
-  poster: 'aspect-[3/4]',
+  poster: 'aspect-[2/3]',
   wide: 'aspect-[16/9]',
-  ranked: 'aspect-[3/4]',
+  ranked: 'aspect-[2/3]',
 };
 const aspect = ASPECT[variant];
+
+// Type tag label derived from `kind` (Spanish UI copy, intended). Undefined
+// kind → no tag.
+const KIND_LABEL: Record<NonNullable<Props['kind']>, string> = {
+  book: 'Libro',
+  news: 'Noticia',
+};
+const kindLabel = kind ? KIND_LABEL[kind] : undefined;
 
 // Only paint the LQIP blur-up backdrop when the projection provided one.
 const lqipStyle = image.lqip
@@ -79,102 +94,58 @@ const lqipStyle = image.lqip
   aria-label={title}
   data-variant={variant}
   class:list={[
-    'mediacard group relative block overflow-hidden rounded-lg bg-base-muted ring-1 ring-white/5 shadow-elevation-1 outline-none transition-shadow duration-300',
-    'hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent',
-    aspect,
+    'mediacard group block outline-none',
+    'focus-visible:ring-2 focus-visible:ring-accent',
   ]}
 >
-  <div class="absolute inset-0" style={lqipStyle}>
+  {/* Image block: fixed aspect ratio, rounded, holds the cover + type tag. */}
+  <div
+    class:list={[
+      'relative block overflow-hidden bg-base-muted shadow-elevation-1 transition-shadow duration-300 group-hover:shadow-elevation-2',
+      aspect,
+    ]}
+  >
+    <div class="absolute inset-0" style={lqipStyle}>
+      {
+        image.src && (
+          <img
+            src={image.src}
+            srcset={image.srcset}
+            sizes={image.sizes}
+            alt={title}
+            loading="lazy"
+            decoding="async"
+            transition:name={_id ? `cover-${_id}` : undefined}
+            class="mediacard-img h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        )
+      }
+    </div>
+
+    {/* High-contrast type tag: solid accent background, black text, over the
+        top-left corner of the cover. Only rendered when `kind` is provided. */}
     {
-      image.src && (
-        <img
-          src={image.src}
-          srcset={image.srcset}
-          sizes={image.sizes}
-          alt={title}
-          loading="lazy"
-          decoding="async"
-          transition:name={_id ? `cover-${_id}` : undefined}
-          class="mediacard-img h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+      kindLabel && (
+        <span class="absolute left-2 top-2 rounded bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-black shadow-sm ring-1 ring-black/10">
+          {kindLabel}
+        </span>
       )
     }
   </div>
 
-  {/* Fine-pointer reveal: bottom gradient overlay with full metadata. Hidden at
-      rest, revealed on group-hover / group-focus-within via CSS. */}
-  <div
-    class="mediacard-overlay pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-4"
-  >
-    <h3 class="line-clamp-2 text-base font-semibold text-zinc-50">{title}</h3>
-    {author && <p class="text-sm text-zinc-300">{author}</p>}
-    {
-      synopsis && (
-        <p class="mediacard-synopsis line-clamp-3 text-xs text-zinc-400">
-          {synopsis}
-        </p>
-      )
-    }
-  </div>
-
-  {/* Coarse-pointer (touch) persistent TITLE-ONLY compact label. Hidden on
-      fine pointers; shown always on `pointer: coarse` (never the full overlay). */}
-  <div
-    class="mediacard-coarse-label pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3"
-  >
-    <span class="line-clamp-1 text-sm font-semibold text-zinc-50">{title}</span>
+  {/* Always-visible caption BELOW the image: title + optional author. Text
+      steps up slightly at sm so it stays legible at the ~130px mobile card
+      width without crowding the wider desktop card. */}
+  <div class="mediacard-caption flex flex-col gap-0.5 pt-2">
+    <h3 class="line-clamp-2 text-xs font-semibold text-zinc-50 sm:text-sm">{title}</h3>
+    {author && <p class="text-xs text-zinc-400 sm:text-sm">{author}</p>}
   </div>
 </a>
 
 <style>
-  /* Rest state: the full overlay is invisible and slightly translated down so it
-   * slides up on reveal. Transition is opacity + transform, ≤300ms (spec:
-   * Hover/Focus-Visible Overlay). */
-  .mediacard-overlay {
-    opacity: 0;
-    transform: translateY(0.5rem);
-    transition:
-      opacity 250ms ease,
-      transform 250ms ease;
-  }
-
-  /* Fine-pointer reveal: hover on the card OR keyboard focus-within the anchor
-   * (design decision #4 — <a> is the single focus target). */
-  .mediacard:hover .mediacard-overlay,
-  .mediacard:focus-within .mediacard-overlay {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* Coarse-pointer label is hidden by default (fine pointers use the overlay). */
-  .mediacard-coarse-label {
-    display: none;
-  }
-
-  /* Touch/coarse devices: hide the interactive overlay entirely and show the
-   * persistent title-only label instead (spec: Coarse-Pointer Fallback — the
-   * full overlay MUST NOT be permanently shown on coarse pointers). */
-  @media (pointer: coarse) {
-    .mediacard-overlay {
-      display: none;
-    }
-    .mediacard-coarse-label {
-      display: block;
-    }
-  }
-
-  /* Reduced motion: skip all transitions and show the overlay state instantly
-   * (spec: Reduced-Motion Respect). The image zoom is also disabled. */
+  /* Reduced motion: skip the image zoom + shadow transitions. */
   @media (prefers-reduced-motion: reduce) {
-    .mediacard-overlay {
-      transition: none;
-      opacity: 1;
-      transform: none;
-    }
     .mediacard-img {
-      transition: none;
-    }
-    .mediacard {
       transition: none;
     }
     .mediacard:hover .mediacard-img {

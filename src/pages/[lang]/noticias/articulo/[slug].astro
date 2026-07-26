@@ -12,11 +12,8 @@
  * Body rendering uses `renderBody` (design decision #5), which defensively
  * handles both a plain string and a Portable Text block array and returns an
  * HTML-escaped `<p>` sequence injected via `<Fragment set:html>`.
- *
- * ThemeToggle is forwarded into the Header masthead via BaseLayout's slot.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import ThemeToggle from '@components/islands/ThemeToggle';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getArticleBySlug, renderBody } from '@lib/sanity';
 
@@ -62,7 +59,6 @@ function formatDate(iso: string): string {
   description={article.excerpt || UI_LABELS[lang].meta.newsDescription}
   ogImage={article.imageUrl}
 >
-  <ThemeToggle slot="theme-toggle" client:load lang={lang} />
   <article class="reveal mx-auto flex w-full max-w-3xl flex-col gap-6 px-4">
     <header class="flex flex-col gap-3">
       <time class="text-xs font-medium uppercase tracking-wide text-zinc-500">
