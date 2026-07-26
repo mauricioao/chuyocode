@@ -25,6 +25,17 @@ const cover = (n: number) => ({
   metadata: { lqip: 'data:image/jpeg;base64,QUJD' },
 });
 
+// Optional hero art (spec: hero-logo-background): a transparent-PNG title
+// treatment and a wide landscape backdrop. Distinct filenames per asset so a
+// test can prove WHICH one the backdrop actually resolved to.
+const logo = (n: number) => ({
+  url: `https://cdn.sanity.io/images/proj/production/logo${n}-800x300.png`,
+});
+
+const backdrop = (n: number) => ({
+  url: `https://cdn.sanity.io/images/proj/production/backdrop${n}-2560x1440.jpg`,
+});
+
 const slide = (n: number) => ({
   _id: `doc-${n}`,
   href: `/es/libros/libro-${n}`,
@@ -37,6 +48,11 @@ const slide = (n: number) => ({
 async function render(props: Record<string, unknown>): Promise<string> {
   const container = await AstroContainer.create();
   return container.renderToString(HeroCarousel, { props });
+}
+
+// First rendered Sanity CDN `src`, i.e. the backdrop of the first slide.
+function srcOf(html: string): string | undefined {
+  return html.match(/src="(https:\/\/cdn\.sanity\.io[^"]*)"/)?.[1];
 }
 
 describe('HeroCarousel.astro — multiple slides', () => {
@@ -88,11 +104,107 @@ describe('HeroCarousel.astro — multiple slides', () => {
     expect(html).toContain('Tagline 1');
   });
 
-  it('emits a responsive wide srcset (no raw full-res URL) per slide', async () => {
+  it('emits a responsive hero srcset (no raw full-res URL) per slide', async () => {
     const html = await render({ items: [slide(1), slide(2)] });
     expect(html).toMatch(/srcset="[^"]*\?w=\d+&(?:amp;)?auto=format[^"]*"/);
-    // wide variant tops out at 1920w.
+    // hero variant spans 960..2560; 1920 stays a candidate, 2560 is the new top.
     expect(html).toContain('1920w');
+    expect(html).toContain('2560w');
+    // Full-bleed slide, so the sizes hint must be the truthful 100vw.
+    expect(html).toContain('sizes="100vw"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hero-logo-background — the two OPTIONAL hero art fields. Both are purely
+// additive: a slide without them must render exactly as it did before.
+// ---------------------------------------------------------------------------
+describe('HeroCarousel.astro — optional content logo', () => {
+  it('renders the logo AND keeps the text title visible', async () => {
+    const html = await render({
+      items: [{ ...slide(1), logoAsset: logo(1) }, slide(2)],
+    });
+    // The logo image renders...
+    expect(html).toContain('data-hero-logo');
+    expect(html).toContain('logo1-800x300.png');
+    // ...and the <h2> text title is STILL rendered. The logo never replaces it.
+    expect(html).toMatch(/<h2[^>]*>\s*Libro 1\s*<\/h2>/);
+    // Nothing hides the heading.
+    expect(html).not.toContain('sr-only');
+  });
+
+  it('places the logo BEFORE the <h2> in document order', async () => {
+    const html = await render({ items: [{ ...slide(1), logoAsset: logo(1) }] });
+    expect(html.indexOf('data-hero-logo')).toBeLessThan(html.indexOf('<h2'));
+  });
+
+  it('renders NO logo image when the document has no contentLogo', async () => {
+    const html = await render({ items: [slide(1), slide(2)] });
+    // Hook attribute must be absent…
+    expect(html).not.toContain('data-hero-logo');
+    // …but also no logo CDN URL — catches the case where the attribute is
+    // renamed/deleted while the <img> still renders (observable behavior).
+    expect(html).not.toContain('logo1-800x300.png');
+    // No extra <img> elements beyond the backdrop covers (one per slide here).
+    const imgTags = html.match(/<img\b/g) ?? [];
+    expect(imgTags.length).toBe(2);
+    // The title renders exactly as before, unchanged.
+    expect(html).toMatch(/<h2[^>]*>\s*Libro 1\s*<\/h2>/);
+  });
+
+  it('renders NO logo image when logoAsset is null', async () => {
+    const html = await render({ items: [{ ...slide(1), logoAsset: null }] });
+    // Hook attribute must be absent…
+    expect(html).not.toContain('data-hero-logo');
+    // …and no logo CDN URL either.
+    expect(html).not.toContain('logo1-800x300.png');
+    // Only the single backdrop <img> should be present.
+    const imgTags = html.match(/<img\b/g) ?? [];
+    expect(imgTags.length).toBe(1);
+    expect(html).toContain('Libro 1');
+  });
+
+  it('emits a small responsive logo srcset, not the hero width set', async () => {
+    const html = await render({ items: [{ ...slide(1), logoAsset: logo(1) }] });
+    expect(html).toContain('480w');
+    expect(html).toContain('(min-width: 640px) 22rem, 14rem');
+  });
+});
+
+describe('HeroCarousel.astro — optional hero background', () => {
+  it('uses heroBackground for the backdrop when present', async () => {
+    const html = await render({
+      items: [{ ...slide(1), backgroundAsset: backdrop(1) }],
+    });
+    expect(html).toContain('backdrop1-2560x1440.jpg');
+  });
+
+  it('falls back to the cover when heroBackground is absent', async () => {
+    const withBackdrop = await render({
+      items: [{ ...slide(1), backgroundAsset: backdrop(1) }],
+    });
+    const coverOnly = await render({ items: [slide(1)] });
+
+    // The fallback path renders the cover, NOT the backdrop.
+    expect(coverOnly).toContain('cover1-1600x900.jpg');
+    expect(coverOnly).not.toContain('backdrop1-2560x1440.jpg');
+    // And the two cases genuinely resolve to different image URLs.
+    expect(srcOf(withBackdrop)).not.toBe(srcOf(coverOnly));
+  });
+
+  it('falls back to the cover when backgroundAsset is null', async () => {
+    const html = await render({ items: [{ ...slide(1), backgroundAsset: null }] });
+    expect(html).toContain('cover1-1600x900.jpg');
+  });
+
+  it('renders no backdrop image when neither background nor cover exists', async () => {
+    const html = await render({
+      items: [{ ...slide(1), asset: undefined, backgroundAsset: undefined }],
+    });
+    expect(html).not.toContain('cdn.sanity.io');
+    // The info panel still renders, so the slide is never blank.
+    expect(html).toContain('Libro 1');
+    expect(html).toContain('data-hero-cta');
   });
 });
 

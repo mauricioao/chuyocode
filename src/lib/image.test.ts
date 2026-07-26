@@ -14,7 +14,7 @@ vi.mock('./env', () => ({
   }),
 }));
 
-import { buildImage, type MediaVariant } from './image';
+import { buildImage, type ImageVariant, type MediaVariant } from './image';
 
 // A resolved cover as produced by the `cover.asset->{url, "lqip": metadata.lqip}`
 // GROQ projection. The url embeds project/dataset/asset id like a real CDN URL.
@@ -38,7 +38,7 @@ function srcsetWidths(srcset: string): number[] {
 }
 
 describe('buildImage srcset', () => {
-  it.each<MediaVariant>(['poster', 'wide', 'ranked'])(
+  it.each<ImageVariant>(['poster', 'wide', 'ranked', 'hero', 'logo'])(
     'emits at least 3 width descriptors with ?w=&auto=format for %s',
     (variant) => {
       const { srcset } = buildImage(withLqip, variant);
@@ -62,6 +62,16 @@ describe('buildImage srcset', () => {
     ]);
     expect(srcsetWidths(buildImage(withLqip, 'ranked').srcset)).toEqual([
       320, 420, 560,
+    ]);
+    // hero: full-bleed billboard, so it starts higher than `wide` and adds a
+    // 2560 candidate for wide/HiDPI displays.
+    expect(srcsetWidths(buildImage(withLqip, 'hero').srcset)).toEqual([
+      960, 1280, 1920, 2560,
+    ]);
+    // logo: title treatment capped at ~22rem (352 CSS px on desktop). 2× needs
+    // ~704 device px, 3× needs ~1056. Extended set covers HiDPI displays.
+    expect(srcsetWidths(buildImage(withLqip, 'logo').srcset)).toEqual([
+      240, 360, 480, 720, 960,
     ]);
   });
 
@@ -94,6 +104,44 @@ describe('buildImage sizes', () => {
 
   it('returns the ranked sizes hint', () => {
     expect(buildImage(withLqip, 'ranked').sizes).toBe('11rem');
+  });
+
+  it('returns a full-viewport sizes hint for hero (not the wide column hint)', () => {
+    // The hero slide is full-bleed. Reusing `wide` understated the rendered
+    // width on desktop, which is an LCP candidate mis-selection.
+    expect(buildImage(withLqip, 'hero').sizes).toBe('100vw');
+    expect(buildImage(withLqip, 'hero').sizes).not.toBe(
+      buildImage(withLqip, 'wide').sizes,
+    );
+  });
+
+  it('returns the logo sizes hint', () => {
+    expect(buildImage(withLqip, 'logo').sizes).toBe(
+      '(min-width: 640px) 22rem, 14rem',
+    );
+  });
+});
+
+describe('variant unions', () => {
+  // Type-level regression guard, enforced by `astro check` (it typechecks test
+  // files). The hero-only variants MUST stay out of the CARD union: MediaCard
+  // owns an exhaustive `Record<MediaVariant, string>` aspect-ratio map, so
+  // folding `hero`/`logo` into MediaVariant breaks it. If someone widens
+  // MediaVariant again, these @ts-expect-error directives go unused and the
+  // typecheck fails — which is the point.
+  it('keeps hero and logo OUT of the card variant union', () => {
+    // @ts-expect-error 'hero' is a HeroVariant, never a card MediaVariant.
+    const notACard: MediaVariant = 'hero';
+    // @ts-expect-error 'logo' is a HeroVariant, never a card MediaVariant.
+    const alsoNotACard: MediaVariant = 'logo';
+    expect([notACard, alsoNotACard]).toEqual(['hero', 'logo']);
+  });
+
+  it('accepts every variant through the combined ImageVariant union', () => {
+    const all: ImageVariant[] = ['poster', 'wide', 'ranked', 'hero', 'logo'];
+    for (const variant of all) {
+      expect(buildImage(withLqip, variant).sizes).not.toBe('');
+    }
   });
 });
 

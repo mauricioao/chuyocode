@@ -3,11 +3,19 @@
  * HeroCarousel — auto-rotating full-image billboard for featured content
  * (spec: hero-carousel; design decisions #1 and #10).
  *
- * Renders each featured item as an edge-to-edge full-bleed slide: the cover
- * fills the frame (wide variant via {@link buildImage}) with a bottom-to-top
+ * Renders each featured item as an edge-to-edge full-bleed slide: the backdrop
+ * fills the frame (hero variant via {@link buildImage}) with a bottom-to-top
  * opacity gradient that fades into pure black, and a CENTERED info block
  * (anchored toward the bottom third) carries the title, tagline, and a primary
  * CTA that deep-links to the item's detail page.
+ *
+ * Optional hero art (spec: hero-logo-background), both purely ADDITIVE:
+ *   - `backgroundAsset` (Sanity `heroBackground`) is a wide landscape backdrop.
+ *     When absent the backdrop falls back to `asset` (the cover), so existing
+ *     documents render exactly as they did before the field existed.
+ *   - `logoAsset` (Sanity `contentLogo`) is a transparent-PNG title treatment
+ *     rendered ABOVE the `<h2>`. It is ADDITIVE, never a replacement: the text
+ *     title stays rendered and visible whether or not a logo is present.
  * Below the slides sits one indicator dot per slide; the active dot is visually
  * distinct and clicking a dot jumps directly to that slide.
  *
@@ -34,7 +42,8 @@
  *     interval={6000}
  *     items={[
  *       { _id, href: "/es/libros/el-libro", title, tagline?, ctaLabel?,
- *         asset: { url, metadata: { lqip } } },
+ *         asset: { url, metadata: { lqip } },
+ *         logoAsset?: { url, ... }, backgroundAsset?: { url, ... } },
  *     ]}
  *   />
  */
@@ -53,6 +62,16 @@ interface HeroSlide {
   ctaLabel?: string;
   /** Resolved cover asset (`{ url, metadata: { lqip } }`) for buildImage. */
   asset?: SanityAssetRef | null;
+  /**
+   * Optional title-treatment logo (transparent PNG). Rendered ABOVE the text
+   * title, which stays visible — the logo never replaces it.
+   */
+  logoAsset?: SanityAssetRef | null;
+  /**
+   * Optional wide landscape hero backdrop. Falls back to {@link HeroSlide.asset}
+   * when absent, so slides without it look exactly as they did before.
+   */
+  backgroundAsset?: SanityAssetRef | null;
 }
 
 interface Props {
@@ -172,12 +191,22 @@ const AUTOPLAY_SCRIPT = `
 `;
 
 const slides = items.map((item, index) => {
-  const image = buildImage({ asset: item.asset, _id: item._id }, 'wide');
+  // Backdrop: prefer the dedicated landscape hero art, fall back to the cover.
+  // `??` (not `||`) so a null projection falls through but a real asset never
+  // does. The `hero` variant declares the truthful `sizes: 100vw` for this
+  // full-bleed slide; `wide` was tuned for Spotlight's narrower column.
+  const image = buildImage(
+    { asset: item.backgroundAsset ?? item.asset, _id: item._id },
+    'hero',
+  );
+  // Title-treatment logo. Empty src when the document has no contentLogo, which
+  // is what the template gates on.
+  const logo = buildImage({ asset: item.logoAsset, _id: item._id }, 'logo');
   // Only paint the LQIP blur-up backdrop when the projection provided one.
   const lqipStyle = image.lqip
     ? `background-image:url(${image.lqip});background-size:cover;background-position:center;`
     : undefined;
-  return { ...item, index, image, lqipStyle };
+  return { ...item, index, image, logo, lqipStyle };
 });
 ---
 
@@ -244,6 +273,26 @@ const slides = items.map((item, index) => {
                 third: title, tagline, CTA. */}
             <div class="absolute inset-x-0 bottom-0 flex flex-col items-center gap-4 p-6 text-center sm:pb-16">
               <div class="flex max-w-2xl flex-col items-center gap-4">
+                {/* Optional title-treatment logo, ADDITIVE: it sits ABOVE the
+                    <h2> and never replaces it, so the text title stays
+                    rendered and visible either way. Height/width are capped so
+                    a tall or very wide PNG cannot blow out the flex column.
+                    alt="" is deliberate (WCAG H67): the logo renders the same
+                    title the <h2> below already exposes, so naming it here
+                    would make screen readers announce the title twice per
+                    slide. It is decorative relative to that heading. */}
+                {slide.logo.src && (
+                  <img
+                    src={slide.logo.src}
+                    srcset={slide.logo.srcset}
+                    sizes={slide.logo.sizes}
+                    alt=""
+                    loading={slide.index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    class="hero-logo h-auto max-h-24 w-auto max-w-[14rem] object-contain sm:max-h-36 sm:max-w-[22rem]"
+                    data-hero-logo
+                  />
+                )}
                 <h2 class="text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
                   {slide.title}
                 </h2>

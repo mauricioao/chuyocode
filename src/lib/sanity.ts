@@ -120,6 +120,22 @@ export interface MediaItem {
   href: string;
   /** Cover asset in `buildImage` shape (`{ url, metadata: { lqip } }`). */
   asset?: MediaAsset | null;
+  /**
+   * Content/franchise title-treatment logo (transparent PNG) in `buildImage`
+   * shape. Projected by HERO_FRAGMENT and therefore present in BOTH
+   * `getHeroItems` and `getSpotlight` (via SPOTLIGHT_FRAGMENT inheritance).
+   * Consumed only by HeroCarousel today; Spotlight receives it and ignores it.
+   * Optional: when absent the hero renders its text title alone.
+   */
+  logoAsset?: MediaAsset | null;
+  /**
+   * Wide landscape hero backdrop in `buildImage` shape. Projected by
+   * HERO_FRAGMENT and therefore present in BOTH `getHeroItems` and
+   * `getSpotlight` (via SPOTLIGHT_FRAGMENT inheritance). Consumed only by
+   * HeroCarousel today; Spotlight receives it and ignores it. Optional: when
+   * absent the hero falls back to {@link MediaItem.asset} (the cover).
+   */
+  backgroundAsset?: MediaAsset | null;
   /** Short editorial tagline; always a string (coalesced to "" when absent). */
   tagline: string;
   /** Long editorial synopsis for hero/spotlight contexts (optional). */
@@ -331,11 +347,39 @@ export const MEDIA_CARD_FRAGMENT = `
   "kind": _type,
   "asset": coalesce(cover.asset, image.asset)->{ url, "metadata": { "lqip": metadata.lqip } }`;
 
-/** Hero projection: card fields plus a long synopsis for the slide panel. */
+/**
+ * Hero projection: card fields, a long synopsis for the slide panel, and the
+ * two art assets (`contentLogo` title treatment + `heroBackground` landscape
+ * backdrop).
+ *
+ * Those two assets live HERE and deliberately NOT in
+ * {@link MEDIA_CARD_FRAGMENT}: the card fragment also feeds
+ * `ROWS_BY_THEME_QUERY` and `RANKED_QUERY`, which render poster thumbnails that
+ * never show a backdrop or a logo. Every added `->` is a per-document
+ * dereference paid on EVERY card of EVERY row, so hoisting them into the shared
+ * fragment would be pure waste on the two heaviest queries.
+ *
+ * NOTE: `SPOTLIGHT_FRAGMENT` is a pass-through of this fragment, so
+ * `getSpotlight` ALSO projects `logoAsset` and `backgroundAsset`. The spotlight
+ * query targets a single document, so the extra dereferences are bounded — that
+ * is WHY leaving them in is acceptable rather than an oversight. Both assets are
+ * consumed only by HeroCarousel today; Spotlight receives them and ignores them.
+ *
+ * `book` and `news` intentionally use the SAME field names for these two, so a
+ * plain `contentLogo.asset->` works and no `coalesce(a, b)` is needed (unlike
+ * the cover, where the field is `cover` on books and `image` on news).
+ */
 export const HERO_FRAGMENT = `${MEDIA_CARD_FRAGMENT},
-  "synopsis": coalesce(description[$lang], description.es, "")`;
+  "synopsis": coalesce(description[$lang], description.es, ""),
+  "logoAsset": contentLogo.asset->{ url, "metadata": { "lqip": metadata.lqip } },
+  "backgroundAsset": heroBackground.asset->{ url, "metadata": { "lqip": metadata.lqip } }`;
 
-/** Spotlight projection: hero fields (featured is already in the base card). */
+/**
+ * Spotlight projection: inherits HERO_FRAGMENT verbatim, so it projects
+ * `logoAsset` and `backgroundAsset` in addition to all card fields. Spotlight
+ * targets one document, so the dereference cost is bounded. The art fields are
+ * consumed only by HeroCarousel; Spotlight.astro receives them and ignores them.
+ */
 export const SPOTLIGHT_FRAGMENT = `${HERO_FRAGMENT}`;
 
 /**
@@ -590,24 +634,49 @@ function hrefFor(kind: MediaItem['kind'], slug: string, lang: Lang): string {
 }
 
 /**
+ * Normalize ONE raw projected asset into a {@link MediaAsset}, or `undefined`
+ * when the projection produced nothing usable.
+ *
+ * A dereference like `cover.asset->{ url, ... }` yields `null` when the field is
+ * unset, and an object with a missing/blank `url` is just as unrenderable, so
+ * both collapse to `undefined` and the caller omits the key entirely. `metadata`
+ * only rides along when it is actually an object.
+ *
+ * Extracted because {@link toMediaItem} now normalizes THREE assets (cover,
+ * logo, background) with identical rules — three copies of this block would
+ * drift.
+ */
+export function toAsset(raw: unknown): MediaAsset | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const candidate = raw as { url?: unknown; metadata?: unknown };
+  if (typeof candidate.url !== 'string' || candidate.url.length === 0) {
+    return undefined;
+  }
+  return {
+    url: candidate.url,
+    ...(candidate.metadata && typeof candidate.metadata === 'object'
+      ? { metadata: candidate.metadata as { lqip?: string } }
+      : {}),
+  };
+}
+
+/**
  * Normalize a raw discovery projection into a {@link MediaItem}, applying the
  * same safe defaults the GROQ coalesces guarantee (defensive: a raw doc missing
- * `featured`/`tagline` still yields `false`/`""`). The asset is preserved in
+ * `featured`/`tagline` still yields `false`/`""`). Assets are preserved in
  * buildImage's `{ url, metadata: { lqip } }` shape or dropped when absent.
+ *
+ * NOTE: this is a WHITELIST normalizer — a field added to a GROQ fragment is
+ * silently discarded unless it is also picked up here.
  */
 function toMediaItem(raw: Record<string, unknown>, lang: Lang): MediaItem {
   const kind = raw.kind === 'news' ? 'news' : 'book';
   const slug = String(raw.slug ?? '');
-  const rawAsset = raw.asset as { url?: unknown; metadata?: unknown } | null | undefined;
-  const asset =
-    rawAsset && typeof rawAsset.url === 'string' && rawAsset.url.length > 0
-      ? {
-          url: rawAsset.url,
-          ...(rawAsset.metadata && typeof rawAsset.metadata === 'object'
-            ? { metadata: rawAsset.metadata as { lqip?: string } }
-            : {}),
-        }
-      : undefined;
+  const asset = toAsset(raw.asset);
+  // Art projected by HERO_FRAGMENT → present on both hero and spotlight results;
+  // absent on card/ranked projections, which never select HERO_FRAGMENT.
+  const logoAsset = toAsset(raw.logoAsset);
+  const backgroundAsset = toAsset(raw.backgroundAsset);
   const synopsis = typeof raw.synopsis === 'string' && raw.synopsis.length > 0
     ? raw.synopsis
     : undefined;
@@ -621,6 +690,8 @@ function toMediaItem(raw: Record<string, unknown>, lang: Lang): MediaItem {
     slug,
     href: hrefFor(kind, slug, lang),
     ...(asset ? { asset } : {}),
+    ...(logoAsset ? { logoAsset } : {}),
+    ...(backgroundAsset ? { backgroundAsset } : {}),
     tagline: String(raw.tagline ?? ''),
     ...(synopsis ? { synopsis } : {}),
     ...(themeTag ? { themeTag } : {}),

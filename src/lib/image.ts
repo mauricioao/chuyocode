@@ -15,8 +15,25 @@ import { loadEnv } from './env';
 import { createImageUrlBuilder } from '@sanity/image-url';
 import type { ImageUrlBuilder } from '@sanity/image-url';
 
-/** Card contexts that map to distinct width sets and `sizes` hints. */
+/**
+ * CARD contexts that map to distinct width sets and `sizes` hints. Card
+ * components key exhaustive lookups off this union (MediaCard's aspect-ratio
+ * `Record<MediaVariant, string>` is exactly such a map), so adding a non-card
+ * variant here is a breaking change — see {@link HeroVariant}.
+ */
 export type MediaVariant = 'poster' | 'wide' | 'ranked';
+
+/**
+ * HERO-only contexts (spec: hero-logo-background). Kept OUTSIDE
+ * {@link MediaVariant} on purpose: neither is a card, and folding them into the
+ * card union breaks every exhaustive `Record<MediaVariant, …>` a card component
+ * owns. Splitting the unions makes the distinction load-bearing instead of
+ * relying on reviewers to remember it.
+ */
+export type HeroVariant = 'hero' | 'logo';
+
+/** Every variant {@link buildImage} accepts: cards plus hero-only contexts. */
+export type ImageVariant = MediaVariant | HeroVariant;
 
 /**
  * Minimal asset reference shape produced by the cover GROQ projection.
@@ -53,17 +70,34 @@ export interface BuildImageResult {
  * Variant → responsive width descriptors. Each set has ≥3 widths so the
  * generated `srcset` always satisfies the spec's minimum descriptor count.
  */
-const VARIANT_WIDTHS: Record<MediaVariant, readonly number[]> = {
+const VARIANT_WIDTHS: Record<ImageVariant, readonly number[]> = {
   poster: [360, 480, 640, 768],
   wide: [640, 960, 1280, 1920],
   ranked: [320, 420, 560],
+  // `hero` exists because `wide` is tuned for Spotlight's two-column slot
+  // (`(min-width: 1024px) 38rem, 100vw`). The HeroCarousel slide is a
+  // FULL-BLEED `h-[72vh]` billboard, so reusing `wide` there shipped a `sizes`
+  // hint that understates the real rendered width on desktop — the browser
+  // could pick a candidate far too small for the LCP image. `hero` declares the
+  // truth (`100vw`) and adds a 2560 candidate for wide/HiDPI displays.
+  hero: [960, 1280, 1920, 2560],
+  // `logo` is a title-treatment PNG rendered inside the hero info panel.
+  // CSS cap: max-w-[14rem] mobile / max-w-[22rem] sm+ → rendered at ~352 CSS px
+  // on desktop. On 2× displays that needs ~704 device px; on 3× phones the
+  // 14rem (224 CSS px) needs ~672 device px. The original set topped at 480w,
+  // so every HiDPI screen upscaled — the ENTIRE POINT of a crisp title treatment
+  // was defeated. Extended to 960 to cover 2× desktop comfortably and most of
+  // 3× at this capped size. DPR reasoning mirrors the `hero` variant above.
+  logo: [240, 360, 480, 720, 960],
 };
 
 /** Variant → `sizes` attribute value (viewport-aware layout hints). */
-const VARIANT_SIZES: Record<MediaVariant, string> = {
+const VARIANT_SIZES: Record<ImageVariant, string> = {
   poster: '(min-width: 640px) 18rem, 12rem',
   wide: '(min-width: 1024px) 38rem, 100vw',
   ranked: '11rem',
+  hero: '100vw',
+  logo: '(min-width: 640px) 22rem, 14rem',
 };
 
 /**
@@ -110,7 +144,7 @@ function toSource(asset: SanityAssetRef): { asset: { url: string } } | { _ref: s
  */
 export function buildImage(
   input: BuildImageInput,
-  variant: MediaVariant,
+  variant: ImageVariant,
 ): BuildImageResult {
   const widths = VARIANT_WIDTHS[variant];
   const sizes = VARIANT_SIZES[variant];
