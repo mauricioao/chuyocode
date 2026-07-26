@@ -42,6 +42,7 @@ import {
   getRowsByTheme,
   getSpotlight,
   getRanked,
+  toAsset,
 } from './sanity';
 
 // ---------------------------------------------------------------------------
@@ -479,16 +480,72 @@ describe('discovery GROQ fragments', () => {
     expect(MEDIA_CARD_FRAGMENT).toContain('themeTag');
   });
 
+  it('MEDIA_CARD_FRAGMENT does NOT project the hero-only art assets', () => {
+    // The card fragment feeds ROWS_BY_THEME_QUERY and RANKED_QUERY, which render
+    // poster thumbnails. Dereferencing a backdrop/logo there would be a wasted
+    // per-card `->` on the two heaviest queries.
+    expect(MEDIA_CARD_FRAGMENT).not.toContain('contentLogo');
+    expect(MEDIA_CARD_FRAGMENT).not.toContain('heroBackground');
+    expect(MEDIA_CARD_FRAGMENT).not.toContain('logoAsset');
+    expect(MEDIA_CARD_FRAGMENT).not.toContain('backgroundAsset');
+  });
+
   it('HERO_FRAGMENT composes the card fragment plus a synopsis', () => {
     // Fragment composition: HERO extends MEDIA_CARD (DRY, design decision #6).
     expect(HERO_FRAGMENT).toContain(MEDIA_CARD_FRAGMENT);
     expect(HERO_FRAGMENT).toContain('"synopsis": coalesce(description[$lang], description.es, "")');
   });
 
+  it('HERO_FRAGMENT projects contentLogo and heroBackground in buildImage shape', () => {
+    // Both document types share these field names on purpose, so a plain
+    // dereference works — no coalesce(book field, news field) needed.
+    expect(HERO_FRAGMENT).toContain(
+      '"logoAsset": contentLogo.asset->{ url, "metadata": { "lqip": metadata.lqip } }',
+    );
+    expect(HERO_FRAGMENT).toContain(
+      '"backgroundAsset": heroBackground.asset->{ url, "metadata": { "lqip": metadata.lqip } }',
+    );
+  });
+
   it('SPOTLIGHT_FRAGMENT composes the hero fragment', () => {
     expect(SPOTLIGHT_FRAGMENT).toContain(HERO_FRAGMENT);
     // Transitively includes the card fields (featured is in the base card).
     expect(SPOTLIGHT_FRAGMENT).toContain('coalesce(featured, false)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toAsset — shared normalizer for every projected image asset (cover, hero
+// logo, hero backdrop). An unrenderable asset must collapse to `undefined` so
+// the caller omits the key instead of shipping a broken <img>.
+// ---------------------------------------------------------------------------
+describe('toAsset', () => {
+  it('keeps url and metadata when both are present', () => {
+    expect(toAsset({ url: 'https://cdn/a.jpg', metadata: { lqip: 'data:x' } })).toEqual({
+      url: 'https://cdn/a.jpg',
+      metadata: { lqip: 'data:x' },
+    });
+  });
+
+  it('omits metadata when it is absent or not an object', () => {
+    expect(toAsset({ url: 'https://cdn/a.jpg' })).toEqual({ url: 'https://cdn/a.jpg' });
+    expect(toAsset({ url: 'https://cdn/a.jpg', metadata: 'nope' })).toEqual({
+      url: 'https://cdn/a.jpg',
+    });
+  });
+
+  it('returns undefined for a missing, blank, or non-string url', () => {
+    expect(toAsset({})).toBeUndefined();
+    expect(toAsset({ url: '' })).toBeUndefined();
+    expect(toAsset({ url: 42 })).toBeUndefined();
+    expect(toAsset({ metadata: { lqip: 'data:x' } })).toBeUndefined();
+  });
+
+  it('returns undefined for a null/undefined or non-object input', () => {
+    // An unset Sanity image field dereferences to null.
+    expect(toAsset(null)).toBeUndefined();
+    expect(toAsset(undefined)).toBeUndefined();
+    expect(toAsset('https://cdn/a.jpg')).toBeUndefined();
   });
 });
 
@@ -531,6 +588,52 @@ describe('getHeroItems', () => {
     });
   });
 
+  it('maps the optional hero art assets when the projection resolves them', async () => {
+    fetchMock.mockResolvedValue([
+      {
+        _id: 'b3',
+        kind: 'book',
+        title: 'With Hero Art',
+        slug: 'with-hero-art',
+        tagline: '',
+        featured: true,
+        asset: { url: 'https://cdn/cover.jpg' },
+        logoAsset: { url: 'https://cdn/logo.png', metadata: { lqip: 'data:l' } },
+        backgroundAsset: { url: 'https://cdn/backdrop.jpg' },
+      },
+    ]);
+    const [item] = await getHeroItems('es');
+    expect(item?.logoAsset).toEqual({
+      url: 'https://cdn/logo.png',
+      metadata: { lqip: 'data:l' },
+    });
+    expect(item?.backgroundAsset).toEqual({ url: 'https://cdn/backdrop.jpg' });
+    // The cover keeps its own slot — hero art never overwrites it.
+    expect(item?.asset).toEqual({ url: 'https://cdn/cover.jpg' });
+  });
+
+  it('drops hero art assets whose dereference resolved to null', async () => {
+    // Unset image fields dereference to null, which is the common case for every
+    // document created before these fields existed.
+    fetchMock.mockResolvedValue([
+      {
+        _id: 'b4',
+        kind: 'book',
+        title: 'No Hero Art',
+        slug: 'no-hero-art',
+        tagline: '',
+        featured: true,
+        asset: { url: 'https://cdn/cover.jpg' },
+        logoAsset: null,
+        backgroundAsset: null,
+      },
+    ]);
+    const [item] = await getHeroItems('es');
+    expect(item?.logoAsset).toBeUndefined();
+    expect(item?.backgroundAsset).toBeUndefined();
+    expect(item?.asset).toEqual({ url: 'https://cdn/cover.jpg' });
+  });
+
   it('builds a noticias href for news-kind items', async () => {
     fetchMock.mockResolvedValue([
       { _id: 'n1', kind: 'news', title: 'N', slug: 'la-noticia', tagline: '', featured: true },
@@ -550,6 +653,8 @@ describe('getHeroItems', () => {
     expect(item?.asset).toBeUndefined();
     expect(item?.synopsis).toBeUndefined();
     expect(item?.themeTag).toBeUndefined();
+    expect(item?.logoAsset).toBeUndefined();
+    expect(item?.backgroundAsset).toBeUndefined();
   });
 
   it('passes lang and limit to the GROQ query', async () => {

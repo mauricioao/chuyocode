@@ -86,6 +86,26 @@ export default {
         ],
       },
     },
+    // hero-logo-background (content-schema delta): additive OPTIONAL hero art.
+    // Also optional, same rule as the block above — documents without them keep
+    // rendering unchanged. These surface ONLY in the home HeroCarousel slide;
+    // `image` above keeps its role as the card/poster thumbnail everywhere else.
+    {
+      name: 'contentLogo',
+      type: 'image',
+      title: 'Logo del contenido',
+      description:
+        'PNG con fondo transparente (logotipo del título). Se muestra sobre el título en el carrusel destacado de la home. Opcional.',
+      options: { hotspot: true },
+    },
+    {
+      name: 'heroBackground',
+      type: 'image',
+      title: 'Fondo del hero',
+      description:
+        'Imagen panorámica de fondo para el carrusel destacado de la home. Si no se define, se usa la imagen del artículo. Opcional.',
+      options: { hotspot: true },
+    },
   ],
   orderings: [
     { title: 'Fecha, nuevo primero', name: 'publishedAtDesc', by: [{ field: 'publishedAt', direction: 'desc' }] },

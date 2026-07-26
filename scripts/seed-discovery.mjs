@@ -4,6 +4,15 @@
  * Sanity (downloaded from picsum.photos), several flagged featured:true with a
  * spread of themeTag values so every home section lights up.
  *
+ * Also seeds `heroBackground` (1920x1080, a DIFFERENT picsum seed than the
+ * cover) so the HeroCarousel backdrop and its cover fallback are both
+ * demonstrable.
+ *
+ * NOT seeded: `contentLogo`. It must be a transparent PNG title treatment and
+ * picsum only serves opaque JPEGs, so there is no way to fake it here. Upload
+ * it manually per document in Sanity Studio ("Logo del contenido") to see the
+ * hero logo render above the title.
+ *
  * Usage:
  *   node --env-file=.env scripts/seed-discovery.mjs
  * Requires SANITY_WRITE_TOKEN in .env (Editor token, never committed).
@@ -28,7 +37,7 @@ const client = createClient({
 });
 
 // Download a deterministic picsum image and upload it as a Sanity image asset.
-async function uploadCover(seed, width, height, label) {
+async function uploadImageAsset(seed, width, height, label) {
   const url = `https://picsum.photos/seed/${seed}/${width}/${height}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed ${url}: ${res.status}`);
@@ -63,7 +72,9 @@ function slugDoc(slug) {
 const now = new Date().toISOString();
 
 for (const b of books) {
-  const cover = await uploadCover(b.seed, b.w, b.h, 'cover');
+  const cover = await uploadImageAsset(b.seed, b.w, b.h, 'cover');
+  // Distinct seed so the hero backdrop is visibly NOT the portrait cover.
+  const heroBackground = await uploadImageAsset(`${b.seed}-hero`, 1920, 1080, 'hero');
   const doc = {
     _type: 'book',
     title: { es: b.es, en: b.en },
@@ -74,6 +85,7 @@ for (const b of books) {
       en: `${b.en} — a practical guide to learning by doing, step by step.`,
     },
     cover,
+    heroBackground,
     featured: b.featured,
     tagline: { es: b.taglineEs, en: b.taglineEn },
     themeTag: b.themeTag,
@@ -84,7 +96,9 @@ for (const b of books) {
 
 let i = 0;
 for (const n of news) {
-  const image = await uploadCover(n.seed, n.w, n.h, 'image');
+  const image = await uploadImageAsset(n.seed, n.w, n.h, 'image');
+  // Distinct seed so the hero backdrop is visibly NOT the article thumbnail.
+  const heroBackground = await uploadImageAsset(`${n.seed}-hero`, 1920, 1080, 'hero');
   const publishedAt = new Date(Date.now() - i * 86400000).toISOString(); // staggered
   const body = [
     { _type: 'block', _key: `b${i}a`, style: 'normal', children: [{ _type: 'span', _key: `s${i}a`, text: n.excerptEs }] },
@@ -102,6 +116,7 @@ for (const n of news) {
     body: { es: body, en: bodyEn },
     publishedAt,
     image,
+    heroBackground,
     featured: n.featured,
     tagline: { es: n.excerptEs, en: n.excerptEn },
     themeTag: n.themeTag,
