@@ -356,10 +356,10 @@ export const MEDIA_CARD_FRAGMENT = `
  *
  * Those two assets live HERE and deliberately NOT in
  * {@link MEDIA_CARD_FRAGMENT}: the card fragment also feeds
- * `ROWS_BY_THEME_QUERY` and `RANKED_QUERY`, which render poster thumbnails that
- * never show a backdrop or a logo. Every added `->` is a per-document
- * dereference paid on EVERY card of EVERY row, so hoisting them into the shared
- * fragment would be pure waste on the two heaviest queries.
+ * `ROWS_BY_THEME_QUERY` and `BOOKS_BY_SLUGS_QUERY`, which render poster
+ * thumbnails that never show a backdrop or a logo. Every added `->` is a
+ * per-document dereference paid on EVERY card of EVERY row, so hoisting them
+ * into the shared fragment would be pure waste on the heaviest queries.
  *
  * NOTE: `SPOTLIGHT_FRAGMENT` is a pass-through of this fragment, so
  * `getSpotlight` ALSO projects `logoAsset` and `backgroundAsset`. The spotlight
@@ -615,10 +615,17 @@ const SPOTLIGHT_QUERY = `*[
   ${SPOTLIGHT_FRAGMENT}
 }`;
 
-/** Top books ordered for the numbered RankedRow. */
-const RANKED_QUERY = `*[
-  _type == "book" && !(_id in path("drafts.**"))
-] | order(title asc) [0...$limit] {
+/**
+ * Books whose slug is in `$slugs`, projected as discovery cards. Used to
+ * hydrate the "Más descargados" ranking: Supabase returns the ordered slugs,
+ * this query fetches their content. GROQ has no stable "order by array index",
+ * so the CALLER re-sorts the result back into the `$slugs` order.
+ */
+const BOOKS_BY_SLUGS_QUERY = `*[
+  _type == "book"
+  && slug.current in $slugs
+  && !(_id in path("drafts.**"))
+] {
   ${MEDIA_CARD_FRAGMENT}
 }`;
 
@@ -629,12 +636,13 @@ export interface EditorialRow {
 }
 
 /**
- * Reserved theme slugs that get a fixed slot + a curated title at the TOP of
- * the home page, in this exact order. Every OTHER theme renders below them as a
- * dynamic editorial row (spec: home section order). Keep the slugs lowercase +
- * hyphenated to match what editors type in the Studio `themes` tag field.
+ * Reserved theme slugs that get a fixed slot + a curated title near the TOP of
+ * the home page. Today only `recomendados` (rendered as the hero-overlapping
+ * row); every OTHER theme renders as a dynamic editorial row below the
+ * automatic "Más descargados" ranking. Keep the slugs lowercase + hyphenated to
+ * match what editors type in the Studio `themes` tag field.
  */
-export const RESERVED_THEMES = ['mas-vistos', 'recomendados'] as const;
+export const RESERVED_THEMES = ['recomendados'] as const;
 
 /**
  * Display-title overrides for theme slugs whose auto-generated title would be
@@ -644,7 +652,6 @@ export const RESERVED_THEMES = ['mas-vistos', 'recomendados'] as const;
  * `frontend` need nothing.
  */
 export const THEME_TITLE_OVERRIDES: Record<string, string> = {
-  'mas-vistos': 'Más vistos',
   recomendados: 'Libros Recomendados',
 };
 
@@ -842,28 +849,38 @@ export async function getSpotlight(
 }
 
 /**
- * Fetch the top books for the numbered RankedRow, ordered by title.
+ * Fetch books by an explicit list of slugs and return them IN THE GIVEN slug
+ * order (not GROQ's default order).
  *
- * Cached for {@link CACHE_TTL_MS}. Returns `[]` on any Sanity error or when the
- * catalog is empty. Ranking is derived from the query order (design open
- * question: no dedicated `rank` field yet).
+ * Used to hydrate the "Más descargados" ranking: `slugs` comes pre-sorted by
+ * download count from Supabase, so this preserves that ranking. Slugs with no
+ * matching (or draft) book are silently dropped. Cached for {@link CACHE_TTL_MS}
+ * keyed by the ordered slug list. Fail-safe: `[]` on any error or empty input.
  */
-export async function getRanked(
+export async function getBooksBySlugs(
+  slugs: string[],
   lang: Lang | string,
-  limit = 10,
 ): Promise<MediaItem[]> {
   const l = safeLang(lang);
-  const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+  const clean = Array.isArray(slugs)
+    ? slugs.filter((s): s is string => typeof s === 'string' && s.length > 0)
+    : [];
+  if (clean.length === 0) return [];
   try {
-    const raw = await cached(`ranked:${l}:${cap}`, () =>
-      sanityClient.fetch<Record<string, unknown>[]>(RANKED_QUERY, {
+    const raw = await cached(`books-by-slugs:${l}:${clean.join(',')}`, () =>
+      sanityClient.fetch<Record<string, unknown>[]>(BOOKS_BY_SLUGS_QUERY, {
         lang: l,
-        limit: cap,
+        slugs: clean,
       }),
     );
-    return Array.isArray(raw) ? raw.map((r) => toMediaItem(r, l)) : [];
+    const items = Array.isArray(raw) ? raw.map((r) => toMediaItem(r, l)) : [];
+    // Re-order into the requested slug order (GROQ returned them unordered).
+    const bySlug = new Map(items.map((it) => [it.slug, it]));
+    return clean
+      .map((s) => bySlug.get(s))
+      .filter((it): it is MediaItem => it !== undefined);
   } catch (err) {
-    console.error('[sanity] getRanked failed:', err);
+    console.error('[sanity] getBooksBySlugs failed:', err);
     return [];
   }
 }

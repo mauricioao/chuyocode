@@ -2,32 +2,32 @@
 /**
  * Image-first discovery home (frontend-v3 home-discovery; spec: home-page delta).
  *
- * Replaces the previous boxed storytelling hero + static ContentRows with an
- * image-first discovery layout composed of four sections IN ORDER (spec:
- * Section Order):
- *   1. HeroCarousel  — getHeroItems()  → auto-rotating featured billboard.
- *   2. EditorialRows — getRowsByTheme() → one titled row per themeTag, mixed
- *      books + news as poster MediaCards.
- *   3. Spotlight     — getSpotlight()  → single featured doc, wide cover + long
- *      synopsis + CTA.
- *   4. RankedRow     — getRanked()     → numbered "top books" rail.
+ * Image-first discovery layout, sections IN ORDER:
+ *   1. HeroCarousel   — getHeroItems()     → auto-rotating featured billboard.
+ *   2. Reserved rows  — getRowsByTheme()   → the RESERVED_THEMES that have
+ *      content (today "Libros Recomendados"); the FIRST one overlaps the hero.
+ *   3. Más descargados — getMostDownloaded() → automatic numbered ranking by
+ *      REAL download count (RankedRow). Self-hides until downloads exist.
+ *   4. Other themes   — getRowsByTheme()   → one titled row per remaining theme,
+ *      mixed books + news as poster MediaCards.
+ *   5. Spotlight      — getSpotlight()     → single featured doc, wide cover +
+ *      long synopsis + CTA.
  *
- * The AndeanPattern symbol and the boxed hero are REMOVED (spec: REMOVED
- * Requirement — AndeanPattern / Chakana Hero Symbol; product direction mandates
- * a neutral identity). The old static "courses" and "english" teasers are also
- * removed — the page is now purely the four image-first discovery sections.
+ * Themes are a free-text multi-select array (`themes`), so a document can appear
+ * in several rows; titles come from themeTitle() (override map + generic
+ * hyphen→space capitalize).
  *
  * SSR fail-safe: every discovery query returns [] / null on error (design
  * decision #8), and each section renders nothing when its data is empty, so an
  * outage degrades individual sections instead of 500-ing the page — the page
  * always renders.
  *
- * All chrome copy is localized via `UI_LABELS[lang]`. Section headings for the
- * new Spotlight/RankedRow use neutral, general-audience labels.
+ * All chrome copy is localized via `UI_LABELS[lang]`.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import HeroCarousel from '@components/ui/HeroCarousel.astro';
 import EditorialRow from '@components/ui/EditorialRow.astro';
+import RankedRow from '@components/ui/RankedRow.astro';
 import Spotlight from '@components/ui/Spotlight.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
@@ -39,6 +39,7 @@ import {
   type EditorialRow as EditorialRowData,
   type MediaItem,
 } from '@lib/sanity';
+import { getMostDownloaded } from '@lib/downloads';
 
 // The middleware validates and injects `locals.lang`; fall back to the route
 // param for safety, and 404 if somehow neither is a supported language.
@@ -54,20 +55,31 @@ const description = UI_LABELS[lang].meta.siteDescription;
 
 // SSR-fetch every discovery section in parallel. All helpers are fail-safe
 // (return [] / null on error), so empty results simply collapse their section.
-const [heroItems, editorialRows, spotlight] = await Promise.all([
+// `mostDownloaded` reads Supabase + Sanity and returns [] until downloads exist
+// or when the service-role key is unset, so the ranking self-hides gracefully.
+const [heroItems, editorialRows, spotlight, mostDownloaded] = await Promise.all([
   getHeroItems(lang, 6),
   getRowsByTheme(lang),
   getSpotlight(lang),
+  getMostDownloaded(lang, 10),
 ]);
 
 const spotlightHeading = lang === 'en' ? 'Spotlight' : 'Destacado';
 const spotlightCta = UI_LABELS[lang].news.readMore;
 
-// Section ordering (spec: home section order). The reserved themes render
-// FIRST, in RESERVED_THEMES order (mas-vistos, then recomendados), each with a
-// curated title. Every OTHER theme renders below them as a dynamic row, in the
-// first-seen order getRowsByTheme returned. A reserved theme with no content
-// simply produces no row (find returns undefined → filtered out).
+// "Más descargados" ranking labels (automatic, by real download count).
+const mostDownloadedTitle = lang === 'en' ? 'Most downloaded' : 'Más descargados';
+const mostDownloadedDescription =
+  lang === 'en'
+    ? 'The most downloaded titles right now.'
+    : 'Los títulos más descargados ahora mismo.';
+
+// Section ordering (spec: home section order):
+//   hero → "Libros Recomendados" (reserved theme, overlaps the hero)
+//        → "Más descargados" (automatic ranking) → every OTHER theme → spotlight
+// `reservedRows` are the RESERVED_THEMES that actually have content, in that
+// exact order; `otherRows` are the remaining themes in first-seen order. A
+// reserved theme with no content simply produces no row.
 const rowByTheme = new Map(editorialRows.map((r) => [r.themeTag, r]));
 const reservedRows: EditorialRowData[] = RESERVED_THEMES.map(
   (theme) => rowByTheme.get(theme),
@@ -75,7 +87,6 @@ const reservedRows: EditorialRowData[] = RESERVED_THEMES.map(
 const otherRows: EditorialRowData[] = editorialRows.filter(
   (r) => !RESERVED_THEMES.includes(r.themeTag as (typeof RESERVED_THEMES)[number]),
 );
-const orderedRows: EditorialRowData[] = [...reservedRows, ...otherRows];
 ---
 
 <BaseLayout lang={lang} title="ChuyoCode" description={description}>
@@ -98,15 +109,34 @@ const orderedRows: EditorialRowData[] = [...reservedRows, ...otherRows];
         underneath; each row child re-enables `pointer-events-auto` so cards
         stay fully interactive. --- */}
     <div class="pointer-events-none relative z-10 -mt-28 flex flex-col gap-12 py-8 [&>*]:pointer-events-auto sm:-mt-44 sm:gap-16 sm:py-12">
-      {/* --- Editorial rows, ONE per theme, in the ordered sequence built in the
-          frontmatter: the reserved themes first ("Más vistos", then "Libros
-          Recomendados"), every other theme after. The FIRST row is the one that
-          overlaps the hero. Each row's title comes from themeTitle() (override
-          map + generic hyphen→space capitalize). Empty rows never reach here —
-          getRowsByTheme only returns themes that have items. ------------- */}
+      {/* --- Reserved editorial rows FIRST ("Libros Recomendados"). The first
+          one is the row that overlaps the hero. Title via themeTitle() (override
+          map + generic hyphen→space capitalize). Empty reserved themes never
+          reach here — getRowsByTheme only returns themes that have items. -- */}
       {
-        orderedRows.map((row, i) => (
+        reservedRows.map((row, i) => (
           <div class="reveal" style={`--reveal-delay:${(i + 1) * 40}ms`}>
+            <EditorialRow title={themeTitle(row.themeTag)} items={row.items} />
+          </div>
+        ))
+      }
+
+      {/* --- "Más descargados" — automatic numbered ranking by real download
+          count (RankedRow). Self-hides when there are no downloads yet or the
+          service-role key is unset (mostDownloaded === []). -------------- */}
+      <div class="reveal" style="--reveal-delay:120ms">
+        <RankedRow
+          title={mostDownloadedTitle}
+          items={mostDownloaded}
+          description={mostDownloadedDescription}
+        />
+      </div>
+
+      {/* --- Every OTHER theme, as dynamic editorial rows in first-seen order.
+          Each row's title comes from themeTitle(). -------------------------- */}
+      {
+        otherRows.map((row, i) => (
+          <div class="reveal" style={`--reveal-delay:${(i + 2) * 40}ms`}>
             <EditorialRow title={themeTitle(row.themeTag)} items={row.items} />
           </div>
         ))

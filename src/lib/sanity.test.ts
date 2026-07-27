@@ -41,7 +41,7 @@ import {
   getHeroItems,
   getRowsByTheme,
   getSpotlight,
-  getRanked,
+  getBooksBySlugs,
   toAsset,
   themeTitle,
   RESERVED_THEMES,
@@ -483,9 +483,9 @@ describe('discovery GROQ fragments', () => {
   });
 
   it('MEDIA_CARD_FRAGMENT does NOT project the hero-only art assets', () => {
-    // The card fragment feeds ROWS_BY_THEME_QUERY and RANKED_QUERY, which render
-    // poster thumbnails. Dereferencing a backdrop/logo there would be a wasted
-    // per-card `->` on the two heaviest queries.
+    // The card fragment feeds ROWS_BY_THEME_QUERY and BOOKS_BY_SLUGS_QUERY,
+    // which render poster thumbnails. Dereferencing a backdrop/logo there would
+    // be a wasted per-card `->` on the heaviest queries.
     expect(MEDIA_CARD_FRAGMENT).not.toContain('contentLogo');
     expect(MEDIA_CARD_FRAGMENT).not.toContain('heroBackground');
     expect(MEDIA_CARD_FRAGMENT).not.toContain('logoAsset');
@@ -782,53 +782,13 @@ describe('getSpotlight', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getRanked — ordered books, cap, fail-safe, caching.
-// ---------------------------------------------------------------------------
-describe('getRanked', () => {
-  beforeEach(() => {
-    fetchMock.mockReset();
-    sanityCache.clear();
-  });
 
-  it('maps ranked books into MediaItems', async () => {
-    fetchMock.mockResolvedValue([
-      { _id: 'b1', kind: 'book', title: 'A', slug: 'a', tagline: '', featured: false },
-      { _id: 'b2', kind: 'book', title: 'B', slug: 'b', tagline: '', featured: false },
-    ]);
-    const items = await getRanked('es', 5);
-    expect(items).toHaveLength(2);
-    expect(items[0]?.href).toBe('/es/libros/a');
-  });
-
-  it('passes lang and limit to the GROQ query', async () => {
-    fetchMock.mockResolvedValue([]);
-    await getRanked('en', 3);
-    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), {
-      lang: 'en',
-      limit: 3,
-    });
-  });
-
-  it('returns [] (fail-safe) on a Sanity error', async () => {
-    fetchMock.mockRejectedValue(new Error('boom'));
-    expect(await getRanked('es')).toEqual([]);
-  });
-
-  it('serves a second identical call from cache (no extra fetch)', async () => {
-    fetchMock.mockResolvedValue([]);
-    await getRanked('es', 10);
-    await getRanked('es', 10);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // themeTitle — slug → display title (override map + generic transform).
 // ---------------------------------------------------------------------------
 describe('themeTitle', () => {
-  it('uses the override map for reserved themes (with accents)', () => {
-    expect(themeTitle('mas-vistos')).toBe('Más vistos');
+  it('uses the override map for reserved themes (multi-word label)', () => {
     expect(themeTitle('recomendados')).toBe('Libros Recomendados');
   });
 
@@ -847,6 +807,54 @@ describe('themeTitle', () => {
   });
 
   it('exposes the reserved themes in home order', () => {
-    expect(RESERVED_THEMES).toEqual(['mas-vistos', 'recomendados']);
+    expect(RESERVED_THEMES).toEqual(['recomendados']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getBooksBySlugs — hydrate an ordered slug list (backs "Más descargados").
+// ---------------------------------------------------------------------------
+describe('getBooksBySlugs', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    sanityCache.clear();
+  });
+
+  it('returns [] without querying for an empty slug list', async () => {
+    expect(await getBooksBySlugs([], 'es')).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('re-sorts the GROQ result back into the requested slug order', async () => {
+    // Supabase ranking order is [top, mid, low]; GROQ returns them shuffled.
+    fetchMock.mockResolvedValue([
+      { _id: '2', kind: 'book', title: 'Mid', slug: 'mid', tagline: '', featured: false },
+      { _id: '3', kind: 'book', title: 'Low', slug: 'low', tagline: '', featured: false },
+      { _id: '1', kind: 'book', title: 'Top', slug: 'top', tagline: '', featured: false },
+    ]);
+    const items = await getBooksBySlugs(['top', 'mid', 'low'], 'es');
+    expect(items.map((i) => i.slug)).toEqual(['top', 'mid', 'low']);
+  });
+
+  it('drops slugs that resolved to no book', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: '1', kind: 'book', title: 'Top', slug: 'top', tagline: '', featured: false },
+    ]);
+    const items = await getBooksBySlugs(['top', 'missing'], 'es');
+    expect(items.map((i) => i.slug)).toEqual(['top']);
+  });
+
+  it('passes the slug list and lang to the GROQ query', async () => {
+    fetchMock.mockResolvedValue([]);
+    await getBooksBySlugs(['a', 'b'], 'en');
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), {
+      lang: 'en',
+      slugs: ['a', 'b'],
+    });
+  });
+
+  it('returns [] (fail-safe) on a Sanity error', async () => {
+    fetchMock.mockRejectedValue(new Error('boom'));
+    expect(await getBooksBySlugs(['a'], 'es')).toEqual([]);
   });
 });
