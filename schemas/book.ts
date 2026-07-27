@@ -72,19 +72,13 @@ export default {
       ],
     },
     {
-      name: 'themeTag',
-      type: 'string',
-      title: 'Tema',
-      description: 'Agrupa el contenido en filas editoriales (opcional).',
-      options: {
-        list: [
-          { title: 'Arquitectura', value: 'architecture' },
-          { title: 'Testing', value: 'testing' },
-          { title: 'Frontend', value: 'frontend' },
-          { title: 'Backend', value: 'backend' },
-          { title: 'Carrera', value: 'career' },
-        ],
-      },
+      name: 'themes',
+      type: 'array',
+      title: 'Temas',
+      of: [{ type: 'string' }],
+      options: { layout: 'tags' },
+      description:
+        'Temas del contenido (escribí libremente y presioná Enter). Agrupan el contenido en filas editoriales de la home. Reservados especiales: "mas-vistos" y "recomendados".',
     },
     // hero-logo-background (content-schema delta): additive OPTIONAL hero art.
     // Also optional, same rule as the block above — documents without them keep

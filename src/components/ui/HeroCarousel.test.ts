@@ -67,17 +67,15 @@ describe('HeroCarousel.astro — multiple slides', () => {
     expect(html).toContain('Libro 3');
   });
 
-  it('renders one indicator dot per slide', async () => {
+  it('renders NO indicator dots (removed pending a new slide control)', async () => {
     const html = await render({ items: [slide(1), slide(2), slide(3)] });
-    // `data-hero-dots` (the container) shares the `data-hero-dot` prefix, so
-    // match the per-dot boolean attribute at its boundary only.
-    const dots = html.match(/data-hero-dot(?=[\s">])/g) ?? [];
-    expect(dots).toHaveLength(3);
-    expect(html).toContain('data-hero-dots');
-    expect(html).toContain('role="tablist"');
+    // Dots were removed intentionally; a different control replaces them later.
+    expect(html).not.toContain('data-hero-dots');
+    expect(html).not.toContain('data-hero-dot');
+    expect(html).not.toContain('role="tablist"');
   });
 
-  it('marks the first slide and first dot active by default', async () => {
+  it('marks the first slide active by default', async () => {
     const html = await render({ items: [slide(1), slide(2)] });
     // First slide is visible; others start hidden.
     expect(html).toContain('is-active');
@@ -96,7 +94,7 @@ describe('HeroCarousel.astro — multiple slides', () => {
     const html = await render({
       items: [{ ...slide(1), ctaLabel: undefined }, slide(2)],
     });
-    expect(html).toContain('>View<');
+    expect(html).toContain('>Leer<');
   });
 
   it('renders the tagline in the info panel when present', async () => {

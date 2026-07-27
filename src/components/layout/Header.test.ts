@@ -36,12 +36,12 @@ describe('Header.astro — nav', () => {
     expect(html).toContain('href="/es/ingles"');
   });
 
-  it('renders the masthead logo image pointing at /logo.svg', async () => {
+  it('renders the masthead logo image pointing at /chuyocode.svg', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
-    expect(html).toContain('src="/logo.svg"');
+    expect(html).toContain('src="/chuyocode.svg"');
     expect(html).toContain('alt="ChuyoCode"');
   });
 

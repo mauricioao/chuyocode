@@ -58,7 +58,6 @@ export interface Book {
    */
   featured?: boolean;
   tagline?: string;
-  themeTag?: string;
 }
 
 /** A published news article, projected into a flat, render-ready shape. */
@@ -87,7 +86,6 @@ export interface NewsArticle {
    */
   featured?: boolean;
   tagline?: string;
-  themeTag?: string;
 }
 
 /**
@@ -140,8 +138,12 @@ export interface MediaItem {
   tagline: string;
   /** Long editorial synopsis for hero/spotlight contexts (optional). */
   synopsis?: string;
-  /** Grouping tag for editorial rows (optional). */
-  themeTag?: string;
+  /**
+   * Grouping tags for editorial rows. Always an array (coalesced to `[]` when
+   * absent). A document can belong to several themes at once, so it appears in
+   * one editorial row per tag it carries.
+   */
+  themes: string[];
   /** Featured flag; always a boolean (coalesced to false when absent). */
   featured: boolean;
 }
@@ -343,7 +345,7 @@ export const MEDIA_CARD_FRAGMENT = `
   "slug": slug.current,
   "tagline": coalesce(tagline[$lang], tagline.es, ""),
   "featured": coalesce(featured, false),
-  themeTag,
+  "themes": coalesce(themes, []),
   "kind": _type,
   "asset": coalesce(cover.asset, image.asset)->{ url, "metadata": { "lqip": metadata.lqip } }`;
 
@@ -593,10 +595,12 @@ const HERO_QUERY = `*[
   ${HERO_FRAGMENT}
 }`;
 
-/** Cards grouped by themeTag, mixed book + news, for EditorialRows. */
+/** Cards grouped by theme, mixed book + news, for EditorialRows. A document
+ * with several themes is returned once and fanned out into one row per theme
+ * by {@link getRowsByTheme}. */
 const ROWS_BY_THEME_QUERY = `*[
   (_type == "book" || _type == "news")
-  && defined(themeTag)
+  && count(themes) > 0
   && !(_id in path("drafts.**"))
 ] | order(coalesce(publishedAt, _createdAt) desc) {
   ${MEDIA_CARD_FRAGMENT}
@@ -618,10 +622,51 @@ const RANKED_QUERY = `*[
   ${MEDIA_CARD_FRAGMENT}
 }`;
 
-/** An editorial row: a themeTag plus the items grouped under it. */
+/** An editorial row: a theme slug plus the items grouped under it. */
 export interface EditorialRow {
   themeTag: string;
   items: MediaItem[];
+}
+
+/**
+ * Reserved theme slugs that get a fixed slot + a curated title at the TOP of
+ * the home page, in this exact order. Every OTHER theme renders below them as a
+ * dynamic editorial row (spec: home section order). Keep the slugs lowercase +
+ * hyphenated to match what editors type in the Studio `themes` tag field.
+ */
+export const RESERVED_THEMES = ['mas-vistos', 'recomendados'] as const;
+
+/**
+ * Display-title overrides for theme slugs whose auto-generated title would be
+ * wrong (accents the slug can't carry, or a multi-word editorial label). Any
+ * slug NOT listed here falls through to {@link themeTitle}'s generic transform.
+ * Editors add a line here only for special-cased titles; plain slugs like
+ * `frontend` need nothing.
+ */
+export const THEME_TITLE_OVERRIDES: Record<string, string> = {
+  'mas-vistos': 'Más vistos',
+  recomendados: 'Libros Recomendados',
+};
+
+/**
+ * Turn a theme slug into a display title. Precedence:
+ *   1. An explicit entry in {@link THEME_TITLE_OVERRIDES} (accents / labels).
+ *   2. Generic transform: hyphens/underscores → spaces, then capitalize the
+ *      first letter of each word ("frontend" → "Frontend", "clean-arch" →
+ *      "Clean Arch").
+ * The generic path CANNOT invent accents that are not in the slug, which is
+ * exactly why the override map exists.
+ */
+export function themeTitle(slug: string): string {
+  if (!slug) return '';
+  const override = THEME_TITLE_OVERRIDES[slug];
+  if (override) return override;
+  return slug
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 /**
@@ -680,9 +725,16 @@ function toMediaItem(raw: Record<string, unknown>, lang: Lang): MediaItem {
   const synopsis = typeof raw.synopsis === 'string' && raw.synopsis.length > 0
     ? raw.synopsis
     : undefined;
-  const themeTag = typeof raw.themeTag === 'string' && raw.themeTag.length > 0
-    ? raw.themeTag
-    : undefined;
+  // `themes` is an array of non-empty strings. Defensive: tolerate a raw doc
+  // that still carries a legacy string OR a null, coercing both to a clean
+  // string[] so grouping never sees nulls/blanks.
+  const themes = Array.isArray(raw.themes)
+    ? raw.themes.filter(
+        (t): t is string => typeof t === 'string' && t.length > 0,
+      )
+    : typeof raw.themes === 'string' && raw.themes.length > 0
+      ? [raw.themes]
+      : [];
   return {
     _id: String(raw._id ?? ''),
     kind,
@@ -694,7 +746,7 @@ function toMediaItem(raw: Record<string, unknown>, lang: Lang): MediaItem {
     ...(backgroundAsset ? { backgroundAsset } : {}),
     tagline: String(raw.tagline ?? ''),
     ...(synopsis ? { synopsis } : {}),
-    ...(themeTag ? { themeTag } : {}),
+    themes,
     featured: raw.featured === true,
   };
 }
@@ -749,14 +801,14 @@ export async function getRowsByTheme(
     const rows = new Map<string, MediaItem[]>();
     for (const doc of raw) {
       const item = toMediaItem(doc, l);
-      if (!item.themeTag) {
-        continue;
-      }
-      const bucket = rows.get(item.themeTag);
-      if (bucket) {
-        bucket.push(item);
-      } else {
-        rows.set(item.themeTag, [item]);
+      // A document can carry several themes → it joins one row per theme.
+      for (const theme of item.themes) {
+        const bucket = rows.get(theme);
+        if (bucket) {
+          bucket.push(item);
+        } else {
+          rows.set(theme, [item]);
+        }
       }
     }
     return Array.from(rows, ([themeTag, items]) => ({ themeTag, items }));

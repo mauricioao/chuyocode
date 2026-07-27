@@ -43,6 +43,8 @@ import {
   getSpotlight,
   getRanked,
   toAsset,
+  themeTitle,
+  RESERVED_THEMES,
 } from './sanity';
 
 // ---------------------------------------------------------------------------
@@ -477,7 +479,7 @@ describe('discovery GROQ fragments', () => {
     expect(MEDIA_CARD_FRAGMENT).toContain('coalesce(tagline[$lang], tagline.es, "")');
     // Localized title with es fallback and a final empty-string guard.
     expect(MEDIA_CARD_FRAGMENT).toContain('coalesce(title[$lang], title.es, title, "")');
-    expect(MEDIA_CARD_FRAGMENT).toContain('themeTag');
+    expect(MEDIA_CARD_FRAGMENT).toContain('"themes": coalesce(themes, [])');
   });
 
   it('MEDIA_CARD_FRAGMENT does NOT project the hero-only art assets', () => {
@@ -567,7 +569,7 @@ describe('getHeroItems', () => {
         slug: 'featured-book',
         tagline: 'A tagline',
         featured: true,
-        themeTag: 'architecture',
+        themes: ['architecture'],
         synopsis: 'Long synopsis',
         asset: { url: 'https://cdn/cover.jpg', metadata: { lqip: 'data:blur' } },
       },
@@ -583,7 +585,7 @@ describe('getHeroItems', () => {
       asset: { url: 'https://cdn/cover.jpg', metadata: { lqip: 'data:blur' } },
       tagline: 'A tagline',
       synopsis: 'Long synopsis',
-      themeTag: 'architecture',
+      themes: ['architecture'],
       featured: true,
     });
   });
@@ -652,7 +654,7 @@ describe('getHeroItems', () => {
     expect(item?.featured).toBe(false);
     expect(item?.asset).toBeUndefined();
     expect(item?.synopsis).toBeUndefined();
-    expect(item?.themeTag).toBeUndefined();
+    expect(item?.themes).toEqual([]);
     expect(item?.logoAsset).toBeUndefined();
     expect(item?.backgroundAsset).toBeUndefined();
   });
@@ -688,11 +690,11 @@ describe('getRowsByTheme', () => {
     sanityCache.clear();
   });
 
-  it('groups mixed book + news items into rows by themeTag', async () => {
+  it('groups mixed book + news items into rows by theme', async () => {
     fetchMock.mockResolvedValue([
-      { _id: 'b1', kind: 'book', title: 'Book A', slug: 'a', tagline: '', featured: false, themeTag: 'testing' },
-      { _id: 'n1', kind: 'news', title: 'News B', slug: 'b', tagline: '', featured: false, themeTag: 'testing' },
-      { _id: 'b2', kind: 'book', title: 'Book C', slug: 'c', tagline: '', featured: false, themeTag: 'frontend' },
+      { _id: 'b1', kind: 'book', title: 'Book A', slug: 'a', tagline: '', featured: false, themes: ['testing'] },
+      { _id: 'n1', kind: 'news', title: 'News B', slug: 'b', tagline: '', featured: false, themes: ['testing'] },
+      { _id: 'b2', kind: 'book', title: 'Book C', slug: 'c', tagline: '', featured: false, themes: ['frontend'] },
     ]);
     const rows = await getRowsByTheme('es');
     expect(rows).toHaveLength(2);
@@ -703,16 +705,29 @@ describe('getRowsByTheme', () => {
     expect(rows.find((r) => r.themeTag === 'frontend')?.items).toHaveLength(1);
   });
 
+  it('fans a multi-theme document into one row per theme', async () => {
+    // A single document carrying several themes must appear in every matching
+    // row (spec: themes are a multi-select array).
+    fetchMock.mockResolvedValue([
+      { _id: 'b1', kind: 'book', title: 'Multi', slug: 'multi', tagline: '', featured: false, themes: ['mas-vistos', 'frontend'] },
+      { _id: 'b2', kind: 'book', title: 'Solo', slug: 'solo', tagline: '', featured: false, themes: ['frontend'] },
+    ]);
+    const rows = await getRowsByTheme('es');
+    expect(rows.map((r) => r.themeTag).sort()).toEqual(['frontend', 'mas-vistos']);
+    expect(rows.find((r) => r.themeTag === 'mas-vistos')?.items).toHaveLength(1);
+    expect(rows.find((r) => r.themeTag === 'frontend')?.items).toHaveLength(2);
+  });
+
   it('preserves first-seen tag order', async () => {
     fetchMock.mockResolvedValue([
-      { _id: '1', kind: 'book', title: 'X', slug: 'x', tagline: '', featured: false, themeTag: 'backend' },
-      { _id: '2', kind: 'book', title: 'Y', slug: 'y', tagline: '', featured: false, themeTag: 'career' },
+      { _id: '1', kind: 'book', title: 'X', slug: 'x', tagline: '', featured: false, themes: ['backend'] },
+      { _id: '2', kind: 'book', title: 'Y', slug: 'y', tagline: '', featured: false, themes: ['career'] },
     ]);
     const rows = await getRowsByTheme('es');
     expect(rows.map((r) => r.themeTag)).toEqual(['backend', 'career']);
   });
 
-  it('returns [] when no document carries a themeTag', async () => {
+  it('returns [] when no document carries a theme', async () => {
     fetchMock.mockResolvedValue([]);
     expect(await getRowsByTheme('es')).toEqual([]);
   });
@@ -805,5 +820,33 @@ describe('getRanked', () => {
     await getRanked('es', 10);
     await getRanked('es', 10);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// themeTitle — slug → display title (override map + generic transform).
+// ---------------------------------------------------------------------------
+describe('themeTitle', () => {
+  it('uses the override map for reserved themes (with accents)', () => {
+    expect(themeTitle('mas-vistos')).toBe('Más vistos');
+    expect(themeTitle('recomendados')).toBe('Libros Recomendados');
+  });
+
+  it('capitalizes a plain single-word slug', () => {
+    expect(themeTitle('frontend')).toBe('Frontend');
+    expect(themeTitle('backend')).toBe('Backend');
+  });
+
+  it('turns hyphens/underscores into spaces and capitalizes each word', () => {
+    expect(themeTitle('clean-arch')).toBe('Clean Arch');
+    expect(themeTitle('data_science')).toBe('Data Science');
+  });
+
+  it('returns an empty string for an empty slug', () => {
+    expect(themeTitle('')).toBe('');
+  });
+
+  it('exposes the reserved themes in home order', () => {
+    expect(RESERVED_THEMES).toEqual(['mas-vistos', 'recomendados']);
   });
 });

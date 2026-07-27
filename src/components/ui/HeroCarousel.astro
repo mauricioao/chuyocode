@@ -109,7 +109,6 @@ const AUTOPLAY_SCRIPT = `
   if (!root) return;
 
   var slides = root.querySelectorAll('[data-hero-slide]');
-  var dots = root.querySelectorAll('[data-hero-dot]');
   if (slides.length < 2) return;
 
   var interval = parseInt(root.getAttribute('data-interval'), 10);
@@ -128,11 +127,6 @@ const AUTOPLAY_SCRIPT = `
       var active = i === next;
       slides[i].classList.toggle('is-active', active);
       slides[i].setAttribute('aria-hidden', active ? 'false' : 'true');
-    }
-    for (var j = 0; j < dots.length; j++) {
-      var on = j === next;
-      dots[j].classList.toggle('is-active', on);
-      dots[j].setAttribute('aria-selected', on ? 'true' : 'false');
     }
     current = next;
   }
@@ -175,16 +169,6 @@ const AUTOPLAY_SCRIPT = `
   }
   document.addEventListener('visibilitychange', onVisibility);
 
-  // Dot click jumps directly to that slide (spec: Indicator navigation).
-  for (var k = 0; k < dots.length; k++) {
-    (function (dot) {
-      dot.addEventListener('click', function () {
-        var idx = parseInt(dot.getAttribute('data-index'), 10) || 0;
-        show(idx);
-      });
-    })(dots[k]);
-  }
-
   // Reduced motion disables autoplay entirely (no timer ever starts).
   if (!reduceMotion && !document.hidden) start();
 })();
@@ -216,7 +200,7 @@ const slides = items.map((item, index) => {
        slot so the layout below (rows, spotlight) still flows (spec: Zero
        items → no carousel DOM rendered). */
     <div
-      class="hero-carousel-placeholder flex h-[72vh] min-h-[420px] w-full items-center justify-center bg-base-muted"
+      class="hero-carousel-placeholder flex h-[88vh] min-h-[520px] w-full items-center justify-center bg-base-muted"
       data-hero-placeholder
     >
       <span class="text-sm text-zinc-400">No featured content</span>
@@ -229,7 +213,7 @@ const slides = items.map((item, index) => {
       aria-roledescription="carousel"
       aria-label="Featured content"
     >
-      <div class="hero-carousel-viewport relative h-[72vh] min-h-[420px] w-full">
+      <div class="hero-carousel-viewport relative h-[88vh] min-h-[520px] w-full">
         {slides.map((slide) => (
           <article
             class:list={[
@@ -260,19 +244,20 @@ const slides = items.map((item, index) => {
               )}
             </div>
 
-            {/* Bottom-to-top opacity gradient so the centered info block stays
-                legible over any cover AND fades into PURE BLACK so the page
-                background below the hero joins seamlessly (no tonal seam). The
-                fade STARTS LOWER (half height, bottom-anchored, with the solid
-                black stop pushed toward the very bottom) so more of the featured
-                art stays visible up top — the shademanga billboard look. The
-                first content row still overlaps this lower fade for depth. */}
-            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black from-25% via-black/50 to-transparent" />
+            {/* Bottom-to-top scrim (shademanga overlap look): the tall hero
+                extends well below the fold, so the fade lives in the bottom
+                third and eases GRADUALLY — solid black at the very bottom (so
+                the overlapping cards + page background join seamlessly), then a
+                long soft ramp up to transparent. This is the band the first
+                content row overlaps ~40%, giving depth without a hard seam. */}
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black from-15% via-black/40 via-50% to-transparent" />
 
-            {/* Info panel CENTERED horizontally, anchored toward the bottom
-                third: title, tagline, CTA. */}
-            <div class="absolute inset-x-0 bottom-0 flex flex-col items-center gap-4 p-6 text-center sm:pb-16">
-              <div class="flex max-w-2xl flex-col items-center gap-4">
+            {/* Info panel LEFT-ALIGNED and VERTICALLY CENTERED (shademanga
+                billboard look): the block sits on the left half at mid-height,
+                so the featured art breathes on the right. Text is left-aligned;
+                on small screens it drops padding but keeps the left anchor. */}
+            <div class="absolute inset-y-0 left-0 flex flex-col items-start justify-center gap-4 p-6 text-left sm:pl-12 md:pl-16 lg:pl-20">
+              <div class="flex max-w-xl flex-col items-start gap-4">
                 {/* Optional title-treatment logo, ADDITIVE: it sits ABOVE the
                     <h2> and never replaces it, so the text title stays
                     rendered and visible either way. Height/width are capped so
@@ -297,7 +282,7 @@ const slides = items.map((item, index) => {
                   {slide.title}
                 </h2>
                 {slide.tagline && (
-                  <p class="max-w-prose text-sm text-zinc-300 sm:text-base">
+                  <p class="max-w-prose font-display text-sm font-medium text-zinc-100 sm:text-base">
                     {slide.tagline}
                   </p>
                 )}
@@ -306,7 +291,7 @@ const slides = items.map((item, index) => {
                   class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-black outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
                   data-hero-cta
                 >
-                  {slide.ctaLabel ?? 'View'}
+                  {slide.ctaLabel ?? 'Leer'}
                 </a>
               </div>
             </div>
@@ -314,32 +299,8 @@ const slides = items.map((item, index) => {
         ))}
       </div>
 
-      {/* Indicator dots — one per slide, only when there is more than one
-          slide (spec: 1 item → no indicators). Clicking a dot jumps to it. */}
-      {!isStatic && (
-        <div
-          class="hero-dots absolute inset-x-0 bottom-4 z-10 flex items-center justify-center gap-2"
-          role="tablist"
-          aria-label="Choose slide"
-          data-hero-dots
-        >
-          {slides.map((slide) => (
-            <button
-              type="button"
-              class:list={[
-                'hero-dot h-2.5 w-2.5 rounded-full bg-white/40 outline-none transition-colors duration-200',
-                'hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-accent',
-                slide.index === 0 && 'is-active',
-              ]}
-              data-hero-dot
-              data-index={String(slide.index)}
-              role="tab"
-              aria-selected={slide.index === 0 ? 'true' : 'false'}
-              aria-label={`Go to slide ${slide.index + 1}`}
-            />
-          ))}
-        </div>
-      )}
+      {/* Indicator dots were removed intentionally — a different slide control
+          will replace them later. Autoplay + cross-fade still drive rotation. */}
     </section>
   )
 }
@@ -368,12 +329,6 @@ const slides = items.map((item, index) => {
   .hero-slide.is-active {
     opacity: 1;
     visibility: visible;
-  }
-
-  /* Active indicator dot is visually distinct from the rest. */
-  .hero-dot.is-active {
-    background-color: rgb(255 255 255 / 0.95);
-    transform: scale(1.2);
   }
 
   /* Reduced motion: no cross-fade animation on slide switch. */

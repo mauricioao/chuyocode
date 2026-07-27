@@ -49,20 +49,23 @@ async function uploadImageAsset(seed, width, height, label) {
   return { _type: 'image', asset: { _type: 'reference', _ref: asset._id } };
 }
 
+// `themes` is a multi-select array now. Some docs carry a RESERVED theme
+// (mas-vistos / recomendados) IN ADDITION to a topic theme, to exercise the
+// multi-theme fan-out and light up the reserved home rows.
 const books = [
-  { slug: 'diseno-que-ensena', es: 'Diseño que enseña', en: 'Design That Teaches', authorEs: 'Chuyo', authorEn: 'Chuyo', themeTag: 'frontend', featured: true, taglineEs: 'Interfaces claras, sin ruido.', taglineEn: 'Clear interfaces, no noise.', seed: 'design-book', w: 600, h: 800 },
-  { slug: 'habitos-que-suman', es: 'Hábitos que suman', en: 'Habits That Add Up', authorEs: 'Chuyo', authorEn: 'Chuyo', themeTag: 'career', featured: true, taglineEs: 'Pequeños pasos, grandes cambios.', taglineEn: 'Small steps, big change.', seed: 'habits-book', w: 600, h: 800 },
-  { slug: 'negocios-sin-humo', es: 'Negocios sin humo', en: 'Business, No Fluff', authorEs: 'Chuyo', authorEn: 'Chuyo', themeTag: 'backend', featured: true, taglineEs: 'Lo esencial para emprender.', taglineEn: 'The essentials to start.', seed: 'business-book', w: 600, h: 800 },
-  { slug: 'escribir-mejor', es: 'Escribir mejor', en: 'Write Better', authorEs: 'Chuyo', authorEn: 'Chuyo', themeTag: 'career', featured: false, taglineEs: 'Claridad en cada frase.', taglineEn: 'Clarity in every line.', seed: 'writing-book', w: 600, h: 800 },
-  { slug: 'pensar-en-sistemas', es: 'Pensar en sistemas', en: 'Thinking in Systems', authorEs: 'Chuyo', authorEn: 'Chuyo', themeTag: 'architecture', featured: false, taglineEs: 'El todo por encima de las partes.', taglineEn: 'The whole above the parts.', seed: 'systems-book', w: 600, h: 800 },
-  { slug: 'aprender-a-aprender', es: 'Aprender a aprender', en: 'Learn to Learn', authorEs: 'Chuyo', authorEn: 'Chuyo', themeTag: 'testing', featured: false, taglineEs: 'Método antes que memoria.', taglineEn: 'Method over memory.', seed: 'learn-book', w: 600, h: 800 },
+  { slug: 'diseno-que-ensena', es: 'Diseño que enseña', en: 'Design That Teaches', authorEs: 'Chuyo', authorEn: 'Chuyo', themes: ['mas-vistos', 'frontend'], featured: true, taglineEs: 'Interfaces claras, sin ruido.', taglineEn: 'Clear interfaces, no noise.', seed: 'design-book', w: 600, h: 800 },
+  { slug: 'habitos-que-suman', es: 'Hábitos que suman', en: 'Habits That Add Up', authorEs: 'Chuyo', authorEn: 'Chuyo', themes: ['recomendados', 'career'], featured: true, taglineEs: 'Pequeños pasos, grandes cambios.', taglineEn: 'Small steps, big change.', seed: 'habits-book', w: 600, h: 800 },
+  { slug: 'negocios-sin-humo', es: 'Negocios sin humo', en: 'Business, No Fluff', authorEs: 'Chuyo', authorEn: 'Chuyo', themes: ['mas-vistos', 'recomendados', 'backend'], featured: true, taglineEs: 'Lo esencial para emprender.', taglineEn: 'The essentials to start.', seed: 'business-book', w: 600, h: 800 },
+  { slug: 'escribir-mejor', es: 'Escribir mejor', en: 'Write Better', authorEs: 'Chuyo', authorEn: 'Chuyo', themes: ['career'], featured: false, taglineEs: 'Claridad en cada frase.', taglineEn: 'Clarity in every line.', seed: 'writing-book', w: 600, h: 800 },
+  { slug: 'pensar-en-sistemas', es: 'Pensar en sistemas', en: 'Thinking in Systems', authorEs: 'Chuyo', authorEn: 'Chuyo', themes: ['recomendados', 'architecture'], featured: false, taglineEs: 'El todo por encima de las partes.', taglineEn: 'The whole above the parts.', seed: 'systems-book', w: 600, h: 800 },
+  { slug: 'aprender-a-aprender', es: 'Aprender a aprender', en: 'Learn to Learn', authorEs: 'Chuyo', authorEn: 'Chuyo', themes: ['mas-vistos', 'testing'], featured: false, taglineEs: 'Método antes que memoria.', taglineEn: 'Method over memory.', seed: 'learn-book', w: 600, h: 800 },
 ];
 
 const news = [
-  { slug: 'bienvenidos-chuyocode', es: 'Bienvenidos a ChuyoCode', en: 'Welcome to ChuyoCode', excerptEs: 'Un nuevo espacio para aprender haciendo.', excerptEn: 'A new space to learn by doing.', themeTag: 'career', featured: false, seed: 'welcome-news', w: 1280, h: 720 },
-  { slug: 'guia-rapida-portafolio', es: 'Guía rápida para tu portafolio', en: 'Quick Guide to Your Portfolio', excerptEs: 'Qué mostrar y qué dejar afuera.', excerptEn: 'What to show and what to leave out.', themeTag: 'frontend', featured: false, seed: 'portfolio-news', w: 1280, h: 720 },
-  { slug: 'productividad-sin-burnout', es: 'Productividad sin burnout', en: 'Productivity Without Burnout', excerptEs: 'Trabajar mejor, no más horas.', excerptEn: 'Work better, not longer.', themeTag: 'career', featured: false, seed: 'productivity-news', w: 1280, h: 720 },
-  { slug: 'ideas-que-se-comparten', es: 'Ideas que se comparten', en: 'Ideas Worth Sharing', excerptEs: 'Por qué enseñar te hace mejor.', excerptEn: 'Why teaching makes you better.', themeTag: 'testing', featured: false, seed: 'share-news', w: 1280, h: 720 },
+  { slug: 'bienvenidos-chuyocode', es: 'Bienvenidos a ChuyoCode', en: 'Welcome to ChuyoCode', excerptEs: 'Un nuevo espacio para aprender haciendo.', excerptEn: 'A new space to learn by doing.', themes: ['career'], featured: false, seed: 'welcome-news', w: 1280, h: 720 },
+  { slug: 'guia-rapida-portafolio', es: 'Guía rápida para tu portafolio', en: 'Quick Guide to Your Portfolio', excerptEs: 'Qué mostrar y qué dejar afuera.', excerptEn: 'What to show and what to leave out.', themes: ['mas-vistos', 'frontend'], featured: false, seed: 'portfolio-news', w: 1280, h: 720 },
+  { slug: 'productividad-sin-burnout', es: 'Productividad sin burnout', en: 'Productivity Without Burnout', excerptEs: 'Trabajar mejor, no más horas.', excerptEn: 'Work better, not longer.', themes: ['career'], featured: false, seed: 'productivity-news', w: 1280, h: 720 },
+  { slug: 'ideas-que-se-comparten', es: 'Ideas que se comparten', en: 'Ideas Worth Sharing', excerptEs: 'Por qué enseñar te hace mejor.', excerptEn: 'Why teaching makes you better.', themes: ['testing'], featured: false, seed: 'share-news', w: 1280, h: 720 },
 ];
 
 function slugDoc(slug) {
@@ -88,10 +91,10 @@ for (const b of books) {
     heroBackground,
     featured: b.featured,
     tagline: { es: b.taglineEs, en: b.taglineEn },
-    themeTag: b.themeTag,
+    themes: b.themes,
   };
   const created = await client.create(doc);
-  console.log(`book  ${created.slug?.current}  featured=${b.featured} theme=${b.themeTag} (${created._id})`);
+  console.log(`book  ${created.slug?.current}  featured=${b.featured} themes=${b.themes.join(',')} (${created._id})`);
 }
 
 let i = 0;
@@ -119,10 +122,10 @@ for (const n of news) {
     heroBackground,
     featured: n.featured,
     tagline: { es: n.excerptEs, en: n.excerptEn },
-    themeTag: n.themeTag,
+    themes: n.themes,
   };
   const created = await client.create(doc);
-  console.log(`news  ${created.slug?.current}  theme=${n.themeTag} (${created._id})`);
+  console.log(`news  ${created.slug?.current}  themes=${n.themes.join(',')} (${created._id})`);
   i++;
 }
 
