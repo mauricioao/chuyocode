@@ -65,7 +65,17 @@ const t = COPY[lang];
 ---
 
 <BaseLayout lang={lang} title={book.title}>
-  <article class="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 md:flex-row md:gap-10">
+  <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:py-12">
+    {/* Page-level back action — its own row above the article, aligned to the
+        container edge (not buried inside the text column). */}
+    <a
+      href={`/${lang}/libros`}
+      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+    >
+      &larr; {t.back}
+    </a>
+
+    <article class="flex w-full flex-col gap-8 md:flex-row md:gap-10">
     <div class="w-full max-w-xs shrink-0">
       <div class="aspect-[3/4] overflow-hidden rounded-lg border border-base-muted bg-base-muted">
         <img
@@ -122,13 +132,7 @@ const t = COPY[lang];
           </>
         )
       }
-
-      <a
-        href={`/${lang}/libros`}
-        class="mt-2 text-sm font-semibold text-accent hover:text-accent-hover"
-      >
-        &larr; {t.back}
-      </a>
     </div>
-  </article>
+    </article>
+  </div>
 </BaseLayout>
