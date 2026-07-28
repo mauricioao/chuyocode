@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 import netlify from '@astrojs/netlify';
 import react from '@astrojs/react';
-import tailwind from '@astrojs/tailwind';
+import tailwindcss from '@tailwindcss/vite';
 
 // ChuyoCode runs in SSR mode: every gated page verifies the access cookie per
 // request against Supabase, so static output is not an option (design
@@ -14,11 +14,6 @@ export default defineConfig({
   integrations: [
     // React powers the islands only (AdModal).
     react(),
-    // Tailwind with a JS config so darkMode:'class' and the zinc/yellow
-    // palette live in tailwind.config.cjs.
-    tailwind({
-      applyBaseStyles: true,
-    }),
   ],
   // Locale routing (spec 5). `prefixDefaultLocale: true` means the default
   // locale (es) is always URL-prefixed (`/es/…`), never served unprefixed.
@@ -33,6 +28,9 @@ export default defineConfig({
     },
   },
   vite: {
+    // Tailwind 4 plugs into Vite directly (replaced the @astrojs/tailwind
+    // integration). It reads the `@theme` block in src/styles/global.css.
+    plugins: [tailwindcss()],
     // Keep server-only secrets (service role, HMAC) out of the client bundle.
     ssr: {
       noExternal: ['@sanity/client'],

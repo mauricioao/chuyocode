@@ -1,69 +1,66 @@
 import { describe, it, expect } from 'vitest';
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-// PR 2 (visual-identity) — design decision #2 (additive tokens) + #1 (display
-// font), updated for the shademanga visual overhaul (yellow accent, warm
-// sub-tokens removed). The Tailwind config is CommonJS, so require() it and
-// assert the theme contract as pure logic. This guards against accidental
-// renames of the existing `accent` scale (which has 20+ call sites) and
-// confirms the display font family + elevation depth tokens are present.
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const config = require('../../tailwind.config.cjs') as {
-  theme: {
-    extend: {
-      colors: Record<string, Record<string, string>>;
-      fontFamily: Record<string, string[]>;
-      boxShadow: Record<string, string>;
-    };
-  };
-};
+// Visual-identity token contract (design decision #2 additive tokens + #1
+// display font), now on Tailwind 4. The theme moved from tailwind.config.cjs
+// to the CSS-first `@theme` block in global.css, so this guard reads that CSS
+// and asserts the token contract as text. It protects the `accent` scale
+// (20+ call sites), the base surface scale, the Raleway display font, and the
+// elevation depth tokens against accidental renames/removals.
+const cssPath = fileURLToPath(new URL('./global.css', import.meta.url));
+const css = readFileSync(cssPath, 'utf8');
 
-const colors = config.theme.extend.colors;
-const fontFamily = config.theme.extend.fontFamily;
-const boxShadow = config.theme.extend.boxShadow;
+/** Read a single `--token: value;` declaration from the @theme block. */
+function token(name: string): string | undefined {
+  const match = css.match(new RegExp(`${name}\\s*:\\s*([^;]+);`));
+  return match ? match[1].trim() : undefined;
+}
 
-describe('tailwind theme tokens', () => {
-  it('preserves the accent scale shape with the yellow streaming values', () => {
-    expect(colors.accent).toMatchObject({
-      DEFAULT: '#FACC15',
-      hover: '#EAB308',
-      soft: '#FDE047',
-    });
+describe('tailwind theme tokens (CSS-first @theme)', () => {
+  it('imports Tailwind 4 and opts into class-based dark mode', () => {
+    expect(css).toContain("@import 'tailwindcss'");
+    expect(css).toContain('@custom-variant dark');
+  });
+
+  it('preserves the accent scale with the yellow streaming values', () => {
+    expect(token('--color-accent')?.toLowerCase()).toBe('#facc15');
+    expect(token('--color-accent-hover')?.toLowerCase()).toBe('#eab308');
+    expect(token('--color-accent-soft')?.toLowerCase()).toBe('#fde047');
   });
 
   it('keeps the base surface scale', () => {
-    expect(colors.base).toMatchObject({
-      DEFAULT: '#000000',
-      soft: '#18181b',
-      muted: '#27272a',
-    });
+    expect(token('--color-base')?.toLowerCase()).toBe('#000000');
+    expect(token('--color-base-soft')?.toLowerCase()).toBe('#18181b');
+    expect(token('--color-base-muted')?.toLowerCase()).toBe('#27272a');
   });
 
   it.each(['terracotta', 'ocre', 'amaranto'])(
     'does not define the removed %s warm token',
-    (token) => {
-      expect(colors[token]).toBeUndefined();
+    (name) => {
+      expect(token(`--color-${name}`)).toBeUndefined();
     },
   );
 
   it('exposes a Raleway display font family with a sans fallback', () => {
-    expect(fontFamily.display[0]).toBe('Raleway Variable');
-    expect(fontFamily.display).toContain('sans-serif');
+    const display = token('--font-display');
+    expect(display).toContain('Raleway Variable');
+    expect(display).toContain('sans-serif');
   });
 
   it('keeps a system-sans stack for body copy (web-font-free)', () => {
-    expect(fontFamily.sans).toContain('system-ui');
-    expect(fontFamily.sans).toContain('sans-serif');
+    const sans = token('--font-sans');
+    expect(sans).toContain('system-ui');
+    expect(sans).toContain('sans-serif');
   });
 
-  // frontend-v3 design decision #9 — depth tokens replace flat borders.
+  // Design decision #9 — depth tokens replace flat borders.
   it.each(['elevation-1', 'elevation-2', 'elevation-3'])(
-    'adds the %s boxShadow depth token',
-    (token) => {
-      expect(boxShadow[token]).toBeDefined();
-      expect(typeof boxShadow[token]).toBe('string');
-      expect(boxShadow[token]).not.toBe('');
+    'adds the %s shadow depth token',
+    (name) => {
+      const value = token(`--shadow-${name}`);
+      expect(value).toBeDefined();
+      expect(value).not.toBe('');
     },
   );
 });

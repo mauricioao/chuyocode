@@ -1,14 +1,60 @@
 /**
- * Global CSS — cross-cutting styles that sit on top of Tailwind's base layer
- * (`@astrojs/tailwind` injects Tailwind; this file is imported after it in
- * BaseLayout). Scope for PR 2 (visual-identity):
+ * Global CSS — Tailwind 4 entry + cross-cutting styles.
  *
+ * Tailwind 4 is CSS-first: `@import "tailwindcss"` pulls in base/components/
+ * utilities (replacing the old `@astrojs/tailwind` injection), and the theme
+ * lives in the `@theme` block below instead of `tailwind.config.cjs`. Token
+ * NAMES are preserved (base/accent/display/elevation/theme) so every existing
+ * `bg-base-*`, `text-accent`, `font-display`, `shadow-elevation-*`, and
+ * `*-theme` call site keeps working unchanged.
+ *
+ * Then, on top of Tailwind:
  *   1. Display font rule for headings (design decision #1 + #4).
  *   2. `.andean-pattern` decorative tiled SVG (design decision #3).
- *   3. `.skip-link` visually-hidden-until-focus helper for the skip-to-content
- *      link (design decision #7).
+ *   3. `.skip-link` visually-hidden-until-focus helper (design decision #7).
  *   4. `.reveal` / `.revealed` scroll-reveal motion (design decision #6).
  */
+
+@import 'tailwindcss';
+
+/* Dark mode is toggled by a `dark` class on <html> (design decision #9), not by
+ * the OS preference. In Tailwind 4 that opt-in is declared here (it replaced
+ * `darkMode: 'class'` from the old JS config). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Theme tokens (was tailwind.config.cjs `theme.extend`). Tailwind 4 reads these
+ * CSS variables and generates the matching utilities automatically. */
+@theme {
+  /* Base surface: dark mode that avoids the boring pure-black look. `base`
+   * (pure black) kills the hero-gradient seam; soft/muted are zinc-900/800. */
+  --color-base: #000000;
+  --color-base-soft: #18181b;
+  --color-base-muted: #27272a;
+
+  /* High-contrast energetic accent: streaming yellow (shademanga reference).
+   * DEFAULT/hover/soft keep the 20+ existing `accent-*` call sites working. */
+  --color-accent: #facc15;
+  --color-accent-hover: #eab308;
+  --color-accent-soft: #fde047;
+
+  /* Display face for headings (decision #1). Raleway Variable loads via
+   * fonts.css; the system-sans stack is the swap fallback. */
+  --font-display: 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Depth system (design decision #9): layered shadows + a hairline ring
+   * instead of flat borders. */
+  --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-elevation-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-elevation-3: 0 12px 32px -4px rgb(0 0 0 / 0.6);
+
+  /* Smooth theme transitions (spec 6: CSS transition <= 300ms). Drives
+   * `transition-theme` + `duration-theme`. */
+  --transition-property-theme: background-color, border-color, color, fill,
+    stroke;
+  --transition-duration-theme: 300ms;
+}
 
 /* --- Display headings (decision #4) -------------------------------------- *
  * h1–h3 use the Raleway display face globally so every page (home, libros,
