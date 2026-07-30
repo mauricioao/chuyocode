@@ -125,9 +125,9 @@ describe('MediaCard.astro — type tag', () => {
   it('renders a "Libro" tag when kind="book"', async () => {
     const html = await render({ ...baseProps, variant: 'poster', kind: 'book' });
     expect(html).toContain('Libro');
-    // High-contrast: solid accent background + black text.
-    expect(html).toContain('bg-accent');
-    expect(html).toContain('text-black');
+    // High-contrast shadcn Badge: solid primary (brand amber) + black ink.
+    expect(html).toContain('bg-primary');
+    expect(html).toContain('text-primary-foreground');
   });
 
   it('renders a "Noticia" tag when kind="news"', async () => {

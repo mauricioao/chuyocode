@@ -65,7 +65,7 @@ describe('RankedRow.astro', () => {
   it('passes item kind through to the MediaCard type tag', async () => {
     const html = await render({ title: 'Top', items: [item(1)] });
     expect(html).toContain('Libro');
-    expect(html).toContain('text-black');
+    expect(html).toContain('text-primary-foreground');
   });
 
   it('renders an optional side description', async () => {

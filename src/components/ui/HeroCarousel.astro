@@ -48,6 +48,7 @@
  *   />
  */
 import { buildImage, type SanityAssetRef } from '@lib/image';
+import { buttonVariants } from '@components/ui/button';
 
 interface HeroSlide {
   /** Document id; keys the View Transition name and the dot controls. */
@@ -288,7 +289,11 @@ const slides = items.map((item, index) => {
                 )}
                 <a
                   href={slide.href}
-                  class="hero-cta inline-flex w-fit items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-black outline-none transition-shadow duration-300 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-accent"
+                  class={buttonVariants({
+                    variant: 'default',
+                    size: 'lg',
+                    className: 'hero-cta w-fit px-5 py-2.5',
+                  })}
                   data-hero-cta
                 >
                   {slide.ctaLabel ?? 'Leer'}
