@@ -27,14 +27,19 @@
 /* Theme tokens (was tailwind.config.cjs `theme.extend`). Tailwind 4 reads these
  * CSS variables and generates the matching utilities automatically. */
 @theme {
-  /* Base surface: dark mode that avoids the boring pure-black look. `base`
-   * (pure black) kills the hero-gradient seam; soft/muted are zinc-900/800. */
+  /* ChuyoCode brand palette (official):
+   *   Black        #000000  base background (kills the hero-gradient seam)
+   *   Carbon Black #18181B  surfaces (cards, popover) -> base-soft
+   *   Shadow Grey  #27272A  borders / muted -> base-muted
+   *   Platinum     #F4F4F5  light text / foreground
+   *   Bright Amber #FACC15  brand accent / primary */
   --color-base: #000000;
   --color-base-soft: #18181b;
   --color-base-muted: #27272a;
+  --color-platinum: #f4f4f5;
 
-  /* High-contrast energetic accent: streaming yellow (shademanga reference).
-   * DEFAULT/hover/soft keep the 20+ existing `accent-*` call sites working. */
+  /* Brand accent: Bright Amber. DEFAULT/hover/soft keep the 20+ existing
+   * `accent-*` call sites working (hover/soft are darker/lighter amber steps). */
   --color-accent: #facc15;
   --color-accent-hover: #eab308;
   --color-accent-soft: #fde047;
@@ -71,25 +76,25 @@
   --radius: 0.625rem;
 
   --background: #000000;
-  --foreground: #fafafa;
+  --foreground: #f4f4f5;
   --card: #18181b;
-  --card-foreground: #fafafa;
+  --card-foreground: #f4f4f5;
   --popover: #18181b;
-  --popover-foreground: #fafafa;
+  --popover-foreground: #f4f4f5;
 
   /* Brand: yellow primary, black ink on it. */
   --primary: #facc15;
   --primary-foreground: #000000;
 
   --secondary: #27272a;
-  --secondary-foreground: #fafafa;
+  --secondary-foreground: #f4f4f5;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
   --accent: #27272a;
-  --accent-foreground: #fafafa;
+  --accent-foreground: #f4f4f5;
 
   --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
+  --destructive-foreground: #f4f4f5;
 
   --border: #27272a;
   --input: #27272a;
@@ -98,21 +103,21 @@
 
 .dark {
   --background: #000000;
-  --foreground: #fafafa;
+  --foreground: #f4f4f5;
   --card: #18181b;
-  --card-foreground: #fafafa;
+  --card-foreground: #f4f4f5;
   --popover: #18181b;
-  --popover-foreground: #fafafa;
+  --popover-foreground: #f4f4f5;
   --primary: #facc15;
   --primary-foreground: #000000;
   --secondary: #27272a;
-  --secondary-foreground: #fafafa;
+  --secondary-foreground: #f4f4f5;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
   --accent: #27272a;
-  --accent-foreground: #fafafa;
+  --accent-foreground: #f4f4f5;
   --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
+  --destructive-foreground: #f4f4f5;
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
@@ -193,7 +198,7 @@ h3 {
   z-index: 100;
   padding: 0.5rem 1rem;
   background-color: #000000;
-  color: #fafafa;
+  color: #f4f4f5;
   border-radius: 0 0 0.375rem 0;
 }
 
