@@ -8,7 +8,7 @@
  * the request's `Accept-Language`, then the default (es).
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import Button from '@components/ui/Button.astro';
+import { buttonVariants } from '@components/ui/button';
 import { isValidLang, resolveLang, type Lang } from '@lib/i18n';
 
 const segment = Astro.url.pathname.split('/')[1] ?? '';
@@ -41,8 +41,11 @@ const t = COPY[lang];
       {t.title}
     </h1>
     <p class="max-w-md text-zinc-400">{t.body}</p>
-    <Button variant="secondary" href={`/${lang}/`}>
+    <a
+      href={`/${lang}/`}
+      class={buttonVariants({ variant: 'outline', size: 'lg' })}
+    >
       {t.home}
-    </Button>
+    </a>
   </section>
 </BaseLayout>
