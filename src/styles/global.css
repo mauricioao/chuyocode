@@ -16,6 +16,8 @@
  */
 
 @import 'tailwindcss';
+/* Animation utilities used by shadcn/ui components (accordion, dialog, …). */
+@import 'tw-animate-css';
 
 /* Dark mode is toggled by a `dark` class on <html> (design decision #9), not by
  * the OS preference. In Tailwind 4 that opt-in is declared here (it replaced
@@ -54,6 +56,92 @@
   --transition-property-theme: background-color, border-color, color, fill,
     stroke;
   --transition-duration-theme: 300ms;
+}
+
+/* --- shadcn/ui token bridge --------------------------------------------- *
+ * shadcn components consume SEMANTIC roles (--background, --primary, --border,
+ * …), not our raw palette. We map those roles onto the ChuyoCode identity so
+ * every shadcn component is on-brand from the first install: `--primary` is our
+ * streaming yellow with black text, surfaces are our black/zinc scale, and the
+ * focus `--ring` is yellow. The site is dark-only (`<html class="dark">`), so
+ * `:root` already carries the dark values; `.dark` repeats them so shadcn's
+ * dark-mode contract also holds. `@theme inline` re-exports the roles as
+ * Tailwind utilities (bg-background, text-primary, border-border, …). */
+:root {
+  --radius: 0.625rem;
+
+  --background: #000000;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+
+  /* Brand: yellow primary, black ink on it. */
+  --primary: #facc15;
+  --primary-foreground: #000000;
+
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #facc15;
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #facc15;
+  --primary-foreground: #000000;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #facc15;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-role: var(--accent);
+  --color-accent-role-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 /* --- Display headings (decision #4) -------------------------------------- *

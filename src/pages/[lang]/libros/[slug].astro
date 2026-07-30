@@ -15,6 +15,7 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import AdModal from '@components/islands/AdModal';
+import { buttonVariants } from '@components/ui/button';
 import { isValidLang, type Lang } from '@lib/i18n';
 import { getBookBySlug } from '@lib/sanity';
 import { getPassState } from '@lib/pass';
@@ -100,7 +101,11 @@ const t = COPY[lang];
             href={`/api/descargar/${slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            class="mt-4 inline-flex w-fit items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-accent-hover"
+            class={buttonVariants({
+              variant: 'default',
+              size: 'lg',
+              className: 'mt-4 w-fit gap-2 px-5 py-3',
+            })}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
