@@ -165,28 +165,6 @@ h3 {
     sans-serif;
 }
 
-/* --- Andean decorative pattern (decision #3) ----------------------------- *
- * A stepped-diamond (chakana-inspired) geometric motif, tiled as a 64×64
- * data-URI SVG. The SVG is applied as a CSS `mask` (not a background-image)
- * so `background-color: currentColor` shows through it — that makes the
- * pattern TOKEN-DRIVEN: whatever accent text color the
- * wrapping element carries becomes the ink of the tiles (decision #3:
- * "token-driven colors, currentColor stroke"). A data-URI background-image
- * cannot inherit currentColor, so the mask approach is what actually honors
- * the contract. Opacity is capped at 4% so it reads as texture, never
- * content — the component sets aria-hidden and pointer-events:none. */
-.andean-pattern {
-  background-color: currentColor;
-  opacity: 0.04;
-  --andean-tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M32 4 L44 16 L32 28 L20 16 Z'/%3E%3Cpath d='M32 36 L44 48 L32 60 L20 48 Z'/%3E%3Cpath d='M4 24 L12 32 L4 40'/%3E%3Cpath d='M60 24 L52 32 L60 40'/%3E%3Cpath d='M0 32 L20 32 M44 32 L64 32'/%3E%3C/svg%3E");
-  -webkit-mask-image: var(--andean-tile);
-  mask-image: var(--andean-tile);
-  -webkit-mask-repeat: repeat;
-  mask-repeat: repeat;
-  -webkit-mask-size: 64px 64px;
-  mask-size: 64px 64px;
-}
-
 /* --- Skip-to-content link (decision #7, wired in PR 5) ------------------- *
  * Off-screen until keyboard focus, then snaps to the top-left so keyboard and
  * screen-reader users can jump past the masthead. Defined now so PR 5 only
