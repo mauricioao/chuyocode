@@ -32,18 +32,18 @@ const secondaryLinks = [
 ---
 
 <footer
-  class="border-t border-base-muted bg-base-soft transition-theme duration-theme"
+  class="border-t border-border bg-card transition-theme duration-theme"
 >
   <div
     class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row"
   >
-    <p class="text-sm text-zinc-400">&copy; 2026 ChuyoCode</p>
+    <p class="text-sm text-muted-foreground">&copy; 2026 ChuyoCode</p>
     <nav class="flex items-center gap-6" aria-label="Secondary">
       {
         secondaryLinks.map((link) => (
           <a
             href={link.href}
-            class="text-sm text-zinc-400 transition-theme duration-theme hover:text-accent"
+            class="text-sm text-muted-foreground transition-theme duration-theme hover:text-primary"
           >
             {link.label}
           </a>

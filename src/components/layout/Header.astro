@@ -40,7 +40,7 @@ const navLinks = [
 ---
 
 <header
-  class="sticky top-0 z-40 border-b border-base-muted bg-base/95 backdrop-blur transition-theme duration-theme"
+  class="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur transition-theme duration-theme"
 >
   <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
     {/* Masthead: small logo image (left) + wordmark (right), vertically
@@ -48,7 +48,7 @@ const navLinks = [
         broken-image placeholder until the real asset lands in `public/`. */}
     <a
       href={`${base}/`}
-      class="flex items-center gap-2 text-xl font-bold tracking-tight text-accent hover:text-accent-hover"
+      class="flex items-center gap-2 text-xl font-bold tracking-tight text-primary hover:text-primary/80"
     >
       <img src="/chuyocode.svg" alt="ChuyoCode" class="h-8 w-8 object-contain" />
       <span>ChuyoCode</span>
@@ -59,7 +59,7 @@ const navLinks = [
         navLinks.map((link) => (
           <a
             href={link.href}
-            class="text-sm font-medium text-zinc-300 transition-theme duration-theme hover:text-accent"
+            class="text-sm font-medium text-muted-foreground transition-theme duration-theme hover:text-primary"
           >
             {link.label}
           </a>
@@ -72,7 +72,7 @@ const navLinks = [
     <button
       type="button"
       id="mobile-menu-button"
-      class="inline-flex items-center justify-center rounded-md p-2 text-zinc-300 hover:text-accent md:hidden"
+      class="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-primary md:hidden"
       aria-label="Toggle navigation menu"
       aria-controls="mobile-menu"
       aria-expanded="false"
@@ -92,14 +92,14 @@ const navLinks = [
 
   <nav
     id="mobile-menu"
-    class="hidden flex-col gap-2 border-t border-base-muted px-4 py-3 md:hidden"
+    class="hidden flex-col gap-2 border-t border-border px-4 py-3 md:hidden"
     aria-label="Mobile"
   >
     {
       navLinks.map((link) => (
         <a
           href={link.href}
-          class="py-1 text-sm font-medium text-zinc-300 hover:text-accent"
+          class="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
         >
           {link.label}
         </a>
