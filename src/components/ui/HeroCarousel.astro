@@ -1,345 +1,110 @@
 ---
 /**
- * HeroCarousel — auto-rotating full-image billboard for featured content
- * (spec: hero-carousel; design decisions #1 and #10).
+ * HeroCarousel — server wrapper for the interactive hero billboard.
  *
- * Renders each featured item as an edge-to-edge full-bleed slide: the backdrop
- * fills the frame (hero variant via {@link buildImage}) with a bottom-to-top
- * opacity gradient that fades into pure black, and a CENTERED info block
- * (anchored toward the bottom third) carries the title, tagline, and a primary
- * CTA that deep-links to the item's detail page.
+ * The hero is a shadcn Carousel (Embla) that MUST run on the client, but the
+ * Sanity image pipeline ({@link buildImage}) is server-only (env + @sanity/
+ * image-url). This component bridges the two: it runs buildImage per slide on
+ * the SERVER, flattens each slide to plain data (resolved src/srcset/sizes/lqip
+ * for the backdrop and the optional logo), and hands that to the
+ * {@link HeroCarouselIsland} React island (`client:load`). Nothing server-only
+ * ever ships to the browser.
  *
- * Optional hero art (spec: hero-logo-background), both purely ADDITIVE:
- *   - `backgroundAsset` (Sanity `heroBackground`) is a wide landscape backdrop.
- *     When absent the backdrop falls back to `asset` (the cover), so existing
- *     documents render exactly as they did before the field existed.
- *   - `logoAsset` (Sanity `contentLogo`) is a transparent-PNG title treatment
- *     rendered ABOVE the `<h2>`. It is ADDITIVE, never a replacement: the text
- *     title stays rendered and visible whether or not a logo is present.
- * Below the slides sits one indicator dot per slide; the active dot is visually
- * distinct and clicking a dot jumps directly to that slide.
- *
- * Autoplay is driven by a single dependency-free `is:inline` vanilla script
- * (design decision #1 — no island, no drag library). Rules (design decision
- * #10, spec: Auto-Rotation):
- *   - Advances every `data-interval` ms (configurable prop, DEFAULT 6000).
- *   - Pauses on `mouseenter` and `focusin` (focus-within, covers keyboard).
- *   - Pauses when the document is hidden (`visibilitychange`).
- *   - Resumes on `mouseleave` / `focusout` / document visible.
- *   - When `prefers-reduced-motion: reduce` is active, autoplay is DISABLED
- *     entirely (no timer is ever started); dot navigation still works.
- * Slide switching only toggles an `.is-active` class over absolutely-stacked
- * slides, so there is NO layout shift on advance.
+ * Hero art (spec: hero-logo-background), both purely ADDITIVE:
+ *   - `backgroundAsset` (Sanity `heroBackground`): wide landscape backdrop;
+ *     falls back to `asset` (the cover) via `??` when absent.
+ *   - `logoAsset` (Sanity `contentLogo`): transparent-PNG title treatment shown
+ *     ABOVE the <h2>; the text title always stays rendered.
  *
  * Edge cases (spec: Edge-Case Item Counts):
- *   - 0 items: NO carousel DOM is rendered — a fallback placeholder renders in
- *     its place instead.
- *   - 1 item: the single slide renders WITHOUT indicator dots and WITHOUT the
- *     autoplay script (no rotation to drive).
+ *   - 0 items: NO carousel — a neutral placeholder holds the slot.
+ *   - 1 item: rendered as a single, non-rotating slide (island handles this).
+ *
+ * TRADEOFF: the previous Astro `transition:name` cover morph is dropped for the
+ * hero (View Transitions directives cannot cross into a React island). The row
+ * MediaCards keep their morph.
  *
  * API:
- *   <HeroCarousel
- *     interval={6000}
- *     items={[
- *       { _id, href: "/es/libros/el-libro", title, tagline?, ctaLabel?,
- *         asset: { url, metadata: { lqip } },
- *         logoAsset?: { url, ... }, backgroundAsset?: { url, ... } },
- *     ]}
- *   />
+ *   <HeroCarousel interval={6000} items={[{ _id, href, title, tagline?,
+ *     ctaLabel?, asset, logoAsset?, backgroundAsset? }]} />
  */
 import { buildImage, type SanityAssetRef } from '@lib/image';
-import { buttonVariants } from '@components/ui/button';
+import HeroCarouselIsland, {
+  type HeroSlideData,
+  type HeroImage,
+} from '@components/islands/HeroCarouselIsland';
 
 interface HeroSlide {
-  /** Document id; keys the View Transition name and the dot controls. */
   _id?: string;
-  /** CTA deep-link to the content detail page (book or news article). */
   href: string;
-  /** Slide heading. */
   title: string;
-  /** Short editorial tagline shown under the title (optional). */
   tagline?: string;
-  /** Primary CTA label; falls back to a neutral default when omitted. */
   ctaLabel?: string;
-  /** Resolved cover asset (`{ url, metadata: { lqip } }`) for buildImage. */
   asset?: SanityAssetRef | null;
-  /**
-   * Optional title-treatment logo (transparent PNG). Rendered ABOVE the text
-   * title, which stays visible — the logo never replaces it.
-   */
   logoAsset?: SanityAssetRef | null;
-  /**
-   * Optional wide landscape hero backdrop. Falls back to {@link HeroSlide.asset}
-   * when absent, so slides without it look exactly as they did before.
-   */
   backgroundAsset?: SanityAssetRef | null;
 }
 
 interface Props {
-  /** Featured slides. 0 → placeholder only; 1 → no rotation/indicators. */
+  /** Featured slides. 0 → placeholder only. */
   items: HeroSlide[];
   /** Auto-advance interval in milliseconds. Default 6000 (spec default 6 s). */
   interval?: number;
 }
 
 const { items, interval = 6000 } = Astro.props;
+const isEmpty = items.length === 0;
 
-const count = items.length;
-const isEmpty = count === 0;
-// A single slide is static: no rotation, no indicators, no autoplay script.
-const isStatic = count <= 1;
+/**
+ * Flatten a buildImage result to the island's {@link HeroImage} shape, or
+ * `null` when the variant produced no `src` (missing asset). Keeping `null`
+ * (not undefined) lets the island's optional chaining short-circuit cleanly.
+ */
+function toHeroImage(
+  asset: SanityAssetRef | null | undefined,
+  _id: string | undefined,
+  variant: 'hero' | 'logo',
+): HeroImage | null {
+  const built = buildImage({ asset, _id }, variant);
+  if (!built.src) return null;
+  return {
+    src: built.src,
+    srcset: built.srcset,
+    sizes: built.sizes,
+    ...(built.lqip ? { lqip: built.lqip } : {}),
+  };
+}
 
-// Only render the autoplay-driving markup (data-interval + script) when there
-// is more than one slide to rotate between.
-const autoInterval = interval;
-
-// Autoplay driver source (dependency-free vanilla JS). It lives in a
-// frontmatter constant injected via set:html because Astro does NOT evaluate
-// `{}` expressions inside <script> content: a template-literal wrapper there
-// ships as a literal, never-executing string (caught in review R2-001/R3-001).
-const AUTOPLAY_SCRIPT = `
-(function () {
-  var root = document.currentScript
-    ? document.currentScript.previousElementSibling
-    : null;
-  // currentScript is null under some renderers; fall back to a query.
-  if (!root || !root.hasAttribute('data-hero-carousel')) {
-    var all = document.querySelectorAll('[data-hero-carousel]');
-    root = all[all.length - 1] || null;
-  }
-  if (!root) return;
-
-  var slides = root.querySelectorAll('[data-hero-slide]');
-  if (slides.length < 2) return;
-
-  var interval = parseInt(root.getAttribute('data-interval'), 10);
-  if (!interval || interval < 1000) interval = 6000;
-
-  var current = 0;
-  var timer = null;
-
-  var reduceMotion =
-    window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  function show(next) {
-    if (next === current) return;
-    for (var i = 0; i < slides.length; i++) {
-      var active = i === next;
-      slides[i].classList.toggle('is-active', active);
-      slides[i].setAttribute('aria-hidden', active ? 'false' : 'true');
-    }
-    current = next;
-  }
-
-  function advance() {
-    show((current + 1) % slides.length);
-  }
-
-  function start() {
-    if (reduceMotion || timer) return;
-    timer = window.setInterval(advance, interval);
-  }
-
-  function stop() {
-    if (timer) {
-      window.clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  // Pause on hover / focus-within; resume on leave / blur.
-  root.addEventListener('mouseenter', stop);
-  root.addEventListener('mouseleave', start);
-  root.addEventListener('focusin', stop);
-  root.addEventListener('focusout', start);
-
-  // Pause when the tab/document is hidden; resume when visible again.
-  // Self-removes once its carousel root is swapped out of the document, so
-  // stale handlers never pile up (or retain detached DOM) across navigations.
-  function onVisibility() {
-    if (!root.isConnected) {
-      document.removeEventListener('visibilitychange', onVisibility);
-      return;
-    }
-    if (document.hidden) {
-      stop();
-    } else {
-      start();
-    }
-  }
-  document.addEventListener('visibilitychange', onVisibility);
-
-  // Reduced motion disables autoplay entirely (no timer ever starts).
-  if (!reduceMotion && !document.hidden) start();
-})();
-`;
-
-const slides = items.map((item, index) => {
-  // Backdrop: prefer the dedicated landscape hero art, fall back to the cover.
-  // `??` (not `||`) so a null projection falls through but a real asset never
-  // does. The `hero` variant declares the truthful `sizes: 100vw` for this
-  // full-bleed slide; `wide` was tuned for Spotlight's narrower column.
-  const image = buildImage(
-    { asset: item.backgroundAsset ?? item.asset, _id: item._id },
-    'hero',
-  );
-  // Title-treatment logo. Empty src when the document has no contentLogo, which
-  // is what the template gates on.
-  const logo = buildImage({ asset: item.logoAsset, _id: item._id }, 'logo');
-  // Only paint the LQIP blur-up backdrop when the projection provided one.
-  const lqipStyle = image.lqip
-    ? `background-image:url(${image.lqip});background-size:cover;background-position:center;`
-    : undefined;
-  return { ...item, index, image, logo, lqipStyle };
-});
+// Server-side image pipeline per slide → plain data for the client island.
+// Backdrop prefers the dedicated landscape art, falls back to the cover (`??`
+// so a null projection falls through but a real asset never does).
+const slides: HeroSlideData[] = items.map((item) => ({
+  ...(item._id ? { id: item._id } : {}),
+  href: item.href,
+  title: item.title,
+  ...(item.tagline ? { tagline: item.tagline } : {}),
+  ...(item.ctaLabel ? { ctaLabel: item.ctaLabel } : {}),
+  image: toHeroImage(item.backgroundAsset ?? item.asset, item._id, 'hero'),
+  logo: toHeroImage(item.logoAsset, item._id, 'logo'),
+}));
 ---
 
 {
   isEmpty ? (
-    /* Zero featured items: NO carousel DOM. A neutral placeholder holds the
-       slot so the layout below (rows, spotlight) still flows (spec: Zero
-       items → no carousel DOM rendered). */
+    /* Zero featured items: NO carousel. A neutral placeholder holds the slot so
+       the layout below (rows, spotlight) still flows. */
     <div
-      class="hero-carousel-placeholder flex h-[88vh] min-h-[520px] w-full items-center justify-center bg-base-muted"
+      class="hero-carousel-placeholder flex h-[88vh] min-h-[520px] w-full items-center justify-center bg-muted"
       data-hero-placeholder
     >
-      <span class="text-sm text-zinc-400">No featured content</span>
+      <span class="text-sm text-muted-foreground">No featured content</span>
     </div>
   ) : (
-    <section
-      class="hero-carousel relative w-full overflow-hidden"
-      data-hero-carousel
-      data-interval={isStatic ? undefined : String(autoInterval)}
-      aria-roledescription="carousel"
-      aria-label="Featured content"
-    >
-      <div class="hero-carousel-viewport relative h-[88vh] min-h-[520px] w-full">
-        {slides.map((slide) => (
-          <article
-            class:list={[
-              'hero-slide absolute inset-0',
-              slide.index === 0 && 'is-active',
-            ]}
-            data-hero-slide
-            data-index={String(slide.index)}
-            aria-roledescription="slide"
-            aria-hidden={slide.index === 0 ? 'false' : 'true'}
-          >
-            {/* Full-bleed cover fills the frame edge-to-edge. LQIP blur-up
-                backdrop paints behind the img until the full image loads. */}
-            <div class="absolute inset-0" style={slide.lqipStyle}>
-              {slide.image.src && (
-                <img
-                  src={slide.image.src}
-                  srcset={slide.image.srcset}
-                  sizes={slide.image.sizes}
-                  alt={slide.title}
-                  loading={slide.index === 0 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  transition:name={
-                    slide._id ? `cover-${slide._id}` : undefined
-                  }
-                  class="h-full w-full object-cover"
-                />
-              )}
-            </div>
-
-            {/* Bottom-to-top scrim (shademanga overlap look): the tall hero
-                extends well below the fold, so the fade lives in the bottom
-                third and eases GRADUALLY — solid black at the very bottom (so
-                the overlapping cards + page background join seamlessly), then a
-                long soft ramp up to transparent. This is the band the first
-                content row overlaps ~40%, giving depth without a hard seam. */}
-            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black from-15% via-black/40 via-50% to-transparent" />
-
-            {/* Info panel LEFT-ALIGNED and VERTICALLY CENTERED (shademanga
-                billboard look): the block sits on the left half at mid-height,
-                so the featured art breathes on the right. Text is left-aligned;
-                on small screens it drops padding but keeps the left anchor. */}
-            <div class="absolute inset-y-0 left-0 flex flex-col items-start justify-center gap-4 p-6 text-left sm:pl-12 md:pl-16 lg:pl-20">
-              <div class="flex max-w-xl flex-col items-start gap-4">
-                {/* Optional title-treatment logo, ADDITIVE: it sits ABOVE the
-                    <h2> and never replaces it, so the text title stays
-                    rendered and visible either way. Height/width are capped so
-                    a tall or very wide PNG cannot blow out the flex column.
-                    alt="" is deliberate (WCAG H67): the logo renders the same
-                    title the <h2> below already exposes, so naming it here
-                    would make screen readers announce the title twice per
-                    slide. It is decorative relative to that heading. */}
-                {slide.logo.src && (
-                  <img
-                    src={slide.logo.src}
-                    srcset={slide.logo.srcset}
-                    sizes={slide.logo.sizes}
-                    alt=""
-                    loading={slide.index === 0 ? 'eager' : 'lazy'}
-                    decoding="async"
-                    class="hero-logo h-auto max-h-24 w-auto max-w-[14rem] object-contain sm:max-h-36 sm:max-w-[22rem]"
-                    data-hero-logo
-                  />
-                )}
-                <h2 class="text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
-                  {slide.title}
-                </h2>
-                {slide.tagline && (
-                  <p class="max-w-prose font-display text-sm font-medium text-zinc-100 sm:text-base">
-                    {slide.tagline}
-                  </p>
-                )}
-                <a
-                  href={slide.href}
-                  class={buttonVariants({
-                    variant: 'default',
-                    size: 'lg',
-                    className: 'hero-cta w-fit px-5 py-2.5',
-                  })}
-                  data-hero-cta
-                >
-                  {slide.ctaLabel ?? 'Leer'}
-                </a>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      {/* Indicator dots were removed intentionally — a different slide control
-          will replace them later. Autoplay + cross-fade still drive rotation. */}
-    </section>
+    <HeroCarouselIsland
+      client:load
+      slides={slides}
+      interval={interval}
+      defaultCtaLabel="Leer"
+    />
   )
 }
-
-{
-  /* Autoplay driver — dependency-free vanilla, only shipped when there are 2+
-     slides to rotate. `is:inline` keeps it out of the bundler like BaseLayout's
-     no-flash script (design decision #1). Reduced-motion disables autoplay
-     entirely; dot navigation always works. The JS source lives in the
-     AUTOPLAY_SCRIPT frontmatter constant and is injected via set:html so this
-     conditional expression ships executable code, not a literal string. */
-  !isEmpty && !isStatic && (
-    <script is:inline data-astro-rerun set:html={AUTOPLAY_SCRIPT} />
-  )
-}
-
-<style>
-  /* Slides are absolutely stacked; only `.is-active` is visible. Switching
-   * toggles opacity, so advancing never reflows the layout (no layout shift). */
-  .hero-slide {
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 400ms ease;
-  }
-
-  .hero-slide.is-active {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  /* Reduced motion: no cross-fade animation on slide switch. */
-  @media (prefers-reduced-motion: reduce) {
-    .hero-slide {
-      transition: none;
-    }
-  }
-</style>
