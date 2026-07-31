@@ -7,7 +7,7 @@
  * message, no broken layout).
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import BookCard from '@components/ui/BookCard.astro';
+import MediaCard from '@components/ui/MediaCard.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getBooks } from '@lib/sanity';
 
@@ -46,11 +46,26 @@ const books = await getBooks(lang);
       ) : (
         <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
           {books.map((book) => (
-            <BookCard
+            // Canonical MediaCard (replaces the legacy BookCard): same cover +
+            // title + author full-card link, but gains LQIP blur-up, responsive
+            // srcset, and a native View Transition into the detail hero.
+            <MediaCard
+              variant="poster"
+              kind="book"
+              _id={book._id}
               title={book.title}
-              coverUrl={book.coverUrl}
               author={book.author}
               href={`/${lang}/libros/${book.slug}`}
+              asset={
+                book.coverUrl
+                  ? {
+                      url: book.coverUrl,
+                      ...(book.coverLqip
+                        ? { metadata: { lqip: book.coverLqip } }
+                        : {}),
+                    }
+                  : null
+              }
             />
           ))}
         </div>
