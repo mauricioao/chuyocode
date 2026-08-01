@@ -616,6 +616,19 @@ const SPOTLIGHT_QUERY = `*[
 }`;
 
 /**
+ * ALL featured items (books + news), newest first, for the Spotlight CAROUSEL.
+ * Same filter/order as {@link SPOTLIGHT_QUERY} but without the `[0]` slice, so
+ * the home can rotate through every featured document instead of a single one.
+ */
+const SPOTLIGHTS_QUERY = `*[
+  (_type == "book" || _type == "news")
+  && coalesce(featured, false) == true
+  && !(_id in path("drafts.**"))
+] | order(coalesce(publishedAt, _createdAt) desc) {
+  ${SPOTLIGHT_FRAGMENT}
+}`;
+
+/**
  * Books whose slug is in `$slugs`, projected as discovery cards. Used to
  * hydrate the "Más descargados" ranking: Supabase returns the ordered slugs,
  * this query fetches their content. GROQ has no stable "order by array index",
@@ -845,6 +858,32 @@ export async function getSpotlight(
   } catch (err) {
     console.error('[sanity] getSpotlight failed:', err);
     return null;
+  }
+}
+
+/**
+ * Fetch ALL featured items (books + news), newest first, for the Spotlight
+ * CAROUSEL. Same projection as {@link getSpotlight} but returns every featured
+ * document instead of just the first, so the home can rotate through them.
+ *
+ * Cached for {@link CACHE_TTL_MS}. Fail-safe: returns `[]` when nothing is
+ * featured or on any Sanity error, so the Spotlight section self-hides instead
+ * of breaking the home page.
+ */
+export async function getSpotlights(
+  lang: Lang | string,
+): Promise<MediaItem[]> {
+  const l = safeLang(lang);
+  try {
+    const raw = await cached(`spotlights:${l}`, () =>
+      sanityClient.fetch<Record<string, unknown>[]>(SPOTLIGHTS_QUERY, {
+        lang: l,
+      }),
+    );
+    return Array.isArray(raw) ? raw.map((r) => toMediaItem(r, l)) : [];
+  } catch (err) {
+    console.error('[sanity] getSpotlights failed:', err);
+    return [];
   }
 }
 

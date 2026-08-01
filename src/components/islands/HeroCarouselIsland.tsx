@@ -166,11 +166,11 @@ export default function HeroCarouselIsland({
                       data-hero-logo
                     />
                   )}
-                  <h2 className="text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
+                  <h2 className="text-3xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.85)] sm:text-5xl">
                     {slide.title}
                   </h2>
                   {slide.tagline && (
-                    <p className="max-w-prose font-display text-sm font-medium text-zinc-100 sm:text-base">
+                    <p className="max-w-prose font-display text-sm font-medium text-zinc-100 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)] sm:text-base">
                       {slide.tagline}
                     </p>
                   )}

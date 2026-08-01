@@ -106,7 +106,7 @@ export const UI_LABELS = {
       soon: 'Pronto',
       switchTo: 'Cambiar a',
     },
-    footer: { terms: 'Términos', privacy: 'Privacidad' },
+    footer: { terms: 'Términos y Condiciones', privacy: 'Privacidad' },
     legal: {
       titles: { terms: 'Términos y condiciones', privacy: 'Política de privacidad' },
       pending: 'Contenido legal pendiente',
@@ -171,7 +171,7 @@ export const UI_LABELS = {
       soon: 'Soon',
       switchTo: 'Switch to',
     },
-    footer: { terms: 'Terms', privacy: 'Privacy' },
+    footer: { terms: 'Terms & Conditions', privacy: 'Privacy' },
     legal: {
       titles: { terms: 'Terms and conditions', privacy: 'Privacy policy' },
       pending: 'Legal content pending',

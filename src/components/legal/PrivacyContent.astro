@@ -1,0 +1,347 @@
+---
+/**
+ * PrivacyContent — Privacy Policy + Cookies body (es/en) for
+ * /[lang]/legal/privacy.
+ *
+ * Aligned with Peru's Ley N° 29733 (Protección de Datos Personales) and Google
+ * AdSense publisher requirements: identifies the data controller, states data
+ * collected and purpose, dedicates a section to cookies (first-party + Google
+ * third-party), covers third-party advertising and opt-out, and lists ARCO
+ * rights (acceso, rectificación, cancelación, oposición).
+ *
+ * DISCLAIMER: solid industry-standard structure, NOT lawyer-reviewed. Have it
+ * reviewed by a legal professional before production use with live ads.
+ */
+import type { Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  ownerName: string;
+  ownerRuc: string;
+  ownerCity: string;
+  ownerEmail: string;
+  updated: string;
+}
+
+const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
+  Astro.props;
+const isEs = lang === 'es';
+---
+
+<div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
+  <p class="text-sm text-zinc-500">
+    {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
+  </p>
+
+  {
+    isEs ? (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            1. Responsable del tratamiento
+          </h2>
+          <p>
+            El responsable del tratamiento de los datos personales recolectados a
+            través de este sitio ChuyoCode (el "Sitio") es{' '}
+            <strong class="text-zinc-100">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            {ownerCity && <>, domiciliado en {ownerCity}, Perú</>}. El tratamiento
+            se realiza conforme a la Ley N° 29733, Ley de Protección de Datos
+            Personales, y su reglamento. Contacto:{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'el correo de contacto del Sitio'
+            )}
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            2. Datos que recolectamos
+          </h2>
+          <p>
+            El Sitio está diseñado para funcionar con la mínima recolección de
+            datos posible. No solicitamos registro ni datos de identificación para
+            navegar. Podemos recolectar de forma automática: dirección IP,
+            identificadores de cookies, tipo de navegador y dispositivo, y datos de
+            navegación (páginas vistas, descargas realizadas). La publicidad de
+            terceros puede recolectar datos adicionales según sus propias
+            políticas.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            3. Finalidad del tratamiento
+          </h2>
+          <p>
+            Utilizamos los datos para: (a) permitir el funcionamiento del Sitio y
+            el acceso recompensado por publicidad; (b) contabilizar descargas para
+            elaborar rankings de contenido ("Más vistos"); (c) mostrar publicidad,
+            incluida publicidad personalizada de terceros; y (d) obtener métricas
+            agregadas de uso para mejorar el servicio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            4. Cookies
+          </h2>
+          <p>
+            Una cookie es un pequeño archivo que se almacena en tu navegador. El
+            Sitio utiliza:
+          </p>
+          <ul class="ml-5 flex list-disc flex-col gap-2">
+            <li>
+              <strong class="text-zinc-100">Cookies técnicas propias:</strong>{' '}
+              necesarias para el funcionamiento. Por ejemplo, la cookie de acceso
+              recompensado (que recuerda que viste un anuncio para no repetirlo por
+              un período) y cookies para evitar contar la misma descarga varias
+              veces. Sin estas, el Sitio no funciona correctamente.
+            </li>
+            <li>
+              <strong class="text-zinc-100">Cookies de terceros:</strong>{' '}
+              proveedores como Google (AdSense / Ad Manager y, en su caso,
+              Analytics) instalan cookies para mostrar y medir publicidad, incluida
+              publicidad personalizada. Estas se rigen por las políticas de dichos
+              proveedores.
+            </li>
+          </ul>
+          <p>
+            Puedes gestionar o eliminar las cookies desde la configuración de tu
+            navegador. Bloquear las cookies técnicas puede afectar el
+            funcionamiento del Sitio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Publicidad de terceros
+          </h2>
+          <p>
+            El Sitio muestra publicidad de redes de terceros, principalmente
+            Google. Estos proveedores pueden usar cookies e identificadores para
+            mostrar anuncios basados en tus visitas a este y otros sitios. Puedes
+            configurar tus preferencias de anuncios personalizados de Google en{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://adssettings.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              adssettings.google.com
+            </a>{' '}
+            y conocer más en{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://policies.google.com/technologies/partner-sites"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              las políticas de Google
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            6. Tus derechos (ARCO)
+          </h2>
+          <p>
+            Conforme a la Ley N° 29733, tienes derecho de acceso, rectificación,
+            cancelación y oposición sobre tus datos personales. Puedes ejercerlos
+            escribiendo a{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'el correo de contacto del Sitio'
+            )}
+            . También puedes presentar un reclamo ante la Autoridad Nacional de
+            Protección de Datos Personales del Perú.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            7. Conservación y seguridad
+          </h2>
+          <p>
+            Conservamos los datos solo durante el tiempo necesario para las
+            finalidades descritas y aplicamos medidas técnicas y organizativas
+            razonables para protegerlos. Ningún sistema es completamente infalible,
+            por lo que no podemos garantizar seguridad absoluta.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            8. Cambios en esta política
+          </h2>
+          <p>
+            Podemos actualizar esta Política de Privacidad en cualquier momento.
+            Los cambios rigen desde su publicación en el Sitio. Te recomendamos
+            revisarla periódicamente.
+          </p>
+        </section>
+      </>
+    ) : (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            1. Data controller
+          </h2>
+          <p>
+            The controller of personal data collected through this ChuyoCode site
+            (the "Site") is{' '}
+            <strong class="text-zinc-100">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            {ownerCity && <>, based in {ownerCity}, Peru</>}. Processing is carried
+            out in accordance with Peru's Law No. 29733 on Personal Data
+            Protection and its regulations. Contact:{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'the Site contact address'
+            )}
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            2. Data we collect
+          </h2>
+          <p>
+            The Site is designed to work with the least data collection possible.
+            We do not require registration or identification to browse. We may
+            automatically collect: IP address, cookie identifiers, browser and
+            device type, and browsing data (pages viewed, downloads made).
+            Third-party advertising may collect additional data under its own
+            policies.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            3. Purpose of processing
+          </h2>
+          <p>
+            We use data to: (a) operate the Site and the ad-rewarded access; (b)
+            count downloads to build content rankings ("Most viewed"); (c) serve
+            advertising, including personalized third-party ads; and (d) obtain
+            aggregate usage metrics to improve the service.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            4. Cookies
+          </h2>
+          <p>
+            A cookie is a small file stored in your browser. The Site uses:
+          </p>
+          <ul class="ml-5 flex list-disc flex-col gap-2">
+            <li>
+              <strong class="text-zinc-100">First-party technical cookies:</strong>{' '}
+              required for operation. For example, the rewarded-access cookie
+              (remembering you watched an ad so it is not repeated for a period)
+              and cookies to avoid counting the same download multiple times.
+              Without these, the Site does not work correctly.
+            </li>
+            <li>
+              <strong class="text-zinc-100">Third-party cookies:</strong> providers
+              such as Google (AdSense / Ad Manager and, where applicable,
+              Analytics) set cookies to serve and measure advertising, including
+              personalized ads. These are governed by those providers' policies.
+            </li>
+          </ul>
+          <p>
+            You can manage or delete cookies from your browser settings. Blocking
+            technical cookies may affect how the Site works.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Third-party advertising
+          </h2>
+          <p>
+            The Site shows advertising from third-party networks, mainly Google.
+            These providers may use cookies and identifiers to show ads based on
+            your visits to this and other sites. You can set your Google
+            personalized-ads preferences at{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://adssettings.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              adssettings.google.com
+            </a>{' '}
+            and learn more in{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://policies.google.com/technologies/partner-sites"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google's policies
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            6. Your rights
+          </h2>
+          <p>
+            Under Law No. 29733, you have the rights of access, rectification,
+            cancellation, and objection over your personal data. You may exercise
+            them by writing to{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'the Site contact address'
+            )}
+            . You may also file a complaint with Peru's National Authority for
+            Personal Data Protection.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            7. Retention and security
+          </h2>
+          <p>
+            We retain data only for as long as necessary for the purposes
+            described and apply reasonable technical and organizational measures to
+            protect it. No system is completely foolproof, so we cannot guarantee
+            absolute security.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            8. Changes to this policy
+          </h2>
+          <p>
+            We may update this Privacy Policy at any time. Changes take effect upon
+            publication on the Site. We recommend reviewing it periodically.
+          </p>
+        </section>
+      </>
+    )
+  }
+</div>

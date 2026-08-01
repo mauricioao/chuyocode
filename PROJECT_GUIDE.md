@@ -5,7 +5,8 @@
 > stack, architecture, conventions, and current state before making changes.
 > Keep it updated when architecture-level decisions change.
 
-Last updated: after the shadcn/ui + Tailwind 4 migration (all phases complete).
+Last updated: after the home redesign (Más vistos rail, shadcn EditorialRow
+arrows, Destacados carousel).
 
 ---
 
@@ -113,12 +114,15 @@ src/
       MediaCard.astro           # canonical image-first card (posters, catalog, rows)
       NewsCard.astro            # text card (news list)
       Spotlight.astro           # featured block (Card+Badge tokens)
-      EditorialRow.astro        # standard horizontal scroll-snap row
-      RankedRow.astro           # numbered "top N" rail ("Más descargados")
-      HeroCarousel.astro        # SERVER wrapper: buildImage → mounts island
+      EditorialRow.astro        # standard horizontal row (shadcn lucide arrows)
+      RankedRow.astro           # numbered "top 10" rail ("Más vistos")
+      Spotlight.astro           # single-doc featured block (LEGACY: kept, unused)
+      HeroCarousel.astro        # SERVER wrapper: buildImage → mounts hero island
+      SpotlightCarousel.astro   # SERVER wrapper: buildImage → mounts spotlight island
     islands/                    # React (client:*)
       AdModal.tsx               # rewarded-ad unlock (shadcn Dialog)
       HeroCarouselIsland.tsx    # interactive hero (shadcn Carousel + Embla autoplay)
+      SpotlightCarouselIsland.tsx # featured "Destacados" carousel (Carousel + Embla)
   lib/
     sanity.ts                   # all Sanity queries + types + LRU cache (60s)
     downloads.ts                # Supabase download counter + "most downloaded"
@@ -137,9 +141,18 @@ supabase/migrations/            # SQL (book_downloads table + increment RPC)
 1. **HeroCarousel** — featured items (`getHeroItems`), tall billboard with
    ~40% overlap of the next row.
 2. **"Libros Recomendados"** — reserved theme `recomendados` (overlaps hero).
-3. **"Más descargados"** — RankedRow, automatic ranking by real download count.
-4. **Other themes** — one EditorialRow per remaining theme.
-5. **Spotlight** — single featured doc.
+3. **"Más vistos"** — RankedRow "top 10" chart. PRODUCT DECISION: a "view"
+   equals a download/read in this product, so this rail reuses the SAME real
+   download count (`getMostDownloaded`) — there is NO separate view counter. It
+   is a wider, framed showcase box (thicker side padding `px-6 sm:px-10
+   lg:px-16`) with oversized outlined rank numerals; self-hides with no data.
+4. **Other themes** — one EditorialRow per remaining theme. Prev/next arrows are
+   shadcn icon buttons (lucide chevrons inlined as SVG, zero-JS); the amber
+   "next" arrow is the always-visible "there's more" affordance.
+5. **Destacados** — SpotlightCarousel: rotates through ALL featured docs
+   (`getSpotlights`) as wide 16/9 slides so the art never distorts. Server
+   wrapper (`SpotlightCarousel.astro`) runs buildImage → mounts
+   `SpotlightCarouselIsland` (shadcn Carousel + Embla) `client:visible`.
 
 ### Themes (`themes` field, Sanity)
 - `themes` is a **free-text multi-select array** (tags layout). A document can
@@ -196,9 +209,16 @@ supabase/migrations/            # SQL (book_downloads table + increment RPC)
 - Tests: **282 passing** (`pnpm test`), build Complete.
 
 ### Manual TODO for the maintainer
-- [ ] Set `SUPABASE_SERVICE_ROLE_KEY` (local `.env` + Netlify) — needed for the
-      download ranking.
-- [ ] Run `supabase/migrations/0001_book_downloads.sql` in Supabase.
+- [x] Set `SUPABASE_SERVICE_ROLE_KEY` (local `.env`) — done (uses the NEW
+      `sb_secret_...` key format; works fine as the `service_role` Postgres role).
+- [x] Run `supabase/migrations/0001_book_downloads.sql` in Supabase (table + RPC
+      exist; rows are being written via the RPC).
+- [ ] **Run `supabase/migrations/0002_book_downloads_grants.sql` in Supabase.**
+      REQUIRED for the "Más vistos" ranking to READ. Root cause: `service_role`
+      has BYPASSRLS but NOT table GRANTs, so the SECURITY DEFINER RPC could WRITE
+      but a direct SELECT failed with `42501 permission denied for table
+      book_downloads`. This grant fixes the read. GOTCHA for any future table:
+      SQL-Editor-created tables need explicit `GRANT ... TO service_role`.
 - [ ] `pnpm sanity:deploy` so the new `themes` field is editable in the Studio;
       reassign themes on existing docs (old `themeTag` is orphaned).
 - [ ] Visual QA pass in the browser (the shadcn restyle was verified by build +
@@ -209,3 +229,27 @@ supabase/migrations/            # SQL (book_downloads table + increment RPC)
 ### Possible next steps
 - Bklit charts for a future admin/stats dashboard (download analytics).
 - Motion/Magic UI animations on the hero/cards if more polish is wanted.
+
+### Ad monetization roadmap (deferred — not built yet)
+The 24h-pass-after-one-ad business model is ALREADY implemented architecturally
+(`pass.ts` mints a global `chu_pass` for 24h; `AdModal` + `validar-anuncio` +
+`descargar/[slug]` gate + count). Only the ad itself is a 3s placeholder. Path
+to real ads (Peru context):
+1. **Legal prerequisites (blocking):** Privacy Policy + Cookie Policy + consent
+   banner. Google rejects without these.
+2. **AdSense** simple display blocks; learn payouts, validate the site.
+3. **Google Ad Manager (GAM)** for the real Rewarded Ad: wire GPT's
+   `rewardedSlotGranted` → `AdModal`, add SSV/postback → `validar-anuncio`
+   (the existing HMAC is the correct anti-DevTools-fraud base). This is where the
+   current arch plugs in cleanly.
+4. **Only with traffic:** Adsterra / AdMaven Content Locker for the aggressive
+   fallback (ad-per-download). Premature today (Header Bidding wants 50k–100k
+   sessions/mo).
+- **News blur gate:** news is currently FREE (no `getPassState`); blurring news
+  behind the ad-pass is a NEW feature (reuses the existing 24h pass).
+- **Payouts (Peru):** Payoneer + PayPal-Interbank; Binance P2P/USDT only at
+  volume. SEO: delay the ad-wall (scroll/2nd-click, not zero-second) and mark
+  gated content with JSON-LD `isAccessibleForFree: false` to avoid the intrusive
+  interstitial penalty and cloaking flags.
+- Research doc (over-scoped for current stage):
+  `ChuyoCode_others/Redes Publicitarias Generales para Web TI.docx`.

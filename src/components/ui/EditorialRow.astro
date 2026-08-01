@@ -30,6 +30,7 @@
  *   <EditorialRow title="Architecture" items={items} />
  */
 import MediaCard from '@components/ui/MediaCard.astro';
+import { buttonVariants } from '@components/ui/button';
 import type { MediaItem } from '@lib/sanity';
 
 interface Props {
@@ -40,6 +41,15 @@ interface Props {
 }
 
 const { title, items } = Astro.props;
+
+// lucide chevron glyphs, inlined as SVG so the arrows match the shadcn Carousel
+// controls (ChevronLeftIcon / ChevronRightIcon) WITHOUT shipping a React island
+// — the row stays zero-JS except for the tiny scroll wiring below. Same 24px
+// lucide viewBox/stroke as `@components/ui/carousel`.
+const CHEVRON_LEFT_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
+const CHEVRON_RIGHT_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
 
 // Nothing to render for an empty row — the home page also guards this, but the
 // component stays self-safe so it degrades gracefully when used standalone.
@@ -63,8 +73,17 @@ const ARROW_SCRIPT = `
         var amount = Math.max(240, Math.round(track.clientWidth * 0.8));
         track.scrollBy({ left: dir * amount, behavior: 'smooth' });
       }
-      if (prev) prev.addEventListener('click', function () { step(-1); });
-      if (next) next.addEventListener('click', function () { step(1); });
+      function bind(btn, dir) {
+        if (!btn) return;
+        // Prevent the button from grabbing focus on press: a focused, absolutely
+        // positioned arrow makes the browser scroll it into view, which nudges
+        // the whole page vertically on click/hold. mousedown.preventDefault stops
+        // the focus (and its scroll) while keeping the click handler working.
+        btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        btn.addEventListener('click', function (e) { e.preventDefault(); step(dir); });
+      }
+      bind(prev, -1);
+      bind(next, 1);
       row.setAttribute('data-arrows-bound', '1');
     })(rows[r]);
   }
@@ -80,15 +99,21 @@ const ARROW_SCRIPT = `
       </h2>
 
       <div class="relative">
-        {/* Prev arrow — hover/focus-gated: only useful once already scrolled. */}
+        {/* Prev arrow — shadcn icon button (matches the Carousel controls),
+            hover/focus-gated: only useful once already scrolled. The trailing
+            space in `editorial-arrow ` is the opacity-gate hook. */}
         <button
           type="button"
-          class="editorial-arrow editorial-arrow-prev absolute left-2 top-1/2 z-20 -translate-y-1/2 hidden h-10 w-10 items-center justify-center rounded-full bg-black/60 text-zinc-50 outline-none ring-1 ring-white/10 backdrop-blur transition-opacity duration-200 hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-accent sm:flex"
+          class={buttonVariants({
+            variant: 'outline',
+            size: 'icon',
+            className:
+              'editorial-arrow editorial-arrow-prev absolute left-3 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur transition-opacity duration-200 hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent sm:inline-flex',
+          })}
           data-editorial-prev
           aria-label="Scroll left"
-        >
-          <span aria-hidden="true">&lsaquo;</span>
-        </button>
+          set:html={CHEVRON_LEFT_SVG}
+        />
 
         {/* Right-edge gradient fade to black: the last visible card cuts off
             into the fade, hinting there is more to scroll. Non-interactive so it
@@ -98,16 +123,21 @@ const ARROW_SCRIPT = `
           aria-hidden="true"
         />
 
-        {/* Next arrow — ALWAYS VISIBLE accent-yellow chevron: the "there's
-            more" affordance. Sits over the right fade and scrolls the row. */}
+        {/* Next arrow — ALWAYS VISIBLE accent-amber shadcn icon button: the
+            "there's more" affordance. Sits over the right fade and scrolls the
+            row. NOT opacity-gated (no `editorial-arrow ` class). */}
         <button
           type="button"
-          class="editorial-arrow-next absolute right-2 top-1/2 z-20 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl font-bold leading-none text-accent outline-none ring-1 ring-accent/40 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-2 focus-visible:ring-accent"
+          class={buttonVariants({
+            variant: 'outline',
+            size: 'icon',
+            className:
+              'editorial-arrow-next absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent',
+          })}
           data-editorial-next
           aria-label="Scroll right"
-        >
-          <span aria-hidden="true">&rsaquo;</span>
-        </button>
+          set:html={CHEVRON_RIGHT_SVG}
+        />
 
         {/* Left-gutter scroll-snap track of poster MediaCards. The leading
             padding aligns the first card with the row title (px-4 sm:px-6) so

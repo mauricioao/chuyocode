@@ -1,0 +1,88 @@
+---
+/**
+ * SpotlightCarousel — server wrapper for the featured "Destacados" carousel.
+ *
+ * Mirrors {@link HeroCarousel}: the carousel is a shadcn Carousel (Embla) that
+ * MUST run on the client, but the Sanity image pipeline ({@link buildImage}) is
+ * server-only. This component runs buildImage per slide on the SERVER, flattens
+ * each slide to plain data (resolved src/srcset/sizes/lqip for the wide cover),
+ * and hands that to the {@link SpotlightCarouselIsland} React island
+ * (`client:visible`, so it hydrates only when scrolled near — it sits low on
+ * the page). Nothing server-only ever ships to the browser.
+ *
+ * Each slide's cover uses the WIDE (hero/16:9) variant of the landscape hero
+ * backdrop (`backgroundAsset`, falling back to the cover), so the art renders at
+ * its native ratio and never distorts — the fix for the old single-Spotlight
+ * poster-stretched-into-16/9 problem.
+ *
+ * Graceful empty: an empty `items` array renders NOTHING — the home page skips
+ * the section rather than showing an empty block (matches Spotlight.astro).
+ *
+ * API:
+ *   <SpotlightCarousel items={spotlights} heading="Destacado" ctaLabel="Leer" />
+ */
+import { buildImage, type SanityAssetRef } from '@lib/image';
+import SpotlightCarouselIsland, {
+  type SpotlightSlideData,
+  type SpotlightImage,
+} from '@components/islands/SpotlightCarouselIsland';
+import type { MediaItem } from '@lib/sanity';
+
+interface Props {
+  /** Featured items (books + news). Empty → renders nothing. */
+  items: MediaItem[];
+  /** Small eyebrow heading above each title. */
+  heading?: string;
+  /** CTA label for the deep-link button. */
+  ctaLabel?: string;
+  /** Auto-advance interval in ms. Default 7000. */
+  interval?: number;
+}
+
+const { items, heading, ctaLabel, interval = 7000 } = Astro.props;
+const hasItems = items.length > 0;
+
+/**
+ * Flatten a buildImage result to the island's {@link SpotlightImage} shape, or
+ * `null` when the variant produced no `src` (missing asset).
+ */
+function toSpotlightImage(
+  asset: SanityAssetRef | null | undefined,
+  _id: string | undefined,
+): SpotlightImage | null {
+  const built = buildImage({ asset, _id }, 'hero');
+  if (!built.src) return null;
+  return {
+    src: built.src,
+    srcset: built.srcset,
+    sizes: built.sizes,
+    ...(built.lqip ? { lqip: built.lqip } : {}),
+  };
+}
+
+// Server-side image pipeline per slide → plain data for the client island. The
+// cover prefers the landscape hero backdrop and falls back to the cover (`??`),
+// mirroring HeroCarousel so a null projection falls through but a real asset
+// never does. `body` prefers the long synopsis, falling back to the tagline.
+const slides: SpotlightSlideData[] = items.map((item) => ({
+  ...(item._id ? { id: item._id } : {}),
+  href: item.href,
+  title: item.title,
+  ...(item.synopsis || item.tagline
+    ? { body: item.synopsis || item.tagline }
+    : {}),
+  image: toSpotlightImage(item.backgroundAsset ?? item.asset, item._id),
+}));
+---
+
+{
+  hasItems && (
+    <SpotlightCarouselIsland
+      client:visible
+      slides={slides}
+      heading={heading}
+      ctaLabel={ctaLabel ?? 'Read more'}
+      interval={interval}
+    />
+  )
+}

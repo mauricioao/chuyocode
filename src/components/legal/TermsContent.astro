@@ -1,0 +1,299 @@
+---
+/**
+ * TermsContent — Terms & Conditions body (es/en) for /[lang]/legal/terms.
+ *
+ * Content lives here (not in i18n.ts) so the long legal copy does not pollute
+ * the short-label localization file. The owner identity comes from env vars
+ * (LEGAL_OWNER_*) resolved by the page and passed in as props, so personal data
+ * stays out of source control while still rendering publicly (required by Peru's
+ * Ley 29733: the data controller must be identified on the site).
+ *
+ * DISCLAIMER: this is a solid industry-standard structure aligned with AdSense
+ * requirements and Ley 29733, NOT a lawyer-reviewed document. Have it reviewed
+ * by a legal professional before relying on it in production.
+ */
+import type { Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  ownerName: string;
+  ownerRuc: string;
+  ownerCity: string;
+  ownerEmail: string;
+  /** Last-updated date, already formatted for display. */
+  updated: string;
+}
+
+const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
+  Astro.props;
+const isEs = lang === 'es';
+---
+
+<div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
+  <p class="text-sm text-zinc-500">
+    {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
+  </p>
+
+  {
+    isEs ? (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            1. Identificación del titular
+          </h2>
+          <p>
+            Este sitio web ChuyoCode (en adelante, "el Sitio") es operado por{' '}
+            <strong class="text-zinc-100">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            {ownerCity && <>, domiciliado en {ownerCity}, Perú</>} (en adelante,
+            "el Titular"). Para cualquier consulta relacionada con estos términos
+            puedes escribir a{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'el correo de contacto del Sitio'
+            )}
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            2. Objeto y aceptación
+          </h2>
+          <p>
+            Los presentes Términos y Condiciones regulan el acceso y uso del
+            Sitio, cuyo fin es ofrecer contenido educativo sobre programación,
+            tecnología e informática, incluyendo libros, artículos de noticias y,
+            en el futuro, cursos. Al acceder o utilizar el Sitio, el usuario
+            declara haber leído, entendido y aceptado estos Términos. Si no está
+            de acuerdo, debe abstenerse de utilizar el Sitio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            3. Descripción del servicio
+          </h2>
+          <p>
+            El Sitio pone a disposición del usuario contenido de consulta y, en
+            algunos casos, la descarga de materiales (por ejemplo, archivos PDF).
+            El acceso a determinadas descargas puede requerir la visualización
+            previa de publicidad, que otorga acceso temporal sin fricción por un
+            período limitado. El Titular puede modificar, suspender o discontinuar
+            cualquier funcionalidad del Sitio en cualquier momento.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            4. Propiedad intelectual
+          </h2>
+          <p>
+            Las marcas, logotipos, diseño y elementos propios del Sitio pertenecen
+            al Titular o se utilizan bajo licencia. El contenido de terceros
+            (libros, portadas, textos de noticias) pertenece a sus respectivos
+            autores o titulares de derechos y se muestra con fines informativos y
+            educativos. El usuario se compromete a no reproducir, distribuir ni
+            explotar dicho contenido fuera de lo permitido por la ley aplicable.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Publicidad y acceso recompensado
+          </h2>
+          <p>
+            El Sitio se financia mediante publicidad, incluyendo redes de terceros
+            como Google. El usuario puede acceder a un modo de navegación sin
+            interrupciones publicitarias por un período determinado tras
+            visualizar un anuncio, o continuar con publicidad por cada interacción
+            de descarga. El Titular no se responsabiliza por el contenido de los
+            anuncios de terceros ni por los sitios a los que estos enlacen.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            6. Conducta del usuario
+          </h2>
+          <p>
+            El usuario se compromete a utilizar el Sitio conforme a la ley, la
+            buena fe y estos Términos. Queda prohibido: (a) intentar vulnerar la
+            seguridad del Sitio o sus mecanismos de acceso; (b) automatizar
+            descargas o eludir los controles de publicidad; (c) usar el Sitio para
+            fines ilícitos; y (d) afectar el funcionamiento normal del servicio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            7. Exención de responsabilidad
+          </h2>
+          <p>
+            El Sitio y su contenido se ofrecen "tal cual". El Titular no garantiza
+            que el contenido esté libre de errores ni que el servicio sea
+            ininterrumpido. En la máxima medida permitida por la ley, el Titular no
+            será responsable por daños directos o indirectos derivados del uso o la
+            imposibilidad de uso del Sitio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            8. Enlaces a terceros
+          </h2>
+          <p>
+            El Sitio puede contener enlaces a sitios de terceros. El Titular no
+            controla ni asume responsabilidad por el contenido, políticas o
+            prácticas de dichos sitios. El acceso a ellos es responsabilidad del
+            usuario.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            9. Modificaciones, ley aplicable y jurisdicción
+          </h2>
+          <p>
+            El Titular puede modificar estos Términos en cualquier momento; los
+            cambios rigen desde su publicación en el Sitio. Estos Términos se rigen
+            por las leyes de la República del Perú. Cualquier controversia se
+            someterá a los jueces y tribunales competentes de{' '}
+            {ownerCity || 'Lima'}, Perú, salvo disposición legal imperativa en
+            contrario.
+          </p>
+        </section>
+      </>
+    ) : (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            1. Site owner
+          </h2>
+          <p>
+            This ChuyoCode website (the "Site") is operated by{' '}
+            <strong class="text-zinc-100">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            {ownerCity && <>, based in {ownerCity}, Peru</>} (the "Owner"). For any
+            question regarding these terms, you may contact{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'the Site contact address'
+            )}
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            2. Purpose and acceptance
+          </h2>
+          <p>
+            These Terms &amp; Conditions govern access to and use of the Site,
+            whose purpose is to provide educational content about programming,
+            technology, and IT — including books, news articles, and, in the
+            future, courses. By accessing or using the Site, you confirm that you
+            have read, understood, and accepted these Terms. If you disagree, you
+            must refrain from using the Site.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            3. Service description
+          </h2>
+          <p>
+            The Site offers reference content and, in some cases, downloadable
+            materials (for example, PDF files). Access to certain downloads may
+            require first viewing an advertisement, which grants friction-free
+            temporary access for a limited period. The Owner may modify, suspend,
+            or discontinue any Site feature at any time.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            4. Intellectual property
+          </h2>
+          <p>
+            The Site's own trademarks, logos, design, and elements belong to the
+            Owner or are used under license. Third-party content (books, covers,
+            news text) belongs to its respective authors or rights holders and is
+            shown for informational and educational purposes. You agree not to
+            reproduce, distribute, or exploit such content beyond what applicable
+            law permits.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Advertising and rewarded access
+          </h2>
+          <p>
+            The Site is funded through advertising, including third-party networks
+            such as Google. You may access an ad-free browsing mode for a set
+            period after viewing an ad, or continue with advertising per download
+            interaction. The Owner is not responsible for the content of
+            third-party ads or the sites they link to.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            6. User conduct
+          </h2>
+          <p>
+            You agree to use the Site in accordance with the law, good faith, and
+            these Terms. It is prohibited to: (a) attempt to breach the Site's
+            security or access mechanisms; (b) automate downloads or bypass ad
+            controls; (c) use the Site for unlawful purposes; and (d) disrupt the
+            normal operation of the service.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            7. Disclaimer
+          </h2>
+          <p>
+            The Site and its content are provided "as is". The Owner does not
+            guarantee that the content is error-free or that the service will be
+            uninterrupted. To the maximum extent permitted by law, the Owner shall
+            not be liable for direct or indirect damages arising from the use of,
+            or inability to use, the Site.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            8. Third-party links
+          </h2>
+          <p>
+            The Site may contain links to third-party sites. The Owner does not
+            control and assumes no responsibility for the content, policies, or
+            practices of such sites. Accessing them is your responsibility.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            9. Changes, governing law, and jurisdiction
+          </h2>
+          <p>
+            The Owner may modify these Terms at any time; changes take effect upon
+            publication on the Site. These Terms are governed by the laws of the
+            Republic of Peru. Any dispute shall be submitted to the competent
+            courts of {ownerCity || 'Lima'}, Peru, unless a mandatory legal
+            provision states otherwise.
+          </p>
+        </section>
+      </>
+    )
+  }
+</div>

@@ -35,6 +35,11 @@ export interface Env {
   SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   AD_HMAC_SECRET: string;
+  /** Legal entity (site owner) shown on /legal pages. Optional; empty → fallback. */
+  LEGAL_OWNER_NAME: string;
+  LEGAL_OWNER_RUC: string;
+  LEGAL_OWNER_CITY: string;
+  LEGAL_OWNER_EMAIL: string;
 }
 
 /** Source shape: any string-keyed record (import.meta.env or process.env). */
@@ -52,6 +57,10 @@ export const REQUIRED_ENV_KEYS = [
 export const OPTIONAL_ENV_KEYS = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'AD_HMAC_SECRET',
+  'LEGAL_OWNER_NAME',
+  'LEGAL_OWNER_RUC',
+  'LEGAL_OWNER_CITY',
+  'LEGAL_OWNER_EMAIL',
 ] as const;
 
 /**
@@ -160,5 +169,10 @@ export function loadEnv(source: EnvSource = defaultEnvSource()): Env {
     // Optional today; empty string until their owning work unit wires them.
     SUPABASE_SERVICE_ROLE_KEY: readString(source, 'SUPABASE_SERVICE_ROLE_KEY'),
     AD_HMAC_SECRET: readString(source, 'AD_HMAC_SECRET'),
+    // Legal entity (optional): empty string falls back to a neutral label.
+    LEGAL_OWNER_NAME: readString(source, 'LEGAL_OWNER_NAME'),
+    LEGAL_OWNER_RUC: readString(source, 'LEGAL_OWNER_RUC'),
+    LEGAL_OWNER_CITY: readString(source, 'LEGAL_OWNER_CITY'),
+    LEGAL_OWNER_EMAIL: readString(source, 'LEGAL_OWNER_EMAIL'),
   };
 }

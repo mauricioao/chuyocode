@@ -2,20 +2,30 @@
 /**
  * RankedRow — numbered "top N" rail of poster cards (spec: home-discovery;
  * design decision #3). Each item is a {@link MediaCard} in the `ranked` variant
- * fronted by a large index number (1, 2, 3…), so the row reads as an ordered
- * chart. An optional side description block sits before the rail to frame the
- * list.
+ * fronted by a LARGE index number (1, 2, 3…), so the row reads as an ordered
+ * chart in the streaming-billboard style (the big numeral sits beside the
+ * poster, Netflix "Top 10" look).
+ *
+ * This is the home's "Más vistos" block. It is deliberately WIDER than the other
+ * discovery rows: it uses thicker left/right side padding (`px-6 sm:px-10
+ * lg:px-16`) so it reads as a distinct, framed showcase box that spans the
+ * viewport, while the remaining EditorialRows keep the lighter gutter. The rail
+ * scrolls horizontally and the next cards peek in from the right edge (a gradient
+ * fade hints "there is more").
  *
  * The rail is a pure CSS scroll-snap track (`overflow-x-auto snap-x`,
  * `snap-start shrink-0` per item) — no island, no layout JS, degrades
  * gracefully. The big numbers are decorative (`aria-hidden`), so the accessible
  * name of each entry comes from the card's own anchor label (the title).
  *
+ * At most {@link MAX_RANKED} entries render (a "top 10" cap), even if more items
+ * are passed in.
+ *
  * Graceful empty: an empty `items` array renders NOTHING — the home page skips
  * the section rather than showing an empty rail.
  *
  * API:
- *   <RankedRow title="Top books" items={ranked} description="…" />
+ *   <RankedRow title="Más vistos" items={ranked} description="…" />
  */
 import MediaCard from '@components/ui/MediaCard.astro';
 import type { MediaItem } from '@lib/sanity';
@@ -29,55 +39,84 @@ interface Props {
   description?: string;
 }
 
+/** Hard cap on the ranking: a "top 10" chart at most. */
+export const MAX_RANKED = 10;
+
+/** Max title length in the ranked rail so each card caption stays one line. */
+export const RANKED_TITLE_MAX = 20;
+
 const { title, items, description } = Astro.props;
 
-const hasItems = items.length > 0;
+// Cap to a top-10 chart even when more items are provided upstream.
+const ranked = items.slice(0, MAX_RANKED);
+const hasItems = ranked.length > 0;
+
+/** Truncate to RANKED_TITLE_MAX chars with an ellipsis so titles fit one line. */
+function shortTitle(t: string): string {
+  return t.length > RANKED_TITLE_MAX
+    ? `${t.slice(0, RANKED_TITLE_MAX).trimEnd()}…`
+    : t;
+}
 ---
 
 {
   hasItems && (
-    <section class="ranked-row flex flex-col gap-4 px-4 sm:px-6" data-ranked-row>
+    <section
+      class="ranked-row flex flex-col gap-5 px-6 py-2 sm:px-10 lg:px-16"
+      data-ranked-row
+    >
       <h2 class="font-display text-2xl font-semibold text-foreground sm:text-3xl">
         {title}
       </h2>
 
-      <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
         {description && (
           <p class="max-w-xs shrink-0 text-sm text-muted-foreground lg:w-64">
             {description}
           </p>
         )}
 
-        <div
-          class="ranked-track flex snap-x snap-mandatory gap-6 overflow-x-auto py-1"
-          data-ranked-track
-        >
-          {items.map((item, index) => (
-            <div
-              class="ranked-item relative flex shrink-0 snap-start items-end"
-              data-ranked-item
-            >
-              {/* Big decorative rank number. Hidden from a11y tree — the card
-                  anchor already exposes the title as its accessible name. */}
-              <span
-                class="ranked-number font-display font-black leading-none text-white/10"
-                aria-hidden="true"
+        <div class="relative min-w-0 flex-1">
+          {/* Right-edge fade: the last visible card cuts into black, hinting the
+              rail scrolls and more entries wait past the edge. Non-interactive so
+              it never eats clicks aimed at the card underneath. */}
+          <div
+            class="ranked-fade pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-black to-transparent sm:w-20"
+            aria-hidden="true"
+          />
+
+          <div
+            class="ranked-track flex snap-x snap-mandatory gap-2 overflow-x-auto overflow-y-hidden pr-12 sm:gap-4 sm:pr-20"
+            data-ranked-track
+          >
+            {ranked.map((item, index) => (
+              <div
+                class="ranked-item relative flex shrink-0 snap-start items-end"
+                data-ranked-item
               >
-                {index + 1}
-              </span>
-              <div class="ranked-card -ml-4 w-32 sm:w-36">
-                <MediaCard
-                  variant="ranked"
-                  kind={item.kind}
-                  _id={item._id}
-                  href={item.href}
-                  title={item.title}
-                  author={item.tagline}
-                  asset={item.asset}
-                />
+                {/* Big decorative rank numeral — outlined, streaming "Top N"
+                    style. Hidden from a11y tree: the card anchor already exposes
+                    the title as its accessible name. */}
+                <span
+                  class="ranked-number font-display font-black leading-none"
+                  aria-hidden="true"
+                >
+                  {index + 1}
+                </span>
+                <div class="ranked-card -ml-3 w-28 sm:-ml-5 sm:w-36 lg:w-40">
+                  <MediaCard
+                    variant="ranked"
+                    kind={item.kind}
+                    _id={item._id}
+                    href={item.href}
+                    title={shortTitle(item.title)}
+                    author={item.tagline}
+                    asset={item.asset}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -95,9 +134,21 @@ const hasItems = items.length > 0;
     display: none; /* Chrome / Safari / Edge */
   }
 
-  /* Oversized chart numeral. Clamps across breakpoints; the negative card
-   * margin above overlaps the poster so the digit reads as a rank marker. */
+  /* Oversized chart numeral, "Top 10" billboard style: a hollow, outlined digit
+   * so the poster beside it stays the focal point. Clamps across breakpoints;
+   * the negative card margin above overlaps the poster so the digit reads as a
+   * rank marker fronting the cover. */
   .ranked-number {
-    font-size: clamp(4rem, 10vw, 7rem);
+    font-size: clamp(4.5rem, 12vw, 8.5rem);
+    color: transparent;
+    -webkit-text-stroke: 2px rgba(255, 255, 255, 0.28);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+    letter-spacing: -0.04em;
+  }
+
+  /* Double-digit ranks (10) need a touch more room and a slightly smaller face
+   * so they don't crowd the poster. */
+  .ranked-item:nth-child(n + 10) .ranked-number {
+    font-size: clamp(3.5rem, 9vw, 6.5rem);
   }
 </style>

@@ -3,17 +3,24 @@
  * Legal page (design decision #9 / File Changes; spec 5: localized routing).
  *
  * A single dynamic route backs both legal documents the Footer links to:
- *   - `/[lang]/legal/terms`   -> Terms and conditions
- *   - `/[lang]/legal/privacy` -> Privacy policy
+ *   - `/[lang]/legal/terms`   -> Terms & Conditions   (TermsContent)
+ *   - `/[lang]/legal/privacy` -> Privacy Policy + Cookies (PrivacyContent)
  *
  * The `[page]` segment is validated against a small allow-list; anything else
- * 404s (SSR mode — see astro.config.mjs). Content is intentionally a localized
- * placeholder ("Legal content pending" + a short generic privacy note) until
- * the real legal copy is authored. All strings come from `UI_LABELS[lang].legal`
- * (spec 5: no hardcoded UI strings).
+ * 404s (SSR mode — see astro.config.mjs). The real localized copy lives in the
+ * `@components/legal/*` components; titles/labels still come from
+ * `UI_LABELS[lang].legal` (spec 5: no hardcoded UI strings).
+ *
+ * Owner identity (name/RUC/city/email) is read from env (LEGAL_OWNER_*) so the
+ * personal data required on the page by Ley 29733 renders publicly WITHOUT being
+ * hardcoded into source control. Every field is optional and fails safe: an unset
+ * value falls back to a neutral label ("ChuyoCode") so the page never breaks.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import TermsContent from '@components/legal/TermsContent.astro';
+import PrivacyContent from '@components/legal/PrivacyContent.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { loadEnv } from '@lib/env';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -35,6 +42,22 @@ const legalPage = page as LegalPage;
 
 const legal = UI_LABELS[lang].legal;
 const title = legal.titles[legalPage];
+
+// Owner identity from env (fail-safe: fall back to a neutral label so the page
+// always renders even before the LEGAL_OWNER_* vars are configured).
+const env = loadEnv();
+const ownerName = env.LEGAL_OWNER_NAME || 'ChuyoCode';
+const ownerRuc = env.LEGAL_OWNER_RUC;
+const ownerCity = env.LEGAL_OWNER_CITY;
+const ownerEmail = env.LEGAL_OWNER_EMAIL;
+
+// Last-updated date, localized. Computed at render time (SSR), so it always
+// reflects the current deploy — good enough for a "last updated" line.
+const updated = new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'es-PE', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
 ---
 
 <BaseLayout lang={lang} title={title}>
@@ -42,7 +65,27 @@ const title = legal.titles[legalPage];
     <h1 class="font-display text-3xl font-bold tracking-tight text-accent sm:text-4xl">
       {title}
     </h1>
-    <p class="text-lg text-zinc-400">{legal.pending}</p>
-    <p class="leading-relaxed text-zinc-300">{legal.privacyNote}</p>
+
+    {
+      legalPage === 'terms' ? (
+        <TermsContent
+          lang={lang}
+          ownerName={ownerName}
+          ownerRuc={ownerRuc}
+          ownerCity={ownerCity}
+          ownerEmail={ownerEmail}
+          updated={updated}
+        />
+      ) : (
+        <PrivacyContent
+          lang={lang}
+          ownerName={ownerName}
+          ownerRuc={ownerRuc}
+          ownerCity={ownerCity}
+          ownerEmail={ownerEmail}
+          updated={updated}
+        />
+      )
+    }
   </section>
 </BaseLayout>

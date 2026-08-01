@@ -94,19 +94,19 @@ const lqipStyle = image.lqip
   href={href}
   aria-label={title}
   data-variant={variant}
-  class:list={[
-    'mediacard group block outline-none',
-    'focus-visible:ring-2 focus-visible:ring-accent',
-  ]}
+  class="mediacard group relative block outline-none focus-visible:ring-2 focus-visible:ring-accent"
 >
-  {/* Image block: fixed aspect ratio, rounded, holds the cover + type tag. */}
+  {/* Image block = the 3D stage. `perspective` on the wrapper + `preserve-3d`
+      inside give the depth; on hover the cover lifts toward the viewer and the
+      type badge floats out even further (layered depth, adapted from the Nike
+      "product + buy" 3D card). rounded/overflow keep the cover clipped. */}
   <div
     class:list={[
-      'relative block overflow-hidden bg-base-muted shadow-elevation-1 transition-shadow duration-300 group-hover:shadow-elevation-2',
+      'mediacard-stage relative block overflow-hidden bg-base-muted shadow-elevation-1 transition-shadow duration-500 group-hover:shadow-elevation-3',
       aspect,
     ]}
   >
-    <div class="absolute inset-0" style={lqipStyle}>
+    <div class="mediacard-cover absolute inset-0" style={lqipStyle}>
       {
         image.src && (
           <img
@@ -117,46 +117,108 @@ const lqipStyle = image.lqip
             loading="lazy"
             decoding="async"
             transition:name={_id ? `cover-${_id}` : undefined}
-            class="mediacard-img h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            class="mediacard-img h-full w-full object-cover"
           />
         )
       }
     </div>
 
-    {/* High-contrast type tag (shadcn Badge): solid primary (brand amber),
-        black text, over the top-left corner of the cover. Only rendered when
-        `kind` is provided. */}
-    {
-      kindLabel && (
-        <span
-          class={badgeVariants({
-            variant: 'default',
-            className:
-              'absolute left-2 top-2 uppercase tracking-wide shadow-sm ring-1 ring-black/10',
-          })}
-        >
-          {kindLabel}
-        </span>
-      )
-    }
   </div>
+
+  {/* High-contrast type tag (shadcn Badge). Rendered OUTSIDE the overflow-hidden
+      cover stage (as a sibling over it) so its 3D lift is not clipped: it
+      ACCOMPANIES the cover in the depth effect, floating further toward the
+      viewer on hover (the "buy button" counterpart from the reference). */}
+  {
+    kindLabel && (
+      <span
+        class={badgeVariants({
+          variant: 'default',
+          className:
+            'mediacard-badge pointer-events-none absolute left-2 top-2 z-10 uppercase tracking-wide shadow-md ring-1 ring-black/10',
+        })}
+      >
+        {kindLabel}
+      </span>
+    )
+  }
 
   {/* Always-visible caption BELOW the image: title + optional author. Text
       steps up slightly at sm so it stays legible at the ~130px mobile card
-      width without crowding the wider desktop card. */}
+      width without crowding the wider desktop card. The ranked rail keeps the
+      title to ONE truncated line (callers pre-shorten it); other variants wrap
+      to two lines. */}
   <div class="mediacard-caption flex flex-col gap-0.5 pt-2">
-    <h3 class="line-clamp-2 text-xs font-semibold text-zinc-50 sm:text-sm">{title}</h3>
-    {author && <p class="text-xs text-zinc-400 sm:text-sm">{author}</p>}
+    <h3
+      class:list={[
+        'text-xs font-semibold text-zinc-50 sm:text-sm',
+        variant === 'ranked' ? 'truncate' : 'line-clamp-2',
+      ]}
+    >
+      {title}
+    </h3>
+    {author && <p class="line-clamp-1 text-xs text-zinc-400 sm:text-sm">{author}</p>}
   </div>
 </a>
 
 <style>
-  /* Reduced motion: skip the image zoom + shadow transitions. */
+  /* 3D depth hover (adapted from a Nike "product card" reference, CSS-only — no
+   * vanilla-tilt, no JS, no per-card hydration, so it scales to every card while
+   * staying Astro-first). The card keeps a `perspective` so its children can be
+   * pushed toward the viewer on the Z axis; on hover the whole card lifts a
+   * little AND the cover + badge "pop out" at different depths for a layered feel.
+   * A slow, soft cubic-bezier makes both enter and exit feel smooth. */
+  .mediacard {
+    perspective: 900px;
+    transition: transform 0.5s cubic-bezier(0.03, 0.98, 0.52, 0.99);
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .mediacard:hover,
+  .mediacard:focus-visible {
+    transform: translateY(-8px);
+  }
+
+  .mediacard :global(.mediacard-stage) {
+    transform-style: preserve-3d;
+  }
+
+  /* Cover: rests flat, lifts toward the viewer with a hair of tilt on hover. */
+  .mediacard :global(.mediacard-cover) {
+    transform: translateZ(0) rotate(0deg);
+    transition: transform 0.5s cubic-bezier(0.03, 0.98, 0.52, 0.99);
+    transform-style: preserve-3d;
+  }
+  .mediacard:hover :global(.mediacard-cover),
+  .mediacard:focus-visible :global(.mediacard-cover) {
+    transform: translateZ(28px) scale(1.03);
+  }
+
+  /* Badge accompanies the lift, floating out FURTHER than the cover (the "buy
+   * button" role from the reference) so the layers read as real depth. */
+  .mediacard :global(.mediacard-badge) {
+    transform: translateZ(0);
+    transition: transform 0.5s cubic-bezier(0.03, 0.98, 0.52, 0.99);
+    transform-style: preserve-3d;
+  }
+  .mediacard:hover :global(.mediacard-badge),
+  .mediacard:focus-visible :global(.mediacard-badge) {
+    transform: translateZ(55px);
+  }
+
+  /* Reduced motion: no 3D, no lift, no transition (content stays fully usable). */
   @media (prefers-reduced-motion: reduce) {
-    .mediacard-img {
+    .mediacard,
+    .mediacard :global(.mediacard-cover),
+    .mediacard :global(.mediacard-badge) {
       transition: none;
     }
-    .mediacard:hover .mediacard-img {
+    .mediacard:hover,
+    .mediacard:focus-visible,
+    .mediacard:hover :global(.mediacard-cover),
+    .mediacard:focus-visible :global(.mediacard-cover),
+    .mediacard:hover :global(.mediacard-badge),
+    .mediacard:focus-visible :global(.mediacard-badge) {
       transform: none;
     }
   }

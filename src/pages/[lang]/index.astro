@@ -28,16 +28,15 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import HeroCarousel from '@components/ui/HeroCarousel.astro';
 import EditorialRow from '@components/ui/EditorialRow.astro';
 import RankedRow from '@components/ui/RankedRow.astro';
-import Spotlight from '@components/ui/Spotlight.astro';
+import SpotlightCarousel from '@components/ui/SpotlightCarousel.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   getHeroItems,
   getRowsByTheme,
-  getSpotlight,
+  getSpotlights,
   themeTitle,
   RESERVED_THEMES,
   type EditorialRow as EditorialRowData,
-  type MediaItem,
 } from '@lib/sanity';
 import { getMostDownloaded } from '@lib/downloads';
 
@@ -57,22 +56,25 @@ const description = UI_LABELS[lang].meta.siteDescription;
 // (return [] / null on error), so empty results simply collapse their section.
 // `mostDownloaded` reads Supabase + Sanity and returns [] until downloads exist
 // or when the service-role key is unset, so the ranking self-hides gracefully.
-const [heroItems, editorialRows, spotlight, mostDownloaded] = await Promise.all([
+const [heroItems, editorialRows, spotlights, mostDownloaded] = await Promise.all([
   getHeroItems(lang, 6),
   getRowsByTheme(lang),
-  getSpotlight(lang),
+  getSpotlights(lang),
   getMostDownloaded(lang, 10),
 ]);
 
 const spotlightHeading = lang === 'en' ? 'Spotlight' : 'Destacado';
 const spotlightCta = UI_LABELS[lang].news.readMore;
 
-// "Más descargados" ranking labels (automatic, by real download count).
-const mostDownloadedTitle = lang === 'en' ? 'Most downloaded' : 'Más descargados';
-const mostDownloadedDescription =
+// "Más vistos" ranking labels. Product decision: in this product a "view"
+// equals a download/read (users treat downloading as reading), so this ranking
+// is fed by the SAME real download count (getMostDownloaded) and simply
+// presented as "Más vistos" / "Most viewed" — no separate view counter.
+const mostViewedTitle = lang === 'en' ? 'Most viewed' : 'Más vistos';
+const mostViewedDescription =
   lang === 'en'
-    ? 'The most downloaded titles right now.'
-    : 'Los títulos más descargados ahora mismo.';
+    ? 'The most viewed titles right now.'
+    : 'Los títulos más vistos ahora mismo.';
 
 // Section ordering (spec: home section order):
 //   hero → "Libros Recomendados" (reserved theme, overlaps the hero)
@@ -108,7 +110,7 @@ const otherRows: EditorialRowData[] = editorialRows.filter(
         transparent overlap band pass clicks through to the hero CTA
         underneath; each row child re-enables `pointer-events-auto` so cards
         stay fully interactive. --- */}
-    <div class="pointer-events-none relative z-10 -mt-28 flex flex-col gap-12 py-8 [&>*]:pointer-events-auto sm:-mt-44 sm:gap-16 sm:py-12">
+    <div class="pointer-events-none relative z-10 -mt-28 flex flex-col gap-12 pt-8 [&>*]:pointer-events-auto sm:-mt-44 sm:gap-16 sm:pt-12">
       {/* --- Reserved editorial rows FIRST ("Libros Recomendados"). The first
           one is the row that overlaps the hero. Title via themeTitle() (override
           map + generic hyphen→space capitalize). Empty reserved themes never
@@ -121,14 +123,16 @@ const otherRows: EditorialRowData[] = editorialRows.filter(
         ))
       }
 
-      {/* --- "Más descargados" — automatic numbered ranking by real download
-          count (RankedRow). Self-hides when there are no downloads yet or the
-          service-role key is unset (mostDownloaded === []). -------------- */}
+      {/* --- "Más vistos" — automatic numbered "top 10" chart by real download
+          count (RankedRow, framed showcase box with thicker side padding).
+          "View" == download/read in this product, so it reuses getMostDownloaded.
+          Self-hides when there are no downloads yet or the service-role key is
+          unset (mostDownloaded === []). -------------------------------- */}
       <div class="reveal" style="--reveal-delay:120ms">
         <RankedRow
-          title={mostDownloadedTitle}
+          title={mostViewedTitle}
           items={mostDownloaded}
-          description={mostDownloadedDescription}
+          description={mostViewedDescription}
         />
       </div>
 
@@ -142,13 +146,14 @@ const otherRows: EditorialRowData[] = editorialRows.filter(
         ))
       }
 
-      {/* --- Spotlight — single featured doc, closes the page (renders nothing
-          when null). ---------------------------------------------------- */}
+      {/* --- Destacados — featured carousel, closes the page. Rotates through
+          ALL featured docs (getSpotlights) as wide 16/9 slides so the art never
+          distorts. Renders nothing when there are none. ------------------ */}
       {
-        spotlight && (
+        spotlights.length > 0 && (
           <div class="reveal" style="--reveal-delay:160ms">
-            <Spotlight
-              item={spotlight as MediaItem}
+            <SpotlightCarousel
+              items={spotlights}
               heading={spotlightHeading}
               ctaLabel={spotlightCta}
             />

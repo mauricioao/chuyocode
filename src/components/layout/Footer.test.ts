@@ -7,6 +7,18 @@ import { UI_LABELS } from '@lib/i18n';
 // Footer is a pure Astro component (no island), so the Container API renders
 // it fully. These tests pin the secondary links to the real, localized legal
 // route `/[lang]/legal/[page]` (they previously 404'd at /terminos, /privacidad).
+
+// Astro escapes text content, so a label containing `&` (e.g. "Terms &
+// Conditions") renders as `&amp;` in the HTML. Escape the expected label the
+// same way before matching so the assertion checks the localized label, not a
+// specific punctuation encoding.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 describe('Footer.astro — legal links', () => {
   it('points the terms/privacy links at /[lang]/legal/[page]', async () => {
     const container = await AstroContainer.create();
@@ -27,7 +39,7 @@ describe('Footer.astro — legal links', () => {
     });
     expect(html).toContain('href="/en/legal/terms"');
     expect(html).toContain('href="/en/legal/privacy"');
-    expect(html).toContain(UI_LABELS.en.footer.terms);
-    expect(html).toContain(UI_LABELS.en.footer.privacy);
+    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.terms));
+    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.privacy));
   });
 });
