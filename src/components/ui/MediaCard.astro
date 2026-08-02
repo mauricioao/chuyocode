@@ -96,17 +96,21 @@ const lqipStyle = image.lqip
   data-variant={variant}
   class="mediacard group relative block outline-none focus-visible:ring-2 focus-visible:ring-accent"
 >
-  {/* Image block = the 3D stage. `perspective` on the wrapper + `preserve-3d`
-      inside give the depth; on hover the cover lifts toward the viewer and the
-      type badge floats out even further (layered depth, adapted from the Nike
-      "product + buy" 3D card). rounded/overflow keep the cover clipped. */}
+  {/* Image block = the element that lifts on hover (see the "lifted by hand"
+      rule in <style>). The badge lives inside it, so it rises together with the
+      cover — only the image block moves, the caption below stays put. The COVER
+      clips its image so the portrait stays rounded; the shadow deepens on hover
+      to reinforce the lift. */}
   <div
     class:list={[
-      'mediacard-stage relative block overflow-hidden bg-base-muted shadow-elevation-1 transition-shadow duration-500 group-hover:shadow-elevation-3',
+      'mediacard-stage relative block bg-base-muted shadow-elevation-1 transition-shadow duration-500 group-hover:shadow-elevation-3',
       aspect,
     ]}
   >
-    <div class="mediacard-cover absolute inset-0" style={lqipStyle}>
+    <div
+      class="mediacard-cover absolute inset-0 overflow-hidden"
+      style={lqipStyle}
+    >
       {
         image.src && (
           <img
@@ -123,25 +127,24 @@ const lqipStyle = image.lqip
       }
     </div>
 
+    {/* High-contrast type tag (shadcn Badge). Sits over the cover but OUTSIDE
+        the overflow-hidden cover box, so on hover it can scale/lift MORE than
+        the cover and separate as its own layer (the "buy button" counterpart
+        from the reference), simulating depth with 2D transforms. */}
+    {
+      kindLabel && (
+        <span
+          class={badgeVariants({
+            variant: 'default',
+            className:
+              'mediacard-badge pointer-events-none absolute left-2 top-2 z-10 uppercase tracking-wide shadow-md ring-1 ring-black/10',
+          })}
+        >
+          {kindLabel}
+        </span>
+      )
+    }
   </div>
-
-  {/* High-contrast type tag (shadcn Badge). Rendered OUTSIDE the overflow-hidden
-      cover stage (as a sibling over it) so its 3D lift is not clipped: it
-      ACCOMPANIES the cover in the depth effect, floating further toward the
-      viewer on hover (the "buy button" counterpart from the reference). */}
-  {
-    kindLabel && (
-      <span
-        class={badgeVariants({
-          variant: 'default',
-          className:
-            'mediacard-badge pointer-events-none absolute left-2 top-2 z-10 uppercase tracking-wide shadow-md ring-1 ring-black/10',
-        })}
-      >
-        {kindLabel}
-      </span>
-    )
-  }
 
   {/* Always-visible caption BELOW the image: title + optional author. Text
       steps up slightly at sm so it stays legible at the ~130px mobile card
@@ -162,64 +165,32 @@ const lqipStyle = image.lqip
 </a>
 
 <style>
-  /* 3D depth hover (adapted from a Nike "product card" reference, CSS-only — no
-   * vanilla-tilt, no JS, no per-card hydration, so it scales to every card while
-   * staying Astro-first). The card keeps a `perspective` so its children can be
-   * pushed toward the viewer on the Z axis; on hover the whole card lifts a
-   * little AND the cover + badge "pop out" at different depths for a layered feel.
-   * A slow, soft cubic-bezier makes both enter and exit feel smooth. */
-  .mediacard {
-    perspective: 900px;
-    transition: transform 0.5s cubic-bezier(0.03, 0.98, 0.52, 0.99);
-    transform-style: preserve-3d;
+  /* "Lifted by hand" hover: ONLY the image block grows UPWARD on hover — its
+   * bottom edge stays anchored (transform-origin: bottom) so the card appears to
+   * be gently picked up while the caption below stays put. The motion is slow,
+   * soft, and SYMMETRIC: the same duration + ease-in-out on enter AND exit, so
+   * releasing the mouse lowers it back the exact same way. 2D transform only, so
+   * the scroll-track overflow never flattens it. */
+  .mediacard :global(.mediacard-stage) {
+    transform-origin: bottom center;
+    transform: translateY(0);
+    transition:
+      transform 0.45s ease-in-out,
+      box-shadow 0.45s ease-in-out;
     will-change: transform;
   }
-  .mediacard:hover,
-  .mediacard:focus-visible {
-    transform: translateY(-8px);
+  .mediacard:hover :global(.mediacard-stage),
+  .mediacard:focus-visible :global(.mediacard-stage) {
+    /* The WHOLE image block moves up as one piece (no scale, so nothing grows
+     * past the track edge and gets clipped) = the card is "picked up". */
+    transform: translateY(-10px);
   }
 
-  .mediacard :global(.mediacard-stage) {
-    transform-style: preserve-3d;
-  }
-
-  /* Cover: rests flat, lifts toward the viewer with a hair of tilt on hover. */
-  .mediacard :global(.mediacard-cover) {
-    transform: translateZ(0) rotate(0deg);
-    transition: transform 0.5s cubic-bezier(0.03, 0.98, 0.52, 0.99);
-    transform-style: preserve-3d;
-  }
-  .mediacard:hover :global(.mediacard-cover),
-  .mediacard:focus-visible :global(.mediacard-cover) {
-    transform: translateZ(28px) scale(1.03);
-  }
-
-  /* Badge accompanies the lift, floating out FURTHER than the cover (the "buy
-   * button" role from the reference) so the layers read as real depth. */
-  .mediacard :global(.mediacard-badge) {
-    transform: translateZ(0);
-    transition: transform 0.5s cubic-bezier(0.03, 0.98, 0.52, 0.99);
-    transform-style: preserve-3d;
-  }
-  .mediacard:hover :global(.mediacard-badge),
-  .mediacard:focus-visible :global(.mediacard-badge) {
-    transform: translateZ(55px);
-  }
-
-  /* Reduced motion: no 3D, no lift, no transition (content stays fully usable). */
-  @media (prefers-reduced-motion: reduce) {
-    .mediacard,
-    .mediacard :global(.mediacard-cover),
-    .mediacard :global(.mediacard-badge) {
-      transition: none;
-    }
-    .mediacard:hover,
-    .mediacard:focus-visible,
-    .mediacard:hover :global(.mediacard-cover),
-    .mediacard:focus-visible :global(.mediacard-cover),
-    .mediacard:hover :global(.mediacard-badge),
-    .mediacard:focus-visible :global(.mediacard-badge) {
-      transform: none;
-    }
-  }
+  /* NOTE: this hover is intentionally NOT gated behind
+   * `prefers-reduced-motion: reduce`. It is a subtle, user-initiated hover lift
+   * (not autoplaying/looping motion), so it stays on for everyone — many systems
+   * report `reduce` from unrelated settings (battery saver, Windows animation
+   * effects off), which would otherwise hide this basic affordance. Larger,
+   * automatic motion elsewhere (hero autoplay, scroll reveals) still respects
+   * the preference. */
 </style>
