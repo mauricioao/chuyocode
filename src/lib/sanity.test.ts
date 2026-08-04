@@ -348,6 +348,54 @@ describe('getArticleBySlug', () => {
     await getArticleBySlug('foo', 'es');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('maps heroBackgroundUrl when present, omits when absent', async () => {
+    fetchMock.mockResolvedValue({
+      _id: 'n3',
+      title: 'Hero Article',
+      slug: 'hero-article',
+      excerpt: '',
+      body: '',
+      publishedAt: '',
+      imageUrl: 'https://cdn/img.jpg',
+      heroBackgroundUrl: 'https://cdn/hero.jpg',
+      heroBackgroundLqip: 'data:blur',
+    });
+    const article = await getArticleBySlug('hero-article', 'es');
+    expect(article?.heroBackgroundUrl).toBe('https://cdn/hero.jpg');
+    expect(article?.heroBackgroundLqip).toBe('data:blur');
+    // imageUrl is still populated (fallback when heroBackground is absent).
+    expect(article?.imageUrl).toBe('https://cdn/img.jpg');
+
+    // Article without heroBackground: field is absent.
+    fetchMock.mockResolvedValue({
+      _id: 'n4',
+      title: 'Plain Article',
+      slug: 'plain',
+      excerpt: '',
+      body: '',
+      publishedAt: '',
+      imageUrl: 'https://cdn/img.jpg',
+    });
+    const plain = await getArticleBySlug('plain', 'es');
+    expect(plain?.heroBackgroundUrl).toBeUndefined();
+    expect(plain?.heroBackgroundLqip).toBeUndefined();
+  });
+
+  it('maps contentLogoUrl when present, omits when absent', async () => {
+    fetchMock.mockResolvedValue({
+      _id: 'n5',
+      title: 'Logo Article',
+      slug: 'logo-article',
+      excerpt: '',
+      body: '',
+      publishedAt: '',
+      imageUrl: '',
+      contentLogoUrl: 'https://cdn/logo.png',
+    });
+    const article = await getArticleBySlug('logo-article', 'es');
+    expect(article?.contentLogoUrl).toBe('https://cdn/logo.png');
+  });
 });
 
 // ---------------------------------------------------------------------------

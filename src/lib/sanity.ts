@@ -86,6 +86,41 @@ export interface NewsArticle {
    */
   featured?: boolean;
   tagline?: string;
+  /**
+   * Random-side image+text sections (random-side-news-layout delta). Additive
+   * and optional — existing articles without sections are fully backward-
+   * compatible. Each section carries a shared image, optional alt text, and
+   * per-language body blocks.
+   */
+  sections?: SectionInput[];
+  /**
+   * Optional wide (16:9) hero background image URL from Sanity's `heroBackground`
+   * field. When present, this replaces `imageUrl` as the main article image.
+   * When absent, the article falls back to `imageUrl` (spec: heroBackground
+   * takes precedence over the standard `image` field).
+   */
+  heroBackgroundUrl?: string;
+  /**
+   * LQIP blur-up placeholder for {@link heroBackgroundUrl}. Optional: absent
+   * when the asset has no `metadata.lqip` or when `heroBackgroundUrl` itself is
+   * absent.
+   */
+  heroBackgroundLqip?: string;
+  /**
+   * Optional content-logo URL from Sanity's `contentLogo` field (transparent
+   * PNG treatment). Rendered as a centered logo block between the intro body
+   * and the alternating sections. Gracefully omitted when absent.
+   */
+  contentLogoUrl?: string;
+}
+
+/** A single random-side section as returned by {@link ARTICLE_BY_SLUG_QUERY}. */
+export interface SectionInput {
+  image?: {
+    asset?: { url?: string; metadata?: { lqip?: string } } | null;
+  } | null;
+  alt?: string;
+  body?: { es?: unknown; en?: unknown } | null;
 }
 
 /**
@@ -310,6 +345,8 @@ const NEWS_QUERY = `{
 // `body` may resolve to a plain string or a Portable Text block array depending
 // on the Sanity schema, so it stays untyped here and is normalized at render
 // time by {@link renderBody} (design decision #5).
+// Also projects optional `heroBackgroundUrl` (16:9 hero image), `contentLogoUrl`
+// (transparent logo treatment), and random-side `sections`.
 const ARTICLE_BY_SLUG_QUERY = `*[_type == "news" && slug.current == $slug && !(_id in path("drafts.**"))][0] {
   _id,
   "title": coalesce(title[$lang], title.es, title),
@@ -318,7 +355,15 @@ const ARTICLE_BY_SLUG_QUERY = `*[_type == "news" && slug.current == $slug && !(_
   "body": coalesce(body[$lang], body.es, body),
   publishedAt,
   "imageUrl": image.asset->url,
-  "imageLqip": image.asset->metadata.lqip
+  "imageLqip": image.asset->metadata.lqip,
+  "heroBackgroundUrl": heroBackground.asset->url,
+  "heroBackgroundLqip": heroBackground.asset->metadata.lqip,
+  "contentLogoUrl": contentLogo.asset->url,
+  "sections": coalesce(sections[]{
+    "image": { "asset": image.asset->{ url, "metadata": { "lqip": metadata.lqip } } },
+    "alt": coalesce(alt, ""),
+    "body": { "es": body.es, "en": body.en }
+  }, [])
 }`;
 
 // ---------------------------------------------------------------------------
@@ -419,6 +464,21 @@ function toNewsArticle(raw: Record<string, unknown>): NewsArticle {
     typeof raw.imageLqip === 'string' && raw.imageLqip.length > 0
       ? raw.imageLqip
       : undefined;
+  const heroBackgroundUrl =
+    typeof raw.heroBackgroundUrl === 'string' && raw.heroBackgroundUrl.length > 0
+      ? raw.heroBackgroundUrl
+      : undefined;
+  const heroBackgroundLqip =
+    typeof raw.heroBackgroundLqip === 'string' && raw.heroBackgroundLqip.length > 0
+      ? raw.heroBackgroundLqip
+      : undefined;
+  const contentLogoUrl =
+    typeof raw.contentLogoUrl === 'string' && raw.contentLogoUrl.length > 0
+      ? raw.contentLogoUrl
+      : undefined;
+  const sections = Array.isArray(raw.sections)
+    ? (raw.sections as SectionInput[])
+    : undefined;
   return {
     _id: String(raw._id ?? ''),
     title: String(raw.title ?? ''),
@@ -428,6 +488,10 @@ function toNewsArticle(raw: Record<string, unknown>): NewsArticle {
     publishedAt: String(raw.publishedAt ?? ''),
     imageUrl: String(raw.imageUrl ?? ''),
     ...(imageLqip ? { imageLqip } : {}),
+    ...(heroBackgroundUrl ? { heroBackgroundUrl } : {}),
+    ...(heroBackgroundLqip ? { heroBackgroundLqip } : {}),
+    ...(contentLogoUrl ? { contentLogoUrl } : {}),
+    ...(sections ? { sections } : {}),
   };
 }
 

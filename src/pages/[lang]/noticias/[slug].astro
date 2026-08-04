@@ -1,0 +1,210 @@
+---
+/**
+ * Article detail page (spec: article-reading; SSR).
+ *
+ * Fetches a single news article by slug for the active locale and renders its
+ * title, formatted publish date, hero image, and localized body. A 404 is
+ * returned when the slug matches no document (spec: Missing slug -> 404).
+ *
+ * Route: `/[lang]/noticias/[slug]` (moved from `.../articulo/[slug]`).
+ *
+ * This route is NOT pass-gated (spec: article-reading — MUST NOT be pass-gated):
+ * news is free content and never touches `getPassState` / the premium gate.
+ *
+ * Body rendering uses `renderBody` (design decision #5), which defensively
+ * handles both a plain string and a Portable Text block array and returns an
+ * HTML-escaped `<p>` sequence injected via `<Fragment set:html>`.
+ *
+ * Hero image: `heroBackgroundUrl` (16:9) takes precedence over the standard
+ * `imageUrl`. When both are absent the image slot is omitted.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getArticleBySlug, renderBody, type SectionInput } from '@lib/sanity';
+import { buildSections } from '@lib/sections';
+import { buildImage } from '@lib/image';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const slug = Astro.params.slug;
+if (!slug) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const article = await getArticleBySlug(slug, lang);
+
+// Slug not found -> 404 (spec: Missing slug).
+if (!article) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang];
+const bodyHtml = renderBody(article.body);
+
+// Hero image: heroBackground (16:9) > standard image (square/portrait).
+const heroImageUrl = article.heroBackgroundUrl || article.imageUrl;
+
+// Build random-side sections below the content logo (per-request SSR).
+const builtSections = buildSections(article.sections as SectionInput[] | undefined, lang).map(
+  (s) => ({
+    side: s.side,
+    alt: s.alt,
+    img: buildImage({ asset: s.image.asset }, 'wide'),
+    bodyHtml: renderBody(s.body),
+  }),
+);
+
+/** Format an ISO timestamp for display in the active locale. */
+function formatDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+---
+
+<BaseLayout
+  lang={lang}
+  title={article.title}
+  description={article.excerpt || UI_LABELS[lang].meta.newsDescription}
+  ogImage={heroImageUrl}
+>
+  <article class="reveal mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
+    <header class="flex flex-col gap-3">
+      <time class="text-xs font-medium uppercase tracking-wide text-white/60">
+        {formatDate(article.publishedAt)}
+      </time>
+      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+        {article.title}
+      </h1>
+    </header>
+
+    {
+      heroImageUrl && (
+        <div class="overflow-hidden rounded-lg border border-base-muted bg-base-muted">
+          <img
+            src={heroImageUrl}
+            alt={article.title}
+            class="aspect-video w-full object-cover"
+          />
+        </div>
+      )
+    }
+
+    <!-- Intro body: always white/high-contrast, not zinc on the black backgound. -->
+    {
+      bodyHtml ? (
+        <div class="flex flex-col gap-4 leading-relaxed text-white [&>p]:text-base [&>p]:text-white">
+          <Fragment set:html={bodyHtml} />
+        </div>
+      ) : (
+        <p class="text-white/70">{article.excerpt}</p>
+      )
+    }
+
+    <!-- Content logo + first section floating editorial layout (flow-root with desktop float). -->
+    {
+      (() => {
+        const firstSection = builtSections[0];
+        const hasLogo = Boolean(article.contentLogoUrl);
+        const hasFirstBody = Boolean(firstSection?.bodyHtml);
+
+        // Both present: floating editorial layout using firstSection.side.
+        if (hasLogo && hasFirstBody) {
+          const floatSide = firstSection.side === 'left'
+            ? 'md:float-left md:mr-6 md:mb-4 md:w-48 lg:w-56'
+            : 'md:float-right md:ml-6 md:mb-4 md:w-48 lg:w-56';
+
+          return (
+            <section class="flow-root">
+              <figure class={`float-none mx-auto w-full max-w-[280px] ${floatSide}`}>
+                <img
+                  src={article.contentLogoUrl}
+                  alt=""
+                  role="presentation"
+                  class="block h-auto w-full max-w-full object-contain"
+                />
+              </figure>
+              <div class="flex flex-col gap-4 leading-relaxed text-white [&>p]:text-base [&>p]:text-white">
+                <Fragment set:html={firstSection.bodyHtml} />
+              </div>
+            </section>
+          );
+        }
+
+        // Graceful fallback: only logo present (centered, same as the original standalone block).
+        if (hasLogo) {
+          return (
+            <div class="flex justify-center py-4">
+              <img
+                src={article.contentLogoUrl}
+                alt=""
+                role="presentation"
+                class="w-full h-auto max-w-full max-h-32 sm:max-h-40 md:max-h-48 lg:max-h-56 xl:max-h-64 object-contain"
+              />
+            </div>
+          );
+        }
+
+        // Graceful fallback: only first section body (single-column text flow).
+        if (hasFirstBody) {
+          return (
+            <div class="flex flex-col gap-4 leading-relaxed text-white [&>p]:text-base [&>p]:text-white">
+              <Fragment set:html={firstSection.bodyHtml} />
+            </div>
+          );
+        }
+
+        return null;
+      })()
+    }
+
+    <!-- Remaining sections (index 1+) render in single-column flow. -->
+    {
+      builtSections.length > 1 && (
+        <div class="flex flex-col gap-10">
+          {builtSections.slice(1).map((s) => {
+            const hasImage = Boolean(s.img.src);
+            return (
+              <section class="flex flex-col gap-6">
+                {hasImage && (
+                  <figure class="overflow-hidden rounded-lg border border-base-muted bg-base-muted">
+                    <img
+                      src={s.img.src}
+                      srcset={s.img.srcset}
+                      sizes={s.img.sizes}
+                      alt={s.alt}
+                      class="h-full w-full object-cover"
+                    />
+                  </figure>
+                )}
+                {s.bodyHtml && (
+                  <div class="flex flex-col gap-4 leading-relaxed text-white [&>p]:text-base [&>p]:text-white">
+                    <Fragment set:html={s.bodyHtml} />
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )
+    }
+
+    <a
+      href={`/${lang}/noticias`}
+      class="mt-2 text-sm font-semibold text-accent hover:text-accent-hover"
+    >
+      &larr; {t.article.back}
+    </a>
+  </article>
+</BaseLayout>

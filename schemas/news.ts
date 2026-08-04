@@ -100,6 +100,30 @@ export default {
         'Imagen panorámica de fondo para el carrusel destacado de la home. Si no se define, se usa la imagen del artículo. Opcional.',
       options: { hotspot: true },
     },
+    {
+      name: 'sections',
+      type: 'array',
+      title: 'Secciones (imagen + texto, lado aleatorio)',
+      of: [
+        {
+          type: 'object',
+          name: 'newsSection',
+          fields: [
+            { name: 'image', type: 'image', options: { hotspot: true }, title: 'Imagen' },
+            { name: 'alt', type: 'string', title: 'Texto alternativo (opcional)' },
+            {
+              name: 'body',
+              type: 'object',
+              title: 'Cuerpo',
+              fields: [
+                { name: 'es', type: 'array', of: [{ type: 'block' }], title: 'Español' },
+                { name: 'en', type: 'array', of: [{ type: 'block' }], title: 'English' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
   ],
   orderings: [
     { title: 'Fecha, nuevo primero', name: 'publishedAtDesc', by: [{ field: 'publishedAt', direction: 'desc' }] },
