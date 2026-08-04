@@ -134,17 +134,23 @@ describe('initReveals', () => {
     expect(io.observed.has(b)).toBe(true);
   });
 
-  it('skips animation under prefers-reduced-motion: reveals immediately, no observer', () => {
+  it('still animates under prefers-reduced-motion (product decision: not gated)', () => {
+    // Motion is intentionally NOT gated behind reduced-motion anymore: the
+    // reveal must observe + animate exactly as normal even when the user's
+    // system reports `prefers-reduced-motion: reduce`.
     setReducedMotion(true);
     const [a, b] = addRevealElements(2);
 
     initReveals();
 
-    // No observer is created…
-    expect(MockIntersectionObserver.instances).toHaveLength(0);
-    // …but every element is revealed straight away.
-    expect(a.classList.contains(REVEALED_CLASS)).toBe(true);
-    expect(b.classList.contains(REVEALED_CLASS)).toBe(true);
+    // An observer IS created and elements are observed (not short-circuited).
+    expect(MockIntersectionObserver.instances).toHaveLength(1);
+    const io = MockIntersectionObserver.instances[0];
+    expect(io.observed.has(a)).toBe(true);
+    expect(io.observed.has(b)).toBe(true);
+    // Not revealed until intersection.
+    expect(a.classList.contains(REVEALED_CLASS)).toBe(false);
+    expect(b.classList.contains(REVEALED_CLASS)).toBe(false);
   });
 
   it('falls back to immediate reveal when IntersectionObserver is unsupported', () => {

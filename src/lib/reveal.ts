@@ -7,11 +7,10 @@
  * the element is unobserved so it never re-animates. No external library, no
  * client island — `BaseLayout` runs this from an inline module script.
  *
- * Accessibility (decision #6 + spec: prefers-reduced-motion): when the user has
- * `prefers-reduced-motion: reduce`, we short-circuit entirely — every `.reveal`
- * element is marked `.revealed` immediately (content visible, zero animation)
- * and NO observer is created. The CSS media query additionally zeroes the
- * transition, so even the class flip produces no motion.
+ * Motion policy (product decision): the fade-up ALWAYS plays — it is NOT gated
+ * behind `prefers-reduced-motion`. As a real capability fallback (not a
+ * preference), when `IntersectionObserver` is unavailable we reveal everything
+ * immediately so content is never stuck hidden.
  *
  * Safe to call repeatedly (View Transitions re-run it after `astro:after-swap`):
  * already-revealed elements are skipped, and each call only observes elements
@@ -32,27 +31,16 @@ export interface InitRevealsOptions {
 }
 
 /**
- * Does the current environment prefer reduced motion?
- *
- * Guards `matchMedia` so it stays safe under SSR / older jsdom where the API
- * may be missing — treated as "no reduced-motion preference" in that case.
- */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
-/**
  * Observe every `.reveal` element and reveal it on scroll.
  *
  * - No `.reveal` elements → no-op.
- * - `prefers-reduced-motion: reduce` OR no `IntersectionObserver` support →
- *   reveal everything immediately, create no observer.
+ * - No `IntersectionObserver` support → reveal everything immediately, create no
+ *   observer (capability fallback so content is never stuck hidden).
  * - Otherwise → observe each not-yet-revealed element; on intersection add
  *   `.revealed` and unobserve it.
+ *
+ * The reveal animation is intentionally NOT gated behind
+ * `prefers-reduced-motion` (product decision — UI animations always play).
  *
  * @param opts - Optional observer `root` / `threshold` overrides.
  */
@@ -68,8 +56,9 @@ export function initReveals(opts: InitRevealsOptions = {}): void {
     return;
   }
 
-  // Reduced-motion OR no IO support → show content immediately, skip observer.
-  if (prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
+  // No IntersectionObserver support → show content immediately, skip observer.
+  // (Capability fallback only; reduced-motion is intentionally NOT checked.)
+  if (typeof IntersectionObserver === 'undefined') {
     for (const el of elements) {
       el.classList.add(REVEALED_CLASS);
     }

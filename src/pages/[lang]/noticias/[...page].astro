@@ -11,6 +11,7 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import NewsCard from '@components/ui/NewsCard.astro';
+import SearchFilter from '@components/ui/SearchFilter.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getNews } from '@lib/sanity';
 
@@ -49,8 +50,22 @@ const hasPrev = page > 1;
 const hasNext = page < result.pageCount;
 
 const COPY = {
-  es: { title: 'Noticias', empty: 'No hay noticias disponibles', prev: 'Anterior', next: 'Siguiente' },
-  en: { title: 'News', empty: 'No news available', prev: 'Previous', next: 'Next' },
+  es: {
+    title: 'Noticias',
+    empty: 'No hay noticias disponibles',
+    prev: 'Anterior',
+    next: 'Siguiente',
+    search: 'Buscar en esta página',
+    noResults: 'No se encontraron resultados en esta página',
+  },
+  en: {
+    title: 'News',
+    empty: 'No news available',
+    prev: 'Previous',
+    next: 'Next',
+    search: 'Search this page',
+    noResults: 'No results found on this page',
+  },
 } as const;
 
 const t = COPY[lang];
@@ -74,25 +89,51 @@ function formatDate(iso: string): string {
   description={UI_LABELS[lang].meta.newsDescription}
 >
   <section class="reveal mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:py-12">
-    <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-      {t.title}
-    </h1>
+    <div class="flex items-center justify-between gap-4">
+      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+        {t.title}
+      </h1>
+      {
+        result.articles.length > 0 && (
+          // NOTE: news is paginated (page size 10), so this instant filter
+          // narrows the CURRENT page only, not the whole archive. Full-archive
+          // search would need a server query/endpoint (deferred).
+          <SearchFilter
+            targetSelector="[data-news-item]"
+            emptyId="news-no-results"
+            label={t.search}
+          />
+        )
+      }
+    </div>
 
     {
       result.articles.length === 0 ? (
         <p class="py-16 text-center text-lg text-zinc-400">{t.empty}</p>
       ) : (
-        <div class="flex flex-col gap-5">
-          {result.articles.map((article) => (
-            <NewsCard
-              title={article.title}
-              excerpt={article.excerpt}
-              date={formatDate(article.publishedAt)}
-              href={`/${lang}/noticias/articulo/${article.slug}`}
-              lang={lang}
-            />
-          ))}
-        </div>
+        <>
+          <p
+            id="news-no-results"
+            hidden
+            aria-live="polite"
+            class="py-16 text-center text-lg text-zinc-400"
+          >
+            {t.noResults}
+          </p>
+          <div class="flex flex-col gap-5">
+            {result.articles.map((article) => (
+              <div data-news-item data-search={`${article.title} ${article.excerpt ?? ''}`}>
+                <NewsCard
+                  title={article.title}
+                  excerpt={article.excerpt}
+                  date={formatDate(article.publishedAt)}
+                  href={`/${lang}/noticias/articulo/${article.slug}`}
+                  lang={lang}
+                />
+              </div>
+            ))}
+          </div>
+        </>
       )
     }
 

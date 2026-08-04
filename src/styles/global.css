@@ -191,10 +191,11 @@ h3 {
  * caller stagger siblings so rows cascade (e.g. inline `style="--reveal-delay:
  * 120ms"` on each item); it defaults to 0ms so a lone element reveals at once.
  *
- * Under `prefers-reduced-motion: reduce` we neutralize everything: no offset,
- * no opacity dip, no transition, no delay. reveal.ts ALSO short-circuits and
- * marks elements `.revealed` immediately, so this media query is the belt to
- * that suspenders — content is visible and motionless for those users. */
+ * NOTE: this reveal is intentionally NOT gated behind
+ * `prefers-reduced-motion: reduce` (product decision). It is a short (≤300ms),
+ * one-shot fade-up on first view — not looping/autoplaying motion — and the site
+ * wants its UI animations to always play. Autoplaying motion (carousel autoplay)
+ * still respects the preference. */
 .reveal {
   opacity: 0;
   transform: translateY(8px);
@@ -208,14 +209,4 @@ h3 {
 .reveal.revealed {
   opacity: 1;
   transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal,
-  .reveal.revealed {
-    opacity: 1;
-    transform: none;
-    transition: none;
-    transition-delay: 0ms;
-  }
 }

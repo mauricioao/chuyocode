@@ -1,0 +1,276 @@
+---
+/**
+ * SearchFilter — client-side instant filter with an animated magnifier input.
+ *
+ * VISUAL: a high-contrast amber magnifier icon that "unfolds" into a search bar
+ * on focus/typing. The shape + stroke-dash animation is adapted from the
+ * Dribbble "Search input animation" (single SVG path whose stroke-dasharray
+ * morphs the lens+handle into a horizontal bar). Retuned to the ChuyoCode brand
+ * (amber stroke on the dark theme) instead of the original white-on-pink.
+ *
+ * BEHAVIOR (Astro-first, zero React): a small vanilla '<script>' filters the
+ * items ALREADY rendered on the page — no server round-trip, no Sanity call. It
+ * matches the typed query (accent-insensitive, case-insensitive) against each
+ * item's 'data-search' haystack and toggles a 'hidden' attribute. When nothing
+ * matches, a localized "no results" message is revealed.
+ *
+ * SCOPE: filters only the items present in the DOM. For Libros that is the whole
+ * catalog (getBooks loads all). For paginated Noticias it filters the CURRENT
+ * page only — this is intentional and documented at the call site.
+ *
+ * WIRING (call site contract):
+ *   - Give the SearchFilter a 'targetSelector' matching each filterable item
+ *     wrapper, and each wrapper must carry a 'data-search="<haystack>"'.
+ *   - Give the empty-state element the id passed as 'emptyId'; keep it hidden
+ *     initially (the script shows it only when the query hides everything).
+ *
+ * A11y: the input has an 'aria-label'; results filtering is announced via an
+ * 'aria-live="polite"' region tied to the empty-state message.
+ */
+interface Props {
+  /** CSS selector for each filterable item wrapper (must carry 'data-search'). */
+  targetSelector: string;
+  /** id of the "no results" element this filter toggles. */
+  emptyId: string;
+  /** Accessible label / placeholder-intent for the input. */
+  label: string;
+  /** Optional extra classes on the outer wrapper. */
+  class?: string;
+}
+
+const { targetSelector, emptyId, label, class: className } = Astro.props;
+---
+
+<div
+  class:list={['chu-search', className]}
+  data-target={targetSelector}
+  data-empty={emptyId}
+>
+  {/* Expanding bar: 0 width at rest, unfolds leftward from the lens. It holds
+      the input and a bottom rule so it reads as a real bar with body (not a
+      thin dashed stroke). */}
+  <div class="chu-search-bar">
+    <input
+      type="text"
+      placeholder=" "
+      aria-label={label}
+      autocomplete="off"
+      spellcheck="false"
+    />
+  </div>
+
+  {/* Real magnifier: a thick-stroked circle (the lens the user asked to make
+      more noticeable) plus a short handle, as its own SVG element with genuine
+      stroke width — not a dash-morph trick. It doubles as the toggle button:
+      clicking it focuses the input so the bar expands. */}
+  <button
+    type="button"
+    class="chu-search-lens"
+    aria-label={label}
+    tabindex="-1"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5"></circle>
+      <line x1="15.5" y1="15.5" x2="21" y2="21"></line>
+    </svg>
+  </button>
+</div>
+
+<style>
+  /* Magnifier that unfolds into a real bar. Two independent parts:
+   *  1) .chu-search-lens — a THICK-stroked circle + handle (always visible,
+   *     high-contrast amber). This is the "lupa gruesa" the user wanted; its
+   *     stroke width is fixed and generous so the circle clearly reads.
+   *  2) .chu-search-bar — a container that grows horizontally from 0 to a
+   *     card's width, carrying the input and a bottom rule so the open state is
+   *     a bar with BODY (not a thin dash that stops half-way).
+   * The lens stays right-anchored; the bar unfolds to the LEFT of it. */
+  .chu-search {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    height: 36px;
+  }
+
+  /* The open/close state is driven by an '.is-open' class toggled in JS — NOT
+   * by :focus-within — so the growth ANIMATION runs first and focus is applied
+   * only after it finishes (see the 'transitionend' handler). This is what makes
+   * the bar visibly grow right-to-left before the caret appears. */
+  .chu-search-bar {
+    display: flex;
+    align-items: flex-end;
+    height: 36px;
+    width: 0;
+    overflow: hidden;
+    /* Bottom rule = the "bar". Amber, grows in with the width. */
+    border-bottom: 2px solid transparent;
+    transition:
+      width 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.45s ease;
+    /* Sit flush to the lens so the rule visually continues into the handle. */
+    margin-right: 6px;
+  }
+  .chu-search.is-open .chu-search-bar {
+    /* Roughly one card wide. */
+    width: 220px;
+    border-bottom-color: var(--color-accent, #facc15);
+  }
+
+  .chu-search-bar input {
+    background: none;
+    border: none;
+    outline: none;
+    width: 100%;
+    min-width: 0;
+    padding: 0 4px 4px;
+    line-height: 20px;
+    font-size: 15px;
+    -webkit-appearance: none;
+    color: var(--color-platinum, #f4f4f5);
+  }
+
+  .chu-search-lens {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-accent, #facc15);
+  }
+  .chu-search-lens svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    /* THICK stroke so the lens circle is clearly visible / high-contrast. */
+    stroke-width: 2.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .chu-search-lens:focus-visible {
+    outline: 2px solid var(--color-accent, #facc15);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* NOTE: this expansion is intentionally NOT gated behind
+   * 'prefers-reduced-motion: reduce'. It is a short, user-initiated (click) grow
+   * — not autoplaying/looping motion — so it stays on for everyone, matching the
+   * card hover-lift decision. Many systems report 'reduce' from unrelated
+   * settings (battery saver, Windows animation effects off), which would
+   * otherwise hide this basic affordance. */
+</style>
+
+<script>
+  // Accent- and case-insensitive normalizer so "artificial" matches
+  // "Artificial" and "inteligencia" matches "Inteligencia". Plain JS (no TS
+  // type annotations) so the Astro dev dependency scanner parses it cleanly.
+  function normalize(s) {
+    return s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  function wireSearch(root) {
+    const input = root.querySelector('input');
+    const bar = root.querySelector('.chu-search-bar');
+    const lens = root.querySelector('.chu-search-lens');
+    const targetSelector = root.dataset.target;
+    const emptyId = root.dataset.empty;
+    if (!input || !bar || !targetSelector) return;
+
+    const items = Array.from(document.querySelectorAll(targetSelector));
+    const empty = emptyId ? document.getElementById(emptyId) : null;
+
+    const apply = () => {
+      const q = normalize(input.value);
+      let visible = 0;
+      for (const item of items) {
+        const hay = normalize(item.dataset.search ?? item.textContent ?? '');
+        const match = q === '' || hay.includes(q);
+        item.hidden = !match;
+        if (match) visible++;
+      }
+      if (empty) empty.hidden = !(q !== '' && visible === 0);
+    };
+
+    // Open/close is a click TOGGLE on the lens, ordered exactly as requested:
+    //   open  -> add '.is-open' (bar grows right-to-left) -> on 'transitionend'
+    //            of 'width', THEN focus the input (caret appears after grow).
+    //   close -> blur first -> remove '.is-open' (bar shrinks to nothing).
+    let onOpenEnd = null;
+
+    const open = () => {
+      if (root.classList.contains('is-open')) return;
+      // Clear any stale end-listener before starting a fresh open.
+      if (onOpenEnd) bar.removeEventListener('transitionend', onOpenEnd);
+      root.classList.add('is-open');
+      // Safety net: if 'transitionend' somehow doesn't fire (interrupted, no
+      // layout change), still focus shortly after the nominal duration.
+      const fallback = window.setTimeout(() => {
+        if (onOpenEnd) {
+          bar.removeEventListener('transitionend', onOpenEnd);
+          onOpenEnd = null;
+        }
+        input.focus();
+      }, 550);
+      onOpenEnd = (e) => {
+        if (e.propertyName !== 'width' || e.target !== bar) return;
+        window.clearTimeout(fallback);
+        bar.removeEventListener('transitionend', onOpenEnd);
+        onOpenEnd = null;
+        // Focus only AFTER the grow animation completes.
+        input.focus();
+      };
+      bar.addEventListener('transitionend', onOpenEnd);
+    };
+
+    const close = () => {
+      if (!root.classList.contains('is-open')) return;
+      if (onOpenEnd) {
+        bar.removeEventListener('transitionend', onOpenEnd);
+        onOpenEnd = null;
+      }
+      input.blur();
+      root.classList.remove('is-open');
+    };
+
+    lens?.addEventListener('click', () => {
+      if (root.classList.contains('is-open')) close();
+      else open();
+    });
+
+    // Esc closes an open bar (keyboard affordance).
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+
+    input.addEventListener('input', apply);
+    // Re-apply after client-side (View Transitions) navigation restores state.
+    apply();
+  }
+
+  function init() {
+    document.querySelectorAll('.chu-search').forEach((el) => {
+      // Guard against double-wiring: a component script can run once as a
+      // module AND fire on astro:page-load. Mark each root so its listeners are
+      // attached exactly once (a second wire would toggle open->closed).
+      if (el.dataset.chuWired === '1') return;
+      el.dataset.chuWired = '1';
+      wireSearch(el);
+    });
+  }
+
+  // Wire on initial load and after every View Transitions navigation. Using
+  // both events (with the wired-guard above) makes it robust no matter whether
+  // the module is evaluated before or after astro:page-load for this page.
+  init();
+  document.addEventListener('astro:page-load', init);
+  document.addEventListener('DOMContentLoaded', init);
+</script>
