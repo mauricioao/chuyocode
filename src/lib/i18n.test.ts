@@ -144,6 +144,22 @@ describe('UI_LABELS — home-streaming keys', () => {
     }
   });
 
+  it('exposes english.exercise copy for both locales', () => {
+    for (const l of locales) {
+      const exercise = UI_LABELS[l].english.exercise;
+      for (const key of ['back', 'level', 'description'] as const) {
+        expect(typeof exercise[key]).toBe('string');
+        expect(exercise[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('localizes the exercise route copy differently per locale', () => {
+    expect(UI_LABELS.es.english.exercise.back).not.toBe(
+      UI_LABELS.en.english.exercise.back,
+    );
+  });
+
   it('distinguishes es from en for the hero headline', () => {
     expect(UI_LABELS.es.home.hero.headline).not.toBe(
       UI_LABELS.en.home.hero.headline,
