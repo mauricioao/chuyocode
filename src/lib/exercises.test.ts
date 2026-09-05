@@ -15,7 +15,7 @@ const { clientState, maybeSingleMock, eqMock, selectMock, fromMock } = vi.hoiste
     const builder: Record<string, unknown> = { maybeSingle: maybeSingleMock };
     const eqMock = vi.fn(() => builder);
     builder.eq = eqMock;
-    const selectMock = vi.fn(() => builder);
+    const selectMock = vi.fn((_columns: string) => builder);
     const fromMock = vi.fn(() => ({ select: selectMock }));
     return {
       clientState: { available: true },
@@ -92,6 +92,17 @@ describe('getExerciseBySlug', () => {
     expect(eqMock).toHaveBeenCalledWith('slug', 'present-simple');
     // Unpublished drafts must never be reachable by deep link.
     expect(eqMock).toHaveBeenCalledWith('published', true);
+  });
+
+  it('selects named columns rather than *, so the read stays explicit', async () => {
+    maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
+
+    await getExerciseBySlug('A1', 'daily-life', 'present-simple');
+
+    const selected = String(selectMock.mock.calls[0]?.[0] ?? '');
+    expect(selected).not.toBe('*');
+    expect(selected).toContain('payload');
+    expect(selected).toContain('slug');
   });
 
   // Spec — Scenario: Availability derived free.
