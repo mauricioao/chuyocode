@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, TOPICS } from './exerciseTaxonomy';
+import { LEVELS, SKILLS, TOPICS } from './exerciseTaxonomy';
 import {
   SUPPORTED_LANGS,
   DEFAULT_LANG,
@@ -138,7 +138,7 @@ describe('UI_LABELS — home-streaming keys', () => {
   it('exposes english.exercise copy for both locales', () => {
     for (const l of locales) {
       const exercise = UI_LABELS[l].english.exercise;
-      for (const key of ['back', 'level', 'description'] as const) {
+      for (const key of ['back', 'level', 'description', 'related'] as const) {
         expect(typeof exercise[key]).toBe('string');
         expect(exercise[key].length).toBeGreaterThan(0);
       }
@@ -208,12 +208,39 @@ describe('UI_LABELS — english section keys', () => {
     }
   });
 
+  it('exposes a display label for every skill in both locales', () => {
+    for (const l of locales) {
+      const skills = UI_LABELS[l].english.skills;
+      // Driven off the taxonomy, like `levels` and `topics`. `skill` is a UI
+      // FILTER LABEL, never a dispatch key (docs/exercise-model.md, "The two
+      // axes"), and cards render it — so a missing entry would print
+      // `undefined` on a card, which typecheck and the status-code page tests
+      // both fail to catch.
+      for (const skill of SKILLS) {
+        expect(typeof skills[skill]).toBe('string');
+        expect(skills[skill].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('never invents a "speaking" skill', () => {
+    // Nothing here can auto-grade speech, so `speaking` is deliberately absent
+    // from the enum (docs/exercise-model.md, "Non-goals"). A label for it would
+    // be a promise the platform cannot keep.
+    for (const l of locales) {
+      expect('speaking' in UI_LABELS[l].english.skills).toBe(false);
+    }
+  });
+
   it('localizes the section copy (es vs en)', () => {
     expect(UI_LABELS.es.english.section.chooseLevel).not.toBe(
       UI_LABELS.en.english.section.chooseLevel,
     );
     expect(UI_LABELS.es.english.topics['daily-life']).not.toBe(
       UI_LABELS.en.english.topics['daily-life'],
+    );
+    expect(UI_LABELS.es.english.skills.writing).not.toBe(
+      UI_LABELS.en.english.skills.writing,
     );
   });
 

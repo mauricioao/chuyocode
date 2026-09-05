@@ -104,13 +104,13 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
                 </span>
                 {/* The skill is the only attribute that varies between cards
                     inside one level+topic pair, so it is what makes them
-                    distinguishable at a glance. Rendered as the raw slug on
-                    purpose: `reading`/`listening`/`writing` are the terms used
-                    in English teaching in both locales, and inventing a
-                    translation here would need i18n keys this slice does not
-                    own. The mechanic icons and topic illustrations land later. */}
+                    distinguishable at a glance. Localized through `skills`,
+                    which the related-exercise cards on the detail route also
+                    read — rendering the same field as a raw slug here and as a
+                    label one click away would be an inconsistency the user
+                    sees. */}
                 <span class={badgeVariants({ variant: 'outline' })}>
-                  {exercise.skill}
+                  {t.skills[exercise.skill]}
                 </span>
               </a>
             </li>

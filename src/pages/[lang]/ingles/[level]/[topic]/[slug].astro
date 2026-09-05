@@ -18,10 +18,10 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import ExerciseIsland from '@components/islands/ExerciseIsland';
-import { Badge } from '@components/ui/badge';
+import { Badge, badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { isLevel, isTopic } from '@lib/exerciseTaxonomy';
-import { getExerciseBySlug } from '@lib/exercises';
+import { getExerciseBySlug, getRelatedExercises } from '@lib/exercises';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -45,11 +45,17 @@ if (!exercise) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const t = UI_LABELS[lang].english.exercise;
+const english = UI_LABELS[lang].english;
+const t = english.exercise;
 
 // The first slot's prompt is the most useful human title we have; exercise
 // content is English-only by contract, so it is not mirrored per locale.
 const heading = exercise.payload.slots[0]?.label ?? slug;
+
+// Fetched AFTER the 404 guards above, so a page nobody will see never spends a
+// round trip on suggestions. Fail-safe: `[]` on any error, which renders
+// nothing at all rather than an empty heading.
+const related = await getRelatedExercises(exercise);
 ---
 
 <BaseLayout lang={lang} title={heading} description={t.description}>
@@ -77,5 +83,49 @@ const heading = exercise.payload.slots[0]?.label ?? slug;
 
     {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
     <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+
+    {/* Related by LEVEL, not topic: someone browsing a level is roughly at that
+        level, and narrowing to the current topic would hide most of what they
+        can do. Rendered only when there IS something — an empty "related"
+        section is noise, not information. Zero JavaScript: these are links. */}
+    {
+      related.length > 0 && (
+        <section class="flex flex-col gap-4 border-t border-border pt-8">
+          <h2 class="text-xl font-bold tracking-tight text-accent">
+            {t.related}
+          </h2>
+
+          <ul class="grid gap-4 sm:grid-cols-2">
+            {related.map((item) => (
+              <li>
+                <a
+                  href={`/${lang}/ingles/${item.level}/${item.topic}/${item.slug}`}
+                  class="flex h-full flex-col gap-3 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+                >
+                  {/* Same title rule as the listing cards: the first slot's
+                      prompt. Exercise content is English-only by contract. */}
+                  <span class="text-lg font-semibold text-zinc-100">
+                    {item.payload.slots[0]?.label || item.slug}
+                  </span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    {/* Topic is what distinguishes these cards from each other:
+                        they cross topics, unlike the listing's. */}
+                    <span class={badgeVariants({ variant: 'outline' })}>
+                      {english.topics[item.topic]}
+                    </span>
+                    <span class={badgeVariants({ variant: 'secondary' })}>
+                      {`${t.level} ${item.level}`}
+                    </span>
+                    <span class={badgeVariants({ variant: 'outline' })}>
+                      {english.skills[item.skill]}
+                    </span>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
   </div>
 </BaseLayout>

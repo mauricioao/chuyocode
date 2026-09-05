@@ -27,6 +27,17 @@ import {
 /** DB table name — must match the SQL migration. */
 export const EXERCISES_TABLE = 'exercises';
 
+/**
+ * How many related exercises a detail page offers.
+ *
+ * Six, because the block sits UNDER the exercise on a single-column
+ * `max-w-3xl` route: a related list longer than the exercise itself stops being
+ * a suggestion and becomes a second listing page. Six also fills a 1/2/3-column
+ * responsive grid with no orphan row (6, 3x2, 2x3), and bounds the read to
+ * seven `jsonb` payloads.
+ */
+export const RELATED_LIMIT = 6;
+
 /** Columns the detail route needs. Selected explicitly, never `*`. */
 const EXERCISE_COLUMNS = 'id, slug, skill, level, topic, payload';
 
@@ -237,6 +248,114 @@ export async function getPublishedExercises(
     });
   } catch (err) {
     console.error('[exercises] getPublishedExercises threw:', err);
+    return [];
+  }
+}
+
+/**
+ * Is `candidate` the very exercise the learner is already looking at?
+ *
+ * Prefers the PRIMARY KEY. `slug` is unique per `(level, topic)`, not globally
+ * (docs/exercise-model.md, "Deep links"), so at level scope two different
+ * exercises may legitimately share a slug — `ordering-coffee` under `food` and
+ * under `travel` are not the same exercise. Slug alone would therefore drop an
+ * innocent card. `(topic, slug)` is the fallback identity when the id did not
+ * come back as a usable string.
+ */
+function isSameExercise(candidate: Exercise, current: Exercise): boolean {
+  if (candidate.id.length > 0 && current.id.length > 0) {
+    return candidate.id === current.id;
+  }
+  return candidate.topic === current.topic && candidate.slug === current.slug;
+}
+
+/**
+ * Fetch other published exercises at the SAME LEVEL as `current`.
+ *
+ * Level is the axis, not topic. Someone browsing a level is roughly at that
+ * level, so level is what makes a suggestion appropriate; narrowing to the
+ * current topic would hide most of what they can actually do and would produce
+ * an empty block for every topic that holds a single exercise.
+ *
+ * ORDERING IS DETERMINISTIC AND TOTAL. `(level, topic, slug)` is the table's
+ * unique key, so at a fixed level `(topic, slug)` admits no ties — the same
+ * request always returns the same rows in the same sequence. Without an
+ * ORDER BY Postgres may return rows in any order, and the block would reshuffle
+ * between two SSR renders of the same URL, which is a real annoyance for
+ * someone re-reading a page. The accepted cost is that the same few exercises
+ * always surface at a level; rotating them needs a stable seed and real content
+ * volume, not `Math.random()` on the render path.
+ *
+ * THE CURRENT EXERCISE IS EXCLUDED IN MEMORY, not in SQL, so there is one code
+ * path that always excludes correctly — including when the row's id is not a
+ * usable string, where `neq('id', '')` against a `uuid` column would be a cast
+ * error that fail-safes the whole block to empty. The cost is bounded to
+ * exactly one extra row, which is why the query asks for `limit + 1`.
+ *
+ * FAIL-SAFE: `[]` on any error. An empty result is also the ordinary answer for
+ * a level that holds nothing else, and the caller renders NOTHING for it — an
+ * empty "related" heading is noise, not information.
+ */
+export async function getRelatedExercises(
+  current: Exercise,
+  limit: number = RELATED_LIMIT,
+): Promise<Exercise[]> {
+  if (!isLevel(current.level) || limit <= 0) return [];
+
+  const client = getClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from(EXERCISES_TABLE)
+      .select(EXERCISE_COLUMNS)
+      .eq('level', current.level)
+      // Drafts must not be reachable through a suggestion either.
+      .eq('published', true)
+      .order('topic', { ascending: true })
+      .order('slug', { ascending: true })
+      // `limit + 1`: the current exercise is itself a row at this level and may
+      // sit inside the window, so asking for exactly `limit` would render
+      // `limit - 1` cards whenever it does.
+      .limit(limit + 1);
+
+    if (error) {
+      console.error('[exercises] getRelatedExercises failed:', error.message);
+      return [];
+    }
+    if (!Array.isArray(data)) return [];
+
+    return data
+      .flatMap((raw): Exercise[] => {
+        const row = raw as unknown as Record<string, unknown>;
+        // The topic VARIES across these rows, unlike every other read here, so
+        // it is validated per row: a topic outside the taxonomy would build a
+        // card linking to a URL the route 404s on.
+        if (!isTopic(row?.topic)) return [];
+        if (typeof row.slug !== 'string' || row.slug.length === 0) return [];
+
+        const payload = parsePayload(row.payload);
+        if (!payload) {
+          console.error('[exercises] malformed payload for slug:', row.slug);
+          return [];
+        }
+
+        return [
+          {
+            id: typeof row.id === 'string' ? row.id : '',
+            slug: row.slug,
+            skill: row.skill as Skill,
+            level: current.level,
+            topic: row.topic,
+            payload,
+            hasAudio: hasAudio(payload),
+          },
+        ];
+      })
+      .filter((candidate) => !isSameExercise(candidate, current))
+      .slice(0, limit);
+  } catch (err) {
+    console.error('[exercises] getRelatedExercises threw:', err);
     return [];
   }
 }

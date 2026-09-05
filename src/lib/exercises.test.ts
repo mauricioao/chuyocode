@@ -13,6 +13,7 @@ const {
   maybeSingleMock,
   eqMock,
   orderMock,
+  limitMock,
   selectMock,
   fromMock,
   listResult,
@@ -46,8 +47,10 @@ const {
   };
   const eqMock = vi.fn(() => builder);
   const orderMock = vi.fn(() => builder);
+  const limitMock = vi.fn((_count: number) => builder);
   builder.eq = eqMock;
   builder.order = orderMock;
+  builder.limit = limitMock;
   const selectMock = vi.fn((_columns: string) => builder);
   const fromMock = vi.fn(() => ({ select: selectMock }));
   return {
@@ -55,6 +58,7 @@ const {
     maybeSingleMock,
     eqMock,
     orderMock,
+    limitMock,
     selectMock,
     fromMock,
     listResult,
@@ -74,8 +78,11 @@ import {
   getExerciseBySlug,
   getExerciseFacetRows,
   getPublishedExercises,
+  getRelatedExercises,
   clearExercisesClient,
   EXERCISES_TABLE,
+  RELATED_LIMIT,
+  type Exercise,
 } from './exercises';
 
 /** A published multiple-choice row exactly as Postgres returns it. */
@@ -411,6 +418,180 @@ describe('getPublishedExercises', () => {
 
   it('rejects a level outside the CEFR scale without touching Supabase', async () => {
     expect(await getPublishedExercises('B3', 'daily-life')).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('getRelatedExercises', () => {
+  /** The exercise the learner is currently on. */
+  const current: Exercise = {
+    // Same primary key as ROW, so `{ ...ROW }` in a result set IS this exercise.
+    id: ROW.id,
+    slug: ROW.slug,
+    skill: 'writing',
+    level: 'A1',
+    topic: 'daily-life',
+    payload: ROW.payload as Exercise['payload'],
+    hasAudio: false,
+  };
+
+  /** A published row at the same level, in whatever topic. */
+  const rowAt = (slug: string, topic = 'travel', id = `id-${slug}`) => ({
+    ...ROW,
+    id,
+    slug,
+    topic,
+  });
+
+  it('offers other exercises at the SAME LEVEL, across topics', async () => {
+    listResult.value = {
+      data: [rowAt('at-airport', 'travel'), rowAt('ordering', 'food')],
+      error: null,
+    };
+
+    const related = await getRelatedExercises(current);
+
+    // Level is the axis, not topic: someone browsing A1 is roughly at A1, and
+    // restricting to the current topic would hide most of what they can do.
+    expect(related.map((e) => e.topic)).toEqual(['travel', 'food']);
+    expect(related.map((e) => e.level)).toEqual(['A1', 'A1']);
+    expect(eqMock).toHaveBeenCalledWith('level', 'A1');
+  });
+
+  it('never lists the exercise the learner is already on', async () => {
+    listResult.value = {
+      data: [rowAt('at-airport'), { ...ROW }, rowAt('ordering', 'food')],
+      error: null,
+    };
+
+    const related = await getRelatedExercises(current);
+
+    expect(related.map((e) => e.slug)).toEqual(['at-airport', 'ordering']);
+  });
+
+  it('excludes by (topic, slug) when the row carries no usable id', async () => {
+    // `slug` is unique per (level, topic), NOT per level, so slug alone cannot
+    // be the exclusion rule — two topics may legitimately share one.
+    listResult.value = {
+      data: [
+        { ...ROW, id: 7 },
+        rowAt('present-simple', 'travel'),
+      ],
+      error: null,
+    };
+
+    const related = await getRelatedExercises({ ...current, id: '' });
+
+    // The same slug under a DIFFERENT topic is a different exercise and stays.
+    expect(related.map((e) => e.topic)).toEqual(['travel']);
+  });
+
+  it('caps the list', async () => {
+    listResult.value = {
+      data: Array.from({ length: 20 }, (_, i) => rowAt(`ex-${i}`)),
+      error: null,
+    };
+
+    expect(await getRelatedExercises(current)).toHaveLength(RELATED_LIMIT);
+    expect(await getRelatedExercises(current, 2)).toHaveLength(2);
+  });
+
+  it('asks Supabase for cap + 1 rows so the cap survives the exclusion', async () => {
+    listResult.value = { data: [rowAt('a')], error: null };
+
+    await getRelatedExercises(current, 3);
+
+    // The current exercise is itself a row at this level and may sit inside the
+    // window. Fetching exactly the cap would render cap - 1 cards whenever it
+    // does — a silent off-by-one nothing would report.
+    expect(limitMock).toHaveBeenCalledWith(4);
+  });
+
+  it('reads published rows only', async () => {
+    listResult.value = { data: [rowAt('a')], error: null };
+
+    await getRelatedExercises(current);
+
+    expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
+    expect(eqMock).toHaveBeenCalledWith('published', true);
+  });
+
+  it('orders deterministically so the block does not reshuffle per render', async () => {
+    listResult.value = { data: [rowAt('a')], error: null };
+
+    await getRelatedExercises(current);
+
+    // `(level, topic, slug)` is the table's unique key, so at a FIXED level
+    // `(topic, slug)` has no ties: this is a total order, not merely a sort.
+    expect(orderMock).toHaveBeenNthCalledWith(1, 'topic', { ascending: true });
+    expect(orderMock).toHaveBeenNthCalledWith(2, 'slug', { ascending: true });
+  });
+
+  it('drops a row whose topic is outside the taxonomy', async () => {
+    listResult.value = {
+      data: [rowAt('a', 'space-travel'), rowAt('b', 'food')],
+      error: null,
+    };
+
+    const related = await getRelatedExercises(current);
+
+    // The card links to /[lang]/ingles/[level]/[topic]/[slug]; an unknown topic
+    // would build a link the route 404s on.
+    expect(related.map((e) => e.topic)).toEqual(['food']);
+  });
+
+  it('drops a malformed row instead of losing the whole block to it', async () => {
+    listResult.value = {
+      data: [{ ...rowAt('broken'), payload: { pools: {} } }, rowAt('fine')],
+      error: null,
+    };
+
+    const related = await getRelatedExercises(current);
+
+    expect(related.map((e) => e.slug)).toEqual(['fine']);
+  });
+
+  it('returns an empty list when this level holds nothing else', async () => {
+    listResult.value = { data: [{ ...ROW }], error: null };
+
+    // The route renders NOTHING for this: an empty "related" heading is noise.
+    expect(await getRelatedExercises(current)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when Supabase reports an error', async () => {
+    listResult.value = { data: null, error: { message: 'down' } };
+
+    expect(await getRelatedExercises(current)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when the query throws', async () => {
+    listResult.throws = new Error('network');
+
+    expect(await getRelatedExercises(current)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+
+    expect(await getRelatedExercises(current)).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('fail-safes to an empty list when the driver returns a null data set', async () => {
+    listResult.value = { data: null, error: null };
+
+    expect(await getRelatedExercises(current)).toEqual([]);
+  });
+
+  it('rejects a level outside the CEFR scale without touching Supabase', async () => {
+    expect(
+      await getRelatedExercises({ ...current, level: 'B3' as Exercise['level'] }),
+    ).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('does not query at all for a non-positive cap', async () => {
+    expect(await getRelatedExercises(current, 0)).toEqual([]);
     expect(fromMock).not.toHaveBeenCalled();
   });
 });

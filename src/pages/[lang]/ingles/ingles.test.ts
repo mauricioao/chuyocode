@@ -33,10 +33,12 @@ vi.mock('@lib/env', () => ({
 const getExerciseBySlug = vi.fn();
 const getExerciseFacetRows = vi.fn();
 const getPublishedExercises = vi.fn();
+const getRelatedExercises = vi.fn();
 vi.mock('@lib/exercises', () => ({
   getExerciseBySlug: (...args: unknown[]) => getExerciseBySlug(...args),
   getExerciseFacetRows: (...args: unknown[]) => getExerciseFacetRows(...args),
   getPublishedExercises: (...args: unknown[]) => getPublishedExercises(...args),
+  getRelatedExercises: (...args: unknown[]) => getRelatedExercises(...args),
 }));
 
 import EntryPage from './index.astro';
@@ -241,6 +243,20 @@ describe('ingles/[level]/[topic]/[slug].astro', () => {
   beforeEach(() => {
     getExerciseBySlug.mockReset();
     getExerciseBySlug.mockResolvedValue(null);
+    getRelatedExercises.mockReset();
+    getRelatedExercises.mockResolvedValue([]);
+  });
+
+  // Every 404 path short-circuits before the exercise exists, so there is no
+  // level to relate anything to. A related query fired anyway would be a round
+  // trip spent on a page nobody will see.
+  it('never looks for related exercises on a 404 path', async () => {
+    await render({ ...valid, level: 'Z9' }, { lang: 'es' });
+    await render({ ...valid, topic: 'space-travel' }, { lang: 'es' });
+    await render({ ...valid, lang: 'fr' });
+    await render(valid, { lang: 'es' }); // valid taxonomy, no published row
+
+    expect(getRelatedExercises).not.toHaveBeenCalled();
   });
 
   it('returns 404 for an invalid level', async () => {
@@ -285,6 +301,11 @@ describe('ingles/[level]/[topic]/[slug].astro', () => {
 
   // Skipped for the same reason as src/pages/[lang]/libros/libros.test.ts:47 —
   // AstroContainer cannot render the React islands this page mounts.
+  //
+  // CONSEQUENCE WORTH STATING: the related-exercises block lives on this same
+  // 200 path, so NOTHING here proves it renders. Its data layer is covered in
+  // src/lib/exercises.test.ts and its copy in src/lib/i18n.test.ts, but the
+  // markup itself is verified by hand in a browser.
   it.skip('renders the exercise island for a published slug', async () => {
     getExerciseBySlug.mockResolvedValue({
       id: 'e1',

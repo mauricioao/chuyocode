@@ -186,11 +186,21 @@ export const UI_LABELS = {
         'technical-documentation': 'Documentación técnica',
         'job-interview': 'Entrevista de trabajo',
       },
+      // Display names for the `skill` filter labels. There is deliberately no
+      // `speaking`: nothing here can auto-grade speech, so it is absent from the
+      // enum itself (docs/exercise-model.md, "Non-goals").
+      skills: {
+        writing: 'Escritura',
+        listening: 'Escucha',
+        reading: 'Lectura',
+      },
       // Copy for the exercise detail route `/[lang]/ingles/[level]/[topic]/[slug]`.
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
         description: 'Practicá inglés técnico con ejercicios cortos y corrección al instante.',
+        // Level, not topic: someone browsing a level is roughly at that level.
+        related: 'Más ejercicios de este nivel',
       },
     },
   },
@@ -284,10 +294,16 @@ export const UI_LABELS = {
         'technical-documentation': 'Technical documentation',
         'job-interview': 'Job interview',
       },
+      skills: {
+        writing: 'Writing',
+        listening: 'Listening',
+        reading: 'Reading',
+      },
       exercise: {
         back: 'Back to English',
         level: 'Level',
         description: 'Practice technical English with short exercises and instant feedback.',
+        related: 'More exercises at this level',
       },
     },
   },
