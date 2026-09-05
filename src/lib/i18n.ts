@@ -143,12 +143,48 @@ export const UI_LABELS = {
       },
     },
     english: {
-      teaser: {
-        badge: 'Próximamente',
+      // Copy for the section entry route `/[lang]/ingles` and the
+      // `[level]/[topic]` listing. The old "coming soon" teaser lived here and
+      // was removed when the section actually shipped.
+      section: {
         title: 'Inglés para programadores',
         description:
-          'Una sección independiente para dominar el inglés técnico que necesitás en tu carrera. Estamos trabajando en ella.',
-        imageAlt: 'Vista previa de la sección de inglés para programadores',
+          'Ejercicios cortos de inglés técnico, organizados por nivel y por tema, con corrección al instante.',
+        intro:
+          'Elegí tu nivel y practicá con ejercicios cortos pensados para el día a día de un desarrollador.',
+        chooseLevel: 'Elegí tu nivel',
+        topicsTitle: 'Temas',
+        // Rendered as "1 ejercicio" / "7 ejercicios" — the number is prepended
+        // by the page, so these stay plain nouns.
+        exerciseOne: 'ejercicio',
+        exerciseMany: 'ejercicios',
+        empty:
+          'Todavía no hay ejercicios publicados. Estamos preparando los primeros: volvé en unos días.',
+        emptyLevel: 'Todavía no hay ejercicios para este nivel.',
+        emptyPair:
+          'Todavía no hay ejercicios para este tema en este nivel. Probá con otro tema.',
+      },
+      // Display names for the CEFR levels. The URL keeps the bare code; the
+      // screen adds what it means, because "B1" alone tells a beginner nothing.
+      levels: {
+        A1: 'Principiante',
+        A2: 'Básico',
+        B1: 'Intermedio',
+        B2: 'Intermedio alto',
+        C1: 'Avanzado',
+        C2: 'Dominio',
+      },
+      // Display names for the topic slugs. The slug is permanent (it is in the
+      // URL and in published rows); only this label is safe to reword.
+      topics: {
+        'daily-life': 'Vida diaria',
+        travel: 'Viajes',
+        food: 'Comida',
+        'family-and-friends': 'Familia y amigos',
+        'code-review': 'Code review',
+        'daily-standup': 'Daily standup',
+        'technical-documentation': 'Documentación técnica',
+        'job-interview': 'Entrevista de trabajo',
       },
       // Copy for the exercise detail route `/[lang]/ingles/[level]/[topic]/[slug]`.
       exercise: {
@@ -214,12 +250,39 @@ export const UI_LABELS = {
       },
     },
     english: {
-      teaser: {
-        badge: 'Coming soon',
+      section: {
         title: 'English for developers',
         description:
-          'An independent section to master the technical English your career needs. We are working on it.',
-        imageAlt: 'Preview of the English for developers section',
+          'Short technical English exercises, organized by level and topic, with instant feedback.',
+        intro:
+          'Pick your level and practise with short exercises built for a developer’s day to day.',
+        chooseLevel: 'Choose your level',
+        topicsTitle: 'Topics',
+        exerciseOne: 'exercise',
+        exerciseMany: 'exercises',
+        empty:
+          'No exercises published yet. We are preparing the first ones — check back in a few days.',
+        emptyLevel: 'No exercises at this level yet.',
+        emptyPair:
+          'No exercises for this topic at this level yet. Try another topic.',
+      },
+      levels: {
+        A1: 'Beginner',
+        A2: 'Elementary',
+        B1: 'Intermediate',
+        B2: 'Upper intermediate',
+        C1: 'Advanced',
+        C2: 'Proficient',
+      },
+      topics: {
+        'daily-life': 'Daily life',
+        travel: 'Travel',
+        food: 'Food',
+        'family-and-friends': 'Family and friends',
+        'code-review': 'Code review',
+        'daily-standup': 'Daily standup',
+        'technical-documentation': 'Technical documentation',
+        'job-interview': 'Job interview',
       },
       exercise: {
         back: 'Back to English',

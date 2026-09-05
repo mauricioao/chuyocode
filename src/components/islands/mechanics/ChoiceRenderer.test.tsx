@@ -84,6 +84,31 @@ describe('ChoiceRenderer', () => {
     ).toBe('false');
   });
 
+  // REGRESSION GUARD. The selected option was invisible in the browser: the
+  // shadcn generator styled the checked state with `data-checked:` variants,
+  // which Tailwind 4 compiles to `[data-checked]` — an attribute Radix never
+  // writes. It emits `data-state="checked"`. Nothing failed; the control simply
+  // looked identical checked or not, and its black dot sat on a near-black
+  // background. Asserting the CLASS would be brittle; asserting the ATTRIBUTE we
+  // style against is the real contract, and it breaks loudly if Radix renames it.
+  it('exposes the checked state as data-state, the attribute the styles target', () => {
+    render(
+      <ChoiceRenderer
+        slot={slot}
+        items={items}
+        value={['b']}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('radio', { name: 'sits' }).getAttribute('data-state'),
+    ).toBe('checked');
+    expect(
+      screen.getByRole('radio', { name: 'sit' }).getAttribute('data-state'),
+    ).toBe('unchecked');
+  });
+
   it('locks every option once disabled', () => {
     const onChange = vi.fn();
     render(
