@@ -146,23 +146,27 @@ export const UI_LABELS = {
       // Copy for the section entry route `/[lang]/ingles` and the
       // `[level]/[topic]` listing. The old "coming soon" teaser lived here and
       // was removed when the section actually shipped.
+      // REGISTER: neutral Spanish, impersonal. Instructions use the infinitive
+      // ("Revisar las respuestas") and descriptions avoid the second person
+      // entirely. The site is not Argentina-specific, so no voseo reaches the
+      // UI — enforced by a guard in `i18n.test.ts`.
       section: {
         title: 'Inglés para programadores',
         description:
           'Ejercicios cortos de inglés técnico, organizados por nivel y por tema, con corrección al instante.',
         intro:
-          'Elegí tu nivel y practicá con ejercicios cortos pensados para el día a día de un desarrollador.',
-        chooseLevel: 'Elegí tu nivel',
+          'Elegir un nivel y practicar con ejercicios cortos pensados para el día a día de un desarrollador.',
+        chooseLevel: 'Elegir nivel',
         topicsTitle: 'Temas',
         // Rendered as "1 ejercicio" / "7 ejercicios" — the number is prepended
         // by the page, so these stay plain nouns.
         exerciseOne: 'ejercicio',
         exerciseMany: 'ejercicios',
         empty:
-          'Todavía no hay ejercicios publicados. Estamos preparando los primeros: volvé en unos días.',
+          'Todavía no hay ejercicios publicados. Estamos preparando los primeros y van a estar disponibles en unos días.',
         emptyLevel: 'Todavía no hay ejercicios para este nivel.',
         emptyPair:
-          'Todavía no hay ejercicios para este tema en este nivel. Probá con otro tema.',
+          'Todavía no hay ejercicios para este tema en este nivel. Probar con otro tema.',
       },
       // Display names for the CEFR levels. The URL keeps the bare code; the
       // screen adds what it means, because "B1" alone tells a beginner nothing.
@@ -183,7 +187,10 @@ export const UI_LABELS = {
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
-        description: 'Practicá inglés técnico con ejercicios cortos y corrección al instante.',
+        // A `<meta name="description">`, so it describes rather than instructs:
+        // a noun phrase keeps it neutral without an infinitive standing alone.
+        description:
+          'Práctica de inglés técnico con ejercicios cortos y corrección al instante.',
         // Level, not topic: someone browsing a level is roughly at that level.
         related: 'Más ejercicios de este nivel',
       },

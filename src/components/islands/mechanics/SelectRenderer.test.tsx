@@ -60,12 +60,12 @@ describe('SelectRenderer', () => {
         items={items}
         value={[]}
         onChange={vi.fn()}
-        placeholder="Elegí una opción"
+        placeholder="Elegir una opción"
       />,
     );
 
     const placeholder = screen.getByRole('option', {
-      name: 'Elegí una opción',
+      name: 'Elegir una opción',
     }) as HTMLOptionElement;
     // The empty VALUE is what makes "nothing chosen" distinguishable from an id.
     expect(placeholder.value).toBe('');
@@ -300,7 +300,7 @@ describe('SelectRenderer — label with a blank', () => {
         items={items}
         value={[]}
         onChange={vi.fn()}
-        placeholder="Elegí una opción"
+        placeholder="Elegir una opción"
       />,
     );
 

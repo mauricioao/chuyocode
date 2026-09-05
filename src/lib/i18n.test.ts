@@ -25,6 +25,49 @@ function flattenStrings(value: unknown): string[] {
   return [];
 }
 
+/**
+ * Ordinary Spanish words that legitimately end in a stressed á/é/í.
+ *
+ * The voseo detector below flags a final stressed vowel because that is what
+ * separates `Revisá` from `Revisar` and `Elegí` from `Elegir`. A short list of
+ * everyday words shares that ending, so they are named here explicitly:
+ * extending the list is a deliberate, reviewable act rather than a silent
+ * loosening of the rule.
+ */
+const NON_VOSEO_ACCENTED_WORDS = [
+  'aquí',
+  'ahí',
+  'allí',
+  'así',
+  'está',
+  'esté',
+  'estará',
+  'será',
+  'habrá',
+  'podrá',
+  'quizá',
+  'café',
+  'sí',
+];
+
+/**
+ * The voseo imperatives inside `text`, in order.
+ *
+ * Deliberately a heuristic, not a conjugation table: a final stressed á/é/í is
+ * the one shape every Rioplatense imperative shares (`Elegí`, `Revisá`,
+ * `Probá`, `Volvé`), and it costs an allowlist entry instead of a parser. The
+ * companion test above proves the detector actually fires, so the guard cannot
+ * pass by matching nothing.
+ */
+function voseoWords(text: string): string[] {
+  return (text.match(/\p{L}+/gu) ?? []).filter(
+    (word) =>
+      /[áéí]$/u.test(word) &&
+      word.length > 2 &&
+      !NON_VOSEO_ACCENTED_WORDS.includes(word.toLowerCase()),
+  );
+}
+
 describe('SUPPORTED_LANGS / DEFAULT_LANG', () => {
   it('supports exactly es and en', () => {
     expect([...SUPPORTED_LANGS]).toEqual(['es', 'en']);
@@ -249,6 +292,30 @@ describe('UI_LABELS — english section keys', () => {
     expect(UI_LABELS.es.english.levels.A1).not.toBe(
       UI_LABELS.en.english.levels.A1,
     );
+  });
+
+  it('detects voseo when it IS there (the guard below is not vacuous)', () => {
+    // Triangulation for the guard that follows: run the same detector over the
+    // copy this repo used to ship and prove it fires.
+    expect(voseoWords('Elegí tu nivel y practicá con ejercicios cortos.')).toEqual(
+      ['Elegí', 'practicá'],
+    );
+    expect(voseoWords('Revisá las respuestas marcadas.')).toEqual(['Revisá']);
+    // ...and does not fire on ordinary Spanish that happens to end in a stress.
+    expect(voseoWords('Practicar inglés aquí, así, cuando esté todo listo.')).toEqual(
+      [],
+    );
+  });
+
+  it('writes the Spanish section copy in neutral Spanish, with no voseo', () => {
+    // STANDING PROJECT RULE. The site is not Argentina-specific, so regional
+    // verb forms must not reach the UI. The register is impersonal: infinitive
+    // for instructions ("Revisar las respuestas"), impersonal prose for
+    // descriptions — no second-person verb at all, which removes the tú/vos
+    // fork at the root instead of picking a side of it.
+    const strings = flattenStrings(UI_LABELS.es.english);
+    expect(strings.length).toBeGreaterThan(10);
+    expect(strings.flatMap(voseoWords)).toEqual([]);
   });
 
   it('no longer ships the "coming soon" teaser now that the section exists', () => {

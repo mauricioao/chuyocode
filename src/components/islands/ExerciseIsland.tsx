@@ -48,27 +48,38 @@ interface Copy {
   someWrong: string;
 }
 
-const COPY: Record<'es' | 'en', Copy> = {
+/**
+ * REGISTER (standing project rule): neutral Spanish, no voseo. Instructions use
+ * the infinitive — `Revisar`, not `Revisá` — and nothing addresses the learner
+ * in the second person, which removes the tú/vos fork instead of picking a side
+ * of it. The site is not Argentina-specific. Guarded by a test in
+ * `ExerciseIsland.test.tsx`.
+ *
+ * Exported for that guard: the island deliberately keeps its copy local rather
+ * than importing `UI_LABELS`, so this map is the only place the guard can read.
+ */
+export const COPY: Record<'es' | 'en', Copy> = {
   es: {
     submit: 'Comprobar',
-    submitHint: 'Elegí al menos una respuesta para comprobar.',
-    selectPlaceholder: 'Elegí una opción',
+    submitHint: 'Elegir al menos una respuesta para comprobar.',
+    selectPlaceholder: 'Elegir una opción',
     retry: 'Intentar de nuevo',
-    // Names what actually happens, so the learner is not afraid of losing the
-    // answers they already got right by pressing it.
-    fix: 'Corregir las incorrectas',
+    // The verb alone. The verdict directly above already names which answers
+    // were wrong, so "Corregir las incorrectas" made the button repeat it — and
+    // a button that reads like a sentence stops looking like a button.
+    fix: 'Corregir',
     correct: 'Correcto',
     incorrect: 'Incorrecto',
-    unavailable: 'Esta parte del ejercicio todavía no se puede resolver acá.',
+    unavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
     allCorrect: '¡Todo correcto!',
-    someWrong: 'Revisá las respuestas marcadas.',
+    someWrong: 'Revisar las respuestas marcadas.',
   },
   en: {
     submit: 'Check',
     submitHint: 'Select at least one answer to check.',
     selectPlaceholder: 'Choose an option',
     retry: 'Try again',
-    fix: 'Fix the wrong ones',
+    fix: 'Fix',
     correct: 'Correct',
     incorrect: 'Incorrect',
     unavailable: 'This part of the exercise cannot be answered here yet.',

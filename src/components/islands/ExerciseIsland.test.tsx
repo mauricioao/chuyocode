@@ -16,6 +16,7 @@ import type { GradeResult } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
 import ExerciseIsland, {
   clearIncorrectAnswers,
+  COPY,
   firstIncorrectSlotId,
   hasSubmittableAnswer,
 } from './ExerciseIsland';
@@ -373,7 +374,7 @@ describe('ExerciseIsland — disabled submit hint', () => {
     render(<ExerciseIsland lang="es" payload={single} />);
 
     expect(screen.getByTestId('exercise-submit-hint').textContent).toContain(
-      'Elegí al menos una respuesta',
+      'Elegir al menos una respuesta',
     );
   });
 });
@@ -468,7 +469,7 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
   it('localizes the dropdown placeholder', () => {
     render(<ExerciseIsland lang="es" payload={threeMechanics} />);
 
-    expect(screen.getByRole('option', { name: 'Elegí una opción' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Elegir una opción' })).toBeTruthy();
     cleanup();
 
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
@@ -731,14 +732,57 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
     const someWrong = retryButton().textContent;
 
     expect(allRight).toBe('Try again');
-    expect(someWrong).toBe('Fix the wrong ones');
+    expect(someWrong).toBe('Fix');
     expect(allRight).not.toBe(someWrong);
     cleanup();
 
     render(<ExerciseIsland lang="es" payload={single} />);
     choose('sit');
     submit();
-    expect(retryButton().textContent).toBe('Corregir las incorrectas');
+    expect(retryButton().textContent).toBe('Corregir');
+  });
+
+  it('keeps the correct-button label to a single word in both locales', () => {
+    // "Corregir las incorrectas" described the behaviour accurately and read
+    // like a sentence on a button. The verb alone is enough: the verdict right
+    // above it already says which answers are wrong, so the label does not have
+    // to repeat it.
+    render(<ExerciseIsland lang="es" payload={single} />);
+    choose('sit');
+    submit();
+    expect(retryButton().textContent).toBe('Corregir');
+    cleanup();
+
+    render(<ExerciseIsland lang="en" payload={single} />);
+    choose('sit');
+    submit();
+    expect(retryButton().textContent).toBe('Fix');
+  });
+
+  it('writes the Spanish island copy in neutral Spanish, with no voseo', () => {
+    // STANDING PROJECT RULE, mirrored from `i18n.test.ts`. The island keeps its
+    // copy LOCAL (it must not pull the Astro-side i18n module into the client
+    // bundle), so the guard has to be applied here too or half the Spanish the
+    // learner reads is unguarded.
+    const voseo = (text: string) =>
+      (text.match(/\p{L}+/gu) ?? []).filter(
+        (word) =>
+          /[áéí]$/u.test(word) &&
+          word.length > 2 &&
+          !['aquí', 'ahí', 'allí', 'así', 'está', 'esté'].includes(
+            word.toLowerCase(),
+          ),
+      );
+
+    // Triangulation: the detector fires on the copy this island used to ship.
+    expect(voseo('Revisá las respuestas y elegí una opción')).toEqual([
+      'Revisá',
+      'elegí',
+    ]);
+
+    const strings = Object.values(COPY.es);
+    expect(strings.length).toBeGreaterThan(5);
+    expect(strings.flatMap(voseo)).toEqual([]);
   });
 
   it('leaves an unavailable slot alone while correcting the one beside it', () => {
