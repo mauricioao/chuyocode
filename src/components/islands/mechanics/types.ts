@@ -20,6 +20,16 @@ export interface MechanicRendererProps {
   onChange: (next: string[]) => void;
   /** Locked after grading, so feedback cannot be edited out from under itself. */
   disabled?: boolean;
+  /**
+   * Localized "nothing chosen yet" copy, for mechanics that need an explicit
+   * empty state (currently `select`).
+   *
+   * Passed to EVERY renderer and ignored by the ones that do not need it, which
+   * is what keeps the props uniform and the registry free of per-mechanic
+   * branches. Chrome copy is localized; the exercise content inside the pool is
+   * English only (docs/exercise-model.md, "Authoring checklist").
+   */
+  placeholder?: string;
 }
 
 /** A renderer is any component honouring {@link MechanicRendererProps}. */

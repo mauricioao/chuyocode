@@ -35,6 +35,8 @@ export interface ExerciseIslandProps {
 interface Copy {
   submit: string;
   submitHint: string;
+  /** Empty option of a `select` slot — the "nothing chosen yet" state. */
+  selectPlaceholder: string;
   retry: string;
   correct: string;
   incorrect: string;
@@ -47,6 +49,7 @@ const COPY: Record<'es' | 'en', Copy> = {
   es: {
     submit: 'Comprobar',
     submitHint: 'Elegí al menos una respuesta para comprobar.',
+    selectPlaceholder: 'Elegí una opción',
     retry: 'Intentar de nuevo',
     correct: 'Correcto',
     incorrect: 'Incorrecto',
@@ -57,6 +60,7 @@ const COPY: Record<'es' | 'en', Copy> = {
   en: {
     submit: 'Check',
     submitHint: 'Select at least one answer to check.',
+    selectPlaceholder: 'Choose an option',
     retry: 'Try again',
     correct: 'Correct',
     incorrect: 'Incorrect',
@@ -148,6 +152,10 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
                   setResponse((prev) => ({ ...prev, [slot.id]: next }))
                 }
                 disabled={graded}
+                // Passed to EVERY renderer and ignored by the ones that have no
+                // empty state. Uniform props are what keep the dispatch above
+                // free of a branch per mechanic.
+                placeholder={t.selectPlaceholder}
               />
             ) : (
               <UnavailableRenderer slot={slot} message={t.unavailable} />
