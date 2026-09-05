@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { LEVELS, TOPICS } from './exerciseTaxonomy';
 import {
   SUPPORTED_LANGS,
   DEFAULT_LANG,
@@ -134,16 +135,6 @@ describe('UI_LABELS — home-streaming keys', () => {
     }
   });
 
-  it('exposes english.teaser copy for both locales', () => {
-    for (const l of locales) {
-      const teaser = UI_LABELS[l].english.teaser;
-      for (const key of ['badge', 'title', 'description', 'imageAlt'] as const) {
-        expect(typeof teaser[key]).toBe('string');
-        expect(teaser[key].length).toBeGreaterThan(0);
-      }
-    }
-  });
-
   it('exposes english.exercise copy for both locales', () => {
     for (const l of locales) {
       const exercise = UI_LABELS[l].english.exercise;
@@ -164,6 +155,74 @@ describe('UI_LABELS — home-streaming keys', () => {
     expect(UI_LABELS.es.home.hero.headline).not.toBe(
       UI_LABELS.en.home.hero.headline,
     );
+  });
+});
+
+describe('UI_LABELS — english section keys', () => {
+  // The English section entry + listing routes. Every string these two routes
+  // render must exist in both locales BEFORE the routes ship — a missing key
+  // would surface as `undefined` in the page, which typecheck and the
+  // status-code page tests both fail to catch.
+  const locales = ['es', 'en'] as const;
+
+  it('exposes english.section copy for both locales', () => {
+    for (const l of locales) {
+      const section = UI_LABELS[l].english.section;
+      for (const key of [
+        'title',
+        'description',
+        'intro',
+        'chooseLevel',
+        'topicsTitle',
+        'exerciseOne',
+        'exerciseMany',
+        'empty',
+        'emptyLevel',
+        'emptyPair',
+      ] as const) {
+        expect(typeof section[key]).toBe('string');
+        expect(section[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('exposes a display label for every CEFR level in both locales', () => {
+    for (const l of locales) {
+      const levels = UI_LABELS[l].english.levels;
+      // Driven off the taxonomy: adding a level without copy fails HERE rather
+      // than rendering an empty chip in production.
+      for (const level of LEVELS) {
+        expect(typeof levels[level]).toBe('string');
+        expect(levels[level].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('exposes a display label for every topic slug in both locales', () => {
+    for (const l of locales) {
+      const topics = UI_LABELS[l].english.topics;
+      for (const topic of TOPICS) {
+        expect(typeof topics[topic]).toBe('string');
+        expect(topics[topic].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('localizes the section copy (es vs en)', () => {
+    expect(UI_LABELS.es.english.section.chooseLevel).not.toBe(
+      UI_LABELS.en.english.section.chooseLevel,
+    );
+    expect(UI_LABELS.es.english.topics['daily-life']).not.toBe(
+      UI_LABELS.en.english.topics['daily-life'],
+    );
+  });
+
+  it('no longer ships the "coming soon" teaser now that the section exists', () => {
+    // The placeholder promised a section that was not built yet. It IS built,
+    // so leaving the copy behind invites it back onto a page.
+    for (const l of locales) {
+      expect('teaser' in UI_LABELS[l].english).toBe(false);
+    }
   });
 });
 
