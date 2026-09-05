@@ -62,7 +62,7 @@ const heading = exercise.payload.slots[0]?.label ?? slug;
     </a>
 
     <header class="flex flex-wrap items-center gap-3">
-      <Badge variant="secondary">{t.level} {exercise.level}</Badge>
+      <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
       <Badge variant="outline">{exercise.topic}</Badge>
     </header>
 
