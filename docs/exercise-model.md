@@ -361,6 +361,50 @@ Two mechanics per row: drag the image into the box, **and** pick the quantifier.
 - [ ] A `listening` exercise has `media.audio`. (Enforced by database constraint.)
 - [ ] Exercise content is **English only**. Site chrome is localized through `UI_LABELS`; exercise text is not mirrored `{es,en}`.
 
+### Marking the blank in a label
+
+A slot label marks its gap with a **run of three or more underscores**:
+
+```jsonc
+{ "id": "s1", "label": "She ___ breakfast at eight every morning.",
+  "input": "text", "answer": ["has", "eats"] }
+```
+
+The renderer splits the label at the marker and draws the control **inside the sentence**, where the gap is. The marker itself is never shown.
+
+| Label | Result |
+|---|---|
+| `"She ___ breakfast."` | control between `She` and `breakfast.` |
+| `"She ______ breakfast."` | same — a longer run is still **one** gap |
+| `"___ is the answer."` | control first, sentence after it |
+| `"The answer is ___"` | sentence first, control last |
+| `"What did she say?"` | **no gap** — label above, control below (stacked) |
+
+**Three underscores is the floor, not an exact count.** Authors stretch the gap to hint at answer length, and an exact-three rule would leave `_____` rendered as raw underscores next to the control with nothing reporting the mistake. Three is still the minimum so the marker cannot collide with ordinary content: `user_name` and `__dunder__` stay literal text.
+
+**A label with no marker is a valid authoring style**, not an error. `"What did she say?"` above an audio clip has no gap to splice into, so it keeps the stacked layout — and a real `<label for>`, which is a better accessibility relationship than any ARIA attribute.
+
+#### One blank per slot
+
+**A slot has one `answer`, so it gets one gap.** Only the **first** marker is replaced by a control; any later marker stays literal text on screen:
+
+```jsonc
+// "A ___ and a ___ walk in."  ->  "A [control] and a ___ walk in."
+```
+
+That is deliberately visible rather than silently swallowed, so the author can see the second gap was not honoured.
+
+Two gaps in one sentence need **two slots**, each with its own `answer`:
+
+```jsonc
+"slots": [
+  { "id": "s1", "label": "A ___ walks in.",  "input": "text", "answer": ["dog"] },
+  { "id": "s2", "label": "It orders a ___.", "input": "text", "answer": ["beer"] }
+]
+```
+
+Supporting N blanks inside one label would require an answer per blank — a change to the payload contract and to grading, not a rendering tweak. It is out of scope until a real exercise needs it.
+
 ### Changing a taxonomy value
 
 Renaming a `topic` or a pool item id **orphans published rows**. Treat taxonomy values as permanent once content exists. To retire one, migrate the rows explicitly — never edit the value in place.

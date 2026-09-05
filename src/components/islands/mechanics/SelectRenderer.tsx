@@ -14,7 +14,26 @@
  * below.
  */
 import { Label } from '@/components/ui/label';
+import { splitLabelAtBlank } from '@/lib/exercisePayload';
+import BlankSentence from './BlankSentence';
 import type { MechanicRendererProps } from './types';
+
+/**
+ * Visual tokens shared by both layouts, so a spliced dropdown and a stacked one
+ * on the same page cannot drift apart.
+ */
+const SELECT_BASE =
+  'rounded-md border border-input bg-card px-3 py-2 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+
+/**
+ * Inline: `w-auto` so the control is only as wide as its longest option — a
+ * fixed width next to two-letter quantifiers reads as a form field, not a gap.
+ * `max-w-full` keeps a long option from forcing horizontal scroll on a phone.
+ */
+const SELECT_INLINE = 'mx-1 inline-block w-auto max-w-full align-baseline';
+
+/** Stacked: unchanged from before this feature. */
+const SELECT_STACKED = 'w-full max-w-sm';
 
 /**
  * Fallback for the empty option when the island passes no localized copy.
@@ -40,16 +59,22 @@ export default function SelectRenderer({
   // Scoped by slot id: the same pool may back several slots on one page.
   const selectId = `${slot.id}-select`;
 
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={selectId} className="text-base font-medium text-zinc-100">
-        {slot.label}
-      </Label>
+  // `null` means the author wrote no gap — a real style, not a broken label.
+  const parts = splitLabelAtBlank(slot.label);
 
+  const box = (
       <select
         id={selectId}
         value={selected}
         disabled={disabled}
+        // Inline only, and deliberately NOT `aria-labelledby` pointing at the
+        // sentence. Under the accessible-name algorithm a referenced subtree
+        // containing a `combobox` folds that combobox's OWN selected option into
+        // the computed name, so the question would mutate into the learner's
+        // current answer as they answer it. An `aria-label` is a flat string with
+        // no subtree to recurse into, and it reproduces the stacked layout's
+        // accessible name exactly.
+        aria-label={parts ? slot.label : undefined}
         onChange={(event) => {
           const next = event.target.value;
           // The placeholder CLEARS the answer. Reporting `['']` would submit an
@@ -65,7 +90,7 @@ export default function SelectRenderer({
         // rather than a utility class so it does not depend on a Tailwind
         // version shipping a `scheme-*` utility.
         style={{ colorScheme: 'dark' }}
-        className="w-full max-w-sm rounded-md border border-input bg-card px-3 py-2 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`${SELECT_BASE} ${parts ? SELECT_INLINE : SELECT_STACKED}`}
       >
         {/* An explicit empty option, so "nothing chosen yet" is a real state.
             Without it the browser preselects the first pool item and answers on
@@ -82,6 +107,24 @@ export default function SelectRenderer({
           </option>
         ))}
       </select>
-    </div>
+  );
+
+  // No gap to splice into: keep the stacked layout exactly as it was. A real
+  // `<label htmlFor>` beats any ARIA attribute when the DOM allows one.
+  if (!parts) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={selectId} className="text-base font-medium text-zinc-100">
+          {slot.label}
+        </Label>
+        {box}
+      </div>
+    );
+  }
+
+  return (
+    <BlankSentence slotId={slot.id} before={parts.before} after={parts.after}>
+      {box}
+    </BlankSentence>
   );
 }

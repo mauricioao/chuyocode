@@ -187,3 +187,138 @@ describe('SelectRenderer', () => {
     expect(box().disabled).toBe(true);
   });
 });
+
+/**
+ * The inline layout. `olives` above carries no marker, so every test up to here
+ * also proves the stacked path is untouched when there is no blank to splice.
+ */
+const blankSlot: Slot = {
+  id: 'olives_qty',
+  label: 'I would like ___ olives, please.',
+  input: 'select',
+  pool: 'quantifiers',
+  answer: ['some'],
+};
+
+describe('SelectRenderer — label with a blank', () => {
+  it('renders the sentence around the dropdown, with no marker left on screen', () => {
+    render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={[]}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const sentence = screen.getByTestId('slot-sentence-olives_qty');
+    expect(sentence.textContent).toContain('I would like');
+    expect(sentence.textContent).toContain('olives, please.');
+    expect(sentence.textContent).not.toContain('___');
+  });
+
+  it('splices the dropdown into the sentence where the blank was', () => {
+    render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={[]}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const sentence = screen.getByTestId('slot-sentence-olives_qty');
+    const nodes = Array.from(sentence.childNodes);
+    const at = nodes.indexOf(box());
+
+    expect(at).toBeGreaterThan(-1);
+    expect(nodes.slice(0, at).map((n) => n.textContent).join('')).toBe(
+      'I would like ',
+    );
+    expect(nodes.slice(at + 1).map((n) => n.textContent).join('')).toBe(
+      ' olives, please.',
+    );
+  });
+
+  it('keeps an accessible name via aria-label once inline', () => {
+    const { container } = render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={[]}
+        onChange={vi.fn()}
+      />,
+    );
+
+    // NOT `aria-labelledby` pointing at the sentence. Under the accname
+    // algorithm a referenced subtree containing a `combobox` folds that
+    // combobox's OWN selected option into the name, so the dropdown would
+    // announce the learner's current answer as part of the question.
+    expect(
+      screen.getByRole('combobox', { name: 'I would like ___ olives, please.' }),
+    ).toBeTruthy();
+    expect(container.querySelector('label[for="olives_qty-select"]')).toBeNull();
+  });
+
+  it('reports the same ITEM ID from the inline layout', () => {
+    const onChange = vi.fn();
+    render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={[]}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(box(), { target: { value: 'some' } });
+
+    // Presentation only: identical to the stacked assertion above.
+    expect(onChange).toHaveBeenCalledWith(['some']);
+  });
+
+  it('still CLEARS the answer from the inline layout', () => {
+    const onChange = vi.fn();
+    render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={['some']}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(box(), { target: { value: '' } });
+
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it('keeps the placeholder option in the inline layout', () => {
+    render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={[]}
+        onChange={vi.fn()}
+        placeholder="Elegí una opción"
+      />,
+    );
+
+    expect(screen.getAllByRole('option')).toHaveLength(4);
+    expect(box().value).toBe('');
+  });
+
+  it('locks the inline dropdown once disabled', () => {
+    render(
+      <SelectRenderer
+        slot={blankSlot}
+        items={items}
+        value={['some']}
+        onChange={vi.fn()}
+        disabled
+      />,
+    );
+
+    expect(box().disabled).toBe(true);
+  });
+});
