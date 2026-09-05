@@ -39,6 +39,7 @@ import {
   type EditorialRow as EditorialRowData,
 } from '@lib/sanity';
 import { getMostDownloaded } from '@lib/downloads';
+import { publicCachePolicy } from '@lib/cache';
 
 // The middleware validates and injects `locals.lang`; fall back to the route
 // param for safety, and 404 if somehow neither is a supported language.
@@ -48,6 +49,14 @@ const lang: Lang | undefined =
 
 if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Apply public edge cache: homepage is byte-identical for every visitor at each
+// language variant. Content is fetched fresh via discovery queries (SSR), but the
+// rendered response is cacheable at the Netlify edge for 1 hour.
+const cacheHeaders = publicCachePolicy();
+for (const [name, value] of Object.entries(cacheHeaders)) {
+  Astro.response.headers.set(name, value);
 }
 
 const description = UI_LABELS[lang].meta.siteDescription;

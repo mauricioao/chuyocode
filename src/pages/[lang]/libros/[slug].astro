@@ -19,6 +19,7 @@ import { buttonVariants } from '@components/ui/button';
 import { isValidLang, type Lang } from '@lib/i18n';
 import { getBookBySlug } from '@lib/sanity';
 import { getPassState } from '@lib/pass';
+import { noStorePolicy } from '@lib/cache';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -26,6 +27,13 @@ const lang: Lang | undefined =
 
 if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Apply no-store policy (defense-in-depth). This route is pass-gated and may
+// show different content based on the premium pass cookie. Never cache.
+const cacheHeaders = noStorePolicy();
+for (const [name, value] of Object.entries(cacheHeaders)) {
+  Astro.response.headers.set(name, value);
 }
 
 const slug = Astro.params.slug;
