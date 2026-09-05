@@ -191,8 +191,17 @@ export const UI_LABELS = {
         // a noun phrase keeps it neutral without an infinitive standing alone.
         description:
           'Práctica de inglés técnico con ejercicios cortos y corrección al instante.',
-        // Level, not topic: someone browsing a level is roughly at that level.
-        related: 'Más ejercicios de este nivel',
+        // Several phrasings instead of one. "Más ejercicios de este nivel" was
+        // literally true and read like a description of the query behind it.
+        // The route picks one DETERMINISTICALLY from the exercise slug
+        // (`pickStable` in `exerciseCopy.ts`), so a given page always reads the
+        // same way — a random pick on the SSR render path would change the
+        // heading on every reload and read as a glitch.
+        relatedHeadings: [
+          'Otros ejercicios',
+          'Tal vez te interese',
+          'Para seguir practicando',
+        ],
       },
     },
   },
@@ -281,7 +290,11 @@ export const UI_LABELS = {
         back: 'Back to English',
         level: 'Level',
         description: 'Practice technical English with short exercises and instant feedback.',
-        related: 'More exercises at this level',
+        relatedHeadings: [
+          'More exercises',
+          'You might also like',
+          'Keep practising',
+        ],
       },
     },
   },

@@ -25,6 +25,7 @@ import {
   TOPIC_LABELS,
 } from '@lib/exerciseTaxonomy';
 import { getPublishedExercises } from '@lib/exercises';
+import { humanizeSlug } from '@lib/exerciseCopy';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -103,11 +104,14 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
                 href={`/${lang}/ingles/${level}/${topic}/${exercise.slug}`}
                 class="flex flex-col gap-3 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
               >
-                {/* The first slot's prompt is the most useful human title we
-                    have. Exercise content is English-only by contract, so it is
-                    not mirrored per locale — the chrome around it is. */}
+                {/* The SLUG, not the prompt. These cards had the same problem
+                    as the related-exercise cards: opening with the first slot's
+                    label gives the exercise away before the learner starts it.
+                    The topic cannot lead here — it is the page's own <h1> and
+                    would repeat on every card — so the slug does, which is
+                    English, permanent and deliberately readable. */}
                 <span class="text-lg font-semibold text-zinc-100">
-                  {exercise.payload.slots[0]?.label || exercise.slug}
+                  {humanizeSlug(exercise.slug) || exercise.slug}
                 </span>
                 {/* The skill is the only attribute that varies between cards
                     inside one level+topic pair, so it is what makes them

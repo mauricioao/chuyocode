@@ -27,6 +27,7 @@ import {
   TOPIC_LABELS,
 } from '@lib/exerciseTaxonomy';
 import { getExerciseBySlug, getRelatedExercises } from '@lib/exercises';
+import { pickStable } from '@lib/exerciseCopy';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -50,8 +51,7 @@ if (!exercise) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const english = UI_LABELS[lang].english;
-const t = english.exercise;
+const t = UI_LABELS[lang].english.exercise;
 
 // The first slot's prompt is the most useful human title we have; exercise
 // content is English-only by contract, so it is not mirrored per locale.
@@ -61,6 +61,12 @@ const heading = exercise.payload.slots[0]?.label ?? slug;
 // round trip on suggestions. Fail-safe: `[]` on any error, which renders
 // nothing at all rather than an empty heading.
 const related = await getRelatedExercises(exercise);
+
+// Seeded from the SLUG, never `Math.random()`. The slug is stable and unique
+// per (level, topic), so a given exercise page always shows the same heading —
+// a random pick on the SSR render path would reshuffle it on every reload and
+// read as a glitch rather than as variety.
+const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
 ---
 
 <BaseLayout lang={lang} title={heading} description={t.description}>
@@ -101,7 +107,7 @@ const related = await getRelatedExercises(exercise);
       related.length > 0 && (
         <section class="flex flex-col gap-4 border-t border-border pt-8">
           <h2 class="text-xl font-bold tracking-tight text-accent">
-            {t.related}
+            {relatedHeading}
           </h2>
 
           <ul class="grid gap-4 sm:grid-cols-2">
@@ -111,17 +117,18 @@ const related = await getRelatedExercises(exercise);
                   href={`/${lang}/ingles/${item.level}/${item.topic}/${item.slug}`}
                   class="flex h-full flex-col gap-3 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
                 >
-                  {/* Same title rule as the listing cards: the first slot's
-                      prompt. Exercise content is English-only by contract. */}
-                  <span class="text-lg font-semibold text-zinc-100">
-                    {item.payload.slots[0]?.label || item.slug}
+                  {/* THE TOPIC LEADS. The card used to open with the first
+                      slot's prompt — "___ rename this variable, please?" —
+                      which spoils the exercise before the learner opens it and
+                      says nothing about what the card is for. The topic is what
+                      the card is ABOUT, and it is what distinguishes these
+                      cards from each other: they cross topics, unlike the
+                      listing's. English in every locale, like every other
+                      taxonomy label. */}
+                  <span class="text-xl font-semibold text-zinc-100">
+                    {TOPIC_LABELS[item.topic]}
                   </span>
                   <div class="flex flex-wrap items-center gap-2">
-                    {/* Topic is what distinguishes these cards from each other:
-                        they cross topics, unlike the listing's. */}
-                    <span class={badgeVariants({ variant: 'outline' })}>
-                      {TOPIC_LABELS[item.topic]}
-                    </span>
                     <span class={badgeVariants({ variant: 'secondary' })}>
                       {`${t.level} ${item.level}`}
                     </span>

@@ -197,10 +197,33 @@ describe('UI_LABELS — home-streaming keys', () => {
   it('exposes english.exercise copy for both locales', () => {
     for (const l of locales) {
       const exercise = UI_LABELS[l].english.exercise;
-      for (const key of ['back', 'level', 'description', 'related'] as const) {
+      for (const key of ['back', 'level', 'description'] as const) {
         expect(typeof exercise[key]).toBe('string');
         expect(exercise[key].length).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('offers several phrasings for the related-exercises heading', () => {
+    // "Más ejercicios de este nivel" was literally true and read like a
+    // database description. Several warmer phrasings, picked deterministically
+    // from the exercise slug so a given page always reads the same way.
+    for (const l of locales) {
+      const headings = UI_LABELS[l].english.exercise.relatedHeadings;
+      expect(Array.isArray(headings)).toBe(true);
+      expect(headings.length).toBeGreaterThan(1);
+      for (const heading of headings) {
+        expect(typeof heading).toBe('string');
+        expect(heading.trim().length).toBeGreaterThan(0);
+      }
+      // Duplicates would make the "variety" a lie for part of the catalogue.
+      expect(new Set(headings).size).toBe(headings.length);
+    }
+  });
+
+  it('does not keep the single literal related heading it replaced', () => {
+    for (const l of locales) {
+      expect('related' in UI_LABELS[l].english.exercise).toBe(false);
     }
   });
 
