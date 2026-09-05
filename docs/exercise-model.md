@@ -164,6 +164,7 @@ One table. **Columns for what you filter by, `jsonb` for what you render.**
 ```sql
 create table exercises (
   id          uuid primary key default gen_random_uuid(),
+  slug        text not null,        -- URL segment; see "Deep links" below
   skill       text not null,        -- writing | listening | reading (filter label)
   level       text not null,        -- CEFR: A1 A2 B1 B2 C1 C2
   topic       text not null,
@@ -171,7 +172,9 @@ create table exercises (
   published   boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),  -- maintained by trigger
-  updated_by  uuid references auth.users(id)
+  updated_by  uuid references auth.users(id),
+
+  unique (level, topic, slug)
 );
 
 create index on exercises (level, topic) where published;
@@ -193,6 +196,14 @@ alter table exercises add constraint listening_requires_audio
 | `payload` as `jsonb` | A new mechanic needs zero migrations. GIN-indexable if filtering into the payload ever becomes necessary. |
 | Not Sanity | Exercise images are external URLs, so Sanity's asset pipeline adds nothing here. Audit metadata (`updated_by`, `updated_at`) is a native Postgres trigger but lives in document history in Sanity, where it is not queryable. |
 | Answer keys ship to the client | Grading is stateless and instant by design, so `answer` is readable in DevTools. Accepted, documented, not hidden. There is no score to protect. |
+
+### Deep links
+
+Exercises are addressed as `/[lang]/ingles/[level]/[topic]/[slug]`. Teachers share individual exercises, so the URL must be stable and readable.
+
+`slug` is unique **per `(level, topic)`**, not globally — the same slug may exist at different levels, which keeps slugs short and human-readable (`ordering-coffee` can exist at A1 and B2 without collision).
+
+Changing a published `slug` breaks every shared link to it. Treat it as permanent once published, exactly like a `topic` value.
 
 ---
 
