@@ -55,6 +55,53 @@ export interface Payload {
 /** A learner's answers, keyed by slot id. Always an array, even for one value. */
 export type ExerciseResponse = Record<string, string[]>;
 
+/** The authored text on either side of a slot's blank. */
+export interface LabelParts {
+  /** Text before the blank. Empty when the label opens with the gap. */
+  before: string;
+  /** Text after the blank. Empty when the label ends with the gap. */
+  after: string;
+}
+
+/**
+ * The blank marker: a RUN of three or more underscores.
+ *
+ * Not "exactly three". Authors stretch the gap to hint at answer length
+ * (`_____`), and under a strict three-underscore rule those labels would fall
+ * back to the stacked layout with raw underscores left on screen — a failure
+ * that throws nothing, logs nothing and is only visible in a browser.
+ *
+ * Three is still the FLOOR, so the marker cannot collide with ordinary content:
+ * `snake_case` and `user_name` use single underscores between letters, and
+ * `__dunder__` uses two. Both stay literal text.
+ */
+const BLANK_MARKER = /_{3,}/;
+
+/**
+ * Split a slot label at its blank, or `null` when it has none.
+ *
+ * `null` rather than `{ before: label, after: '' }` on purpose: "there is no
+ * gap here" is a real authoring style (`"What did she say?"`), not a degenerate
+ * split. Returning parts anyway would let a renderer splice its control onto the
+ * end of a sentence that never asked for one, and nothing would report it.
+ *
+ * ONE blank per slot. A slot carries exactly one `answer`, so a second gap has
+ * nothing to grade against; supporting N blanks needs an answer per blank, which
+ * is a model change (docs/exercise-model.md, "Authoring rules"). Later markers
+ * are therefore left as LITERAL text — visible to the author, instead of
+ * silently swallowed.
+ *
+ * Zero I/O, no allocation beyond the two slices.
+ */
+export function splitLabelAtBlank(label: string): LabelParts | null {
+  const match = BLANK_MARKER.exec(label);
+  if (!match) return null;
+  return {
+    before: label.slice(0, match.index),
+    after: label.slice(match.index + match[0].length),
+  };
+}
+
 /** Narrow `unknown` to a plain object without trusting its keys. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

@@ -11,6 +11,7 @@ import {
   parsePayload,
   getSlotItems,
   hasAudio,
+  splitLabelAtBlank,
   type Payload,
 } from './exercisePayload';
 
@@ -165,5 +166,78 @@ describe('getSlotItems', () => {
       ],
     }) as Payload;
     expect(getSlotItems(payload, payload.slots[0]!)).toEqual([]);
+  });
+});
+
+describe('splitLabelAtBlank', () => {
+  it('splits a label into the text before and after the blank', () => {
+    expect(splitLabelAtBlank('She ___ breakfast at eight every morning.')).toEqual({
+      before: 'She ',
+      after: ' breakfast at eight every morning.',
+    });
+  });
+
+  // A label with no marker is a LEGITIMATE authoring style ("What did she say?"),
+  // not an error. `null` forces the caller to handle it, so a renderer cannot
+  // accidentally splice a control onto the end of a sentence that has no gap.
+  it('returns null when the label carries no blank', () => {
+    expect(splitLabelAtBlank('What did she say?')).toBeNull();
+  });
+
+  it('returns null for an empty label', () => {
+    expect(splitLabelAtBlank('')).toBeNull();
+  });
+
+  // One slot carries one `answer`, so one slot means ONE blank. Supporting N
+  // blanks would need an answer per blank — a model change, deliberately out of
+  // scope. The remaining markers stay LITERAL text so the author can see the
+  // extra gap was not honoured, instead of it silently disappearing.
+  it('splits at the FIRST blank only and leaves later markers as literal text', () => {
+    expect(splitLabelAtBlank('A ___ and a ___ walk in.')).toEqual({
+      before: 'A ',
+      after: ' and a ___ walk in.',
+    });
+  });
+
+  it('handles a leading blank with an empty `before`', () => {
+    expect(splitLabelAtBlank('___ is the answer.')).toEqual({
+      before: '',
+      after: ' is the answer.',
+    });
+  });
+
+  it('handles a trailing blank with an empty `after`', () => {
+    expect(splitLabelAtBlank('The answer is ___')).toEqual({
+      before: 'The answer is ',
+      after: '',
+    });
+  });
+
+  it('treats a label that is nothing but a blank as two empty parts', () => {
+    expect(splitLabelAtBlank('___')).toEqual({ before: '', after: '' });
+  });
+
+  // CONTRACT: a RUN of three or more underscores is one marker. Authors stretch
+  // the gap to suggest answer length (`_____`), and under an "exactly three"
+  // rule those labels would silently fall back to the stacked layout with raw
+  // underscores on screen — a failure with no error anywhere.
+  it('accepts a longer run of underscores as ONE marker', () => {
+    expect(splitLabelAtBlank('She ______ breakfast.')).toEqual({
+      before: 'She ',
+      after: ' breakfast.',
+    });
+  });
+
+  // Two underscores is below the threshold, which is what keeps the marker from
+  // colliding with ordinary text.
+  it('does not treat one or two underscores as a blank', () => {
+    expect(splitLabelAtBlank('a _ b')).toBeNull();
+    expect(splitLabelAtBlank('a __ b')).toBeNull();
+  });
+
+  // `snake_case` appears in exercises about code and file names. Single
+  // underscores between letters must never be read as a gap.
+  it('does not treat snake_case words as a blank', () => {
+    expect(splitLabelAtBlank('The variable user_name is set.')).toBeNull();
   });
 });
