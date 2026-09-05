@@ -150,6 +150,12 @@ export const UI_LABELS = {
           'Una sección independiente para dominar el inglés técnico que necesitás en tu carrera. Estamos trabajando en ella.',
         imageAlt: 'Vista previa de la sección de inglés para programadores',
       },
+      // Copy for the exercise detail route `/[lang]/ingles/[level]/[topic]/[slug]`.
+      exercise: {
+        back: 'Volver a inglés',
+        level: 'Nivel',
+        description: 'Practicá inglés técnico con ejercicios cortos y corrección al instante.',
+      },
     },
   },
   en: {
@@ -214,6 +220,11 @@ export const UI_LABELS = {
         description:
           'An independent section to master the technical English your career needs. We are working on it.',
         imageAlt: 'Preview of the English for developers section',
+      },
+      exercise: {
+        back: 'Back to English',
+        level: 'Level',
+        description: 'Practice technical English with short exercises and instant feedback.',
       },
     },
   },

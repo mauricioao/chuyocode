@@ -1,0 +1,81 @@
+---
+/**
+ * Exercise detail page — `/[lang]/ingles/[level]/[topic]/[slug]` (SSR).
+ *
+ * The deep link IS the identity: teachers share individual exercises, so the
+ * URL must stay stable and readable. `slug` is unique per `(level, topic)`, not
+ * globally (docs/exercise-model.md, "Deep links").
+ *
+ * Everything that is not a real exercise collapses to a 404, mirroring the book
+ * detail route:
+ *   - unsupported `lang`            -> 404 (before any query)
+ *   - `level`/`topic` outside the taxonomy -> 404 (before any query, via the guards)
+ *   - no published row, a Supabase outage, or a payload that drifted out of
+ *     shape -> `getExerciseBySlug` fail-safes to `null` -> 404
+ *
+ * Grading itself is client-side and stateless, so the only server work here is
+ * fetching the row; the island does the rest.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ExerciseIsland from '@components/islands/ExerciseIsland';
+import { Badge } from '@components/ui/badge';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { isLevel, isTopic } from '@lib/exerciseTaxonomy';
+import { getExerciseBySlug } from '@lib/exercises';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const { level, topic, slug } = Astro.params;
+
+// Taxonomy guards run BEFORE the query: a segment that is not in the closed
+// vocabulary can never match a row, so a round trip would only make the 404 slower.
+if (!isLevel(level) || !isTopic(topic) || !slug) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const exercise = await getExerciseBySlug(level, topic, slug);
+
+if (!exercise) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].english.exercise;
+
+// The first slot's prompt is the most useful human title we have; exercise
+// content is English-only by contract, so it is not mirrored per locale.
+const heading = exercise.payload.slots[0]?.label ?? slug;
+---
+
+<BaseLayout lang={lang} title={heading} description={t.description}>
+  <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
+    <a
+      href={`/${lang}/ingles`}
+      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+    >
+      &larr; {t.back}
+    </a>
+
+    <header class="flex flex-wrap items-center gap-3">
+      <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
+      <Badge variant="outline">{exercise.topic}</Badge>
+    </header>
+
+    {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
+        (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the
+        row we already fetched — no HTTP check on the render path. */}
+    {
+      exercise.hasAudio && (
+        <audio controls preload="none" class="w-full" src={exercise.payload.media?.audio} />
+      )
+    }
+
+    {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
+    <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+  </div>
+</BaseLayout>
