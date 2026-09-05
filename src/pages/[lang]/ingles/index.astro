@@ -1,0 +1,168 @@
+---
+/**
+ * English section entry screen — `/[lang]/ingles` (SSR).
+ *
+ * This is the route `Header.astro` links to from EVERY page of the site, in both
+ * locales, so it has exactly one hard requirement: it must always answer. A
+ * Supabase outage, an empty database or a junk query string all degrade to a
+ * 200 with an honest explanation. The only 404 here is an unsupported locale,
+ * because that is a page that genuinely does not exist.
+ *
+ * Zero JavaScript. The active level travels in `?nivel=`, so the screen is
+ * deep-linkable, shareable and survives with scripting disabled — a filter that
+ * needs an island to work would be a worse version of a link.
+ *
+ * All the decision logic lives in `src/lib/exerciseFacets.ts` (pure, 21 tests)
+ * because AstroContainer cannot assert appearance: anything that could silently
+ * be wrong belongs in a function, not in a template expression.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import { badgeVariants } from '@components/ui/badge';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getExerciseFacetRows } from '@lib/exercises';
+import {
+  buildFacets,
+  resolveLevel,
+  topicsForLevel,
+} from '@lib/exerciseFacets';
+
+// Prefer the middleware-validated lang; fall back to the route param and 404 if
+// neither is supported (defensive — middleware normally sets it).
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].english;
+
+// ONE flat read of every published `(level, topic)` pair, grouped in memory.
+// Fail-safe by contract: `[]` on any error, which is why an outage lands on the
+// "nothing published yet" panel instead of a 500 in the site chrome.
+const facets = buildFacets(await getExerciseFacetRows());
+
+// A VALID but empty level is honoured on purpose — the user asked for it, so the
+// grid answers "nothing here yet" instead of silently swapping in another level
+// and contradicting the URL they are looking at. Only a non-level falls back.
+const activeLevel = resolveLevel(facets, Astro.url.searchParams.get('nivel'));
+const topics = topicsForLevel(facets, activeLevel);
+const totalPublished = facets.reduce((total, facet) => total + facet.count, 0);
+
+/**
+ * "3 ejercicios" / "1 ejercicio". Built as ONE expression: two adjacent Astro
+ * expressions collapse the whitespace between them and would render "3ejercicios".
+ */
+function countLabel(count: number): string {
+  return `${count} ${count === 1 ? t.section.exerciseOne : t.section.exerciseMany}`;
+}
+
+/**
+ * A level chip. Composed from `badgeVariants` rather than the `Badge` component
+ * so the chip can be an anchor without dragging a React island onto a page that
+ * ships no JavaScript.
+ *
+ * The active chip is FILLED (yellow on black) while the rest are outlined — a
+ * difference in kind, not a one-pixel border tweak that disappears on a bad
+ * monitor. Empty levels are dimmed but stay above the contrast floor, because
+ * "unavailable" must never mean "unreadable"; the count beside the label carries
+ * the same information as text for anyone the dimming does not reach.
+ */
+function chipClass(isActive: boolean, isEmpty: boolean): string {
+  return [
+    badgeVariants({ variant: isActive ? 'default' : 'outline' }),
+    'h-auto gap-2 rounded-full px-4 py-2 text-sm',
+    isEmpty ? 'opacity-60' : 'hover:border-accent hover:text-accent',
+    isActive ? 'font-semibold shadow-elevation-1' : '',
+  ].join(' ');
+}
+---
+
+<BaseLayout lang={lang} title={t.section.title} description={t.section.description}>
+  <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 sm:py-12">
+    <header class="flex flex-col gap-3">
+      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+        {t.section.title}
+      </h1>
+      <p class="max-w-2xl text-lg text-zinc-300">{t.section.intro}</p>
+    </header>
+
+    <nav class="flex flex-col gap-4" aria-label={t.section.chooseLevel}>
+      <h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
+        {t.section.chooseLevel}
+      </h2>
+      <ul class="flex flex-wrap gap-3">
+        {
+          facets.map((facet) => {
+            const isActive = facet.level === activeLevel;
+            const isEmpty = facet.count === 0;
+            const label = t.levels[facet.level];
+            // A level with nothing published is NOT a link. Rendering it as an
+            // anchor would offer a click whose only possible destination is an
+            // empty screen, so the dead combination is unreachable by
+            // construction rather than by styling.
+            return (
+              <li>
+                {isEmpty ? (
+                  <span class={chipClass(isActive, true)}>
+                    <span>{`${facet.level} · ${label}`}</span>
+                    <span class="tabular-nums">{countLabel(facet.count)}</span>
+                  </span>
+                ) : (
+                  <a
+                    href={`/${lang}/ingles?nivel=${facet.level}`}
+                    class={chipClass(isActive, false)}
+                    aria-current={isActive ? 'true' : undefined}
+                  >
+                    <span>{`${facet.level} · ${label}`}</span>
+                    <span class="tabular-nums">{countLabel(facet.count)}</span>
+                  </a>
+                )}
+              </li>
+            );
+          })
+        }
+      </ul>
+    </nav>
+
+    <section class="flex flex-col gap-4">
+      <h2 class="text-xl font-semibold text-zinc-100">{t.section.topicsTitle}</h2>
+
+      {
+        /* Three DIFFERENT empty states, because they are three different facts
+           and one generic message would be a lie in two of them:
+             1. nothing published anywhere (also what an outage degrades to)
+             2. this level has no topics yet, but other levels do
+             3. handled by the listing route: a real pair with nothing in it */
+        totalPublished === 0 ? (
+          <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+            {t.section.empty}
+          </p>
+        ) : topics.length === 0 ? (
+          <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+            {t.section.emptyLevel}
+          </p>
+        ) : (
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {topics.map((entry) => (
+              <li>
+                <a
+                  href={`/${lang}/ingles/${activeLevel}/${entry.topic}`}
+                  class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+                >
+                  <span class="text-lg font-semibold text-zinc-100">
+                    {t.topics[entry.topic]}
+                  </span>
+                  <span class="text-sm text-zinc-400 tabular-nums">
+                    {countLabel(entry.count)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </section>
+  </section>
+</BaseLayout>

@@ -1,0 +1,122 @@
+---
+/**
+ * Exercise listing — `/[lang]/ingles/[level]/[topic]` (SSR).
+ *
+ * The screen between the entry chips and a single exercise. It answers one
+ * question: what can I practise at this level, on this topic?
+ *
+ * The status codes carry a real distinction:
+ *   - a segment OUTSIDE the closed taxonomy is a URL that can never exist -> 404
+ *   - a valid pair with nothing published EXISTS and is simply empty -> 200
+ * Collapsing the second into a 404 would tell the user the page is wrong when
+ * the truth is only that the shelf has not been stocked. A Supabase outage
+ * fail-safes to the same empty array and therefore renders the same honest
+ * screen instead of an error.
+ *
+ * Zero JavaScript: cards are links, and links do not need hydration.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import { badgeVariants } from '@components/ui/badge';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { isLevel, isTopic } from '@lib/exerciseTaxonomy';
+import { getPublishedExercises } from '@lib/exercises';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const { level, topic } = Astro.params;
+
+// Taxonomy guards run BEFORE the query, mirroring the detail route: an unknown
+// segment cannot match a row, so spending a round trip on it only makes the 404
+// slower. This is also what keeps the 404/200 split above meaningful.
+if (!isLevel(level) || !isTopic(topic)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const exercises = await getPublishedExercises(level, topic);
+
+const t = UI_LABELS[lang].english;
+const topicName = t.topics[topic];
+// Back to the entry screen ON THE LEVEL THE USER CAME FROM. Dropping `?nivel=`
+// would silently return them to the default level and lose their place.
+const backHref = `/${lang}/ingles?nivel=${level}`;
+---
+
+<BaseLayout
+  lang={lang}
+  title={`${topicName} · ${level}`}
+  description={t.section.description}
+>
+  <section class="reveal mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:py-12">
+    <a
+      href={backHref}
+      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+    >
+      {`\u2190 ${t.exercise.back}`}
+    </a>
+
+    <header class="flex flex-col gap-3">
+      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+        {topicName}
+      </h1>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class={badgeVariants({ variant: 'secondary' })}>
+          {`${t.exercise.level} ${level}`}
+        </span>
+        <span class={badgeVariants({ variant: 'outline' })}>
+          {t.levels[level]}
+        </span>
+      </div>
+    </header>
+
+    {
+      exercises.length === 0 ? (
+        /* A REAL pair with nothing in it. Distinct from the entry screen's
+           "nothing published anywhere" panel, and it always offers a way out —
+           an empty state with no exit is a dead end. */
+        <div class="flex flex-col items-start gap-4 rounded-lg border border-border bg-base-soft p-6">
+          <p class="text-zinc-300">{t.section.emptyPair}</p>
+          <a
+            href={backHref}
+            class="text-sm font-semibold text-accent hover:text-accent-hover"
+          >
+            {t.section.chooseLevel}
+          </a>
+        </div>
+      ) : (
+        <ul class="flex flex-col gap-4">
+          {exercises.map((exercise) => (
+            <li>
+              <a
+                href={`/${lang}/ingles/${level}/${topic}/${exercise.slug}`}
+                class="flex flex-col gap-3 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+              >
+                {/* The first slot's prompt is the most useful human title we
+                    have. Exercise content is English-only by contract, so it is
+                    not mirrored per locale — the chrome around it is. */}
+                <span class="text-lg font-semibold text-zinc-100">
+                  {exercise.payload.slots[0]?.label || exercise.slug}
+                </span>
+                {/* The skill is the only attribute that varies between cards
+                    inside one level+topic pair, so it is what makes them
+                    distinguishable at a glance. Rendered as the raw slug on
+                    purpose: `reading`/`listening`/`writing` are the terms used
+                    in English teaching in both locales, and inventing a
+                    translation here would need i18n keys this slice does not
+                    own. The mechanic icons and topic illustrations land later. */}
+                <span class={badgeVariants({ variant: 'outline' })}>
+                  {exercise.skill}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </section>
+</BaseLayout>
