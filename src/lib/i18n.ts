@@ -89,8 +89,12 @@ export function resolveLang(acceptLang?: string | null): Lang {
 export const UI_LABELS = {
   es: {
     meta: {
+      // A `<meta name="description">` DESCRIBES; it does not instruct. The
+      // sentence that used to open with an imperative is now a claim about the
+      // catalogue the previous sentence just named — same promise, no verb
+      // addressing the reader. `aprender` was already carried by "cursos".
       siteDescription:
-        'ChuyoCode: libros, artículos y cursos de programación para la comunidad latina. Aprendé tecnología en tu idioma, con fundamentos sólidos.',
+        'ChuyoCode: libros, artículos y cursos de programación para la comunidad latina. Tecnología en tu idioma, con fundamentos sólidos.',
       booksDescription:
         'Catálogo de libros de programación y tecnología en español, seleccionados para aprender con fundamentos sólidos.',
       newsDescription:
@@ -115,9 +119,22 @@ export const UI_LABELS = {
     },
     news: { readMore: 'Leer más' },
     article: { back: 'Volver a noticias' },
+    // 404 copy. It used to live in a local map inside `404.astro`, which put a
+    // whole page's Spanish out of reach of the neutral-Spanish guard — and that
+    // is precisely where a voseo ("La página que buscás") quietly survived the
+    // English-section sweep. Centralizing it is what makes it guardable.
+    notFound: {
+      title: 'Página no encontrada',
+      body: 'La página solicitada no existe o fue movida.',
+      home: 'Volver al inicio',
+    },
     home: {
       hero: {
-        headline: 'Aprendé tecnología en tu idioma',
+        // Infinitive, matching the register the rest of the site already uses
+        // for actions ("Elegir nivel", "Revisar las respuestas"). It keeps the
+        // headline's rhythm, length and `aprender` keyword intact and changes
+        // only the one thing the rule is about: the direct address.
+        headline: 'Aprender tecnología en tu idioma',
         subline:
           'Libros, artículos y cursos de programación pensados para la comunidad latina. Contenido claro, sin atajos, con fundamentos sólidos.',
         primaryCta: 'Explorar libros',
@@ -137,8 +154,12 @@ export const UI_LABELS = {
       teaser: {
         badge: 'Próximamente',
         title: 'Cursos en camino',
+        // "vas a poder" addressed the reader in the second person. The same
+        // phrasing the English section already uses for a not-yet-available
+        // state ("van a estar disponibles") keeps the promise without it, and
+        // "con nosotros" went with it — "Estamos preparando" already says who.
         description:
-          'Estamos preparando cursos prácticos de programación. Muy pronto vas a poder aprender paso a paso con nosotros.',
+          'Estamos preparando cursos prácticos de programación. Muy pronto van a estar disponibles para aprender paso a paso.',
         imageAlt: 'Vista previa de los próximos cursos de programación',
       },
     },
@@ -233,6 +254,11 @@ export const UI_LABELS = {
     },
     news: { readMore: 'Read more' },
     article: { back: 'Back to news' },
+    notFound: {
+      title: 'Page not found',
+      body: 'The page you are looking for does not exist or was moved.',
+      home: 'Back to home',
+    },
     home: {
       hero: {
         headline: 'Learn technology in your own language',

@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GradeResult } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
+import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
 import ExerciseIsland, {
   clearIncorrectAnswers,
   COPY,
@@ -760,29 +761,23 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
   });
 
   it('writes the Spanish island copy in neutral Spanish, with no voseo', () => {
-    // STANDING PROJECT RULE, mirrored from `i18n.test.ts`. The island keeps its
-    // copy LOCAL (it must not pull the Astro-side i18n module into the client
-    // bundle), so the guard has to be applied here too or half the Spanish the
-    // learner reads is unguarded.
-    const voseo = (text: string) =>
-      (text.match(/\p{L}+/gu) ?? []).filter(
-        (word) =>
-          /[áéí]$/u.test(word) &&
-          word.length > 2 &&
-          !['aquí', 'ahí', 'allí', 'así', 'está', 'esté'].includes(
-            word.toLowerCase(),
-          ),
-      );
+    // STANDING PROJECT RULE, site-wide. The island keeps its copy LOCAL (it
+    // must not pull the Astro-side i18n module into the client bundle), so the
+    // `i18n.test.ts` guard structurally cannot reach it and this second guard
+    // is what keeps the learner-facing half of the Spanish covered.
+    //
+    // The detector is the SHARED one. It used to be re-implemented inline here
+    // with a shorter allowlist, which is how one guard silently ends up
+    // stricter than the other.
 
     // Triangulation: the detector fires on the copy this island used to ship.
-    expect(voseo('Revisá las respuestas y elegí una opción')).toEqual([
+    expect(voseoWords('Revisá las respuestas y elegí una opción')).toEqual([
       'Revisá',
       'elegí',
     ]);
 
-    const strings = Object.values(COPY.es);
-    expect(strings.length).toBeGreaterThan(5);
-    expect(strings.flatMap(voseo)).toEqual([]);
+    expect(Object.keys(COPY.es).length).toBeGreaterThan(5);
+    expect(findVoseo(COPY.es)).toEqual([]);
   });
 
   it('leaves an unavailable slot alone while correcting the one beside it', () => {

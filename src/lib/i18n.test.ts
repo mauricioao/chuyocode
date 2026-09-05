@@ -6,6 +6,7 @@ import {
   TOPICS,
   TOPIC_LABELS,
 } from './exerciseTaxonomy';
+import { findVoseo, voseoWords } from './neutralSpanish';
 import {
   SUPPORTED_LANGS,
   DEFAULT_LANG,
@@ -23,49 +24,6 @@ function flattenStrings(value: unknown): string[] {
     return Object.values(value).flatMap(flattenStrings);
   }
   return [];
-}
-
-/**
- * Ordinary Spanish words that legitimately end in a stressed á/é/í.
- *
- * The voseo detector below flags a final stressed vowel because that is what
- * separates `Revisá` from `Revisar` and `Elegí` from `Elegir`. A short list of
- * everyday words shares that ending, so they are named here explicitly:
- * extending the list is a deliberate, reviewable act rather than a silent
- * loosening of the rule.
- */
-const NON_VOSEO_ACCENTED_WORDS = [
-  'aquí',
-  'ahí',
-  'allí',
-  'así',
-  'está',
-  'esté',
-  'estará',
-  'será',
-  'habrá',
-  'podrá',
-  'quizá',
-  'café',
-  'sí',
-];
-
-/**
- * The voseo imperatives inside `text`, in order.
- *
- * Deliberately a heuristic, not a conjugation table: a final stressed á/é/í is
- * the one shape every Rioplatense imperative shares (`Elegí`, `Revisá`,
- * `Probá`, `Volvé`), and it costs an allowlist entry instead of a parser. The
- * companion test above proves the detector actually fires, so the guard cannot
- * pass by matching nothing.
- */
-function voseoWords(text: string): string[] {
-  return (text.match(/\p{L}+/gu) ?? []).filter(
-    (word) =>
-      /[áéí]$/u.test(word) &&
-      word.length > 2 &&
-      !NON_VOSEO_ACCENTED_WORDS.includes(word.toLowerCase()),
-  );
 }
 
 describe('SUPPORTED_LANGS / DEFAULT_LANG', () => {
@@ -317,30 +275,6 @@ describe('UI_LABELS — english section keys', () => {
     );
   });
 
-  it('detects voseo when it IS there (the guard below is not vacuous)', () => {
-    // Triangulation for the guard that follows: run the same detector over the
-    // copy this repo used to ship and prove it fires.
-    expect(voseoWords('Elegí tu nivel y practicá con ejercicios cortos.')).toEqual(
-      ['Elegí', 'practicá'],
-    );
-    expect(voseoWords('Revisá las respuestas marcadas.')).toEqual(['Revisá']);
-    // ...and does not fire on ordinary Spanish that happens to end in a stress.
-    expect(voseoWords('Practicar inglés aquí, así, cuando esté todo listo.')).toEqual(
-      [],
-    );
-  });
-
-  it('writes the Spanish section copy in neutral Spanish, with no voseo', () => {
-    // STANDING PROJECT RULE. The site is not Argentina-specific, so regional
-    // verb forms must not reach the UI. The register is impersonal: infinitive
-    // for instructions ("Revisar las respuestas"), impersonal prose for
-    // descriptions — no second-person verb at all, which removes the tú/vos
-    // fork at the root instead of picking a side of it.
-    const strings = flattenStrings(UI_LABELS.es.english);
-    expect(strings.length).toBeGreaterThan(10);
-    expect(strings.flatMap(voseoWords)).toEqual([]);
-  });
-
   it('no longer ships the "coming soon" teaser now that the section exists', () => {
     // The placeholder promised a section that was not built yet. It IS built,
     // so leaving the copy behind invites it back onto a page.
@@ -415,5 +349,74 @@ describe('UI_LABELS — motion-polish (SEO) keys', () => {
     expect(UI_LABELS.es.meta.siteDescription).not.toBe(
       UI_LABELS.en.meta.siteDescription,
     );
+  });
+});
+
+describe('UI_LABELS — 404 keys', () => {
+  // The 404 copy used to live in a local map inside `404.astro`. Astro
+  // frontmatter cannot be imported by a test, so that map was unreachable by
+  // any guard — and it is exactly where a voseo survived the English-section
+  // sweep. Centralizing it is what makes the site-wide guard below honest.
+  const locales = ['es', 'en'] as const;
+
+  it('exposes notFound copy for both locales', () => {
+    for (const l of locales) {
+      const notFound = UI_LABELS[l].notFound;
+      for (const key of ['title', 'body', 'home'] as const) {
+        expect(typeof notFound[key]).toBe('string');
+        expect(notFound[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('localizes the 404 copy (es vs en)', () => {
+    expect(UI_LABELS.es.notFound.title).not.toBe(UI_LABELS.en.notFound.title);
+  });
+});
+
+describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
+  // STANDING PROJECT RULE, and no longer scoped to the English section.
+  //
+  // ChuyoCode serves the whole Latin community, not Argentina, so regional
+  // (Rioplatense) verb forms must not reach the UI anywhere. The register is
+  // impersonal: the infinitive for instructions ("Revisar las respuestas",
+  // "Probar con otro tema") and impersonal prose for descriptions — no
+  // second-person verb at all, which removes the tú/vos fork at the root
+  // instead of picking a side of it.
+  //
+  // Possessives (`tu idioma`) are deliberately still allowed: identical in
+  // tuteo and voseo, so they carry no regional signal.
+
+  it('detects voseo when it IS there (the guard below is not vacuous)', () => {
+    // Triangulation. `findVoseo` returning `[]` is the pass condition below, so
+    // a detector that matched nothing would make that guard permanently green.
+    // Full rule-by-rule coverage lives in `neutralSpanish.test.ts`; this proves
+    // the detector THIS FILE imports fires on copy this repo actually shipped.
+    expect(voseoWords('Elegí tu nivel y practicá con ejercicios cortos.')).toEqual(
+      ['Elegí', 'practicá'],
+    );
+    expect(voseoWords('Aprendé tecnología en tu idioma')).toEqual(['Aprendé']);
+    expect(voseoWords('La página que buscás no existe.')).toEqual(['buscás']);
+    expect(voseoWords('Muy pronto vas a poder aprender.')).toEqual(['vas']);
+    // ...and stays silent on ordinary Spanish that happens to end in a stress.
+    expect(
+      voseoWords('Practicar inglés aquí, así, cuando esté todo listo. Leer más.'),
+    ).toEqual([]);
+  });
+
+  it('reports the offending KEY alongside the offending word', () => {
+    // A guard that only names the word leaves the author grepping for it. The
+    // failure output has to point at the exact copy entry to fix.
+    expect(
+      findVoseo({ home: { hero: { headline: 'Aprendé tecnología' } } }),
+    ).toEqual(['home.hero.headline: Aprendé']);
+  });
+
+  it('writes ALL of the Spanish UI copy in neutral Spanish, with no voseo', () => {
+    // Not `UI_LABELS.es.english` any more — the whole locale map. Every Spanish
+    // string the site renders from here is covered.
+    const strings = flattenStrings(UI_LABELS.es);
+    expect(strings.length).toBeGreaterThan(50);
+    expect(findVoseo(UI_LABELS.es)).toEqual([]);
   });
 });
