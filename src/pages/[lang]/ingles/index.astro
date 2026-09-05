@@ -19,6 +19,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { TOPIC_LABELS } from '@lib/exerciseTaxonomy';
 import { getExerciseFacetRows } from '@lib/exercises';
 import {
   buildFacets,
@@ -151,8 +152,10 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
                   href={`/${lang}/ingles/${activeLevel}/${entry.topic}`}
                   class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
                 >
+                  {/* English in every locale: the topic is exercise data, not
+                      chrome (docs/exercise-model.md, "Authoring rules"). */}
                   <span class="text-lg font-semibold text-zinc-100">
-                    {t.topics[entry.topic]}
+                    {TOPIC_LABELS[entry.topic]}
                   </span>
                   <span class="text-sm text-zinc-400 tabular-nums">
                     {countLabel(entry.count)}

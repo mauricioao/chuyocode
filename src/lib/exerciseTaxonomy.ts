@@ -44,6 +44,47 @@ export const SKILLS = ['writing', 'listening', 'reading'] as const;
 /** Union of the supported skill labels. */
 export type Skill = (typeof SKILLS)[number];
 
+/**
+ * Display labels for the topic slugs — **English in every locale**.
+ *
+ * `topic` and `skill` are exercise DATA, not site chrome. Exercise content is
+ * English-only by contract (docs/exercise-model.md, "Authoring rules"), and the
+ * whole point of the section is to read English: a card that announces
+ * "Escritura" over an English prompt localizes the one thing the learner came
+ * here to practise, and makes the same row read differently depending on the
+ * URL prefix it was reached through.
+ *
+ * That is why this map lives HERE, beside the slugs, and not in `UI_LABELS` —
+ * `UI_LABELS` is keyed by locale, and putting a locale-independent value inside
+ * it is what produced the translated badges in the first place.
+ *
+ * The CEFR `level` is different and stays in `UI_LABELS`: "A2" is not a
+ * translatable word, but the surrounding "Nivel"/"Level" is chrome.
+ *
+ * Sentence case on purpose. "Code Review" reads as a proper noun; these are
+ * labels, not titles.
+ */
+export const TOPIC_LABELS: Record<Topic, string> = {
+  'daily-life': 'Daily life',
+  travel: 'Travel',
+  food: 'Food',
+  'family-and-friends': 'Family and friends',
+  'code-review': 'Code review',
+  'daily-standup': 'Daily standup',
+  'technical-documentation': 'Technical documentation',
+  'job-interview': 'Job interview',
+};
+
+/**
+ * Display labels for the skill filter. English in every locale, for the same
+ * reason as {@link TOPIC_LABELS}.
+ */
+export const SKILL_LABELS: Record<Skill, string> = {
+  writing: 'Writing',
+  listening: 'Listening',
+  reading: 'Reading',
+};
+
 /** Type guard: is `value` a CEFR level? Matched exactly — `b1` is not `B1`. */
 export function isLevel(value: unknown): value is Level {
   return (

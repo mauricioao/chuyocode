@@ -20,7 +20,12 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import ExerciseIsland from '@components/islands/ExerciseIsland';
 import { Badge, badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { isLevel, isTopic } from '@lib/exerciseTaxonomy';
+import {
+  isLevel,
+  isTopic,
+  SKILL_LABELS,
+  TOPIC_LABELS,
+} from '@lib/exerciseTaxonomy';
 import { getExerciseBySlug, getRelatedExercises } from '@lib/exercises';
 
 const routeLang = Astro.params.lang;
@@ -67,9 +72,13 @@ const related = await getRelatedExercises(exercise);
       &larr; {t.back}
     </a>
 
+    {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the topic and
+        skill labels are exercise data and stay English in every locale
+        (docs/exercise-model.md, "Authoring rules"). */}
     <header class="flex flex-wrap items-center gap-3">
       <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
-      <Badge variant="outline">{exercise.topic}</Badge>
+      <Badge variant="outline">{TOPIC_LABELS[exercise.topic]}</Badge>
+      <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
     </header>
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
@@ -111,13 +120,13 @@ const related = await getRelatedExercises(exercise);
                     {/* Topic is what distinguishes these cards from each other:
                         they cross topics, unlike the listing's. */}
                     <span class={badgeVariants({ variant: 'outline' })}>
-                      {english.topics[item.topic]}
+                      {TOPIC_LABELS[item.topic]}
                     </span>
                     <span class={badgeVariants({ variant: 'secondary' })}>
                       {`${t.level} ${item.level}`}
                     </span>
                     <span class={badgeVariants({ variant: 'outline' })}>
-                      {english.skills[item.skill]}
+                      {SKILL_LABELS[item.skill]}
                     </span>
                   </div>
                 </a>

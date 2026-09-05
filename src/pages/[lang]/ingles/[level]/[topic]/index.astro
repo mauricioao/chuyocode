@@ -18,7 +18,12 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { isLevel, isTopic } from '@lib/exerciseTaxonomy';
+import {
+  isLevel,
+  isTopic,
+  SKILL_LABELS,
+  TOPIC_LABELS,
+} from '@lib/exerciseTaxonomy';
 import { getPublishedExercises } from '@lib/exercises';
 
 const routeLang = Astro.params.lang;
@@ -41,7 +46,9 @@ if (!isLevel(level) || !isTopic(topic)) {
 const exercises = await getPublishedExercises(level, topic);
 
 const t = UI_LABELS[lang].english;
-const topicName = t.topics[topic];
+// English in every locale: the topic is exercise data, not chrome
+// (docs/exercise-model.md, "Authoring rules").
+const topicName = TOPIC_LABELS[topic];
 // Back to the entry screen ON THE LEVEL THE USER CAME FROM. Dropping `?nivel=`
 // would silently return them to the default level and lose their place.
 const backHref = `/${lang}/ingles?nivel=${level}`;
@@ -104,13 +111,10 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
                 </span>
                 {/* The skill is the only attribute that varies between cards
                     inside one level+topic pair, so it is what makes them
-                    distinguishable at a glance. Localized through `skills`,
-                    which the related-exercise cards on the detail route also
-                    read — rendering the same field as a raw slug here and as a
-                    label one click away would be an inconsistency the user
-                    sees. */}
+                    distinguishable at a glance. English in every locale, like
+                    the topic: it is exercise data, not chrome. */}
                 <span class={badgeVariants({ variant: 'outline' })}>
-                  {t.skills[exercise.skill]}
+                  {SKILL_LABELS[exercise.skill]}
                 </span>
               </a>
             </li>

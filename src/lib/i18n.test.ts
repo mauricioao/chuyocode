@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, SKILLS, TOPICS } from './exerciseTaxonomy';
+import {
+  LEVELS,
+  SKILLS,
+  SKILL_LABELS,
+  TOPICS,
+  TOPIC_LABELS,
+} from './exerciseTaxonomy';
 import {
   SUPPORTED_LANGS,
   DEFAULT_LANG,
@@ -8,6 +14,16 @@ import {
   getDefaultLang,
   resolveLang,
 } from './i18n';
+
+/** Every string reachable under `value`, at any depth, in arrays or objects. */
+function flattenStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(flattenStrings);
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap(flattenStrings);
+  }
+  return [];
+}
 
 describe('SUPPORTED_LANGS / DEFAULT_LANG', () => {
   it('supports exactly es and en', () => {
@@ -198,37 +214,31 @@ describe('UI_LABELS — english section keys', () => {
     }
   });
 
-  it('exposes a display label for every topic slug in both locales', () => {
+  it('ships NO per-locale topic or skill label map', () => {
+    // `topic` and `skill` are exercise DATA, not chrome. Their display labels
+    // are English in every locale and live in `exerciseTaxonomy`, beside the
+    // slugs they name. A per-locale map here is exactly the mistake this test
+    // exists to stop coming back — it made the same row read "Escritura" under
+    // /es and "Writing" under /en while the exercise itself stayed English.
     for (const l of locales) {
-      const topics = UI_LABELS[l].english.topics;
-      for (const topic of TOPICS) {
-        expect(typeof topics[topic]).toBe('string');
-        expect(topics[topic].length).toBeGreaterThan(0);
-      }
+      expect('topics' in UI_LABELS[l].english).toBe(false);
+      expect('skills' in UI_LABELS[l].english).toBe(false);
     }
   });
 
-  it('exposes a display label for every skill in both locales', () => {
+  it('keeps the taxonomy labels out of the locale maps entirely', () => {
+    // Stronger than the key check above: no locale value anywhere under
+    // `english` may equal a taxonomy label, which would mean a copy of the map
+    // was smuggled back under a different key.
+    const taxonomyLabels = new Set<string>([
+      ...TOPICS.map((topic) => TOPIC_LABELS[topic]),
+      ...SKILLS.map((skill) => SKILL_LABELS[skill]),
+    ]);
+    expect(taxonomyLabels.size).toBeGreaterThan(0);
     for (const l of locales) {
-      const skills = UI_LABELS[l].english.skills;
-      // Driven off the taxonomy, like `levels` and `topics`. `skill` is a UI
-      // FILTER LABEL, never a dispatch key (docs/exercise-model.md, "The two
-      // axes"), and cards render it — so a missing entry would print
-      // `undefined` on a card, which typecheck and the status-code page tests
-      // both fail to catch.
-      for (const skill of SKILLS) {
-        expect(typeof skills[skill]).toBe('string');
-        expect(skills[skill].length).toBeGreaterThan(0);
+      for (const value of flattenStrings(UI_LABELS[l].english)) {
+        expect(taxonomyLabels.has(value)).toBe(false);
       }
-    }
-  });
-
-  it('never invents a "speaking" skill', () => {
-    // Nothing here can auto-grade speech, so `speaking` is deliberately absent
-    // from the enum (docs/exercise-model.md, "Non-goals"). A label for it would
-    // be a promise the platform cannot keep.
-    for (const l of locales) {
-      expect('speaking' in UI_LABELS[l].english.skills).toBe(false);
     }
   });
 
@@ -236,11 +246,8 @@ describe('UI_LABELS — english section keys', () => {
     expect(UI_LABELS.es.english.section.chooseLevel).not.toBe(
       UI_LABELS.en.english.section.chooseLevel,
     );
-    expect(UI_LABELS.es.english.topics['daily-life']).not.toBe(
-      UI_LABELS.en.english.topics['daily-life'],
-    );
-    expect(UI_LABELS.es.english.skills.writing).not.toBe(
-      UI_LABELS.en.english.skills.writing,
+    expect(UI_LABELS.es.english.levels.A1).not.toBe(
+      UI_LABELS.en.english.levels.A1,
     );
   });
 

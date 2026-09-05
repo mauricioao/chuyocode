@@ -361,6 +361,31 @@ Two mechanics per row: drag the image into the box, **and** pick the quantifier.
 - [ ] A `listening` exercise has `media.audio`. (Enforced by database constraint.)
 - [ ] Exercise content is **English only**. Site chrome is localized through `UI_LABELS`; exercise text is not mirrored `{es,en}`.
 
+### Topic and skill display labels are English in every locale
+
+`topic` and `skill` are **exercise data, not site chrome**. Their display labels
+live in `src/lib/exerciseTaxonomy.ts` (`TOPIC_LABELS`, `SKILL_LABELS`) — a single
+locale-independent map, deliberately **not** inside `UI_LABELS`, which is keyed
+by locale.
+
+Three reasons this is not a style preference:
+
+1. **The section teaches English.** A card that announces "Escritura" over an
+   English prompt translates the one word the learner came here to read.
+2. **One row, one name.** A translated label makes the same database row read
+   differently depending on the URL prefix it was reached through, so a learner
+   and a teacher looking at the same exercise cannot use the same word for it.
+3. **The slug is the label's shadow.** `code-review` is already English and is
+   permanent (it is in the URL and in every published row). A per-locale label
+   invents a second, softer identity for a value that has exactly one.
+
+The CEFR `level` is the deliberate exception, split in two: the code (`A2`) is
+data and is never translated; the surrounding word `Nivel` / `Level` and the
+human gloss (`Básico` / `Elementary`) are chrome and stay in `UI_LABELS`.
+
+No migration is involved in any of this. The table already stores English slugs
+in `topic` and `skill` — the labels were only ever a render-time lookup.
+
 ### Marking the blank in a label
 
 A slot label marks its gap with a **run of three or more underscores**:

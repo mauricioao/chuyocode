@@ -174,26 +174,11 @@ export const UI_LABELS = {
         C1: 'Avanzado',
         C2: 'Dominio',
       },
-      // Display names for the topic slugs. The slug is permanent (it is in the
-      // URL and in published rows); only this label is safe to reword.
-      topics: {
-        'daily-life': 'Vida diaria',
-        travel: 'Viajes',
-        food: 'Comida',
-        'family-and-friends': 'Familia y amigos',
-        'code-review': 'Code review',
-        'daily-standup': 'Daily standup',
-        'technical-documentation': 'Documentación técnica',
-        'job-interview': 'Entrevista de trabajo',
-      },
-      // Display names for the `skill` filter labels. There is deliberately no
-      // `speaking`: nothing here can auto-grade speech, so it is absent from the
-      // enum itself (docs/exercise-model.md, "Non-goals").
-      skills: {
-        writing: 'Escritura',
-        listening: 'Escucha',
-        reading: 'Lectura',
-      },
+      // NO `topics` / `skills` maps here, deliberately. Those are exercise
+      // DATA, not chrome: their display labels are English in every locale and
+      // live in `exerciseTaxonomy` (`TOPIC_LABELS` / `SKILL_LABELS`), beside
+      // the slugs they name. See docs/exercise-model.md, "Authoring rules".
+      //
       // Copy for the exercise detail route `/[lang]/ingles/[level]/[topic]/[slug]`.
       exercise: {
         back: 'Volver a inglés',
@@ -284,21 +269,7 @@ export const UI_LABELS = {
         C1: 'Advanced',
         C2: 'Proficient',
       },
-      topics: {
-        'daily-life': 'Daily life',
-        travel: 'Travel',
-        food: 'Food',
-        'family-and-friends': 'Family and friends',
-        'code-review': 'Code review',
-        'daily-standup': 'Daily standup',
-        'technical-documentation': 'Technical documentation',
-        'job-interview': 'Job interview',
-      },
-      skills: {
-        writing: 'Writing',
-        listening: 'Listening',
-        reading: 'Reading',
-      },
+      // No `topics` / `skills` here either — see the `es` block above.
       exercise: {
         back: 'Back to English',
         level: 'Level',
