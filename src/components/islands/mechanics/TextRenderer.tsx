@@ -40,6 +40,7 @@ export default function TextRenderer({
   value,
   onChange,
   disabled = false,
+  focusRef,
 }: MechanicRendererProps) {
   // Single-answer mechanic: the array carries at most one string. Coalescing to
   // `''` keeps the input CONTROLLED — `undefined` would make React switch it to
@@ -54,6 +55,8 @@ export default function TextRenderer({
 
   const field = (
     <input
+      // The one focusable control this mechanic owns.
+      ref={focusRef}
       id={inputId}
       type="text"
       value={typed}

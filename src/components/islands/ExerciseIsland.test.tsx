@@ -12,8 +12,13 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { GradeResult } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
-import ExerciseIsland, { hasSubmittableAnswer } from './ExerciseIsland';
+import ExerciseIsland, {
+  clearIncorrectAnswers,
+  firstIncorrectSlotId,
+  hasSubmittableAnswer,
+} from './ExerciseIsland';
 
 /** One choice slot. The smallest gradeable exercise. */
 const single: Payload = {
@@ -88,12 +93,57 @@ const threeMechanics: Payload = {
   ],
 };
 
+/**
+ * Three independent blanks. One focusable control each, so "first incorrect in
+ * DOCUMENT order" is unambiguous and every answer is directly readable off
+ * `input.value` — which is what proves an answer survived correcting.
+ */
+const threeBlanks: Payload = {
+  pools: {},
+  slots: [
+    { id: 't1', label: 'First ___', input: 'text', answer: ['one'] },
+    { id: 't2', label: 'Second ___', input: 'text', answer: ['two'] },
+    { id: 't3', label: 'Third ___', input: 'text', answer: ['three'] },
+  ],
+};
+
+/** A radio slot above a blank: the choice slot is the top-most control. */
+const choiceThenBlank: Payload = {
+  pools: {
+    opts: [
+      { id: 'a', text: 'sit' },
+      { id: 'b', text: 'sits' },
+    ],
+  },
+  slots: [
+    { id: 'c1', label: 'Choice slot', input: 'choice', pool: 'opts', answer: ['b'] },
+    { id: 't1', label: 'Blank ___', input: 'text', answer: ['one'] },
+  ],
+};
+
 function dropdown(): HTMLSelectElement {
   return screen.getByRole('combobox') as HTMLSelectElement;
 }
 
 function blank(): HTMLInputElement {
   return screen.getByRole('textbox') as HTMLInputElement;
+}
+
+function blanks(): HTMLInputElement[] {
+  return screen.getAllByRole('textbox') as HTMLInputElement[];
+}
+
+/** Type into the nth blank, as a learner would. */
+function type(index: number, text: string) {
+  fireEvent.change(blanks()[index]!, { target: { value: text } });
+}
+
+function retryButton(): HTMLButtonElement {
+  return screen.getByTestId('exercise-retry') as HTMLButtonElement;
+}
+
+function retry() {
+  fireEvent.click(retryButton());
 }
 
 /** Click the option labelled `text` inside the slot's group. */
@@ -454,6 +504,256 @@ describe('ExerciseIsland — statelessness', () => {
 
     expect(screen.queryByTestId('exercise-verdict')).toBeNull();
     expect(screen.getByTestId('exercise-submit')).toBeTruthy();
+  });
+});
+
+describe('clearIncorrectAnswers', () => {
+  /** Build a grade result without going through `check()`. */
+  const graded = (slots: GradeResult['slots']): GradeResult => ({
+    correct: Object.values(slots).every((o) => o !== 'incorrect'),
+    slots,
+  });
+
+  it('drops the wrong answers and keeps the right ones', () => {
+    const next = clearIncorrectAnswers(
+      { t1: ['one'], t2: ['nope'], t3: ['three'] },
+      graded({ t1: 'correct', t2: 'incorrect', t3: 'correct' }),
+    );
+
+    expect(next).toEqual({ t1: ['one'], t3: ['three'] });
+  });
+
+  // An `unavailable` slot is neither right nor wrong — it was never OFFERED.
+  // Clearing it would silently discard data the learner cannot re-enter,
+  // because that mechanic ships no control at all.
+  it('leaves an unavailable slot untouched', () => {
+    const next = clearIncorrectAnswers(
+      { s1: ['b'], h1: ['x'] },
+      graded({ s1: 'incorrect', h1: 'unavailable' }),
+    );
+
+    expect(next).toEqual({ h1: ['x'] });
+  });
+
+  it('keeps an entry the grader never reported at all', () => {
+    // Defensive: a response key with no outcome is not evidence of a mistake.
+    const next = clearIncorrectAnswers({ ghost: ['x'] }, graded({}));
+
+    expect(next).toEqual({ ghost: ['x'] });
+  });
+
+  it('does not mutate the response it was given', () => {
+    const before = { t1: ['one'], t2: ['nope'] };
+
+    clearIncorrectAnswers(before, graded({ t1: 'correct', t2: 'incorrect' }));
+
+    expect(before).toEqual({ t1: ['one'], t2: ['nope'] });
+  });
+});
+
+describe('firstIncorrectSlotId', () => {
+  it('returns null when nothing is wrong', () => {
+    expect(
+      firstIncorrectSlotId(threeBlanks, {
+        correct: true,
+        slots: { t1: 'correct', t2: 'correct', t3: 'correct' },
+      }),
+    ).toBeNull();
+  });
+
+  // The important one. `result.slots` is a plain object, so iterating IT walks
+  // insertion order, which is not the order the learner sees. Only the payload
+  // defines document order, and the island renders `payload.slots` in sequence.
+  it('walks PAYLOAD order, not the order of the result keys', () => {
+    const reversedKeys: GradeResult = {
+      correct: false,
+      slots: { t3: 'incorrect', t2: 'incorrect', t1: 'correct' },
+    };
+
+    expect(firstIncorrectSlotId(threeBlanks, reversedKeys)).toBe('t2');
+  });
+
+  it('skips an unavailable slot that sits above the first wrong one', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 'h1', label: 'Tap it', input: 'hotspot', answer: ['x'] },
+        { id: 't1', label: 'Blank ___', input: 'text', answer: ['one'] },
+      ],
+    };
+
+    expect(
+      firstIncorrectSlotId(payload, {
+        correct: false,
+        slots: { h1: 'unavailable', t1: 'incorrect' },
+      }),
+    ).toBe('t1');
+  });
+});
+
+describe('ExerciseIsland — correcting keeps work that was already right', () => {
+  it('keeps the correct answers and clears only the wrong one', () => {
+    render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+    type(0, 'one');
+    type(1, 'nope');
+    type(2, 'three');
+    submit();
+
+    expect(screen.getByTestId('slot-feedback-t2').textContent).toContain(
+      'Incorrect',
+    );
+
+    retry();
+
+    // Four of five right and being made to redo all five is the bug this fixes.
+    expect(blanks()[0]!.value).toBe('one');
+    expect(blanks()[2]!.value).toBe('three');
+    // The wrong one is CLEARED, not left in place: a value that was just marked
+    // wrong, with its verdict now gone, invites re-submitting it unchanged.
+    expect(blanks()[1]!.value).toBe('');
+  });
+
+  it('unlocks the controls and re-enables submit after correcting', () => {
+    render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+    type(0, 'one');
+    type(1, 'nope');
+    submit();
+    expect(blanks()[0]!.disabled).toBe(true);
+
+    retry();
+
+    for (const field of blanks()) {
+      expect(field.disabled).toBe(false);
+      expect(field.hasAttribute('disabled')).toBe(false);
+    }
+    // The surviving correct answer keeps submit usable — the learner is one
+    // blank away from finishing, not back at an empty exercise.
+    expect(submitButton().disabled).toBe(false);
+    expect(screen.queryByTestId('exercise-verdict')).toBeNull();
+  });
+
+  it('moves focus to the incorrect control', () => {
+    render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+    type(0, 'one');
+    type(1, 'nope');
+    type(2, 'three');
+    submit();
+
+    retry();
+
+    // Focus must land AFTER the re-render that re-enables the field: focusing a
+    // still-disabled element is a silent no-op that nothing would report.
+    expect(document.activeElement).toBe(blanks()[1]);
+  });
+
+  it('focuses the TOP-most wrong control when two are wrong', () => {
+    render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+    type(0, 'nope');
+    type(1, 'also-nope');
+    type(2, 'three');
+    submit();
+
+    retry();
+
+    // Not the last one the loop happened to touch: the learner reads top-down.
+    expect(document.activeElement).toBe(blanks()[0]);
+    expect(document.activeElement).not.toBe(blanks()[1]);
+  });
+
+  it('focuses a choice slot WITHOUT answering it on the learner s behalf', () => {
+    render(<ExerciseIsland lang="en" payload={choiceThenBlank} />);
+
+    choose('sit'); // wrong
+    type(0, 'one'); // correct
+    submit();
+
+    retry();
+
+    const first = screen.getAllByRole('radio')[0]!;
+    expect(document.activeElement).toBe(first);
+    // Radix only auto-checks on focus when an ARROW KEY is down (verified in
+    // @radix-ui/react-radio-group/dist/index.mjs L369-373). A programmatic
+    // focus must therefore leave the group unanswered — otherwise we would be
+    // picking an answer for the learner and grading them on it.
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio.getAttribute('aria-checked')).toBe('false');
+    }
+    // ...and the blank they got right is still filled in.
+    expect(blank().value).toBe('one');
+  });
+
+  it('focuses a dropdown slot', () => {
+    render(<ExerciseIsland lang="en" payload={threeMechanics} />);
+
+    choose('sits');
+    fireEvent.change(dropdown(), { target: { value: 'i_a' } }); // wrong
+    submit();
+
+    retry();
+
+    expect(document.activeElement).toBe(dropdown());
+    expect(dropdown().value).toBe('');
+  });
+
+  it('still clears EVERYTHING when the whole exercise was correct', () => {
+    render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+    type(0, 'one');
+    type(1, 'two');
+    type(2, 'three');
+    submit();
+    expect(screen.getByTestId('exercise-verdict').textContent).toContain(
+      'All correct',
+    );
+
+    retry();
+
+    // Nothing to fix, so the button means "start over" — and it must really
+    // start over, not silently preserve the finished attempt.
+    for (const field of blanks()) expect(field.value).toBe('');
+    expect(submitButton().disabled).toBe(true);
+  });
+
+  it('labels the two outcomes differently, in both locales', () => {
+    render(<ExerciseIsland lang="en" payload={single} />);
+    choose('sits');
+    submit();
+    const allRight = retryButton().textContent;
+    cleanup();
+
+    render(<ExerciseIsland lang="en" payload={single} />);
+    choose('sit');
+    submit();
+    const someWrong = retryButton().textContent;
+
+    expect(allRight).toBe('Try again');
+    expect(someWrong).toBe('Fix the wrong ones');
+    expect(allRight).not.toBe(someWrong);
+    cleanup();
+
+    render(<ExerciseIsland lang="es" payload={single} />);
+    choose('sit');
+    submit();
+    expect(retryButton().textContent).toBe('Corregir las incorrectas');
+  });
+
+  it('leaves an unavailable slot alone while correcting the one beside it', () => {
+    render(<ExerciseIsland lang="en" payload={mixed} />);
+
+    choose('sit'); // wrong
+    submit();
+
+    retry();
+
+    // The degraded slot is still degraded, still offers no control, and still
+    // gets no verdict — correcting did not disturb it.
+    expect(screen.getByTestId('slot-unavailable-h1')).toBeTruthy();
+    expect(screen.queryByTestId('slot-feedback-h1')).toBeNull();
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
   });
 });
 

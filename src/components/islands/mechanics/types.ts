@@ -30,6 +30,23 @@ export interface MechanicRendererProps {
    * English only (docs/exercise-model.md, "Authoring checklist").
    */
   placeholder?: string;
+  /**
+   * Callback ref for the slot's PRIMARY focusable control — the element a
+   * caller should move focus to when it wants the learner's attention on this
+   * slot (e.g. the first blank they still have to fix after grading).
+   *
+   * A callback ref rather than a `RefObject`, deliberately: a callback ref is
+   * assignable to every DOM `ref` position (`HTMLInputElement`,
+   * `HTMLSelectElement`, `HTMLButtonElement`, …) because function parameters
+   * are checked contravariantly, whereas a mutable `RefObject<HTMLElement>` is
+   * invariant and would not type-check against any of them.
+   *
+   * OPTIONAL and ignorable. A mechanic with no single focusable control simply
+   * does not wire it, and the caller falls through to doing nothing — which is
+   * why this keeps the registry's dispatch free of a branch per mechanic, just
+   * like {@link MechanicRendererProps.placeholder}.
+   */
+  focusRef?: (node: HTMLElement | null) => void;
 }
 
 /** A renderer is any component honouring {@link MechanicRendererProps}. */

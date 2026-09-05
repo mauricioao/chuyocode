@@ -50,6 +50,7 @@ export default function SelectRenderer({
   onChange,
   disabled = false,
   placeholder = DEFAULT_PLACEHOLDER,
+  focusRef,
 }: MechanicRendererProps) {
   // Single-answer mechanic: the array carries at most one id. `''` selects the
   // placeholder, which keeps the control CONTROLLED and keeps "nothing chosen"
@@ -64,6 +65,8 @@ export default function SelectRenderer({
 
   const box = (
       <select
+        // The one focusable control this mechanic owns.
+        ref={focusRef}
         id={selectId}
         value={selected}
         disabled={disabled}
