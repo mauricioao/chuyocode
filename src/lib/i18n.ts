@@ -89,8 +89,12 @@ export function resolveLang(acceptLang?: string | null): Lang {
 export const UI_LABELS = {
   es: {
     meta: {
+      // A `<meta name="description">` DESCRIBES; it does not instruct. The
+      // sentence that used to open with an imperative is now a claim about the
+      // catalogue the previous sentence just named — same promise, no verb
+      // addressing the reader. `aprender` was already carried by "cursos".
       siteDescription:
-        'ChuyoCode: libros, artículos y cursos de programación para la comunidad latina. Aprendé tecnología en tu idioma, con fundamentos sólidos.',
+        'ChuyoCode: libros, artículos y cursos de programación para la comunidad latina. Tecnología en tu idioma, con fundamentos sólidos.',
       booksDescription:
         'Catálogo de libros de programación y tecnología en español, seleccionados para aprender con fundamentos sólidos.',
       newsDescription:
@@ -115,9 +119,22 @@ export const UI_LABELS = {
     },
     news: { readMore: 'Leer más' },
     article: { back: 'Volver a noticias' },
+    // 404 copy. It used to live in a local map inside `404.astro`, which put a
+    // whole page's Spanish out of reach of the neutral-Spanish guard — and that
+    // is precisely where a voseo ("La página que buscás") quietly survived the
+    // English-section sweep. Centralizing it is what makes it guardable.
+    notFound: {
+      title: 'Página no encontrada',
+      body: 'La página solicitada no existe o fue movida.',
+      home: 'Volver al inicio',
+    },
     home: {
       hero: {
-        headline: 'Aprendé tecnología en tu idioma',
+        // Infinitive, matching the register the rest of the site already uses
+        // for actions ("Elegir nivel", "Revisar las respuestas"). It keeps the
+        // headline's rhythm, length and `aprender` keyword intact and changes
+        // only the one thing the rule is about: the direct address.
+        headline: 'Aprender tecnología en tu idioma',
         subline:
           'Libros, artículos y cursos de programación pensados para la comunidad latina. Contenido claro, sin atajos, con fundamentos sólidos.',
         primaryCta: 'Explorar libros',
@@ -137,32 +154,68 @@ export const UI_LABELS = {
       teaser: {
         badge: 'Próximamente',
         title: 'Cursos en camino',
+        // "vas a poder" addressed the reader in the second person. The same
+        // phrasing the English section already uses for a not-yet-available
+        // state ("van a estar disponibles") keeps the promise without it, and
+        // "con nosotros" went with it — "Estamos preparando" already says who.
         description:
-          'Estamos preparando cursos prácticos de programación. Muy pronto vas a poder aprender paso a paso con nosotros.',
+          'Estamos preparando cursos prácticos de programación. Muy pronto van a estar disponibles para aprender paso a paso.',
         imageAlt: 'Vista previa de los próximos cursos de programación',
       },
     },
     english: {
       // Copy for the section entry route `/[lang]/ingles` and the
-      // `[level]/[topic]` listing. The old "coming soon" teaser lived here and
+      // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
       // was removed when the section actually shipped.
+      // REGISTER: neutral Spanish, impersonal. Instructions use the infinitive
+      // ("Revisar las respuestas") and descriptions avoid the second person
+      // entirely. The site is not Argentina-specific, so no voseo reaches the
+      // UI — enforced by a guard in `i18n.test.ts`.
       section: {
-        title: 'Inglés para programadores',
+        // Names the SECTION, not its audience. "Inglés para programadores"
+        // described who the section was for, which the visitor already knows by
+        // the time they are looking at it; "Ejercicios de inglés" says what is
+        // actually on the screen. It doubles as the `<title>`, where the shorter
+        // string also survives a SERP truncation intact.
+        title: 'Ejercicios de inglés',
+        // `<meta name="description">`. Deliberately left as-is: it already leads
+        // with "Ejercicios cortos de inglés técnico", so it reads as an
+        // expansion of the new headline rather than a contradiction of it, and
+        // it is the one string here that must stay a full descriptive sentence.
         description:
-          'Ejercicios cortos de inglés técnico, organizados por nivel y por tema, con corrección al instante.',
-        intro:
-          'Elegí tu nivel y practicá con ejercicios cortos pensados para el día a día de un desarrollador.',
-        chooseLevel: 'Elegí tu nivel',
-        topicsTitle: 'Temas',
+          'Ejercicios cortos de inglés técnico, organizados por nivel y por punto gramatical, con corrección al instante.',
+        // MAINTAINER-AUTHORED, VERBATIM. "Elige" is TUTEO, and the standing
+        // neutral-Spanish rule bans REGIONAL forms (`Elegí`), not the second
+        // person as a category — so this passes `neutralSpanish.ts` unchanged
+        // and was NOT rewritten into an infinitive to match `chooseLevel`.
+        // Asserted exactly in `i18n.test.ts` so a future "consistency" pass has
+        // to argue with a red test instead of quietly editing the maintainer.
+        intro: 'Elige un nivel y tema para practicar en el día a día',
+        chooseLevel: 'Elegir nivel',
+        // The grid under a level lists LANGUAGE POINTS, not settings: someone
+        // arriving here wants "conditionals", not "something about airports".
+        // This is chrome and localizes; the point NAMES themselves are exercise
+        // data and stay English (`FOCUS_LABELS`).
+        focusesTitle: 'Puntos gramaticales',
         // Rendered as "1 ejercicio" / "7 ejercicios" — the number is prepended
         // by the page, so these stay plain nouns.
         exerciseOne: 'ejercicio',
         exerciseMany: 'ejercicios',
         empty:
-          'Todavía no hay ejercicios publicados. Estamos preparando los primeros: volvé en unos días.',
+          'Todavía no hay ejercicios publicados. Estamos preparando los primeros y van a estar disponibles en unos días.',
         emptyLevel: 'Todavía no hay ejercicios para este nivel.',
         emptyPair:
-          'Todavía no hay ejercicios para este tema en este nivel. Probá con otro tema.',
+          'Todavía no hay ejercicios de este punto gramatical en este nivel. Probar con otro punto.',
+        // Accessible name for the magnifier filter over the language-point grid.
+        // It is the ONLY name that control has: the trigger is an icon and the
+        // input carries a blank placeholder so the bar can animate open, so
+        // without this a screen reader announces nothing but "edit text".
+        searchFocus: 'Buscar puntos gramaticales',
+        // Shown only when a typed query hides every card. Distinct from
+        // `emptyLevel` on purpose: that one means "nothing is published here",
+        // this one means "your query matched nothing" — collapsing them would
+        // tell the user the level is empty when it is full.
+        focusesNoResults: 'No hay puntos gramaticales que coincidan con la búsqueda.',
       },
       // Display names for the CEFR levels. The URL keeps the bare code; the
       // screen adds what it means, because "B1" alone tells a beginner nothing.
@@ -174,23 +227,31 @@ export const UI_LABELS = {
         C1: 'Avanzado',
         C2: 'Dominio',
       },
-      // Display names for the topic slugs. The slug is permanent (it is in the
-      // URL and in published rows); only this label is safe to reword.
-      topics: {
-        'daily-life': 'Vida diaria',
-        travel: 'Viajes',
-        food: 'Comida',
-        'family-and-friends': 'Familia y amigos',
-        'code-review': 'Code review',
-        'daily-standup': 'Daily standup',
-        'technical-documentation': 'Documentación técnica',
-        'job-interview': 'Entrevista de trabajo',
-      },
-      // Copy for the exercise detail route `/[lang]/ingles/[level]/[topic]/[slug]`.
+      // NO `focuses` / `topics` / `skills` maps here, deliberately. Those are
+      // exercise DATA, not chrome: their display labels are English in every
+      // locale and live in `exerciseTaxonomy` (`FOCUS_LABELS` / `TOPIC_LABELS` /
+      // `SKILL_LABELS`), beside the slugs they name. See
+      // docs/exercise-model.md, "Authoring rules".
+      //
+      // Copy for the exercise detail route `/[lang]/ingles/[level]/[focus]/[slug]`.
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
-        description: 'Practicá inglés técnico con ejercicios cortos y corrección al instante.',
+        // A `<meta name="description">`, so it describes rather than instructs:
+        // a noun phrase keeps it neutral without an infinitive standing alone.
+        description:
+          'Práctica de inglés técnico con ejercicios cortos y corrección al instante.',
+        // Several phrasings instead of one. "Más ejercicios de este nivel" was
+        // literally true and read like a description of the query behind it.
+        // The route picks one DETERMINISTICALLY from the exercise slug
+        // (`pickStable` in `exerciseCopy.ts`), so a given page always reads the
+        // same way — a random pick on the SSR render path would change the
+        // heading on every reload and read as a glitch.
+        relatedHeadings: [
+          'Otros ejercicios',
+          'Tal vez te interese',
+          'Para seguir practicando',
+        ],
       },
     },
   },
@@ -222,6 +283,11 @@ export const UI_LABELS = {
     },
     news: { readMore: 'Read more' },
     article: { back: 'Back to news' },
+    notFound: {
+      title: 'Page not found',
+      body: 'The page you are looking for does not exist or was moved.',
+      home: 'Back to home',
+    },
     home: {
       hero: {
         headline: 'Learn technology in your own language',
@@ -251,20 +317,25 @@ export const UI_LABELS = {
     },
     english: {
       section: {
-        title: 'English for developers',
+        // Matches the Spanish move: name the section, not its audience.
+        title: 'English exercises',
         description:
-          'Short technical English exercises, organized by level and topic, with instant feedback.',
-        intro:
-          'Pick your level and practise with short exercises built for a developer’s day to day.',
+          'Short technical English exercises, organized by level and language point, with instant feedback.',
+        // Mirrors the new Spanish subtitle's brevity and meaning — one line, an
+        // instruction, no trailing period, and the same two choices ("nivel y
+        // tema"). "practise" is this repo's spelling throughout.
+        intro: 'Pick a level and a topic to practise day to day',
         chooseLevel: 'Choose your level',
-        topicsTitle: 'Topics',
+        focusesTitle: 'Language points',
         exerciseOne: 'exercise',
         exerciseMany: 'exercises',
         empty:
           'No exercises published yet. We are preparing the first ones — check back in a few days.',
         emptyLevel: 'No exercises at this level yet.',
         emptyPair:
-          'No exercises for this topic at this level yet. Try another topic.',
+          'No exercises for this language point at this level yet. Try another one.',
+        searchFocus: 'Search language points',
+        focusesNoResults: 'No language points match that search.',
       },
       levels: {
         A1: 'Beginner',
@@ -274,20 +345,16 @@ export const UI_LABELS = {
         C1: 'Advanced',
         C2: 'Proficient',
       },
-      topics: {
-        'daily-life': 'Daily life',
-        travel: 'Travel',
-        food: 'Food',
-        'family-and-friends': 'Family and friends',
-        'code-review': 'Code review',
-        'daily-standup': 'Daily standup',
-        'technical-documentation': 'Technical documentation',
-        'job-interview': 'Job interview',
-      },
+      // No `focuses` / `topics` / `skills` here either — see the `es` block.
       exercise: {
         back: 'Back to English',
         level: 'Level',
         description: 'Practice technical English with short exercises and instant feedback.',
+        relatedHeadings: [
+          'More exercises',
+          'You might also like',
+          'Keep practising',
+        ],
       },
     },
   },

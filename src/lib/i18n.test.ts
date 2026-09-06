@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, TOPICS } from './exerciseTaxonomy';
+import {
+  LEVELS,
+  SKILLS,
+  SKILL_LABELS,
+  TOPICS,
+  TOPIC_LABELS,
+  FOCUSES,
+  FOCUS_LABELS,
+} from './exerciseTaxonomy';
+import { findVoseo, voseoWords } from './neutralSpanish';
 import {
   SUPPORTED_LANGS,
   DEFAULT_LANG,
@@ -8,6 +17,16 @@ import {
   getDefaultLang,
   resolveLang,
 } from './i18n';
+
+/** Every string reachable under `value`, at any depth, in arrays or objects. */
+function flattenStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(flattenStrings);
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap(flattenStrings);
+  }
+  return [];
+}
 
 describe('SUPPORTED_LANGS / DEFAULT_LANG', () => {
   it('supports exactly es and en', () => {
@@ -145,6 +164,29 @@ describe('UI_LABELS — home-streaming keys', () => {
     }
   });
 
+  it('offers several phrasings for the related-exercises heading', () => {
+    // "Más ejercicios de este nivel" was literally true and read like a
+    // database description. Several warmer phrasings, picked deterministically
+    // from the exercise slug so a given page always reads the same way.
+    for (const l of locales) {
+      const headings = UI_LABELS[l].english.exercise.relatedHeadings;
+      expect(Array.isArray(headings)).toBe(true);
+      expect(headings.length).toBeGreaterThan(1);
+      for (const heading of headings) {
+        expect(typeof heading).toBe('string');
+        expect(heading.trim().length).toBeGreaterThan(0);
+      }
+      // Duplicates would make the "variety" a lie for part of the catalogue.
+      expect(new Set(headings).size).toBe(headings.length);
+    }
+  });
+
+  it('does not keep the single literal related heading it replaced', () => {
+    for (const l of locales) {
+      expect('related' in UI_LABELS[l].english.exercise).toBe(false);
+    }
+  });
+
   it('localizes the exercise route copy differently per locale', () => {
     expect(UI_LABELS.es.english.exercise.back).not.toBe(
       UI_LABELS.en.english.exercise.back,
@@ -173,12 +215,14 @@ describe('UI_LABELS — english section keys', () => {
         'description',
         'intro',
         'chooseLevel',
-        'topicsTitle',
+        'focusesTitle',
         'exerciseOne',
         'exerciseMany',
         'empty',
         'emptyLevel',
         'emptyPair',
+        'searchFocus',
+        'focusesNoResults',
       ] as const) {
         expect(typeof section[key]).toBe('string');
         expect(section[key].length).toBeGreaterThan(0);
@@ -198,12 +242,36 @@ describe('UI_LABELS — english section keys', () => {
     }
   });
 
-  it('exposes a display label for every topic slug in both locales', () => {
+  it('ships NO per-locale focus, topic or skill label map', () => {
+    // `focus`, `topic` and `skill` are exercise DATA, not chrome. Their display
+    // labels are English in every locale and live in `exerciseTaxonomy`, beside
+    // the slugs they name. A per-locale map here is exactly the mistake this
+    // test exists to stop coming back — it made the same row read "Escritura"
+    // under /es and "Writing" under /en while the exercise stayed English.
+    //
+    // `focus` is the strongest case of the three: it names the grammar the
+    // learner came here to acquire, so translating it removes the one term
+    // they need to be able to recognize in English.
     for (const l of locales) {
-      const topics = UI_LABELS[l].english.topics;
-      for (const topic of TOPICS) {
-        expect(typeof topics[topic]).toBe('string');
-        expect(topics[topic].length).toBeGreaterThan(0);
+      expect('focuses' in UI_LABELS[l].english).toBe(false);
+      expect('topics' in UI_LABELS[l].english).toBe(false);
+      expect('skills' in UI_LABELS[l].english).toBe(false);
+    }
+  });
+
+  it('keeps the taxonomy labels out of the locale maps entirely', () => {
+    // Stronger than the key check above: no locale value anywhere under
+    // `english` may equal a taxonomy label, which would mean a copy of the map
+    // was smuggled back under a different key.
+    const taxonomyLabels = new Set<string>([
+      ...FOCUSES.map((focus) => FOCUS_LABELS[focus]),
+      ...TOPICS.map((topic) => TOPIC_LABELS[topic]),
+      ...SKILLS.map((skill) => SKILL_LABELS[skill]),
+    ]);
+    expect(taxonomyLabels.size).toBeGreaterThan(0);
+    for (const l of locales) {
+      for (const value of flattenStrings(UI_LABELS[l].english)) {
+        expect(taxonomyLabels.has(value)).toBe(false);
       }
     }
   });
@@ -212,9 +280,46 @@ describe('UI_LABELS — english section keys', () => {
     expect(UI_LABELS.es.english.section.chooseLevel).not.toBe(
       UI_LABELS.en.english.section.chooseLevel,
     );
-    expect(UI_LABELS.es.english.topics['daily-life']).not.toBe(
-      UI_LABELS.en.english.topics['daily-life'],
+    expect(UI_LABELS.es.english.levels.A1).not.toBe(
+      UI_LABELS.en.english.levels.A1,
     );
+  });
+
+  it('ships the maintainer-authored entry headline and subtitle, verbatim', () => {
+    // These two strings were dictated by the maintainer word for word. They are
+    // asserted EXACTLY rather than loosely, because the point of the change was
+    // the wording itself: "Ejercicios de inglés" says what the section IS, while
+    // the old headline described an audience, and the shorter subtitle stops the
+    // screen opening with a sentence nobody reads.
+    expect(UI_LABELS.es.english.section.title).toBe('Ejercicios de inglés');
+    expect(UI_LABELS.es.english.section.intro).toBe(
+      'Elige un nivel y tema para practicar en el día a día',
+    );
+  });
+
+  it('retires the old entry headline and subtitle from english.section', () => {
+    // Scoped to `english.section` on purpose. "Inglés para programadores" is
+    // ALSO the homepage row heading (`home.rows.english`), which is a different
+    // surface the maintainer did not ask to change — a repo-wide assertion here
+    // would fail for the wrong reason and push an unrequested edit.
+    const section = UI_LABELS.es.english.section;
+    expect(Object.values(section)).not.toContain('Inglés para programadores');
+    expect(Object.values(section)).not.toContain(
+      'Elegir un nivel y practicar con ejercicios cortos pensados para el día a día de un desarrollador.',
+    );
+    expect(Object.values(UI_LABELS.en.english.section)).not.toContain(
+      'English for developers',
+    );
+  });
+
+  it('accepts the maintainer subtitle under the neutral-Spanish guard', () => {
+    // "Elige" is TUTEO, not a regional form. The standing rule bans REGIONAL
+    // (Rioplatense) verbs — `Elegí` — not the second person as a category, so
+    // the guard must let this through. Asserted directly so that if someone
+    // later tightens the detector into a blanket second-person ban, THIS test
+    // names the copy it would break instead of the failure surfacing as a
+    // mysterious red in the site-wide sweep.
+    expect(voseoWords(UI_LABELS.es.english.section.intro)).toEqual([]);
   });
 
   it('no longer ships the "coming soon" teaser now that the section exists', () => {
@@ -291,5 +396,74 @@ describe('UI_LABELS — motion-polish (SEO) keys', () => {
     expect(UI_LABELS.es.meta.siteDescription).not.toBe(
       UI_LABELS.en.meta.siteDescription,
     );
+  });
+});
+
+describe('UI_LABELS — 404 keys', () => {
+  // The 404 copy used to live in a local map inside `404.astro`. Astro
+  // frontmatter cannot be imported by a test, so that map was unreachable by
+  // any guard — and it is exactly where a voseo survived the English-section
+  // sweep. Centralizing it is what makes the site-wide guard below honest.
+  const locales = ['es', 'en'] as const;
+
+  it('exposes notFound copy for both locales', () => {
+    for (const l of locales) {
+      const notFound = UI_LABELS[l].notFound;
+      for (const key of ['title', 'body', 'home'] as const) {
+        expect(typeof notFound[key]).toBe('string');
+        expect(notFound[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('localizes the 404 copy (es vs en)', () => {
+    expect(UI_LABELS.es.notFound.title).not.toBe(UI_LABELS.en.notFound.title);
+  });
+});
+
+describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
+  // STANDING PROJECT RULE, and no longer scoped to the English section.
+  //
+  // ChuyoCode serves the whole Latin community, not Argentina, so regional
+  // (Rioplatense) verb forms must not reach the UI anywhere. The register is
+  // impersonal: the infinitive for instructions ("Revisar las respuestas",
+  // "Probar con otro tema") and impersonal prose for descriptions — no
+  // second-person verb at all, which removes the tú/vos fork at the root
+  // instead of picking a side of it.
+  //
+  // Possessives (`tu idioma`) are deliberately still allowed: identical in
+  // tuteo and voseo, so they carry no regional signal.
+
+  it('detects voseo when it IS there (the guard below is not vacuous)', () => {
+    // Triangulation. `findVoseo` returning `[]` is the pass condition below, so
+    // a detector that matched nothing would make that guard permanently green.
+    // Full rule-by-rule coverage lives in `neutralSpanish.test.ts`; this proves
+    // the detector THIS FILE imports fires on copy this repo actually shipped.
+    expect(voseoWords('Elegí tu nivel y practicá con ejercicios cortos.')).toEqual(
+      ['Elegí', 'practicá'],
+    );
+    expect(voseoWords('Aprendé tecnología en tu idioma')).toEqual(['Aprendé']);
+    expect(voseoWords('La página que buscás no existe.')).toEqual(['buscás']);
+    expect(voseoWords('Muy pronto vas a poder aprender.')).toEqual(['vas']);
+    // ...and stays silent on ordinary Spanish that happens to end in a stress.
+    expect(
+      voseoWords('Practicar inglés aquí, así, cuando esté todo listo. Leer más.'),
+    ).toEqual([]);
+  });
+
+  it('reports the offending KEY alongside the offending word', () => {
+    // A guard that only names the word leaves the author grepping for it. The
+    // failure output has to point at the exact copy entry to fix.
+    expect(
+      findVoseo({ home: { hero: { headline: 'Aprendé tecnología' } } }),
+    ).toEqual(['home.hero.headline: Aprendé']);
+  });
+
+  it('writes ALL of the Spanish UI copy in neutral Spanish, with no voseo', () => {
+    // Not `UI_LABELS.es.english` any more — the whole locale map. Every Spanish
+    // string the site renders from here is covered.
+    const strings = flattenStrings(UI_LABELS.es);
+    expect(strings.length).toBeGreaterThan(50);
+    expect(findVoseo(UI_LABELS.es)).toEqual([]);
   });
 });

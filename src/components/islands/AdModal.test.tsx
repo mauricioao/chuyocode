@@ -14,7 +14,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import AdModal, { AD_DURATION_SECONDS } from './AdModal';
+import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+import AdModal, { AD_DURATION_SECONDS, COPY } from './AdModal';
 
 /** Stub window.location.reload so the success path does not navigate. */
 function stubReload() {
@@ -138,5 +139,27 @@ describe('AdModal', () => {
     await runCountdown();
 
     expect(screen.getByTestId('ad-error')).toBeTruthy();
+  });
+});
+
+describe('AdModal — neutral Spanish', () => {
+  it('writes the Spanish modal copy in neutral Spanish, with no voseo', () => {
+    // STANDING PROJECT RULE, site-wide. Like `ExerciseIsland`, this island
+    // keeps its copy LOCAL so the Astro-side i18n module never reaches the
+    // client bundle — which also puts it out of reach of the `i18n.test.ts`
+    // guard. Without this test the whole rewarded-ads flow is unguarded, and
+    // that is where "Intentá de nuevo" survived the English-section sweep.
+
+    // Triangulation: the detector fires on the copy this island used to ship.
+    expect(voseoWords('No se pudo validar el anuncio. Intentá de nuevo.')).toEqual(
+      ['Intentá'],
+    );
+
+    // `playing` is a FUNCTION, and `findVoseo` walks strings only — it would
+    // skip that entry in silence. Calling it puts the rendered sentence back
+    // into the guarded surface instead of leaving a hole the size of one state.
+    const rendered = { ...COPY.es, playing: COPY.es.playing(3) };
+    expect(rendered.playing).toContain('Reproduciendo');
+    expect(findVoseo(rendered)).toEqual([]);
   });
 });

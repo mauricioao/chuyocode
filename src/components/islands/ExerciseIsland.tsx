@@ -13,7 +13,7 @@
  * Copy lives in a LOCAL map rather than `UI_LABELS`: islands are React and must
  * not pull the Astro-side i18n module into the client bundle (see AdModal.tsx).
  */
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import {
@@ -35,7 +35,12 @@ export interface ExerciseIslandProps {
 interface Copy {
   submit: string;
   submitHint: string;
+  /** Empty option of a `select` slot — the "nothing chosen yet" state. */
+  selectPlaceholder: string;
+  /** Everything was right: the button starts the whole exercise over. */
   retry: string;
+  /** Something was wrong: the button clears ONLY the wrong slots. */
+  fix: string;
   correct: string;
   incorrect: string;
   unavailable: string;
@@ -43,21 +48,38 @@ interface Copy {
   someWrong: string;
 }
 
-const COPY: Record<'es' | 'en', Copy> = {
+/**
+ * REGISTER (standing project rule): neutral Spanish, no voseo. Instructions use
+ * the infinitive — `Revisar`, not `Revisá` — and nothing addresses the learner
+ * in the second person, which removes the tú/vos fork instead of picking a side
+ * of it. The site is not Argentina-specific. Guarded by a test in
+ * `ExerciseIsland.test.tsx`.
+ *
+ * Exported for that guard: the island deliberately keeps its copy local rather
+ * than importing `UI_LABELS`, so this map is the only place the guard can read.
+ */
+export const COPY: Record<'es' | 'en', Copy> = {
   es: {
     submit: 'Comprobar',
-    submitHint: 'Elegí al menos una respuesta para comprobar.',
+    submitHint: 'Elegir al menos una respuesta para comprobar.',
+    selectPlaceholder: 'Elegir una opción',
     retry: 'Intentar de nuevo',
+    // The verb alone. The verdict directly above already names which answers
+    // were wrong, so "Corregir las incorrectas" made the button repeat it — and
+    // a button that reads like a sentence stops looking like a button.
+    fix: 'Corregir',
     correct: 'Correcto',
     incorrect: 'Incorrecto',
-    unavailable: 'Esta parte del ejercicio todavía no se puede resolver acá.',
+    unavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
     allCorrect: '¡Todo correcto!',
-    someWrong: 'Revisá las respuestas marcadas.',
+    someWrong: 'Revisar las respuestas marcadas.',
   },
   en: {
     submit: 'Check',
     submitHint: 'Select at least one answer to check.',
+    selectPlaceholder: 'Choose an option',
     retry: 'Try again',
+    fix: 'Fix',
     correct: 'Correct',
     incorrect: 'Incorrect',
     unavailable: 'This part of the exercise cannot be answered here yet.',
@@ -100,6 +122,58 @@ export function hasSubmittableAnswer(
   );
 }
 
+/**
+ * Drop the answers a grading run marked `incorrect`, keeping everything else.
+ *
+ * The whole point of the partial retry: a learner who got four of five right
+ * must not be made to redo all five. Only what was actually wrong is cleared.
+ *
+ * WHY CLEAR THE WRONG ONE RATHER THAN LEAVE IT FOR EDITING. Its `Incorrect`
+ * verdict disappears together with the grading result, so keeping the value
+ * would leave a just-rejected answer sitting in an unmarked field — and because
+ * a non-empty answer satisfies {@link hasSubmittableAnswer}, the learner could
+ * re-submit the identical wrong answer with one click and get the identical
+ * verdict. Clearing makes the remaining work visible and forces a real second
+ * attempt. It is also the only rule that behaves the same across every
+ * mechanic: "edit your typo" means nothing to a radio group or a dropdown,
+ * where a wrong answer is a wrong pick, not a misspelling.
+ *
+ * `unavailable` is deliberately NOT cleared. That slot was never OFFERED — its
+ * mechanic ships no control — so its entry is not a mistake the learner made,
+ * and they would have no way to re-enter it (docs/exercise-model.md, "Why this
+ * cannot break existing exercises").
+ *
+ * Pure: returns a new object and never mutates its input.
+ */
+export function clearIncorrectAnswers(
+  response: ExerciseResponse,
+  result: GradeResult,
+): ExerciseResponse {
+  const next: ExerciseResponse = {};
+  for (const [slotId, answer] of Object.entries(response)) {
+    if (result.slots[slotId] === 'incorrect') continue;
+    next[slotId] = answer;
+  }
+  return next;
+}
+
+/**
+ * The id of the first `incorrect` slot in DOCUMENT order, or `null`.
+ *
+ * Walks `payload.slots`, NOT `result.slots`. The result is a plain object keyed
+ * by slot id, so iterating it walks insertion order — which is not the order
+ * the learner reads. Only the payload defines the on-screen sequence, and the
+ * island renders it verbatim. Getting this wrong sends focus to a field
+ * somewhere below the one the learner should fix first, silently.
+ */
+export function firstIncorrectSlotId(
+  payload: Payload,
+  result: GradeResult,
+): string | null {
+  const slot = payload.slots.find((s) => result.slots[s.id] === 'incorrect');
+  return slot?.id ?? null;
+}
+
 export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   const t = copyFor(lang);
 
@@ -117,6 +191,29 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   const showHint = !canSubmit && answerableSlots(payload).length > 0;
   const hintId = useId();
 
+  // Slot id -> its primary focusable control, populated by the renderers.
+  const controls = useRef(new Map<string, HTMLElement | null>());
+  // The slot focus should move to on the NEXT commit. State, not a ref, because
+  // it has to drive an effect (see below).
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
+
+  /**
+   * Move focus only AFTER the render that re-enabled the controls.
+   *
+   * Doing it inline in the click handler would be a silent no-op: React batches
+   * the state updates, so the control is still `disabled` at that point and
+   * `focus()` on a disabled element does nothing — with nothing thrown and
+   * nothing logged. jsdom would not report it either.
+   */
+  useEffect(() => {
+    if (pendingFocus === null) return;
+    const node = controls.current.get(pendingFocus);
+    // A mechanic may register no control at all. Falling through is the honest
+    // outcome — the learner is already unlocked — and it must never throw.
+    if (node && typeof node.focus === 'function') node.focus();
+    setPendingFocus(null);
+  }, [pendingFocus]);
+
   /**
    * Grade locally. The resolver is registry-backed on purpose: a slot we could
    * not RENDER must not be graded, or the learner would be marked wrong for an
@@ -126,9 +223,28 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
     setResult(check(payload, response, comparatorForRenderable));
   }
 
-  function reset() {
+  /**
+   * The post-grading button. ONE control, two honest behaviours:
+   *
+   *  - everything correct -> there is nothing to fix, so start over completely;
+   *  - something wrong    -> keep what was right, clear only what was wrong,
+   *                          and put the cursor on the first thing to redo.
+   *
+   * The label changes with the behaviour, so the button never lies about what
+   * pressing it will cost the learner.
+   */
+  function retry() {
+    if (!result) return;
+
+    if (result.correct) {
+      setResponse({});
+      setResult(null);
+      return;
+    }
+
+    setResponse((prev) => clearIncorrectAnswers(prev, result));
+    setPendingFocus(firstIncorrectSlotId(payload, result));
     setResult(null);
-    setResponse({});
   }
 
   return (
@@ -148,6 +264,14 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
                   setResponse((prev) => ({ ...prev, [slot.id]: next }))
                 }
                 disabled={graded}
+                // Passed to EVERY renderer and ignored by the ones that have no
+                // empty state. Uniform props are what keep the dispatch above
+                // free of a branch per mechanic.
+                placeholder={t.selectPlaceholder}
+                // A fresh closure per render, so React detaches and reattaches
+                // this ref on every commit. Harmless here: the map is only ever
+                // READ from an effect, which runs after the commit has settled.
+                focusRef={(node) => controls.current.set(slot.id, node)}
               />
             ) : (
               <UnavailableRenderer slot={slot} message={t.unavailable} />
@@ -183,10 +307,10 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
             type="button"
             data-testid="exercise-retry"
             variant="secondary"
-            onClick={reset}
+            onClick={retry}
             className="w-fit"
           >
-            {t.retry}
+            {result.correct ? t.retry : t.fix}
           </Button>
         </div>
       ) : (

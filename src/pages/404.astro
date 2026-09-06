@@ -9,27 +9,17 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import { buttonVariants } from '@components/ui/button';
-import { isValidLang, resolveLang, type Lang } from '@lib/i18n';
+import { isValidLang, resolveLang, UI_LABELS, type Lang } from '@lib/i18n';
 
 const segment = Astro.url.pathname.split('/')[1] ?? '';
 const lang: Lang = isValidLang(segment)
   ? segment
   : resolveLang(Astro.request.headers.get('accept-language'));
 
-const COPY = {
-  es: {
-    title: 'Página no encontrada',
-    body: 'La página que buscás no existe o fue movida.',
-    home: 'Volver al inicio',
-  },
-  en: {
-    title: 'Page not found',
-    body: 'The page you are looking for does not exist or was moved.',
-    home: 'Back to home',
-  },
-} as const;
-
-const t = COPY[lang];
+// Copy comes from `UI_LABELS`, not a local map. Astro frontmatter cannot be
+// imported by a test, so copy kept here is copy no guard can read — and the
+// site-wide neutral-Spanish rule is only worth as much as its coverage.
+const t = UI_LABELS[lang].notFound;
 ---
 
 <BaseLayout lang={lang} title={`404 — ${t.title}`}>

@@ -31,6 +31,37 @@ The same applies to reading and to image-based prompts. `skill` (writing / liste
 
 ---
 
+## Focus and topic — what an exercise is *about*
+
+A second pair, and just as easy to collapse. The axes above describe how an exercise WORKS; these two describe what it TEACHES.
+
+| Axis | Field | Question it answers | Values |
+|---|---|---|---|
+| **Focus** (primary) | `focus` | What am I practising? | `present-simple`, `second-conditional`, `phrasal-verbs`, … |
+| **Topic** (secondary) | `topic` | Where does it happen? | `travel`, `food`, `code-review`, … *(nullable)* |
+
+**`topic` was never the subject of an exercise.** It is the vocabulary CONTEXT — the situation the sentences happen to describe. The section originally filed everything under it, which meant the grid answered "where does this happen?" while the question a learner or a teacher actually asks first is "what am I practising?". Nobody looks for *"something set in an airport"*; they look for *"conditionals"*.
+
+So `focus` is the primary axis. It drives the entry grid, the listing route, the deep link and the uniqueness key.
+
+### Why `topic` was kept rather than dropped
+
+*"Present simple, in a food context"* is a better exercise than *"Present simple"*. The setting is what keeps a drill feeling like language instead of grammar homework, and it is the thing that distinguishes several exercises on the same language point. It is now a badge, not a filter.
+
+### Why `topic` is nullable
+
+A pure grammar drill has no natural setting. A `NOT NULL` context column forces the author to invent one, which pollutes the very axis that is supposed to mean something — and an invented context is worse than an absent one, because it is indistinguishable from a real one.
+
+**An absent topic renders NO badge, never an empty one.** An empty bordered chip looks deliberate rather than broken, which makes it the worse failure. Same rule as an unknown `skill`.
+
+### Why `FOCUSES` is a flat list, not a map keyed by level
+
+A language point is genuinely practised at more than one level: `present-simple` is an A1 introduction and again a B1 contrast against the present continuous; `modal-verbs` runs from A2 politeness to C1 hedging. **The level lives on the row.** A `focus -> level` map would make that ordinary case unrepresentable and would need editing every time a point is reused.
+
+The order of `FOCUSES` is roughly ascending difficulty because it is the order the entry grid renders in. That is display convenience only — nothing reads a level out of a position.
+
+---
+
 ## Payload shape
 
 Three concepts. That is the whole model.
@@ -167,17 +198,18 @@ create table exercises (
   slug        text not null,        -- URL segment; see "Deep links" below
   skill       text not null,        -- writing | listening | reading (filter label)
   level       text not null,        -- CEFR: A1 A2 B1 B2 C1 C2
-  topic       text not null,
+  focus       text not null,        -- PRIMARY axis: the language point
+  topic       text,                 -- SECONDARY axis: the context. NULLABLE.
   payload     jsonb not null default '{}',
   published   boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),  -- maintained by trigger
   updated_by  uuid references auth.users(id),
 
-  unique (level, topic, slug)
+  unique (level, focus, slug)
 );
 
-create index on exercises (level, topic) where published;
+create index on exercises (level, focus) where published;
 
 -- A listening exercise without audio is unplayable. Reject at the source.
 alter table exercises add constraint listening_requires_audio
@@ -196,14 +228,25 @@ alter table exercises add constraint listening_requires_audio
 | `payload` as `jsonb` | A new mechanic needs zero migrations. GIN-indexable if filtering into the payload ever becomes necessary. |
 | Not Sanity | Exercise images are external URLs, so Sanity's asset pipeline adds nothing here. Audit metadata (`updated_by`, `updated_at`) is a native Postgres trigger but lives in document history in Sanity, where it is not queryable. |
 | Answer keys ship to the client | Grading is stateless and instant by design, so `answer` is readable in DevTools. Accepted, documented, not hidden. There is no score to protect. |
+| `focus` is a column, `topic` is a nullable column | Both are filtered/grouped on — `focus` by the entry grid and the listing, `topic` never. `topic` stays a column anyway because it is rendered on every card and would otherwise be a `jsonb` read for a badge. |
+
+### Adding `focus` to a table that already had rows
+
+`0004_exercises_focus.sql` adds the column **nullable and without a default**, backfills it, and only then sets `NOT NULL`. A plain `add column focus text not null` aborts on a non-empty table.
+
+The alternative — add with a `DEFAULT`, then drop it — was rejected. A default is not merely a migration convenience: while it exists, an `INSERT` that simply *forgot* `focus` succeeds and files that exercise under a real, routable, completely wrong language point. With no default at any point, `NOT NULL` is the real thing and a missing `focus` fails loudly at the source, which is the entire reason the taxonomy is closed.
+
+Rows the migration cannot classify are set to `focus = 'unassigned'` **and unpublished**. The sentinel is deliberately OUTSIDE the taxonomy, so even a hand-republished row fails `isFocus`, gets discarded from the facets, and 404s on the route — rather than being filed under a language point nobody chose. Guessing a real focus would publish an exercise teaching something other than what it claims, which the learner cannot detect and nothing logs.
 
 ### Deep links
 
-Exercises are addressed as `/[lang]/ingles/[level]/[topic]/[slug]`. Teachers share individual exercises, so the URL must be stable and readable.
+Exercises are addressed as `/[lang]/ingles/[level]/[focus]/[slug]`. Teachers share individual exercises, so the URL must be stable and readable.
 
-`slug` is unique **per `(level, topic)`**, not globally — the same slug may exist at different levels, which keeps slugs short and human-readable (`ordering-coffee` can exist at A1 and B2 without collision).
+`slug` is unique **per `(level, focus)`**, not globally — the same slug may exist at different levels, which keeps slugs short and human-readable (`spot-the-error` can exist under `present-perfect` and under `passive-voice` without collision).
 
-Changing a published `slug` breaks every shared link to it. Treat it as permanent once published, exactly like a `topic` value.
+**`topic` is deliberately NOT in the URL.** It is nullable, so it cannot be a path segment without inventing a "no context" segment; and it is context rather than identity, so it would make the same exercise addressable by a detail that is allowed to be absent.
+
+⚠️ **Changing a published `slug` or `focus` breaks every shared link to it.** Both are in the URL and both are in the uniqueness key. Treat them as permanent once published. This is precisely why the axis moved at ~5 published rows and could not have moved later: the cost of this change is proportional to the number of published deep links.
 
 ---
 
@@ -358,12 +401,98 @@ Two mechanics per row: drag the image into the box, **and** pick the quantifier.
 - [ ] Pool item ids are unique within their pool and are **never** reused for a different item after publishing — a published id is permanent.
 - [ ] A choice-style slot references a pool with at least two items.
 - [ ] `level` is one of `A1 A2 B1 B2 C1 C2`.
+- [ ] `focus` is set, and is one of the values in `FOCUSES`. **Required.** It is what the exercise teaches, and it is in the URL.
+- [ ] `topic` is either a value in `TOPICS` or **`NULL`**. Do NOT invent a context to fill it — an absent setting is a legitimate, expected answer for a pure grammar drill.
 - [ ] A `listening` exercise has `media.audio`. (Enforced by database constraint.)
 - [ ] Exercise content is **English only**. Site chrome is localized through `UI_LABELS`; exercise text is not mirrored `{es,en}`.
 
+### Picking the focus
+
+Choose the **one** language point the exercise is actually drilling — the thing a learner would search for. An exercise whose slug names two (`quantifiers-and-present-simple`) still gets one `focus`: the distinctive one. If two points are genuinely co-equal, that is two exercises.
+
+### Focus, topic and skill display labels are English in every locale
+
+`focus`, `topic` and `skill` are **exercise data, not site chrome**. Their display labels
+live in `src/lib/exerciseTaxonomy.ts` (`FOCUS_LABELS`, `TOPIC_LABELS`, `SKILL_LABELS`) — a single
+locale-independent map, deliberately **not** inside `UI_LABELS`, which is keyed
+by locale.
+
+`focus` is the strongest case of the three: it names the grammar the learner came here to acquire. Printing "Presente perfecto" over an English exercise removes the one term they need to be able to recognize in English.
+
+Three reasons this is not a style preference:
+
+1. **The section teaches English.** A card that announces "Escritura" over an
+   English prompt translates the one word the learner came here to read.
+2. **One row, one name.** A translated label makes the same database row read
+   differently depending on the URL prefix it was reached through, so a learner
+   and a teacher looking at the same exercise cannot use the same word for it.
+3. **The slug is the label's shadow.** `code-review` is already English and is
+   permanent (it is in the URL and in every published row). A per-locale label
+   invents a second, softer identity for a value that has exactly one.
+
+The CEFR `level` is the deliberate exception, split in two: the code (`A2`) is
+data and is never translated; the surrounding word `Nivel` / `Level` and the
+human gloss (`Básico` / `Elementary`) are chrome and stay in `UI_LABELS`.
+
+No migration is involved in any of this. The table already stores English slugs
+in `topic` and `skill` — the labels were only ever a render-time lookup.
+
+### Marking the blank in a label
+
+A slot label marks its gap with a **run of three or more underscores**:
+
+```jsonc
+{ "id": "s1", "label": "She ___ breakfast at eight every morning.",
+  "input": "text", "answer": ["has", "eats"] }
+```
+
+The renderer splits the label at the marker and draws the control **inside the sentence**, where the gap is. The marker itself is never shown.
+
+| Label | Result |
+|---|---|
+| `"She ___ breakfast."` | control between `She` and `breakfast.` |
+| `"She ______ breakfast."` | same — a longer run is still **one** gap |
+| `"___ is the answer."` | control first, sentence after it |
+| `"The answer is ___"` | sentence first, control last |
+| `"What did she say?"` | **no gap** — label above, control below (stacked) |
+
+**Three underscores is the floor, not an exact count.** Authors stretch the gap to hint at answer length, and an exact-three rule would leave `_____` rendered as raw underscores next to the control with nothing reporting the mistake. Three is still the minimum so the marker cannot collide with ordinary content: `user_name` and `__dunder__` stay literal text.
+
+**A label with no marker is a valid authoring style**, not an error. `"What did she say?"` above an audio clip has no gap to splice into, so it keeps the stacked layout — and a real `<label for>`, which is a better accessibility relationship than any ARIA attribute.
+
+#### One blank per slot
+
+**A slot has one `answer`, so it gets one gap.** Only the **first** marker is replaced by a control; any later marker stays literal text on screen:
+
+```jsonc
+// "A ___ and a ___ walk in."  ->  "A [control] and a ___ walk in."
+```
+
+That is deliberately visible rather than silently swallowed, so the author can see the second gap was not honoured.
+
+Two gaps in one sentence need **two slots**, each with its own `answer`:
+
+```jsonc
+"slots": [
+  { "id": "s1", "label": "A ___ walks in.",  "input": "text", "answer": ["dog"] },
+  { "id": "s2", "label": "It orders a ___.", "input": "text", "answer": ["beer"] }
+]
+```
+
+Supporting N blanks inside one label would require an answer per blank — a change to the payload contract and to grading, not a rendering tweak. It is out of scope until a real exercise needs it.
+
 ### Changing a taxonomy value
 
-Renaming a `topic` or a pool item id **orphans published rows**. Treat taxonomy values as permanent once content exists. To retire one, migrate the rows explicitly — never edit the value in place.
+Renaming a `focus`, a `topic` or a pool item id **orphans published rows**. Treat taxonomy values as permanent once content exists. To retire one, migrate the rows explicitly — never edit the value in place.
+
+The three are not equally expensive, and it is worth knowing which is which before touching one:
+
+| Value | Cost of renaming it |
+|---|---|
+| `focus` | **Highest.** It is in the URL and in the uniqueness key: every shared deep link breaks, and the rows are unroutable until migrated. |
+| `slug` | Same — in the URL and the key. |
+| `topic` | Lower. It is not in the URL. A retired value renders no badge (`readTopic` collapses it to `null`) rather than breaking the page, but the context is silently lost. |
+| pool item id | Breaks **grading**, silently: `answer` references the id, so the learner answers correctly and is marked wrong. The worst of the four. |
 
 ---
 

@@ -1,0 +1,159 @@
+---
+/**
+ * Exercise detail page — `/[lang]/ingles/[level]/[focus]/[slug]` (SSR).
+ *
+ * The deep link IS the identity: teachers share individual exercises, so the
+ * URL must stay stable and readable. `slug` is unique per `(level, focus)`, not
+ * globally (docs/exercise-model.md, "Deep links").
+ *
+ * Everything that is not a real exercise collapses to a 404, mirroring the book
+ * detail route:
+ *   - unsupported `lang`            -> 404 (before any query)
+ *   - `level`/`focus` outside the taxonomy -> 404 (before any query, via the guards)
+ *   - no published row, a Supabase outage, or a payload that drifted out of
+ *     shape -> `getExerciseBySlug` fail-safes to `null` -> 404
+ *
+ * Grading itself is client-side and stateless, so the only server work here is
+ * fetching the row; the island does the rest.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ExerciseIsland from '@components/islands/ExerciseIsland';
+import ExerciseCard from '@components/ui/ExerciseCard.astro';
+import { Badge } from '@components/ui/badge';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import {
+  isLevel,
+  isFocus,
+  FOCUS_LABELS,
+  SKILL_LABELS,
+  TOPIC_LABELS,
+} from '@lib/exerciseTaxonomy';
+import { getExerciseBySlug, getRelatedExercises } from '@lib/exercises';
+import { pickStable } from '@lib/exerciseCopy';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const { level, focus, slug } = Astro.params;
+
+// Taxonomy guards run BEFORE the query: a segment that is not in the closed
+// vocabulary can never match a row, so a round trip would only make the 404 slower.
+if (!isLevel(level) || !isFocus(focus) || !slug) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const exercise = await getExerciseBySlug(level, focus, slug);
+
+if (!exercise) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].english.exercise;
+
+// The first slot's prompt is the most useful human title we have; exercise
+// content is English-only by contract, so it is not mirrored per locale.
+const heading = exercise.payload.slots[0]?.label ?? slug;
+
+// Fetched AFTER the 404 guards above, so a page nobody will see never spends a
+// round trip on suggestions. Fail-safe: `[]` on any error, which renders
+// nothing at all rather than an empty heading.
+const related = await getRelatedExercises(exercise);
+
+// Seeded from the SLUG, never `Math.random()`. The slug is stable and unique
+// per (level, topic), so a given exercise page always shows the same heading —
+// a random pick on the SSR render path would reshuffle it on every reload and
+// read as a glitch rather than as variety.
+const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
+---
+
+<BaseLayout lang={lang} title={heading} description={t.description}>
+  <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
+    <a
+      href={`/${lang}/ingles`}
+      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+    >
+      &larr; {t.back}
+    </a>
+
+    {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus,
+        topic and skill labels are exercise data and stay English in every
+        locale (docs/exercise-model.md, "Authoring rules").
+
+        The FOCUS sits first among the data badges: it is what the exercise
+        teaches. The topic is LAST and conditional — it qualifies the exercise
+        rather than naming it, and an exercise with no setting must render no
+        badge at all instead of an empty pill. */}
+    <header class="flex flex-wrap items-center gap-3">
+      <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
+      <Badge variant="outline">{FOCUS_LABELS[exercise.focus]}</Badge>
+      <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
+      {
+        exercise.topic && (
+          <Badge variant="outline">
+            {TOPIC_LABELS[exercise.topic] ?? exercise.topic}
+          </Badge>
+        )
+      }
+    </header>
+
+    {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
+        (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the
+        row we already fetched — no HTTP check on the render path. */}
+    {
+      exercise.hasAudio && (
+        <audio controls preload="none" class="w-full" src={exercise.payload.media?.audio} />
+      )
+    }
+
+    {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
+    <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+
+    {/* Related by LEVEL, not focus: someone browsing a level is roughly at that
+        level, and narrowing to the current language point would hide most of
+        what they can do — and would empty this block for every focus holding a
+        single exercise. Rendered only when there IS something; an empty
+        "related" section is noise, not information. Zero JS: these are links. */}
+    {
+      related.length > 0 && (
+        <section class="flex flex-col gap-4 border-t border-border pt-8">
+          <h2 class="text-xl font-bold tracking-tight text-accent">
+            {relatedHeading}
+          </h2>
+
+          <ul class="grid gap-4 sm:grid-cols-2">
+            {/* THE FOCUS LEADS. The card used to open with the first slot's
+                prompt — "___ rename this variable, please?" — which spoils the
+                exercise before the learner opens it and says nothing about what
+                the card is for. It then led with the TOPIC, which named the
+                setting rather than the lesson. The language point is what the
+                card is actually offering, and it is what distinguishes these
+                cards from each other: they cross focuses, unlike the listing's.
+                English in every locale, like every other taxonomy label.
+
+                "Nivel"/"Level" is chrome and localizes, so it is composed HERE
+                and passed in; the skill and topic labels are exercise data and
+                the card derives them itself. `topic` may be null — the card
+                renders no badge for it rather than an empty one. */}
+            {related.map((item) => (
+              <li>
+                <ExerciseCard
+                  href={`/${lang}/ingles/${item.level}/${item.focus}/${item.slug}`}
+                  title={FOCUS_LABELS[item.focus]}
+                  skill={item.skill}
+                  levelBadge={`${t.level} ${item.level}`}
+                  topic={item.topic}
+                  titleSize="xl"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+  </div>
+</BaseLayout>

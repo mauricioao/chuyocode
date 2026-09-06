@@ -11,16 +11,20 @@
 import type { Comparator } from '@/lib/exerciseGrading';
 import { comparatorFor } from '@/lib/exerciseGrading';
 import ChoiceRenderer from './ChoiceRenderer';
+import SelectRenderer from './SelectRenderer';
+import TextRenderer from './TextRenderer';
 import type { MechanicRenderer } from './types';
 
 /**
  * `slot.input` -> renderer. One line per shipped mechanic.
  *
- * `text`, `select`, `drop`, `order` and `hotspot` are deliberately ABSENT: their
- * comparators exist, but their renderers have not shipped.
+ * `drop`, `order` and `hotspot` are deliberately ABSENT — no renderer and, for
+ * the last two, no comparator either. They degrade per slot.
  */
 const MECHANICS: Record<string, MechanicRenderer> = {
   choice: ChoiceRenderer,
+  select: SelectRenderer,
+  text: TextRenderer,
 };
 
 /**
@@ -37,11 +41,17 @@ export function rendererFor(input: string): MechanicRenderer | null {
 /**
  * Resolve the comparator for a mechanic ONLY IF that mechanic is also rendered.
  *
- * This closes a real correctness hole. The comparator map is WIDER than the
- * renderer registry — `text` and `select` have comparators but no renderer yet.
- * Grading with the comparator map alone would show the learner no input for
- * such a slot and then mark it `incorrect`: permanently wrong, for an answer
- * they were never given the chance to type. Nothing throws, nothing logs.
+ * This closes a real correctness hole. The comparator map can be WIDER than the
+ * renderer registry, because a comparator is cheap and a renderer is not, so
+ * one routinely lands first. Grading with the comparator map alone would show
+ * the learner no input for such a slot and then mark it `incorrect`: permanently
+ * wrong, for an answer they were never given the chance to give. Nothing throws,
+ * nothing logs.
+ *
+ * As of this slice the two maps happen to cover the same three mechanics, so the
+ * resolver is currently a no-op in practice. That is exactly why it stays: it
+ * re-arms automatically the next time a comparator ships ahead of its renderer,
+ * with no one having to remember this hole existed.
  *
  * Routing grading through the registry makes the invariant STRUCTURAL rather
  * than a promise: a slot can only be graded by a mechanic that was actually

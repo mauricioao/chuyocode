@@ -16,6 +16,7 @@ export default function ChoiceRenderer({
   value,
   onChange,
   disabled = false,
+  focusRef,
 }: MechanicRendererProps) {
   // Single-answer mechanic: the array carries at most one id.
   const selected = value[0] ?? '';
@@ -31,12 +32,21 @@ export default function ChoiceRenderer({
         onValueChange={(next) => onChange([next])}
         disabled={disabled}
       >
-        {items.map((item) => {
+        {items.map((item, index) => {
           // Scoped by slot id: the same pool may back several slots on one page.
           const inputId = `${slot.id}-${item.id}`;
           return (
             <div key={item.id} className="flex items-center gap-3">
-              <RadioGroupItem id={inputId} value={item.id} />
+              <RadioGroupItem
+                id={inputId}
+                value={item.id}
+                // The group's focus entry point is its FIRST option, matching
+                // where a keyboard user lands when nothing is selected. Radix
+                // only auto-selects on focus while an arrow key is held (see
+                // @radix-ui/react-radio-group dist/index.mjs L369-373), so a
+                // programmatic focus here never answers for the learner.
+                ref={index === 0 ? focusRef : undefined}
+              />
               <Label htmlFor={inputId} className="cursor-pointer text-zinc-300">
                 {item.text ?? item.id}
               </Label>
