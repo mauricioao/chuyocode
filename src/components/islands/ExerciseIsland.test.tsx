@@ -11,10 +11,11 @@
  *  - copy differs between es and en.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GradeResult } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+import { DROP_COPY } from './mechanics/DropRenderer';
 import ExerciseIsland, {
   clearIncorrectAnswers,
   COPY,
@@ -109,6 +110,45 @@ const threeBlanks: Payload = {
   ],
 };
 
+/**
+ * TWO `drop` SLOTS READING ONE POOL — the case the island exists to keep honest.
+ *
+ * A pool is SHARED, and a renderer only ever sees its OWN answer. So nothing
+ * inside `DropRenderer` can know that the tile it is about to offer is already
+ * sitting in the question above it. Only the island holds the whole response,
+ * which is why it — and not the renderer — derives `claimed`.
+ *
+ * Four tiles for two slots on purpose: with an exact-fit pool, "the tile
+ * disappeared from the other slot" and "the other slot ran out of tiles" look
+ * identical, and a broken implementation would pass by coincidence.
+ */
+const twoDropsOnePool: Payload = {
+  pools: {
+    quantities: [
+      { id: 'q_some', text: 'some' },
+      { id: 'q_any', text: 'any' },
+      { id: 'q_much', text: 'much' },
+      { id: 'q_many', text: 'many' },
+    ],
+  },
+  slots: [
+    {
+      id: 'olives',
+      label: 'There are ___ olives on the table.',
+      input: 'drop',
+      pool: 'quantities',
+      answer: ['q_some'],
+    },
+    {
+      id: 'bread',
+      label: 'Is there ___ bread left?',
+      input: 'drop',
+      pool: 'quantities',
+      answer: ['q_any'],
+    },
+  ],
+};
+
 /** A radio slot above a blank: the choice slot is the top-most control. */
 const choiceThenBlank: Payload = {
   pools: {
@@ -159,6 +199,43 @@ function submitButton(): HTMLButtonElement {
 
 function submit() {
   fireEvent.click(screen.getByTestId('exercise-submit'));
+}
+
+/** The tiles slot `slotId` currently offers, by accessible name. */
+function tilesIn(slotId: string): string[] {
+  const pool = screen.getByTestId(`drop-pool-${slotId}`);
+  return Array.from(pool.querySelectorAll('button')).map(
+    (button) => button.getAttribute('aria-label') ?? '',
+  );
+}
+
+/**
+ * Drag a tile into a slot's box with the keyboard.
+ *
+ * The `await act` between presses is load-bearing: dnd-kit's `KeyboardSensor`
+ * registers its document-level keydown handler inside a `setTimeout`, so a press
+ * dispatched in the same tick as the pick-up lands before the sensor is
+ * listening and is silently ignored.
+ *
+ * Each slot owns its own `DndContext`, so the drag below can only ever resolve
+ * to that slot's single box — which is what makes this deterministic in jsdom,
+ * where every rect is zero and collision detection has no geometry to work with.
+ */
+async function dropInto(slotId: string, tileName: string) {
+  const pool = screen.getByTestId(`drop-pool-${slotId}`);
+  const tile = Array.from(pool.querySelectorAll('button')).find(
+    (button) => button.getAttribute('aria-label') === tileName,
+  );
+  if (!tile) throw new Error(`no tile named ${tileName} in slot ${slotId}`);
+
+  fireEvent.keyDown(tile, { code: 'Space' });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  fireEvent.keyDown(document, { code: 'Space' });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
 afterEach(() => {
@@ -475,6 +552,141 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
 
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
     expect(screen.getByRole('option', { name: 'Choose an option' })).toBeTruthy();
+  });
+});
+
+describe('ExerciseIsland — two drop slots sharing one pool', () => {
+  it('offers the whole pool to both slots before anything is placed', () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    expect(tilesIn('olives')).toEqual(['some', 'any', 'much', 'many']);
+    expect(tilesIn('bread')).toEqual(['some', 'any', 'much', 'many']);
+  });
+
+  /**
+   * THE BUG THIS BLOCK EXISTS TO PREVENT.
+   *
+   * `DropRenderer` derives its pool from its OWN answer plus `claimed`. If the
+   * island never computes `claimed`, the second slot keeps offering a tile that
+   * is already in the first slot's box — so the learner can answer with the same
+   * tile twice and the shared pool is a lie. Nothing throws, nothing logs, and
+   * both slots look perfectly normal.
+   */
+  it('withdraws a placed tile from the OTHER slot', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'some');
+
+    // Gone from the slot that consumed it...
+    expect(tilesIn('olives')).not.toContain('some');
+    // ...and, the part only the island can know, gone from its sibling too.
+    expect(tilesIn('bread')).toEqual(['any', 'much', 'many']);
+  });
+
+  it('leaves the rest of the pool alone', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'some');
+
+    // Three tiles for one remaining slot: consuming one tile must not look like
+    // exhausting the pool.
+    expect(tilesIn('bread')).toHaveLength(3);
+  });
+
+  it('lets each slot consume a different tile independently', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'some');
+    await dropInto('bread', 'any');
+
+    expect(tilesIn('olives')).toEqual(['much', 'many']);
+    expect(tilesIn('bread')).toEqual(['much', 'many']);
+  });
+
+  it('returns a removed tile to BOTH slots', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'some');
+    fireEvent.click(
+      screen.getByRole('button', { name: DROP_COPY.en.remove('some') }),
+    );
+
+    // Derived, not stored: nothing names the tile any more, so it is back.
+    expect(tilesIn('olives')).toContain('some');
+    expect(tilesIn('bread')).toContain('some');
+  });
+
+  it('grades both drop slots instead of excluding them from the verdict', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'some');
+    await dropInto('bread', 'any');
+    submit();
+
+    expect(screen.getByTestId('slot-feedback-olives').textContent).toBe(
+      COPY.en.correct,
+    );
+    expect(screen.getByTestId('slot-feedback-bread').textContent).toBe(
+      COPY.en.correct,
+    );
+    expect(screen.getByTestId('exercise-verdict').textContent).toBe(
+      COPY.en.allCorrect,
+    );
+  });
+
+  it('grades a wrong tile as incorrect rather than unavailable', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'much');
+    submit();
+
+    expect(screen.getByTestId('slot-feedback-olives').textContent).toBe(
+      COPY.en.incorrect,
+    );
+  });
+
+  it('unlocks submit once a tile has been placed', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    // An untouched exercise is a NON-ATTEMPT, not a wrong answer.
+    expect(submitButton().disabled).toBe(true);
+
+    await dropInto('olives', 'some');
+
+    expect(submitButton().disabled).toBe(false);
+  });
+
+  it('gives a wrongly placed tile back for a second attempt', async () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    await dropInto('olives', 'much');
+    submit();
+    retry();
+
+    // The wrong answer was cleared, so its tile is claimable again — by either
+    // slot. A learner who must redo a slot needs its tiles back.
+    expect(tilesIn('olives')).toContain('much');
+    expect(tilesIn('bread')).toContain('much');
+  });
+});
+
+describe('ExerciseIsland — locale reaches the mechanics', () => {
+  /**
+   * `drop` is the first mechanic whose chrome is whole SENTENCES rather than one
+   * label, so `placeholder` could not carry it and the island had to pass `lang`.
+   * Untested, a Spanish page would narrate its drag-and-drop in English and no
+   * automated check would notice.
+   */
+  it('narrates a Spanish exercise in Spanish', () => {
+    render(<ExerciseIsland lang="es" payload={twoDropsOnePool} />);
+
+    expect(document.body.textContent).toContain(DROP_COPY.es.instructions);
+  });
+
+  it('narrates an English exercise in English', () => {
+    render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
+
+    expect(document.body.textContent).toContain(DROP_COPY.en.instructions);
   });
 });
 

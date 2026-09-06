@@ -15,6 +15,7 @@
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { claimedTileIds } from '@/lib/exerciseDrop';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import {
   getSlotItems,
@@ -268,6 +269,19 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
                 // empty state. Uniform props are what keep the dispatch above
                 // free of a branch per mechanic.
                 placeholder={t.selectPlaceholder}
+                // WHY THE ISLAND COMPUTES THIS AND NOT THE RENDERER. A pool is
+                // SHARED across slots, so "which tiles are still free" is a fact
+                // about the WHOLE response — and the response lives here. A
+                // renderer only ever sees its own `value`, so it cannot know
+                // that the tile it is about to offer is already sitting in the
+                // question above it. Without this, two `drop` slots reading one
+                // pool each offer the same tile and the learner can answer with
+                // it twice; nothing throws and nothing logs.
+                claimed={claimedTileIds(payload, response, slot.id)}
+                // Chrome copy is localized. `drop` is the first mechanic whose
+                // copy is whole SENTENCES (screen-reader announcements) rather
+                // than one label, so `placeholder` could not carry it.
+                lang={lang}
                 // A fresh closure per render, so React detaches and reattaches
                 // this ref on every commit. Harmless here: the map is only ever
                 // READ from an effect, which runs after the commit has settled.
