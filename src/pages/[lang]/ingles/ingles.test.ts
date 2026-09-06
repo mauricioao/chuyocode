@@ -220,6 +220,138 @@ describe('ingles/index.astro (section entry)', () => {
     expect(getExerciseFacetRows).toHaveBeenCalledTimes(1);
   });
 
+  it('headlines the screen with the section, not with its audience', async () => {
+    getExerciseFacetRows.mockResolvedValue([facetRow('A1', 'present-simple')]);
+
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('Ejercicios de inglés');
+    expect(html).toContain('Elige un nivel y tema para practicar en el día a día');
+    // The old copy must be gone from the RENDERED page, not merely unused: the
+    // headline doubles as the `<title>`, so a stale value survives in <head>
+    // long after the <h1> looks right.
+    expect(html).not.toContain('Inglés para programadores');
+    expect(html).not.toContain('pensados para el día a día de un desarrollador');
+  });
+
+  it('headlines the screen in English too', async () => {
+    getExerciseFacetRows.mockResolvedValue([facetRow('A1', 'present-simple')]);
+
+    const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+    const html = await res.text();
+
+    expect(html).toContain('English exercises');
+    expect(html).not.toContain('English for developers');
+  });
+
+  // The magnifier filter over the language-point grid. It filters the cards
+  // ALREADY rendered for the active level — it never queries the server and it
+  // does not touch `?nivel=`, so the deep link keeps meaning exactly what it
+  // meant before.
+  describe('language-point filter', () => {
+    it('gives the filter input an accessible name', async () => {
+      getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
+
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?nivel=B1',
+      );
+      const html = await res.text();
+
+      // An icon-only magnifier with a bare <input> is a control a screen reader
+      // announces as "edit text" and nothing else. The label is the whole
+      // affordance for anyone not looking at the lens.
+      expect(html).toContain('aria-label="Buscar puntos gramaticales"');
+    });
+
+    it('gives every card a haystack holding BOTH the label and the slug', async () => {
+      getExerciseFacetRows.mockResolvedValue([
+        facetRow('B1', 'phrasal-verbs'),
+        facetRow('B1', 'past-perfect'),
+      ]);
+
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?nivel=B1',
+      );
+      const html = await res.text();
+
+      // The label alone is not enough: typing "past" must reach `past-simple`
+      // AND `past-perfect`, and the slug is the only string in which the shared
+      // stem is written the same way in both.
+      expect(html).toContain('data-search="Phrasal verbs phrasal-verbs"');
+      expect(html).toContain('data-search="Past perfect past-perfect"');
+      expect(html).toContain('data-focus-item');
+    });
+
+    it('ships the empty-results element the filter reveals, hidden', async () => {
+      getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
+
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?nivel=B1',
+      );
+      const html = await res.text();
+
+      // The id is the contract between the page and `SearchFilter`'s script; a
+      // typo here degrades to "the grid empties and nothing explains why".
+      expect(html).toMatch(/id="focuses-no-results"[^>]*hidden/);
+      expect(html).toContain('No hay puntos gramaticales que coincidan con la búsqueda.');
+      // Localized, not hardcoded — same key, other locale.
+      const enRes = await renderPage(
+        EntryPage,
+        { lang: 'en' },
+        { lang: 'en' },
+        'https://chuyocode.test/en/ingles?nivel=B1',
+      );
+      expect(await enRes.text()).toContain('No language points match that search.');
+    });
+
+    it('renders no filter when there is nothing at this level to filter', async () => {
+      // A search box over zero cards is a control whose every keystroke is a
+      // no-op. The level HAS to stay honoured (it is a real, empty level), so
+      // the filter is what goes away, not the empty state.
+      getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
+
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?nivel=C2',
+      );
+      const html = await res.text();
+
+      expect(res.status).toBe(200);
+      expect(html).not.toContain('chu-search');
+      expect(html).not.toContain('id="focuses-no-results"');
+      expect(html).toContain('Todavía no hay ejercicios para este nivel.');
+    });
+
+    it('keeps the filter free of any island or framework runtime', async () => {
+      // `SearchFilter` is deliberately vanilla. A `client:` directive here would
+      // trade a 40-line script for a hydrated component on a page whose entire
+      // design premise is that it ships no JavaScript framework.
+      getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
+
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?nivel=B1',
+      );
+      const html = await res.text();
+
+      expect(html).not.toContain('astro-island');
+    });
+  });
+
   it('returns 200 for a ?nivel= value that is not a CEFR level', async () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'past-simple')]);
 

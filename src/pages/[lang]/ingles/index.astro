@@ -8,15 +8,25 @@
  * 200 with an honest explanation. The only 404 here is an unsupported locale,
  * because that is a page that genuinely does not exist.
  *
- * Zero JavaScript. The active level travels in `?nivel=`, so the screen is
- * deep-linkable, shareable and survives with scripting disabled — a filter that
- * needs an island to work would be a worse version of a link.
+ * Zero JavaScript FRAMEWORK. The active level travels in `?nivel=`, so the
+ * screen is deep-linkable, shareable and survives with scripting disabled — a
+ * level selector that needed an island to work would be a worse version of a
+ * link, and that has not changed.
+ *
+ * The language-point filter is the one piece of script here, and it is a
+ * DIFFERENT job: it narrows the cards ALREADY on the page for the active level.
+ * It issues no request and never touches `?nivel=`, so the URL still says
+ * exactly what the server rendered. `SearchFilter` is vanilla — reaching for an
+ * island to hide `<li>` elements would ship a framework runtime to do what forty
+ * lines of DOM code already do. With scripting off the grid simply stays whole,
+ * which is the correct degraded state for a narrowing control.
  *
  * All the decision logic lives in `src/lib/exerciseFacets.ts` (pure, 21 tests)
  * because AstroContainer cannot assert appearance: anything that could silently
  * be wrong belongs in a function, not in a template expression.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import SearchFilter from '@components/ui/SearchFilter.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { FOCUS_LABELS } from '@lib/exerciseTaxonomy';
@@ -131,7 +141,24 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
     </nav>
 
     <section class="flex flex-col gap-4">
-      <h2 class="text-xl font-semibold text-zinc-100">{t.section.focusesTitle}</h2>
+      <div class="flex items-center justify-between gap-4">
+        <h2 class="text-xl font-semibold text-zinc-100">{t.section.focusesTitle}</h2>
+        {
+          /* Same placement and shape as the books catalog: the magnifier sits on
+             the heading row it filters, so the control and its target read as
+             one unit. Rendered only when there is a grid to narrow — a search
+             box over zero cards is a control whose every keystroke is a no-op,
+             and it would sit directly above a message explaining that the level
+             is empty. */
+          focuses.length > 0 && (
+            <SearchFilter
+              targetSelector="[data-focus-item]"
+              emptyId="focuses-no-results"
+              label={t.section.searchFocus}
+            />
+          )
+        }
+      </div>
 
       {
         /* Three DIFFERENT empty states, because they are three different facts
@@ -148,25 +175,50 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
             {t.section.emptyLevel}
           </p>
         ) : (
-          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {focuses.map((entry) => (
-              <li>
-                <a
-                  href={`/${lang}/ingles/${activeLevel}/${entry.focus}`}
-                  class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+          <>
+            {/* Filter empty state — the FOURTH fact this screen can report, and
+                the only one that is about the query rather than the data:
+                everything is published and visible, the typed text just matches
+                none of it. Hidden until the script hides every card;
+                `aria-live` announces the transition, because a grid silently
+                emptying is invisible to anyone not watching it. */}
+            <p
+              id="focuses-no-results"
+              hidden
+              aria-live="polite"
+              class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300"
+            >
+              {t.section.focusesNoResults}
+            </p>
+            <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {focuses.map((entry) => (
+                // The wrapper carries the haystack, so `SearchFilter` stays
+                // decoupled from the card markup. It holds the LABEL and the
+                // SLUG because they answer different queries: the label is what
+                // is on screen ("Modal verbs"), while the slug is where the
+                // shared stem is spelled identically across siblings — "past"
+                // reaches `past-simple` AND `past-perfect` only through it.
+                <li
+                  data-focus-item
+                  data-search={`${FOCUS_LABELS[entry.focus]} ${entry.focus}`}
                 >
-                  {/* English in every locale: the focus is exercise data, not
-                      chrome (docs/exercise-model.md, "Authoring rules"). */}
-                  <span class="text-lg font-semibold text-zinc-100">
-                    {FOCUS_LABELS[entry.focus]}
-                  </span>
-                  <span class="text-sm text-zinc-400 tabular-nums">
-                    {countLabel(entry.count)}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
+                  <a
+                    href={`/${lang}/ingles/${activeLevel}/${entry.focus}`}
+                    class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+                  >
+                    {/* English in every locale: the focus is exercise data, not
+                        chrome (docs/exercise-model.md, "Authoring rules"). */}
+                    <span class="text-lg font-semibold text-zinc-100">
+                      {FOCUS_LABELS[entry.focus]}
+                    </span>
+                    <span class="text-sm text-zinc-400 tabular-nums">
+                      {countLabel(entry.count)}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
         )
       }
     </section>

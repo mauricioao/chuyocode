@@ -172,11 +172,25 @@ export const UI_LABELS = {
       // entirely. The site is not Argentina-specific, so no voseo reaches the
       // UI — enforced by a guard in `i18n.test.ts`.
       section: {
-        title: 'Inglés para programadores',
+        // Names the SECTION, not its audience. "Inglés para programadores"
+        // described who the section was for, which the visitor already knows by
+        // the time they are looking at it; "Ejercicios de inglés" says what is
+        // actually on the screen. It doubles as the `<title>`, where the shorter
+        // string also survives a SERP truncation intact.
+        title: 'Ejercicios de inglés',
+        // `<meta name="description">`. Deliberately left as-is: it already leads
+        // with "Ejercicios cortos de inglés técnico", so it reads as an
+        // expansion of the new headline rather than a contradiction of it, and
+        // it is the one string here that must stay a full descriptive sentence.
         description:
           'Ejercicios cortos de inglés técnico, organizados por nivel y por punto gramatical, con corrección al instante.',
-        intro:
-          'Elegir un nivel y practicar con ejercicios cortos pensados para el día a día de un desarrollador.',
+        // MAINTAINER-AUTHORED, VERBATIM. "Elige" is TUTEO, and the standing
+        // neutral-Spanish rule bans REGIONAL forms (`Elegí`), not the second
+        // person as a category — so this passes `neutralSpanish.ts` unchanged
+        // and was NOT rewritten into an infinitive to match `chooseLevel`.
+        // Asserted exactly in `i18n.test.ts` so a future "consistency" pass has
+        // to argue with a red test instead of quietly editing the maintainer.
+        intro: 'Elige un nivel y tema para practicar en el día a día',
         chooseLevel: 'Elegir nivel',
         // The grid under a level lists LANGUAGE POINTS, not settings: someone
         // arriving here wants "conditionals", not "something about airports".
@@ -192,6 +206,16 @@ export const UI_LABELS = {
         emptyLevel: 'Todavía no hay ejercicios para este nivel.',
         emptyPair:
           'Todavía no hay ejercicios de este punto gramatical en este nivel. Probar con otro punto.',
+        // Accessible name for the magnifier filter over the language-point grid.
+        // It is the ONLY name that control has: the trigger is an icon and the
+        // input carries a blank placeholder so the bar can animate open, so
+        // without this a screen reader announces nothing but "edit text".
+        searchFocus: 'Buscar puntos gramaticales',
+        // Shown only when a typed query hides every card. Distinct from
+        // `emptyLevel` on purpose: that one means "nothing is published here",
+        // this one means "your query matched nothing" — collapsing them would
+        // tell the user the level is empty when it is full.
+        focusesNoResults: 'No hay puntos gramaticales que coincidan con la búsqueda.',
       },
       // Display names for the CEFR levels. The URL keeps the bare code; the
       // screen adds what it means, because "B1" alone tells a beginner nothing.
@@ -293,11 +317,14 @@ export const UI_LABELS = {
     },
     english: {
       section: {
-        title: 'English for developers',
+        // Matches the Spanish move: name the section, not its audience.
+        title: 'English exercises',
         description:
           'Short technical English exercises, organized by level and language point, with instant feedback.',
-        intro:
-          'Pick your level and practise with short exercises built for a developer’s day to day.',
+        // Mirrors the new Spanish subtitle's brevity and meaning — one line, an
+        // instruction, no trailing period, and the same two choices ("nivel y
+        // tema"). "practise" is this repo's spelling throughout.
+        intro: 'Pick a level and a topic to practise day to day',
         chooseLevel: 'Choose your level',
         focusesTitle: 'Language points',
         exerciseOne: 'exercise',
@@ -307,6 +334,8 @@ export const UI_LABELS = {
         emptyLevel: 'No exercises at this level yet.',
         emptyPair:
           'No exercises for this language point at this level yet. Try another one.',
+        searchFocus: 'Search language points',
+        focusesNoResults: 'No language points match that search.',
       },
       levels: {
         A1: 'Beginner',

@@ -221,6 +221,8 @@ describe('UI_LABELS — english section keys', () => {
         'empty',
         'emptyLevel',
         'emptyPair',
+        'searchFocus',
+        'focusesNoResults',
       ] as const) {
         expect(typeof section[key]).toBe('string');
         expect(section[key].length).toBeGreaterThan(0);
@@ -281,6 +283,43 @@ describe('UI_LABELS — english section keys', () => {
     expect(UI_LABELS.es.english.levels.A1).not.toBe(
       UI_LABELS.en.english.levels.A1,
     );
+  });
+
+  it('ships the maintainer-authored entry headline and subtitle, verbatim', () => {
+    // These two strings were dictated by the maintainer word for word. They are
+    // asserted EXACTLY rather than loosely, because the point of the change was
+    // the wording itself: "Ejercicios de inglés" says what the section IS, while
+    // the old headline described an audience, and the shorter subtitle stops the
+    // screen opening with a sentence nobody reads.
+    expect(UI_LABELS.es.english.section.title).toBe('Ejercicios de inglés');
+    expect(UI_LABELS.es.english.section.intro).toBe(
+      'Elige un nivel y tema para practicar en el día a día',
+    );
+  });
+
+  it('retires the old entry headline and subtitle from english.section', () => {
+    // Scoped to `english.section` on purpose. "Inglés para programadores" is
+    // ALSO the homepage row heading (`home.rows.english`), which is a different
+    // surface the maintainer did not ask to change — a repo-wide assertion here
+    // would fail for the wrong reason and push an unrequested edit.
+    const section = UI_LABELS.es.english.section;
+    expect(Object.values(section)).not.toContain('Inglés para programadores');
+    expect(Object.values(section)).not.toContain(
+      'Elegir un nivel y practicar con ejercicios cortos pensados para el día a día de un desarrollador.',
+    );
+    expect(Object.values(UI_LABELS.en.english.section)).not.toContain(
+      'English for developers',
+    );
+  });
+
+  it('accepts the maintainer subtitle under the neutral-Spanish guard', () => {
+    // "Elige" is TUTEO, not a regional form. The standing rule bans REGIONAL
+    // (Rioplatense) verbs — `Elegí` — not the second person as a category, so
+    // the guard must let this through. Asserted directly so that if someone
+    // later tightens the detector into a blanket second-person ban, THIS test
+    // names the copy it would break instead of the failure surfacing as a
+    // mysterious red in the site-wide sweep.
+    expect(voseoWords(UI_LABELS.es.english.section.intro)).toEqual([]);
   });
 
   it('no longer ships the "coming soon" teaser now that the section exists', () => {
