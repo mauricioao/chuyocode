@@ -2,93 +2,89 @@
 
 # ChuyoCode
 
-### Free tech knowledge, in your own language
+### A developer toolbox, in your own language
 
-_Books and articles about technology, open to everyone — no paywalls, no subscriptions._
+_Books, news and English practice — open to everyone, no paywalls, no subscriptions._
 
 [![Status](https://img.shields.io/badge/status-in_development-orange)]()
 [![Stack](https://img.shields.io/badge/Astro_5-SSR-FACC15)]()
-[![Tests](https://img.shields.io/badge/tests-249_passing-16a34a)]()
-[![Content](https://img.shields.io/badge/routes-ES_·_EN-b45309)]()
+[![Tests](https://img.shields.io/badge/tests-691_passing-16a34a)]()
+[![Routes](https://img.shields.io/badge/routes-ES_·_EN-b45309)]()
 
 </div>
 
 ---
 
-## 🌎 Purpose
+## 🌎 What this is
 
-**ChuyoCode** exists to put quality technical information in front of people who are usually served last: Spanish-speaking developers, students, and tech-curious readers across Latin America.
+**ChuyoCode** is a multi-purpose platform gathering the tools a developer actually reaches for, built for the people usually served last: Spanish-speaking developers, students and self-taught learners across Latin America.
 
-The premise is simple:
+> Good technical resources should not be gated behind a price tag or a language barrier.
 
-> Good technical content should not be gated behind a price tag or a language barrier.
+Not another blog. Each section is a **working tool** — a catalog you can read from, a newsroom, an exercise engine that grades you. More tools follow the same rule: free, in Spanish, and actually usable.
 
-- **Free by default.** Books and articles are published to be read, not to be sold.
-- **Spanish first.** Content is written and edited in Spanish, with English routes available in the platform.
-- **Made to be read.** An image-first, streaming-style catalog instead of another wall of gray text.
+### What is open today
 
-### Who is it for?
-
-Developers, students, and self-taught learners who want solid material in their own language — with a reading experience that respects their time and their eyes.
-
-### Content lines
-
-| Line | Status | Description |
+| Tool | Status | What it does |
 | :-- | :-- | :-- |
 | 📚 **Books** | ✅ Live | Catalog with detail pages and downloadable material |
-| 📝 **Articles** | ✅ Live | Paginated news and long-form reading |
-| 🎓 **Courses** | 🔜 Planned | Nav entry exists, section not built yet |
-| 🇬🇧 **English App** | 🔮 Roadmap | Nav entry exists, section not built yet |
+| 📝 **News** | ✅ Live | Paginated articles and long-form reading |
+| 🇬🇧 **English** | ✅ Live | Interactive exercises by CEFR level and language point, graded instantly |
+| 🎓 **Courses** | 🔜 Planned | Learning paths with progress tracking |
 
 ---
 
-## ✨ The Experience
+## ✨ The experience
 
-- **Image-first discovery** — a full-bleed auto-rotating hero, editorial rows, a ranked rail, and a spotlight block, all built from a single `MediaCard` primitive.
-- **High-contrast identity** — yellow accent (`#FACC15`) over pure black (`#000000`), Raleway Variable for display headings, system sans for body text.
-- **Dark by design** — the site is dark-only. No toggle, no persistence, no flash: `class="dark"` ships in the HTML.
-- **Bilingual routing** — `/es/` and `/en/` route trees with a full label dictionary; the visible chrome is Spanish-only today.
-- **Blazing fast** — server-side rendering, real HTML, JavaScript only where it is unavoidable.
-- **Accessible** — keyboard navigation, skip-to-content, and `prefers-reduced-motion` support in every animation.
+- **Image-first discovery** — full-bleed rotating hero, editorial rows, a ranked rail and a spotlight block, all composed from a single `MediaCard` primitive.
+- **Practice, not reading** — the English section grades in the browser: pick an answer, get told immediately, keep the ones you got right when you retry.
+- **High-contrast identity** — amber (`#FACC15`) on pure black, Raleway Variable for headings.
+- **Dark by design** — no toggle, no persistence, no flash: `class="dark"` ships in the HTML.
+- **Bilingual routing** — `/es/` and `/en/` route trees with a full label dictionary.
+- **Fast** — server-rendered HTML, CDN-cached at the edge, JavaScript only where an interaction genuinely exists.
+- **Accessible** — keyboard navigation, skip-to-content, and real focus management (correcting an exercise moves the cursor to the first wrong answer).
 
 ---
 
 ## 🏗️ Architecture
 
-ChuyoCode is not a prototype: it's a **tested, server-first foundation** built to grow without rewrites. 249 tests across 23 files guard the contracts described below.
+A tested, server-first foundation built to grow without rewrites. **691 tests** guard the contracts below.
 
-### Design principles
+### Principles
 
-- **Server-first.** Pages are assembled on the server and delivered as ready-to-paint HTML. Maximum speed, maximum SEO.
-- **Islands, not a SPA.** React is loaded in exactly **one** component (`AdModal`). Everything else is static Astro output plus a couple of dependency-free inline scripts.
-- **Fail-safe reads, fail-closed access.** CMS failures log and return empty collections so the page still renders; access checks deny by default on any doubt.
-- **Zero secrets in code.** Every key lives in environment variables and is validated at startup by `src/lib/env.ts`.
-- **Server-only boundaries.** Sanity, Supabase, and signing secrets are never imported into client bundles.
+- **Server-first.** Pages are assembled on the server and delivered as ready-to-paint HTML.
+- **Islands, not a SPA.** React mounts only where a real interaction exists — the ad modal, the carousels, the exercise player. Everything else is static Astro.
+- **Storage follows the shape of the data.** Sanity for editorial content (rich text, bilingual bodies, its own image pipeline). Postgres for application data (uniform rows, indexed filters, audit columns). They are not interchangeable.
+- **Decision logic lives in pure modules**, never in templates. `.astro` files compose; they do not decide. That is what makes the logic testable without a DOM.
+- **Fail-safe reads, fail-closed access.** A CMS or database outage degrades a section instead of 500-ing; access checks deny by default on any doubt.
+- **Zero secrets in code.** Every key is an environment variable, validated at startup by `src/lib/env.ts`, and never imported into a client bundle.
 
-### Request flow
+### The exercise engine
 
+The most structurally interesting part of the codebase. **One table, one payload shape, one grading function** — for every kind of exercise.
+
+```jsonc
+{
+  "pools": { "verbs": [{ "id": "v_sits", "text": "sits" }] },
+  "slots": [{
+    "id": "s1",
+    "label": "The cat ___ on the mat.",
+    "input": "choice",          // the mechanic
+    "pool": "verbs",
+    "answer": ["v_sits"]        // a stable ID, never a position
+  }]
+}
 ```
-                     ┌────────────────────────────────────────┐
-   Request           │           Astro (Server / SSR)          │
-   /es/libros/slug   │                                        │
-        ─────────►   │  1. middleware.ts → validate locale     │
-                     │  2. lib/sanity.ts → GROQ + LRU cache ──►│──► Sanity (Headless CMS)
-                     │  3. lib/image.ts  → srcset + LQIP       │
-                     │  4. lib/pass.ts   → verify access cookie │
-                     │                                        │
-                     │  5. Render decision:                    │
-                     │     ✅ valid pass  → full content       │
-                     │     ❌ no pass     → access island      │──► React (AdModal)
-                     └────────────────────────────────────────┘
-                                       │
-                              POST /api/validar-anuncio
-                                       │
-                     ┌────────────────────────────────────────┐
-                     │  Validates a ±5 min timestamp window    │
-                     │  Mints an HMAC-SHA256 signed cookie     │
-                     │  Grants 24h of access, then expires     │
-                     └────────────────────────────────────────┘
-```
+
+Three ideas carry the whole design:
+
+- **Two orthogonal axes.** `media` is the *stimulus* (audio ⇒ listening); `slot.input` is the *mechanic*. Listening is therefore **not an exercise type** — it is audio layered on any mechanic. Treating it as a type would duplicate every mechanic inside it.
+- **Dispatch is per slot, not per exercise.** One exercise can mix a dropdown and a typed blank, and an unrecognised mechanic degrades that slot alone instead of breaking the page.
+- **Stable IDs, never positions.** Options are shuffled on render. A positional answer key would mark a correct learner wrong, silently — the worst failure this kind of system can produce.
+
+Adding a mechanic is **one renderer file plus one registry line**: no migration, no table change, no change to grading, no change to existing rows. A slot that could not be *rendered* is never *graded*.
+
+Full contract: [`docs/exercise-model.md`](docs/exercise-model.md). Authoring guide: [`docs/exercise-authoring-brief.md`](docs/exercise-authoring-brief.md).
 
 ### Access control
 
@@ -101,176 +97,113 @@ Premium material is gated by a self-contained, stateless token — no session ta
 | Signature | HMAC-SHA256 under `AD_HMAC_SECRET`, compared with `timingSafeEqual` |
 | Lifetime | 24 hours from issuance |
 | Replay window | The issuing endpoint rejects timestamps outside ±5 minutes |
-| Failure mode | **Fail-closed** — missing, malformed, unsigned, or expired ⇒ access denied |
-
-The secret never leaves the server. Verification is pure computation, so it costs nothing at request time.
+| Failure mode | **Fail-closed** — missing, malformed, unsigned or expired ⇒ denied |
 
 ### Tech stack
 
-Every choice answers a goal, not a trend:
-
 | Layer | Technology | Why |
 | :-- | :-- | :-- |
-| **Core** | [Astro 5](https://astro.build) (SSR + Node adapter) | Content-shaped framework; SSR lets us decide what to serve before the first byte |
-| **Interactivity** | [React 19](https://react.dev) (one island) | JS ships only where a real interaction exists |
-| **CMS** | [Sanity](https://sanity.io) + `@sanity/image-url` | Editors publish without touching code; responsive images and LQIP for free |
-| **Data** | [Supabase](https://supabase.com) | Postgres ready for future accounts, analytics, and progress tracking |
-| **Styling** | [Tailwind CSS 3](https://tailwindcss.com) | Design tokens in one file, zero CSS drift |
-| **Typography** | [Raleway Variable](https://fonts.google.com/specimen/Raleway) (self-hosted) | Sharp editorial headings, no Google Fonts CDN request |
-| **Testing** | [Vitest](https://vitest.dev) + [Playwright](https://playwright.dev) | 249 unit tests + e2e coverage of the hero carousel |
+| **Core** | [Astro 5](https://astro.build) (SSR, Netlify adapter) | Content-shaped framework; SSR decides what to serve before the first byte |
+| **Interactivity** | [React 19](https://react.dev) islands | JS ships only where a real interaction exists |
+| **Styling** | [Tailwind 4](https://tailwindcss.com) (CSS-first) + [shadcn/ui](https://ui.shadcn.com) | Design tokens in one file, zero CSS drift |
+| **CMS** | [Sanity](https://sanity.io) | Editors publish books and news without touching code |
+| **Database** | [Supabase](https://supabase.com) | Exercises, download counters, audit columns |
+| **Caching** | Netlify CDN | Responses cached at the edge; in-process caches do not survive serverless |
+| **Testing** | [Vitest](https://vitest.dev) + [Playwright](https://playwright.dev) | 691 unit tests + e2e coverage |
 
-### Project structure
+### Layout
 
 ```
-chuyocode/
-├── public/                       # Static assets (logo.svg pending)
-├── schemas/                      # Sanity content models
-│   ├── book.ts
-│   ├── news.ts
-│   └── index.ts
-├── scripts/
-│   └── seed-discovery.mjs        # Seeds demo content into the dataset
-├── src/
-│   ├── components/
-│   │   ├── islands/
-│   │   │   └── AdModal.tsx       # The ONLY React island
-│   │   ├── layout/               # Header, Footer
-│   │   └── ui/
-│   │       ├── HeroCarousel.astro    # Full-bleed auto-rotating billboard
-│   │       ├── EditorialRow.astro    # Scroll-snap row with arrows + edge fades
-│   │       ├── RankedRow.astro       # Numbered "top N" rail
-│   │       ├── Spotlight.astro       # Single featured item, editorial layout
-│   │       ├── MediaCard.astro       # Poster card — primitive of every row
-│   │       ├── BookCard.astro        # Catalog card (libros)
-│   │       ├── NewsCard.astro        # Article card (noticias)
-│   │       ├── Button.astro
-│   │       ├── ContentRow.astro      # legacy, superseded by EditorialRow
-│   │       └── AndeanPattern.astro   # legacy, no longer mounted
-│   ├── layouts/
-│   │   └── BaseLayout.astro      # Global shell: SEO, dark class, skip-link
-│   ├── lib/                      # Business logic (server-only)
-│   │   ├── sanity.ts             #   CMS client + 60s LRU cache + GROQ queries
-│   │   ├── image.ts              #   Responsive srcset + LQIP blur-up
-│   │   ├── supabase.ts           #   Anon + lazy service-role clients
-│   │   ├── pass.ts               #   Access cookie: HMAC-signed, fail-closed
-│   │   ├── i18n.ts               #   Locales, resolution, and UI label dictionary
-│   │   ├── env.ts                #   Env validation at startup
-│   │   └── reveal.ts             #   Scroll reveals (IntersectionObserver)
-│   ├── middleware.ts             # Locale validation + redirects
-│   ├── pages/
-│   │   ├── index.astro           # 302 → /es/
-│   │   ├── 404.astro
-│   │   ├── [lang]/
-│   │   │   ├── index.astro       # Discovery home
-│   │   │   ├── libros/           # Catalog + gated detail page
-│   │   │   ├── noticias/         # Paginated list + article page
-│   │   │   └── legal/            # Terms and privacy
-│   │   └── api/
-│   │       └── validar-anuncio.ts    # Issues the 24h access cookie
-│   └── styles/                   # fonts.css + global.css
-├── tests/
-│   └── e2e/hero-carousel.spec.ts
-├── astro.config.mjs
-├── tailwind.config.cjs           # Yellow/black tokens + elevation scale
-├── vitest.config.ts
-├── playwright.config.ts
-└── sanity.config.ts              # Studio configuration
+src/
+  components/
+    islands/            # React — mounted only for real interaction
+      ExerciseIsland    #   grades answers in the browser, stateless
+      mechanics/        #   one renderer per mechanic + the registry
+      AdModal, HeroCarouselIsland, SpotlightCarouselIsland
+    ui/                 # shadcn primitives + presentational Astro components
+    layout/             # Header, Footer
+  lib/                  # server-only business logic, all unit-tested
+    sanity.ts           #   CMS client + GROQ queries
+    exercises.ts        #   Supabase reads, fail-safe
+    exerciseGrading.ts  #   the single grading function
+    exerciseTaxonomy.ts #   the closed vocabularies (levels, focuses, topics)
+    pass.ts             #   access cookie: HMAC-signed, fail-closed
+    cache.ts            #   CDN cache policies
+    i18n.ts  env.ts  image.ts  neutralSpanish.ts
+  pages/[lang]/         # libros/ · noticias/ · ingles/ · legal/
+  pages/api/            # validar-anuncio · descargar/[slug]
+schemas/                # Sanity models (book, news)
+supabase/
+  migrations/           # schema
+  seeds/                # exercise content
+docs/                   # exercise-model.md · exercise-authoring-brief.md
 ```
 
 Unit tests live **next to the code they cover** (`pass.ts` ↔ `pass.test.ts`), not in a mirrored tree.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting started
 
-### Requirements
-
-- **Node.js 20+** (`engines.node: ">=20"`; developed on v22 LTS)
-- **pnpm 9+** via Corepack (`packageManager: pnpm@9.15.9`)
-
-### Installation
+**Requirements:** Node.js 20+ · pnpm 9+ via Corepack
 
 ```bash
-# 1. Clone
 git clone git@github.com:mauricioao/chuyocode.git
 cd chuyocode
-
-# 2. Dependencies
-corepack enable
-pnpm install
-
-# 3. Environment variables
+corepack enable && pnpm install
 cp .env.example .env
 ```
 
-Fill in `.env`:
-
 | Variable | Required | Purpose |
 | :-- | :-- | :-- |
-| `SANITY_PROJECT_ID` | ✅ | CMS project |
-| `SANITY_DATASET` | ✅ | CMS dataset |
-| `SUPABASE_URL` | ✅ | Database endpoint |
-| `SUPABASE_ANON_KEY` | ✅ | Public client key |
-| `SUPABASE_SERVICE_ROLE_KEY` | ⬜ | Server-only privileged client |
+| `SANITY_PROJECT_ID` · `SANITY_DATASET` | ✅ | CMS |
+| `SUPABASE_URL` · `SUPABASE_ANON_KEY` | ✅ | Database |
+| `SUPABASE_SERVICE_ROLE_KEY` | ⬜ | Download counter, exercise reads |
 | `AD_HMAC_SECRET` | ⬜ | Signs the access cookie (required for gated content) |
 
-> **Generate `AD_HMAC_SECRET`:**
-> ```bash
-> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-> ```
-> Use **the same value** across every environment: it signs and verifies the access cookies.
+> Generate the secret with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and use **the same value** in every environment — it signs and verifies the cookies.
 
-Missing required variables throw a `MissingEnvError` at startup — by design. Fail loudly at boot, never silently at runtime.
+Missing required variables throw at startup, by design: fail loudly at boot, never silently at runtime.
 
 ### Commands
 
 | Command | What it does |
 | :-- | :-- |
 | `pnpm dev` | Dev server at `http://localhost:4321` |
-| `pnpm build` | Production build |
-| `pnpm preview` | Preview the build |
-| `pnpm test` | Full test suite, single run (Vitest) |
-| `pnpm test:watch` | Test suite in watch mode |
-| `pnpm test:e2e` | End-to-end tests (Playwright) |
+| `pnpm build` · `pnpm preview` | Production build / preview |
+| `pnpm test` · `pnpm test:watch` | Vitest |
+| `pnpm test:e2e` | Playwright |
 | `pnpm typecheck` | `astro check` |
-| `pnpm sanity:start` | Sanity Studio locally |
-| `pnpm sanity:deploy` | Publish the Studio |
+| `pnpm sanity:start` · `pnpm sanity:deploy` | Sanity Studio |
 
-### Content management
+### Content
 
-Books and articles are managed from **Sanity Studio** — run `pnpm sanity:start` for the local Studio, or `pnpm sanity:deploy` to publish the hosted one.
-
-Create a document, fill the fields in Spanish and English, hit **Publish**. The site picks it up on the next request (content is cached for 60 seconds).
-
-To load demo content into an empty dataset:
-
-```bash
-node scripts/seed-discovery.mjs
-```
+- **Books and news** → Sanity Studio. Create, fill the Spanish and English fields, publish.
+- **Exercises** → SQL. Run the migrations in `supabase/migrations/`, then the seeds in `supabase/seeds/`. To write new ones, follow [`docs/exercise-authoring-brief.md`](docs/exercise-authoring-brief.md) — it is self-contained.
 
 ---
 
-## 🔐 Security & Secrets
+## 🔐 Security
 
-- `.env` is **never** committed (it is in `.gitignore`). `.env.example` is the template.
-- `SUPABASE_SERVICE_ROLE_KEY` and `AD_HMAC_SECRET` are **server-only** and never reach the browser.
-- The service-role client is created lazily, so a missing key only fails when privileged access is actually attempted.
+- `.env` is never committed; `.env.example` is the template.
+- `SUPABASE_SERVICE_ROLE_KEY` and `AD_HMAC_SECRET` are server-only and never reach the browser.
+- The service-role client is created lazily, so a missing key fails only when privileged access is actually attempted.
 - Signature comparison uses `timingSafeEqual` — no early-exit leaks.
-- When cloning onto a new machine, recreate `.env` by hand and keep the secrets in a password manager.
+- CDN caching is **opt-in per route**: Netlify does not cache function responses by default, and gated routes explicitly emit `no-store`.
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] Base platform: books, articles, bilingual routing, access control
-- [x] Discovery redesign: image-first home, hero carousel, editorial rows, ranked rail
-- [ ] Ship `public/logo.svg` (the masthead currently points at a missing asset)
-- [ ] **Courses**: learning paths with progress tracking (`/[lang]/cursos` not built yet)
-- [ ] **English App**: dedicated section for developers (`/[lang]/ingles` not built yet)
-- [ ] Restore a visible language switcher for the existing `/en/` routes
+- [x] Base platform: books, news, bilingual routing, access control
+- [x] Image-first discovery home
+- [x] English section: exercise engine, three mechanics, CEFR levels and language points
+- [ ] Grow the exercise catalog beyond A1–A2
+- [ ] Search across exercises (Postgres full-text)
+- [ ] More mechanics: drag-and-drop, matching, listening with audio
+- [ ] **Courses** — learning paths with progress tracking
+- [ ] Visible language switcher for the existing `/en/` routes
 - [ ] Advanced SEO: sitemap, structured data, dynamic OG images
-- [ ] Usage analytics and admin dashboard
-- [ ] Remove legacy `ContentRow` / `AndeanPattern` components
 
 ---
 
