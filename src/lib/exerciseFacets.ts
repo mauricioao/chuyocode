@@ -1,12 +1,16 @@
 /**
- * Level x topic facets for the English section entry screen.
+ * Level x focus facets for the English section entry screen.
  *
  * Zero I/O, zero dependencies — this is the whole decision layer behind
  * `/[lang]/ingles`, deliberately kept pure so it can be proven without a
- * browser. AstroContainer cannot render the React islands the layout mounts
- * (see `src/pages/[lang]/libros/libros.test.ts:47`), so the page tests can only
- * assert status codes; anything that could silently be WRONG has to be a
- * function here instead of a expression inside the template.
+ * browser. The entry page mounts no island, but anything that could silently be
+ * WRONG still belongs in a function here rather than in a template expression.
+ *
+ * THE AXIS IS `focus`, NOT `topic`. Someone opening this section is choosing a
+ * LANGUAGE POINT to practise — present simple, conditionals, phrasal verbs —
+ * not a setting for it. `topic` is secondary context, it is nullable, and a
+ * nullable column cannot key a navigation grid without inventing a "no topic"
+ * bucket nobody would ever click. See `supabase/migrations/0004_exercises_focus.sql`.
  *
  * The contract that matters: a facet is only ever offered when it can actually
  * be opened. Every count is derived from rows that survived the taxonomy
@@ -14,52 +18,57 @@
  */
 import {
   LEVELS,
-  TOPICS,
+  FOCUSES,
   isLevel,
-  isTopic,
+  isFocus,
   type Level,
-  type Topic,
+  type Focus,
 } from './exerciseTaxonomy';
 
 /**
  * One published row as the flat facets query returns it. Only the two columns
- * the entry screen groups by — the payload is never read here.
+ * the entry screen groups by — neither the payload nor the topic is read here.
  */
 export interface FacetRow {
   level: string;
-  topic: string;
+  focus: string;
 }
 
-/** A topic that has at least one exercise at some level. */
-export interface TopicFacet {
-  topic: Topic;
+/** A language point that has at least one exercise at some level. */
+export interface FocusFacet {
+  focus: Focus;
   count: number;
 }
 
 /**
- * A CEFR level and what is published under it. `topics` holds ONLY topics with
- * content, so an empty array means "nothing at this level yet" — never
- * "eight topics, all of them empty".
+ * A CEFR level and what is published under it. `focuses` holds ONLY language
+ * points with content, so an empty array means "nothing at this level yet" —
+ * never "thirty-three focuses, all of them empty".
  */
 export interface LevelFacet {
   level: Level;
   count: number;
-  topics: TopicFacet[];
+  focuses: FocusFacet[];
 }
 
 /**
- * Group published `(level, topic)` rows into a facet per CEFR level.
+ * Group published `(level, focus)` rows into a facet per CEFR level.
  *
  * All six levels are ALWAYS returned, in taxonomy order, because the chip row is
  * a fixed piece of navigation: it must not reflow as content is published. A
  * level with nothing simply reports `count: 0`, which the caller renders as a
  * dimmed, unclickable chip.
  *
- * Rows whose `level` or `topic` fell out of the taxonomy are DISCARDED — from
- * the topic list and from the level count alike. A retired value orphans its
+ * The SAME focus at two levels is counted under each level independently, which
+ * is the whole reason `FOCUSES` is a flat list: `present-simple` is an A1
+ * introduction and a B1 contrast, and both are real.
+ *
+ * Rows whose `level` or `focus` fell out of the taxonomy are DISCARDED — from
+ * the focus list and from the level count alike. A retired value orphans its
  * published rows (docs/exercise-model.md, "Changing a taxonomy value"); showing
  * it would offer a chip that routes to a guaranteed 404, and counting it would
- * put a number on the screen the grid cannot honour.
+ * put a number on the screen the grid cannot honour. The `'unassigned'`
+ * sentinel written by the migration is discarded by exactly this rule.
  *
  * Null-safe: the query is fail-safe and hands back `[]` on any Supabase error,
  * so this must degrade to "six empty levels" rather than throw mid-render.
@@ -67,7 +76,7 @@ export interface LevelFacet {
 export function buildFacets(
   rows: readonly FacetRow[] | null | undefined,
 ): LevelFacet[] {
-  const tally = {} as Record<Level, Partial<Record<Topic, number>>>;
+  const tally = {} as Record<Level, Partial<Record<Focus, number>>>;
   for (const level of LEVELS) {
     tally[level] = {};
   }
@@ -75,25 +84,25 @@ export function buildFacets(
   if (Array.isArray(rows)) {
     for (const raw of rows) {
       if (typeof raw !== 'object' || raw === null) continue;
-      const { level, topic } = raw as { level?: unknown; topic?: unknown };
+      const { level, focus } = raw as { level?: unknown; focus?: unknown };
       // Both guards, every row: one bad column is enough to make the pair
       // unroutable, and an unroutable pair must not reach the screen.
-      if (!isLevel(level) || !isTopic(topic)) continue;
-      tally[level][topic] = (tally[level][topic] ?? 0) + 1;
+      if (!isLevel(level) || !isFocus(focus)) continue;
+      tally[level][focus] = (tally[level][focus] ?? 0) + 1;
     }
   }
 
   return LEVELS.map((level) => {
-    const byTopic = tally[level];
-    const topics: TopicFacet[] = [];
-    for (const topic of TOPICS) {
-      const count = byTopic[topic] ?? 0;
-      if (count > 0) topics.push({ topic, count });
+    const byFocus = tally[level];
+    const focuses: FocusFacet[] = [];
+    for (const focus of FOCUSES) {
+      const count = byFocus[focus] ?? 0;
+      if (count > 0) focuses.push({ focus, count });
     }
-    // Summed from the surviving topics rather than counted separately, so the
+    // Summed from the surviving focuses rather than counted separately, so the
     // level total and the chip numbers cannot drift apart by construction.
-    const count = topics.reduce((total, entry) => total + entry.count, 0);
-    return { level, count, topics };
+    const count = focuses.reduce((total, entry) => total + entry.count, 0);
+    return { level, count, focuses };
   });
 }
 
@@ -126,10 +135,10 @@ export function resolveLevel(
   return isLevel(param) ? param : pickDefaultLevel(facets);
 }
 
-/** The topics published at `level`, or `[]` when that level is empty. */
-export function topicsForLevel(
+/** The language points published at `level`, or `[]` when that level is empty. */
+export function focusesForLevel(
   facets: readonly LevelFacet[],
   level: Level,
-): TopicFacet[] {
-  return facets.find((facet) => facet.level === level)?.topics ?? [];
+): FocusFacet[] {
+  return facets.find((facet) => facet.level === level)?.focuses ?? [];
 }

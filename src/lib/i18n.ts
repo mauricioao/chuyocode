@@ -165,7 +165,7 @@ export const UI_LABELS = {
     },
     english: {
       // Copy for the section entry route `/[lang]/ingles` and the
-      // `[level]/[topic]` listing. The old "coming soon" teaser lived here and
+      // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
       // was removed when the section actually shipped.
       // REGISTER: neutral Spanish, impersonal. Instructions use the infinitive
       // ("Revisar las respuestas") and descriptions avoid the second person
@@ -174,11 +174,15 @@ export const UI_LABELS = {
       section: {
         title: 'Inglés para programadores',
         description:
-          'Ejercicios cortos de inglés técnico, organizados por nivel y por tema, con corrección al instante.',
+          'Ejercicios cortos de inglés técnico, organizados por nivel y por punto gramatical, con corrección al instante.',
         intro:
           'Elegir un nivel y practicar con ejercicios cortos pensados para el día a día de un desarrollador.',
         chooseLevel: 'Elegir nivel',
-        topicsTitle: 'Temas',
+        // The grid under a level lists LANGUAGE POINTS, not settings: someone
+        // arriving here wants "conditionals", not "something about airports".
+        // This is chrome and localizes; the point NAMES themselves are exercise
+        // data and stay English (`FOCUS_LABELS`).
+        focusesTitle: 'Puntos gramaticales',
         // Rendered as "1 ejercicio" / "7 ejercicios" — the number is prepended
         // by the page, so these stay plain nouns.
         exerciseOne: 'ejercicio',
@@ -187,7 +191,7 @@ export const UI_LABELS = {
           'Todavía no hay ejercicios publicados. Estamos preparando los primeros y van a estar disponibles en unos días.',
         emptyLevel: 'Todavía no hay ejercicios para este nivel.',
         emptyPair:
-          'Todavía no hay ejercicios para este tema en este nivel. Probar con otro tema.',
+          'Todavía no hay ejercicios de este punto gramatical en este nivel. Probar con otro punto.',
       },
       // Display names for the CEFR levels. The URL keeps the bare code; the
       // screen adds what it means, because "B1" alone tells a beginner nothing.
@@ -199,12 +203,13 @@ export const UI_LABELS = {
         C1: 'Avanzado',
         C2: 'Dominio',
       },
-      // NO `topics` / `skills` maps here, deliberately. Those are exercise
-      // DATA, not chrome: their display labels are English in every locale and
-      // live in `exerciseTaxonomy` (`TOPIC_LABELS` / `SKILL_LABELS`), beside
-      // the slugs they name. See docs/exercise-model.md, "Authoring rules".
+      // NO `focuses` / `topics` / `skills` maps here, deliberately. Those are
+      // exercise DATA, not chrome: their display labels are English in every
+      // locale and live in `exerciseTaxonomy` (`FOCUS_LABELS` / `TOPIC_LABELS` /
+      // `SKILL_LABELS`), beside the slugs they name. See
+      // docs/exercise-model.md, "Authoring rules".
       //
-      // Copy for the exercise detail route `/[lang]/ingles/[level]/[topic]/[slug]`.
+      // Copy for the exercise detail route `/[lang]/ingles/[level]/[focus]/[slug]`.
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
@@ -290,18 +295,18 @@ export const UI_LABELS = {
       section: {
         title: 'English for developers',
         description:
-          'Short technical English exercises, organized by level and topic, with instant feedback.',
+          'Short technical English exercises, organized by level and language point, with instant feedback.',
         intro:
           'Pick your level and practise with short exercises built for a developer’s day to day.',
         chooseLevel: 'Choose your level',
-        topicsTitle: 'Topics',
+        focusesTitle: 'Language points',
         exerciseOne: 'exercise',
         exerciseMany: 'exercises',
         empty:
           'No exercises published yet. We are preparing the first ones — check back in a few days.',
         emptyLevel: 'No exercises at this level yet.',
         emptyPair:
-          'No exercises for this topic at this level yet. Try another topic.',
+          'No exercises for this language point at this level yet. Try another one.',
       },
       levels: {
         A1: 'Beginner',
@@ -311,7 +316,7 @@ export const UI_LABELS = {
         C1: 'Advanced',
         C2: 'Proficient',
       },
-      // No `topics` / `skills` here either — see the `es` block above.
+      // No `focuses` / `topics` / `skills` here either — see the `es` block.
       exercise: {
         back: 'Back to English',
         level: 'Level',

@@ -4,19 +4,24 @@
  *
  * Extracted from two call sites that had converged on the same shape and were
  * one edit away from drifting apart again:
- *   - `[lang]/ingles/[level]/[topic]/[slug].astro` — the related-exercise grid
- *   - `[lang]/ingles/[level]/[topic]/index.astro`  — the listing
+ *   - `[lang]/ingles/[level]/[focus]/[slug].astro` — the related-exercise grid
+ *   - `[lang]/ingles/[level]/[focus]/index.astro`  — the listing
  *
  * They had already drifted once: the detail header rendered a raw `code-review`
  * slug while the cards one click away showed `Code review`.
  *
+ * THE FOCUS LEADS. The language point — present simple, phrasal verbs — is what
+ * the learner is choosing, so it is the heading. Level, skill and context are
+ * badges beneath it: they QUALIFY the exercise, they do not identify it.
+ *
  * WHAT THE TWO CALL SITES ACTUALLY DISAGREE ON — and why `title` is a prop
- * rather than something this component derives. Related cards CROSS topics, so
- * the topic is the single thing that tells them apart and it leads. Listing
- * cards are all inside one topic, which is already the page's own `<h1>`, so
- * leading with it would print the same word on every card; they lead with the
- * humanized slug instead. Deriving the title here would have to re-learn which
- * page it is on, which is exactly the coupling the extraction is meant to kill.
+ * rather than something this component derives. Related cards CROSS language
+ * points, so the focus is the single thing that tells them apart and it leads.
+ * Listing cards are all inside one focus, which is already the page's own
+ * `<h1>`, so leading with it would print the same words on every card; they
+ * lead with the humanized slug instead. Deriving the title here would have to
+ * re-learn which page it is on, which is exactly the coupling the extraction is
+ * meant to kill.
  *
  * ZERO JAVASCRIPT. This is a link with an inline SVG. No React component enters
  * the tree, which is also what keeps the component renderable by
@@ -29,7 +34,12 @@
  * chrome and localizes, so the caller composes that string and passes it.
  */
 import { badgeVariants } from '@components/ui/badge';
-import { SKILL_LABELS, type Skill } from '@lib/exerciseTaxonomy';
+import {
+  SKILL_LABELS,
+  TOPIC_LABELS,
+  type Skill,
+  type Topic,
+} from '@lib/exerciseTaxonomy';
 import { skillIconPaths } from '@lib/skillIcons';
 
 interface Props {
@@ -45,11 +55,23 @@ interface Props {
    * page header, so a badge would repeat identical text on every row.
    */
   levelBadge?: string;
+  /**
+   * The vocabulary CONTEXT, or `null`/omitted when the exercise has none.
+   *
+   * `null` is an ORDINARY value, not missing data: a pure grammar drill has no
+   * natural setting, and the column is nullable precisely so an author is not
+   * pushed into inventing one. It renders NO badge — never an empty pill.
+   *
+   * Derived to a label here rather than passed as a string, for the same
+   * structural reason as `skill`: this component takes no `lang` prop, so a
+   * call site cannot hand it a translated topic even by mistake.
+   */
+  topic?: Topic | null;
   /** Heading size. The related grid runs two columns and steps up to `xl`. */
   titleSize?: 'lg' | 'xl';
 }
 
-const { href, title, skill, levelBadge, titleSize = 'lg' } = Astro.props;
+const { href, title, skill, levelBadge, topic, titleSize = 'lg' } = Astro.props;
 
 /**
  * Full class names in a lookup, never a template string. Tailwind scans source
@@ -81,6 +103,26 @@ const iconPaths = skillIconPaths(skill);
  * database.
  */
 const skillLabel = SKILL_LABELS[skill] ?? skill;
+
+/**
+ * The context badge's text, or `null` for no badge at all.
+ *
+ * TWO different absences collapse here on purpose, because the card's correct
+ * response to both is identical — draw nothing:
+ *   - `null`/omitted: the exercise genuinely has no setting.
+ *   - `''`: a column that is empty rather than NULL, which would otherwise
+ *     render a bordered pill containing nothing.
+ *
+ * A topic OUTSIDE the taxonomy is the third case and is treated differently: it
+ * falls back to the raw slug, exactly like `skillLabel` above. That is not
+ * symmetry for its own sake — it is the same bug, and this component already
+ * shipped it once. `TOPIC_LABELS[topic]` for an unmapped value is `undefined`,
+ * and Astro renders `undefined` as NOTHING (measured — not as the literal word
+ * "undefined"), so the failure looks like a deliberate empty chip rather than
+ * like something broken. The slug is an honest English value and names what
+ * actually came out of the database.
+ */
+const topicLabel = topic ? (TOPIC_LABELS[topic] ?? topic) : null;
 ---
 
 {/* `h-full` matters in the related GRID, where a short card must stretch to
@@ -135,5 +177,16 @@ const skillLabel = SKILL_LABELS[skill] ?? skill;
       }
       {skillLabel}
     </span>
+
+    {/* LAST, and only when there is one. The badges narrow from placement to
+        detail: which level, how you answer, and finally what it is about.
+        Rendering an empty pill for an exercise with no context would invent a
+        fourth, meaningless state — the whole reason `topic` was made nullable
+        was so "no setting" could be said plainly instead of faked. */}
+    {
+      topicLabel && (
+        <span class={badgeVariants({ variant: 'outline' })}>{topicLabel}</span>
+      )
+    }
   </div>
 </a>

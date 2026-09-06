@@ -19,12 +19,12 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { TOPIC_LABELS } from '@lib/exerciseTaxonomy';
+import { FOCUS_LABELS } from '@lib/exerciseTaxonomy';
 import { getExerciseFacetRows } from '@lib/exercises';
 import {
   buildFacets,
   resolveLevel,
-  topicsForLevel,
+  focusesForLevel,
 } from '@lib/exerciseFacets';
 
 // Prefer the middleware-validated lang; fall back to the route param and 404 if
@@ -39,7 +39,7 @@ if (!lang) {
 
 const t = UI_LABELS[lang].english;
 
-// ONE flat read of every published `(level, topic)` pair, grouped in memory.
+// ONE flat read of every published `(level, focus)` pair, grouped in memory.
 // Fail-safe by contract: `[]` on any error, which is why an outage lands on the
 // "nothing published yet" panel instead of a 500 in the site chrome.
 const facets = buildFacets(await getExerciseFacetRows());
@@ -48,7 +48,10 @@ const facets = buildFacets(await getExerciseFacetRows());
 // grid answers "nothing here yet" instead of silently swapping in another level
 // and contradicting the URL they are looking at. Only a non-level falls back.
 const activeLevel = resolveLevel(facets, Astro.url.searchParams.get('nivel'));
-const topics = topicsForLevel(facets, activeLevel);
+// The grid under a level lists LANGUAGE POINTS. Someone opening this section is
+// deciding what to practise — conditionals, phrasal verbs — not what setting to
+// read about; `topic` is context that qualifies an exercise, never the way in.
+const focuses = focusesForLevel(facets, activeLevel);
 const totalPublished = facets.reduce((total, facet) => total + facet.count, 0);
 
 /**
@@ -128,34 +131,34 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
     </nav>
 
     <section class="flex flex-col gap-4">
-      <h2 class="text-xl font-semibold text-zinc-100">{t.section.topicsTitle}</h2>
+      <h2 class="text-xl font-semibold text-zinc-100">{t.section.focusesTitle}</h2>
 
       {
         /* Three DIFFERENT empty states, because they are three different facts
            and one generic message would be a lie in two of them:
              1. nothing published anywhere (also what an outage degrades to)
-             2. this level has no topics yet, but other levels do
+             2. this level has no language points yet, but other levels do
              3. handled by the listing route: a real pair with nothing in it */
         totalPublished === 0 ? (
           <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
             {t.section.empty}
           </p>
-        ) : topics.length === 0 ? (
+        ) : focuses.length === 0 ? (
           <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
             {t.section.emptyLevel}
           </p>
         ) : (
           <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {topics.map((entry) => (
+            {focuses.map((entry) => (
               <li>
                 <a
-                  href={`/${lang}/ingles/${activeLevel}/${entry.topic}`}
+                  href={`/${lang}/ingles/${activeLevel}/${entry.focus}`}
                   class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
                 >
-                  {/* English in every locale: the topic is exercise data, not
+                  {/* English in every locale: the focus is exercise data, not
                       chrome (docs/exercise-model.md, "Authoring rules"). */}
                   <span class="text-lg font-semibold text-zinc-100">
-                    {TOPIC_LABELS[entry.topic]}
+                    {FOCUS_LABELS[entry.focus]}
                   </span>
                   <span class="text-sm text-zinc-400 tabular-nums">
                     {countLabel(entry.count)}

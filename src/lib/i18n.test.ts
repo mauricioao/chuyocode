@@ -5,6 +5,8 @@ import {
   SKILL_LABELS,
   TOPICS,
   TOPIC_LABELS,
+  FOCUSES,
+  FOCUS_LABELS,
 } from './exerciseTaxonomy';
 import { findVoseo, voseoWords } from './neutralSpanish';
 import {
@@ -213,7 +215,7 @@ describe('UI_LABELS — english section keys', () => {
         'description',
         'intro',
         'chooseLevel',
-        'topicsTitle',
+        'focusesTitle',
         'exerciseOne',
         'exerciseMany',
         'empty',
@@ -238,13 +240,18 @@ describe('UI_LABELS — english section keys', () => {
     }
   });
 
-  it('ships NO per-locale topic or skill label map', () => {
-    // `topic` and `skill` are exercise DATA, not chrome. Their display labels
-    // are English in every locale and live in `exerciseTaxonomy`, beside the
-    // slugs they name. A per-locale map here is exactly the mistake this test
-    // exists to stop coming back — it made the same row read "Escritura" under
-    // /es and "Writing" under /en while the exercise itself stayed English.
+  it('ships NO per-locale focus, topic or skill label map', () => {
+    // `focus`, `topic` and `skill` are exercise DATA, not chrome. Their display
+    // labels are English in every locale and live in `exerciseTaxonomy`, beside
+    // the slugs they name. A per-locale map here is exactly the mistake this
+    // test exists to stop coming back — it made the same row read "Escritura"
+    // under /es and "Writing" under /en while the exercise stayed English.
+    //
+    // `focus` is the strongest case of the three: it names the grammar the
+    // learner came here to acquire, so translating it removes the one term
+    // they need to be able to recognize in English.
     for (const l of locales) {
+      expect('focuses' in UI_LABELS[l].english).toBe(false);
       expect('topics' in UI_LABELS[l].english).toBe(false);
       expect('skills' in UI_LABELS[l].english).toBe(false);
     }
@@ -255,6 +262,7 @@ describe('UI_LABELS — english section keys', () => {
     // `english` may equal a taxonomy label, which would mean a copy of the map
     // was smuggled back under a different key.
     const taxonomyLabels = new Set<string>([
+      ...FOCUSES.map((focus) => FOCUS_LABELS[focus]),
       ...TOPICS.map((topic) => TOPIC_LABELS[topic]),
       ...SKILLS.map((skill) => SKILL_LABELS[skill]),
     ]);

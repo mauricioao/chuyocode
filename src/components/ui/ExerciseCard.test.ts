@@ -22,8 +22,9 @@ import ExerciseCard from './ExerciseCard.astro';
 import { SKILL_ICON_PATHS } from '@lib/skillIcons';
 
 const baseProps = {
-  href: '/es/ingles/B1/job-interview/greetings',
-  title: 'Job interview',
+  href: '/es/ingles/B1/phrasal-verbs/greetings',
+  // The FOCUS leads: the language point is what the learner is choosing.
+  title: 'Phrasal verbs',
   skill: 'reading',
 };
 
@@ -35,7 +36,7 @@ async function render(props: Record<string, unknown>): Promise<string> {
 describe('ExerciseCard.astro — link and title', () => {
   it('renders the whole card as one anchor to href', async () => {
     const html = await render(baseProps);
-    expect(html).toContain('href="/es/ingles/B1/job-interview/greetings"');
+    expect(html).toContain('href="/es/ingles/B1/phrasal-verbs/greetings"');
     // One anchor = one tab stop for keyboard users.
     expect(html.match(/<a\b/g)).toHaveLength(1);
   });
@@ -82,6 +83,100 @@ describe('ExerciseCard.astro — level badge', () => {
     expect(html).not.toContain('Level');
     // `secondary` is the level badge's variant and nothing else here uses it.
     expect(html).not.toContain('bg-secondary');
+  });
+});
+
+describe('ExerciseCard.astro — the focus leads', () => {
+  it('renders the language point as the card heading', async () => {
+    // `focus` is the primary axis: "what am I practising?" is the question the
+    // card has to answer at a glance. The context, when there is one, is a
+    // badge underneath — it qualifies the exercise, it does not identify it.
+    const html = await render({ ...baseProps, title: 'Second conditional' });
+
+    expect(html).toContain('Second conditional');
+  });
+
+  it('puts the heading BEFORE the badge row in the markup', async () => {
+    // Reading order is the accessible order: a screen reader and a sighted
+    // scanner must both meet the language point first.
+    const html = await render({
+      ...baseProps,
+      levelBadge: 'Nivel B1',
+      topic: 'code-review',
+    });
+
+    expect(html.indexOf('Phrasal verbs')).toBeLessThan(html.indexOf('Nivel B1'));
+    expect(html.indexOf('Phrasal verbs')).toBeLessThan(html.indexOf('Code review'));
+  });
+});
+
+describe('ExerciseCard.astro — optional topic context', () => {
+  it('renders the English topic label when the exercise has a context', async () => {
+    const html = await render({ ...baseProps, topic: 'code-review' });
+
+    expect(html).toContain('Code review');
+  });
+
+  it('derives the topic label from the slug, never from a lang prop', async () => {
+    // Same structural rule as the skill label: the component takes no `lang`,
+    // so a call site cannot pass a translated topic even by mistake.
+    const html = await render({ ...baseProps, topic: 'job-interview' });
+
+    expect(html).toContain('Job interview');
+    for (const spanish of ['Entrevista', 'Revisión de código', 'Comida']) {
+      expect(html).not.toContain(spanish);
+    }
+  });
+
+  it('renders NO topic badge at all when the topic is null', async () => {
+    // A null topic is ORDINARY, not missing data: a pure grammar drill has no
+    // natural setting. `0004_exercises_focus.sql` made the column nullable for
+    // exactly this case.
+    const html = await render({ ...baseProps, topic: null });
+
+    expect(html).not.toContain('Code review');
+    // Exactly ONE badge — the skill — and no stray empty pill beside it.
+    expect(html.match(/<span[^>]*inline-flex/g)).toHaveLength(1);
+  });
+
+  it('renders NO topic badge when the prop is omitted entirely', async () => {
+    const html = await render(baseProps);
+
+    expect(html.match(/<span[^>]*inline-flex/g)).toHaveLength(1);
+  });
+
+  it('never renders an EMPTY badge for a topic outside the taxonomy', async () => {
+    // THE bug this repo already shipped once, in this very component:
+    // `SKILL_LABELS[skill]` produced a bordered pill with nothing inside it.
+    // Astro renders `undefined` as nothing at all, so the failure looks
+    // deliberate rather than broken. An unknown topic must show the raw slug,
+    // which is at least an honest English value, or show nothing.
+    const html = await render({ ...baseProps, topic: 'space-travel' });
+
+    expect(html).not.toMatch(/<span[^>]*inline-flex[^>]*>\s*<\/span>/);
+    expect(html).not.toContain('undefined');
+    expect(html).toContain('space-travel');
+  });
+
+  it('renders an empty-string topic as no badge, not as a blank pill', async () => {
+    const html = await render({ ...baseProps, topic: '' });
+
+    expect(html.match(/<span[^>]*inline-flex/g)).toHaveLength(1);
+  });
+
+  it('shows level, skill and topic together when all three are present', async () => {
+    const html = await render({
+      ...baseProps,
+      levelBadge: 'Nivel B1',
+      topic: 'code-review',
+    });
+
+    expect(html).toContain('Nivel B1');
+    expect(html).toContain('Reading');
+    expect(html).toContain('Code review');
+    // Level, then skill, then context — narrowing from placement to detail.
+    expect(html.indexOf('Nivel B1')).toBeLessThan(html.indexOf('Reading'));
+    expect(html.indexOf('Reading')).toBeLessThan(html.indexOf('Code review'));
   });
 });
 
@@ -161,7 +256,7 @@ describe('ExerciseCard.astro — an unknown skill degrades, never breaks', () =>
   it('still renders the card, the link and the title', async () => {
     // A bad skill must degrade one badge, never cost the user the whole card.
     const html = await render({ ...baseProps, skill: 'speaking' });
-    expect(html).toContain('href="/es/ingles/B1/job-interview/greetings"');
-    expect(html).toContain('Job interview');
+    expect(html).toContain('href="/es/ingles/B1/phrasal-verbs/greetings"');
+    expect(html).toContain('Phrasal verbs');
   });
 });

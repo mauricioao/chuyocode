@@ -1,15 +1,15 @@
 ---
 /**
- * Exercise detail page — `/[lang]/ingles/[level]/[topic]/[slug]` (SSR).
+ * Exercise detail page — `/[lang]/ingles/[level]/[focus]/[slug]` (SSR).
  *
  * The deep link IS the identity: teachers share individual exercises, so the
- * URL must stay stable and readable. `slug` is unique per `(level, topic)`, not
+ * URL must stay stable and readable. `slug` is unique per `(level, focus)`, not
  * globally (docs/exercise-model.md, "Deep links").
  *
  * Everything that is not a real exercise collapses to a 404, mirroring the book
  * detail route:
  *   - unsupported `lang`            -> 404 (before any query)
- *   - `level`/`topic` outside the taxonomy -> 404 (before any query, via the guards)
+ *   - `level`/`focus` outside the taxonomy -> 404 (before any query, via the guards)
  *   - no published row, a Supabase outage, or a payload that drifted out of
  *     shape -> `getExerciseBySlug` fail-safes to `null` -> 404
  *
@@ -23,7 +23,8 @@ import { Badge } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   isLevel,
-  isTopic,
+  isFocus,
+  FOCUS_LABELS,
   SKILL_LABELS,
   TOPIC_LABELS,
 } from '@lib/exerciseTaxonomy';
@@ -38,15 +39,15 @@ if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const { level, topic, slug } = Astro.params;
+const { level, focus, slug } = Astro.params;
 
 // Taxonomy guards run BEFORE the query: a segment that is not in the closed
 // vocabulary can never match a row, so a round trip would only make the 404 slower.
-if (!isLevel(level) || !isTopic(topic) || !slug) {
+if (!isLevel(level) || !isFocus(focus) || !slug) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const exercise = await getExerciseBySlug(level, topic, slug);
+const exercise = await getExerciseBySlug(level, focus, slug);
 
 if (!exercise) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
@@ -79,13 +80,25 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
       &larr; {t.back}
     </a>
 
-    {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the topic and
-        skill labels are exercise data and stay English in every locale
-        (docs/exercise-model.md, "Authoring rules"). */}
+    {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus,
+        topic and skill labels are exercise data and stay English in every
+        locale (docs/exercise-model.md, "Authoring rules").
+
+        The FOCUS sits first among the data badges: it is what the exercise
+        teaches. The topic is LAST and conditional — it qualifies the exercise
+        rather than naming it, and an exercise with no setting must render no
+        badge at all instead of an empty pill. */}
     <header class="flex flex-wrap items-center gap-3">
       <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
-      <Badge variant="outline">{TOPIC_LABELS[exercise.topic]}</Badge>
+      <Badge variant="outline">{FOCUS_LABELS[exercise.focus]}</Badge>
       <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
+      {
+        exercise.topic && (
+          <Badge variant="outline">
+            {TOPIC_LABELS[exercise.topic] ?? exercise.topic}
+          </Badge>
+        )
+      }
     </header>
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
@@ -100,10 +113,11 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
     {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
     <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
 
-    {/* Related by LEVEL, not topic: someone browsing a level is roughly at that
-        level, and narrowing to the current topic would hide most of what they
-        can do. Rendered only when there IS something — an empty "related"
-        section is noise, not information. Zero JavaScript: these are links. */}
+    {/* Related by LEVEL, not focus: someone browsing a level is roughly at that
+        level, and narrowing to the current language point would hide most of
+        what they can do — and would empty this block for every focus holding a
+        single exercise. Rendered only when there IS something; an empty
+        "related" section is noise, not information. Zero JS: these are links. */}
     {
       related.length > 0 && (
         <section class="flex flex-col gap-4 border-t border-border pt-8">
@@ -112,24 +126,27 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
           </h2>
 
           <ul class="grid gap-4 sm:grid-cols-2">
-            {/* THE TOPIC LEADS. The card used to open with the first slot's
+            {/* THE FOCUS LEADS. The card used to open with the first slot's
                 prompt — "___ rename this variable, please?" — which spoils the
                 exercise before the learner opens it and says nothing about what
-                the card is for. The topic is what the card is ABOUT, and it is
-                what distinguishes these cards from each other: they cross
-                topics, unlike the listing's. English in every locale, like
-                every other taxonomy label.
+                the card is for. It then led with the TOPIC, which named the
+                setting rather than the lesson. The language point is what the
+                card is actually offering, and it is what distinguishes these
+                cards from each other: they cross focuses, unlike the listing's.
+                English in every locale, like every other taxonomy label.
 
                 "Nivel"/"Level" is chrome and localizes, so it is composed HERE
-                and passed in; the skill label is exercise data and the card
-                derives it itself. */}
+                and passed in; the skill and topic labels are exercise data and
+                the card derives them itself. `topic` may be null — the card
+                renders no badge for it rather than an empty one. */}
             {related.map((item) => (
               <li>
                 <ExerciseCard
-                  href={`/${lang}/ingles/${item.level}/${item.topic}/${item.slug}`}
-                  title={TOPIC_LABELS[item.topic]}
+                  href={`/${lang}/ingles/${item.level}/${item.focus}/${item.slug}`}
+                  title={FOCUS_LABELS[item.focus]}
                   skill={item.skill}
                   levelBadge={`${t.level} ${item.level}`}
+                  topic={item.topic}
                   titleSize="xl"
                 />
               </li>

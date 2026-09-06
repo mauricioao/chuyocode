@@ -1,9 +1,14 @@
 ---
 /**
- * Exercise listing — `/[lang]/ingles/[level]/[topic]` (SSR).
+ * Exercise listing — `/[lang]/ingles/[level]/[focus]` (SSR).
  *
  * The screen between the entry chips and a single exercise. It answers one
- * question: what can I practise at this level, on this topic?
+ * question: what can I practise at this level, on this LANGUAGE POINT?
+ *
+ * The page is scoped to one focus, so what distinguishes the cards on it is the
+ * slug, the skill and — when there is one — the vocabulary CONTEXT the exercise
+ * is set in. That context is optional by design: a pure grammar drill has none,
+ * and the card then shows nothing rather than an empty badge.
  *
  * The status codes carry a real distinction:
  *   - a segment OUTSIDE the closed taxonomy is a URL that can never exist -> 404
@@ -19,7 +24,7 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { isLevel, isTopic, TOPIC_LABELS } from '@lib/exerciseTaxonomy';
+import { isLevel, isFocus, FOCUS_LABELS } from '@lib/exerciseTaxonomy';
 import { getPublishedExercises } from '@lib/exercises';
 import { humanizeSlug } from '@lib/exerciseCopy';
 
@@ -31,21 +36,24 @@ if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const { level, topic } = Astro.params;
+const { level, focus } = Astro.params;
 
 // Taxonomy guards run BEFORE the query, mirroring the detail route: an unknown
 // segment cannot match a row, so spending a round trip on it only makes the 404
 // slower. This is also what keeps the 404/200 split above meaningful.
-if (!isLevel(level) || !isTopic(topic)) {
+//
+// `isFocus` also rejects every OLD topic slug, so a link shared before the axis
+// moved lands on a 404 rather than quietly resolving to the wrong screen.
+if (!isLevel(level) || !isFocus(focus)) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const exercises = await getPublishedExercises(level, topic);
+const exercises = await getPublishedExercises(level, focus);
 
 const t = UI_LABELS[lang].english;
-// English in every locale: the topic is exercise data, not chrome
+// English in every locale: the focus is exercise data, not chrome
 // (docs/exercise-model.md, "Authoring rules").
-const topicName = TOPIC_LABELS[topic];
+const focusName = FOCUS_LABELS[focus];
 // Back to the entry screen ON THE LEVEL THE USER CAME FROM. Dropping `?nivel=`
 // would silently return them to the default level and lose their place.
 const backHref = `/${lang}/ingles?nivel=${level}`;
@@ -53,7 +61,7 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
 
 <BaseLayout
   lang={lang}
-  title={`${topicName} · ${level}`}
+  title={`${focusName} · ${level}`}
   description={t.section.description}
 >
   <section class="reveal mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:py-12">
@@ -66,7 +74,7 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
 
     <header class="flex flex-col gap-3">
       <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-        {topicName}
+        {focusName}
       </h1>
       <div class="flex flex-wrap items-center gap-2">
         <span class={badgeVariants({ variant: 'secondary' })}>
@@ -96,22 +104,25 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
         <ul class="flex flex-col gap-4">
           {/* The SLUG, not the prompt. These cards had the same problem as the
               related-exercise cards: opening with the first slot's label gives
-              the exercise away before the learner starts it. The topic cannot
+              the exercise away before the learner starts it. The FOCUS cannot
               lead here — it is the page's own <h1> and would repeat on every
               card — so the slug does, which is English, permanent and
               deliberately readable.
 
               NO `levelBadge`: every exercise on this page shares the level with
               the header above, so a level badge would print the same text on
-              every row. The skill is the only attribute that VARIES inside one
-              level+topic pair, which is what makes the cards distinguishable at
-              a glance — and the card derives that label itself, in English. */}
+              every row. Skill and CONTEXT are what vary inside one
+              (level, focus) pair — the same grammar is practised in several
+              settings, and some rows have no setting at all — which is what
+              makes these cards distinguishable at a glance. Both labels are
+              derived by the card itself, in English. */}
           {exercises.map((exercise) => (
             <li>
               <ExerciseCard
-                href={`/${lang}/ingles/${level}/${topic}/${exercise.slug}`}
+                href={`/${lang}/ingles/${level}/${focus}/${exercise.slug}`}
                 title={humanizeSlug(exercise.slug) || exercise.slug}
                 skill={exercise.skill}
+                topic={exercise.topic}
               />
             </li>
           ))}

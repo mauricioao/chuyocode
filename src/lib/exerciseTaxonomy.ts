@@ -2,7 +2,7 @@
  * Exercise taxonomy — the closed vocabularies of the English section.
  *
  * Zero I/O, zero dependencies. These are the values that appear in URLs
- * (`/[lang]/ingles/[level]/[topic]/[slug]`) and in the `exercises` table, so
+ * (`/[lang]/ingles/[level]/[focus]/[slug]`) and in the `exercises` table, so
  * they are effectively PERMANENT: renaming one orphans every published row that
  * references it (docs/exercise-model.md, "Changing a taxonomy value").
  *

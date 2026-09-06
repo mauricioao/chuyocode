@@ -5,6 +5,10 @@
  * every test here is the same: a Supabase problem must degrade to `null` (which
  * the route turns into a 404), never into a 500. Mirrors the mock-chain style
  * of downloads.test.ts.
+ *
+ * Every read is keyed on `(level, focus)` — the language point — because that
+ * is the primary axis and the table's unique key. `topic` is secondary context
+ * that rides along on the row and may be absent.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -45,7 +49,10 @@ const {
       return settled.then(onfulfilled, onrejected);
     },
   };
-  const eqMock = vi.fn(() => builder);
+  // Parameters are declared so the recorded call tuple is indexable: a test
+  // that asserts a column was NEVER filtered on has to read `call[0]`, and an
+  // untyped `vi.fn(() => …)` records a zero-length tuple.
+  const eqMock = vi.fn((_column: string, _value: unknown) => builder);
   const orderMock = vi.fn(() => builder);
   const limitMock = vi.fn((_count: number) => builder);
   builder.eq = eqMock;
@@ -85,12 +92,19 @@ import {
   type Exercise,
 } from './exercises';
 
-/** A published multiple-choice row exactly as Postgres returns it. */
+/**
+ * A published multiple-choice row exactly as Postgres returns it.
+ *
+ * `focus` and `slug` carry DIFFERENT values on purpose: they are separate
+ * filters on the same query, and reusing one string for both would let a
+ * mis-wired `.eq()` pass unnoticed.
+ */
 const ROW = {
   id: '11111111-1111-1111-1111-111111111111',
-  slug: 'present-simple',
+  slug: 'cat-on-the-mat',
   skill: 'writing',
   level: 'A1',
+  focus: 'present-simple',
   topic: 'daily-life',
   payload: {
     pools: {
@@ -117,37 +131,86 @@ describe('getExerciseBySlug', () => {
   it('returns the exercise with its parsed payload', async () => {
     maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
 
-    const exercise = await getExerciseBySlug('A1', 'daily-life', 'present-simple');
+    const exercise = await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
 
     expect(exercise).not.toBeNull();
-    expect(exercise?.slug).toBe('present-simple');
+    expect(exercise?.slug).toBe('cat-on-the-mat');
     expect(exercise?.level).toBe('A1');
+    expect(exercise?.focus).toBe('present-simple');
     expect(exercise?.payload.slots[0]?.answer).toEqual(['b']);
     expect(exercise?.payload.pools.opts).toHaveLength(2);
   });
 
-  it('queries the exercises table filtered by level, topic, slug and published', async () => {
+  it('queries the exercises table filtered by level, focus, slug and published', async () => {
     maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
 
-    await getExerciseBySlug('A1', 'daily-life', 'present-simple');
+    await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
 
     expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
-    expect(eqMock).toHaveBeenCalledWith('topic', 'daily-life');
-    expect(eqMock).toHaveBeenCalledWith('slug', 'present-simple');
+    expect(eqMock).toHaveBeenCalledWith('focus', 'present-simple');
+    expect(eqMock).toHaveBeenCalledWith('slug', 'cat-on-the-mat');
     // Unpublished drafts must never be reachable by deep link.
     expect(eqMock).toHaveBeenCalledWith('published', true);
+  });
+
+  it('never filters by topic — context is not an axis', async () => {
+    maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
+
+    await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
+
+    const filtered = eqMock.mock.calls.map((call) => call[0]);
+    expect(filtered).not.toContain('topic');
   });
 
   it('selects named columns rather than *, so the read stays explicit', async () => {
     maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
 
-    await getExerciseBySlug('A1', 'daily-life', 'present-simple');
+    await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
 
     const selected = String(selectMock.mock.calls[0]?.[0] ?? '');
     expect(selected).not.toBe('*');
     expect(selected).toContain('payload');
     expect(selected).toContain('slug');
+    expect(selected).toContain('focus');
+  });
+
+  it('carries the secondary topic through when the row has one', async () => {
+    maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
+
+    const exercise = await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
+
+    expect(exercise?.topic).toBe('daily-life');
+  });
+
+  it('reports a null topic as null — an absent context is ORDINARY', async () => {
+    // A pure grammar drill has no natural setting. The column was made nullable
+    // precisely so an author is not pushed into inventing one, so this is a
+    // normal row and not a data problem.
+    maybeSingleMock.mockResolvedValue({
+      data: { ...ROW, topic: null },
+      error: null,
+    });
+
+    const exercise = await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
+
+    expect(exercise).not.toBeNull();
+    expect(exercise?.topic).toBeNull();
+  });
+
+  it('collapses a topic outside the taxonomy to null rather than dropping the exercise', async () => {
+    // A retired context has no label to draw, which is the same instruction to
+    // the caller as no context at all. Losing the whole exercise over a
+    // secondary attribute would be wildly disproportionate.
+    maybeSingleMock.mockResolvedValue({
+      data: { ...ROW, topic: 'space-travel' },
+      error: null,
+    });
+
+    const exercise = await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
+
+    expect(exercise).not.toBeNull();
+    expect(exercise?.topic).toBeNull();
   });
 
   // Spec — Scenario: Availability derived free.
@@ -161,7 +224,7 @@ describe('getExerciseBySlug', () => {
       error: null,
     });
 
-    const exercise = await getExerciseBySlug('A1', 'daily-life', 'present-simple');
+    const exercise = await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
 
     expect(exercise?.hasAudio).toBe(true);
     expect(fromMock).toHaveBeenCalledTimes(1);
@@ -169,29 +232,29 @@ describe('getExerciseBySlug', () => {
 
   it('reports hasAudio false for a row with no media', async () => {
     maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
-    const exercise = await getExerciseBySlug('A1', 'daily-life', 'present-simple');
+    const exercise = await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
     expect(exercise?.hasAudio).toBe(false);
   });
 
   it('returns null when no published row matches', async () => {
     maybeSingleMock.mockResolvedValue({ data: null, error: null });
-    expect(await getExerciseBySlug('A1', 'daily-life', 'missing')).toBeNull();
+    expect(await getExerciseBySlug('A1', 'present-simple', 'missing')).toBeNull();
   });
 
   // Spec — Scenario: Supabase failure yields empty result.
   it('returns null (fail-safe) when Supabase reports an error', async () => {
     maybeSingleMock.mockResolvedValue({ data: null, error: { message: 'down' } });
-    expect(await getExerciseBySlug('A1', 'daily-life', 'present-simple')).toBeNull();
+    expect(await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat')).toBeNull();
   });
 
   it('returns null when the query throws instead of propagating', async () => {
     maybeSingleMock.mockRejectedValue(new Error('network'));
-    expect(await getExerciseBySlug('A1', 'daily-life', 'present-simple')).toBeNull();
+    expect(await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat')).toBeNull();
   });
 
   it('returns null when the service-role key is unconfigured', async () => {
     clientState.available = false;
-    expect(await getExerciseBySlug('A1', 'daily-life', 'present-simple')).toBeNull();
+    expect(await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat')).toBeNull();
     expect(fromMock).not.toHaveBeenCalled();
   });
 
@@ -200,32 +263,48 @@ describe('getExerciseBySlug', () => {
       data: { ...ROW, payload: { pools: {} } },
       error: null,
     });
-    expect(await getExerciseBySlug('A1', 'daily-life', 'present-simple')).toBeNull();
+    expect(await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat')).toBeNull();
   });
 
-  // Spec — Scenario: Invalid topic rejected.
-  it('rejects an unknown topic without touching Supabase', async () => {
-    expect(await getExerciseBySlug('A1', 'space-travel', 'present-simple')).toBeNull();
+  // Spec — Scenario: Invalid focus rejected.
+  it('rejects an unknown focus without touching Supabase', async () => {
+    expect(
+      await getExerciseBySlug('A1', 'subjunctive-mood', 'cat-on-the-mat'),
+    ).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects the migration sentinel without touching Supabase', async () => {
+    // `0004_exercises_focus.sql` parks unclassified rows under `unassigned` and
+    // unpublishes them; the deep link must not resolve even by accident.
+    expect(await getExerciseBySlug('A1', 'unassigned', 'cat-on-the-mat')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a topic slug used where a focus belongs', async () => {
+    // The two axes share a URL position with the old routes. A stale link
+    // carrying `travel` must 404, not silently resolve.
+    expect(await getExerciseBySlug('A1', 'travel', 'cat-on-the-mat')).toBeNull();
     expect(fromMock).not.toHaveBeenCalled();
   });
 
   it('rejects a level outside the CEFR scale without touching Supabase', async () => {
-    expect(await getExerciseBySlug('B3', 'daily-life', 'present-simple')).toBeNull();
+    expect(await getExerciseBySlug('B3', 'present-simple', 'cat-on-the-mat')).toBeNull();
     expect(fromMock).not.toHaveBeenCalled();
   });
 
   it('rejects an empty slug without touching Supabase', async () => {
-    expect(await getExerciseBySlug('A1', 'daily-life', '')).toBeNull();
+    expect(await getExerciseBySlug('A1', 'present-simple', '')).toBeNull();
     expect(fromMock).not.toHaveBeenCalled();
   });
 });
 
 describe('getExerciseFacetRows', () => {
-  it('returns the published level/topic pairs the entry screen groups by', async () => {
+  it('returns the published level/focus pairs the entry screen groups by', async () => {
     listResult.value = {
       data: [
-        { level: 'A1', topic: 'food' },
-        { level: 'B1', topic: 'travel' },
+        { level: 'A1', focus: 'articles' },
+        { level: 'B1', focus: 'phrasal-verbs' },
       ],
       error: null,
     };
@@ -233,8 +312,8 @@ describe('getExerciseFacetRows', () => {
     const rows = await getExerciseFacetRows();
 
     expect(rows).toEqual([
-      { level: 'A1', topic: 'food' },
-      { level: 'B1', topic: 'travel' },
+      { level: 'A1', focus: 'articles' },
+      { level: 'B1', focus: 'phrasal-verbs' },
     ]);
   });
 
@@ -243,8 +322,8 @@ describe('getExerciseFacetRows', () => {
   it('reads every level in ONE query, never one query per level', async () => {
     listResult.value = {
       data: [
-        { level: 'A1', topic: 'food' },
-        { level: 'C2', topic: 'code-review' },
+        { level: 'A1', focus: 'articles' },
+        { level: 'C2', focus: 'idioms' },
       ],
       error: null,
     };
@@ -256,14 +335,16 @@ describe('getExerciseFacetRows', () => {
     expect(selectMock).toHaveBeenCalledTimes(1);
   });
 
-  it('selects only level and topic, never the payload', async () => {
+  it('selects only level and focus — never the payload, never the topic', async () => {
     await getExerciseFacetRows();
 
     const selected = String(selectMock.mock.calls[0]?.[0] ?? '');
     expect(selected).toContain('level');
-    expect(selected).toContain('topic');
-    // Pulling every jsonb payload just to count rows would be wasteful.
+    expect(selected).toContain('focus');
+    // Pulling every jsonb payload just to count rows would be wasteful, and the
+    // topic is not an axis so it is not grouped on.
     expect(selected).not.toContain('payload');
+    expect(selected).not.toContain('topic');
   });
 
   it('counts only published rows, so drafts never inflate a chip', async () => {
@@ -300,51 +381,84 @@ describe('getExerciseFacetRows', () => {
 
   it('drops rows whose columns are not strings rather than shipping them onward', async () => {
     listResult.value = {
-      data: [{ level: 'A1', topic: 'food' }, { level: 7, topic: null }, null],
+      data: [{ level: 'A1', focus: 'articles' }, { level: 7, focus: null }, null],
       error: null,
     };
 
     // One well-formed pair survives; the junk beside it is discarded.
     expect(await getExerciseFacetRows()).toEqual([
-      { level: 'A1', topic: 'food' },
+      { level: 'A1', focus: 'articles' },
     ]);
   });
 });
 
 describe('getPublishedExercises', () => {
-  it('returns every published exercise for a level/topic pair', async () => {
+  it('returns every published exercise for a level/focus pair', async () => {
     listResult.value = {
-      data: [ROW, { ...ROW, id: 'other', slug: 'past-simple' }],
+      data: [ROW, { ...ROW, id: 'other', slug: 'she-works-here' }],
       error: null,
     };
 
-    const exercises = await getPublishedExercises('A1', 'daily-life');
+    const exercises = await getPublishedExercises('A1', 'present-simple');
 
     expect(exercises).toHaveLength(2);
     expect(exercises.map((e) => e.slug)).toEqual([
-      'present-simple',
-      'past-simple',
+      'cat-on-the-mat',
+      'she-works-here',
     ]);
     expect(exercises[0]?.payload.slots[0]?.answer).toEqual(['b']);
   });
 
-  it('filters by level, topic and published', async () => {
+  it('filters by level, focus and published', async () => {
     listResult.value = { data: [ROW], error: null };
 
-    await getPublishedExercises('A1', 'daily-life');
+    await getPublishedExercises('A1', 'present-simple');
 
     expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
-    expect(eqMock).toHaveBeenCalledWith('topic', 'daily-life');
+    expect(eqMock).toHaveBeenCalledWith('focus', 'present-simple');
     expect(eqMock).toHaveBeenCalledWith('published', true);
   });
 
   it('orders the listing deterministically so the grid does not reshuffle', async () => {
     listResult.value = { data: [ROW], error: null };
 
-    await getPublishedExercises('A1', 'daily-life');
+    await getPublishedExercises('A1', 'present-simple');
 
     expect(orderMock).toHaveBeenCalledWith('slug', { ascending: true });
+  });
+
+  it('carries a different context per row inside ONE language point', async () => {
+    // The point of keeping `topic` at all: the same grammar practised in
+    // several settings, plus rows with no setting whatsoever.
+    listResult.value = {
+      data: [
+        ROW,
+        { ...ROW, slug: 'at-the-desk', topic: 'code-review' },
+        { ...ROW, slug: 'plain-drill', topic: null },
+      ],
+      error: null,
+    };
+
+    const exercises = await getPublishedExercises('A1', 'present-simple');
+
+    expect(exercises.map((e) => e.topic)).toEqual([
+      'daily-life',
+      'code-review',
+      null,
+    ]);
+  });
+
+  it('keeps a row whose topic left the taxonomy, with no context to render', async () => {
+    listResult.value = {
+      data: [{ ...ROW, topic: 'space-travel' }],
+      error: null,
+    };
+
+    const exercises = await getPublishedExercises('A1', 'present-simple');
+
+    expect(exercises).toHaveLength(1);
+    expect(exercises[0]?.topic).toBeNull();
   });
 
   it('derives hasAudio per row from the payload already fetched', async () => {
@@ -361,7 +475,7 @@ describe('getPublishedExercises', () => {
       error: null,
     };
 
-    const exercises = await getPublishedExercises('A1', 'daily-life');
+    const exercises = await getPublishedExercises('A1', 'present-simple');
 
     expect(exercises[0]?.hasAudio).toBe(false);
     expect(exercises[1]?.hasAudio).toBe(true);
@@ -375,11 +489,11 @@ describe('getPublishedExercises', () => {
       error: null,
     };
 
-    const exercises = await getPublishedExercises('A1', 'daily-life');
+    const exercises = await getPublishedExercises('A1', 'present-simple');
 
     // One bad payload must not empty a page of otherwise valid exercises.
     expect(exercises).toHaveLength(1);
-    expect(exercises[0]?.slug).toBe('present-simple');
+    expect(exercises[0]?.slug).toBe('cat-on-the-mat');
   });
 
   it('returns an empty list for a valid pair with nothing published', async () => {
@@ -387,37 +501,42 @@ describe('getPublishedExercises', () => {
     // the intentional empty state, not a 404.
     listResult.value = { data: [], error: null };
 
-    expect(await getPublishedExercises('C2', 'code-review')).toEqual([]);
+    expect(await getPublishedExercises('C2', 'inversion')).toEqual([]);
     expect(fromMock).toHaveBeenCalledTimes(1);
   });
 
   it('fail-safes to an empty list when Supabase reports an error', async () => {
     listResult.value = { data: null, error: { message: 'down' } };
 
-    expect(await getPublishedExercises('A1', 'daily-life')).toEqual([]);
+    expect(await getPublishedExercises('A1', 'present-simple')).toEqual([]);
   });
 
   it('fail-safes to an empty list when the query throws', async () => {
     listResult.throws = new Error('network');
 
-    expect(await getPublishedExercises('A1', 'daily-life')).toEqual([]);
+    expect(await getPublishedExercises('A1', 'present-simple')).toEqual([]);
   });
 
   it('fail-safes to an empty list when the service-role key is unconfigured', async () => {
     clientState.available = false;
 
-    expect(await getPublishedExercises('A1', 'daily-life')).toEqual([]);
+    expect(await getPublishedExercises('A1', 'present-simple')).toEqual([]);
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  // Spec — Scenario: Invalid topic rejected.
-  it('rejects an unknown topic without touching Supabase', async () => {
-    expect(await getPublishedExercises('A1', 'space-travel')).toEqual([]);
+  // Spec — Scenario: Invalid focus rejected.
+  it('rejects an unknown focus without touching Supabase', async () => {
+    expect(await getPublishedExercises('A1', 'subjunctive-mood')).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a topic slug used where a focus belongs', async () => {
+    expect(await getPublishedExercises('A1', 'travel')).toEqual([]);
     expect(fromMock).not.toHaveBeenCalled();
   });
 
   it('rejects a level outside the CEFR scale without touching Supabase', async () => {
-    expect(await getPublishedExercises('B3', 'daily-life')).toEqual([]);
+    expect(await getPublishedExercises('B3', 'present-simple')).toEqual([]);
     expect(fromMock).not.toHaveBeenCalled();
   });
 });
@@ -430,60 +549,63 @@ describe('getRelatedExercises', () => {
     slug: ROW.slug,
     skill: 'writing',
     level: 'A1',
+    focus: 'present-simple',
     topic: 'daily-life',
     payload: ROW.payload as Exercise['payload'],
     hasAudio: false,
   };
 
-  /** A published row at the same level, in whatever topic. */
-  const rowAt = (slug: string, topic = 'travel', id = `id-${slug}`) => ({
+  /** A published row at the same level, in whatever language point. */
+  const rowAt = (slug: string, focus = 'articles', id = `id-${slug}`) => ({
     ...ROW,
     id,
     slug,
-    topic,
+    focus,
   });
 
-  it('offers other exercises at the SAME LEVEL, across topics', async () => {
+  it('offers other exercises at the SAME LEVEL, across language points', async () => {
     listResult.value = {
-      data: [rowAt('at-airport', 'travel'), rowAt('ordering', 'food')],
+      data: [rowAt('a-an-the', 'articles'), rowAt('two-cats', 'plurals')],
       error: null,
     };
 
     const related = await getRelatedExercises(current);
 
-    // Level is the axis, not topic: someone browsing A1 is roughly at A1, and
-    // restricting to the current topic would hide most of what they can do.
-    expect(related.map((e) => e.topic)).toEqual(['travel', 'food']);
+    // Level is the axis, not focus: someone browsing A1 is roughly at A1, and
+    // restricting to the current language point would hide most of what they
+    // can do and would empty the block for any focus holding one exercise.
+    expect(related.map((e) => e.focus)).toEqual(['articles', 'plurals']);
     expect(related.map((e) => e.level)).toEqual(['A1', 'A1']);
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
   });
 
   it('never lists the exercise the learner is already on', async () => {
     listResult.value = {
-      data: [rowAt('at-airport'), { ...ROW }, rowAt('ordering', 'food')],
+      data: [rowAt('a-an-the'), { ...ROW }, rowAt('two-cats', 'plurals')],
       error: null,
     };
 
     const related = await getRelatedExercises(current);
 
-    expect(related.map((e) => e.slug)).toEqual(['at-airport', 'ordering']);
+    expect(related.map((e) => e.slug)).toEqual(['a-an-the', 'two-cats']);
   });
 
-  it('excludes by (topic, slug) when the row carries no usable id', async () => {
-    // `slug` is unique per (level, topic), NOT per level, so slug alone cannot
-    // be the exclusion rule — two topics may legitimately share one.
+  it('excludes by (focus, slug) when the row carries no usable id', async () => {
+    // `slug` is unique per (level, focus), NOT per level, so slug alone cannot
+    // be the exclusion rule — two language points may legitimately share one.
+    // `topic` cannot serve here either: it is nullable and not in the key.
     listResult.value = {
       data: [
         { ...ROW, id: 7 },
-        rowAt('present-simple', 'travel'),
+        rowAt('cat-on-the-mat', 'articles'),
       ],
       error: null,
     };
 
     const related = await getRelatedExercises({ ...current, id: '' });
 
-    // The same slug under a DIFFERENT topic is a different exercise and stays.
-    expect(related.map((e) => e.topic)).toEqual(['travel']);
+    // The same slug under a DIFFERENT focus is a different exercise and stays.
+    expect(related.map((e) => e.focus)).toEqual(['articles']);
   });
 
   it('caps the list', async () => {
@@ -516,28 +638,48 @@ describe('getRelatedExercises', () => {
     expect(eqMock).toHaveBeenCalledWith('published', true);
   });
 
-  it('orders deterministically so the block does not reshuffle per render', async () => {
+  it('orders by (focus, slug) — the new unique key — so the block cannot reshuffle', async () => {
     listResult.value = { data: [rowAt('a')], error: null };
 
     await getRelatedExercises(current);
 
-    // `(level, topic, slug)` is the table's unique key, so at a FIXED level
-    // `(topic, slug)` has no ties: this is a total order, not merely a sort.
-    expect(orderMock).toHaveBeenNthCalledWith(1, 'topic', { ascending: true });
+    // `(level, focus, slug)` is the table's unique key, so at a FIXED level
+    // `(focus, slug)` has no ties: a total order, not merely a sort. Ordering
+    // by `topic` would no longer be total — it is nullable and non-unique — and
+    // the NULL rows would sort into an arbitrary block.
+    expect(orderMock).toHaveBeenNthCalledWith(1, 'focus', { ascending: true });
     expect(orderMock).toHaveBeenNthCalledWith(2, 'slug', { ascending: true });
+    expect(orderMock).not.toHaveBeenCalledWith('topic', { ascending: true });
   });
 
-  it('drops a row whose topic is outside the taxonomy', async () => {
+  it('drops a row whose focus is outside the taxonomy', async () => {
     listResult.value = {
-      data: [rowAt('a', 'space-travel'), rowAt('b', 'food')],
+      data: [rowAt('a', 'subjunctive-mood'), rowAt('b', 'plurals')],
       error: null,
     };
 
     const related = await getRelatedExercises(current);
 
-    // The card links to /[lang]/ingles/[level]/[topic]/[slug]; an unknown topic
+    // The card links to /[lang]/ingles/[level]/[focus]/[slug]; an unknown focus
     // would build a link the route 404s on.
-    expect(related.map((e) => e.topic)).toEqual(['food']);
+    expect(related.map((e) => e.focus)).toEqual(['plurals']);
+  });
+
+  it('keeps a row with no topic — the card simply shows no context badge', async () => {
+    // The opposite of the focus rule above, and deliberately so: `topic` is not
+    // in the link, so an absent or retired one costs a badge, never the card.
+    listResult.value = {
+      data: [
+        { ...rowAt('a', 'plurals'), topic: null },
+        { ...rowAt('b', 'articles'), topic: 'space-travel' },
+      ],
+      error: null,
+    };
+
+    const related = await getRelatedExercises(current);
+
+    expect(related).toHaveLength(2);
+    expect(related.map((e) => e.topic)).toEqual([null, null]);
   });
 
   it('drops a malformed row instead of losing the whole block to it', async () => {
