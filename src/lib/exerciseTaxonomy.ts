@@ -17,8 +17,78 @@ export const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 export type Level = (typeof LEVELS)[number];
 
 /**
- * Confirmed topic slugs. Half are everyday English, half are the workplace
+ * The LANGUAGE POINT an exercise practises — the section's PRIMARY axis.
+ *
+ * This is what a learner or a teacher searches for first: "I need conditionals",
+ * not "I need something set in an airport". {@link TOPICS} answers a different
+ * question — where the language happens — and is the SECONDARY axis
+ * (`supabase/migrations/0004_exercises_focus.sql` carries the full rationale).
+ *
+ * DELIBERATELY A FLAT LIST, NOT A MAP KEYED BY LEVEL. A focus is genuinely
+ * practised at more than one level: `present-simple` is an A1 introduction and
+ * again a B1 contrast against the present continuous; `modal-verbs` runs from
+ * A2 politeness to C1 hedging. The level lives on the ROW, where it can differ
+ * per exercise. A `focus -> level` map would make that ordinary case
+ * unrepresentable and would need editing every time a point is reused.
+ *
+ * The ORDER is roughly ascending difficulty — the CEFR bands the vocabulary was
+ * drawn from — because it is what the entry screen renders in. That is a
+ * DISPLAY convenience only; nothing reads a level out of a position here.
+ *
+ * Like every value in this file, these sit in URLs and in published rows, so
+ * they are permanent (docs/exercise-model.md, "Changing a taxonomy value").
+ */
+export const FOCUSES = [
+  // Roughly A1
+  'present-simple',
+  'verb-to-be',
+  'articles',
+  'plurals',
+  'possessives',
+  'prepositions',
+  'question-forms',
+  // Roughly A2
+  'present-continuous',
+  'past-simple',
+  'comparatives',
+  'quantifiers',
+  'future-forms',
+  'adverbs-of-frequency',
+  'modal-verbs',
+  // Roughly B1
+  'present-perfect',
+  'past-continuous',
+  'first-conditional',
+  'second-conditional',
+  'passive-voice',
+  'reported-speech',
+  'gerunds-infinitives',
+  'relative-clauses',
+  'phrasal-verbs',
+  // Roughly B2
+  'past-perfect',
+  'third-conditional',
+  'present-perfect-continuous',
+  'modals-of-deduction',
+  'linking-words',
+  // Roughly C1/C2
+  'inversion',
+  'cleft-sentences',
+  'unreal-past',
+  'collocations',
+  'idioms',
+] as const;
+
+/** Union of the supported language-point slugs. */
+export type Focus = (typeof FOCUSES)[number];
+
+/**
+ * Confirmed topic slugs — the CONTEXT a language point is practised in, not the
+ * subject of the exercise. Half are everyday English, half are the workplace
  * situations a developer actually lands in.
+ *
+ * SECONDARY to {@link FOCUSES}, and OPTIONAL on a row: a pure grammar drill has
+ * no natural setting, and forcing one would make authors invent fake contexts.
  */
 export const TOPICS = [
   'daily-life',
@@ -76,6 +146,51 @@ export const TOPIC_LABELS: Record<Topic, string> = {
 };
 
 /**
+ * Display labels for the language points. English in every locale, for exactly
+ * the same reasons as {@link TOPIC_LABELS} — and more strongly here, because a
+ * focus names the grammar the learner is here to acquire. Printing "Presente
+ * perfecto" over an English exercise translates the one term they need to be
+ * able to read in English.
+ *
+ * Sentence case, like the other two maps.
+ */
+export const FOCUS_LABELS: Record<Focus, string> = {
+  'present-simple': 'Present simple',
+  'verb-to-be': 'Verb to be',
+  articles: 'Articles',
+  plurals: 'Plurals',
+  possessives: 'Possessives',
+  prepositions: 'Prepositions',
+  'question-forms': 'Question forms',
+  'present-continuous': 'Present continuous',
+  'past-simple': 'Past simple',
+  comparatives: 'Comparatives',
+  quantifiers: 'Quantifiers',
+  'future-forms': 'Future forms',
+  'adverbs-of-frequency': 'Adverbs of frequency',
+  'modal-verbs': 'Modal verbs',
+  'present-perfect': 'Present perfect',
+  'past-continuous': 'Past continuous',
+  'first-conditional': 'First conditional',
+  'second-conditional': 'Second conditional',
+  'passive-voice': 'Passive voice',
+  'reported-speech': 'Reported speech',
+  'gerunds-infinitives': 'Gerunds and infinitives',
+  'relative-clauses': 'Relative clauses',
+  'phrasal-verbs': 'Phrasal verbs',
+  'past-perfect': 'Past perfect',
+  'third-conditional': 'Third conditional',
+  'present-perfect-continuous': 'Present perfect continuous',
+  'modals-of-deduction': 'Modals of deduction',
+  'linking-words': 'Linking words',
+  inversion: 'Inversion',
+  'cleft-sentences': 'Cleft sentences',
+  'unreal-past': 'Unreal past',
+  collocations: 'Collocations',
+  idioms: 'Idioms',
+};
+
+/**
  * Display labels for the skill filter. English in every locale, for the same
  * reason as {@link TOPIC_LABELS}.
  */
@@ -89,6 +204,20 @@ export const SKILL_LABELS: Record<Skill, string> = {
 export function isLevel(value: unknown): value is Level {
   return (
     typeof value === 'string' && (LEVELS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Type guard: is `value` a language point in the taxonomy?
+ *
+ * Also the reason `'unassigned'` was chosen as the sentinel in
+ * `0004_exercises_focus.sql`: a row the migration could not classify fails this
+ * guard, so it is discarded from the facets and 404s on the route instead of
+ * being filed under a real but wrong language point.
+ */
+export function isFocus(value: unknown): value is Focus {
+  return (
+    typeof value === 'string' && (FOCUSES as readonly string[]).includes(value)
   );
 }
 
