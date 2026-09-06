@@ -197,8 +197,31 @@ The full data contract lives in **`docs/exercise-model.md`**; that file is the
 source of truth. Summary of the load-bearing ideas:
 
 - **One table, one payload shape, one grading function.** `exercises` in Supabase:
-  columns for what you FILTER by (`level`, `topic`, `skill`, `published`, `slug`),
+  columns for what you FILTER by (`level`, `focus`, `skill`, `published`, `slug`),
   `payload jsonb` for what you RENDER.
+- **`focus` is the PRIMARY axis; `topic` is secondary context.** `focus` is the
+  LANGUAGE POINT (`present-simple`, `second-conditional`, `phrasal-verbs`) —
+  what the learner is practising. `topic` (`travel`, `food`, `code-review`) is
+  only WHERE the language happens, and was never the subject of an exercise.
+  Filing the section under `topic` answered "where does this happen?" while the
+  question actually being asked first is "what am I practising?".
+  - `topic` was KEPT, not dropped: "Present simple, in a food context" is more
+    useful than "Present simple" alone, and the setting is what distinguishes
+    several exercises on the same point. It is a badge now, not a filter.
+  - `topic` is **NULLABLE**: a pure grammar drill has no natural setting, and a
+    NOT NULL context column only makes authors invent fake ones. An absent topic
+    renders **no badge**, never an empty one — an empty chip looks deliberate.
+  - `FOCUSES` is a **flat list, NOT a map keyed by level.** `present-simple` is
+    an A1 introduction and a B1 contrast; the level lives on the ROW.
+  - The axis moved at ~5 published rows ON PURPOSE. `focus` is in the URL and in
+    the uniqueness key `(level, focus, slug)`, so the cost of this change is
+    proportional to the number of published deep links.
+  - `0004_exercises_focus.sql` adds the column **nullable → backfill → NOT NULL**,
+    never with a DEFAULT. A default survives as an authoring hazard: an INSERT
+    that forgot `focus` would succeed and file the exercise under a real but
+    wrong language point. Unclassifiable rows are parked unpublished under the
+    sentinel `'unassigned'`, which is deliberately OUTSIDE the taxonomy so every
+    guard discards it.
 - **Payload = `pools` / `slots` / `answer`.** A pool is a named, reusable set of
   items; a slot is a thing to answer and carries its own `answer` inline (a
   separate key map allowed orphaned keys — a silent bug class).
@@ -221,11 +244,19 @@ source of truth. Summary of the load-bearing ideas:
 - **Grading is stateless and client-side.** No accounts, no progress, no scores.
   The answer key ships to the browser and is readable in DevTools — accepted and
   documented; there is nothing to protect.
-- Routes: entry `/[lang]/ingles` (CEFR chips, level in `?nivel=`, zero JS),
-  listing `/[lang]/ingles/[level]/[topic]`, detail `…/[slug]`.
+- Routes: entry `/[lang]/ingles` (CEFR chips, level in `?nivel=`, zero JS; the
+  grid under a level lists LANGUAGE POINTS), listing
+  `/[lang]/ingles/[level]/[focus]`, detail `…/[slug]`.
 - **404 vs 200 is principled**: a segment outside the closed taxonomy can never
-  exist → 404. A valid `(level, topic)` pair with nothing published EXISTS and is
-  merely unstocked → 200 with an empty state.
+  exist → 404. A valid `(level, focus)` pair with nothing published EXISTS and is
+  merely unstocked → 200 with an empty state. `isFocus` also rejects every old
+  `topic` slug, so a link shared before the axis moved 404s loudly instead of
+  quietly resolving to the wrong screen.
+- **Related exercises are keyed on LEVEL** — unchanged by the axis move.
+  Narrowing to the current focus would empty the block for every language point
+  holding one exercise. Its `ORDER BY` did have to follow the new unique key
+  (`topic` → `focus`): a nullable, non-unique column is not a total order, and
+  the block would reshuffle between two SSR renders of the same URL.
 
 ---
 
@@ -244,13 +275,18 @@ source of truth. Summary of the load-bearing ideas:
 |---|---|
 | Code, identifiers, comments, commit messages | **English**, always |
 | Site chrome (nav, buttons, hints, empty states) | Localized `es` / `en` |
-| **Exercise taxonomy labels** (`topic`, `skill`) | **English in EVERY locale** |
+| **Exercise taxonomy labels** (`focus`, `topic`, `skill`) | **English in EVERY locale** |
 | Exercise content (prompts, options, blanks) | **English only**, never mirrored |
 
-- **Exercise taxonomy is DATA, not chrome.** `topic` and `skill` describe the
-  content, so they read "Code review" / "Writing" under `/es/` too. The DB always
-  stored English slugs; a translation map in the render layer was the mistake.
-  CEFR levels stay literal — only the surrounding word "Nivel"/"Level" is chrome.
+- **Exercise taxonomy is DATA, not chrome.** `focus`, `topic` and `skill`
+  describe the content, so they read "Present simple" / "Code review" /
+  "Writing" under `/es/` too. The DB always stored English slugs; a translation
+  map in the render layer was the mistake. CEFR levels stay literal — only the
+  surrounding word "Nivel"/"Level" is chrome.
+- **`focus` is the strongest case of the three**: it names the grammar the
+  learner came here to acquire, so translating it removes the one term they need
+  to be able to recognize in English. The grid HEADING ("Puntos gramaticales" /
+  "Language points") is chrome and localizes; the point NAMES do not.
 - **Spanish is NEUTRAL and IMPERSONAL. No regional forms, ever.** No voseo
   (`Elegí`, `Revisá`, `Aprendé`), no `vos` conjugations (`buscás`, `podés`).
   Register: **infinitive for instructions** ("Revisar las respuestas"), impersonal
