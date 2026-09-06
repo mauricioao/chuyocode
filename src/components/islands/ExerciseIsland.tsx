@@ -23,6 +23,13 @@ import {
   type Payload,
   type Slot,
 } from '@/lib/exercisePayload';
+import {
+  formatRemaining,
+  hasExpired,
+  shouldTick,
+  tick,
+  TICK_MS,
+} from '@/lib/exerciseTimer';
 import UnavailableRenderer from './mechanics/UnavailableRenderer';
 import { comparatorForRenderable, rendererFor } from './mechanics/registry';
 
@@ -47,6 +54,8 @@ interface Copy {
   unavailable: string;
   allCorrect: string;
   someWrong: string;
+  /** Prefix for the countdown, shown only on the rare timed exercise. */
+  timeLeft: string;
 }
 
 /**
@@ -74,6 +83,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     unavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
     allCorrect: '¡Todo correcto!',
     someWrong: 'Revisar las respuestas marcadas.',
+    timeLeft: 'Tiempo restante',
   },
   en: {
     submit: 'Check',
@@ -86,6 +96,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     unavailable: 'This part of the exercise cannot be answered here yet.',
     allCorrect: 'All correct!',
     someWrong: 'Review the marked answers.',
+    timeLeft: 'Time left',
   },
 };
 
@@ -216,6 +227,79 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   }, [pendingFocus]);
 
   /**
+   * Seconds left, or `null` for the overwhelmingly common untimed exercise.
+   *
+   * Seeded from the payload and never re-seeded: `useState`'s initial value is
+   * read once per mount, which is exactly the lifetime a countdown should have.
+   * Remounting starts the clock over, matching the island's existing rule that
+   * everything here is ephemeral.
+   */
+  const [remaining, setRemaining] = useState<number | null>(
+    payload.timer?.seconds ?? null,
+  );
+
+  /**
+   * Has the countdown already ended this exercise?
+   *
+   * BE HONEST ABOUT WHAT THIS IS: today it is defence in depth, not the thing
+   * that makes the countdown fire once. The effect below depends on `remaining`
+   * alone, and `remaining` freezes at `0` forever once the clock is spent, so
+   * React never re-runs it and the single shot is already structural. Deleting
+   * this ref right now changes no observable behaviour — that was measured, not
+   * assumed.
+   *
+   * It stays because of the specific edit it survives. `retry()` sets `result`
+   * back to `null`, so `graded` returns to false while `remaining` is still `0`.
+   * The moment anyone widens the dependency array to include `graded` — which is
+   * exactly what `react-hooks/exhaustive-deps` tells you to do — the effect
+   * re-runs in that state and re-grades the learner's freshly cleared answers
+   * the instant they ask for another attempt. A verdict they never submitted, on
+   * an exercise they had not re-answered, with nothing thrown.
+   *
+   * A REF and not state, because it is a latch: it must not cause a render, and
+   * it must survive the very transition that re-arms the condition.
+   */
+  const autoGraded = useRef(false);
+
+  const counting = shouldTick(remaining, graded);
+
+  /**
+   * The one interval. Cleared on unmount and whenever counting stops, so a
+   * learner who navigates away mid-exercise leaves nothing running.
+   *
+   * Keyed on `counting` rather than on `remaining`, so the interval is created
+   * once per run instead of being torn down and rebuilt every second — which
+   * would also reset the phase each tick and make the last second arbitrarily
+   * long.
+   */
+  useEffect(() => {
+    if (!counting) return;
+    const id = setInterval(() => {
+      setRemaining((left) => (left === null ? null : tick(left)));
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [counting]);
+
+  /**
+   * Time is up: grade through the SAME path the button uses.
+   *
+   * Deliberately calls `grade()` rather than reimplementing it. A second call to
+   * `check` here would be a second definition of "what counts as an answer", and
+   * the two would drift the first time either side changed — with the timed path
+   * being the one nobody manually tests.
+   */
+  useEffect(() => {
+    if (remaining === null || !hasExpired(remaining)) return;
+    if (autoGraded.current) return;
+    autoGraded.current = true;
+    grade();
+    // `remaining` ALONE, deliberately. `grade` is recreated every render, so
+    // depending on it would re-run this effect on every keystroke; `graded` and
+    // `response` would re-run it after a retry. The latch above is what keeps
+    // widening this list from becoming a bug rather than merely wasteful.
+  }, [remaining]);
+
+  /**
    * Grade locally. The resolver is registry-backed on purpose: a slot we could
    * not RENDER must not be graded, or the learner would be marked wrong for an
    * answer we never let them give.
@@ -250,6 +334,23 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
 
   return (
     <section className="flex flex-col gap-6">
+      {/* Rendered only for the rare timed exercise. `remaining` is `null` both
+          when no timer was authored and when a malformed one was dropped at the
+          payload boundary, so there is ONE condition here, not two. */}
+      {remaining !== null && (
+        <p
+          data-testid="exercise-timer"
+          // `role="timer"` carries an implicit `aria-live="off"`, which is the
+          // point of using it: a polite live region would make a screen reader
+          // interrupt itself every single second and render the exercise
+          // unusable by ear. The value stays queryable on demand instead.
+          role="timer"
+          className="text-sm font-semibold text-zinc-100 tabular-nums"
+        >
+          {t.timeLeft} {formatRemaining(remaining)}
+        </p>
+      )}
+
       {payload.slots.map((slot) => {
         const Renderer = rendererFor(slot.input);
         const outcome = result?.slots[slot.id];

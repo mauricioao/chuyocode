@@ -115,6 +115,76 @@ describe('parsePayload', () => {
   });
 });
 
+/**
+ * The OPTIONAL countdown.
+ *
+ * Every case below asserts the same asymmetry: a broken timer degrades to "no
+ * timer" and the exercise still parses. That is the opposite of a broken slot,
+ * which kills the payload — and the difference is that a broken slot is
+ * UNGRADEABLE, so rendering it would lie to the learner, while a broken timer
+ * just means no clock. Turning a typo in an optional field into a 404 on real
+ * content would be the worse bug.
+ */
+describe('parsePayload — timer', () => {
+  /** The base exercise, which is complete and answerable without any timer. */
+  const timed = (timer: unknown) => ({ ...CHOICE_PAYLOAD, timer });
+
+  it('reads a well-formed timer', () => {
+    expect(parsePayload(timed({ seconds: 180 }))?.timer).toEqual({ seconds: 180 });
+  });
+
+  // The normal case. Almost no exercise will ever carry a timer.
+  it('leaves an untimed exercise untimed', () => {
+    expect(parsePayload(CHOICE_PAYLOAD)?.timer).toBeUndefined();
+  });
+
+  it('still parses the exercise when the timer is malformed', () => {
+    // The whole point: the slots survive a broken timer.
+    const payload = parsePayload(timed({ seconds: 'three minutes' }));
+    expect(payload?.slots).toHaveLength(1);
+    expect(payload?.timer).toBeUndefined();
+  });
+
+  it('drops a timer that is not an object', () => {
+    for (const bad of [180, 'later', true, null, [180]]) {
+      expect(parsePayload(timed(bad))?.timer).toBeUndefined();
+    }
+  });
+
+  it('drops a timer whose seconds are not a number', () => {
+    for (const bad of [{ seconds: '180' }, { seconds: null }, { seconds: {} }, {}]) {
+      expect(parsePayload(timed(bad))?.timer).toBeUndefined();
+    }
+  });
+
+  // Each of these would otherwise produce a countdown that never reaches zero.
+  it('drops a timer that could never run out', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(parsePayload(timed({ seconds: bad }))?.timer).toBeUndefined();
+    }
+  });
+
+  /**
+   * A zero-second timer would fire on mount and grade the exercise before the
+   * learner had read the first word — an exercise nobody can answer. Dropping to
+   * "untimed" is strictly better than shipping that.
+   */
+  it('drops a timer that would fire before the learner could read it', () => {
+    expect(parsePayload(timed({ seconds: 0 }))?.timer).toBeUndefined();
+    expect(parsePayload(timed({ seconds: -30 }))?.timer).toBeUndefined();
+    // Floored to zero, so it is rejected on the same rule rather than a second.
+    expect(parsePayload(timed({ seconds: 0.4 }))?.timer).toBeUndefined();
+  });
+
+  it('floors a fractional timer instead of carrying it into the countdown', () => {
+    expect(parsePayload(timed({ seconds: 90.7 }))?.timer).toEqual({ seconds: 90 });
+  });
+
+  it('keeps the shortest timer an author can meaningfully write', () => {
+    expect(parsePayload(timed({ seconds: 1 }))?.timer).toEqual({ seconds: 1 });
+  });
+});
+
 describe('hasAudio', () => {
   // Spec — Scenario: Availability derived free.
   it('is true when media.audio is present on the already-fetched row', () => {

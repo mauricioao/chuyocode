@@ -45,11 +45,31 @@ export interface Slot {
   answer: string[];
 }
 
+/**
+ * An OPTIONAL countdown for the whole exercise.
+ *
+ * Payload data, not a column: a time limit is an authoring choice per exercise,
+ * and the overwhelming majority of exercises will never carry one. A column
+ * would put a nullable integer on every row to describe a rare case, and would
+ * need a migration the first time the shape grows (a grace period, a per-slot
+ * limit). `jsonb` costs nothing for the exercises that omit it.
+ *
+ * EXERCISE-LEVEL, never slot-level. Slots grade independently but they are
+ * answered together, and a per-slot clock would mean several countdowns racing
+ * on one page with nothing to tell the learner which one is about to fire.
+ */
+export interface Timer {
+  /** Whole seconds, always >= 1. See {@link parsePayload}. */
+  seconds: number;
+}
+
 /** The full render payload for one exercise. */
 export interface Payload {
   media?: { audio?: string };
   pools: Record<string, Pool>;
   slots: Slot[];
+  /** Absent on almost every exercise, and absence is the normal case. */
+  timer?: Timer;
 }
 
 /** A learner's answers, keyed by slot id. Always an array, even for one value. */
@@ -122,6 +142,36 @@ function parsePool(value: unknown): Pool {
 }
 
 /**
+ * Parse an optional {@link Timer}, or `null` for "this exercise is untimed".
+ *
+ * DEGRADES, NEVER REJECTS. A malformed timer must not take the exercise down
+ * with it: everything else in the payload is still perfectly answerable, and an
+ * untimed exercise is a complete, correct experience — it is what every exercise
+ * authored so far already is. Failing the whole payload here would turn a typo
+ * in an optional field into a 404 on real content.
+ *
+ * That is the opposite of {@link parseSlot}, which returns `null` and kills the
+ * payload — and the asymmetry is the point. A broken slot is UNGRADEABLE, so
+ * rendering it would lie to the learner. A broken timer just means no clock.
+ *
+ * `seconds < 1` is rejected rather than clamped. A zero-second timer would fire
+ * on mount and grade the exercise before the learner had read the first word —
+ * an exercise nobody can answer. Silently dropping to "untimed" is strictly
+ * better than shipping that. Fractions are floored first, so `0.4` is a zero and
+ * is rejected on the same rule rather than by a separate one.
+ */
+function parseTimer(value: unknown): Timer | null {
+  if (!isRecord(value)) return null;
+  const raw = value.seconds;
+  // `Number.isFinite` also rejects `NaN` and both infinities, each of which
+  // would otherwise produce a countdown that never reaches zero.
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  const seconds = Math.floor(raw);
+  if (seconds < 1) return null;
+  return { seconds };
+}
+
+/**
  * Parse a slot, or `null` if it could never be graded.
  *
  * An UNKNOWN `input` is deliberately accepted: content and code deploy through
@@ -179,6 +229,13 @@ export function parsePayload(value: unknown): Payload | null {
   if (isRecord(value.media) && typeof value.media.audio === 'string') {
     payload.media = { audio: value.media.audio };
   }
+
+  // Set only when usable, so `payload.timer` is absent — not present and
+  // meaningless — for both an untimed exercise and a malformed one. The island
+  // then has ONE condition to check instead of two.
+  const timer = parseTimer(value.timer);
+  if (timer) payload.timer = timer;
+
   return payload;
 }
 

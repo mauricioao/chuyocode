@@ -690,6 +690,195 @@ describe('ExerciseIsland — locale reaches the mechanics', () => {
   });
 });
 
+/**
+ * The countdown, seen from the outside.
+ *
+ * The RULES (clamping, the pause while graded, formatting) are proved against
+ * pure functions in `exerciseTimer.test.ts`. What is left here is the wiring
+ * that only exists once React owns an interval: that expiry grades through the
+ * EXISTING path, that it does so exactly once, that an untimed exercise is
+ * untouched, and that nothing keeps ticking after unmount.
+ */
+describe('ExerciseIsland — countdown', () => {
+  /** A one-slot exercise with a short, exact limit. */
+  const timed: Payload = { ...single, timer: { seconds: 3 } };
+
+  function clock(): HTMLElement | null {
+    return screen.queryByTestId('exercise-timer');
+  }
+
+  function verdict(): HTMLElement | null {
+    return screen.queryByTestId('exercise-verdict');
+  }
+
+  /** Let `seconds` of countdown elapse. */
+  async function elapse(seconds: number) {
+    await act(async () => {
+      vi.advanceTimersByTime(seconds * 1000);
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows no countdown for an exercise without a timer', () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    expect(clock()).toBeNull();
+  });
+
+  /**
+   * THE REGRESSION THAT MATTERS MOST: every exercise authored so far is untimed,
+   * and none of them may start grading itself.
+   */
+  it('never grades an untimed exercise on its own', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    await elapse(600);
+
+    expect(verdict()).toBeNull();
+  });
+
+  it('shows the countdown for a timed exercise and counts it down', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    expect(clock()?.textContent).toContain('0:03');
+
+    await elapse(1);
+
+    expect(clock()?.textContent).toContain('0:02');
+  });
+
+  it('grades automatically when the clock reaches zero', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    expect(verdict()).toBeNull();
+
+    await elapse(3);
+
+    expect(clock()?.textContent).toContain('0:00');
+    expect(verdict()?.textContent).toBe(COPY.en.someWrong);
+  });
+
+  /**
+   * Expiry goes through the SAME grading path as the button, so an answer given
+   * before the clock ran out is judged, not discarded.
+   */
+  it('grades the answers the learner actually gave', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    choose('sits');
+    await elapse(3);
+
+    expect(screen.getByTestId('slot-feedback-s1').textContent).toBe(COPY.en.correct);
+    expect(verdict()?.textContent).toBe(COPY.en.allCorrect);
+  });
+
+  it('grades an unanswered exercise when time runs out, even though submit was locked', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    // The learner never earned the right to press submit...
+    expect(submitButton().disabled).toBe(true);
+
+    await elapse(3);
+
+    // ...but running out of time is not a non-attempt. It is a finished attempt.
+    expect(verdict()?.textContent).toBe(COPY.en.someWrong);
+  });
+
+  it('stops counting down once the learner submits', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    await elapse(1);
+    choose('sits');
+    submit();
+
+    const frozen = clock()?.textContent;
+    await elapse(10);
+
+    // The clock measures time spent ANSWERING; reading a verdict is not
+    // answering, so it must not drain while feedback is on screen.
+    expect(clock()?.textContent).toBe(frozen);
+  });
+
+  /**
+   * THE CLOCK GETS TO END THE EXERCISE ONCE.
+   *
+   * `retry()` clears the result, so `graded` returns to false while the clock is
+   * still at zero — a state in which "time is up" reads as true again. If the
+   * expiry effect runs in it, the learner is handed a verdict they never
+   * submitted, on answers that were just cleared for them, with nothing thrown.
+   *
+   * Two separate things prevent that today, and this test is deliberately blind
+   * to which one is doing the work: the effect depends on `remaining` alone (so
+   * React never re-runs it), and a latch makes the shot single regardless.
+   * Measured: widening the dependency array to `[remaining, graded]` — the edit
+   * `react-hooks/exhaustive-deps` asks for — keeps passing WITH the latch and
+   * fails here without it.
+   */
+  it('does not grade again when the learner retries after time ran out', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    await elapse(3);
+    expect(verdict()).not.toBeNull();
+
+    retry();
+    expect(verdict()).toBeNull();
+
+    await elapse(30);
+
+    // The clock already had its one chance to end the exercise.
+    expect(verdict()).toBeNull();
+  });
+
+  it('leaves the exercise answerable after the clock has been spent', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={timed} />);
+
+    await elapse(3);
+    retry();
+    await elapse(30);
+
+    // A second, untimed attempt: the learner can still answer and submit.
+    choose('sits');
+    submit();
+
+    expect(verdict()?.textContent).toBe(COPY.en.allCorrect);
+  });
+
+  it('clears its interval on unmount', async () => {
+    vi.useFakeTimers();
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+
+    const { unmount } = render(<ExerciseIsland lang="en" payload={timed} />);
+    await elapse(1);
+    unmount();
+
+    expect(clearSpy).toHaveBeenCalled();
+
+    // And nothing is left running: a leaked interval would keep calling
+    // `setRemaining` on an unmounted tree.
+    const callsAfterUnmount = vi.getTimerCount();
+    expect(callsAfterUnmount).toBe(0);
+  });
+
+  it('localizes the countdown label', () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="es" payload={timed} />);
+
+    expect(clock()?.textContent).toContain(COPY.es.timeLeft);
+  });
+});
+
 describe('ExerciseIsland — statelessness', () => {
   it('clears feedback on remount: there is no progress to remember', () => {
     const { unmount } = render(<ExerciseIsland lang="en" payload={single} />);
