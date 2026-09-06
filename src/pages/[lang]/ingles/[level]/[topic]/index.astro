@@ -16,14 +16,10 @@
  * Zero JavaScript: cards are links, and links do not need hydration.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import ExerciseCard from '@components/ui/ExerciseCard.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import {
-  isLevel,
-  isTopic,
-  SKILL_LABELS,
-  TOPIC_LABELS,
-} from '@lib/exerciseTaxonomy';
+import { isLevel, isTopic, TOPIC_LABELS } from '@lib/exerciseTaxonomy';
 import { getPublishedExercises } from '@lib/exercises';
 import { humanizeSlug } from '@lib/exerciseCopy';
 
@@ -98,29 +94,25 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
         </div>
       ) : (
         <ul class="flex flex-col gap-4">
+          {/* The SLUG, not the prompt. These cards had the same problem as the
+              related-exercise cards: opening with the first slot's label gives
+              the exercise away before the learner starts it. The topic cannot
+              lead here — it is the page's own <h1> and would repeat on every
+              card — so the slug does, which is English, permanent and
+              deliberately readable.
+
+              NO `levelBadge`: every exercise on this page shares the level with
+              the header above, so a level badge would print the same text on
+              every row. The skill is the only attribute that VARIES inside one
+              level+topic pair, which is what makes the cards distinguishable at
+              a glance — and the card derives that label itself, in English. */}
           {exercises.map((exercise) => (
             <li>
-              <a
+              <ExerciseCard
                 href={`/${lang}/ingles/${level}/${topic}/${exercise.slug}`}
-                class="flex flex-col gap-3 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
-              >
-                {/* The SLUG, not the prompt. These cards had the same problem
-                    as the related-exercise cards: opening with the first slot's
-                    label gives the exercise away before the learner starts it.
-                    The topic cannot lead here — it is the page's own <h1> and
-                    would repeat on every card — so the slug does, which is
-                    English, permanent and deliberately readable. */}
-                <span class="text-lg font-semibold text-zinc-100">
-                  {humanizeSlug(exercise.slug) || exercise.slug}
-                </span>
-                {/* The skill is the only attribute that varies between cards
-                    inside one level+topic pair, so it is what makes them
-                    distinguishable at a glance. English in every locale, like
-                    the topic: it is exercise data, not chrome. */}
-                <span class={badgeVariants({ variant: 'outline' })}>
-                  {SKILL_LABELS[exercise.skill]}
-                </span>
-              </a>
+                title={humanizeSlug(exercise.slug) || exercise.slug}
+                skill={exercise.skill}
+              />
             </li>
           ))}
         </ul>

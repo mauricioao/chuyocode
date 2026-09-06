@@ -18,7 +18,8 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import ExerciseIsland from '@components/islands/ExerciseIsland';
-import { Badge, badgeVariants } from '@components/ui/badge';
+import ExerciseCard from '@components/ui/ExerciseCard.astro';
+import { Badge } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   isLevel,
@@ -111,32 +112,26 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
           </h2>
 
           <ul class="grid gap-4 sm:grid-cols-2">
+            {/* THE TOPIC LEADS. The card used to open with the first slot's
+                prompt — "___ rename this variable, please?" — which spoils the
+                exercise before the learner opens it and says nothing about what
+                the card is for. The topic is what the card is ABOUT, and it is
+                what distinguishes these cards from each other: they cross
+                topics, unlike the listing's. English in every locale, like
+                every other taxonomy label.
+
+                "Nivel"/"Level" is chrome and localizes, so it is composed HERE
+                and passed in; the skill label is exercise data and the card
+                derives it itself. */}
             {related.map((item) => (
               <li>
-                <a
+                <ExerciseCard
                   href={`/${lang}/ingles/${item.level}/${item.topic}/${item.slug}`}
-                  class="flex h-full flex-col gap-3 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
-                >
-                  {/* THE TOPIC LEADS. The card used to open with the first
-                      slot's prompt — "___ rename this variable, please?" —
-                      which spoils the exercise before the learner opens it and
-                      says nothing about what the card is for. The topic is what
-                      the card is ABOUT, and it is what distinguishes these
-                      cards from each other: they cross topics, unlike the
-                      listing's. English in every locale, like every other
-                      taxonomy label. */}
-                  <span class="text-xl font-semibold text-zinc-100">
-                    {TOPIC_LABELS[item.topic]}
-                  </span>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class={badgeVariants({ variant: 'secondary' })}>
-                      {`${t.level} ${item.level}`}
-                    </span>
-                    <span class={badgeVariants({ variant: 'outline' })}>
-                      {SKILL_LABELS[item.skill]}
-                    </span>
-                  </div>
-                </a>
+                  title={TOPIC_LABELS[item.topic]}
+                  skill={item.skill}
+                  levelBadge={`${t.level} ${item.level}`}
+                  titleSize="xl"
+                />
               </li>
             ))}
           </ul>
