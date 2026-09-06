@@ -27,9 +27,15 @@ export type Comparator = 'set' | 'text';
  *
  * `sequence` (ordering) and `proximity` (hotspot) join this map with their
  * renderers; they are deliberately absent while no renderer exists.
+ *
+ * `drop` REUSES `set` rather than adding a comparator, and that is the point:
+ * the mechanic is how the learner reports an id, never how an id is judged. A
+ * tile dragged into a box and an option picked from a dropdown produce the same
+ * `['i_honey']`, so they must produce the same verdict.
  */
 export const COMPARATORS: Record<string, Comparator> = {
   choice: 'set',
+  drop: 'set',
   select: 'set',
   text: 'text',
 };

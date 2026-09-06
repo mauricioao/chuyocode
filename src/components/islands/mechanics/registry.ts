@@ -11,6 +11,7 @@
 import type { Comparator } from '@/lib/exerciseGrading';
 import { comparatorFor } from '@/lib/exerciseGrading';
 import ChoiceRenderer from './ChoiceRenderer';
+import DropRenderer from './DropRenderer';
 import SelectRenderer from './SelectRenderer';
 import TextRenderer from './TextRenderer';
 import type { MechanicRenderer } from './types';
@@ -18,11 +19,12 @@ import type { MechanicRenderer } from './types';
 /**
  * `slot.input` -> renderer. One line per shipped mechanic.
  *
- * `drop`, `order` and `hotspot` are deliberately ABSENT — no renderer and, for
- * the last two, no comparator either. They degrade per slot.
+ * `order` and `hotspot` are deliberately ABSENT — no renderer and no comparator
+ * either. They degrade per slot.
  */
 const MECHANICS: Record<string, MechanicRenderer> = {
   choice: ChoiceRenderer,
+  drop: DropRenderer,
   select: SelectRenderer,
   text: TextRenderer,
 };
