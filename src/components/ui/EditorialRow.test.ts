@@ -16,6 +16,7 @@ vi.mock('@lib/env', () => ({
 }));
 
 import EditorialRow from './EditorialRow.astro';
+import { CHEVRON_PATH } from '@lib/arrowControl';
 
 // A normalized MediaItem as produced by getRowsByTheme() → toMediaItem().
 const item = (n: number) => ({
@@ -52,6 +53,18 @@ describe('EditorialRow.astro', () => {
     expect(html).toContain('<script');
     expect(html).toContain('scrollBy');
     expect(html).toContain('data-astro-rerun');
+  });
+
+  it('draws both chevrons from the shared arrow-control geometry', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    // Same path data the exercise stepper's React arrows render, so the two
+    // controls cannot drift apart.
+    expect(html).toContain(CHEVRON_PATH.prev);
+    expect(html).toContain(CHEVRON_PATH.next);
+    // The glyph carries no name — the button's aria-label is the whole label.
+    expect(html).toContain('aria-label="Scroll left"');
+    expect(html).toContain('aria-label="Scroll right"');
   });
 
   it('renders an always-visible accent-colored right (next) arrow', async () => {
