@@ -12,7 +12,8 @@ than the rest:
 
 - **§6 (Rules that silently break things)** — these produce broken exercises that
   no automated check catches: a learner types a correct answer and is told they
-  are wrong, with nothing logged anywhere.
+  are wrong, with nothing logged anywhere. **§6.11 is the one that has already
+  shipped a broken exercise** — run its check on every slot that has a pool.
 - **§5.5 (Combine mechanics — the standing rule)** — the single biggest quality
   lever, and the one most likely to be ignored because a page of identical
   multiple-choice items is the path of least resistance.
@@ -252,7 +253,7 @@ one.
   "pools": { "opts": [
     { "id": "o_do",   "text": "do"   },
     { "id": "o_does", "text": "does" },
-    { "id": "o_did",  "text": "did"  }
+    { "id": "o_is",   "text": "is"   }
   ]},
   "slots": [{
     "id": "s1",
@@ -263,6 +264,11 @@ one.
   }]
 }
 ```
+
+Note what is **not** in that pool: `did`. *"Did she work on weekends?"* is a
+perfectly good question, so offering it would make two options correct and grade
+a right answer as wrong. `is` fails on the verb form instead, which cannot be
+argued. See §6.11 — this is the check you run on every pool.
 
 ### `select` — dropdown
 Same shape as `choice`; renders as a `<select>` instead of radio buttons. Use it
@@ -278,13 +284,17 @@ options.
   ]},
   "slots": [{
     "id": "s1",
-    "label": "I would like ___ water, please.",
+    "label": "I would like ___ information about the flight, please.",
     "input": "select",
     "pool": "quant",
     "answer": ["q_some"]
   }]
 }
 ```
+
+`information` is uncountable, so `a` and `an` are wrong for a structural reason.
+A countable noun would not work here: *"I would like a water, please"* is
+something people say, which would put two correct options in the pool (§6.11).
 
 ### `text` — fill in the blank (the learner types)
 **No pool.** `answer` holds the accepted strings themselves.
@@ -415,7 +425,7 @@ place, and it gets no stepper. But it should be the minority, not the default.
       "input": "drop", "pool": "past_verbs", "answer": ["p_flew"] },
 
     { "id": "s2",
-      "label": "The plane ___ twenty minutes early.",
+      "label": "The plane ___ on the runway twenty minutes early.",
       "input": "drop", "pool": "past_verbs", "answer": ["p_landed"] },
 
     { "id": "s3",
@@ -424,7 +434,7 @@ place, and it gets no stepper. But it should be the minority, not the default.
 
     { "id": "s4",
       "label": "I ___ my passport in my jacket, luckily.",
-      "input": "text", "answer": ["found", "had", "kept"] },
+      "input": "text", "answer": ["found", "had", "kept", "left", "put"] },
 
     { "id": "s5",
       "label": "___ you check your bag at the desk?",
@@ -445,13 +455,19 @@ What makes this example work, point by point:
   dropdown, types, then picks a radio option.
 - **`past_verbs` has four tiles for two `drop` slots.** `p_flown` and `p_landing`
   are distractors, so the second drop is a real decision and not elimination.
+- **Every tile fails structurally in the slot it does not belong to** (§6.11).
+  *"We flown to Lisbon"* and *"We landing to Lisbon"* are both wrong on the verb
+  form. `s2` says **on the runway** for the same reason — without it, *"The plane
+  flew twenty minutes early"* is arguable, and arguable means broken.
+- **`aux` carries no `does` or `do`.** *"was / were you check"* cannot precede a
+  bare infinitive, so `did` is the only option that produces English.
 - **The tiles are pinned `top`** so they stay in the same place as the learner
   steps between `s1` and `s2`.
 - **Every label stands alone.** No slot needs the previous sentence to make
   sense, because the learner cannot see it.
-- **`s4` lists three accepted answers**, because three different verbs are
-  genuinely natural there.
-- **150 seconds for five slots** — roughly 30 seconds each.
+- **`s4` lists five accepted answers** — `found`, `had`, `kept`, `left` and `put`
+  are all natural there. Stopping at three would mark two correct learners wrong
+  (§6.3).
 
 ---
 
@@ -461,13 +477,20 @@ These do not throw. They produce a broken exercise that looks fine.
 
 If you read nothing else in this document, read this table.
 
+**The first row is the one that has already shipped a broken exercise.** A
+distractor that is also a correct answer survives every other check here: the
+payload parses, the ids resolve, the taxonomy is clean, the mechanics are mixed —
+and the learner is still told they are wrong.
+
 | # | Rule | What happens if you break it |
 |---|---|---|
+| 6.11 | Every pool option **other than the answer** is wrong **in that exact sentence** | Learner answers correctly, is marked wrong |
 | 6.1 | `answer` holds item **ids** — never text, never positions | Learner answers correctly, is marked wrong |
 | 6.3 | `text` slots list **every** acceptable answer | Learner answers correctly, is marked wrong |
 | 6.4 | **One `___` per slot** | The second gap renders as literal underscores |
 | 6.8 | **Every slot has a non-empty `answer`** | The **entire exercise** 404s — not just that slot |
 | 6.9 | A shared `drop` pool has more tiles than `drop` slots | The last drop answers itself by elimination |
+| 6.12 | The `level` matches what the **whole sentence** demands | The exercise is unreachable for the learners it suits, and wrong for the ones who find it |
 | §7 | Apostrophes inside the payload are **doubled** (`don''t`) | The SQL file will not run at all |
 
 ### 6.1 `answer` references item **IDs**, never text, never positions
@@ -492,9 +515,27 @@ becomes visible immediately instead of passing silently.
 "answer": ["has", "eats", "is having"]
 ```
 A learner marked wrong for a correct answer is the worst failure this system can
-produce. Think about contractions (`doesn't` / `does not`), alternatives
-(`has` / `eats`), and regional spellings (`practise` / `practice`) — list them
-all.
+produce. An unlisted correct answer is **the same failure as an ambiguous
+distractor** (§6.11) arriving from the other side: there, a wrong option is
+accepted by the language; here, a right answer is rejected by your list.
+
+There is no pool to inspect, so run a procedure instead. For each `text` slot,
+brainstorm until you are **out of candidates**, not until you have three:
+
+| Ask | Example |
+|---|---|
+| Synonyms and near-synonyms that fit **this** sentence | `continue` / `keep` / `resume` / `start` / `begin` |
+| Contractions **and** their expansions | `doesn't` / `does not` (doubled to `doesn''t` in the SQL, §7) |
+| Regional spellings | `practise` / `practice`, `organise` / `organize` |
+| Other forms the sentence permits | `has` / `is having` |
+
+A real failure: `developers usually ___ working on their tasks` accepted
+`continue`, `keep` and `resume` — a respectable list — and still marked `start`
+and `begin` wrong, both of which are natural there.
+
+If the list gets uncomfortably long, that is the sentence telling you it is too
+open. Tighten it so fewer answers fit, or move the slot to `choice` where you
+control the options — do not shorten the list and hope.
 
 ### 6.4 One `___` per slot
 Only the **first** blank in a label receives the input. Any later `___` stays on
@@ -559,6 +600,128 @@ option left and tests nothing.
 and is **excluded from the verdict**, so the exercise can report "all correct"
 while that slot was never answered at all. Do not invent mechanics.
 
+### 6.11 Every other option must be wrong **in that exact sentence**
+
+This is the rule that has already shipped a broken exercise, so it is a
+procedure, not an aspiration.
+
+**For every slot that has a pool:** substitute each option into the gap, **one at
+a time**, and read the whole sentence back.
+
+- Only the answer produces correct English → the slot is sound.
+- **Any other option** also produces correct English → the slot is **broken**.
+  Replace that option with one that is unambiguously wrong **in this sentence**.
+
+"Wrong somewhere else" does not count. An option is a distractor only relative to
+the sentence it is offered in.
+
+#### The two ways this went wrong in a real exercise
+
+The exercise was structurally perfect — valid taxonomy, stable ids, correct
+references, all four mechanics mixed — and it graded correct learners as wrong
+twice:
+
+| Label | Answer | Also in the pool | Why it breaks |
+|---|---|---|---|
+| `Each developer ___ what they did yesterday.` | `explains` | `discusses` | *"Each developer discusses what they did yesterday"* is correct English |
+| `___ your team write down the action items afterward?` | `Does` | `Did` | Nothing in the sentence forces the present, so *"Did your team write down…"* is a normal question |
+
+Neither is a typo. Both pools were built out of **different words**, and different
+words compete on **meaning** — which is exactly where a second correct answer
+hides.
+
+#### The fix — make every distractor wrong for a **grammatical** reason
+
+"It sounds odd" is arguable, and you are arguing with a learner who cannot hear
+you. "It is missing the third-person `-s`" is not arguable — and it happens to be
+the thing the exercise exists to teach.
+
+```jsonc
+// ❌ before — four different verbs; "discusses" fits the slot as well as "explains"
+"verbs": [
+  { "id": "v_has",       "text": "has"       },
+  { "id": "v_explains",  "text": "explains"  },
+  { "id": "v_have",      "text": "have"      },
+  { "id": "v_discusses", "text": "discusses" }
+]
+
+// ✅ after — two verbs, two forms each. The pool serves two slots:
+//    "Our team ___ a stand-up every morning."          -> v_has
+//    "Each developer ___ what they did yesterday."     -> v_explains
+"verbs": [
+  { "id": "v_has",      "text": "has"      },
+  { "id": "v_have",     "text": "have"     },
+  { "id": "v_explains", "text": "explains" },
+  { "id": "v_explain",  "text": "explain"  }
+]
+```
+
+*"Each developer explain…"* and *"Each developer have…"* are wrong for the one
+reason a present-simple exercise exists at all. The pool now **teaches the form**
+instead of testing whether the learner happened to pick the same verb you did.
+
+⚠️ **The strategy narrows the search; it does not replace the check.** In the
+pool above, `v_has` is the *other* slot's answer, and it does not fail agreement
+in this one — *"Each developer has…"* is well formed, and only reads wrong for a
+meaning reason, which is precisely the arguable ground you were trying to leave.
+Pairing forms removes most overlaps; the substitution check is what proves the
+last one is gone. Run it on the finished pool, every time.
+
+The same move on the auxiliary — the ambiguous tense option is replaced by one
+that is structurally wrong:
+
+```jsonc
+// ❌ before — "Did" is genuinely valid in that sentence
+"aux": [ { "id": "au_does", "text": "Does" },
+         { "id": "au_do",   "text": "Do"   },
+         { "id": "au_did",  "text": "Did"  } ]
+
+// ✅ after
+"aux": [ { "id": "au_does", "text": "Does" },
+         { "id": "au_do",   "text": "Do"   },
+         { "id": "au_is",   "text": "Is"   } ]
+```
+
+*"Do your team…"* fails agreement. *"Is your team write down…"* fails the verb
+form. Neither can be argued into correctness, and the option that genuinely was
+correct is gone.
+
+> **The general shape: build a pool from the forms of a word, not from different
+> words.** Different words compete on meaning; forms compete on grammar, and
+> grammar has exactly one winner per sentence.
+
+#### Consumption does not resolve an overlap
+
+A placed tile leaves the pool (§5, `drop`), so it is tempting to think an overlap
+sorts itself out — spend `discusses` on the first slot and it cannot reappear in
+the second.
+
+**It resolves nothing.** Grading is **per slot**: it compares the tile the learner
+placed against *that slot's* `answer`. If two slots can each legitimately take
+the same tile, whichever slot the learner fills first decides what the other is
+marked against — and the exercise grades a coin flip.
+
+So run the substitution check per slot against the **full** pool, as if nothing
+had been consumed.
+
+### 6.12 The `level` must be what the whole sentence demands
+
+Nothing validates the level. You choose it, the site routes on it, and a learner
+who picked A1 meets whatever you filed there.
+
+**Read every label back and ask: does each word and each structure belong at the
+declared level?** If one does not, the exercise belongs a level up.
+
+The same real exercise was filed at **A1** while containing:
+
+- `Each developer explains what they did yesterday.` — an embedded past clause
+  inside a present-simple sentence. Not an A1 structure.
+- `stand-up`, `action items`, `blockers` — workplace vocabulary an A1 learner has
+  no reason to have met.
+
+It is A2 at best. **The grammar being drilled can be A1 and the exercise still not
+be**, because the level is a property of the whole sentence, not of the `focus`.
+
 ---
 
 ## 7. Output format
@@ -580,7 +743,7 @@ values
     "id": "s1",
     "label": "I ___ up at seven every day.",
     "input": "text",
-    "answer": ["get", "wake"]
+    "answer": ["get", "wake", "am"]
   }]
 }', true),
 
@@ -598,7 +761,7 @@ values
     "aux": [
       { "id": "au_do",   "text": "do"   },
       { "id": "au_does", "text": "does" },
-      { "id": "au_did",  "text": "did"  }
+      { "id": "au_is",   "text": "is"   }
     ]
   },
   "slots": [
@@ -653,7 +816,8 @@ fails the *entire* file, not one row. Scan for `'` before you deliver.
 - [ ] No `listening` rows
 - [ ] `slug` is unique within its `(level, focus)`, English, kebab-case
 - [ ] The `focus` is genuinely what the majority of the slots test
-- [ ] Vocabulary and sentence length match the CEFR level
+- [ ] **CEFR read-back (§6.12)**: every word and every structure in every label
+      belongs at the declared `level` — not just the grammar being drilled
 
 ### Per exercise — mechanics mix (§5.5)
 
@@ -666,10 +830,17 @@ fails the *entire* file, not one row. Scan for `'` before you deliver.
 ### Per slot — the silent killers
 
 - [ ] **Every slot has a non-empty `answer`** (one empty answer 404s the whole exercise)
+- [ ] **Every pool option was substituted into the sentence one at a time, and
+      only the answer produced correct English** (§6.11)
+- [ ] Distractors are wrong for a **grammatical** reason — forms of the same word,
+      not different words that compete on meaning (§6.11)
+- [ ] Shared pools were checked **per slot against the full pool** — tile
+      consumption never resolves an overlap (§6.11)
 - [ ] Every `answer` id exists in the referenced pool
 - [ ] `choice`/`select` pools have **at least 2 items**
 - [ ] A shared `drop` pool has **more tiles than `drop` slots** (distractors)
-- [ ] `text` slots have no pool, and list **every** acceptable answer
+- [ ] `text` slots have no pool, and list **every** acceptable answer — synonyms,
+      contractions **and** their expansions, regional spellings (§6.3)
 - [ ] **Only one `___` per label** (a label with none is fine)
 - [ ] Pool ids differ from their visible text
 
@@ -693,9 +864,11 @@ fails the *entire* file, not one row. Scan for `'` before you deliver.
   site where every exercise is a radio button is dead. Aim for 4–8 slots and 2–3
   different mechanics per exercise.
 - **The exercise must be answerable from the sentence alone.** If several options
-  are grammatically valid in the given context, the exercise is broken — even
-  though it will grade "correctly". This applies per slot: the learner sees one
-  at a time and cannot use the neighbouring sentences as clues.
+  are valid in the given context, the exercise is broken — even though it will
+  grade "correctly". This is not a matter of taste: **§6.11 is the check that
+  proves it**, per slot, one option at a time. Run it. It applies per slot
+  because the learner sees one at a time and cannot use the neighbouring
+  sentences as clues.
 - **Give drag pools distractors.** A `drop` pool sized exactly to its slots turns
   the last question into arithmetic.
 - **Context is a feature.** "Present simple, in a standup" teaches more than
