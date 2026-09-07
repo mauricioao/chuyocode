@@ -65,14 +65,28 @@ describe('parsePayload', () => {
     expect(payload?.slots[0]?.pool).toBeUndefined();
   });
 
-  it('carries an ordered flag through for sequence-graded slots', () => {
+  /**
+   * `ordered` was carried across this boundary for a `sequence` comparator that
+   * never shipped, so `gradeSlot` never read it — a documented field that did
+   * nothing. It is gone from the contract, and the parser drops it silently.
+   *
+   * The test is about GENERATED CONTENT, not about the key. Rows authored while
+   * the field was documented still carry it, and they must keep parsing exactly
+   * as they did: the slot survives whole, minus a flag nothing ever consulted.
+   */
+  it('ignores a leftover ordered flag instead of carrying it through', () => {
     const payload = parsePayload({
       pools: { words: [{ id: 'w1', text: 'she' }] },
       slots: [
         { id: 's1', label: 'Order', input: 'order', ordered: true, answer: ['w1'] },
       ],
     });
-    expect(payload?.slots[0]?.ordered).toBe(true);
+    expect(payload?.slots[0]).toEqual({
+      id: 's1',
+      label: 'Order',
+      input: 'order',
+      answer: ['w1'],
+    });
   });
 
   it('defaults pools to an empty map when the key is absent', () => {

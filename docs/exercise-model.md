@@ -362,11 +362,11 @@ The comparator map is allowed to be **wider** than the renderer registry, becaus
 
 So the island grades through `comparatorForRenderable`, which resolves a comparator **only if that mechanic also renders**. The invariant is structural rather than a promise, and every future mechanic inherits it for free.
 
-### `slot.ordered` is parsed but inert
+### There is no `slot.ordered` flag
 
-`ordered: true` is carried through the payload boundary and reaches the `Slot` type. **Nothing reads it.** There is no `sequence` comparator and no `order` renderer, so an `order` slot grades `unavailable` regardless of the flag.
+An earlier draft parsed `ordered: true` into the `Slot` type for a `sequence` comparator that never shipped, so **nothing ever read it**. It has been removed from the contract.
 
-It stays in the contract because it is the flag the `sequence` comparator will read the day ordering ships, and because authored content carrying it costs nothing today. Do not author `order` slots expecting them to grade.
+A documented field that does nothing is worse than an absent one: it is indistinguishable from a working feature, so authored content sets it believing ordering is switched on. `parsePayload` now drops the key silently — rows that still carry it parse exactly as before, minus a flag nobody consulted. The day a `sequence` comparator ships, ordering is decided by `slot.input`, which is already the mechanic discriminator.
 
 ---
 
@@ -611,7 +611,7 @@ Two things are load-bearing here and are easy to miss:
 
 ⚠️ **Not implemented.** There is no `order` renderer and no `sequence` comparator, so a slot like this renders as unavailable and is excluded from the verdict. Kept here because it is the shape the mechanic will take; do not author it.
 
-`ordered: true` is the flag the `sequence` comparator will read when ordering ships. It is carried through the payload boundary today and read by nothing.
+There is no extra flag to set. `input: "order"` is the whole discriminator — the answer array's ORDER is the answer.
 
 ```jsonc
 {
@@ -625,7 +625,7 @@ Two things are load-bearing here and are easy to miss:
   },
   "slots": [
     { "id": "s1", "label": "Put the words in order",
-      "input": "order", "pool": "words", "ordered": true,
+      "input": "order", "pool": "words",
       "answer": ["w2", "w1", "w3", "w4"] }
   ]
 }

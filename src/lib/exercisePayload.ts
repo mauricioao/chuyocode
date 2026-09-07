@@ -31,7 +31,7 @@ export type Pool = PoolItem[];
 
 /**
  * One thing to answer. `input` is the mechanic discriminator matched against the
- * registry; `ordered` switches this slot to the `sequence` comparator.
+ * registry.
  */
 export interface Slot {
   id: string;
@@ -40,7 +40,6 @@ export interface Slot {
   input: string;
   /** Name of the pool this slot draws from. Absent when the learner types. */
   pool?: string;
-  ordered?: boolean;
   /** Accepted answers: item ids, or literal strings for `text` slots. */
   answer: string[];
 }
@@ -248,7 +247,9 @@ function parseSlot(value: unknown): Slot | null {
     answer,
   };
   if (typeof value.pool === 'string') slot.pool = value.pool;
-  if (value.ordered === true) slot.ordered = true;
+  // Every other authored key is dropped here, deliberately. A slot is rebuilt
+  // field by field rather than spread, so a key nothing reads cannot survive
+  // the boundary and cannot be mistaken downstream for a feature that works.
   return slot;
 }
 
