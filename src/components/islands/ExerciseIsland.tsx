@@ -19,6 +19,7 @@ import { claimedTileIds } from '@/lib/exerciseDrop';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import {
   getSlotItems,
+  poolPlacement,
   type ExerciseResponse,
   type Payload,
   type Slot,
@@ -208,6 +209,9 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
 
   const graded = result !== null;
   const canSubmit = hasSubmittableAnswer(payload, response);
+  // Derived from the payload every render — cheap, and it cannot fall out of
+  // sync with content the way a stored copy would.
+  const placement = poolPlacement(payload);
   // A bare `disabled` button explains nothing to a screen reader, so the reason
   // ships as visible text in reading order. It is withheld when NOTHING is
   // renderable: "pick an answer" would be a lie, and the per-slot unavailable
@@ -397,6 +401,12 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
                 // copy is whole SENTENCES (screen-reader announcements) rather
                 // than one label, so `placeholder` could not carry it.
                 lang={lang}
+                // Resolved ONCE for the whole exercise, here rather than in
+                // each renderer: the placement is a property of the EXERCISE
+                // (its authored hint, or its slot count), and deriving it per
+                // renderer is how two pools on one page end up on two different
+                // sides after an edit touches one of them.
+                poolPlacement={placement}
                 // A fresh closure per render, so React detaches and reattaches
                 // this ref on every commit. Harmless here: the map is only ever
                 // READ from an effect, which runs after the commit has settled.

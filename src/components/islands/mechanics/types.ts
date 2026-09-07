@@ -7,7 +7,7 @@
  * identical across mechanics is what lets the registry dispatch on `slot.input`
  * alone, with no branch per mechanic.
  */
-import type { PoolItem, Slot } from '@/lib/exercisePayload';
+import type { PoolItem, PoolPlacement, Slot } from '@/lib/exercisePayload';
 
 export interface MechanicRendererProps {
   /** The slot being answered. `slot.answer` is present but never read here. */
@@ -55,6 +55,18 @@ export interface MechanicRendererProps {
    * Unknown values fall back to English.
    */
   lang?: string;
+  /**
+   * Where this mechanic's pool of items should sit relative to its prompt.
+   *
+   * Resolved ONCE by the island (`poolPlacement`) rather than per renderer, so
+   * two mechanics on one page cannot disagree about it. Only `drop` draws a pool
+   * as a separate block today, so only `drop` reads this.
+   *
+   * Optional and ignorable, exactly like {@link MechanicRendererProps.claimed}:
+   * a mechanic whose options are inline simply never reads it, which is what
+   * keeps the registry's dispatch free of a branch per mechanic.
+   */
+  poolPlacement?: PoolPlacement;
   /**
    * Callback ref for the slot's PRIMARY focusable control — the element a
    * caller should move focus to when it wants the learner's attention on this

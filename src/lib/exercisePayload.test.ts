@@ -11,6 +11,7 @@ import {
   parsePayload,
   getSlotItems,
   hasAudio,
+  poolPlacement,
   splitLabelAtBlank,
   type Payload,
 } from './exercisePayload';
@@ -182,6 +183,148 @@ describe('parsePayload — timer', () => {
 
   it('keeps the shortest timer an author can meaningfully write', () => {
     expect(parsePayload(timed({ seconds: 1 }))?.timer).toEqual({ seconds: 1 });
+  });
+});
+
+/**
+ * The pool placement — an OPTIONAL presentation hint with a derived default.
+ *
+ * Two rules under test, and they are separate on purpose: parsing decides
+ * whether an authored value is usable at all, and derivation decides what
+ * happens when there is none. A malformed hint must land in the SECOND rule, not
+ * take the exercise down with it.
+ */
+describe('poolPlacement', () => {
+  /** An exercise with `count` interchangeable drop slots and an optional layout. */
+  const withSlots = (count: number, layout?: unknown) => {
+    const raw: Record<string, unknown> = {
+      pools: { p: [{ id: 'i1', text: 'one' }] },
+      slots: Array.from({ length: count }, (_, i) => ({
+        id: `s${i + 1}`,
+        label: `Slot ___ ${i + 1}`,
+        input: 'drop',
+        pool: 'p',
+        answer: ['i1'],
+      })),
+    };
+    if (layout !== undefined) raw.layout = layout;
+    return parsePayload(raw) as Payload;
+  };
+
+  describe('the derived default', () => {
+    /**
+     * One question: the sentence leads, the options sit under it. That is the
+     * reading order of every worksheet ever printed.
+     */
+    it('puts the pool below a single-slot exercise', () => {
+      expect(poolPlacement(withSlots(1))).toBe('bottom');
+    });
+
+    /**
+     * The pool is SHARED, so it has to be reachable from every gap. Anchoring it
+     * above keeps it in one fixed place instead of moving as prompts of
+     * different heights come and go.
+     */
+    it('puts the pool above a multi-slot exercise', () => {
+      expect(poolPlacement(withSlots(2))).toBe('top');
+      expect(poolPlacement(withSlots(5))).toBe('top');
+    });
+
+    /**
+     * The boundary is between ONE and TWO, so this is the pair that proves the
+     * rule is a rule and not a constant.
+     */
+    it('changes answer at the one-to-two boundary', () => {
+      expect(poolPlacement(withSlots(1))).not.toBe(poolPlacement(withSlots(2)));
+    });
+  });
+
+  describe('the authored override', () => {
+    it('honours every accepted placement', () => {
+      for (const pool of ['bottom', 'top', 'left', 'right'] as const) {
+        expect(poolPlacement(withSlots(3, { pool }))).toBe(pool);
+      }
+    });
+
+    /**
+     * THE OVERRIDE MUST BEAT THE DEFAULT, not merely agree with it. Asserting
+     * against a slot count whose default is the OPPOSITE value is what proves
+     * the authored hint is actually read.
+     */
+    it('beats the derived default in both directions', () => {
+      // One slot derives `bottom`...
+      expect(poolPlacement(withSlots(1, { pool: 'top' }))).toBe('top');
+      // ...and two derive `top`.
+      expect(poolPlacement(withSlots(2, { pool: 'bottom' }))).toBe('bottom');
+    });
+
+    /**
+     * `left` and `right` are explicit-only: they depend on there being a large
+     * block on the other side, which no slot count can tell us. So they must be
+     * reachable ONLY this way.
+     */
+    it('is the only way to reach a side placement', () => {
+      expect(poolPlacement(withSlots(1, { pool: 'left' }))).toBe('left');
+      expect(poolPlacement(withSlots(4, { pool: 'right' }))).toBe('right');
+      for (const count of [1, 2, 3, 10]) {
+        expect(['left', 'right']).not.toContain(poolPlacement(withSlots(count)));
+      }
+    });
+  });
+
+  /**
+   * DEGRADES, NEVER REJECTS — the `timer` rule. A typo in an optional
+   * presentation hint must not turn answerable content into a 404.
+   */
+  describe('a malformed hint', () => {
+    const malformed = [
+      { pool: 'sideways' }, // a string, but not one we can draw
+      { pool: 'BOTTOM' }, // right word, wrong case
+      { pool: '' },
+      { pool: 123 },
+      { pool: null },
+      { pool: ['left'] },
+      {}, // the key itself is missing
+      'top', // not an object at all
+      42,
+      null,
+      [],
+    ];
+
+    it('leaves the payload parseable and answerable', () => {
+      for (const layout of malformed) {
+        const payload = parsePayload({
+          pools: {},
+          slots: [{ id: 's1', label: 'L', input: 'text', answer: ['x'] }],
+          layout,
+        });
+        // The whole exercise still parses: this is the failure mode that would
+        // otherwise 404 real content over a misspelt optional word.
+        expect(payload).not.toBeNull();
+        expect(payload?.slots).toHaveLength(1);
+      }
+    });
+
+    it('is absent rather than present-and-meaningless', () => {
+      for (const layout of malformed) {
+        // ONE condition for the consumer, not two: an exercise that omitted the
+        // hint and one that misspelt it are the same state.
+        expect(parsePayload({ ...CHOICE_PAYLOAD, layout })?.layout).toBeUndefined();
+      }
+    });
+
+    it('falls back to the derived default', () => {
+      for (const layout of malformed) {
+        expect(poolPlacement(withSlots(1, layout))).toBe('bottom');
+        expect(poolPlacement(withSlots(3, layout))).toBe('top');
+      }
+    });
+  });
+
+  it('is absent on every exercise authored without one', () => {
+    // The normal case, and the reason the field is payload data rather than a
+    // column: almost nothing carries it.
+    expect(parsePayload(CHOICE_PAYLOAD)?.layout).toBeUndefined();
   });
 });
 

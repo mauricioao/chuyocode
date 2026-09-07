@@ -39,7 +39,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { availableTiles, clearTile, placeTile, placedTile } from '@/lib/exerciseDrop';
-import { splitLabelAtBlank, type PoolItem } from '@/lib/exercisePayload';
+import {
+  splitLabelAtBlank,
+  type PoolItem,
+  type PoolPlacement,
+} from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
 import { CONTROL_SCALE, PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 import type { MechanicRendererProps } from './types';
@@ -174,6 +178,50 @@ const BOX_EMPTY = 'items-center justify-center border-dashed border-input';
  */
 const BOX_FILLED = 'items-stretch border-solid border-transparent';
 
+/**
+ * The flow for one {@link PoolPlacement}: how the wrapper stacks, and which of
+ * the two blocks comes FIRST.
+ *
+ * ORDER IS EXPRESSED IN THE DOM, never with `flex-col-reverse` or `order-*`.
+ * Those move a block visually while leaving it where it was for a screen reader
+ * and for the tab key, so a pool drawn above the sentence would still be read
+ * after it. Reordering the JSX keeps reading order, tab order and visual order
+ * as one thing that cannot drift.
+ */
+interface PlacementLayout {
+  /** Flow classes for the wrapper that holds prompt and pool. */
+  root: string;
+  /** Extra classes for the prompt block. */
+  prompt: string;
+  /** Extra classes for the pool list. */
+  pool: string;
+  /** Does the pool come before the prompt? */
+  poolFirst: boolean;
+}
+
+const STACKED = 'flex flex-col gap-4';
+
+/**
+ * Side placements COLLAPSE TO A STACK below `sm`.
+ *
+ * A pool beside a sentence needs a large block on the other side to be usable at
+ * all; at 320px there is no other side. `flex-col` is therefore the base and the
+ * two-column arrangement is opt-in from `sm` up, so a phone gets the stacked
+ * layout it can actually read rather than two unusable columns.
+ */
+const SIDE = 'flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6';
+
+/** `min-w-0` so a long sentence wraps instead of forcing the row wider. */
+const SIDE_PROMPT = 'min-w-0 sm:flex-1';
+const SIDE_POOL = 'sm:w-1/3 sm:shrink-0';
+
+const PLACEMENT: Record<PoolPlacement, PlacementLayout> = {
+  bottom: { root: STACKED, prompt: '', pool: '', poolFirst: false },
+  top: { root: STACKED, prompt: '', pool: '', poolFirst: true },
+  left: { root: SIDE, prompt: SIDE_PROMPT, pool: SIDE_POOL, poolFirst: true },
+  right: { root: SIDE, prompt: SIDE_PROMPT, pool: SIDE_POOL, poolFirst: false },
+};
+
 /** The face of a tile — an image when the author supplied one, else its text. */
 function TileFace({ item }: { item: PoolItem }) {
   if (item.media) {
@@ -295,9 +343,14 @@ export default function DropRenderer({
   disabled = false,
   claimed = [],
   lang,
+  // `bottom` is the safe default for a renderer used without the island: the
+  // sentence leads and the tiles sit under it, which is what this mechanic did
+  // before placement existed.
+  poolPlacement = 'bottom',
   focusRef,
 }: MechanicRendererProps) {
   const copy = copyFor(lang);
+  const layout = PLACEMENT[poolPlacement];
 
   // DERIVED, never stored. The pool is "the tiles nobody names", so a displaced
   // tile is back the instant the slot stops naming it — no second list to keep
@@ -381,6 +434,47 @@ export default function DropRenderer({
     />
   );
 
+  const promptBlock = (
+    <div className={cn(STACKED, layout.prompt)}>
+      {parts ? (
+        <BlankSentence slotId={slot.id} before={parts.before} after={parts.after}>
+          {box}
+        </BlankSentence>
+      ) : (
+        <>
+          <Label className={`${PROMPT_MEASURE} font-medium text-zinc-100`}>
+            {slot.label}
+          </Label>
+          {box}
+        </>
+      )}
+    </div>
+  );
+
+  // A real list, so a screen reader announces how many tiles are left — which
+  // is the only cue that placing one CONSUMED it.
+  const poolList = (
+    <ul
+      data-testid={`drop-pool-${slot.id}`}
+      aria-label={slot.label}
+      className={cn('flex list-none flex-wrap gap-3 p-0', layout.pool)}
+    >
+      {available.map((item, index) => (
+        <li key={item.id}>
+          <PoolTile
+            item={item}
+            disabled={disabled}
+            // The focus entry point is the FIRST remaining tile, matching where
+            // a keyboard learner would start. When every tile is placed or
+            // claimed there is nothing to focus, and the island's effect falls
+            // through harmlessly.
+            focusRef={index === 0 ? focusRef : undefined}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <DndContext
       sensors={sensors}
@@ -397,41 +491,20 @@ export default function DropRenderer({
 
           The spliced sentence sets the identical ramp on its own `<p>`, so the
           value is the same whichever branch renders. */}
-      <div className={`flex flex-col gap-4 ${PROMPT_SCALE}`}>
-        {parts ? (
-          <BlankSentence slotId={slot.id} before={parts.before} after={parts.after}>
-            {box}
-          </BlankSentence>
+      <div className={cn(layout.root, PROMPT_SCALE)}>
+        {/* Built as values and ORDERED below, so the DOM says what the eye
+            sees. See {@link PlacementLayout}. */}
+        {layout.poolFirst ? (
+          <>
+            {poolList}
+            {promptBlock}
+          </>
         ) : (
-          <div className="flex flex-col gap-4">
-            <Label className={`${PROMPT_MEASURE} font-medium text-zinc-100`}>
-              {slot.label}
-            </Label>
-            {box}
-          </div>
+          <>
+            {promptBlock}
+            {poolList}
+          </>
         )}
-
-        {/* A real list, so a screen reader announces how many tiles are left —
-            which is the only cue that placing one CONSUMED it. */}
-        <ul
-          data-testid={`drop-pool-${slot.id}`}
-          aria-label={slot.label}
-          className="flex list-none flex-wrap gap-3 p-0"
-        >
-          {available.map((item, index) => (
-            <li key={item.id}>
-              <PoolTile
-                item={item}
-                disabled={disabled}
-                // The focus entry point is the FIRST remaining tile, matching
-                // where a keyboard learner would start. When every tile is
-                // placed or claimed there is nothing to focus, and the island's
-                // effect falls through harmlessly.
-                focusRef={index === 0 ? focusRef : undefined}
-              />
-            </li>
-          ))}
-        </ul>
       </div>
     </DndContext>
   );
