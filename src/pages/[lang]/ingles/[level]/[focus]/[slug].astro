@@ -17,9 +17,10 @@
  * fetching the row; the island does the rest.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import ExerciseIsland from '@components/islands/ExerciseIsland';
+import ExerciseIsland, {
+  type ExerciseBadge,
+} from '@components/islands/ExerciseIsland';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
-import { Badge } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   isLevel,
@@ -69,6 +70,37 @@ const related = await getRelatedExercises(exercise);
 // a random pick on the SSR render path would reshuffle it on every reload and
 // read as a glitch rather than as variety.
 const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
+
+/**
+ * The taxonomy pills, resolved HERE and handed to the island as plain strings.
+ *
+ * "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus, topic
+ * and skill labels are exercise data and stay English in every locale
+ * (docs/exercise-model.md, "Authoring rules"). Composing them on this side is
+ * what keeps `exerciseTaxonomy.ts` and `UI_LABELS` out of the client bundle —
+ * the island carries no vocabulary of its own.
+ *
+ * The FOCUS sits first among the data badges: it is what the exercise teaches.
+ * The topic is LAST and conditional — it qualifies the exercise rather than
+ * naming it, and an exercise with no setting must render no badge at all
+ * instead of an empty pill.
+ *
+ * WHY THE ISLAND DRAWS THEM NOW: the countdown has to share their row, at the
+ * top-right of the exercise card, and the countdown is React state. Two halves
+ * of one flex row cannot live on two sides of the island boundary.
+ */
+const badges: ExerciseBadge[] = [
+  { label: `${t.level} ${exercise.level}`, variant: 'secondary' },
+  { label: FOCUS_LABELS[exercise.focus], variant: 'outline' },
+  { label: SKILL_LABELS[exercise.skill], variant: 'outline' },
+];
+
+if (exercise.topic) {
+  badges.push({
+    label: TOPIC_LABELS[exercise.topic] ?? exercise.topic,
+    variant: 'outline',
+  });
+}
 ---
 
 <BaseLayout lang={lang} title={heading} description={t.description}>
@@ -140,30 +172,15 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
         &larr; {t.back}
       </a>
 
-    {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus,
-        topic and skill labels are exercise data and stay English in every
-        locale (docs/exercise-model.md, "Authoring rules").
-
-        The FOCUS sits first among the data badges: it is what the exercise
-        teaches. The topic is LAST and conditional — it qualifies the exercise
-        rather than naming it, and an exercise with no setting must render no
-        badge at all instead of an empty pill. */}
-      <header class="flex flex-wrap items-center gap-3">
-        <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
-        <Badge variant="outline">{FOCUS_LABELS[exercise.focus]}</Badge>
-        <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
-        {
-          exercise.topic && (
-            <Badge variant="outline">
-              {TOPIC_LABELS[exercise.topic] ?? exercise.topic}
-            </Badge>
-          )
-        }
-      </header>
-
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
         (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the
         row we already fetched — no HTTP check on the render path.
+
+        DELIBERATELY OUTSIDE THE EXERCISE CARD. The card frames the one bounded
+        area the learner works inside; the audio is the stimulus they listen to
+        before working, and a native `<audio>` bar is a piece of browser chrome
+        that no styling of ours reaches. Putting it in the frame would make the
+        card's edge look like it belonged to the player.
 
         Capped at `max-w-2xl` now that the container is 72rem: a native audio bar
         stretched to full width puts its play button and its scrubber at opposite
@@ -179,8 +196,16 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
         )
       }
 
-      {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
-      <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+      {/* Grading runs entirely in the browser: stateless, instant, no accounts.
+          The island draws the whole exercise CARD — badges, countdown, prompt,
+          stepper and action button — because the countdown and the gate are
+          React state and the card is the row they share. */}
+      <ExerciseIsland
+        client:load
+        lang={lang}
+        payload={exercise.payload}
+        badges={badges}
+      />
     </div>
 
     {/* Related by LEVEL, not focus: someone browsing a level is roughly at that

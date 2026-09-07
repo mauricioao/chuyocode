@@ -20,7 +20,6 @@ import ExerciseIsland, {
   clearIncorrectAnswers,
   COPY,
   firstIncorrectSlotId,
-  hasSubmittableAnswer,
 } from './ExerciseIsland';
 
 /** One choice slot. The smallest gradeable exercise. */
@@ -377,29 +376,12 @@ describe('ExerciseIsland — grading', () => {
   });
 });
 
-describe('hasSubmittableAnswer', () => {
-  it('is false for an untouched exercise and true once a slot is answered', () => {
-    expect(hasSubmittableAnswer(single, {})).toBe(false);
-    expect(hasSubmittableAnswer(single, { s1: ['b'] })).toBe(true);
-  });
-
-  it('treats an empty array as unanswered, not as an answer', () => {
-    expect(hasSubmittableAnswer(single, { s1: [] })).toBe(false);
-  });
-
-  it('needs ANY slot, not ALL of them', () => {
-    expect(hasSubmittableAnswer(pair, { s2: ['a'] })).toBe(true);
-  });
-
-  it('ignores answers to a slot whose mechanic never rendered', () => {
-    // `h1` is a hotspot: no renderer, so the learner was never offered it.
-    // A stale response entry must not unlock submit on its own...
-    expect(hasSubmittableAnswer(unanswerable, { h1: ['x'] })).toBe(false);
-    // ...but a renderable sibling still does.
-    expect(hasSubmittableAnswer(mixed, { s1: ['b'] })).toBe(true);
-  });
-});
-
+/**
+ * The gate itself is proved in `src/lib/exerciseSubmit.test.ts`, against the
+ * pure rule and a one-line registry fake. What is left here is the wiring: that
+ * the island really renders that rule onto a real `disabled` attribute, and that
+ * it re-applies after a retry.
+ */
 describe('ExerciseIsland — submit gating', () => {
   it('disables submit until the learner has answered something', () => {
     render(<ExerciseIsland lang="en" payload={single} />);
@@ -420,7 +402,7 @@ describe('ExerciseIsland — submit gating', () => {
     expect(screen.queryByTestId('slot-feedback-s1')).toBeNull();
   });
 
-  it('enables submit as soon as one answer is selected', () => {
+  it('enables submit once the only slot of the exercise is answered', () => {
     render(<ExerciseIsland lang="en" payload={single} />);
     expect(submitButton().disabled).toBe(true);
 
@@ -430,18 +412,23 @@ describe('ExerciseIsland — submit gating', () => {
     expect(submitButton().hasAttribute('disabled')).toBe(false);
   });
 
-  it('accepts a PARTIAL answer: one of two slots is enough to submit', () => {
+  it('REJECTS a partial answer: every slot has to be answered', () => {
     render(<ExerciseIsland lang="en" payload={pair} />);
     expect(submitButton().disabled).toBe(true);
 
-    // Answer slot 1 only. Slot 2 is deliberately left untouched — and never
-    // even visited, which is the realistic shape of a partial attempt now that
-    // the learner has to walk to the second question.
+    // Answer slot 1 only, and never even visit slot 2 — the realistic shape of
+    // a partial attempt now that the learner has to walk to the second
+    // question. Grading here would mark them Incorrect on a question they have
+    // not been shown.
+    choose('sits');
+    expect(submitButton().disabled).toBe(true);
+
+    goToSlot(1);
     choose('sits');
 
     expect(submitButton().disabled).toBe(false);
     submit();
-    // Partial submission really grades — we did not turn this into "answer all".
+    goToSlot(0);
     expect(screen.getByTestId('slot-feedback-s1').textContent).toContain(
       'Correct',
     );
@@ -461,6 +448,34 @@ describe('ExerciseIsland — submit gating', () => {
     expect(submitButton().disabled).toBe(true);
   });
 
+  /**
+   * THE GATE RE-ARMS AFTER A PARTIAL CORRECTION.
+   *
+   * Correcting clears only the WRONG answers, so the response comes back with a
+   * hole in it — and a hole means the exercise is unfinished again. Without the
+   * gate re-applying, the learner could press Check straight after correcting
+   * and be marked Incorrect on the very slot they were just told to redo.
+   */
+  it('re-locks submit after correcting, until the cleared slot is answered again', () => {
+    render(<ExerciseIsland lang="en" payload={pair} />);
+
+    choose('sits'); // s1 correct
+    goToSlot(1);
+    choose('sits'); // s2 wrong
+    submit();
+
+    retry();
+
+    expect(submitButton().disabled).toBe(true);
+
+    // The surviving correct answer is still there — only the wrong one was
+    // cleared — so a single re-answer is all that is needed.
+    goToSlot(1);
+    choose('sit');
+
+    expect(submitButton().disabled).toBe(false);
+  });
+
   it('never offers an enabled submit when no slot can be rendered', () => {
     render(<ExerciseIsland lang="en" payload={unanswerable} />);
 
@@ -476,7 +491,10 @@ describe('ExerciseIsland — disabled submit hint', () => {
     render(<ExerciseIsland lang="en" payload={single} />);
 
     const hint = screen.getByTestId('exercise-submit-hint');
-    expect(hint.textContent).toContain('Select at least one answer');
+    // The copy must describe the rule that is actually enforced. "At least one"
+    // was true of the old gate and would now be a lie told to the only user who
+    // has nothing else to go on.
+    expect(hint.textContent).toContain('Answer every part');
     // A bare disabled button announces nothing; describedby carries the reason.
     expect(hint.id.length).toBeGreaterThan(0);
     expect(submitButton().getAttribute('aria-describedby')).toBe(hint.id);
@@ -494,7 +512,7 @@ describe('ExerciseIsland — disabled submit hint', () => {
     render(<ExerciseIsland lang="es" payload={single} />);
 
     expect(screen.getByTestId('exercise-submit-hint').textContent).toContain(
-      'Elegir al menos una respuesta',
+      'Responder todas las partes',
     );
   });
 });
@@ -573,25 +591,32 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     expect(screen.getByTestId('slot-feedback-t1').textContent).toContain('Incorrect');
   });
 
-  it('unlocks submit from the dropdown alone, and from the blank alone', () => {
+  it('re-locks submit when any ONE of the three slots is emptied again', () => {
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
     expect(submitButton().disabled).toBe(true);
 
+    choose('sits');
     goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_some' } });
-    expect(submitButton().disabled).toBe(false);
-
-    // Clearing back to the placeholder must RE-LOCK it: an empty dropdown is a
-    // non-answer, not the answer "".
-    fireEvent.change(dropdown(), { target: { value: '' } });
+    // Two of three: still an unfinished exercise.
     expect(submitButton().disabled).toBe(true);
 
     goToSlot(2);
     typeHere('s');
     expect(submitButton().disabled).toBe(false);
 
-    // And an emptied text field re-locks it too, for the same reason.
+    // An emptied text field is a NON-ANSWER, not the answer "" — so the gate
+    // closes again on the slot the learner just gave up on.
     typeHere('');
+    expect(submitButton().disabled).toBe(true);
+    typeHere('sits');
+    expect(submitButton().disabled).toBe(false);
+
+    // Same for a dropdown put back on its placeholder, and it re-locks from a
+    // slot that is NOT the one on screen — the gate reads the whole response,
+    // not the visible step.
+    goToSlot(1);
+    fireEvent.change(dropdown(), { target: { value: '' } });
     expect(submitButton().disabled).toBe(true);
   });
 
@@ -599,6 +624,10 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
 
     choose('sits');
+    goToSlot(1);
+    fireEvent.change(dropdown(), { target: { value: 'i_some' } });
+    goToSlot(2);
+    typeHere('sits');
     submit();
 
     // Locked on EVERY step, not only the one grading happened to be on: the
@@ -716,20 +745,28 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     await dropInto('olives', 'much');
+    goToSlot(1);
+    await dropInto('bread', 'any');
     submit();
 
+    goToSlot(0);
     expect(screen.getByTestId('slot-feedback-olives').textContent).toBe(
       COPY.en.incorrect,
     );
   });
 
-  it('unlocks submit once a tile has been placed', async () => {
+  it('unlocks submit only once BOTH boxes hold a tile', async () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     // An untouched exercise is a NON-ATTEMPT, not a wrong answer.
     expect(submitButton().disabled).toBe(true);
 
     await dropInto('olives', 'some');
+    // One box filled, one still empty: the exercise is not finished.
+    expect(submitButton().disabled).toBe(true);
+
+    goToSlot(1);
+    await dropInto('bread', 'any');
 
     expect(submitButton().disabled).toBe(false);
   });
@@ -738,6 +775,8 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     await dropInto('olives', 'much');
+    goToSlot(1);
+    await dropInto('bread', 'any');
     submit();
     retry();
 
@@ -1098,10 +1137,10 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
     expect(blank().value).toBe('three');
   });
 
-  it('unlocks the controls and re-enables submit after correcting', () => {
+  it('unlocks the controls after correcting, and re-arms the submit gate', () => {
     render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-    fillBlanks(['one', 'nope', '']);
+    fillBlanks(['one', 'nope', 'three']);
     submit();
     goToSlot(0);
     expect(blank().disabled).toBe(true);
@@ -1113,10 +1152,20 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
       expect(blank().disabled).toBe(false);
       expect(blank().hasAttribute('disabled')).toBe(false);
     }
-    // The surviving correct answer keeps submit usable — the learner is one
-    // blank away from finishing, not back at an empty exercise.
-    expect(submitButton().disabled).toBe(false);
     expect(screen.queryByTestId('exercise-verdict')).toBeNull();
+
+    // Correcting punched a HOLE in the response, so the exercise is unfinished
+    // again and the gate closes with it. Otherwise the learner could press Check
+    // immediately and be marked Incorrect on the blank they were just told to
+    // redo — the exact loop the gate exists to prevent.
+    expect(submitButton().disabled).toBe(true);
+
+    // The two surviving correct answers were NOT cleared, so re-answering the
+    // one that was is all it takes: the learner is one blank away from
+    // finishing, not back at an empty exercise.
+    goToSlot(1);
+    typeHere('two');
+    expect(submitButton().disabled).toBe(false);
   });
 
   it('moves focus to the incorrect control', () => {
@@ -1181,6 +1230,8 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
     choose('sits');
     goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_a' } }); // wrong
+    goToSlot(2);
+    typeHere('sits');
     submit();
 
     retry();
@@ -1504,13 +1555,32 @@ describe('ExerciseIsland — stepping through the slots', () => {
       expect(direct).toEqual([COPY.en.correct, COPY.en.incorrect, COPY.en.correct]);
     });
 
-    /** Submit grades EVERY slot at once, including ones never stepped to. */
-    it('grades a slot the learner never opened', () => {
+    /**
+     * The gate and the stepper together: an unopened slot is unanswered, so it
+     * holds submit shut until the learner walks to it. Grading then still runs
+     * over the WHOLE payload in one pass, not over the step that happens to be
+     * on screen.
+     */
+    it('keeps submit shut until every slot has been walked to and answered', () => {
       render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
       typeHere('one');
+      expect(submitButton().disabled).toBe(true);
+      goToSlot(1);
+      typeHere('two');
+      expect(submitButton().disabled).toBe(true);
+
+      goToSlot(2);
+      typeHere('nope');
+      expect(submitButton().disabled).toBe(false);
+
       submit();
 
+      // One pass, three verdicts — including the slot reached last.
+      goToSlot(0);
+      expect(screen.getByTestId('slot-feedback-t1').textContent).toBe(
+        COPY.en.correct,
+      );
       goToSlot(2);
       expect(screen.getByTestId('slot-feedback-t3').textContent).toBe(
         COPY.en.incorrect,

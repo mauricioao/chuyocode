@@ -14,6 +14,7 @@
  * not pull the Astro-side i18n module into the client bundle (see AdModal.tsx).
  */
 import { useEffect, useId, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
@@ -22,7 +23,6 @@ import {
   poolPlacement,
   type ExerciseResponse,
   type Payload,
-  type Slot,
 } from '@/lib/exercisePayload';
 import {
   clampStep,
@@ -31,6 +31,8 @@ import {
   hasPrevStep,
   showsStepper,
 } from '@/lib/exerciseStepper';
+import { answerableSlots, isSubmittable } from '@/lib/exerciseSubmit';
+import { cn } from '@/lib/utils';
 import {
   formatRemaining,
   hasExpired,
@@ -41,15 +43,45 @@ import {
 import UnavailableRenderer from './mechanics/UnavailableRenderer';
 import { comparatorForRenderable, rendererFor } from './mechanics/registry';
 
+/**
+ * One pill in the card's header row, already resolved to a string.
+ *
+ * THE ISLAND NEVER LOOKS A TAXONOMY LABEL UP. `FOCUS_LABELS` and friends live in
+ * `exerciseTaxonomy.ts` on the Astro side, and the "Nivel"/"Level" chrome word
+ * comes from `UI_LABELS` — neither module may be pulled into the client bundle
+ * (the same rule that keeps {@link COPY} local). The page composes the final
+ * strings and hands them over, so this component carries no vocabulary at all.
+ */
+export interface ExerciseBadge {
+  label: string;
+  variant: 'secondary' | 'outline';
+}
+
 export interface ExerciseIslandProps {
   /** Active locale; drives all copy. Falls back to English for unknown values. */
   lang: string;
   /** The validated payload for this exercise. */
   payload: Payload;
+  /**
+   * Level / focus / skill / topic pills, rendered top-LEFT of the card.
+   *
+   * WHY THE ISLAND OWNS THEM NOW. The countdown has to sit at the top-RIGHT of
+   * the same row, and the countdown is React state — it cannot exist outside
+   * this component. Leaving the badges on the Astro side would mean the two
+   * halves of one row lived in two files with no way to share a flex container
+   * across the island boundary. Optional, so the island still renders standalone
+   * in tests and in any future embed.
+   */
+  badges?: readonly ExerciseBadge[];
 }
 
 interface Copy {
   submit: string;
+  /**
+   * Why the button is locked. Must describe the CURRENT rule — every answerable
+   * part answered — because it is the only explanation a screen-reader user
+   * gets for a `disabled` control.
+   */
   submitHint: string;
   /** Empty option of a `select` slot — the "nothing chosen yet" state. */
   selectPlaceholder: string;
@@ -87,7 +119,9 @@ interface Copy {
 export const COPY: Record<'es' | 'en', Copy> = {
   es: {
     submit: 'Comprobar',
-    submitHint: 'Elegir al menos una respuesta para comprobar.',
+    // "Partes" is the word the stepper already uses on screen (`stepWord`), so
+    // the hint names the same thing the position indicator counts.
+    submitHint: 'Responder todas las partes para comprobar.',
     selectPlaceholder: 'Elegir una opción',
     retry: 'Intentar de nuevo',
     // The verb alone. The verdict directly above already names which answers
@@ -108,7 +142,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
   },
   en: {
     submit: 'Check',
-    submitHint: 'Select at least one answer to check.',
+    submitHint: 'Answer every part to check.',
     selectPlaceholder: 'Choose an option',
     retry: 'Try again',
     fix: 'Fix',
@@ -178,33 +212,50 @@ function copyFor(lang: string): Copy {
 const ACTION_BUTTON = 'h-12 w-fit px-8 text-lg sm:h-14 sm:px-10 sm:text-xl';
 
 /**
- * The slots the learner was actually OFFERED — those whose mechanic shipped.
+ * THE CARD — one bounded area holding the whole exercise.
  *
- * Same structural invariant `comparatorForRenderable` enforces for grading: a
- * slot we could not DRAW must not drive the UI either. An exercise made only of
- * unshipped mechanics is therefore never submittable, because there is nothing
- * the learner could have answered.
+ * WHY A BORDER AND NOT A SURFACE. The obvious way to bound a region on this
+ * site is `bg-card` (#18181b), and it is wrong here: `TILE_BASE` and the
+ * `select` control already use `bg-card` for the things the learner MANIPULATES.
+ * Painting the container the same colour would flatten the tiles into their own
+ * background — the one contrast in this UI that carries meaning. So the frame is
+ * a line, and the exercise keeps sitting on the page's true black.
+ *
+ * WHY `border-platinum/15` AND NOT `border-border`. The brief asked for a soft,
+ * near-white grey. Platinum (#f4f4f5) IS the palette's near-white; at 15% over
+ * black it resolves to a hairline around #232323 — present enough to read as an
+ * edge, quiet enough that it never competes with the amber accent or with the
+ * dashed drop targets, which are the two things on this page allowed to draw the
+ * eye. `border-border` (#27272a, Shadow Grey) is the same VALUE by accident but
+ * the wrong INTENT: it is the token for structural dividers between sections,
+ * and it does not track if the divider colour is ever retuned. No new colour is
+ * introduced either way — this is an alpha of an existing `@theme` token, which
+ * is the documented escape hatch when nothing existing is close.
+ *
+ * `rounded-lg` and not more: a heavier radius turns a frame into a widget.
+ *
+ * THE MIN-HEIGHT IS THE LAYOUT. Without it the card hugs its content and there
+ * is no "free space" for the prompt to sit in the middle of, so a one-line
+ * exercise would render as a thin strip with its stepper jammed under it. 24rem
+ * (384px) is under a 320px-wide phone's usable viewport height, so it adds
+ * breathing room without ever forcing a scroll on its own.
+ *
+ * Padding is small on a phone deliberately: at 320px the page already spends
+ * `px-4`, and a generous card inset on top of that is what turns a frame into
+ * the cramped box this was supposed to avoid.
  */
-function answerableSlots(payload: Payload): Slot[] {
-  return payload.slots.filter((slot) => rendererFor(slot.input) !== null);
-}
+const CARD =
+  'flex min-h-[24rem] w-full flex-col gap-6 rounded-lg border border-platinum/15 p-4 sm:min-h-[28rem] sm:gap-8 sm:p-6 lg:p-8';
 
 /**
- * Has the learner answered at least ONE slot they could actually answer?
+ * The registry, adapted to the shape `exerciseSubmit.ts` asks for.
  *
- * Deliberately "at least one", NOT "all": partial submission of a multi-slot
- * exercise stays legitimate. This gates only the NON-ATTEMPT. Submitting an
- * untouched exercise is not a mistake to be marked `Incorrect` — it is not an
- * attempt at all, and grading it punishes the learner for our own affordance.
+ * The gate is pure and lives in `src/lib`, which is deliberately free of React;
+ * the registry is a map of components. This one-liner is the whole seam between
+ * them, and it is the same shape `comparatorForRenderable` uses for grading —
+ * so "a slot we could not draw" means exactly one thing across both rules.
  */
-export function hasSubmittableAnswer(
-  payload: Payload,
-  response: ExerciseResponse,
-): boolean {
-  return answerableSlots(payload).some(
-    (slot) => (response[slot.id]?.length ?? 0) > 0,
-  );
-}
+const isRenderable = (input: string) => rendererFor(input) !== null;
 
 /**
  * Drop the answers a grading run marked `incorrect`, keeping everything else.
@@ -258,7 +309,11 @@ export function firstIncorrectSlotId(
   return slot?.id ?? null;
 }
 
-export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
+export default function ExerciseIsland({
+  lang,
+  payload,
+  badges = [],
+}: ExerciseIslandProps) {
   const t = copyFor(lang);
 
   const [response, setResponse] = useState<ExerciseResponse>({});
@@ -267,7 +322,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   const [result, setResult] = useState<GradeResult | null>(null);
 
   const graded = result !== null;
-  const canSubmit = hasSubmittableAnswer(payload, response);
+  const canSubmit = isSubmittable(payload, response, isRenderable);
   // Derived from the payload every render — cheap, and it cannot fall out of
   // sync with content the way a stored copy would.
   const placement = poolPlacement(payload);
@@ -297,7 +352,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   // ships as visible text in reading order. It is withheld when NOTHING is
   // renderable: "pick an answer" would be a lie, and the per-slot unavailable
   // notice is the honest explanation in that case.
-  const showHint = !canSubmit && answerableSlots(payload).length > 0;
+  const showHint = !canSubmit && answerableSlots(payload, isRenderable).length > 0;
   const hintId = useId();
 
   // Slot id -> its primary focusable control, populated by the renderers.
@@ -449,95 +504,76 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   }
 
   return (
-    // `gap-8` rather than `gap-6`: at display scale the slots themselves are
-    // taller, and the old spacing let two questions read as one block.
-    <section className="flex flex-col gap-8">
-      {/* Rendered only for the rare timed exercise. `remaining` is `null` both
-          when no timer was authored and when a malformed one was dropped at the
-          payload boundary, so there is ONE condition here, not two. */}
-      {remaining !== null && (
-        <p
-          data-testid="exercise-timer"
-          // `role="timer"` carries an implicit `aria-live="off"`, which is the
-          // point of using it: a polite live region would make a screen reader
-          // interrupt itself every single second and render the exercise
-          // unusable by ear. The value stays queryable on demand instead.
-          role="timer"
-          className="text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
-        >
-          {t.timeLeft} {formatRemaining(remaining)}
-        </p>
+    <section className={CARD}>
+      {/* THE HEADER ROW: what this exercise IS on the left, how long is left on
+          the right. Rendered only when it would hold something — an untimed
+          exercise embedded without badges gets no empty bar.
+
+          `justify-between` with `flex-wrap`: at 320px a four-pill taxonomy row
+          plus a countdown does not fit on one line, and wrapping the countdown
+          under the pills is the honest degradation. `items-start` so a wrapped
+          countdown aligns with the top of the pill block rather than floating in
+          the middle of it. */}
+      {(badges.length > 0 || remaining !== null) && (
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {badges.map((badge) => (
+              <Badge key={badge.label} variant={badge.variant}>
+                {badge.label}
+              </Badge>
+            ))}
+          </div>
+
+          {/* Rendered only for the rare timed exercise. `remaining` is `null`
+              both when no timer was authored and when a malformed one was
+              dropped at the payload boundary, so there is ONE condition here,
+              not two.
+
+              BEHAVIOUR IS UNCHANGED by the move: still a countdown, still
+              seeded once per mount, still paused by grading. Only its position
+              in the card is different. */}
+          {remaining !== null && (
+            <p
+              data-testid="exercise-timer"
+              // `role="timer"` carries an implicit `aria-live="off"`, which is
+              // the point of using it: a polite live region would make a screen
+              // reader interrupt itself every single second and render the
+              // exercise unusable by ear. The value stays queryable on demand.
+              role="timer"
+              className="ms-auto text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
+            >
+              {t.timeLeft} {formatRemaining(remaining)}
+            </p>
+          )}
+        </header>
       )}
+      {/* THE PROMPT AREA — the visual centre of the card.
 
-      {/* THE STEPPER, and only when there is something to step through. On a
-          single-slot exercise this is absent entirely: "1 de 1" beside two dead
-          arrows is chrome that describes itself and does nothing.
+          `flex-1` makes it claim every pixel the header and the footer do not
+          want, and `justify-center` puts the prompt in the middle of that space,
+          so the card reads prompt-first instead of top-heavy. When the exercise
+          is taller than the card's floor there is no free space left and this
+          degrades to ordinary flow, which is exactly right.
 
-          Navigation ONLY. It never grades, never clears an answer and is never
-          disabled by grading — a learner who has just been marked has to be able
-          to walk back through the slots and read each verdict. */}
-      {stepped && (
-        <nav
-          aria-label={t.stepNav}
-          data-testid="exercise-stepper"
-          className="flex items-center gap-4"
-        >
-          <Button
-            type="button"
-            data-testid="exercise-prev"
-            variant="secondary"
-            onClick={() => goToStep(current - 1)}
-            // A real attribute at the ends, so the control cannot lie about
-            // being usable. NOTE: the pressed button loses focus at the moment
-            // it becomes disabled, which is a browser rule for disabled
-            // elements, not focus trapping — the learner tabs on normally.
-            disabled={!hasPrevStep(current, total)}
-          >
-            {t.stepPrev}
-          </Button>
+          `text-center` is set ONCE, here, and inherits into all four mechanics.
+          Doing it per renderer would be four places for the alignment to drift
+          apart, and the block-level centring of the prompt itself rides on
+          `PROMPT_MEASURE`'s `mx-auto` for the same one-place reason.
 
-          {/* The position, said ONCE for both audiences.
-
-              A live region rather than a second announcement mechanism: the
-              island already reports its verdict this way, and `drop` narrates
-              its gestures through dnd-kit's own region. Adding a third would be
-              three things that can drift.
-
-              The visible text is compact ("2 de 5") because it sits beside the
-              two buttons that explain it. The spoken text names the part AND
-              the slot, because a screen-reader user arrives at "2 de 5" with no
-              buttons in view to give it meaning. */}
-          <p
-            data-testid="exercise-step"
-            role="status"
-            aria-atomic="true"
-            className="text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
-          >
-            <span aria-hidden="true">{formatStep(current, total, t.stepOf)}</span>
-            <span className="sr-only">
-              {`${t.stepWord} ${formatStep(current, total, t.stepOf)}: ${slot?.label ?? ''}`}
-            </span>
-          </p>
-
-          <Button
-            type="button"
-            data-testid="exercise-next"
-            variant="secondary"
-            onClick={() => goToStep(current + 1)}
-            disabled={!hasNextStep(current, total)}
-          >
-            {t.stepNext}
-          </Button>
-        </nav>
-      )}
-
-      {/* `key` on the STEP, not on the slot id: remounting is what restarts the
+          `key` on the STEP, not on the slot id: remounting is what restarts the
           fade, and it is also what guarantees a mechanic cannot carry internal
           state from one question into the next. The learner's answers are not
           in that subtree — they live in `response` — so nothing is lost. */}
-      <div key={current} className={animateStep ? STEP_FADE : undefined}>
+      <div
+        key={current}
+        className={cn('flex flex-1 flex-col text-center', animateStep && STEP_FADE)}
+      >
         {slot && (
-          <div className="flex flex-col gap-3">
+          // `justify-center` here and not only on the parent: a mechanic that
+          // fills its space (a `drop` slot pins its pool to the top edge) is
+          // already centred by its own internal flow, while the mechanics that
+          // hug their content need this to sit mid-card.
+          <div className="flex flex-1 flex-col justify-center gap-3">
             {Renderer ? (
               <Renderer
                 slot={slot}
@@ -596,51 +632,128 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
         )}
       </div>
 
-      {graded ? (
-        <div className="flex flex-col gap-3">
-          <p
-            data-testid="exercise-verdict"
-            role="status"
-            className="text-lg font-semibold text-zinc-100 sm:text-xl"
+      {/* THE FOOT OF THE CARD: where the learner is, then what to press.
+
+          Position above action is the order the two things are USED in — you
+          decide you have finished walking the parts, then you check. It is also
+          the order they must be read in, and the DOM says so rather than a
+          `order-*` utility saying it only to the eye.
+
+          `items-center` centres both blocks; the buttons keep their own `w-fit`,
+          so nothing here stretches a control to the card's width. */}
+      <footer className="flex flex-col items-center gap-4">
+        {/* THE STEPPER, and only when there is something to step through. On a
+            single-slot exercise this is absent entirely: "1 de 1" beside two
+            dead arrows is chrome that describes itself and does nothing.
+
+            Navigation ONLY. It never grades, never clears an answer and is never
+            disabled by grading — a learner who has just been marked has to be
+            able to walk back through the slots and read each verdict.
+
+            STILL THE TEXT BUTTONS. Swapping them for arrows is a separate piece
+            of work with its own accessible-name problem to solve. */}
+        {stepped && (
+          <nav
+            aria-label={t.stepNav}
+            data-testid="exercise-stepper"
+            className="flex flex-wrap items-center justify-center gap-3 sm:gap-4"
           >
-            {result.correct ? t.allCorrect : t.someWrong}
-          </p>
-          <Button
-            type="button"
-            data-testid="exercise-retry"
-            variant="secondary"
-            onClick={retry}
-            className={ACTION_BUTTON}
-          >
-            {result.correct ? t.retry : t.fix}
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {showHint && (
-            <p
-              id={hintId}
-              data-testid="exercise-submit-hint"
-              className="text-base text-muted-foreground"
+            <Button
+              type="button"
+              data-testid="exercise-prev"
+              variant="secondary"
+              onClick={() => goToStep(current - 1)}
+              // A real attribute at the ends, so the control cannot lie about
+              // being usable. NOTE: the pressed button loses focus at the moment
+              // it becomes disabled, which is a browser rule for disabled
+              // elements, not focus trapping — the learner tabs on normally.
+              disabled={!hasPrevStep(current, total)}
             >
-              {t.submitHint}
+              {t.stepPrev}
+            </Button>
+
+            {/* The position, said ONCE for both audiences.
+
+                A live region rather than a second announcement mechanism: the
+                island already reports its verdict this way, and `drop` narrates
+                its gestures through dnd-kit's own region. Adding a third would
+                be three things that can drift.
+
+                The visible text is compact ("2 de 5") because it sits beside the
+                two buttons that explain it. The spoken text names the part AND
+                the slot, because a screen-reader user arrives at "2 de 5" with
+                no buttons in view to give it meaning. */}
+            <p
+              data-testid="exercise-step"
+              role="status"
+              aria-atomic="true"
+              className="text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
+            >
+              <span aria-hidden="true">{formatStep(current, total, t.stepOf)}</span>
+              <span className="sr-only">
+                {`${t.stepWord} ${formatStep(current, total, t.stepOf)}: ${slot?.label ?? ''}`}
+              </span>
             </p>
-          )}
-          <Button
-            type="button"
-            data-testid="exercise-submit"
-            onClick={grade}
-            // A real attribute, not a dimmed style: an unanswered exercise is a
-            // non-attempt, and grading it would mark the learner `Incorrect` for
-            // a mistake they never made.
-            disabled={!canSubmit}
-            aria-describedby={showHint ? hintId : undefined}
-            className={ACTION_BUTTON}
-          >
-            {t.submit}
-          </Button>
-        </div>
-      )}
+
+            <Button
+              type="button"
+              data-testid="exercise-next"
+              variant="secondary"
+              onClick={() => goToStep(current + 1)}
+              disabled={!hasNextStep(current, total)}
+            >
+              {t.stepNext}
+            </Button>
+          </nav>
+        )}
+
+        {graded ? (
+          <div className="flex flex-col items-center gap-3">
+            <p
+              data-testid="exercise-verdict"
+              role="status"
+              className="text-lg font-semibold text-zinc-100 sm:text-xl"
+            >
+              {result.correct ? t.allCorrect : t.someWrong}
+            </p>
+            <Button
+              type="button"
+              data-testid="exercise-retry"
+              variant="secondary"
+              onClick={retry}
+              className={ACTION_BUTTON}
+            >
+              {result.correct ? t.retry : t.fix}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            {showHint && (
+              <p
+                id={hintId}
+                data-testid="exercise-submit-hint"
+                className="text-base text-muted-foreground"
+              >
+                {t.submitHint}
+              </p>
+            )}
+            <Button
+              type="button"
+              data-testid="exercise-submit"
+              onClick={grade}
+              // A real attribute, not a dimmed style: an exercise with parts
+              // still unanswered is an unfinished attempt, and grading it would
+              // mark the learner `Incorrect` on questions the stepper has not
+              // even shown them yet.
+              disabled={!canSubmit}
+              aria-describedby={showHint ? hintId : undefined}
+              className={ACTION_BUTTON}
+            >
+              {t.submit}
+            </Button>
+          </div>
+        )}
+      </footer>
     </section>
   );
 }

@@ -202,6 +202,29 @@ interface PlacementLayout {
 const STACKED = 'flex flex-col gap-4';
 
 /**
+ * The stacked ROOT claims the height the card gives it.
+ *
+ * That extra `flex-1` is what pins a `top` pool to the TOP of the exercise area
+ * and lets the sentence sit in the middle of what is left, instead of the two
+ * floating together as one centred lump. Paired with {@link STACKED_PROMPT}
+ * below: the root grows, the prompt inside it grows and centres, and the pool —
+ * which does not grow — is pushed against whichever edge its order puts it on.
+ */
+const STACKED_FILL = 'flex flex-1 flex-col gap-4';
+
+/** The prompt takes the leftover height and centres itself in it. */
+const STACKED_PROMPT = 'flex-1 justify-center';
+
+/**
+ * A stacked pool is CENTRED, matching the sentence above or below it.
+ *
+ * Only the stacked placements. A `left`/`right` pool lives in its own narrow
+ * column beside the prompt, where centring a wrapped tile row would just make
+ * the column look ragged.
+ */
+const STACKED_POOL = 'justify-center';
+
+/**
  * Side placements COLLAPSE TO A STACK below `sm`.
  *
  * A pool beside a sentence needs a large block on the other side to be usable at
@@ -216,8 +239,18 @@ const SIDE_PROMPT = 'min-w-0 sm:flex-1';
 const SIDE_POOL = 'sm:w-1/3 sm:shrink-0';
 
 const PLACEMENT: Record<PoolPlacement, PlacementLayout> = {
-  bottom: { root: STACKED, prompt: '', pool: '', poolFirst: false },
-  top: { root: STACKED, prompt: '', pool: '', poolFirst: true },
+  bottom: {
+    root: STACKED_FILL,
+    prompt: STACKED_PROMPT,
+    pool: STACKED_POOL,
+    poolFirst: false,
+  },
+  top: {
+    root: STACKED_FILL,
+    prompt: STACKED_PROMPT,
+    pool: STACKED_POOL,
+    poolFirst: true,
+  },
   left: { root: SIDE, prompt: SIDE_PROMPT, pool: SIDE_POOL, poolFirst: true },
   right: { root: SIDE, prompt: SIDE_PROMPT, pool: SIDE_POOL, poolFirst: false },
 };

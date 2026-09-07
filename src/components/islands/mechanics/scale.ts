@@ -42,8 +42,15 @@ export const PROMPT_SCALE = 'text-xl sm:text-2xl lg:text-3xl';
  *
  * This caps PROSE only. The answer tiles are not prose and deliberately use the
  * full width of the page container.
+ *
+ * `mx-auto` RIDES ALONG BECAUSE THE CAP IS WHAT MAKES CENTRING POSSIBLE. The
+ * exercise card centres its prompt, and `text-center` alone cannot do it: the
+ * prompt is a capped BLOCK, so without auto margins it stays pinned to the left
+ * edge with its centred text sitting inside a left-aligned box. Putting the two
+ * together here keeps the same one-place guarantee the measure already had —
+ * four mechanics, one rule, no renderer that quietly forgets to centre.
  */
-export const PROMPT_MEASURE = 'max-w-[32em]';
+export const PROMPT_MEASURE = 'mx-auto max-w-[32em]';
 
 /**
  * A control spliced INTO a sentence: exactly the size of the words around it.
