@@ -7,10 +7,25 @@ SQL `INSERT` statements for a Postgres (Supabase) table.
 Everything you need — the schema, the closed vocabularies, the payload contract
 and the exact output format — is below.
 
-Read all of it before writing a single exercise. The rules in **§6 (Rules that
-silently break things)** are the ones that produce broken exercises which no
-automated check catches: a learner types a correct answer and is told they are
-wrong, with nothing logged anywhere.
+Read all of it before writing a single exercise. Two sections carry more weight
+than the rest:
+
+- **§6 (Rules that silently break things)** — these produce broken exercises that
+  no automated check catches: a learner types a correct answer and is told they
+  are wrong, with nothing logged anywhere.
+- **§5.5 (Combine mechanics — the standing rule)** — the single biggest quality
+  lever, and the one most likely to be ignored because a page of identical
+  multiple-choice items is the path of least resistance.
+
+## ⚠️ The one rule to read first
+
+**Every exercise should COMBINE mechanics.** A `drop`, a `text` and a `choice`
+inside the *same* exercise — not five identical items, and not five exercises
+that are all radio buttons.
+
+A site where every exercise is "click a radio button" is dead. The interaction
+variety **is** the point. §5.5 explains why this is now practical and gives a
+full worked example.
 
 ---
 
@@ -21,6 +36,14 @@ Spanish-speaking developers practising English. They land on a page, pick a
 an exercise. They answer it in the browser and get instant right/wrong feedback.
 There are **no accounts and no saved progress** — every exercise is a
 self-contained, stateless attempt.
+
+An exercise is made of **slots** — individual things to answer. If an exercise
+has two or more slots, the site shows them **one at a time**, with Previous /
+Next buttons and a "2 of 5" counter. The learner answers the whole exercise, then
+presses Check once and every slot is graded together.
+
+That stepper is why a longer, mixed exercise now reads as an *activity* instead
+of a wall of questions, and it changes what you should be writing. See §5.5.
 
 **All exercise content is in English.** Prompts, options, sentences: English.
 The surrounding site interface is Spanish, but you never write that — you only
@@ -38,7 +61,7 @@ create table exercises (
   level       text not null,        -- A1 | A2 | B1 | B2 | C1 | C2
   focus       text not null,        -- the language point  (PRIMARY axis)
   topic       text,                 -- the context         (SECONDARY, NULLABLE)
-  payload     jsonb not null,       -- the exercise itself
+  payload     jsonb not null default '{}',  -- the exercise itself
   published   boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
@@ -78,9 +101,11 @@ A1  A2  B1  B2  C1  C2
 ```
 writing   reading   listening
 ```
-⚠️ **Do NOT use `listening`.** A listening row requires a real, reachable audio
-URL, and a fake one renders a broken player. Use `writing` or `reading` only.
-There is no `speaking` — nothing can auto-grade speech.
+⚠️ **Do NOT use `listening`.** The database has a constraint that **rejects** any
+`listening` row without a non-empty `payload.media.audio`, so the INSERT fails
+outright — and a fake URL that satisfies the constraint renders a broken player
+instead. Use `writing` or `reading` only. There is no `speaking` — nothing can
+auto-grade speech.
 
 ### `focus` — 33 values
 ```
@@ -111,19 +136,19 @@ code-review  daily-standup  technical-documentation  job-interview
 
 ---
 
-## 4. The payload — three concepts
+## 4. The payload — two required keys, two optional ones
 
 Every exercise, of every kind, is the same shape:
 
 ```jsonc
 {
-  "pools": {                        // named sets of selectable items
+  "pools": {                        // sets of selectable items — always write it, even as {}
     "verbs": [
       { "id": "v_sit",  "text": "sit"  },
       { "id": "v_sits", "text": "sits" }
     ]
   },
-  "slots": [                        // the things to answer
+  "slots": [                        // REQUIRED — the things to answer
     {
       "id": "s1",
       "label": "The cat ___ on the mat.",
@@ -131,24 +156,87 @@ Every exercise, of every kind, is the same shape:
       "pool": "verbs",              // which pool to draw from
       "answer": ["v_sits"]          // the correct ITEM ID
     }
-  ]
+  ],
+  "timer":  { "seconds": 120 },     // OPTIONAL — a countdown for the whole exercise
+  "layout": { "pool": "top" }       // OPTIONAL — where drag tiles sit
 }
 ```
 
 - **`pools`** — reusable sets of options. One pool can serve many slots; declare
-  the options once, not once per question.
+  the options once, not once per question. **Always include the key**, as `{}`
+  when no slot needs a pool — it keeps every payload the same shape.
 - **`slots`** — each is one thing the learner answers. A slot carries its own
   `answer` inline.
 - **`label`** — the sentence. Mark the gap with `___` (three or more
   underscores); the input control is rendered **inside** the sentence at that
-  point.
+  point. A label with **no** `___` is also valid — the control is then drawn
+  below the sentence, which is what you want for `"What did she say?"` or
+  `"Drag the olives here:"`.
 
-An exercise may have **several slots**, and they may use **different mechanics**.
-Each slot is graded independently.
+An exercise may have **several slots**, and they **should** use **different
+mechanics** (§5.5). Each slot is graded independently.
+
+### 4.1 `timer` — optional
+
+```jsonc
+"timer": { "seconds": 90 }
+```
+
+A countdown for the **whole exercise**, not per slot. When it reaches zero the
+exercise grades itself with whatever the learner has entered. It pauses while
+they read their feedback and resumes if they retry.
+
+| Rule | |
+|---|---|
+| Whole seconds, **1 or more** | `{"seconds": 90}` ✅ |
+| Zero, negative, fractional-below-one, or non-numeric | silently **dropped** — the exercise just renders untimed |
+| Omitted | untimed. **This is the normal case.** |
+
+Use it sparingly and only where time pressure is part of the skill — a
+listening-style recall drill, a quick-fire verb form. Most exercises should have
+no timer. A timer on a careful reading exercise punishes the behaviour you want.
+When you do use one, budget roughly **20–30 seconds per slot**; the learner has
+to walk through them one at a time.
+
+### 4.2 `layout` — optional
+
+```jsonc
+"layout": { "pool": "top" }
+```
+
+Only affects the `drop` mechanic: it says where the draggable tiles sit relative
+to the sentence. Accepted values: `bottom`, `top`, `left`, `right`. Anything else
+is silently **dropped** and the default applies.
+
+**You almost never need this.** If you omit it, the placement is derived:
+
+| Slots in the exercise | Derived placement |
+|---|---|
+| exactly 1 | `bottom` — sentence first, tiles under it |
+| 2 or more | `top` — tiles pinned above, in one fixed place for every slot |
+
+Set it explicitly only to override that. `left` / `right` are never derived —
+they are only usable when there is a big block on the other side to balance
+them, and they collapse to a stack on a phone anyway.
+
+### 4.3 What the stepper means for you
+
+If an exercise has 2+ slots, the learner sees **one slot at a time** and steps
+through them. Practical consequences:
+
+- **Slot order is pacing.** The array order *is* the order they walk. Put
+  recognition tasks early, production tasks later.
+- **Longer exercises are fine now.** Six to ten slots reads as an activity.
+  Before the stepper, ten slots was ten stacked questions — a wall.
+- **Each slot must stand alone.** The learner sees only the current one, so a
+  slot must never depend on reading the sentence in the previous slot.
+- **Never split one sentence across two slots** and expect them to be read
+  together. If two blanks belong to one sentence, they are still two slots (§6.4)
+  — repeat enough of the sentence in each label that each one makes sense alone.
 
 ---
 
-## 5. The three mechanics
+## 5. The four mechanics
 
 ### `choice` — multiple choice (radio buttons)
 Needs a `pool` with **at least 2 items**. `answer` holds the id of the correct
@@ -211,27 +299,172 @@ options.
 Grading trims whitespace and ignores capitalisation, but **inner spacing
 matters**: `is  sitting` (two spaces) will not match `is sitting`.
 
-### Mixing mechanics in one exercise
+### `drop` — drag a tile into a gap
+
+Needs a `pool`. The learner drags a tile from the pool into a box. `answer` holds
+the id of the correct tile, exactly like `choice` and `select` — the drag is a
+rendering detail, not a different answer shape.
 
 ```jsonc
 {
-  "pools": { "quant": [
-    { "id": "q_a", "text": "a" }, { "id": "q_some", "text": "some" }
+  "pools": { "verbs": [
+    { "id": "d_went",   "text": "went"   },
+    { "id": "d_gone",   "text": "gone"   },
+    { "id": "d_going",  "text": "going"  }
   ]},
+  "slots": [{
+    "id": "s1",
+    "label": "She ___ to the airport at six.",
+    "input": "drop",
+    "pool": "verbs",
+    "answer": ["d_went"]
+  }]
+}
+```
+
+**Two rules you must author around:**
+
+1. **A placed tile leaves the pool.** Once the learner drops `d_went` into a box,
+   that tile is gone from the pool for **every other `drop` slot in the same
+   exercise**. Pools are shared.
+2. **Dropping onto an occupied box returns the resident tile to the pool.** The
+   incoming tile wins; the old one becomes available again. It is not a swap and
+   nothing is destroyed.
+
+Rule 1 is the one that bites. If an exercise has three `drop` slots reading a
+three-tile pool, the last slot answers itself by elimination. **Always give a
+shared drop pool more tiles than it has slots** — one or two distractors.
+
+Tiles may carry an image instead of text:
+
+```jsonc
+{ "id": "i_olives", "media": "https://…/olives.jpg", "text": "olives" }
+```
+
+Keep the `text` on image tiles when the word is not the answer itself — it is
+what a screen reader announces. Without it the tile is announced as `i_olives`.
+
+`drop` works with a gapped label (`"She ___ to the airport."` — the box is drawn
+inside the sentence) **and** with a gapless one (`"Drag the olives here:"` — the
+box is drawn below). Both are correct; pick whichever reads better.
+
+---
+
+## 5.5 Combine mechanics — the standing rule
+
+> **Every exercise should combine mechanics.** `drop` + `text` + `choice` in the
+> same exercise, not five identical items.
+
+This is a standing authoring rule, not a suggestion. An exercise made of five
+radio buttons is a form. The variety of interaction is a large part of what makes
+the practice feel like practice.
+
+### Why this is practical now
+
+Before the stepper, a ten-slot exercise rendered as ten stacked questions on one
+page — a wall, and an intimidating one. So exercises stayed short and
+single-mechanic, because that was the only shape that read well.
+
+The stepper changed that. **One slot is on screen at a time**, so a longer mixed
+exercise reads as an activity you walk through: drag a tile, next, type a word,
+next, pick an option, next. The variety is now a *feature of the pacing* instead
+of a visual inconsistency.
+
+### The target shape
+
+| | |
+|---|---|
+| Slots per exercise | **4 to 8** is the sweet spot |
+| Distinct mechanics per exercise | **at least 2**, ideally 3 |
+| Mechanics across a `focus` | all four should appear somewhere in that focus |
+
+A single-slot exercise is still legitimate — a quick one-blank drill has its
+place, and it gets no stepper. But it should be the minority, not the default.
+
+### Worked example — `drop` + `select` + `text` + `choice`, timed
+
+```jsonc
+{
+  "timer": { "seconds": 150 },
+  "layout": { "pool": "top" },
+  "pools": {
+    "past_verbs": [
+      { "id": "p_flew",    "text": "flew"    },
+      { "id": "p_landed",  "text": "landed"  },
+      { "id": "p_flown",   "text": "flown"   },
+      { "id": "p_landing", "text": "landing" }
+    ],
+    "preps": [
+      { "id": "pr_at", "text": "at" },
+      { "id": "pr_in", "text": "in" },
+      { "id": "pr_on", "text": "on" }
+    ],
+    "aux": [
+      { "id": "au_did",  "text": "did"  },
+      { "id": "au_was",  "text": "was"  },
+      { "id": "au_were", "text": "were" }
+    ]
+  },
   "slots": [
-    { "id": "s1", "label": "I need ___ help with this ticket.",
-      "input": "select", "pool": "quant", "answer": ["q_some"] },
-    { "id": "s2", "label": "She ___ the bug yesterday.",
-      "input": "text", "answer": ["fixed"] }
+    { "id": "s1",
+      "label": "We ___ to Lisbon on Tuesday morning.",
+      "input": "drop", "pool": "past_verbs", "answer": ["p_flew"] },
+
+    { "id": "s2",
+      "label": "The plane ___ twenty minutes early.",
+      "input": "drop", "pool": "past_verbs", "answer": ["p_landed"] },
+
+    { "id": "s3",
+      "label": "We arrived ___ the airport before seven.",
+      "input": "select", "pool": "preps", "answer": ["pr_at"] },
+
+    { "id": "s4",
+      "label": "I ___ my passport in my jacket, luckily.",
+      "input": "text", "answer": ["found", "had", "kept"] },
+
+    { "id": "s5",
+      "label": "___ you check your bag at the desk?",
+      "input": "choice", "pool": "aux", "answer": ["au_did"] }
   ]
 }
 ```
+
+Row for the SQL file:
+
+```sql
+('flight-to-lisbon', 'writing', 'A2', 'past-simple', 'travel', '{ … }', true),
+```
+
+What makes this example work, point by point:
+
+- **Four mechanics in five slots.** The learner drags, drops again, picks from a
+  dropdown, types, then picks a radio option.
+- **`past_verbs` has four tiles for two `drop` slots.** `p_flown` and `p_landing`
+  are distractors, so the second drop is a real decision and not elimination.
+- **The tiles are pinned `top`** so they stay in the same place as the learner
+  steps between `s1` and `s2`.
+- **Every label stands alone.** No slot needs the previous sentence to make
+  sense, because the learner cannot see it.
+- **`s4` lists three accepted answers**, because three different verbs are
+  genuinely natural there.
+- **150 seconds for five slots** — roughly 30 seconds each.
 
 ---
 
 ## 6. Rules that silently break things
 
 These do not throw. They produce a broken exercise that looks fine.
+
+If you read nothing else in this document, read this table.
+
+| # | Rule | What happens if you break it |
+|---|---|---|
+| 6.1 | `answer` holds item **ids** — never text, never positions | Learner answers correctly, is marked wrong |
+| 6.3 | `text` slots list **every** acceptable answer | Learner answers correctly, is marked wrong |
+| 6.4 | **One `___` per slot** | The second gap renders as literal underscores |
+| 6.8 | **Every slot has a non-empty `answer`** | The **entire exercise** 404s — not just that slot |
+| 6.9 | A shared `drop` pool has more tiles than `drop` slots | The last drop answers itself by elimination |
+| §7 | Apostrophes inside the payload are **doubled** (`don''t`) | The SQL file will not run at all |
 
 ### 6.1 `answer` references item **IDs**, never text, never positions
 ```jsonc
@@ -260,8 +493,26 @@ produce. Think about contractions (`doesn't` / `does not`), alternatives
 all.
 
 ### 6.4 One `___` per slot
-Only the **first** blank in a label receives the input. If a sentence needs two
-blanks, make it **two slots**.
+Only the **first** blank in a label receives the input. Any later `___` stays on
+screen as literal underscores next to the control. If a sentence needs two
+blanks, make it **two slots**:
+
+```jsonc
+// ❌ "A ___ and a ___ walk in."  ->  renders "A [control] and a ___ walk in."
+
+// ✅
+"slots": [
+  { "id": "s1", "label": "A ___ walks into a bar.",  "input": "text", "answer": ["dog"] },
+  { "id": "s2", "label": "The dog orders a ___.",    "input": "text", "answer": ["beer"] }
+]
+```
+
+Note the second label repeats "the dog". The learner sees these on **separate
+steps** (§4.3), so each sentence has to stand on its own.
+
+**A label with no `___` at all is valid**, not an error. The control is drawn
+below the sentence instead of inside it. Use it for questions
+(`"What did she say?"`) and for drag prompts (`"Drag the olives here:"`).
 
 ### 6.5 `slug` must be unique per `(level, focus)`
 Short, English, kebab-case, and descriptive of the exercise — not of the grammar
@@ -274,6 +525,35 @@ those links. Renaming breaks them.
 ### 6.7 The `focus` must be what the exercise actually tests
 A row filed under `past-simple` whose blank tests a preposition is worse than no
 row at all.
+
+In a mixed exercise (§5.5) the slots will inevitably touch more than one language
+point — that is fine and is part of what makes it feel like language. The
+**majority** of the slots must still drill the declared `focus`. In the worked
+example above, three of five slots are past simple; the preposition and the
+auxiliary are supporting work.
+
+### 6.8 Every slot needs a non-empty `answer`
+This one is worse than the others. A slot with `"answer": []`, or with no
+`answer` key at all, does not degrade — it makes the site reject the **whole
+payload**, and the exercise page returns 404. Four perfect slots are lost to one
+forgotten answer.
+
+The same applies to a slot missing its `id` or its `input`.
+
+### 6.9 A shared `drop` pool needs more tiles than it has slots
+```jsonc
+// ❌ 2 drop slots, 2 tiles  -> the second one answers itself
+// ✅ 2 drop slots, 4 tiles  -> two distractors, two real decisions
+```
+A placed tile is removed from the pool for every other `drop` slot in the
+exercise (§5, `drop`). With no spare tiles, the final slot has exactly one
+option left and tests nothing.
+
+### 6.10 Only four mechanics exist
+`choice`, `select`, `text`, `drop`. Any other `input` value — `order`,
+`hotspot`, `match`, `speak` — renders as "this part cannot be answered here yet"
+and is **excluded from the verdict**, so the exercise can report "all correct"
+while that slot was never answered at all. Do not invent mechanics.
 
 ---
 
@@ -300,18 +580,34 @@ values
   }]
 }', true),
 
-('third-person-s', 'reading', 'A1', 'present-simple', NULL, '{
-  "pools": { "verbs": [
-    { "id": "v_work",  "text": "work"  },
-    { "id": "v_works", "text": "works" }
-  ]},
-  "slots": [{
-    "id": "s1",
-    "label": "My sister ___ in a hospital.",
-    "input": "choice",
-    "pool": "verbs",
-    "answer": ["v_works"]
-  }]
+-- A mixed exercise: drop + choice + text, with a timer and a placement hint.
+-- Note the doubled apostrophe in "doesn''t".
+('morning-at-home', 'reading', 'A1', 'present-simple', 'daily-life', '{
+  "timer": { "seconds": 120 },
+  "layout": { "pool": "top" },
+  "pools": {
+    "verbs": [
+      { "id": "v_works",  "text": "works"  },
+      { "id": "v_leaves", "text": "leaves" },
+      { "id": "v_work",   "text": "work"   },
+      { "id": "v_leave",  "text": "leave"  }
+    ],
+    "aux": [
+      { "id": "au_do",   "text": "do"   },
+      { "id": "au_does", "text": "does" },
+      { "id": "au_did",  "text": "did"  }
+    ]
+  },
+  "slots": [
+    { "id": "s1", "label": "My sister ___ in a hospital.",
+      "input": "drop", "pool": "verbs", "answer": ["v_works"] },
+    { "id": "s2", "label": "She ___ the house at six every morning.",
+      "input": "drop", "pool": "verbs", "answer": ["v_leaves"] },
+    { "id": "s3", "label": "___ she work on weekends?",
+      "input": "choice", "pool": "aux", "answer": ["au_does"] },
+    { "id": "s4", "label": "No, she ___ work on Sundays.",
+      "input": "text", "answer": ["doesn''t", "does not"] }
+  ]
 }', true)
 
 on conflict (level, focus, slug) do nothing;
@@ -326,29 +622,63 @@ group by level, focus order by level, focus;
   safe to run twice.
 - `topic` is either a quoted slug or bare `NULL` (no quotes).
 - `published` is `true` for finished exercises.
-- The payload is a single-quoted JSON string. **If your English content contains
-  an apostrophe** (`don't`, `it's`), you must escape it by doubling it inside the
-  SQL string: `"answer": ["doesn''t"]`. This is the single most common way these
-  files fail to run.
+- `timer` and `layout` are optional. Omit them entirely rather than writing
+  `null` or `{}`.
+
+### ⚠️ Apostrophes must be doubled
+
+The payload is a **single-quoted SQL string**. Every apostrophe in your English
+content — `don't`, `it's`, `she's`, `I'm`, `won't` — closes that string early
+and breaks the whole file.
+
+```sql
+"answer": ["doesn''t"]      -- ✅ doubled
+"answer": ["doesn't"]       -- ❌ syntax error, the file will not run
+```
+
+This applies **everywhere inside the payload**: labels, pool item text, and
+answers alike. It is the single most common way these files fail to run, and it
+fails the *entire* file, not one row. Scan for `'` before you deliver.
 
 ---
 
 ## 8. Checklist before you deliver
 
-Go through every exercise:
+### Per exercise — taxonomy and routing
 
 - [ ] `level`, `focus`, `topic`, `skill` are copied **exactly** from §3
 - [ ] No `listening` rows
-- [ ] `slug` is unique within its `(level, focus)`
-- [ ] The `focus` is genuinely what the exercise tests
+- [ ] `slug` is unique within its `(level, focus)`, English, kebab-case
+- [ ] The `focus` is genuinely what the majority of the slots test
 - [ ] Vocabulary and sentence length match the CEFR level
+
+### Per exercise — mechanics mix (§5.5)
+
+- [ ] The exercise uses **at least two different `input` values**
+- [ ] Not a page of `choice`-only exercises — `drop`, `select` and `text` all
+      appear across the delivery
+- [ ] `input` is only ever `choice`, `select`, `text` or `drop`
+- [ ] Slot order makes sense as a walked sequence, and each label stands alone
+
+### Per slot — the silent killers
+
+- [ ] **Every slot has a non-empty `answer`** (one empty answer 404s the whole exercise)
 - [ ] Every `answer` id exists in the referenced pool
 - [ ] `choice`/`select` pools have **at least 2 items**
+- [ ] A shared `drop` pool has **more tiles than `drop` slots** (distractors)
 - [ ] `text` slots have no pool, and list **every** acceptable answer
-- [ ] Every `label` contains `___`, and **only one** per slot
+- [ ] **Only one `___` per label** (a label with none is fine)
 - [ ] Pool ids differ from their visible text
-- [ ] Apostrophes inside the JSON are **doubled** (`don''t`)
-- [ ] Mechanics vary — not five identical multiple-choice items in a row
+
+### Optional fields
+
+- [ ] `timer.seconds` is a whole number `>= 1`, or `timer` is absent
+- [ ] `layout.pool` is `bottom`/`top`/`left`/`right`, or `layout` is absent
+- [ ] Most exercises have **no** timer
+
+### The file
+
+- [ ] Apostrophes inside the payload are **doubled** (`don''t`) — every one of them
 - [ ] The JSON parses (check it, do not assume)
 - [ ] The file ends with `on conflict … do nothing`
 
@@ -356,11 +686,15 @@ Go through every exercise:
 
 ## 9. Quality bar
 
+- **Combine mechanics in every exercise.** This is the standing rule (§5.5). A
+  site where every exercise is a radio button is dead. Aim for 4–8 slots and 2–3
+  different mechanics per exercise.
 - **The exercise must be answerable from the sentence alone.** If several options
   are grammatically valid in the given context, the exercise is broken — even
-  though it will grade "correctly".
-- **Vary the mechanics within a focus.** Five identical multiple-choice items is
-  a worksheet, not practice.
+  though it will grade "correctly". This applies per slot: the learner sees one
+  at a time and cannot use the neighbouring sentences as clues.
+- **Give drag pools distractors.** A `drop` pool sized exactly to its slots turns
+  the last question into arithmetic.
 - **Context is a feature.** "Present simple, in a standup" teaches more than
   "Present simple". But use `topic: NULL` when there genuinely is no context —
   do not fabricate one.
