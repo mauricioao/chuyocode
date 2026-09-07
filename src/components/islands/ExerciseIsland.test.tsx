@@ -12,6 +12,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { CHEVRON_PATH } from '@/lib/arrowControl';
 import type { GradeResult } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
@@ -1455,12 +1456,23 @@ describe('ExerciseIsland — stepping through the slots', () => {
      * REAL BUTTONS, reachable and operable without a pointer. The stepper is
      * the only way to reach slots two and three now, so if the keyboard cannot
      * work it, a keyboard-only learner cannot finish the exercise at all.
+     *
+     * WHAT THIS CANNOT PROVE: that pressing Enter or Space actually activates
+     * them. jsdom does not implement a button's default activation behaviour, so
+     * a `keyDown` here fires no click — asserting one would only prove the test
+     * dispatched its own event. What IS provable is the thing that EARNS that
+     * behaviour from the browser: a real `<button type="button">`, focusable,
+     * not a div with a handler. That is the assertion below, and it is the
+     * property the arrow swap could have broken.
      */
     it('exposes controls a keyboard can reach and operate', () => {
       render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-      expect(nextButton().tagName).toBe('BUTTON');
-      expect(nextButton().type).toBe('button');
+      for (const btn of [prevButton(), nextButton()]) {
+        expect(btn.tagName).toBe('BUTTON');
+        expect(btn.type).toBe('button');
+      }
+
       nextButton().focus();
       expect(document.activeElement).toBe(nextButton());
 
@@ -1484,12 +1496,62 @@ describe('ExerciseIsland — stepping through the slots', () => {
       expect(indicator.textContent).toContain('Second ___');
     });
 
+    /**
+     * THE ARROWS CARRY NO TEXT, SO THE NAME IS THE WHOLE ACCESSIBILITY STORY.
+     *
+     * Swapping "Anterior"/"Siguiente" for chevrons deleted the visible label.
+     * If the localized string had not moved to `aria-label`, both controls would
+     * announce as "button" and a screen-reader user would have no way to tell
+     * them apart — the exact regression this replacement could have shipped.
+     */
     it('localizes the controls and the position', () => {
       render(<ExerciseIsland lang="es" payload={threeBlanks} />);
 
-      expect(prevButton().textContent).toBe(COPY.es.stepPrev);
-      expect(nextButton().textContent).toBe(COPY.es.stepNext);
+      expect(prevButton().getAttribute('aria-label')).toBe(COPY.es.stepPrev);
+      expect(nextButton().getAttribute('aria-label')).toBe(COPY.es.stepNext);
       expect(stepLabel()).toContain('1 de 3');
+    });
+
+    it('names each arrow for assistive tech, and hides the glyph from it', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      // Resolvable BY NAME, which is what a screen-reader user navigates by.
+      expect(screen.getByRole('button', { name: COPY.en.stepPrev })).toBe(
+        prevButton(),
+      );
+      expect(screen.getByRole('button', { name: COPY.en.stepNext })).toBe(
+        nextButton(),
+      );
+
+      // The chevron itself must be hidden, or the name would compete with it.
+      const glyph = nextButton().querySelector('svg');
+      expect(glyph).not.toBeNull();
+      expect(glyph?.getAttribute('aria-hidden')).toBe('true');
+      // No visible text left on the control — the name is the ONLY label.
+      expect(nextButton().textContent).toBe('');
+
+      // And they point OPPOSITE ways, from the same shared geometry the home
+      // page's row uses. One transposed key here is invisible in a diff.
+      expect(prevButton().querySelector('path')?.getAttribute('d')).toBe(
+        CHEVRON_PATH.prev,
+      );
+      expect(nextButton().querySelector('path')?.getAttribute('d')).toBe(
+        CHEVRON_PATH.next,
+      );
+    });
+
+    /**
+     * The position stays the ONLY announcement mechanism. Naming the arrows must
+     * not have added a second one: two live regions racing on every step is how
+     * a screen reader ends up reading the same move twice.
+     */
+    it('adds no second live region alongside the position', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      const stepper = screen.getByTestId('exercise-stepper');
+      const live = stepper.querySelectorAll('[role="status"], [aria-live]');
+      expect(live).toHaveLength(1);
+      expect(live[0]).toBe(screen.getByTestId('exercise-step'));
     });
   });
 

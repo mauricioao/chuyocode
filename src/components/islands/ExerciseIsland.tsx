@@ -14,6 +14,7 @@
  * not pull the Astro-side i18n module into the client bundle (see AdModal.tsx).
  */
 import { useEffect, useId, useRef, useState } from 'react';
+import { ArrowButton } from '@/components/ui/ArrowButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { claimedTileIds } from '@/lib/exerciseDrop';
@@ -98,6 +99,10 @@ interface Copy {
   timeLeft: string;
   /** Accessible name of the whole stepper, so it is not just "navigation". */
   stepNav: string;
+  /**
+   * ACCESSIBLE NAMES, not visible text. The stepper's controls are chevrons, so
+   * these two strings are the only thing that stops them announcing as "button".
+   */
   stepPrev: string;
   stepNext: string;
   /** The connecting word in "2 de 5". Passed to `formatStep`. */
@@ -650,27 +655,35 @@ export default function ExerciseIsland({
             disabled by grading — a learner who has just been marked has to be
             able to walk back through the slots and read each verdict.
 
-            STILL THE TEXT BUTTONS. Swapping them for arrows is a separate piece
-            of work with its own accessible-name problem to solve. */}
+            ARROWS, laid out as `‹ 1 de 5 ›`. Same control the home page's
+            EditorialRow uses: both are composed from `@/lib/arrowControl`, which
+            owns the chevron geometry and the `buttonVariants` arguments. It is a
+            shared CONTRACT rather than a shared component because an `.astro`
+            component is server-only and cannot be rendered inside a hydrated
+            island — see the header of that module.
+
+            THE LABELS DID NOT DISAPPEAR, THEY MOVED. `stepPrev`/`stepNext` were
+            the buttons' visible text; they are now the accessible NAME, because
+            the chevron is `aria-hidden` and a bare chevron announces nothing.
+            The position below is still the only ANNOUNCEMENT mechanism — the
+            arrows are named, not live. */}
         {stepped && (
           <nav
             aria-label={t.stepNav}
             data-testid="exercise-stepper"
             className="flex flex-wrap items-center justify-center gap-3 sm:gap-4"
           >
-            <Button
-              type="button"
+            <ArrowButton
+              direction="prev"
               data-testid="exercise-prev"
-              variant="secondary"
+              label={t.stepPrev}
               onClick={() => goToStep(current - 1)}
               // A real attribute at the ends, so the control cannot lie about
               // being usable. NOTE: the pressed button loses focus at the moment
               // it becomes disabled, which is a browser rule for disabled
               // elements, not focus trapping — the learner tabs on normally.
               disabled={!hasPrevStep(current, total)}
-            >
-              {t.stepPrev}
-            </Button>
+            />
 
             {/* The position, said ONCE for both audiences.
 
@@ -695,15 +708,13 @@ export default function ExerciseIsland({
               </span>
             </p>
 
-            <Button
-              type="button"
+            <ArrowButton
+              direction="next"
               data-testid="exercise-next"
-              variant="secondary"
+              label={t.stepNext}
               onClick={() => goToStep(current + 1)}
               disabled={!hasNextStep(current, total)}
-            >
-              {t.stepNext}
-            </Button>
+            />
           </nav>
         )}
 
