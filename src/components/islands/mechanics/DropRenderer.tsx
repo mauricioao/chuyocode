@@ -37,6 +37,7 @@ import {
   type ScreenReaderInstructions,
 } from '@dnd-kit/core';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { availableTiles, clearTile, placeTile, placedTile } from '@/lib/exerciseDrop';
 import { splitLabelAtBlank, type PoolItem } from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
@@ -131,7 +132,7 @@ const TILE_BASE =
   CONTROL_SCALE;
 
 /**
- * The box: dashed while empty so it reads as "something goes here".
+ * The box: the SHAPE of the target, identical in both states.
  *
  * Grown to match the tiles, because the box is what a learner AIMS AT. A target
  * sized for body text is a target you miss — and the one thing jsdom can never
@@ -140,9 +141,38 @@ const TILE_BASE =
  *
  * `min-w-28` on a phone, `sm:min-w-40` above it: 160px of empty box inside a
  * 288px line at 320px would leave almost nothing for the words on either side.
+ *
+ * The border WIDTH lives here and the border STYLE does not, so the box keeps
+ * exactly the same footprint whether it is empty or full — a tile that lands
+ * must not make the sentence around it reflow.
  */
 const BOX_BASE =
-  'mx-1 inline-flex min-h-16 min-w-28 items-center justify-center rounded-md border-2 border-dashed border-input align-middle transition-colors sm:min-w-40';
+  'mx-1 inline-flex min-h-16 min-w-28 rounded-md border-2 align-middle transition-colors sm:min-w-40';
+
+/**
+ * Empty: a dashed outline around a centred hint.
+ *
+ * THE DASHES ARE THE AFFORDANCE. They are the only thing that says "something
+ * goes here", which is why the filled state below is the one that gives them up
+ * — never this one.
+ */
+const BOX_EMPTY = 'items-center justify-center border-dashed border-input';
+
+/**
+ * Filled: the tile IS the box.
+ *
+ * `items-stretch` (cross axis) plus `flex-1` on the tile itself (main axis) make
+ * the placed tile fill the target completely, so a filled slot READS as filled.
+ * Before this, the tile sat centred inside a larger dashed box with a visible
+ * gap all round — an answer that had been given still looked like a gap waiting
+ * for one.
+ *
+ * The box's own border goes TRANSPARENT rather than disappearing: `border-2`
+ * still occupies its two pixels, so the tile does not change size at the moment
+ * it lands. What remains visible is the tile's OWN solid border, which is what
+ * distinguishes this state from the dashed empty one.
+ */
+const BOX_FILLED = 'items-stretch border-solid border-transparent';
 
 /** The face of a tile — an image when the author supplied one, else its text. */
 function TileFace({ item }: { item: PoolItem }) {
@@ -186,7 +216,11 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
       data-testid={`drop-box-${slotId}`}
       data-over={isOver ? 'true' : undefined}
       data-filled={tile ? 'true' : undefined}
-      className={`${BOX_BASE} ${isOver ? 'border-ring bg-accent/30' : ''}`}
+      // `cn`, not a template string: three of these class groups set a
+      // border-COLOUR, and plain concatenation leaves the winner to stylesheet
+      // order rather than to the order written here. tailwind-merge makes the
+      // last one win, so hovering a FILLED box really does show the ring.
+      className={cn(BOX_BASE, tile ? BOX_FILLED : BOX_EMPTY, isOver && 'border-ring bg-accent/30')}
     >
       {tile ? (
         <button
@@ -196,7 +230,10 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
           // Overrides the tile's own content: "Remove tile honey from the box"
           // says what activation DOES, which the tile's name alone does not.
           aria-label={copy.remove(tileLabel(tile))}
-          className={TILE_BASE}
+          // `flex-1` fills the box's main axis; `BOX_FILLED`'s `items-stretch`
+          // fills the cross one. Together they are what makes the placed tile
+          // FILL its target instead of floating inside it.
+          className={cn(TILE_BASE, 'flex-1')}
         >
           <TileFace item={tile} />
         </button>
