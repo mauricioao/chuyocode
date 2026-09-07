@@ -15,6 +15,7 @@
  * on each side of the gap is exactly what keeps "The cat" from touching the box.
  */
 import type { ReactNode } from 'react';
+import { PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 
 export interface BlankSentenceProps {
   /** Slot id — scopes the test hook, since one page may carry several blanks. */
@@ -40,8 +41,14 @@ export default function BlankSentence({
       // taller than the text around it, so on a narrow screen — where the
       // sentence WILL wrap — default line height lets the next line collide with
       // the box. Wrapping itself is free, because the parts are plain text nodes
-      // and the control is a single unbreakable inline-block.
-      className="text-base leading-loose font-medium text-zinc-100"
+      // and the control is a single unbreakable inline-block. It survives the
+      // move to display scale unchanged: the control still exceeds the text box
+      // it sits in, and a bigger font only makes a collision more visible.
+      //
+      // The size ramp and the measure cap are SHARED (see `./scale`) so the
+      // sentence a `text` blank sits in cannot drift away from the one a `drop`
+      // box sits in.
+      className={`${PROMPT_SCALE} ${PROMPT_MEASURE} leading-loose font-medium text-zinc-100`}
     >
       {before}
       {children}

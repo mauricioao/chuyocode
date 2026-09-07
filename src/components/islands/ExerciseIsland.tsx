@@ -106,6 +106,18 @@ function copyFor(lang: string): Copy {
 }
 
 /**
+ * The submit / retry button, sized for an exercise rather than for a form.
+ *
+ * `w-fit` stays: a full-width primary button at this width would read as a page
+ * action, and the exercise already has exactly one thing to press. The explicit
+ * height and padding override the `Button` variant's own — the shared `lg` size
+ * is `h-9`, which is a toolbar button, not the control that ends an activity.
+ * `cn()` inside `Button` runs these through tailwind-merge, so the later values
+ * win cleanly instead of fighting the variant.
+ */
+const ACTION_BUTTON = 'h-12 w-fit px-8 text-lg sm:h-14 sm:px-10 sm:text-xl';
+
+/**
  * The slots the learner was actually OFFERED — those whose mechanic shipped.
  *
  * Same structural invariant `comparatorForRenderable` enforces for grading: a
@@ -333,7 +345,9 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   }
 
   return (
-    <section className="flex flex-col gap-6">
+    // `gap-8` rather than `gap-6`: at display scale the slots themselves are
+    // taller, and the old spacing let two questions read as one block.
+    <section className="flex flex-col gap-8">
       {/* Rendered only for the rare timed exercise. `remaining` is `null` both
           when no timer was authored and when a malformed one was dropped at the
           payload boundary, so there is ONE condition here, not two. */}
@@ -345,7 +359,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
           // interrupt itself every single second and render the exercise
           // unusable by ear. The value stays queryable on demand instead.
           role="timer"
-          className="text-sm font-semibold text-zinc-100 tabular-nums"
+          className="text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
         >
           {t.timeLeft} {formatRemaining(remaining)}
         </p>
@@ -356,7 +370,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
         const outcome = result?.slots[slot.id];
 
         return (
-          <div key={slot.id} className="flex flex-col gap-2">
+          <div key={slot.id} className="flex flex-col gap-3">
             {Renderer ? (
               <Renderer
                 slot={slot}
@@ -398,8 +412,8 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
                 data-testid={`slot-feedback-${slot.id}`}
                 className={
                   outcome === 'correct'
-                    ? 'text-sm font-semibold text-emerald-400'
-                    : 'text-sm font-semibold text-destructive'
+                    ? 'text-base font-semibold text-emerald-400 sm:text-lg'
+                    : 'text-base font-semibold text-destructive sm:text-lg'
                 }
               >
                 {outcome === 'correct' ? t.correct : t.incorrect}
@@ -414,7 +428,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
           <p
             data-testid="exercise-verdict"
             role="status"
-            className="text-base font-semibold text-zinc-100"
+            className="text-lg font-semibold text-zinc-100 sm:text-xl"
           >
             {result.correct ? t.allCorrect : t.someWrong}
           </p>
@@ -423,7 +437,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
             data-testid="exercise-retry"
             variant="secondary"
             onClick={retry}
-            className="w-fit"
+            className={ACTION_BUTTON}
           >
             {result.correct ? t.retry : t.fix}
           </Button>
@@ -434,7 +448,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
             <p
               id={hintId}
               data-testid="exercise-submit-hint"
-              className="text-sm text-muted-foreground"
+              className="text-base text-muted-foreground"
             >
               {t.submitHint}
             </p>
@@ -448,7 +462,7 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
             // a mistake they never made.
             disabled={!canSubmit}
             aria-describedby={showHint ? hintId : undefined}
-            className="w-fit"
+            className={ACTION_BUTTON}
           >
             {t.submit}
           </Button>

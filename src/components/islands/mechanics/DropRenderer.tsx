@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/label';
 import { availableTiles, clearTile, placeTile, placedTile } from '@/lib/exerciseDrop';
 import { splitLabelAtBlank, type PoolItem } from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
+import { CONTROL_SCALE, PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 import type { MechanicRendererProps } from './types';
 
 /**
@@ -116,20 +117,39 @@ function tileLabel(item: PoolItem): string {
   return item.text ?? item.id;
 }
 
-/** Shared visual tokens, so a tile in the pool and the same tile in the box match. */
+/**
+ * Shared visual tokens, so a tile in the pool and the same tile in the box match.
+ *
+ * `CONTROL_SCALE` is load-bearing for that match now that the sentence is at
+ * display size. The tile in the box inherits from the SENTENCE; the tile in the
+ * pool inherits from the pool list. Both ancestors carry {@link PROMPT_SCALE}
+ * (see the render below), so `1em` resolves to the same pixels in both places
+ * and a tile does not visibly shrink the moment it is pulled out of the box.
+ */
 const TILE_BASE =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-input bg-card px-3 py-2 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-14 items-center justify-center gap-2 rounded-md border border-input bg-card px-4 py-3 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ' +
+  CONTROL_SCALE;
 
-/** The box: dashed while empty so it reads as "something goes here". */
+/**
+ * The box: dashed while empty so it reads as "something goes here".
+ *
+ * Grown to match the tiles, because the box is what a learner AIMS AT. A target
+ * sized for body text is a target you miss — and the one thing jsdom can never
+ * show us is whether a drop lands (every rect there is zero, so collision
+ * detection is degenerate arithmetic rather than geometry).
+ *
+ * `min-w-28` on a phone, `sm:min-w-40` above it: 160px of empty box inside a
+ * 288px line at 320px would leave almost nothing for the words on either side.
+ */
 const BOX_BASE =
-  'mx-1 inline-flex min-h-12 min-w-24 items-center justify-center rounded-md border-2 border-dashed border-input align-middle transition-colors';
+  'mx-1 inline-flex min-h-16 min-w-28 items-center justify-center rounded-md border-2 border-dashed border-input align-middle transition-colors sm:min-w-40';
 
 /** The face of a tile — an image when the author supplied one, else its text. */
 function TileFace({ item }: { item: PoolItem }) {
   if (item.media) {
     // `alt=""` on purpose: the accessible name is carried by the BUTTON, and a
     // duplicate alt would make a screen reader say the tile twice.
-    return <img src={item.media} alt="" className="h-16 w-16 object-contain" />;
+    return <img src={item.media} alt="" className="h-20 w-20 object-contain" />;
   }
   return <span>{tileLabel(item)}</span>;
 }
@@ -181,6 +201,9 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
           <TileFace item={tile} />
         </button>
       ) : (
+        // Deliberately NOT at tile scale. This is a hint about an empty target,
+        // not content: at `1em` inside a display-size sentence it would read as
+        // an answer already sitting in the box.
         <span className="px-3 text-sm text-muted-foreground">{copy.empty}</span>
       )}
     </span>
@@ -328,14 +351,25 @@ export default function DropRenderer({
       accessibility={{ announcements, screenReaderInstructions }}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col gap-3">
+      {/* THE SCALE LIVES ON THIS WRAPPER, not on each child. Both the box and
+          the pool below must resolve `TILE_BASE`'s `1em` to the SAME pixels, and
+          the only way to guarantee that structurally is to give them one common
+          ancestor that sets the font-size. Putting it on each child instead is
+          how the tile in the box and the tile in the pool end up at two
+          different sizes after an edit touches only one of them.
+
+          The spliced sentence sets the identical ramp on its own `<p>`, so the
+          value is the same whichever branch renders. */}
+      <div className={`flex flex-col gap-4 ${PROMPT_SCALE}`}>
         {parts ? (
           <BlankSentence slotId={slot.id} before={parts.before} after={parts.after}>
             {box}
           </BlankSentence>
         ) : (
-          <div className="flex flex-col gap-2">
-            <Label className="text-base font-medium text-zinc-100">{slot.label}</Label>
+          <div className="flex flex-col gap-4">
+            <Label className={`${PROMPT_MEASURE} font-medium text-zinc-100`}>
+              {slot.label}
+            </Label>
             {box}
           </div>
         )}
@@ -345,7 +379,7 @@ export default function DropRenderer({
         <ul
           data-testid={`drop-pool-${slot.id}`}
           aria-label={slot.label}
-          className="flex list-none flex-wrap gap-2 p-0"
+          className="flex list-none flex-wrap gap-3 p-0"
         >
           {available.map((item, index) => (
             <li key={item.id}>

@@ -72,7 +72,23 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
 ---
 
 <BaseLayout lang={lang} title={heading} description={t.description}>
-  <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
+  {/* WHY `max-w-6xl` (72rem) AND NOT SOMETHING NARROWER OR WIDER.
+      `max-w-3xl` (48rem) is an ARTICLE measure, and an exercise is not an
+      article: at that width a display-scale prompt and a two-column tile grid
+      have nowhere to go, which is what made the exercise the smallest thing on
+      a screen holding nothing else.
+
+      72rem is not an arbitrary jump — it is the site header's own `max-w-6xl`
+      (see `Header.astro`), so the exercise column now lines up with the masthead
+      above it instead of floating inside it.
+
+      READABILITY IS CAPPED SEPARATELY, on the prose itself: the prompt carries
+      `max-w-[32em]` (~64 characters, see `mechanics/scale.ts`), so widening this
+      container gives the ANSWER TILES room without stretching a line of text to
+      a width nobody can track back from. */}
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8"
+  >
     <a
       href={`/${lang}/ingles`}
       class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
@@ -103,10 +119,19 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
         (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the
-        row we already fetched — no HTTP check on the render path. */}
+        row we already fetched — no HTTP check on the render path.
+
+        Capped at `max-w-2xl` now that the container is 72rem: a native audio bar
+        stretched to full width puts its play button and its scrubber at opposite
+        ends of the screen, which is a worse control, not a bigger one. */}
     {
       exercise.hasAudio && (
-        <audio controls preload="none" class="w-full" src={exercise.payload.media?.audio} />
+        <audio
+          controls
+          preload="none"
+          class="w-full max-w-2xl"
+          src={exercise.payload.media?.audio}
+        />
       )
     }
 

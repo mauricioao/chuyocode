@@ -109,6 +109,38 @@ describe('ChoiceRenderer', () => {
     ).toBe('unchecked');
   });
 
+  // THE REGRESSION THE TILE LAYOUT COULD ACTUALLY CAUSE. The option text is no
+  // longer a caption beside a 16px dot — it is a `flex-1` label filling a large
+  // tile, and it is the surface the learner will aim at. If the `htmlFor`/`id`
+  // wiring is ever lost while restyling, the tile keeps LOOKING clickable and
+  // silently stops answering everywhere except on the dot itself. Nothing throws.
+  //
+  // This asserts the WIRING through its observable effect (a click on the label
+  // reports the item id), not any class name — jsdom has no layout engine, so
+  // the tile's actual size is unprovable here and is deliberately not asserted.
+  it('answers when the option label is clicked, not only the radio itself', () => {
+    const onChange = vi.fn();
+    render(
+      <ChoiceRenderer slot={slot} items={items} value={[]} onChange={onChange} />,
+    );
+
+    fireEvent.click(screen.getByText('sits'));
+
+    expect(onChange).toHaveBeenCalledWith(['b']);
+  });
+
+  // 🔴 KEYBOARD NAVIGATION IS NOT ASSERTED HERE, AND CANNOT BE. Radix drives
+  // this group with a roving tab order, and both halves of it need a layout
+  // engine jsdom does not have. MEASURED, not assumed: with a value selected,
+  // every option reports `tabindex="-1"` (so there is no tab stop to assert),
+  // and `keyDown ArrowDown` on a focused option moves `document.activeElement`
+  // nowhere and fires no `onChange`. A test written against that behaviour would
+  // pass by describing jsdom rather than the browser.
+  //
+  // Arrow-key movement and Space/Enter selection are therefore BROWSER-ONLY
+  // verification for this slice. What is asserted below and above is everything
+  // the restyle could break that jsdom CAN see: the role, the accessible name,
+  // `aria-checked`, `data-state`, the reported item id, and the label wiring.
   it('locks every option once disabled', () => {
     const onChange = vi.fn();
     render(
