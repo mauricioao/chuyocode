@@ -25,6 +25,13 @@ import {
   type Slot,
 } from '@/lib/exercisePayload';
 import {
+  clampStep,
+  formatStep,
+  hasNextStep,
+  hasPrevStep,
+  showsStepper,
+} from '@/lib/exerciseStepper';
+import {
   formatRemaining,
   hasExpired,
   shouldTick,
@@ -57,6 +64,14 @@ interface Copy {
   someWrong: string;
   /** Prefix for the countdown, shown only on the rare timed exercise. */
   timeLeft: string;
+  /** Accessible name of the whole stepper, so it is not just "navigation". */
+  stepNav: string;
+  stepPrev: string;
+  stepNext: string;
+  /** The connecting word in "2 de 5". Passed to `formatStep`. */
+  stepOf: string;
+  /** Opens the spoken position: "Paso 2 de 5: <slot label>". */
+  stepWord: string;
 }
 
 /**
@@ -85,6 +100,11 @@ export const COPY: Record<'es' | 'en', Copy> = {
     allCorrect: '¡Todo correcto!',
     someWrong: 'Revisar las respuestas marcadas.',
     timeLeft: 'Tiempo restante',
+    stepNav: 'Partes del ejercicio',
+    stepPrev: 'Anterior',
+    stepNext: 'Siguiente',
+    stepOf: 'de',
+    stepWord: 'Parte',
   },
   en: {
     submit: 'Check',
@@ -98,8 +118,47 @@ export const COPY: Record<'es' | 'en', Copy> = {
     allCorrect: 'All correct!',
     someWrong: 'Review the marked answers.',
     timeLeft: 'Time left',
+    stepNav: 'Exercise parts',
+    stepPrev: 'Previous',
+    stepNext: 'Next',
+    stepOf: 'of',
+    stepWord: 'Part',
   },
 };
+
+/**
+ * True when the user asked for reduced motion (SSR-safe: false on the server).
+ *
+ * The `typeof` guards are load-bearing, not defensive noise: `window.matchMedia`
+ * does not exist during SSR and does not exist in jsdom either, so reading
+ * `.matches` off it directly throws and takes the whole island down — a crash on
+ * the machines least likely to be checked. Same helper the carousels already
+ * use; it is duplicated rather than shared because it is three lines and lives
+ * in three unrelated islands.
+ */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/**
+ * The transition between two steps: a short fade-in on the arriving slot.
+ *
+ * BE HONEST ABOUT WHAT THIS IS. It is not a crossfade — the outgoing slot is
+ * replaced immediately and the incoming one fades in over it. A true fade-OUT
+ * needs the old slot to stay mounted while it dims, which means the new one
+ * cannot appear until the fade finishes, and that delays every single press of
+ * "next" for the sake of 200ms of decoration.
+ *
+ * `motion-reduce:animate-none` is belt AND braces next to {@link
+ * prefersReducedMotion}: the JS read is a snapshot taken at render, while the
+ * media query keeps holding after the user changes the setting without
+ * reloading.
+ */
+const STEP_FADE = 'animate-in fade-in-0 duration-200 motion-reduce:animate-none';
 
 /** Resolve copy for a locale, defaulting to English. */
 function copyFor(lang: string): Copy {
@@ -212,6 +271,28 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
   // Derived from the payload every render — cheap, and it cannot fall out of
   // sync with content the way a stored copy would.
   const placement = poolPlacement(payload);
+
+  /**
+   * Which slot of THIS exercise is on screen.
+   *
+   * Component state and nothing more: no URL, no query, no page transition. The
+   * stepper walks the questions inside one exercise, and the answers it walks
+   * past already live in `response` above — so nothing is duplicated here, and
+   * stepping cannot lose an answer because stepping does not own any.
+   */
+  const [step, setStep] = useState(0);
+  const total = payload.slots.length;
+  // Clamped on READ rather than trusted: `payload` can change under a mounted
+  // island, and a stale index would index past the end of a shorter one.
+  const current = clampStep(step, total);
+  const stepped = showsStepper(total);
+  const slot = payload.slots[current];
+  const animateStep = !prefersReducedMotion();
+
+  // Resolved here rather than inside the JSX so the render below stays one flat
+  // block. Only ONE slot is on screen, so there is nothing left to map over.
+  const Renderer = slot ? rendererFor(slot.input) : null;
+  const outcome = slot ? result?.slots[slot.id] : undefined;
   // A bare `disabled` button explains nothing to a screen reader, so the reason
   // ships as visible text in reading order. It is withheld when NOTHING is
   // renderable: "pick an answer" would be a lie, and the per-slot unavailable
@@ -340,12 +421,31 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
     if (result.correct) {
       setResponse({});
       setResult(null);
+      // Starting over means starting at the beginning, not on whichever step
+      // the learner happened to read the verdict from.
+      setStep(0);
       return;
     }
 
+    const firstWrong = firstIncorrectSlotId(payload, result);
+
     setResponse((prev) => clearIncorrectAnswers(prev, result));
-    setPendingFocus(firstIncorrectSlotId(payload, result));
+    // STEP TO THE SLOT BEFORE FOCUSING IT. Only one slot is mounted at a time,
+    // so asking for focus on a slot that is not the current step would fall
+    // through harmlessly and silently — the learner would be told to fix
+    // something they cannot see. Both updates land in the same commit, so the
+    // control exists by the time the focus effect runs.
+    if (firstWrong !== null) {
+      const index = payload.slots.findIndex((s) => s.id === firstWrong);
+      if (index >= 0) setStep(index);
+    }
+    setPendingFocus(firstWrong);
     setResult(null);
+  }
+
+  /** Move to another slot of this exercise. Clamped, so the ends are dead ends. */
+  function goToStep(next: number) {
+    setStep(clampStep(next, total));
   }
 
   return (
@@ -369,12 +469,75 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
         </p>
       )}
 
-      {payload.slots.map((slot) => {
-        const Renderer = rendererFor(slot.input);
-        const outcome = result?.slots[slot.id];
+      {/* THE STEPPER, and only when there is something to step through. On a
+          single-slot exercise this is absent entirely: "1 de 1" beside two dead
+          arrows is chrome that describes itself and does nothing.
 
-        return (
-          <div key={slot.id} className="flex flex-col gap-3">
+          Navigation ONLY. It never grades, never clears an answer and is never
+          disabled by grading — a learner who has just been marked has to be able
+          to walk back through the slots and read each verdict. */}
+      {stepped && (
+        <nav
+          aria-label={t.stepNav}
+          data-testid="exercise-stepper"
+          className="flex items-center gap-4"
+        >
+          <Button
+            type="button"
+            data-testid="exercise-prev"
+            variant="secondary"
+            onClick={() => goToStep(current - 1)}
+            // A real attribute at the ends, so the control cannot lie about
+            // being usable. NOTE: the pressed button loses focus at the moment
+            // it becomes disabled, which is a browser rule for disabled
+            // elements, not focus trapping — the learner tabs on normally.
+            disabled={!hasPrevStep(current, total)}
+          >
+            {t.stepPrev}
+          </Button>
+
+          {/* The position, said ONCE for both audiences.
+
+              A live region rather than a second announcement mechanism: the
+              island already reports its verdict this way, and `drop` narrates
+              its gestures through dnd-kit's own region. Adding a third would be
+              three things that can drift.
+
+              The visible text is compact ("2 de 5") because it sits beside the
+              two buttons that explain it. The spoken text names the part AND
+              the slot, because a screen-reader user arrives at "2 de 5" with no
+              buttons in view to give it meaning. */}
+          <p
+            data-testid="exercise-step"
+            role="status"
+            aria-atomic="true"
+            className="text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
+          >
+            <span aria-hidden="true">{formatStep(current, total, t.stepOf)}</span>
+            <span className="sr-only">
+              {`${t.stepWord} ${formatStep(current, total, t.stepOf)}: ${slot?.label ?? ''}`}
+            </span>
+          </p>
+
+          <Button
+            type="button"
+            data-testid="exercise-next"
+            variant="secondary"
+            onClick={() => goToStep(current + 1)}
+            disabled={!hasNextStep(current, total)}
+          >
+            {t.stepNext}
+          </Button>
+        </nav>
+      )}
+
+      {/* `key` on the STEP, not on the slot id: remounting is what restarts the
+          fade, and it is also what guarantees a mechanic cannot carry internal
+          state from one question into the next. The learner's answers are not
+          in that subtree — they live in `response` — so nothing is lost. */}
+      <div key={current} className={animateStep ? STEP_FADE : undefined}>
+        {slot && (
+          <div className="flex flex-col gap-3">
             {Renderer ? (
               <Renderer
                 slot={slot}
@@ -430,8 +593,8 @@ export default function ExerciseIsland({ lang, payload }: ExerciseIslandProps) {
               </p>
             )}
           </div>
-        );
-      })}
+        )}
+      </div>
 
       {graded ? (
         <div className="flex flex-col gap-3">

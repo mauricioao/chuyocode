@@ -171,13 +171,46 @@ function blank(): HTMLInputElement {
   return screen.getByRole('textbox') as HTMLInputElement;
 }
 
-function blanks(): HTMLInputElement[] {
-  return screen.getAllByRole('textbox') as HTMLInputElement[];
+/**
+ * Walk to the step showing slot `index`, from wherever we are.
+ *
+ * THE ISLAND RENDERS ONE SLOT AT A TIME, so a multi-slot exercise only ever has
+ * one slot's controls in the DOM. Reaching the others is navigation, and this is
+ * the learner's own path to them: press the real buttons. Rewinding with `prev`
+ * first makes the helper absolute rather than relative, so a test never has to
+ * track where a previous line left the stepper.
+ *
+ * A single-slot exercise ships NO stepper, so this is a no-op there — which is
+ * what lets the same helper be dropped into a test that does not step.
+ */
+function goToSlot(index: number) {
+  if (!screen.queryByTestId('exercise-stepper')) return;
+  // Bounded: a stepper that never disables `prev` is a bug, and an unbounded
+  // loop would hang the suite instead of failing it.
+  for (let guard = 0; guard < 50; guard += 1) {
+    const prev = screen.getByTestId('exercise-prev') as HTMLButtonElement;
+    if (prev.disabled) break;
+    fireEvent.click(prev);
+  }
+  for (let i = 0; i < index; i += 1) {
+    fireEvent.click(screen.getByTestId('exercise-next'));
+  }
 }
 
-/** Type into the nth blank, as a learner would. */
-function type(index: number, text: string) {
-  fireEvent.change(blanks()[index]!, { target: { value: text } });
+/** Type into the blank on the CURRENT step, as a learner would. */
+function typeHere(text: string) {
+  fireEvent.change(blank(), { target: { value: text } });
+}
+
+/**
+ * Answer one blank per slot, stepping between them. `''` leaves a slot
+ * untouched, which is how a test says "the learner never answered this one".
+ */
+function fillBlanks(values: string[]) {
+  values.forEach((value, index) => {
+    goToSlot(index);
+    if (value !== '') typeHere(value);
+  });
 }
 
 function retryButton(): HTMLButtonElement {
@@ -255,13 +288,15 @@ describe('ExerciseIsland — rendering', () => {
   it('degrades an unrenderable slot while the rest still renders', () => {
     render(<ExerciseIsland lang="en" payload={mixed} />);
 
-    // The hotspot slot shows the degraded notice...
+    // The choice slot is fully interactive...
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getByText('First')).toBeTruthy();
+
+    // ...and the hotspot slot, one step away, shows the degraded notice.
+    goToSlot(1);
     expect(screen.getByTestId('slot-unavailable-h1').textContent).toContain(
       'cannot be answered here yet',
     );
-    // ...and the choice slot is fully interactive next to it.
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
-    expect(screen.getByText('First')).toBeTruthy();
   });
 });
 
@@ -301,13 +336,16 @@ describe('ExerciseIsland — grading', () => {
     render(<ExerciseIsland lang="en" payload={pair} />);
 
     // Slot 1 answered correctly ('b'), slot 2 answered incorrectly ('b' vs 'a').
-    choose('sits', 0);
-    choose('sits', 1);
+    choose('sits');
+    goToSlot(1);
+    choose('sits');
     submit();
 
+    goToSlot(0);
     expect(screen.getByTestId('slot-feedback-s1').textContent).toContain(
       'Correct',
     );
+    goToSlot(1);
     expect(screen.getByTestId('slot-feedback-s2').textContent).toContain(
       'Incorrect',
     );
@@ -318,15 +356,16 @@ describe('ExerciseIsland — grading', () => {
     choose('sits');
     submit();
 
-    // The degraded slot gets NO correct/incorrect verdict at all...
-    expect(screen.queryByTestId('slot-feedback-h1')).toBeNull();
-    // ...and it does not poison the exercise the learner could actually answer.
+    // It does not poison the exercise the learner could actually answer...
     expect(screen.getByTestId('slot-feedback-s1').textContent).toContain(
       'Correct',
     );
     expect(screen.getByTestId('exercise-verdict').textContent).toContain(
       'All correct',
     );
+    // ...and the degraded slot gets NO correct/incorrect verdict at all.
+    goToSlot(1);
+    expect(screen.queryByTestId('slot-feedback-h1')).toBeNull();
   });
 
   it('shows no feedback before the learner submits', () => {
@@ -395,8 +434,10 @@ describe('ExerciseIsland — submit gating', () => {
     render(<ExerciseIsland lang="en" payload={pair} />);
     expect(submitButton().disabled).toBe(true);
 
-    // Answer slot 1 only. Slot 2 is deliberately left untouched.
-    choose('sits', 0);
+    // Answer slot 1 only. Slot 2 is deliberately left untouched — and never
+    // even visited, which is the realistic shape of a partial attempt now that
+    // the learner has to walk to the second question.
+    choose('sits');
 
     expect(submitButton().disabled).toBe(false);
     submit();
@@ -404,6 +445,7 @@ describe('ExerciseIsland — submit gating', () => {
     expect(screen.getByTestId('slot-feedback-s1').textContent).toContain(
       'Correct',
     );
+    goToSlot(1);
     expect(screen.getByTestId('slot-feedback-s2').textContent).toContain(
       'Incorrect',
     );
@@ -462,8 +504,12 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(2);
+
+    goToSlot(1);
     expect(dropdown()).toBeTruthy();
+    goToSlot(2);
     expect(blank()).toBeTruthy();
+
     // Nothing degraded: all three mechanics ship a renderer now.
     expect(screen.queryByTestId('slot-unavailable-d1')).toBeNull();
     expect(screen.queryByTestId('slot-unavailable-t1')).toBeNull();
@@ -473,15 +519,21 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
 
     choose('sits');
+    goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_some' } });
+    goToSlot(2);
     // Sloppy casing and padding on purpose: the `text` comparator normalizes,
     // and it only gets the chance if the renderer reported the string RAW.
-    fireEvent.change(blank(), { target: { value: '  SITS ' } });
+    typeHere('  SITS ');
     submit();
 
+    goToSlot(0);
     expect(screen.getByTestId('slot-feedback-c1').textContent).toContain('Correct');
+    goToSlot(1);
     expect(screen.getByTestId('slot-feedback-d1').textContent).toContain('Correct');
+    goToSlot(2);
     expect(screen.getByTestId('slot-feedback-t1').textContent).toContain('Correct');
+    // The verdict is about the WHOLE exercise, so it is on screen at every step.
     expect(screen.getByTestId('exercise-verdict').textContent).toContain('All correct');
   });
 
@@ -490,12 +542,17 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
 
     choose('sits');
     // Wrong dropdown id...
+    goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_a' } });
-    fireEvent.change(blank(), { target: { value: 'is sitting' } });
+    goToSlot(2);
+    typeHere('is sitting');
     submit();
 
+    goToSlot(0);
     expect(screen.getByTestId('slot-feedback-c1').textContent).toContain('Correct');
+    goToSlot(1);
     expect(screen.getByTestId('slot-feedback-d1').textContent).toContain('Incorrect');
+    goToSlot(2);
     // ...and the second accepted alternative still passes the text slot.
     expect(screen.getByTestId('slot-feedback-t1').textContent).toContain('Correct');
     expect(screen.getByTestId('exercise-verdict').textContent).toContain('Review');
@@ -505,8 +562,10 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
 
     choose('sits');
+    goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_some' } });
-    fireEvent.change(blank(), { target: { value: 'sitting' } });
+    goToSlot(2);
+    typeHere('sitting');
     submit();
 
     // Guards against a renderer that reports a constant, or a comparator wired
@@ -518,6 +577,7 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
     expect(submitButton().disabled).toBe(true);
 
+    goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_some' } });
     expect(submitButton().disabled).toBe(false);
 
@@ -526,11 +586,12 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     fireEvent.change(dropdown(), { target: { value: '' } });
     expect(submitButton().disabled).toBe(true);
 
-    fireEvent.change(blank(), { target: { value: 's' } });
+    goToSlot(2);
+    typeHere('s');
     expect(submitButton().disabled).toBe(false);
 
     // And an emptied text field re-locks it too, for the same reason.
-    fireEvent.change(blank(), { target: { value: '' } });
+    typeHere('');
     expect(submitButton().disabled).toBe(true);
   });
 
@@ -540,17 +601,23 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
     choose('sits');
     submit();
 
+    // Locked on EVERY step, not only the one grading happened to be on: the
+    // learner walks back through the slots to read their verdicts.
+    goToSlot(1);
     expect(dropdown().disabled).toBe(true);
+    goToSlot(2);
     expect(blank().disabled).toBe(true);
   });
 
   it('localizes the dropdown placeholder', () => {
     render(<ExerciseIsland lang="es" payload={threeMechanics} />);
 
+    goToSlot(1);
     expect(screen.getByRole('option', { name: 'Elegir una opción' })).toBeTruthy();
     cleanup();
 
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
+    goToSlot(1);
     expect(screen.getByRole('option', { name: 'Choose an option' })).toBeTruthy();
   });
 });
@@ -560,6 +627,7 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     expect(tilesIn('olives')).toEqual(['some', 'any', 'much', 'many']);
+    goToSlot(1);
     expect(tilesIn('bread')).toEqual(['some', 'any', 'much', 'many']);
   });
 
@@ -580,6 +648,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     // Gone from the slot that consumed it...
     expect(tilesIn('olives')).not.toContain('some');
     // ...and, the part only the island can know, gone from its sibling too.
+    // The sibling is a step away and MOUNTS FRESH when the learner reaches it,
+    // so this also proves `claimed` is recomputed rather than captured once.
+    goToSlot(1);
     expect(tilesIn('bread')).toEqual(['any', 'much', 'many']);
   });
 
@@ -590,6 +661,7 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
 
     // Three tiles for one remaining slot: consuming one tile must not look like
     // exhausting the pool.
+    goToSlot(1);
     expect(tilesIn('bread')).toHaveLength(3);
   });
 
@@ -597,10 +669,12 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     await dropInto('olives', 'some');
+    goToSlot(1);
     await dropInto('bread', 'any');
 
-    expect(tilesIn('olives')).toEqual(['much', 'many']);
     expect(tilesIn('bread')).toEqual(['much', 'many']);
+    goToSlot(0);
+    expect(tilesIn('olives')).toEqual(['much', 'many']);
   });
 
   it('returns a removed tile to BOTH slots', async () => {
@@ -613,6 +687,7 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
 
     // Derived, not stored: nothing names the tile any more, so it is back.
     expect(tilesIn('olives')).toContain('some');
+    goToSlot(1);
     expect(tilesIn('bread')).toContain('some');
   });
 
@@ -620,12 +695,15 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     await dropInto('olives', 'some');
+    goToSlot(1);
     await dropInto('bread', 'any');
     submit();
 
+    goToSlot(0);
     expect(screen.getByTestId('slot-feedback-olives').textContent).toBe(
       COPY.en.correct,
     );
+    goToSlot(1);
     expect(screen.getByTestId('slot-feedback-bread').textContent).toBe(
       COPY.en.correct,
     );
@@ -666,6 +744,7 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     // The wrong answer was cleared, so its tile is claimable again — by either
     // slot. A learner who must redo a slot needs its tiles back.
     expect(tilesIn('olives')).toContain('much');
+    goToSlot(1);
     expect(tilesIn('bread')).toContain('much');
   });
 });
@@ -998,38 +1077,41 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
   it('keeps the correct answers and clears only the wrong one', () => {
     render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-    type(0, 'one');
-    type(1, 'nope');
-    type(2, 'three');
+    fillBlanks(['one', 'nope', 'three']);
     submit();
 
+    goToSlot(1);
     expect(screen.getByTestId('slot-feedback-t2').textContent).toContain(
       'Incorrect',
     );
 
     retry();
 
-    // Four of five right and being made to redo all five is the bug this fixes.
-    expect(blanks()[0]!.value).toBe('one');
-    expect(blanks()[2]!.value).toBe('three');
     // The wrong one is CLEARED, not left in place: a value that was just marked
     // wrong, with its verdict now gone, invites re-submitting it unchanged.
-    expect(blanks()[1]!.value).toBe('');
+    // Correcting lands ON that slot, so this is the blank now on screen.
+    expect(blank().value).toBe('');
+    // Four of five right and being made to redo all five is the bug this fixes.
+    goToSlot(0);
+    expect(blank().value).toBe('one');
+    goToSlot(2);
+    expect(blank().value).toBe('three');
   });
 
   it('unlocks the controls and re-enables submit after correcting', () => {
     render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-    type(0, 'one');
-    type(1, 'nope');
+    fillBlanks(['one', 'nope', '']);
     submit();
-    expect(blanks()[0]!.disabled).toBe(true);
+    goToSlot(0);
+    expect(blank().disabled).toBe(true);
 
     retry();
 
-    for (const field of blanks()) {
-      expect(field.disabled).toBe(false);
-      expect(field.hasAttribute('disabled')).toBe(false);
+    for (const index of [0, 1, 2]) {
+      goToSlot(index);
+      expect(blank().disabled).toBe(false);
+      expect(blank().hasAttribute('disabled')).toBe(false);
     }
     // The surviving correct answer keeps submit usable — the learner is one
     // blank away from finishing, not back at an empty exercise.
@@ -1040,38 +1122,41 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
   it('moves focus to the incorrect control', () => {
     render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-    type(0, 'one');
-    type(1, 'nope');
-    type(2, 'three');
+    fillBlanks(['one', 'nope', 'three']);
     submit();
 
     retry();
 
-    // Focus must land AFTER the re-render that re-enables the field: focusing a
-    // still-disabled element is a silent no-op that nothing would report.
-    expect(document.activeElement).toBe(blanks()[1]);
+    // CORRECTING STEPS TO THE SLOT AND THEN FOCUSES IT. Only one slot is
+    // mounted, so a focus request aimed at a slot the learner cannot see would
+    // fall through silently — they would be told to fix something off-screen.
+    expect(screen.getByTestId('exercise-step').textContent).toContain('2 of 3');
+    // Focus must also land AFTER the re-render that re-enables the field:
+    // focusing a still-disabled element is a silent no-op.
+    expect(document.activeElement).toBe(blank());
   });
 
   it('focuses the TOP-most wrong control when two are wrong', () => {
     render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-    type(0, 'nope');
-    type(1, 'also-nope');
-    type(2, 'three');
+    fillBlanks(['nope', 'also-nope', 'three']);
     submit();
 
     retry();
 
-    // Not the last one the loop happened to touch: the learner reads top-down.
-    expect(document.activeElement).toBe(blanks()[0]);
-    expect(document.activeElement).not.toBe(blanks()[1]);
+    // Not the last one the loop happened to touch: the learner reads top-down,
+    // so correcting rewinds to the FIRST wrong slot.
+    expect(screen.getByTestId('exercise-step').textContent).toContain('1 of 3');
+    expect(document.activeElement).toBe(blank());
+    expect(blank().value).toBe('');
   });
 
   it('focuses a choice slot WITHOUT answering it on the learner s behalf', () => {
     render(<ExerciseIsland lang="en" payload={choiceThenBlank} />);
 
     choose('sit'); // wrong
-    type(0, 'one'); // correct
+    goToSlot(1);
+    typeHere('one'); // correct
     submit();
 
     retry();
@@ -1086,6 +1171,7 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
       expect(radio.getAttribute('aria-checked')).toBe('false');
     }
     // ...and the blank they got right is still filled in.
+    goToSlot(1);
     expect(blank().value).toBe('one');
   });
 
@@ -1093,6 +1179,7 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
     render(<ExerciseIsland lang="en" payload={threeMechanics} />);
 
     choose('sits');
+    goToSlot(1);
     fireEvent.change(dropdown(), { target: { value: 'i_a' } }); // wrong
     submit();
 
@@ -1105,9 +1192,7 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
   it('still clears EVERYTHING when the whole exercise was correct', () => {
     render(<ExerciseIsland lang="en" payload={threeBlanks} />);
 
-    type(0, 'one');
-    type(1, 'two');
-    type(2, 'three');
+    fillBlanks(['one', 'two', 'three']);
     submit();
     expect(screen.getByTestId('exercise-verdict').textContent).toContain(
       'All correct',
@@ -1116,8 +1201,13 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
     retry();
 
     // Nothing to fix, so the button means "start over" — and it must really
-    // start over, not silently preserve the finished attempt.
-    for (const field of blanks()) expect(field.value).toBe('');
+    // start over, not silently preserve the finished attempt. Including the
+    // step: a fresh attempt begins at the first question.
+    expect(screen.getByTestId('exercise-step').textContent).toContain('1 of 3');
+    for (const index of [0, 1, 2]) {
+      goToSlot(index);
+      expect(blank().value).toBe('');
+    }
     expect(submitButton().disabled).toBe(true);
   });
 
@@ -1189,11 +1279,309 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
 
     retry();
 
-    // The degraded slot is still degraded, still offers no control, and still
-    // gets no verdict — correcting did not disturb it.
+    // The choice slot is answerable again...
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    // ...and the degraded slot is still degraded, still offers no control, and
+    // still gets no verdict — correcting did not disturb it.
+    goToSlot(1);
     expect(screen.getByTestId('slot-unavailable-h1')).toBeTruthy();
     expect(screen.queryByTestId('slot-feedback-h1')).toBeNull();
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+});
+
+/**
+ * The stepper — NAVIGATION ONLY.
+ *
+ * The arithmetic (clamping, the two boundaries, the label) is proved against
+ * pure functions in `exerciseStepper.test.ts`. What is left here is everything
+ * that only exists once React owns the index: that a single-slot exercise gets
+ * no stepper at all, that answers outlive the slot that collected them, that
+ * grading is unaffected by the route the learner took through the questions, and
+ * that the verdicts stay walkable afterwards.
+ *
+ * WHAT THESE CANNOT PROVE: the fade. jsdom runs no animations and computes no
+ * styles, so the transition between two steps is invisible to every assertion
+ * here — only the reduced-motion DECISION is observable, and only because it is
+ * a JS read that can throw.
+ */
+describe('ExerciseIsland — stepping through the slots', () => {
+  function stepLabel(): string {
+    return screen.getByTestId('exercise-step').textContent ?? '';
+  }
+
+  function nextButton(): HTMLButtonElement {
+    return screen.getByTestId('exercise-next') as HTMLButtonElement;
+  }
+
+  function prevButton(): HTMLButtonElement {
+    return screen.getByTestId('exercise-prev') as HTMLButtonElement;
+  }
+
+  /** Install a `matchMedia` stub whose reduced-motion answer we control. */
+  function stubMatchMedia(reduce: boolean) {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion') ? reduce : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+  }
+
+  afterEach(() => {
+    // jsdom ships NO `matchMedia`, and the island's guard depends on that
+    // absence being the real default. Leaving a stub installed would hide a
+    // regression in exactly the code path the guard exists for.
+    Reflect.deleteProperty(window, 'matchMedia');
+  });
+
+  describe('a single-slot exercise', () => {
+    /**
+     * NO STEPPER AT ALL — not a disabled one. This is the shape of nearly every
+     * exercise in the section, so the wrong answer here is the one the learner
+     * sees most often.
+     */
+    it('ships no stepper, no arrows and no position', () => {
+      render(<ExerciseIsland lang="en" payload={single} />);
+
+      expect(screen.queryByTestId('exercise-stepper')).toBeNull();
+      expect(screen.queryByTestId('exercise-prev')).toBeNull();
+      expect(screen.queryByTestId('exercise-next')).toBeNull();
+      expect(screen.queryByTestId('exercise-step')).toBeNull();
+    });
+
+    it('still renders and grades its one slot', () => {
+      render(<ExerciseIsland lang="en" payload={single} />);
+
+      choose('sits');
+      submit();
+
+      expect(screen.getByTestId('slot-feedback-s1').textContent).toBe(
+        COPY.en.correct,
+      );
+    });
+  });
+
+  describe('a multi-slot exercise', () => {
+    it('shows one slot at a time, with its position', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      expect(stepLabel()).toContain('1 of 3');
+      // ONE control on screen, not three: that is the whole change.
+      expect(screen.getAllByRole('textbox')).toHaveLength(1);
+      expect(screen.getByText('First')).toBeTruthy();
+    });
+
+    it('walks forward and back through every slot', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      fireEvent.click(nextButton());
+      expect(stepLabel()).toContain('2 of 3');
+      fireEvent.click(nextButton());
+      expect(stepLabel()).toContain('3 of 3');
+      fireEvent.click(prevButton());
+      expect(stepLabel()).toContain('2 of 3');
+    });
+
+    it('closes both ends instead of wrapping around', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      // A learner who reaches the end has finished the questions, not returned
+      // to the first one.
+      expect(prevButton().disabled).toBe(true);
+      expect(nextButton().disabled).toBe(false);
+
+      goToSlot(2);
+
+      expect(prevButton().disabled).toBe(false);
+      expect(nextButton().disabled).toBe(true);
+    });
+
+    /**
+     * REAL BUTTONS, reachable and operable without a pointer. The stepper is
+     * the only way to reach slots two and three now, so if the keyboard cannot
+     * work it, a keyboard-only learner cannot finish the exercise at all.
+     */
+    it('exposes controls a keyboard can reach and operate', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      expect(nextButton().tagName).toBe('BUTTON');
+      expect(nextButton().type).toBe('button');
+      nextButton().focus();
+      expect(document.activeElement).toBe(nextButton());
+
+      // Focus is NOT trapped: the blank in the slot below is still reachable.
+      blank().focus();
+      expect(document.activeElement).toBe(blank());
+    });
+
+    /** The position is a live region, so the change is spoken, not just drawn. */
+    it('announces which slot the learner moved to, and out of how many', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      const indicator = screen.getByTestId('exercise-step');
+      expect(indicator.getAttribute('role')).toBe('status');
+
+      fireEvent.click(nextButton());
+
+      // The spoken half names the slot as well as the number: a screen-reader
+      // user arrives at "2 of 3" with no buttons in view to give it meaning.
+      expect(indicator.textContent).toContain(`${COPY.en.stepWord} 2 of 3`);
+      expect(indicator.textContent).toContain('Second ___');
+    });
+
+    it('localizes the controls and the position', () => {
+      render(<ExerciseIsland lang="es" payload={threeBlanks} />);
+
+      expect(prevButton().textContent).toBe(COPY.es.stepPrev);
+      expect(nextButton().textContent).toBe(COPY.es.stepNext);
+      expect(stepLabel()).toContain('1 de 3');
+    });
+  });
+
+  describe('answers and grading are untouched by stepping', () => {
+    /**
+     * THE STATE QUESTION. The island already holds every answer, keyed by slot
+     * id; the step is only an index into the slots. If stepping owned any of
+     * that state instead, walking away from a question and back would lose it.
+     */
+    it('keeps an answer the learner steps away from and returns to', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      typeHere('one');
+      goToSlot(2);
+      typeHere('three');
+      goToSlot(0);
+
+      expect(blank().value).toBe('one');
+      goToSlot(2);
+      expect(blank().value).toBe('three');
+      // The slot never visited is still empty — stepping past a question does
+      // not answer it.
+      goToSlot(1);
+      expect(blank().value).toBe('');
+    });
+
+    /**
+     * GRADING DOES NOT CHANGE. Stepping is navigation, so the verdict must
+     * depend on the ANSWERS and not on the path taken to give them.
+     */
+    it('grades identically whether or not the learner wandered', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+      fillBlanks(['one', 'nope', 'three']);
+      submit();
+      const direct = [0, 1, 2].map((i) => {
+        goToSlot(i);
+        return screen.getByTestId(`slot-feedback-t${i + 1}`).textContent;
+      });
+      const directVerdict = screen.getByTestId('exercise-verdict').textContent;
+      cleanup();
+
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+      // The same answers, given in a wandering order with detours in between.
+      goToSlot(2);
+      typeHere('three');
+      goToSlot(0);
+      typeHere('one');
+      goToSlot(1);
+      goToSlot(2);
+      goToSlot(1);
+      typeHere('nope');
+      goToSlot(0);
+      submit();
+      const wandered = [0, 1, 2].map((i) => {
+        goToSlot(i);
+        return screen.getByTestId(`slot-feedback-t${i + 1}`).textContent;
+      });
+
+      expect(wandered).toEqual(direct);
+      expect(screen.getByTestId('exercise-verdict').textContent).toBe(directVerdict);
+      // Triangulation: the run really did grade something, so this is not two
+      // empty lists agreeing with each other.
+      expect(direct).toEqual([COPY.en.correct, COPY.en.incorrect, COPY.en.correct]);
+    });
+
+    /** Submit grades EVERY slot at once, including ones never stepped to. */
+    it('grades a slot the learner never opened', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      typeHere('one');
+      submit();
+
+      goToSlot(2);
+      expect(screen.getByTestId('slot-feedback-t3').textContent).toBe(
+        COPY.en.incorrect,
+      );
+    });
+
+    /**
+     * After grading, the learner must be able to walk back and read each
+     * verdict. The stepper is therefore NEVER disabled by grading — only the
+     * answer controls are.
+     */
+    it('stays navigable after grading so every verdict can be read', () => {
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+
+      fillBlanks(['one', 'nope', 'three']);
+      submit();
+      goToSlot(0);
+
+      expect(nextButton().disabled).toBe(false);
+      expect(blank().disabled).toBe(true);
+
+      const verdicts = [0, 1, 2].map((i) => {
+        goToSlot(i);
+        return screen.getByTestId(`slot-feedback-t${i + 1}`).textContent;
+      });
+      expect(verdicts).toEqual([
+        COPY.en.correct,
+        COPY.en.incorrect,
+        COPY.en.correct,
+      ]);
+    });
+  });
+
+  describe('reduced motion', () => {
+    /**
+     * THE GUARD THAT MATTERS. jsdom ships no `window.matchMedia` at all, and
+     * neither does the server. Reading `.matches` off it directly throws and
+     * takes the whole island down — so this is not a style test, it is a crash
+     * test, and it is the reason the `typeof` guard exists.
+     */
+    it('renders and steps where matchMedia does not exist at all', () => {
+      expect(window.matchMedia).toBeUndefined();
+
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+      fireEvent.click(nextButton());
+
+      expect(stepLabel()).toContain('2 of 3');
+    });
+
+    it('steps normally when the user asked for no motion', () => {
+      stubMatchMedia(true);
+
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+      typeHere('one');
+      fireEvent.click(nextButton());
+      typeHere('two');
+      goToSlot(0);
+
+      // Honouring the request must not cost the learner the navigation itself.
+      expect(stepLabel()).toContain('1 of 3');
+      expect(blank().value).toBe('one');
+    });
+
+    it('steps normally when motion is allowed', () => {
+      stubMatchMedia(false);
+
+      render(<ExerciseIsland lang="en" payload={threeBlanks} />);
+      fireEvent.click(nextButton());
+
+      expect(stepLabel()).toContain('2 of 3');
+    });
   });
 });
 
