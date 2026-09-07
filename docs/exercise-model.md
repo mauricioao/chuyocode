@@ -30,14 +30,16 @@ The rest of this document describes the model. This table describes the **build*
 | `order` | — | — | ❌ neither renderer nor comparator |
 | `hotspot` | — | — | ❌ neither renderer nor comparator |
 
-Optional payload fields, both new and both degrading rather than rejecting:
+One optional payload field, which degrades rather than rejects:
 
 | Field | Purpose |
 |---|---|
-| `timer` | A countdown for the whole exercise. See "Timer". |
 | `layout` | Where the tile pool sits. See "Pool placement". |
 
-And one behaviour that is not a field at all: a multi-slot exercise is walked **one slot at a time**. See "The stepper".
+And two behaviours that are not fields at all, and cannot be authored:
+
+- Every exercise is timed by a **count-up stopwatch**. See "The stopwatch".
+- A multi-slot exercise is walked **one slot at a time**. See "The stepper".
 
 ---
 
@@ -89,12 +91,11 @@ The order of `FOCUSES` is roughly ascending difficulty because it is the order t
 
 ## Payload shape
 
-Three concepts carry the model. Two optional fields sit beside them.
+Three concepts carry the model. One optional field sits beside them.
 
 ```jsonc
 {
   "media": { "audio": "https://…" },          // optional stimulus
-  "timer": { "seconds": 90 },                 // optional countdown
   "layout": { "pool": "top" },                // optional placement hint
   "pools": {
     "food": [
@@ -119,8 +120,9 @@ Three concepts carry the model. Two optional fields sit beside them.
 | `slots` | **yes** | The things to answer. Each carries its own `answer`. |
 | `pools` | by convention | Named sets of selectable items. A pool is **shared across slots** — declare the 18 food images once, not once per row. A missing `pools` parses as `{}`, but always write it: see below. |
 | `media` | no | The stimulus. Presence of `media.audio` is what makes an exercise "listening". |
-| `timer` | no | A countdown for the whole exercise. Absence is the normal case. |
 | `layout` | no | Where the tile pool sits. Absence means "derive it". |
+
+**There is no `timer` field.** Timing is automatic and unconfigurable — see "The stopwatch".
 
 ### Why the answer lives inside the slot
 
@@ -141,13 +143,13 @@ Even for a plain multiple-choice question with one pool, where inline `choices` 
 | No `slots`, or `slots` is empty | Whole payload rejected → the page 404s |
 | Any slot missing `id` or `input` | Whole payload rejected → the page 404s |
 | Any slot with an empty `answer` | Whole payload rejected → the page 404s |
-| A malformed `timer` | Timer dropped. Exercise renders untimed. |
 | A malformed `layout` | Hint dropped. Placement falls back to the derived default. |
+| A key nothing reads (`timer`, `ordered`, a typo) | Dropped silently. The payload is rebuilt field by field, so unknown keys cannot survive it. |
 | A pool item without an `id` | That item dropped. The rest of the pool survives. |
 | A slot naming a pool that does not exist | That slot gets `[]` items. The exercise still renders. |
 | An `input` no renderer knows | That slot degrades alone. See "Why this cannot break existing exercises". |
 
-The rule behind the split: **a broken slot is ungradeable, so drawing it would lie to the learner.** A broken timer just means no clock, and a broken layout hint just means the tiles sit where they would have sat anyway — turning a typo in an optional field into a 404 on real content is the worse trade.
+The rule behind the split: **a broken slot is ungradeable, so drawing it would lie to the learner.** A broken layout hint just means the tiles sit where they would have sat anyway — turning a typo in an optional field into a 404 on real content is the worse trade.
 
 The first three rows are the ones that bite authors. One slot with a forgotten `answer` takes down the *entire* exercise, not that slot — which is why "every slot has a non-empty `answer`" is the first line of the authoring rules.
 
@@ -168,37 +170,49 @@ Stable ids also unlock **shuffling options on every render**, which matters: wit
 
 ---
 
-## Timer
+## The stopwatch
 
-Optional. A countdown for the **whole exercise**.
+**Not a field. Nothing to author, nothing to configure, and no way to switch it off.**
 
-```jsonc
-"timer": { "seconds": 90 }
-```
+Every exercise carries a count-up stopwatch in the top-right corner of the card, reading `mm:ss` from `00:00`. It reports how long the learner took. It does not impose a limit, cannot grade, and cannot end an exercise.
 
-| Rule | Behaviour |
+| Event | Behaviour |
 |---|---|
-| Absent | Untimed. This is the normal case and a complete experience. |
-| `seconds` is not a finite number | Dropped → untimed. |
-| `seconds` floors below `1` (`0`, `0.4`, `-5`) | Dropped → untimed. |
-| Fractional (`90.7`) | Floored to `90`. |
-| Valid | Counts down from mount. On zero, the exercise grades itself. |
+| The exercise becomes answerable | Starts at `00:00`. |
+| Every second after that | `00:01`, `00:02`, … `01:05`, … `10:00`. No cap; an hour reads `60:00`. |
+| An **incorrect** submission | **Keeps running.** |
+| Reading an incorrect verdict, and pressing `Fix` | **Keeps running** — same attempt, and it never jumps backwards. |
+| A **fully correct** submission | **Stops.** The one finish line. |
+| Pressing `Try again` after a correct verdict | Resets to `00:00` and runs again. |
+| Leaving the page | The interval is cleared. Nothing is stored, so a reload starts a fresh attempt at zero. |
 
-### Why it is payload data and not a column
+### Why it replaced the countdown
 
-A time limit is an authoring choice per exercise, and the overwhelming majority of exercises will never carry one. A column would put a nullable integer on every row to describe a rare case, and would need a migration the first time the shape grows a second field (a grace period, a per-slot limit). `jsonb` costs nothing for the exercises that omit it.
+The countdown was an optional authored limit (`timer: { seconds: 90 }`) that graded the exercise when it hit zero. It went for three reasons:
 
-### Why it is exercise-level and never slot-level
+1. **It was authorable, so it was almost never authored.** A field most content omits describes the rare case, and the common case — "how long did this take me?" — had no answer at all.
+2. **A limit punishes; a measurement informs.** There are no accounts and no scores here (see "Non-goals"), so a clock that ends the exercise imposes a cost with nothing to spend it on. Measuring is the honest version of the same information.
+3. **Auto-grading at zero was the one path nobody exercised by hand.** It graded an attempt the learner had not finished, and it needed a latch to stop a retry from re-firing it. Deleting it removed a whole state machine.
 
-Slots grade independently but they are **answered together**. A per-slot clock would mean several countdowns racing on one page with nothing to tell the learner which one is about to fire.
+### Why it does not pause while a wrong verdict is on screen
 
-### Why zero is rejected rather than clamped
+**This is a deliberate reversal**, and the countdown's opposite rule is worth stating so it is not "fixed" back.
 
-A zero-second timer fires on mount and grades the exercise before the learner has read the first word — an exercise nobody can answer. Silently dropping to "untimed" is strictly better than shipping that.
+The countdown *paused* while feedback was up. That was right for a **budget**: draining it while the learner read would punish them for looking at the feedback we had just asked them to look at.
 
-### What the clock does while the learner reads feedback
+A stopwatch has no budget and imposes no penalty — it reports elapsed time. Freezing it would make it report something else: two learners who took the same real time would see different numbers depending on how long they stared at a verdict, and a three-minute struggle could read `00:40`. **On a wrong answer, reading why is not a break in the attempt — it is the work.**
 
-It **pauses**, and resumes on retry. The clock measures time spent *answering*; reading a verdict is not answering, and letting it drain while the learner reads would punish them for looking at the feedback we just asked them to look at.
+The structural argument agrees. One stop condition means there is no resume, so no later state can restart the clock, and the machine terminates on the single event that means "finished".
+
+### Why a correct submission is the only stop
+
+It is the only event that means the exercise is *over*. `correct` already means "every gradeable slot is correct", so an exercise whose only non-correct slot was `unavailable` finishes too — the learner did everything that was asked of them.
+
+`Fix` and `Try again` look like one button but are two behaviours, and the clock follows that split exactly: `Fix` continues the same attempt (no reset), `Try again` discards it (reset to `00:00`).
+
+### Where the rules live
+
+`src/lib/exerciseStopwatch.ts` — pure, no React, no `setInterval`. The island owns the interval; the module owns every decision the interval makes, so the stop condition and the formatting are provable without a clock.
 
 ---
 
@@ -571,11 +585,10 @@ Any mechanic plus an audio stimulus. Nothing else changes.
 
 ### Mixed mechanics in one exercise
 
-**This is the target shape, not an advanced case.** Four slots, four mechanics, one timer, one placement hint. The stepper walks them one at a time, so this reads as an activity rather than a form.
+**This is the target shape, not an advanced case.** Four slots, four mechanics, one placement hint. The stepper walks them one at a time, so this reads as an activity rather than a form.
 
 ```jsonc
 {
-  "timer": { "seconds": 120 },
   "layout": { "pool": "top" },
   "pools": {
     "food_images": [
@@ -641,8 +654,8 @@ There is no extra flag to set. `input: "order"` is the whole discriminator — t
 - [ ] Pool item ids are unique within their pool and are **never** reused for a different item after publishing — a published id is permanent.
 - [ ] A choice-style slot references a pool with at least two items.
 - [ ] A `drop` pool has enough tiles for every `drop` slot that shares it, plus distractors if elimination should not solve it.
-- [ ] `timer.seconds` is a whole number `>= 1`, or the field is absent. A malformed timer is silently dropped.
 - [ ] `layout.pool` is one of `bottom` `top` `left` `right`, or the field is absent. Omit it unless the derived default is wrong.
+- [ ] No `timer` and no `ordered`. Neither is read; timing is automatic and unconfigurable.
 - [ ] `level` is one of `A1 A2 B1 B2 C1 C2`.
 - [ ] `focus` is set, and is one of the values in `FOCUSES`. **Required.** It is what the exercise teaches, and it is in the URL.
 - [ ] `topic` is either a value in `TOPICS` or **`NULL`**. Do NOT invent a context to fill it — an absent setting is a legitimate, expected answer for a pure grammar drill.

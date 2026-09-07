@@ -136,7 +136,7 @@ code-review  daily-standup  technical-documentation  job-interview
 
 ---
 
-## 4. The payload — two required keys, two optional ones
+## 4. The payload — two required keys, one optional one
 
 Every exercise, of every kind, is the same shape:
 
@@ -157,10 +157,13 @@ Every exercise, of every kind, is the same shape:
       "answer": ["v_sits"]          // the correct ITEM ID
     }
   ],
-  "timer":  { "seconds": 120 },     // OPTIONAL — a countdown for the whole exercise
   "layout": { "pool": "top" }       // OPTIONAL — where drag tiles sit
 }
 ```
+
+**Those are the only keys.** `pools`, `slots`, `layout`, and `media` on a
+listening exercise. Any other key you write is dropped when the payload is read
+— it is not an error, it simply does nothing.
 
 - **`pools`** — reusable sets of options. One pool can serve many slots; declare
   the options once, not once per question. **Always include the key**, as `{}`
@@ -176,27 +179,29 @@ Every exercise, of every kind, is the same shape:
 An exercise may have **several slots**, and they **should** use **different
 mechanics** (§5.5). Each slot is graded independently.
 
-### 4.1 `timer` — optional
+### 4.1 Timing is automatic — **do NOT write a `timer` field**
 
 ```jsonc
-"timer": { "seconds": 90 }
+"timer": { "seconds": 90 }        // ❌ NO. Not a field. Never write this.
 ```
 
-A countdown for the **whole exercise**, not per slot. When it reaches zero the
-exercise grades itself with whatever the learner has entered. It pauses while
-they read their feedback and resumes if they retry.
+Every exercise shows a **count-up stopwatch** in the top-right corner of the
+card. It starts at `00:00` when the exercise is ready, keeps running while the
+learner works — including through a wrong answer and the correction that
+follows — and stops when they get everything right. Retrying from scratch sends
+it back to `00:00`.
 
-| Rule | |
-|---|---|
-| Whole seconds, **1 or more** | `{"seconds": 90}` ✅ |
-| Zero, negative, fractional-below-one, or non-numeric | silently **dropped** — the exercise just renders untimed |
-| Omitted | untimed. **This is the normal case.** |
+**There is nothing to author and nothing to configure.** It is the same on every
+exercise, it imposes no time limit, and it can never grade or end an exercise.
 
-Use it sparingly and only where time pressure is part of the skill — a
-listening-style recall drill, a quick-fire verb form. Most exercises should have
-no timer. A timer on a careful reading exercise punishes the behaviour you want.
-When you do use one, budget roughly **20–30 seconds per slot**; the learner has
-to walk through them one at a time.
+⚠️ `timer` used to be a real field: an optional countdown that graded the
+exercise when it hit zero. **It was removed.** If you have seen it in an older
+version of this brief, or in an example anywhere, ignore it. Writing it now is
+harmless but pointless — the payload reader drops the key — and it puts a dead
+field in every row you generate.
+
+Because timing is no longer a lever you control, **pace the exercise with slot
+count instead**: 4–8 slots is the target (§5.5).
 
 ### 4.2 `layout` — optional
 
@@ -381,11 +386,10 @@ of a visual inconsistency.
 A single-slot exercise is still legitimate — a quick one-blank drill has its
 place, and it gets no stepper. But it should be the minority, not the default.
 
-### Worked example — `drop` + `select` + `text` + `choice`, timed
+### Worked example — `drop` + `select` + `text` + `choice`
 
 ```jsonc
 {
-  "timer": { "seconds": 150 },
   "layout": { "pool": "top" },
   "pools": {
     "past_verbs": [
@@ -580,10 +584,9 @@ values
   }]
 }', true),
 
--- A mixed exercise: drop + choice + text, with a timer and a placement hint.
+-- A mixed exercise: drop + choice + text, with a placement hint.
 -- Note the doubled apostrophe in "doesn''t".
 ('morning-at-home', 'reading', 'A1', 'present-simple', 'daily-life', '{
-  "timer": { "seconds": 120 },
   "layout": { "pool": "top" },
   "pools": {
     "verbs": [
@@ -622,8 +625,8 @@ group by level, focus order by level, focus;
   safe to run twice.
 - `topic` is either a quoted slug or bare `NULL` (no quotes).
 - `published` is `true` for finished exercises.
-- `timer` and `layout` are optional. Omit them entirely rather than writing
-  `null` or `{}`.
+- `layout` is optional. Omit it entirely rather than writing `null` or `{}`.
+- No `timer` key anywhere in the file (§4.1).
 
 ### ⚠️ Apostrophes must be doubled
 
@@ -672,9 +675,9 @@ fails the *entire* file, not one row. Scan for `'` before you deliver.
 
 ### Optional fields
 
-- [ ] `timer.seconds` is a whole number `>= 1`, or `timer` is absent
 - [ ] `layout.pool` is `bottom`/`top`/`left`/`right`, or `layout` is absent
-- [ ] Most exercises have **no** timer
+- [ ] **No `timer` key anywhere** — timing is automatic (§4.1)
+- [ ] No key outside `pools`, `slots`, `media`, `layout`. Anything else is dead weight
 
 ### The file
 
