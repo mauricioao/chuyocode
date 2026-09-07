@@ -78,11 +78,42 @@ const ARROW_SCRIPT = `
       }
       function bind(btn, dir) {
         if (!btn) return;
-        // Prevent the button from grabbing focus on press: a focused, absolutely
-        // positioned arrow makes the browser scroll it into view, which nudges
-        // the whole page vertically on click/hold. mousedown.preventDefault stops
-        // the focus (and its scroll) while keeping the click handler working.
-        btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        // THE PAGE-SCROLL-ON-CLICK BUG.
+        //
+        // NOTE FOR EDITORS: this whole script is a template literal in the
+        // frontmatter. A backtick or a dollar-brace in these comments TERMINATES
+        // the string and breaks the build. Plain quotes only.
+        //
+        // The arrow is absolutely positioned and vertically centred on the row.
+        // When it receives focus the browser scrolls it into view, and because
+        // <html> carries scroll-behavior:smooth (BaseLayout.astro) that nudge is
+        // ANIMATED - so it does not read as a jump, it reads as the page
+        // deliberately scrolling down.
+        //
+        // The previous attempt was mousedown + preventDefault, i.e. suppress the
+        // focus so nothing gets scrolled to. That covers exactly one entry point
+        // and has two holes:
+        //   1. TOUCH AND PEN. The browser drives activation from the pointer
+        //      sequence and only synthesizes a compatibility mousedown after
+        //      touchend; by then focus has already been applied, so the
+        //      preventDefault arrives too late to stop anything.
+        //   2. It DESTROYS focus on the path where it does work. After a click
+        //      the active element falls back to body, so the next Tab restarts
+        //      from the top of the document.
+        //
+        // So: focus the button OURSELVES, on pointerdown (one listener for
+        // mouse, touch and pen), with preventScroll. The button ends up focused
+        // - which is correct, it is a real control - and the browser's own
+        // default focus is then a no-op on an already-focused element, so no
+        // scroll-into-view happens on any pointer type.
+        //
+        // UNCONFIRMED IN A BROWSER. jsdom never scrolls and has no layout, so
+        // the test below pins the SHAPE of this fix, not its effect.
+        btn.addEventListener('pointerdown', function () {
+          if (typeof btn.focus === 'function') {
+            try { btn.focus({ preventScroll: true }); } catch (err) { btn.focus(); }
+          }
+        });
         btn.addEventListener('click', function (e) { e.preventDefault(); step(dir); });
       }
       bind(prev, -1);

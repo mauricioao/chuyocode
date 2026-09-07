@@ -55,6 +55,26 @@ describe('EditorialRow.astro', () => {
     expect(html).toContain('data-astro-rerun');
   });
 
+  /**
+   * THE PAGE-SCROLL-ON-CLICK GUARD — and be clear about what it is worth.
+   *
+   * jsdom has no layout engine and never scrolls, so the BUG itself cannot be
+   * reproduced or refuted here; only a browser can confirm the fix. What this
+   * pins is the SHAPE of the mitigation, which is the part that silently
+   * regresses: that focus is taken deliberately with `preventScroll` on
+   * `pointerdown` (one listener covering mouse, touch AND pen) rather than
+   * suppressed via `mousedown` + preventDefault, which covered mouse only and
+   * dropped focus to <body> on the path where it worked.
+   */
+  it('takes focus without scrolling, on pointerdown rather than mousedown', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    expect(html).toContain('pointerdown');
+    expect(html).toContain('preventScroll');
+    // The old approach must be gone: re-adding it is the regression.
+    expect(html).not.toContain("addEventListener('mousedown'");
+  });
+
   it('draws both chevrons from the shared arrow-control geometry', async () => {
     const html = await render({ title: 'Row', items: [item(1), item(2)] });
 
