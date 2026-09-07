@@ -131,72 +131,43 @@ describe('parsePayload', () => {
 });
 
 /**
- * The OPTIONAL countdown.
+ * THE RETIRED `timer` FIELD.
  *
- * Every case below asserts the same asymmetry: a broken timer degrades to "no
- * timer" and the exercise still parses. That is the opposite of a broken slot,
- * which kills the payload — and the difference is that a broken slot is
- * UNGRADEABLE, so rendering it would lie to the learner, while a broken timer
- * just means no clock. Turning a typo in an optional field into a 404 on real
- * content would be the worse bug.
+ * `timer` was an authored countdown that graded the exercise when it hit zero.
+ * It is gone: the clock is now an unconfigurable count-up stopwatch, so there is
+ * nothing left for an author to set and nothing for the parser to read.
+ *
+ * These cases are about GENERATED CONTENT, not about the key. The authoring
+ * brief documented `timer` while the catalogue was being written, so real rows
+ * carry it — and every one of them must keep parsing exactly as it did. The
+ * field is not rejected, not warned about and not carried through: it is simply
+ * not read, which is what makes a retired field safe to leave in the data.
  */
-describe('parsePayload — timer', () => {
-  /** The base exercise, which is complete and answerable without any timer. */
+describe('parsePayload — a leftover timer field', () => {
   const timed = (timer: unknown) => ({ ...CHOICE_PAYLOAD, timer });
 
-  it('reads a well-formed timer', () => {
-    expect(parsePayload(timed({ seconds: 180 }))?.timer).toEqual({ seconds: 180 });
-  });
-
-  // The normal case. Almost no exercise will ever carry a timer.
-  it('leaves an untimed exercise untimed', () => {
-    expect(parsePayload(CHOICE_PAYLOAD)?.timer).toBeUndefined();
-  });
-
-  it('still parses the exercise when the timer is malformed', () => {
-    // The whole point: the slots survive a broken timer.
-    const payload = parsePayload(timed({ seconds: 'three minutes' }));
+  it('parses an exercise that still carries a well-formed timer', () => {
+    const payload = parsePayload(timed({ seconds: 180 }));
     expect(payload?.slots).toHaveLength(1);
-    expect(payload?.timer).toBeUndefined();
+    expect(payload?.pools.opts).toHaveLength(3);
   });
 
-  it('drops a timer that is not an object', () => {
-    for (const bad of [180, 'later', true, null, [180]]) {
-      expect(parsePayload(timed(bad))?.timer).toBeUndefined();
+  it('does not carry the field onto the parsed payload', () => {
+    // A structural assertion rather than a property read: `timer` is no longer
+    // on `Payload`, so the only honest question is whether the parser invented
+    // a key for it. It rebuilds the payload field by field, so it cannot.
+    expect(Object.keys(parsePayload(timed({ seconds: 180 })) ?? {})).toEqual([
+      'pools',
+      'slots',
+    ]);
+  });
+
+  it('parses regardless of what the leftover field contains', () => {
+    // Every shape the old parser used to reject, plus the ones it accepted. None
+    // of them is a rejection reason any more, so all of them must be inert.
+    for (const bad of [180, 'later', true, null, [180], {}, { seconds: 0 }]) {
+      expect(parsePayload(timed(bad))?.slots).toHaveLength(1);
     }
-  });
-
-  it('drops a timer whose seconds are not a number', () => {
-    for (const bad of [{ seconds: '180' }, { seconds: null }, { seconds: {} }, {}]) {
-      expect(parsePayload(timed(bad))?.timer).toBeUndefined();
-    }
-  });
-
-  // Each of these would otherwise produce a countdown that never reaches zero.
-  it('drops a timer that could never run out', () => {
-    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expect(parsePayload(timed({ seconds: bad }))?.timer).toBeUndefined();
-    }
-  });
-
-  /**
-   * A zero-second timer would fire on mount and grade the exercise before the
-   * learner had read the first word — an exercise nobody can answer. Dropping to
-   * "untimed" is strictly better than shipping that.
-   */
-  it('drops a timer that would fire before the learner could read it', () => {
-    expect(parsePayload(timed({ seconds: 0 }))?.timer).toBeUndefined();
-    expect(parsePayload(timed({ seconds: -30 }))?.timer).toBeUndefined();
-    // Floored to zero, so it is rejected on the same rule rather than a second.
-    expect(parsePayload(timed({ seconds: 0.4 }))?.timer).toBeUndefined();
-  });
-
-  it('floors a fractional timer instead of carrying it into the countdown', () => {
-    expect(parsePayload(timed({ seconds: 90.7 }))?.timer).toEqual({ seconds: 90 });
-  });
-
-  it('keeps the shortest timer an author can meaningfully write', () => {
-    expect(parsePayload(timed({ seconds: 1 }))?.timer).toEqual({ seconds: 1 });
   });
 });
 
@@ -287,8 +258,10 @@ describe('poolPlacement', () => {
   });
 
   /**
-   * DEGRADES, NEVER REJECTS — the `timer` rule. A typo in an optional
-   * presentation hint must not turn answerable content into a 404.
+   * DEGRADES, NEVER REJECTS. A typo in an optional presentation hint must not
+   * turn answerable content into a 404 — the opposite of a broken slot, which
+   * kills the payload because it is UNGRADEABLE. `layout` is now the only
+   * optional field this rule applies to.
    */
   describe('a malformed hint', () => {
     const malformed = [

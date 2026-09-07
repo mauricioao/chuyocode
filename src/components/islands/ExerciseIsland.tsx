@@ -35,12 +35,12 @@ import {
 import { answerableSlots, isSubmittable } from '@/lib/exerciseSubmit';
 import { cn } from '@/lib/utils';
 import {
-  formatRemaining,
-  hasExpired,
+  formatElapsed,
   shouldTick,
+  START_SECONDS,
   tick,
   TICK_MS,
-} from '@/lib/exerciseTimer';
+} from '@/lib/exerciseStopwatch';
 import UnavailableRenderer from './mechanics/UnavailableRenderer';
 import { comparatorForRenderable, rendererFor } from './mechanics/registry';
 
@@ -66,12 +66,12 @@ export interface ExerciseIslandProps {
   /**
    * Level / focus / skill / topic pills, rendered top-LEFT of the card.
    *
-   * WHY THE ISLAND OWNS THEM NOW. The countdown has to sit at the top-RIGHT of
-   * the same row, and the countdown is React state — it cannot exist outside
-   * this component. Leaving the badges on the Astro side would mean the two
-   * halves of one row lived in two files with no way to share a flex container
-   * across the island boundary. Optional, so the island still renders standalone
-   * in tests and in any future embed.
+   * WHY THE ISLAND OWNS THEM. The stopwatch has to sit at the top-RIGHT of the
+   * same row, and the stopwatch is React state — it cannot exist outside this
+   * component. Leaving the badges on the Astro side would mean the two halves of
+   * one row lived in two files with no way to share a flex container across the
+   * island boundary. Optional, so the island still renders standalone in tests
+   * and in any future embed.
    */
   badges?: readonly ExerciseBadge[];
 }
@@ -95,8 +95,15 @@ interface Copy {
   unavailable: string;
   allCorrect: string;
   someWrong: string;
-  /** Prefix for the countdown, shown only on the rare timed exercise. */
-  timeLeft: string;
+  /**
+   * Prefix for the stopwatch in the card's top-right corner.
+   *
+   * ONE WORD, deliberately. The countdown this replaced needed "restante" to
+   * disambiguate a bare number, because a clock that could be counting either
+   * way is unreadable. There is only one clock now and it only counts up, so the
+   * qualifier disambiguates nothing and costs a wrap at 320px beside four pills.
+   */
+  elapsed: string;
   /** Accessible name of the whole stepper, so it is not just "navigation". */
   stepNav: string;
   /**
@@ -138,7 +145,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     unavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
     allCorrect: '¡Todo correcto!',
     someWrong: 'Revisar las respuestas marcadas.',
-    timeLeft: 'Tiempo restante',
+    elapsed: 'Tiempo',
     stepNav: 'Partes del ejercicio',
     stepPrev: 'Anterior',
     stepNext: 'Siguiente',
@@ -156,7 +163,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     unavailable: 'This part of the exercise cannot be answered here yet.',
     allCorrect: 'All correct!',
     someWrong: 'Review the marked answers.',
-    timeLeft: 'Time left',
+    elapsed: 'Time',
     stepNav: 'Exercise parts',
     stepPrev: 'Previous',
     stepNext: 'Next',
@@ -384,77 +391,40 @@ export default function ExerciseIsland({
   }, [pendingFocus]);
 
   /**
-   * Seconds left, or `null` for the overwhelmingly common untimed exercise.
+   * Seconds spent on this attempt. EVERY exercise has one; nothing configures it.
    *
-   * Seeded from the payload and never re-seeded: `useState`'s initial value is
-   * read once per mount, which is exactly the lifetime a countdown should have.
-   * Remounting starts the clock over, matching the island's existing rule that
-   * everything here is ephemeral.
+   * It measures, it does not limit. The clock cannot end the exercise, cannot
+   * grade anything and cannot be authored — which is why there is no payload
+   * field behind it and no `null` state to branch on.
+   *
+   * Seeded once per mount, so remounting starts a fresh attempt at zero. That
+   * matches the island's standing rule that everything here is ephemeral: there
+   * is no elapsed time to remember because there is no attempt to remember.
    */
-  const [remaining, setRemaining] = useState<number | null>(
-    payload.timer?.seconds ?? null,
-  );
+  const [elapsed, setElapsed] = useState(START_SECONDS);
 
   /**
-   * Has the countdown already ended this exercise?
+   * The stopwatch runs until the exercise is SOLVED, and through everything else.
    *
-   * BE HONEST ABOUT WHAT THIS IS: today it is defence in depth, not the thing
-   * that makes the countdown fire once. The effect below depends on `remaining`
-   * alone, and `remaining` freezes at `0` forever once the clock is spent, so
-   * React never re-runs it and the single shot is already structural. Deleting
-   * this ref right now changes no observable behaviour — that was measured, not
-   * assumed.
-   *
-   * It stays because of the specific edit it survives. `retry()` sets `result`
-   * back to `null`, so `graded` returns to false while `remaining` is still `0`.
-   * The moment anyone widens the dependency array to include `graded` — which is
-   * exactly what `react-hooks/exhaustive-deps` tells you to do — the effect
-   * re-runs in that state and re-grades the learner's freshly cleared answers
-   * the instant they ask for another attempt. A verdict they never submitted, on
-   * an exercise they had not re-answered, with nothing thrown.
-   *
-   * A REF and not state, because it is a latch: it must not cause a render, and
-   * it must survive the very transition that re-arms the condition.
+   * One stop condition, evaluated in `exerciseStopwatch.ts` so the rule is
+   * testable without a clock. Notably it does NOT pause on a wrong verdict — see
+   * that module for why the countdown's pause does not survive the inversion.
    */
-  const autoGraded = useRef(false);
-
-  const counting = shouldTick(remaining, graded);
+  const running = shouldTick(result);
 
   /**
-   * The one interval. Cleared on unmount and whenever counting stops, so a
+   * The one interval. Cleared on unmount and when the exercise is solved, so a
    * learner who navigates away mid-exercise leaves nothing running.
    *
-   * Keyed on `counting` rather than on `remaining`, so the interval is created
-   * once per run instead of being torn down and rebuilt every second — which
-   * would also reset the phase each tick and make the last second arbitrarily
-   * long.
+   * Keyed on `running` rather than on `elapsed`, so the interval is created once
+   * per attempt instead of being torn down and rebuilt every second — which
+   * would also reset the phase each tick and make every second arbitrarily long.
    */
   useEffect(() => {
-    if (!counting) return;
-    const id = setInterval(() => {
-      setRemaining((left) => (left === null ? null : tick(left)));
-    }, TICK_MS);
+    if (!running) return;
+    const id = setInterval(() => setElapsed(tick), TICK_MS);
     return () => clearInterval(id);
-  }, [counting]);
-
-  /**
-   * Time is up: grade through the SAME path the button uses.
-   *
-   * Deliberately calls `grade()` rather than reimplementing it. A second call to
-   * `check` here would be a second definition of "what counts as an answer", and
-   * the two would drift the first time either side changed — with the timed path
-   * being the one nobody manually tests.
-   */
-  useEffect(() => {
-    if (remaining === null || !hasExpired(remaining)) return;
-    if (autoGraded.current) return;
-    autoGraded.current = true;
-    grade();
-    // `remaining` ALONE, deliberately. `grade` is recreated every render, so
-    // depending on it would re-run this effect on every keystroke; `graded` and
-    // `response` would re-run it after a retry. The latch above is what keeps
-    // widening this list from becoming a bug rather than merely wasteful.
-  }, [remaining]);
+  }, [running]);
 
   /**
    * Grade locally. The resolver is registry-backed on purpose: a slot we could
@@ -484,6 +454,11 @@ export default function ExerciseIsland({
       // Starting over means starting at the beginning, not on whichever step
       // the learner happened to read the verdict from.
       setStep(0);
+      // THE ONLY RESET, and it belongs to THIS branch alone. A correct verdict
+      // stopped the clock and this button discards the whole attempt, so the
+      // next one is timed from zero. The `Fix` branch below is the SAME attempt
+      // continuing — the clock never stopped there and must not jump backwards.
+      setElapsed(START_SECONDS);
       return;
     }
 
@@ -510,48 +485,42 @@ export default function ExerciseIsland({
 
   return (
     <section className={CARD}>
-      {/* THE HEADER ROW: what this exercise IS on the left, how long is left on
-          the right. Rendered only when it would hold something — an untimed
-          exercise embedded without badges gets no empty bar.
+      {/* THE HEADER ROW: what this exercise IS on the left, how long it has
+          taken on the right. ALWAYS rendered now — the stopwatch is universal
+          and unconfigurable, so this row can never be empty and there is no
+          longer a condition on it. An embed without badges gets a bar holding
+          just the clock, which is correct rather than a degenerate case.
 
           `justify-between` with `flex-wrap`: at 320px a four-pill taxonomy row
-          plus a countdown does not fit on one line, and wrapping the countdown
-          under the pills is the honest degradation. `items-start` so a wrapped
-          countdown aligns with the top of the pill block rather than floating in
-          the middle of it. */}
-      {(badges.length > 0 || remaining !== null) && (
-        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {badges.map((badge) => (
-              <Badge key={badge.label} variant={badge.variant}>
-                {badge.label}
-              </Badge>
-            ))}
-          </div>
+          plus a clock does not fit on one line, and wrapping the clock under the
+          pills is the honest degradation. `items-start` so a wrapped clock
+          aligns with the top of the pill block rather than floating in the
+          middle of it. */}
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {badges.map((badge) => (
+            <Badge key={badge.label} variant={badge.variant}>
+              {badge.label}
+            </Badge>
+          ))}
+        </div>
 
-          {/* Rendered only for the rare timed exercise. `remaining` is `null`
-              both when no timer was authored and when a malformed one was
-              dropped at the payload boundary, so there is ONE condition here,
-              not two.
-
-              BEHAVIOUR IS UNCHANGED by the move: still a countdown, still
-              seeded once per mount, still paused by grading. Only its position
-              in the card is different. */}
-          {remaining !== null && (
-            <p
-              data-testid="exercise-timer"
-              // `role="timer"` carries an implicit `aria-live="off"`, which is
-              // the point of using it: a polite live region would make a screen
-              // reader interrupt itself every single second and render the
-              // exercise unusable by ear. The value stays queryable on demand.
-              role="timer"
-              className="ms-auto text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
-            >
-              {t.timeLeft} {formatRemaining(remaining)}
-            </p>
-          )}
-        </header>
-      )}
+        {/* The stopwatch. It reports how long the attempt took; it does not
+            limit it, cannot grade and cannot end the exercise. */}
+        <p
+          data-testid="exercise-stopwatch"
+          // `role="timer"` carries an implicit `aria-live="off"`, which is the
+          // point of using it: a polite live region would make a screen reader
+          // interrupt itself every single second and render the exercise
+          // unusable by ear. The value stays queryable on demand. The role
+          // covers a count-up clock as well as a countdown — it is "elapsed
+          // time from a start point, or time remaining until an end point".
+          role="timer"
+          className="ms-auto text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
+        >
+          {t.elapsed} {formatElapsed(elapsed)}
+        </p>
+      </header>
       {/* THE PROMPT AREA — the visual centre of the card.
 
           `flex-1` makes it claim every pixel the header and the footer do not

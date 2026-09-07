@@ -810,27 +810,28 @@ describe('ExerciseIsland — locale reaches the mechanics', () => {
 });
 
 /**
- * The countdown, seen from the outside.
+ * The stopwatch, seen from the outside.
  *
- * The RULES (clamping, the pause while graded, formatting) are proved against
- * pure functions in `exerciseTimer.test.ts`. What is left here is the wiring
- * that only exists once React owns an interval: that expiry grades through the
- * EXISTING path, that it does so exactly once, that an untimed exercise is
- * untouched, and that nothing keeps ticking after unmount.
+ * The RULES (the stop condition, the formatting past a minute and past ten) are
+ * proved against pure functions in `exerciseStopwatch.test.ts`. What is left
+ * here is the wiring that only exists once React owns an interval: that it runs
+ * on every exercise without being asked to, WHICH verdict stops it, which one
+ * does not, when it goes back to zero, and that nothing keeps ticking after
+ * unmount.
+ *
+ * It is deliberately proved on `single` — the plainest exercise in the file,
+ * carrying no clock configuration of any kind, because there is none to carry.
  */
-describe('ExerciseIsland — countdown', () => {
-  /** A one-slot exercise with a short, exact limit. */
-  const timed: Payload = { ...single, timer: { seconds: 3 } };
-
+describe('ExerciseIsland — stopwatch', () => {
   function clock(): HTMLElement | null {
-    return screen.queryByTestId('exercise-timer');
+    return screen.queryByTestId('exercise-stopwatch');
   }
 
   function verdict(): HTMLElement | null {
     return screen.queryByTestId('exercise-verdict');
   }
 
-  /** Let `seconds` of countdown elapse. */
+  /** Let `seconds` of wall time pass. */
   async function elapse(seconds: number) {
     await act(async () => {
       vi.advanceTimersByTime(seconds * 1000);
@@ -841,160 +842,149 @@ describe('ExerciseIsland — countdown', () => {
     vi.useRealTimers();
   });
 
-  it('shows no countdown for an exercise without a timer', () => {
+  /**
+   * NO CONFIGURATION. The countdown this replaced only appeared on an exercise
+   * that authored a `timer`, so the overwhelming majority of exercises showed no
+   * clock at all. The inversion is the whole point of the change: every exercise
+   * is measured, and `single` proves it because it authors nothing.
+   */
+  it('starts at zero on an exercise that configures nothing, and advances', async () => {
     vi.useFakeTimers();
     render(<ExerciseIsland lang="en" payload={single} />);
 
-    expect(clock()).toBeNull();
+    expect(clock()?.textContent).toContain('00:00');
+
+    await elapse(1);
+    expect(clock()?.textContent).toContain('00:01');
+
+    await elapse(64);
+    expect(clock()?.textContent).toContain('01:05');
   });
 
   /**
-   * THE REGRESSION THAT MATTERS MOST: every exercise authored so far is untimed,
-   * and none of them may start grading itself.
+   * THE REGRESSION THAT MATTERS MOST, inherited from the countdown: the clock
+   * has no power to end an exercise. It measures. Ten minutes of ticking must
+   * produce a reading, never a verdict.
    */
-  it('never grades an untimed exercise on its own', async () => {
+  it('never grades an exercise on its own, however long it runs', async () => {
     vi.useFakeTimers();
     render(<ExerciseIsland lang="en" payload={single} />);
 
     await elapse(600);
 
     expect(verdict()).toBeNull();
+    expect(clock()?.textContent).toContain('10:00');
   });
 
-  it('shows the countdown for a timed exercise and counts it down', async () => {
+  it('stops on a fully correct submission — the finish line', async () => {
     vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
+    render(<ExerciseIsland lang="en" payload={single} />);
 
-    expect(clock()?.textContent).toContain('0:03');
-
-    await elapse(1);
-
-    expect(clock()?.textContent).toContain('0:02');
-  });
-
-  it('grades automatically when the clock reaches zero', async () => {
-    vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
-
-    expect(verdict()).toBeNull();
-
-    await elapse(3);
-
-    expect(clock()?.textContent).toContain('0:00');
-    expect(verdict()?.textContent).toBe(COPY.en.someWrong);
-  });
-
-  /**
-   * Expiry goes through the SAME grading path as the button, so an answer given
-   * before the clock ran out is judged, not discarded.
-   */
-  it('grades the answers the learner actually gave', async () => {
-    vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
-
-    choose('sits');
-    await elapse(3);
-
-    expect(screen.getByTestId('slot-feedback-s1').textContent).toBe(COPY.en.correct);
-    expect(verdict()?.textContent).toBe(COPY.en.allCorrect);
-  });
-
-  it('grades an unanswered exercise when time runs out, even though submit was locked', async () => {
-    vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
-
-    // The learner never earned the right to press submit...
-    expect(submitButton().disabled).toBe(true);
-
-    await elapse(3);
-
-    // ...but running out of time is not a non-attempt. It is a finished attempt.
-    expect(verdict()?.textContent).toBe(COPY.en.someWrong);
-  });
-
-  it('stops counting down once the learner submits', async () => {
-    vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
-
-    await elapse(1);
-    choose('sits');
-    submit();
-
-    const frozen = clock()?.textContent;
-    await elapse(10);
-
-    // The clock measures time spent ANSWERING; reading a verdict is not
-    // answering, so it must not drain while feedback is on screen.
-    expect(clock()?.textContent).toBe(frozen);
-  });
-
-  /**
-   * THE CLOCK GETS TO END THE EXERCISE ONCE.
-   *
-   * `retry()` clears the result, so `graded` returns to false while the clock is
-   * still at zero — a state in which "time is up" reads as true again. If the
-   * expiry effect runs in it, the learner is handed a verdict they never
-   * submitted, on answers that were just cleared for them, with nothing thrown.
-   *
-   * Two separate things prevent that today, and this test is deliberately blind
-   * to which one is doing the work: the effect depends on `remaining` alone (so
-   * React never re-runs it), and a latch makes the shot single regardless.
-   * Measured: widening the dependency array to `[remaining, graded]` — the edit
-   * `react-hooks/exhaustive-deps` asks for — keeps passing WITH the latch and
-   * fails here without it.
-   */
-  it('does not grade again when the learner retries after time ran out', async () => {
-    vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
-
-    await elapse(3);
-    expect(verdict()).not.toBeNull();
-
-    retry();
-    expect(verdict()).toBeNull();
-
-    await elapse(30);
-
-    // The clock already had its one chance to end the exercise.
-    expect(verdict()).toBeNull();
-  });
-
-  it('leaves the exercise answerable after the clock has been spent', async () => {
-    vi.useFakeTimers();
-    render(<ExerciseIsland lang="en" payload={timed} />);
-
-    await elapse(3);
-    retry();
-    await elapse(30);
-
-    // A second, untimed attempt: the learner can still answer and submit.
+    await elapse(4);
     choose('sits');
     submit();
 
     expect(verdict()?.textContent).toBe(COPY.en.allCorrect);
+    const finished = clock()?.textContent;
+
+    await elapse(30);
+
+    expect(clock()?.textContent).toBe(finished);
+    expect(finished).toContain('00:04');
+  });
+
+  /**
+   * THE REVERSAL OF THE COUNTDOWN'S RULE, and the one most likely to be "fixed"
+   * back by someone reading the old module's reasoning.
+   *
+   * The countdown PAUSED while feedback was on screen: it was a budget, and
+   * draining it punished the learner for reading the verdict we asked them to
+   * read. A stopwatch has no budget. Freezing it here would make it report
+   * something other than elapsed time — a three-minute struggle could read
+   * `00:40` purely because the learner spent it looking at a verdict. On a wrong
+   * answer, reading why IS the work.
+   */
+  it('keeps running while an incorrect verdict is on screen', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    choose('sit');
+    submit();
+    expect(verdict()?.textContent).toBe(COPY.en.someWrong);
+
+    await elapse(5);
+
+    expect(clock()?.textContent).toContain('00:05');
+  });
+
+  it('keeps running through the correction cycle, without jumping backwards', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    await elapse(3);
+    choose('sit');
+    submit();
+    await elapse(2);
+
+    // `Fix` is the SAME attempt continuing — it clears the wrong answers, not
+    // the clock. A reset here would hand the learner a shorter time for having
+    // got it wrong, which is exactly backwards.
+    retry();
+    expect(clock()?.textContent).toContain('00:05');
+
+    await elapse(1);
+    expect(clock()?.textContent).toContain('00:06');
+  });
+
+  it('resets to zero when the learner retries from scratch', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    await elapse(7);
+    choose('sits');
+    submit();
+    expect(verdict()?.textContent).toBe(COPY.en.allCorrect);
+
+    // A correct verdict ends the attempt, so this button discards it whole.
+    retry();
+
+    expect(clock()?.textContent).toContain('00:00');
+  });
+
+  it('runs again after a reset, rather than staying stopped at zero', async () => {
+    vi.useFakeTimers();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    choose('sits');
+    submit();
+    retry();
+
+    await elapse(2);
+
+    expect(clock()?.textContent).toContain('00:02');
   });
 
   it('clears its interval on unmount', async () => {
     vi.useFakeTimers();
     const clearSpy = vi.spyOn(globalThis, 'clearInterval');
 
-    const { unmount } = render(<ExerciseIsland lang="en" payload={timed} />);
+    const { unmount } = render(<ExerciseIsland lang="en" payload={single} />);
     await elapse(1);
     unmount();
 
     expect(clearSpy).toHaveBeenCalled();
 
     // And nothing is left running: a leaked interval would keep calling
-    // `setRemaining` on an unmounted tree.
+    // `setElapsed` on an unmounted tree.
     const callsAfterUnmount = vi.getTimerCount();
     expect(callsAfterUnmount).toBe(0);
   });
 
-  it('localizes the countdown label', () => {
+  it('localizes the stopwatch label', () => {
     vi.useFakeTimers();
-    render(<ExerciseIsland lang="es" payload={timed} />);
+    render(<ExerciseIsland lang="es" payload={single} />);
 
-    expect(clock()?.textContent).toContain(COPY.es.timeLeft);
+    expect(clock()?.textContent).toContain(COPY.es.elapsed);
   });
 });
 

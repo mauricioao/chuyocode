@@ -45,24 +45,6 @@ export interface Slot {
 }
 
 /**
- * An OPTIONAL countdown for the whole exercise.
- *
- * Payload data, not a column: a time limit is an authoring choice per exercise,
- * and the overwhelming majority of exercises will never carry one. A column
- * would put a nullable integer on every row to describe a rare case, and would
- * need a migration the first time the shape grows (a grace period, a per-slot
- * limit). `jsonb` costs nothing for the exercises that omit it.
- *
- * EXERCISE-LEVEL, never slot-level. Slots grade independently but they are
- * answered together, and a per-slot clock would mean several countdowns racing
- * on one page with nothing to tell the learner which one is about to fire.
- */
-export interface Timer {
-  /** Whole seconds, always >= 1. See {@link parsePayload}. */
-  seconds: number;
-}
-
-/**
  * Where a mechanic's item pool sits relative to the prompt it answers.
  *
  * PRESENTATION ONLY. Grading never sees this, and no comparator changes shape
@@ -76,11 +58,10 @@ const POOL_PLACEMENTS: readonly string[] = ['bottom', 'top', 'left', 'right'];
 /**
  * OPTIONAL per-exercise layout hints.
  *
- * Payload data rather than a column, for the same reason {@link Timer} is: it is
- * an authoring choice that most exercises will never make, and `jsonb` costs
- * nothing for the ones that omit it. A column would put a nullable enum on every
- * row to describe a rare case, and would need a migration the first time the
- * shape grows a second hint.
+ * Payload data rather than a column: it is an authoring choice that most
+ * exercises will never make, and `jsonb` costs nothing for the ones that omit
+ * it. A column would put a nullable enum on every row to describe a rare case,
+ * and would need a migration the first time the shape grows a second hint.
  */
 export interface Layout {
   pool: PoolPlacement;
@@ -91,8 +72,6 @@ export interface Payload {
   media?: { audio?: string };
   pools: Record<string, Pool>;
   slots: Slot[];
-  /** Absent on almost every exercise, and absence is the normal case. */
-  timer?: Timer;
   /** Absent unless the author overrode the derived default. */
   layout?: Layout;
 }
@@ -167,43 +146,12 @@ function parsePool(value: unknown): Pool {
 }
 
 /**
- * Parse an optional {@link Timer}, or `null` for "this exercise is untimed".
- *
- * DEGRADES, NEVER REJECTS. A malformed timer must not take the exercise down
- * with it: everything else in the payload is still perfectly answerable, and an
- * untimed exercise is a complete, correct experience — it is what every exercise
- * authored so far already is. Failing the whole payload here would turn a typo
- * in an optional field into a 404 on real content.
- *
- * That is the opposite of {@link parseSlot}, which returns `null` and kills the
- * payload — and the asymmetry is the point. A broken slot is UNGRADEABLE, so
- * rendering it would lie to the learner. A broken timer just means no clock.
- *
- * `seconds < 1` is rejected rather than clamped. A zero-second timer would fire
- * on mount and grade the exercise before the learner had read the first word —
- * an exercise nobody can answer. Silently dropping to "untimed" is strictly
- * better than shipping that. Fractions are floored first, so `0.4` is a zero and
- * is rejected on the same rule rather than by a separate one.
- */
-function parseTimer(value: unknown): Timer | null {
-  if (!isRecord(value)) return null;
-  const raw = value.seconds;
-  // `Number.isFinite` also rejects `NaN` and both infinities, each of which
-  // would otherwise produce a countdown that never reaches zero.
-  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
-  const seconds = Math.floor(raw);
-  if (seconds < 1) return null;
-  return { seconds };
-}
-
-/**
  * Parse an optional {@link Layout}, or `null` for "derive the default".
  *
- * DEGRADES, NEVER REJECTS — the same rule as {@link parseTimer}, and for the
- * same reason. A typo in an optional presentation hint must not turn real,
- * answerable content into a 404. Every exercise authored so far omits this field
- * entirely, and every one of them renders correctly from the derived default, so
- * "unreadable hint" and "no hint" can safely be the same outcome.
+ * DEGRADES, NEVER REJECTS. A typo in an optional presentation hint must not turn
+ * real, answerable content into a 404. Every exercise authored so far omits this
+ * field entirely, and every one of them renders correctly from the derived
+ * default, so "unreadable hint" and "no hint" can safely be the same outcome.
  *
  * Contrast {@link parseSlot}, which returns `null` and kills the whole payload:
  * a broken slot is UNGRADEABLE, so drawing it would lie to the learner. A broken
@@ -283,15 +231,9 @@ export function parsePayload(value: unknown): Payload | null {
     payload.media = { audio: value.media.audio };
   }
 
-  // Set only when usable, so `payload.timer` is absent — not present and
-  // meaningless — for both an untimed exercise and a malformed one. The island
-  // then has ONE condition to check instead of two.
-  const timer = parseTimer(value.timer);
-  if (timer) payload.timer = timer;
-
-  // Same rule as the timer above: set only when USABLE, so `payload.layout` is
-  // absent — not present and meaningless — for an exercise that omitted it AND
-  // for one that misspelled it. `poolPlacement` then has one condition, not two.
+  // Set only when USABLE, so `payload.layout` is absent — not present and
+  // meaningless — for an exercise that omitted it AND for one that misspelled
+  // it. `poolPlacement` then has one condition, not two.
   const layout = parseLayout(value.layout);
   if (layout) payload.layout = layout;
 
