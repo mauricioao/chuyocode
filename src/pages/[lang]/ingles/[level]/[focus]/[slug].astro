@@ -89,12 +89,56 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
   <div
     class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8"
   >
-    <a
-      href={`/${lang}/ingles`}
-      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+    {/* THE EXERCISE RESERVES THE FIRST SCREEN — MINUS A DELIBERATE SLIVER.
+        Nothing used to hint that anything followed the exercise: the related
+        cards sat below the fold with no edge showing, so a learner who finished
+        an exercise had no reason to scroll. This makes the TOP of the first row
+        of cards visible without a scroll listener, an IntersectionObserver or an
+        island — it is a min-height and the ordinary document flow.
+
+        THE ARITHMETIC, so the number is auditable rather than tuned by eye.
+        The related block's top edge lands at `header + page padding + this
+        min-height + the parent's gap-6` from the top of the viewport, so what is
+        left visible underneath it is `100svh` minus that sum. Reserving 231px
+        (mobile) leaves:
+
+           32px  the related section's own `pt-8`
+           32px  the `text-2xl` heading line
+           16px  the section's `gap-4`
+        +  30px  the top of the first card row
+          -----
+          110px  visible below the fold line
+
+        A card is ~105px tall (p-5 + a title line + gap-3 + a badge row), so
+        ~30px is a peek of roughly 25-30% — enough to read as "there is more",
+        not enough to read as a second section. The `sm` variant differs only
+        because the page padding grows from `py-8` to `py-12`.
+
+        🔴 WHAT THIS CANNOT GUARANTEE — and no layout-only solution could:
+        - It holds only at SCROLL TOP. That is the moment that matters, since it
+          is the only moment the learner has not yet decided whether to scroll.
+        - It holds only while the exercise's NATURAL height is under the reserve.
+          A long multi-slot exercise, or a short landscape-phone viewport, pushes
+          the related block fully below the fold and there is simply no peek.
+          Nothing breaks; the hint is just absent.
+        - `svh` is the SMALLEST viewport height (browser chrome expanded). When
+          the chrome retracts the real viewport is taller, so the peek grows
+          rather than disappearing — it fails toward MORE hint, never less.
+        - The 231/247px both encode the masthead at 65px (`Header.astro`:
+          `py-4` + a 32px logo row + a 1px border). IF THE MASTHEAD'S HEIGHT
+          CHANGES, THESE NUMBERS MUST CHANGE WITH IT. That coupling is real and
+          is the price of doing this without measuring at runtime.
+        - The cost, paid knowingly: when the exercise is short there is now empty
+          space between it and the related block. That space IS the mechanism. */}
+    <div
+      class="flex min-h-[calc(100svh-231px)] flex-col gap-6 sm:min-h-[calc(100svh-247px)]"
     >
-      &larr; {t.back}
-    </a>
+      <a
+        href={`/${lang}/ingles`}
+        class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+      >
+        &larr; {t.back}
+      </a>
 
     {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus,
         topic and skill labels are exercise data and stay English in every
@@ -104,18 +148,18 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
         teaches. The topic is LAST and conditional — it qualifies the exercise
         rather than naming it, and an exercise with no setting must render no
         badge at all instead of an empty pill. */}
-    <header class="flex flex-wrap items-center gap-3">
-      <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
-      <Badge variant="outline">{FOCUS_LABELS[exercise.focus]}</Badge>
-      <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
-      {
-        exercise.topic && (
-          <Badge variant="outline">
-            {TOPIC_LABELS[exercise.topic] ?? exercise.topic}
-          </Badge>
-        )
-      }
-    </header>
+      <header class="flex flex-wrap items-center gap-3">
+        <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
+        <Badge variant="outline">{FOCUS_LABELS[exercise.focus]}</Badge>
+        <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
+        {
+          exercise.topic && (
+            <Badge variant="outline">
+              {TOPIC_LABELS[exercise.topic] ?? exercise.topic}
+            </Badge>
+          )
+        }
+      </header>
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
         (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the
@@ -124,19 +168,20 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
         Capped at `max-w-2xl` now that the container is 72rem: a native audio bar
         stretched to full width puts its play button and its scrubber at opposite
         ends of the screen, which is a worse control, not a bigger one. */}
-    {
-      exercise.hasAudio && (
-        <audio
-          controls
-          preload="none"
-          class="w-full max-w-2xl"
-          src={exercise.payload.media?.audio}
-        />
-      )
-    }
+      {
+        exercise.hasAudio && (
+          <audio
+            controls
+            preload="none"
+            class="w-full max-w-2xl"
+            src={exercise.payload.media?.audio}
+          />
+        )
+      }
 
-    {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
-    <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+      {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
+      <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+    </div>
 
     {/* Related by LEVEL, not focus: someone browsing a level is roughly at that
         level, and narrowing to the current language point would hide most of
@@ -146,11 +191,20 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
     {
       related.length > 0 && (
         <section class="flex flex-col gap-4 border-t border-border pt-8">
-          <h2 class="text-xl font-bold tracking-tight text-accent">
+          {/* `text-2xl`, and the peek arithmetic above budgets exactly one
+              32px line for it. A taller heading eats the card sliver. */}
+          <h2 class="text-2xl font-bold tracking-tight text-accent">
             {relatedHeading}
           </h2>
 
-          <ul class="grid gap-4 sm:grid-cols-2">
+          {/* THREE COLUMNS AT `lg`, which the 72rem container now affords.
+              This serves the peek directly: `getRelatedExercises` returns up to
+              six cards, so at two columns the first row is a third of them and
+              the sliver hints at less than it should. At three, the first row is
+              half the block and reads as a real row of options rather than as a
+              pair. Below `lg` it degrades to two columns and then to one, where
+              a card is already as wide as the screen. */}
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* THE FOCUS LEADS. The card used to open with the first slot's
                 prompt — "___ rename this variable, please?" — which spoils the
                 exercise before the learner opens it and says nothing about what
