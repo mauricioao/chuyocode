@@ -155,4 +155,46 @@ describe('EditorialRow.astro', () => {
     expect(html).not.toContain('data-editorial-track');
     expect(html).not.toContain('<script');
   });
+
+  /**
+   * THE DUPLICATE-VIEW-TRANSITION-NAME REGRESSION GUARD.
+   *
+   * `view-transition-name` must be UNIQUE per page. It is not a style hint —
+   * the spec makes a duplicate a hard error: the browser logs "Unexpected
+   * duplicate view-transition-name: cover-<id>" and ABORTS the transition with
+   * an `InvalidStateError`, taking down the default root cross-fade that
+   * `<ClientRouter />` gives every navigation.
+   *
+   * A document legitimately appears more than once on the home page: `themes`
+   * is a multi-select array, so one book sits in several EditorialRows AND in
+   * the RankedRow. A name keyed on the document id therefore CANNOT be unique
+   * per page. That is why `MediaCard` no longer emits one at all, instead of
+   * gating it behind an opt-in prop — an opt-in flag is a convention someone
+   * regresses, and this single row would still duplicate a document that
+   * belongs to two themes.
+   *
+   * WHY THIS ASSERTS ABSENCE RATHER THAN UNIQUENESS (measured, not assumed):
+   * Astro compiles `transition:name` into `data-astro-transition-scope` plus a
+   * scoped rule carrying the real name. The scope token is a PER-INSTANCE
+   * COUNTER (`astro-<hash>-1`, `astro-<hash>-2`), so the tokens are always
+   * distinct even when the names they map to are identical — asserting token
+   * uniqueness would pass vacuously. The Container API also emits no `<style>`,
+   * so the names themselves never reach this markup. Absence of the scope
+   * attribute is the sound proxy: no scope → no rule → no name → no duplicate,
+   * by construction.
+   */
+  it('emits no view-transition scope on covers when one document repeats', async () => {
+    const repeated = item(1);
+    const html = await render({ title: 'Row', items: [repeated, repeated] });
+
+    // Precondition: the row really did render the SAME document twice — this is
+    // the shape that produced the browser error.
+    expect(html.split('href="/es/libros/item-1"').length - 1).toBe(2);
+
+    const imgs = html.match(/<img[^>]*>/g) ?? [];
+    expect(imgs.length).toBe(2);
+    for (const img of imgs) {
+      expect(img).not.toContain('data-astro-transition-scope');
+    }
+  });
 });

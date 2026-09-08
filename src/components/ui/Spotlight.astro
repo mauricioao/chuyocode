@@ -6,9 +6,16 @@
  *
  * The cover is delivered through {@link buildImage} (wide variant): responsive
  * `srcset`/`sizes` plus an LQIP blur-up placeholder, so no raw full-resolution
- * Sanity CDN URL is shipped. The cover `<img>` carries
- * `transition:name="cover-<_id>"` so navigating to the detail page whose hero
- * shares the name produces a native View Transition cross-fade (decision #8).
+ * Sanity CDN URL is shipped. The cover carries NO `transition:name`: it used to
+ * emit `cover-<_id>`, the same document-keyed name removed from `MediaCard`.
+ * `view-transition-name` must be unique per page, and a Spotlight shares its
+ * document with the rows above it, so the name duplicated and aborted the whole
+ * transition. See the header note in `MediaCard.astro` for the full reasoning.
+ *
+ * NOTE: this component is currently NOT rendered by any page — the home page
+ * uses `SpotlightCarousel` (a React island, which cannot carry Astro transition
+ * directives). It is kept alive only by its own test. The name is removed here
+ * anyway so reinstating this component cannot silently bring the bug back.
  *
  * Graceful empty: when `item` is `null`/`undefined` (nothing featured, or a
  * fail-safe empty read) the component renders NOTHING — the home page simply
@@ -65,7 +72,6 @@ const lqipStyle = image?.lqip
               alt={item.title}
               loading="lazy"
               decoding="async"
-              transition:name={item._id ? `cover-${item._id}` : undefined}
               class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           )}

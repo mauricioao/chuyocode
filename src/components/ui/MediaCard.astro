@@ -22,9 +22,32 @@
  * A subtle `group-hover:scale-105` zoom on the image adds a streaming-style
  * touch; it is disabled under `prefers-reduced-motion: reduce`.
  *
- * View Transitions (design decision #8): the `<img>` carries
- * `transition:name="cover-<_id>"` so navigating to a detail page whose hero img
- * shares the same name produces a native cross-fade morph with zero JS.
+ * View Transitions: the cover deliberately carries NO `transition:name`.
+ * Decision #8 originally set `transition:name="cover-<_id>"` here to morph the
+ * cover into the detail page's hero. That intent is not implementable with a
+ * document-keyed name, for two independent reasons:
+ *
+ *   1. `view-transition-name` MUST be unique per page — it is a hard spec
+ *      constraint, not a style hint. A document legitimately appears more than
+ *      once on the home page (`themes` is a multi-select array, so one book sits
+ *      in several EditorialRows AND in the RankedRow), so a name keyed on the
+ *      document id is duplicated by construction. The browser then logs
+ *      "Unexpected duplicate view-transition-name: cover-<id>" and ABORTS the
+ *      whole transition with an InvalidStateError — which also killed the
+ *      default root cross-fade `<ClientRouter />` gives every navigation.
+ *   2. There was nothing to morph INTO. No detail page carries a matching name:
+ *      `libros/[slug].astro` renders a plain `<img src={book.coverUrl}>` and
+ *      `noticias/[slug].astro` has none either. The morph had already been dead.
+ *
+ * So the name was pure cost: zero morphs, and every home-page transition
+ * aborted. Removing it makes the duplicate IMPOSSIBLE BY CONSTRUCTION rather
+ * than by a "only enable this on one row" convention that regresses on the next
+ * row someone adds.
+ *
+ * Reinstating the morph is a PAIRED change, not a flag: a detail-page hero must
+ * declare the name AND exactly one placement per page must own it (which needs
+ * page-level dedup across rows, since a single opted-in row still repeats a
+ * document across themes).
  *
  * API:
  *   <MediaCard
@@ -45,7 +68,12 @@ interface Props {
   variant: MediaVariant;
   /** Content kind; drives the high-contrast type tag (book → "Libro", news → "Noticia"). */
   kind?: 'book' | 'news';
-  /** Document id; keys the View Transition name (`cover-<_id>`). */
+  /**
+   * Document id. Retained for call-site compatibility (every caller passes it)
+   * but NOT rendered — it used to key the View Transition name, which was
+   * removed (see the header note). Kept because it is also the natural key a
+   * future, page-deduped morph would use. Same treatment as `synopsis`.
+   */
   _id?: string;
   /** Destination for the whole-card link. */
   href: string;
@@ -120,7 +148,6 @@ const lqipStyle = image.lqip
             alt={title}
             loading="lazy"
             decoding="async"
-            transition:name={_id ? `cover-${_id}` : undefined}
             class="mediacard-img h-full w-full object-cover"
           />
         )
