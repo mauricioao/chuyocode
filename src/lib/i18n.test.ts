@@ -155,9 +155,25 @@ describe('UI_LABELS — home-streaming keys', () => {
   });
 
   it('exposes english.exercise copy for both locales', () => {
+    // The list grew with the page's controls. A missing key surfaces as
+    // `undefined` in the rendered page, which neither typecheck (the maps are
+    // `as const`, so a key absent from BOTH locales still types) nor the
+    // status-code page tests would catch — an unnamed button simply ships.
     for (const l of locales) {
       const exercise = UI_LABELS[l].english.exercise;
-      for (const key of ['back', 'level', 'description'] as const) {
+      for (const key of [
+        'back',
+        'level',
+        'description',
+        'like',
+        'share',
+        'shareTitle',
+        'shareHint',
+        'shareLink',
+        'shareCopy',
+        'shareCopied',
+        'shareQrAlt',
+      ] as const) {
         expect(typeof exercise[key]).toBe('string');
         expect(exercise[key].length).toBeGreaterThan(0);
       }

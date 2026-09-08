@@ -242,6 +242,19 @@ export const UI_LABELS = {
         // instruction ("Marcar como favorito") would describe the click rather
         // than the thing being counted.
         like: 'Me gusta',
+        // The share dialog. Impersonal register throughout: the hint is an
+        // infinitive ("Escanear"), never an instruction addressed to a person,
+        // and the button labels are bare verbs and participles.
+        share: 'Compartir',
+        shareTitle: 'Compartir este ejercicio',
+        // Says what the code is FOR. "Código QR" alone names the object and
+        // leaves the teacher to guess that the point is opening it elsewhere.
+        shareHint:
+          'Escanear el código para abrir el ejercicio en otro dispositivo.',
+        shareLink: 'Enlace',
+        shareCopy: 'Copiar',
+        shareCopied: 'Copiado',
+        shareQrAlt: 'Código QR con el enlace a este ejercicio',
         // A `<meta name="description">`, so it describes rather than instructs:
         // a noun phrase keeps it neutral without an infinitive standing alone.
         description:
@@ -355,6 +368,13 @@ export const UI_LABELS = {
         back: 'Back to English',
         level: 'Level',
         like: 'Like',
+        share: 'Share',
+        shareTitle: 'Share this exercise',
+        shareHint: 'Scan the code to open this exercise on another device.',
+        shareLink: 'Link',
+        shareCopy: 'Copy',
+        shareCopied: 'Copied',
+        shareQrAlt: 'QR code linking to this exercise',
         description: 'Practice technical English with short exercises and instant feedback.',
         relatedHeadings: [
           'More exercises',

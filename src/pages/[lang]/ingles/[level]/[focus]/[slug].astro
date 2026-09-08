@@ -22,8 +22,10 @@ import ExerciseIsland, {
 } from '@components/islands/ExerciseIsland';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
 import LikeButton from '@components/islands/LikeButton';
+import ShareDialog from '@components/islands/ShareDialog';
 import { hasDedupCookie, dedupCookieName } from '@lib/dedupCookie';
 import { getLikeCount, LIKE_COOKIE_PREFIX } from '@lib/likes';
+import { qrSvg, shareUrl } from '@lib/qr';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   isLevel,
@@ -98,6 +100,27 @@ const alreadyLiked =
     Astro.request.headers.get('cookie'),
     dedupCookieName(LIKE_COOKIE_PREFIX, exercise.id),
   );
+
+/**
+ * The shareable address of THIS page, and its QR — both built on the server.
+ *
+ * `Astro.url` is derived from the incoming request, so the link follows whatever
+ * host actually served the page: production, a branch deploy, or a Netlify
+ * preview. `astro.config.mjs` sets no `site`, and hardcoding one here would
+ * generate previews whose QR silently pointed at production.
+ *
+ * Generating the code here rather than in the island is what keeps the promise
+ * that no third party ever learns which exercises get shared — and it means the
+ * dialog needs no network at all once it opens. The markup is ~9.6 KB raw but
+ * ~0.8 KB over the wire (it is extremely repetitive path data and compresses
+ * accordingly), which is cheaper than the request an on-demand endpoint would
+ * cost, and it removes a whole route whose input would have to be sanitised.
+ *
+ * `qr === null` hides the control, exactly like an unreadable like count: a
+ * share dialog is decoration on a page whose real job is grading an exercise.
+ */
+const shareLink = shareUrl(Astro.url);
+const shareQr = qrSvg(shareLink);
 
 // Seeded from the SLUG, never `Math.random()`. The slug is stable and unique
 // per (level, topic), so a given exercise page always shows the same heading —
@@ -219,19 +242,48 @@ if (exercise.topic) {
           &larr; {t.back}
         </a>
 
-        {/* Rendered only when the counter is reachable — a Supabase outage ships
-            no island at all here (decided in the frontmatter). */}
-        {
-          showLike && (
-            <LikeButton
-              client:load
-              exerciseId={exercise.id}
-              count={likeCount}
-              liked={alreadyLiked}
-              label={t.like}
-            />
-          )
-        }
+        {/* The two page-level actions, grouped so they stay together when the
+            row wraps — a like that wrapped away from the share control would
+            read as belonging to whatever ended up beside it. */}
+        <div class="flex items-center gap-2">
+          {/* Rendered only when the counter is reachable — a Supabase outage
+              ships no island at all here (decided in the frontmatter). */}
+          {
+            showLike && (
+              <LikeButton
+                client:load
+                exerciseId={exercise.id}
+                count={likeCount}
+                liked={alreadyLiked}
+                label={t.like}
+              />
+            )
+          }
+
+          {/* `client:idle`, unlike the like button's `client:load`. This is the
+              heaviest island on the page (Radix Dialog brings a portal, a focus
+              trap and scroll locking) and the least urgent — nobody shares an
+              exercise before it has finished loading. Letting it hydrate after
+              the exercise itself is the whole reason it is a separate island. */}
+          {
+            shareQr && (
+              <ShareDialog
+                client:idle
+                url={shareLink}
+                qr={shareQr}
+                labels={{
+                  trigger: t.share,
+                  title: t.shareTitle,
+                  hint: t.shareHint,
+                  link: t.shareLink,
+                  copy: t.shareCopy,
+                  copied: t.shareCopied,
+                  qrAlt: t.shareQrAlt,
+                }}
+              />
+            )
+          }
+        </div>
       </div>
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
