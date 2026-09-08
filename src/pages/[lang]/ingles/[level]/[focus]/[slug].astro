@@ -21,6 +21,9 @@ import ExerciseIsland, {
   type ExerciseBadge,
 } from '@components/islands/ExerciseIsland';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
+import LikeButton from '@components/islands/LikeButton';
+import { hasDedupCookie, dedupCookieName } from '@lib/dedupCookie';
+import { getLikeCount, LIKE_COOKIE_PREFIX } from '@lib/likes';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   isLevel,
@@ -61,9 +64,40 @@ const t = UI_LABELS[lang].english.exercise;
 const heading = exercise.payload.slots[0]?.label ?? slug;
 
 // Fetched AFTER the 404 guards above, so a page nobody will see never spends a
-// round trip on suggestions. Fail-safe: `[]` on any error, which renders
-// nothing at all rather than an empty heading.
-const related = await getRelatedExercises(exercise);
+// round trip on suggestions. Both are fail-safe and INDEPENDENT, so they run
+// concurrently — sequencing them would add a whole round trip to the render path
+// to no purpose. `related` fail-safes to `[]`, which renders nothing at all
+// rather than an empty heading; `likeCount` fail-safes to `null`, which means
+// "unknown" and hides the control (see below).
+const [related, likeCount] = await Promise.all([
+  getRelatedExercises(exercise),
+  getLikeCount(exercise.id),
+]);
+
+/**
+ * The like control's state, decided ENTIRELY on the server.
+ *
+ * `likeCount === null` means the counter is unreachable, and the control is then
+ * not rendered AT ALL — so an outage ships no island and no JavaScript for it,
+ * rather than hydrating a button that cannot work. That also means `LikeButton`
+ * never receives an unknown count and has no such branch to get wrong.
+ *
+ * `exercise.id` is guarded too: `getExerciseBySlug` degrades a missing id to
+ * `''`, and a counter keyed on an empty string would be a shared bucket for
+ * every exercise that ever hit that path.
+ *
+ * `liked` comes from the SAME dedup cookie the endpoint arms, read here on the
+ * ordinary page request. That is why the cookie is `HttpOnly`: the server is its
+ * only reader, so the button can render in its true state on first paint instead
+ * of flashing "not liked" and correcting itself after hydration.
+ */
+const showLike = likeCount !== null && exercise.id.length > 0;
+const alreadyLiked =
+  showLike &&
+  hasDedupCookie(
+    Astro.request.headers.get('cookie'),
+    dedupCookieName(LIKE_COOKIE_PREFIX, exercise.id),
+  );
 
 // Seeded from the SLUG, never `Math.random()`. The slug is stable and unique
 // per (level, topic), so a given exercise page always shows the same heading —
@@ -165,12 +199,40 @@ if (exercise.topic) {
     <div
       class="flex min-h-[calc(100svh-231px)] flex-col gap-6 sm:min-h-[calc(100svh-247px)]"
     >
-      <a
-        href={`/${lang}/ingles`}
-        class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
-      >
-        &larr; {t.back}
-      </a>
+      {/* THE PAGE'S CONTROL ROW: leave on the left, act on the right.
+          `flex-wrap` is load-bearing rather than defensive. At 320px the back
+          link and the controls together exceed the 288px of content width left
+          by `px-4`, so without it this row would either overflow the viewport or
+          squash the link. Wrapping costs one extra line on the narrowest phones,
+          which is the cheap failure.
+
+          It sits INSIDE the reserved first screen (see the min-height note
+          above), so it consumes part of that reserve rather than pushing the
+          related block down — the peek is unchanged until the exercise's own
+          height overflows the reserve, which was already the documented limit of
+          that mechanism. */}
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <a
+          href={`/${lang}/ingles`}
+          class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+        >
+          &larr; {t.back}
+        </a>
+
+        {/* Rendered only when the counter is reachable — a Supabase outage ships
+            no island at all here (decided in the frontmatter). */}
+        {
+          showLike && (
+            <LikeButton
+              client:load
+              exerciseId={exercise.id}
+              count={likeCount}
+              liked={alreadyLiked}
+              label={t.like}
+            />
+          )
+        }
+      </div>
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
         (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the

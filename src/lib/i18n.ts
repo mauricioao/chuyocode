@@ -237,6 +237,11 @@ export const UI_LABELS = {
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
+        // The like control's accessible NAME. The count is rendered beside it
+        // and completes the name, so this is the noun phrase alone — an
+        // instruction ("Marcar como favorito") would describe the click rather
+        // than the thing being counted.
+        like: 'Me gusta',
         // A `<meta name="description">`, so it describes rather than instructs:
         // a noun phrase keeps it neutral without an infinitive standing alone.
         description:
@@ -349,6 +354,7 @@ export const UI_LABELS = {
       exercise: {
         back: 'Back to English',
         level: 'Level',
+        like: 'Like',
         description: 'Practice technical English with short exercises and instant feedback.',
         relatedHeadings: [
           'More exercises',
