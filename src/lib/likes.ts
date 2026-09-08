@@ -2,7 +2,10 @@
  * Server-only exercise "like" counters.
  *
  * Backs the like endpoint (`/api/me-gusta/[id]`) and the SSR count on the
- * exercise detail page. Same shape and same security posture as
+ * exercise detail page. Liking is a TOGGLE, so the write side is a symmetric
+ * pair — {@link incrementLike} and {@link decrementLike} — and neither of them
+ * decides WHICH one to call: that is the endpoint's job, read off the dedup
+ * cookie. Same shape and same security posture as
  * src/lib/downloads.ts: writes go through the service-role client, the table has
  * RLS enabled with NO public policies, and the browser never talks to Supabase
  * itself — exposing a writable counter to the anon key would make the number
@@ -28,9 +31,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from './supabase';
 
-/** DB table + RPC names — must match the SQL migration. */
+/** DB table + RPC names — must match the SQL migrations. */
 export const EXERCISE_LIKES_TABLE = 'exercise_likes';
 export const INCREMENT_LIKE_RPC = 'increment_exercise_like';
+/** Added by supabase/migrations/0006_exercise_like_toggle.sql. */
+export const DECREMENT_LIKE_RPC = 'decrement_exercise_like';
 
 /**
  * Per-exercise dedup cookie prefix. Mirrors the download proxy's `chu_dl_`.
@@ -94,6 +99,12 @@ function getClient(): SupabaseClient | null {
  * reporting it as zero would render as "the likes were wiped".
  */
 function readCount(value: unknown): number | null {
+  // 🔴 `null` MUST be rejected BEFORE the coercion, because `Number(null)` is 0
+  // — so an RPC that answered nothing would have rendered as "the likes were
+  // wiped", which is the one thing this function exists to prevent. The
+  // docstring above always promised this; the code only started keeping the
+  // promise when the decrement RPC made "no answer" a reachable shape.
+  if (value === null || value === undefined) return null;
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isInteger(n) || n < 0) return null;
   return n;
@@ -127,6 +138,47 @@ export async function incrementLike(
     return readCount(data);
   } catch (err) {
     console.error('[likes] incrementLike threw:', err);
+    return null;
+  }
+}
+
+/**
+ * Atomically take one like back off `exerciseId` and return the NEW total.
+ *
+ * The mirror of {@link incrementLike}, with the same contract: `null` on any
+ * failure, never a throw, and the authoritative count in the same round trip
+ * that writes it.
+ *
+ * 🔴 THE FLOOR IS THE DATABASE'S JOB, NOT THIS FUNCTION'S. There is no
+ * `Math.max` here on purpose. Clamping in JavaScript would mean reading the
+ * count, subtracting, and writing a literal back — three steps with a window
+ * between them in which a second un-like can read the same "1" and both write
+ * "0", or worse. The clamp lives inside the RPC's single UPDATE statement (see
+ * `0006_exercise_like_toggle.sql`), plus a CHECK constraint behind it, so
+ * concurrency is settled by Postgres row locking rather than by hope.
+ *
+ * The RPC is TOTAL: an exercise with no counter row yet answers 0 rather than
+ * nothing. So a `null` here always means the call failed, never "there was
+ * nothing to take away".
+ */
+export async function decrementLike(
+  exerciseId: string,
+): Promise<number | null> {
+  if (!isExerciseId(exerciseId)) return null;
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client.rpc(DECREMENT_LIKE_RPC, {
+      exercise: exerciseId,
+    });
+    if (error) {
+      console.error('[likes] decrementLike failed:', error.message);
+      return null;
+    }
+    return readCount(data);
+  } catch (err) {
+    console.error('[likes] decrementLike threw:', err);
     return null;
   }
 }

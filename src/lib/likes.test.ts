@@ -40,9 +40,11 @@ vi.mock('./supabase', () => ({
 
 import {
   incrementLike,
+  decrementLike,
   getLikeCount,
   isExerciseId,
   clearLikesClient,
+  DECREMENT_LIKE_RPC,
   INCREMENT_LIKE_RPC,
   EXERCISE_LIKES_TABLE,
 } from './likes';
@@ -116,6 +118,70 @@ describe('incrementLike', () => {
     // to render "0 likes" on an exercise that may have hundreds.
     rpcMock.mockResolvedValue({ data: 'boom', error: null });
     expect(await incrementLike(ID)).toBeNull();
+  });
+});
+
+describe('decrementLike', () => {
+  it('calls the decrement RPC with the exercise id and returns the new count', async () => {
+    rpcMock.mockResolvedValue({ data: 6, error: null });
+    expect(await decrementLike(ID)).toBe(6);
+    expect(rpcMock).toHaveBeenCalledWith(DECREMENT_LIKE_RPC, { exercise: ID });
+  });
+
+  it('is a DIFFERENT RPC from the increment', async () => {
+    // Triangulation. Both take `{ exercise }` and both return a bigint, so a
+    // copy-paste that left the increment name in place would otherwise pass
+    // every other case here while un-liking added a like.
+    expect(DECREMENT_LIKE_RPC).not.toBe(INCREMENT_LIKE_RPC);
+  });
+
+  it('accepts a bigint returned as a string', async () => {
+    rpcMock.mockResolvedValue({ data: '0', error: null });
+    expect(await decrementLike(ID)).toBe(0);
+  });
+
+  it('reports 0 as a real zero, never as unknown', async () => {
+    // The floor is enforced in the RPC, so 0 is the ordinary answer for the last
+    // like being taken back. Confusing it with `null` would hide the control.
+    rpcMock.mockResolvedValue({ data: 0, error: null });
+    expect(await decrementLike(ID)).toBe(0);
+  });
+
+  it('returns null (never throws) when the RPC errors', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: 'down' } });
+    expect(await decrementLike(ID)).toBeNull();
+  });
+
+  it('returns null when the RPC throws', async () => {
+    rpcMock.mockRejectedValue(new Error('network'));
+    expect(await decrementLike(ID)).toBeNull();
+  });
+
+  it('returns null when the RPC answers nothing at all', async () => {
+    // `Number(null)` is 0, so an unguarded coercion would report a counter we
+    // never heard back about as an emptied one — and the endpoint would then
+    // clear the dedup cookie on the strength of a write that never happened.
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    expect(await decrementLike(ID)).toBeNull();
+  });
+
+  it('never returns a negative count, whatever the database says', async () => {
+    // Defence in depth. The clamp lives in the RPC and a CHECK constraint sits
+    // behind it, so this is unreachable through the supported path — but a
+    // counter that renders "-1" is exactly the bug that reaches a screenshot.
+    rpcMock.mockResolvedValue({ data: -1, error: null });
+    expect(await decrementLike(ID)).toBeNull();
+  });
+
+  it('returns null for a malformed id without touching Supabase', async () => {
+    expect(await decrementLike('not-a-uuid')).toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await decrementLike(ID)).toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 });
 

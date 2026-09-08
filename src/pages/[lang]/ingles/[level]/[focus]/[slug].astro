@@ -248,6 +248,13 @@ if (exercise.topic) {
         <div class="flex items-center gap-2">
           {/* Rendered only when the counter is reachable — a Supabase outage
               ships no island at all here (decided in the frontmatter). */}
+          {/* `lang`, not a resolved label: the control is a TOGGLE, so its name
+              depends on state only the island can see, and it owns that pair of
+              words itself (see the LikeButton header).
+
+              This comment sits OUTSIDE the expression on purpose — a `{/* */}`
+              as the first child of an Astro `cond && (...)` block fails the
+              compiler with `Expected ")" but found "$$render"`. */}
           {
             showLike && (
               <LikeButton
@@ -255,7 +262,7 @@ if (exercise.topic) {
                 exerciseId={exercise.id}
                 count={likeCount}
                 liked={alreadyLiked}
-                label={t.like}
+                lang={lang}
               />
             )
           }

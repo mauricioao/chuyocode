@@ -237,11 +237,12 @@ export const UI_LABELS = {
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
-        // The like control's accessible NAME. The count is rendered beside it
-        // and completes the name, so this is the noun phrase alone — an
-        // instruction ("Marcar como favorito") would describe the click rather
-        // than the thing being counted.
-        like: 'Me gusta',
+        // NO `like` KEY. The like control became a TOGGLE, and a toggle needs
+        // one name per direction chosen from state that only the island holds.
+        // Its pair of words therefore lives in `LikeButton.COPY`, which that
+        // component's test sweeps with `findVoseo` so the neutral-Spanish rule
+        // still applies to it. Leaving a stale `like` here would look live.
+        //
         // The share dialog. Impersonal register throughout: the hint is an
         // infinitive ("Escanear"), never an instruction addressed to a person,
         // and the button labels are bare verbs and participles.
@@ -367,7 +368,7 @@ export const UI_LABELS = {
       exercise: {
         back: 'Back to English',
         level: 'Level',
-        like: 'Like',
+        // No `like` — see the `es` block.
         share: 'Share',
         shareTitle: 'Share this exercise',
         shareHint: 'Scan the code to open this exercise on another device.',

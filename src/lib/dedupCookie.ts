@@ -87,12 +87,52 @@ export function hasDedupCookie(
  * is the entire signal, and its expiry is the window.
  */
 export function dedupCookie(name: string, options: { secure: boolean }): string {
+  return buildCookie(name, '1', Math.floor(DEDUP_WINDOW_MS / 1000), options);
+}
+
+/**
+ * The `Set-Cookie` value that DISARMS the window for `name` immediately.
+ *
+ * The counterpart to {@link dedupCookie}, needed the moment a counted action
+ * became reversible: un-liking has to hand the browser back the right to like
+ * again, and it must do so at once rather than 24 hours later.
+ *
+ * 🔴 THE OTHER ATTRIBUTES ARE NOT DECORATION — THEY ARE THE COOKIE'S IDENTITY.
+ * A browser matches a `Set-Cookie` against what it already stores by name,
+ * `Domain` and `Path`, and `Max-Age` alone. Sending `Max-Age=0` WITHOUT the same
+ * `Path=/` creates a SECOND, already-expired cookie scoped to the request path
+ * and leaves the original one sitting there — the delete silently does nothing,
+ * and the symptom is a like that can never be re-liked. So this is built from
+ * the same helper as the arming value, which is what keeps the two in step.
+ *
+ * `Max-Age=0` rather than an expiry date: no clock arithmetic, no timezone, and
+ * every browser that supports `Max-Age` treats it as "expire now".
+ */
+export function clearDedupCookie(
+  name: string,
+  options: { secure: boolean },
+): string {
+  // Empty value, because the value never carried meaning — only presence did.
+  return buildCookie(name, '', 0, options);
+}
+
+/**
+ * The single place the attribute list is written, so arming and clearing cannot
+ * drift apart. See {@link clearDedupCookie} for why that drift would be a bug
+ * rather than an inconsistency.
+ */
+function buildCookie(
+  name: string,
+  value: string,
+  maxAgeSeconds: number,
+  options: { secure: boolean },
+): string {
   const attrs = [
-    `${name}=1`,
+    `${name}=${value}`,
     'HttpOnly',
     'SameSite=Lax',
     'Path=/',
-    `Max-Age=${Math.floor(DEDUP_WINDOW_MS / 1000)}`,
+    `Max-Age=${maxAgeSeconds}`,
   ];
   if (options.secure) attrs.push('Secure');
   return attrs.join('; ');

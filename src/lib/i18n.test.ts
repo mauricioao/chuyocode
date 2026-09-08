@@ -165,7 +165,6 @@ describe('UI_LABELS — home-streaming keys', () => {
         'back',
         'level',
         'description',
-        'like',
         'share',
         'shareTitle',
         'shareHint',
@@ -200,6 +199,15 @@ describe('UI_LABELS — home-streaming keys', () => {
   it('does not keep the single literal related heading it replaced', () => {
     for (const l of locales) {
       expect('related' in UI_LABELS[l].english.exercise).toBe(false);
+    }
+  });
+
+  it('no longer carries the like label the toggle moved into its island', () => {
+    // A toggle needs one name per direction, picked from state the page cannot
+    // see, so the pair moved to `LikeButton.COPY`. Copy left behind here reads
+    // as live to the next person and gets re-wired by accident.
+    for (const l of locales) {
+      expect('like' in UI_LABELS[l].english.exercise).toBe(false);
     }
   });
 

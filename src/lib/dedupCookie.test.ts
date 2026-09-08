@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  clearDedupCookie,
   DEDUP_WINDOW_MS,
   dedupCookie,
   dedupCookieName,
@@ -82,5 +83,36 @@ describe('dedupCookie', () => {
     const name = dedupCookieName('chu_like_', 'abc');
     const header = dedupCookie(name, { secure: true }).split(';')[0];
     expect(hasDedupCookie(header, name)).toBe(true);
+  });
+});
+
+describe('clearDedupCookie', () => {
+  it('expires the cookie immediately', () => {
+    const value = clearDedupCookie('chu_like_abc', { secure: false });
+    expect(value).toContain('chu_like_abc=');
+    expect(value).toContain('Max-Age=0');
+  });
+
+  /**
+   * 🔴 THE ONE THAT ACTUALLY MATTERS. A browser matches a deletion against the
+   * cookie it stored by name, `Domain` and `Path`. Dropping `Path=/` here would
+   * create a second, already-expired cookie scoped to the request path and leave
+   * the original untouched — a delete that silently does nothing, whose only
+   * symptom is a like that can never be given again.
+   */
+  it('keeps every attribute that identifies the cookie being deleted', () => {
+    const armed = dedupCookie('chu_like_abc', { secure: true });
+    const cleared = clearDedupCookie('chu_like_abc', { secure: true });
+    for (const attr of ['HttpOnly', 'SameSite=Lax', 'Path=/', 'Secure']) {
+      expect(armed).toContain(attr);
+      expect(cleared).toContain(attr);
+    }
+  });
+
+  it('omits Secure unless asked, exactly like arming does', () => {
+    expect(clearDedupCookie('chu_like_abc', { secure: false })).not.toContain(
+      'Secure',
+    );
+    expect(clearDedupCookie('chu_like_abc', { secure: true })).toContain('Secure');
   });
 });

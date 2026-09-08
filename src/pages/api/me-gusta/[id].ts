@@ -1,5 +1,5 @@
 /**
- * POST /api/me-gusta/[id] — the exercise like counter.
+ * POST /api/me-gusta/[id] — the exercise like TOGGLE.
  *
  * THE ONLY WRITER OF THE LIKE COUNTER. The browser never talks to Supabase: an
  * anon key that could write this table would make the number meaningless, so
@@ -8,10 +8,24 @@
  *
  * Flow:
  *   1. Reject anything that is not a uuid → 404, before any query.
- *   2. If this browser already has a fresh `chu_like_<id>` cookie, do NOT count
- *      again — just report the current total.
- *   3. Otherwise increment atomically and arm the 24h dedup cookie.
+ *   2. `chu_like_<id>` cookie ABSENT → increment, and arm the 24h cookie.
+ *   3. `chu_like_<id>` cookie PRESENT → decrement, and clear the cookie.
  *   4. Answer `{ count }` — the AUTHORITATIVE total, or `null` when unknown.
+ *
+ * 🔴 THE COOKIE IS THE STATE, WHICH IS WHY THE TOGGLE IS ONE BRANCH AND NOT A
+ * PROTOCOL. There are no accounts, so "did this browser like this exercise" had
+ * to be recorded somewhere anyway — and it already was, by the dedup cookie the
+ * one-way version needed. Reading it as the toggle's state means the browser
+ * sends NO intent at all: no request body, no query flag, nothing the client can
+ * get out of step with. The server cannot be told "un-like" by something that
+ * never liked, because the only evidence it accepts is a cookie it set itself.
+ *
+ * THE 24h WINDOW STILL GOVERNS THE LIKE, AND ONLY THE LIKE. Liking arms it;
+ * un-liking clears it immediately, because making someone wait a day to undo a
+ * mis-click would be a punishment, not a dedup. Re-liking afterwards does count
+ * again — and that is not a hole, it is what a toggle means: the decrement
+ * already gave the point back, so a browser can still only ever contribute a net
+ * +1 while it is in the liked state.
  *
  * 🔴 THE RESPONSE IS `{ count: number | null }` AND `null` IS LOAD-BEARING.
  * The button updates optimistically, so it needs an answer it can either
@@ -34,9 +48,14 @@
  * needs identity, which this feature deliberately does not introduce.
  */
 import type { APIRoute } from 'astro';
-import { dedupCookie, dedupCookieName, hasDedupCookie } from '@lib/dedupCookie';
 import {
-  getLikeCount,
+  clearDedupCookie,
+  dedupCookie,
+  dedupCookieName,
+  hasDedupCookie,
+} from '@lib/dedupCookie';
+import {
+  decrementLike,
   incrementLike,
   isExerciseId,
   LIKE_COOKIE_PREFIX,
@@ -67,26 +86,30 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   const cookieName = dedupCookieName(LIKE_COOKIE_PREFIX, id);
+  // The cookie is the whole input. Present means this browser is currently
+  // liking the exercise, so the press can only mean "take it back".
+  const liked = hasDedupCookie(request.headers.get('cookie'), cookieName);
 
-  // Already counted within the window. Report the CURRENT total rather than
-  // saying nothing: the button's optimistic +1 has to be undone, and the honest
-  // way to undo it is to hand back the real number.
-  if (hasDedupCookie(request.headers.get('cookie'), cookieName)) {
-    return json({ count: await getLikeCount(id) });
-  }
+  const count = liked ? await decrementLike(id) : await incrementLike(id);
 
-  const count = await incrementLike(id);
-
-  // THE COOKIE IS ARMED ONLY ON A CONFIRMED WRITE. Arming it after a failure
-  // would lock this browser out of liking for 24 hours over a transient outage
-  // — a failure the learner never saw, silently turned into a permanent one.
+  // 🔴 THE COOKIE MOVES ONLY ON A CONFIRMED WRITE, IN BOTH DIRECTIONS.
+  //   - Arming it after a failed like would lock this browser out for 24 hours
+  //     over a transient outage: a failure nobody saw, made permanent.
+  //   - Clearing it after a failed un-like is the mirror mistake and the worse
+  //     one — the count would still hold the like while the browser believed it
+  //     had none, so the next press would ADD a second one.
+  // Leaving the cookie exactly where it was keeps the browser's state and the
+  // counter's state in agreement whenever the write did not happen.
   const headers = new Headers();
   if (count !== null) {
+    // Dev runs on plain http://localhost, where a `Secure` cookie is dropped
+    // outright and the dedup would look broken rather than absent.
+    const secure = import.meta.env?.PROD === true;
     headers.append(
       'set-cookie',
-      // Dev runs on plain http://localhost, where a `Secure` cookie is dropped
-      // outright and the dedup would look broken rather than absent.
-      dedupCookie(cookieName, { secure: import.meta.env?.PROD === true }),
+      liked
+        ? clearDedupCookie(cookieName, { secure })
+        : dedupCookie(cookieName, { secure }),
     );
   }
 
