@@ -33,7 +33,6 @@ import {
   showsStepper,
 } from '@/lib/exerciseStepper';
 import { answerableSlots, isSubmittable } from '@/lib/exerciseSubmit';
-import { cn } from '@/lib/utils';
 import {
   formatElapsed,
   shouldTick,
@@ -173,38 +172,36 @@ export const COPY: Record<'es' | 'en', Copy> = {
 };
 
 /**
- * True when the user asked for reduced motion (SSR-safe: false on the server).
+ * The prompt area's classes, INCLUDING the step transition.
  *
- * The `typeof` guards are load-bearing, not defensive noise: `window.matchMedia`
- * does not exist during SSR and does not exist in jsdom either, so reading
- * `.matches` off it directly throws and takes the whole island down — a crash on
- * the machines least likely to be checked. Same helper the carousels already
- * use; it is duplicated rather than shared because it is three lines and lives
- * in three unrelated islands.
- */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
-/**
- * The transition between two steps: a short fade-in on the arriving slot.
- *
- * BE HONEST ABOUT WHAT THIS IS. It is not a crossfade — the outgoing slot is
+ * BE HONEST ABOUT WHAT THE FADE IS. It is not a crossfade — the outgoing slot is
  * replaced immediately and the incoming one fades in over it. A true fade-OUT
  * needs the old slot to stay mounted while it dims, which means the new one
  * cannot appear until the fade finishes, and that delays every single press of
  * "next" for the sake of 200ms of decoration.
  *
- * `motion-reduce:animate-none` is belt AND braces next to {@link
- * prefersReducedMotion}: the JS read is a snapshot taken at render, while the
- * media query keeps holding after the user changes the setting without
- * reloading.
+ * 🔴 REDUCED MOTION IS HONOURED IN CSS ALONE, AND THAT IS NOT A STYLE PREFERENCE
+ * — IT IS THE FIX FOR A REAL HYDRATION BUG. This used to be
+ * `cn(base, !prefersReducedMotion() && STEP_FADE)`, where `prefersReducedMotion`
+ * read `window.matchMedia` DURING RENDER. `matchMedia` does not exist on the
+ * server, so SSR always emitted the fade classes while the first client render
+ * of a reduced-motion visitor omitted them — different markup from the same
+ * component, which is exactly the mismatch React reports as:
+ *
+ *   A tree hydrated but some attributes of the server rendered HTML didn't
+ *   match the client properties
+ *
+ * The JS branch was also REDUNDANT: `motion-reduce:animate-none` already
+ * suppresses the animation in pure CSS, and it does so BETTER — a render-time
+ * read is a snapshot, whereas the media query keeps holding after the visitor
+ * changes the OS setting without reloading.
+ *
+ * So the markup is now a CONSTANT. No render-time branch means no way for the
+ * two renders to disagree: the mismatch is impossible by construction, not
+ * merely unobserved.
  */
-const STEP_FADE = 'animate-in fade-in-0 duration-200 motion-reduce:animate-none';
+const PROMPT_AREA =
+  'flex flex-1 flex-col text-center animate-in fade-in-0 duration-200 motion-reduce:animate-none';
 
 /** Resolve copy for a locale, defaulting to English. */
 function copyFor(lang: string): Copy {
@@ -354,7 +351,6 @@ export default function ExerciseIsland({
   const current = clampStep(step, total);
   const stepped = showsStepper(total);
   const slot = payload.slots[current];
-  const animateStep = !prefersReducedMotion();
 
   // Resolved here rather than inside the JSX so the render below stays one flat
   // block. Only ONE slot is on screen, so there is nothing left to map over.
@@ -538,10 +534,7 @@ export default function ExerciseIsland({
           fade, and it is also what guarantees a mechanic cannot carry internal
           state from one question into the next. The learner's answers are not
           in that subtree — they live in `response` — so nothing is lost. */}
-      <div
-        key={current}
-        className={cn('flex flex-1 flex-col text-center', animateStep && STEP_FADE)}
-      >
+      <div key={current} className={PROMPT_AREA}>
         {slot && (
           // `justify-center` here and not only on the parent: a mechanic that
           // fills its space (a `drop` slot pins its pool to the top edge) is

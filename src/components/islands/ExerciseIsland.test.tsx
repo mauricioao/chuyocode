@@ -1341,10 +1341,11 @@ describe('ExerciseIsland — correcting keeps work that was already right', () =
  * grading is unaffected by the route the learner took through the questions, and
  * that the verdicts stay walkable afterwards.
  *
- * WHAT THESE CANNOT PROVE: the fade. jsdom runs no animations and computes no
- * styles, so the transition between two steps is invisible to every assertion
- * here — only the reduced-motion DECISION is observable, and only because it is
- * a JS read that can throw.
+ * WHAT THESE CANNOT PROVE: the fade itself. jsdom runs no animations and
+ * computes no styles, so the transition between two steps is invisible to every
+ * assertion here. What IS provable, and what the last block below proves, is
+ * that the MARKUP carrying that fade is decided without asking the browser
+ * anything — see the hydration note there.
  */
 describe('ExerciseIsland — stepping through the slots', () => {
   function stepLabel(): string {
@@ -1668,10 +1669,69 @@ describe('ExerciseIsland — stepping through the slots', () => {
 
   describe('reduced motion', () => {
     /**
-     * THE GUARD THAT MATTERS. jsdom ships no `window.matchMedia` at all, and
-     * neither does the server. Reading `.matches` off it directly throws and
-     * takes the whole island down — so this is not a style test, it is a crash
-     * test, and it is the reason the `typeof` guard exists.
+     * 🔴 THE HYDRATION GUARD — a regression test for a bug reported from a real
+     * browser by a visitor with `prefers-reduced-motion` enabled:
+     *
+     *   A tree hydrated but some attributes of the server rendered HTML didn't
+     *   match the client properties
+     *     + className="flex flex-1 flex-col text-center"
+     *     - className="flex flex-1 flex-col text-center animate-in fade-in-0
+     *                  duration-200 motion-reduce:animate-none"
+     *
+     * The island used to pick those classes by reading `window.matchMedia`
+     * DURING RENDER. `matchMedia` does not exist on the server, so SSR always
+     * emitted the fade while the first client render of a reduced-motion
+     * visitor omitted it — two different markups from one component, which is
+     * exactly what React reports. The CSS variant `motion-reduce:animate-none`
+     * was already honouring the preference, so the JS branch bought nothing.
+     *
+     * WHY THE ASSERTION IS AN IDENTITY AND NOT A CLASS CHECK. "The fade class is
+     * present" is a CSS assertion, and it would keep passing on a component that
+     * branched on some other browser-only read. The invariant that actually
+     * holds is INDEPENDENCE: the markup must be identical whether `matchMedia`
+     * is absent (the server, and jsdom) or present and answering "reduce" (the
+     * reporter's machine). A render that cannot observe the media query has no
+     * way to disagree with one that can.
+     *
+     * RED→GREEN PROVEN: restoring `animateStep && STEP_FADE` makes this fail
+     * with the reduced-motion markup missing those four classes.
+     */
+    it('renders identical markup whether or not matchMedia exists', () => {
+      /**
+       * React's `useId` counter is global to the client runtime, so two
+       * independent roots legitimately produce different ids. That difference is
+       * not what this test is about; every other byte must match.
+       */
+      function markupOf(): string {
+        const { container } = render(
+          <ExerciseIsland lang="en" payload={threeBlanks} />,
+        );
+        return container.innerHTML.replace(/_[Rr]_[0-9a-z]*_/g, 'GENERATED_ID');
+      }
+
+      expect(window.matchMedia).toBeUndefined();
+      const serverLike = markupOf();
+      cleanup();
+
+      stubMatchMedia(true);
+      const reduced = markupOf();
+      cleanup();
+
+      stubMatchMedia(false);
+      const allowed = markupOf();
+
+      // Triangulation: two empty strings would satisfy the equalities below.
+      expect(serverLike).toContain('exercise-stepper');
+      expect(reduced).toBe(serverLike);
+      expect(allowed).toBe(serverLike);
+    });
+
+    /**
+     * Still a crash test, and still worth keeping. jsdom ships no
+     * `window.matchMedia` at all, and neither does the server; the island must
+     * work there. It passes today because the island reads nothing — which is
+     * the point — but it would catch the next person who reaches for the media
+     * query from render.
      */
     it('renders and steps where matchMedia does not exist at all', () => {
       expect(window.matchMedia).toBeUndefined();
