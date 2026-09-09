@@ -16,30 +16,33 @@ import { describe, expect, it } from 'vitest';
 import { COMPARATORS, check, comparatorFor } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
 import ChoiceRenderer from './ChoiceRenderer';
+import DropRenderer from './DropRenderer';
 import SelectRenderer from './SelectRenderer';
 import TextRenderer from './TextRenderer';
 import { comparatorForRenderable, rendererFor } from './registry';
 
 /** Mechanics named in the model that have shipped neither half. */
-const UNSHIPPED = ['drop', 'order', 'hotspot'];
+const UNSHIPPED = ['order', 'hotspot'];
 
 describe('rendererFor', () => {
   it('resolves every shipped mechanic to its own renderer', () => {
     expect(rendererFor('choice')).toBe(ChoiceRenderer);
     expect(rendererFor('select')).toBe(SelectRenderer);
     expect(rendererFor('text')).toBe(TextRenderer);
+    expect(rendererFor('drop')).toBe(DropRenderer);
   });
 
-  // TRIANGULATION: three distinct mechanics must map to three DISTINCT
+  // TRIANGULATION: four distinct mechanics must map to four DISTINCT
   // renderers, which a single catch-all component would fail.
   it('maps each mechanic to a distinct renderer', () => {
     const resolved = [
       rendererFor('choice'),
       rendererFor('select'),
       rendererFor('text'),
+      rendererFor('drop'),
     ];
 
-    expect(new Set(resolved).size).toBe(3);
+    expect(new Set(resolved).size).toBe(4);
   });
 
   it('returns null for a mechanic that has no renderer yet', () => {
@@ -60,6 +63,7 @@ describe('comparatorForRenderable', () => {
     expect(comparatorForRenderable('choice')).toBe('set');
     expect(comparatorForRenderable('select')).toBe('set');
     expect(comparatorForRenderable('text')).toBe('text');
+    expect(comparatorForRenderable('drop')).toBe('set');
   });
 
   it('refuses to grade a mechanic that has neither half', () => {
@@ -148,5 +152,77 @@ describe('grading through the registry (the correctness guarantee)', () => {
     // The comparator normalizes the raw string the renderer reported.
     expect(result.slots.t1).toBe('correct');
     expect(result.correct).toBe(true);
+  });
+
+  /**
+   * THE REASON `drop` COULD NOT SIMPLY BE REGISTERED IN THE RENDERER MAP.
+   *
+   * `COMPARATORS` had no `drop` key, so `comparatorForRenderable('drop')`
+   * returned `null` and every drop slot graded `unavailable` — EXCLUDED from the
+   * verdict. The learner would place every tile correctly and be told neither
+   * "correct" nor "incorrect". Nothing throws, nothing logs.
+   *
+   * Registering the mechanic without its comparator is therefore only half a
+   * mechanic, and the half that is missing is the invisible one.
+   */
+  it('grades a drop slot instead of silently excluding it from the verdict', () => {
+    const dropped: Payload = {
+      pools: { food: [{ id: 'i_olives' }, { id: 'i_honey' }] },
+      slots: [
+        {
+          id: 'olives_img',
+          label: 'olives',
+          input: 'drop',
+          pool: 'food',
+          answer: ['i_olives'],
+        },
+      ],
+    };
+
+    const right = check(dropped, { olives_img: ['i_olives'] }, comparatorForRenderable);
+    expect(right.slots.olives_img).toBe('correct');
+    expect(right.correct).toBe(true);
+
+    const wrong = check(dropped, { olives_img: ['i_honey'] }, comparatorForRenderable);
+    expect(wrong.slots.olives_img).toBe('incorrect');
+    expect(wrong.correct).toBe(false);
+  });
+
+  /**
+   * The mechanic is a RENDERING concern, never a grading one. The same reported
+   * ids must produce the same verdict whichever control collected them — that is
+   * the property that let `drop` reuse `set` instead of growing a comparator.
+   */
+  it('grades an id reported by drop identically to the same id via choice', () => {
+    const pools = { opts: [{ id: 'a' }, { id: 'b' }] };
+    const slot = { id: 's1', label: 'q', pool: 'opts', answer: ['b'] };
+
+    const viaDrop = check(
+      { pools, slots: [{ ...slot, input: 'drop' }] },
+      { s1: ['b'] },
+      comparatorForRenderable,
+    );
+    const viaChoice = check(
+      { pools, slots: [{ ...slot, input: 'choice' }] },
+      { s1: ['b'] },
+      comparatorForRenderable,
+    );
+
+    expect(viaDrop).toEqual(viaChoice);
+
+    // And they must agree when WRONG too, not merely when correct.
+    const wrongDrop = check(
+      { pools, slots: [{ ...slot, input: 'drop' }] },
+      { s1: ['a'] },
+      comparatorForRenderable,
+    );
+    const wrongChoice = check(
+      { pools, slots: [{ ...slot, input: 'choice' }] },
+      { s1: ['a'] },
+      comparatorForRenderable,
+    );
+
+    expect(wrongDrop).toEqual(wrongChoice);
+    expect(wrongDrop.correct).toBe(false);
   });
 });

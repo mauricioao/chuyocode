@@ -18,42 +18,25 @@ import type { APIRoute } from 'astro';
 import { getBookBySlug } from '@lib/sanity';
 import { getPassState } from '@lib/pass';
 import { incrementDownload } from '@lib/downloads';
+import {
+  DEDUP_WINDOW_MS,
+  dedupCookie,
+  dedupCookieName,
+  hasDedupCookie,
+} from '@lib/dedupCookie';
 
-/** Dedup window: don't re-count the same slug from the same browser for 24h. */
-export const DOWNLOAD_DEDUP_MS = 24 * 60 * 60 * 1000;
+/**
+ * Dedup window: don't re-count the same slug from the same browser for 24h.
+ *
+ * Re-exported rather than defined here: the like counter needs the identical
+ * rule, so the window and the cookie mechanics moved into `@lib/dedupCookie`
+ * (two hand-maintained copies of one rule drift, and a drifted dedup silently
+ * stops deduping). This name is kept because it is this endpoint's contract.
+ */
+export const DOWNLOAD_DEDUP_MS = DEDUP_WINDOW_MS;
 
-/** Per-slug dedup cookie name. */
-function dedupCookieName(slug: string): string {
-  return `chu_dl_${slug}`;
-}
-
-/** True when the browser already has a fresh dedup cookie for this slug. */
-function alreadyCounted(request: Request, slug: string): boolean {
-  const header = request.headers.get('cookie');
-  if (!header) return false;
-  const name = dedupCookieName(slug);
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === name) return true;
-  }
-  return false;
-}
-
-/** Build the `Set-Cookie` value that arms the 24h dedup window for `slug`. */
-function dedupCookie(slug: string): string {
-  const maxAge = Math.floor(DOWNLOAD_DEDUP_MS / 1000);
-  const isProd = import.meta.env?.PROD === true;
-  const attrs = [
-    `${dedupCookieName(slug)}=1`,
-    'HttpOnly',
-    'SameSite=Lax',
-    'Path=/',
-    `Max-Age=${maxAge}`,
-  ];
-  if (isProd) attrs.push('Secure');
-  return attrs.join('; ');
-}
+/** Per-slug dedup cookie prefix. */
+const DOWNLOAD_COOKIE_PREFIX = 'chu_dl_';
 
 export const GET: APIRoute = async ({ params, request }) => {
   const slug = params.slug;
@@ -77,9 +60,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   // gets the 24h cookie; a reload within the window skips the count. Counting
   // failures are swallowed — the redirect below always happens.
   const headers = new Headers({ location: book.pdfUrl });
-  if (!alreadyCounted(request, slug)) {
+  const cookieName = dedupCookieName(DOWNLOAD_COOKIE_PREFIX, slug);
+  if (!hasDedupCookie(request.headers.get('cookie'), cookieName)) {
     await incrementDownload(slug);
-    headers.append('set-cookie', dedupCookie(slug));
+    headers.append(
+      'set-cookie',
+      dedupCookie(cookieName, { secure: import.meta.env?.PROD === true }),
+    );
   }
 
   // 302: send the browser on to the real PDF on the CDN.

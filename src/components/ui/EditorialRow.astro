@@ -31,6 +31,11 @@
  */
 import MediaCard from '@components/ui/MediaCard.astro';
 import { buttonVariants } from '@components/ui/button';
+import {
+  ARROW_BUTTON_SHAPE,
+  ARROW_BUTTON_VARIANT,
+  chevronSvgMarkup,
+} from '@lib/arrowControl';
 import type { MediaItem } from '@lib/sanity';
 
 interface Props {
@@ -42,14 +47,12 @@ interface Props {
 
 const { title, items } = Astro.props;
 
-// lucide chevron glyphs, inlined as SVG so the arrows match the shadcn Carousel
-// controls (ChevronLeftIcon / ChevronRightIcon) WITHOUT shipping a React island
-// — the row stays zero-JS except for the tiny scroll wiring below. Same 24px
-// lucide viewBox/stroke as `@components/ui/carousel`.
-const CHEVRON_LEFT_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
-const CHEVRON_RIGHT_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+// The chevron glyphs and the shadcn variant both come from `@lib/arrowControl`,
+// which the exercise stepper's React arrows are built from too. The row stays
+// zero-JS except for the tiny scroll wiring below — the shared module is
+// framework-free data plus a string builder, not a component.
+const CHEVRON_LEFT_SVG = chevronSvgMarkup('prev');
+const CHEVRON_RIGHT_SVG = chevronSvgMarkup('next');
 
 // Nothing to render for an empty row — the home page also guards this, but the
 // component stays self-safe so it degrades gracefully when used standalone.
@@ -75,11 +78,42 @@ const ARROW_SCRIPT = `
       }
       function bind(btn, dir) {
         if (!btn) return;
-        // Prevent the button from grabbing focus on press: a focused, absolutely
-        // positioned arrow makes the browser scroll it into view, which nudges
-        // the whole page vertically on click/hold. mousedown.preventDefault stops
-        // the focus (and its scroll) while keeping the click handler working.
-        btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        // THE PAGE-SCROLL-ON-CLICK BUG.
+        //
+        // NOTE FOR EDITORS: this whole script is a template literal in the
+        // frontmatter. A backtick or a dollar-brace in these comments TERMINATES
+        // the string and breaks the build. Plain quotes only.
+        //
+        // The arrow is absolutely positioned and vertically centred on the row.
+        // When it receives focus the browser scrolls it into view, and because
+        // <html> carries scroll-behavior:smooth (BaseLayout.astro) that nudge is
+        // ANIMATED - so it does not read as a jump, it reads as the page
+        // deliberately scrolling down.
+        //
+        // The previous attempt was mousedown + preventDefault, i.e. suppress the
+        // focus so nothing gets scrolled to. That covers exactly one entry point
+        // and has two holes:
+        //   1. TOUCH AND PEN. The browser drives activation from the pointer
+        //      sequence and only synthesizes a compatibility mousedown after
+        //      touchend; by then focus has already been applied, so the
+        //      preventDefault arrives too late to stop anything.
+        //   2. It DESTROYS focus on the path where it does work. After a click
+        //      the active element falls back to body, so the next Tab restarts
+        //      from the top of the document.
+        //
+        // So: focus the button OURSELVES, on pointerdown (one listener for
+        // mouse, touch and pen), with preventScroll. The button ends up focused
+        // - which is correct, it is a real control - and the browser's own
+        // default focus is then a no-op on an already-focused element, so no
+        // scroll-into-view happens on any pointer type.
+        //
+        // UNCONFIRMED IN A BROWSER. jsdom never scrolls and has no layout, so
+        // the test below pins the SHAPE of this fix, not its effect.
+        btn.addEventListener('pointerdown', function () {
+          if (typeof btn.focus === 'function') {
+            try { btn.focus({ preventScroll: true }); } catch (err) { btn.focus(); }
+          }
+        });
         btn.addEventListener('click', function (e) { e.preventDefault(); step(dir); });
       }
       bind(prev, -1);
@@ -105,10 +139,8 @@ const ARROW_SCRIPT = `
         <button
           type="button"
           class={buttonVariants({
-            variant: 'outline',
-            size: 'icon',
-            className:
-              'editorial-arrow editorial-arrow-prev absolute left-3 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur transition-opacity duration-200 hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent sm:inline-flex',
+            ...ARROW_BUTTON_VARIANT,
+            className: `editorial-arrow editorial-arrow-prev absolute left-3 top-1/2 z-20 hidden -translate-y-1/2 ${ARROW_BUTTON_SHAPE} border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur transition-opacity duration-200 hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent sm:inline-flex`,
           })}
           data-editorial-prev
           aria-label="Scroll left"
@@ -129,10 +161,8 @@ const ARROW_SCRIPT = `
         <button
           type="button"
           class={buttonVariants({
-            variant: 'outline',
-            size: 'icon',
-            className:
-              'editorial-arrow-next absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent',
+            ...ARROW_BUTTON_VARIANT,
+            className: `editorial-arrow-next absolute right-3 top-1/2 z-20 -translate-y-1/2 ${ARROW_BUTTON_SHAPE} border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent`,
           })}
           data-editorial-next
           aria-label="Scroll right"

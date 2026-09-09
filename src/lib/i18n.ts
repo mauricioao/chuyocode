@@ -237,6 +237,25 @@ export const UI_LABELS = {
       exercise: {
         back: 'Volver a inglés',
         level: 'Nivel',
+        // NO `like` KEY. The like control became a TOGGLE, and a toggle needs
+        // one name per direction chosen from state that only the island holds.
+        // Its pair of words therefore lives in `LikeButton.COPY`, which that
+        // component's test sweeps with `findVoseo` so the neutral-Spanish rule
+        // still applies to it. Leaving a stale `like` here would look live.
+        //
+        // The share dialog. Impersonal register throughout: the hint is an
+        // infinitive ("Escanear"), never an instruction addressed to a person,
+        // and the button labels are bare verbs and participles.
+        share: 'Compartir',
+        shareTitle: 'Compartir este ejercicio',
+        // Says what the code is FOR. "Código QR" alone names the object and
+        // leaves the teacher to guess that the point is opening it elsewhere.
+        shareHint:
+          'Escanear el código para abrir el ejercicio en otro dispositivo.',
+        shareLink: 'Enlace',
+        shareCopy: 'Copiar',
+        shareCopied: 'Copiado',
+        shareQrAlt: 'Código QR con el enlace a este ejercicio',
         // A `<meta name="description">`, so it describes rather than instructs:
         // a noun phrase keeps it neutral without an infinitive standing alone.
         description:
@@ -349,6 +368,14 @@ export const UI_LABELS = {
       exercise: {
         back: 'Back to English',
         level: 'Level',
+        // No `like` — see the `es` block.
+        share: 'Share',
+        shareTitle: 'Share this exercise',
+        shareHint: 'Scan the code to open this exercise on another device.',
+        shareLink: 'Link',
+        shareCopy: 'Copy',
+        shareCopied: 'Copied',
+        shareQrAlt: 'QR code linking to this exercise',
         description: 'Practice technical English with short exercises and instant feedback.',
         relatedHeadings: [
           'More exercises',

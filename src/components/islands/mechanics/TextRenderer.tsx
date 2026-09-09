@@ -14,26 +14,37 @@
 import { Label } from '@/components/ui/label';
 import { splitLabelAtBlank } from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
+import { CONTROL_SCALE, PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 import type { MechanicRendererProps } from './types';
 
 /**
- * Visual tokens shared by both layouts. Only FLOW differs between them, so the
- * border, background and focus ring cannot drift apart between a spliced blank
- * and a stacked one on the same page.
+ * Visual tokens shared by both layouts. Only FLOW and SIZE differ between them,
+ * so the border, background and focus ring cannot drift apart between a spliced
+ * blank and a stacked one on the same page.
  */
 const FIELD_BASE =
-  'rounded-md border border-input bg-input/30 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-md border border-input bg-input/30 px-3 py-2 text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
  * Inline: sized in `ch` so the gap looks like a gap in a sentence rather than a
  * form field, `max-w-full` so it can never force horizontal scroll on a phone,
  * and `align-baseline` so the typed text sits on the same line as the words
  * around it instead of riding above them.
+ *
+ * `CONTROL_SCALE` is what keeps all three true now that the sentence is at
+ * display size. `w-[12ch]` is relative to the FIELD's own font-size, so a fixed
+ * `text-base` here would have pinned the gap at twelve BODY characters inside a
+ * `text-3xl` sentence — a visibly undersized notch that no longer sits on the
+ * line it belongs to.
  */
-const FIELD_INLINE = 'mx-1 inline-block w-[12ch] max-w-full align-baseline';
+const FIELD_INLINE = `mx-1 inline-block w-[12ch] max-w-full align-baseline ${CONTROL_SCALE}`;
 
-/** Stacked: unchanged from before this feature. */
-const FIELD_STACKED = 'w-full max-w-sm';
+/**
+ * Stacked: there is no sentence to sit inside, so the field is sized directly
+ * rather than from its parent. One step below the prompt above it — the answer
+ * is not the question.
+ */
+const FIELD_STACKED = 'w-full max-w-md text-xl';
 
 export default function TextRenderer({
   slot,
@@ -92,8 +103,11 @@ export default function TextRenderer({
   // `<label htmlFor>` beats any ARIA attribute when the DOM allows one.
   if (!parts) {
     return (
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={inputId} className="text-base font-medium text-zinc-100">
+      <div className="flex flex-col gap-4">
+        <Label
+          htmlFor={inputId}
+          className={`${PROMPT_SCALE} ${PROMPT_MEASURE} font-medium text-zinc-100`}
+        >
           {slot.label}
         </Label>
         {field}

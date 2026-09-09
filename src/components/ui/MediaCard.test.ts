@@ -176,12 +176,24 @@ describe('MediaCard.astro — lqip blur-up', () => {
 });
 
 describe('MediaCard.astro — view transitions', () => {
-  it('assigns a View Transition scope to the cover img when an _id is given', async () => {
-    // Astro compiles `transition:name` into a `data-astro-transition-scope`
-    // token rather than emitting the literal name; identical names across
-    // pages resolve to matching scopes, producing the card→detail morph.
+  /**
+   * The cover used to carry `transition:name="cover-<_id>"`. It no longer does,
+   * and that is the FIX, not an oversight.
+   *
+   * `view-transition-name` must be unique per page. `_id` is a DOCUMENT key,
+   * and one document is rendered by several cards on the home page (`themes` is
+   * a multi-select array, plus the ranked rail), so the name was duplicated by
+   * construction — the browser aborted every transition on that page with an
+   * `InvalidStateError`. It also morphed into nothing: no detail page declares a
+   * matching name (`libros/[slug].astro` renders a plain `<img>`).
+   *
+   * Asserting absence HERE — at the component that owns the attribute — is what
+   * makes the duplicate impossible rather than merely unlikely: a card cannot
+   * collide with a name it never emits, no matter how many times it renders.
+   * The paired regression test in `EditorialRow.test.ts` proves the repeat case.
+   */
+  it('assigns NO View Transition scope to the cover img, even with an _id', async () => {
     const html = await render({ ...baseProps, variant: 'poster' });
-    // The scope is applied on the cover img element specifically.
-    expect(html).toMatch(/<img[^>]*data-astro-transition-scope/);
+    expect(html).not.toContain('data-astro-transition-scope');
   });
 });

@@ -1,0 +1,86 @@
+{
+  "level": "C1",
+  "target": 100,
+  "current": 60,
+  "nextBatchNumber": 3,
+  "focusPool": ["inversion", "cleft-sentences", "unreal-past", "collocations", "idioms"],
+  "focusCounts": {
+    "inversion": 12,
+    "cleft-sentences": 12,
+    "unreal-past": 12,
+    "collocations": 12,
+    "idioms": 12
+  },
+  "usedSlugs": {
+    "inversion": [
+      "inversion-never-seen-before",
+      "inversion-should-they-appear",
+      "inversion-only-under-pressure",
+      "inversion-rarely-does-she",
+      "inversion-not-only-did",
+      "inversion-seldom-have-i",
+      "inversion-under-no-circumstances",
+      "inversion-not-a-single-clue",
+      "inversion-hardly-had-we",
+      "inversion-at-no-time",
+      "inversion-in-no-way",
+      "inversion-scarce-has-anyone"
+    ],
+    "cleft-sentences": [
+      "cleft-it-was-john",
+      "cleft-it-is-the-testing",
+      "cleft-what-matters",
+      "cleft-it-is-her-dedication",
+      "cleft-what-makes-it-succeed",
+      "cleft-it-was-not-until",
+      "cleft-what-impressed-most",
+      "cleft-it-was-the-timing",
+      "cleft-what-truly-counts",
+      "cleft-it-is-the-architecture",
+      "cleft-what-distinguishes",
+      "cleft-it-is-by-persistence"
+    ],
+    "unreal-past": [
+      "unreal-past-wish-had-known",
+      "unreal-past-if-i-had-studied",
+      "unreal-past-it-is-time",
+      "unreal-past-as-if-had-changed",
+      "unreal-past-would-rather",
+      "unreal-past-but-for-your-help",
+      "unreal-past-were-i",
+      "unreal-past-lest-they-should",
+      "unreal-past-supposing-you-found",
+      "unreal-past-had-it-not-been",
+      "unreal-past-if-only-i-knew",
+      "unreal-past-in-case-they-should"
+    ],
+    "collocations": [
+      "collocation-breach-of-trust",
+      "collocation-extensive-research",
+      "collocation-drawn-out",
+      "collocation-dire-consequences",
+      "collocation-compelling-argument",
+      "collocation-stark-contrast",
+      "collocation-sweeping-reforms",
+      "collocation-lay-bare",
+      "collocation-grasp-the-nettle",
+      "collocation-turn-a-blind-eye",
+      "collocation-bring-to-bear",
+      "collocation-hold-sway"
+    ],
+    "idioms": [
+      "idiom-cutting-edge",
+      "idiom-elephant-in-room",
+      "idiom-level-playing-field",
+      "idiom-piece-of-cake",
+      "idiom-under-the-weather",
+      "idiom-go-the-extra-mile",
+      "idiom-play-your-cards-right",
+      "idiom-barking-up-wrong-tree",
+      "idiom-face-the-music",
+      "idiom-rock-the-boat",
+      "idiom-break-new-ground",
+      "idiom-in-the-long-run"
+    ]
+  }
+}

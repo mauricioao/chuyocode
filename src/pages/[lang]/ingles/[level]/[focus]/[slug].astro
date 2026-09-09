@@ -17,9 +17,15 @@
  * fetching the row; the island does the rest.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import ExerciseIsland from '@components/islands/ExerciseIsland';
+import ExerciseIsland, {
+  type ExerciseBadge,
+} from '@components/islands/ExerciseIsland';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
-import { Badge } from '@components/ui/badge';
+import LikeButton from '@components/islands/LikeButton';
+import ShareDialog from '@components/islands/ShareDialog';
+import { hasDedupCookie, dedupCookieName } from '@lib/dedupCookie';
+import { getLikeCount, LIKE_COOKIE_PREFIX } from '@lib/likes';
+import { qrSvg, shareUrl } from '@lib/qr';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   isLevel,
@@ -60,58 +66,275 @@ const t = UI_LABELS[lang].english.exercise;
 const heading = exercise.payload.slots[0]?.label ?? slug;
 
 // Fetched AFTER the 404 guards above, so a page nobody will see never spends a
-// round trip on suggestions. Fail-safe: `[]` on any error, which renders
-// nothing at all rather than an empty heading.
-const related = await getRelatedExercises(exercise);
+// round trip on suggestions. Both are fail-safe and INDEPENDENT, so they run
+// concurrently — sequencing them would add a whole round trip to the render path
+// to no purpose. `related` fail-safes to `[]`, which renders nothing at all
+// rather than an empty heading; `likeCount` fail-safes to `null`, which means
+// "unknown" and hides the control (see below).
+const [related, likeCount] = await Promise.all([
+  getRelatedExercises(exercise),
+  getLikeCount(exercise.id),
+]);
+
+/**
+ * The like control's state, decided ENTIRELY on the server.
+ *
+ * `likeCount === null` means the counter is unreachable, and the control is then
+ * not rendered AT ALL — so an outage ships no island and no JavaScript for it,
+ * rather than hydrating a button that cannot work. That also means `LikeButton`
+ * never receives an unknown count and has no such branch to get wrong.
+ *
+ * `exercise.id` is guarded too: `getExerciseBySlug` degrades a missing id to
+ * `''`, and a counter keyed on an empty string would be a shared bucket for
+ * every exercise that ever hit that path.
+ *
+ * `liked` comes from the SAME dedup cookie the endpoint arms, read here on the
+ * ordinary page request. That is why the cookie is `HttpOnly`: the server is its
+ * only reader, so the button can render in its true state on first paint instead
+ * of flashing "not liked" and correcting itself after hydration.
+ */
+const showLike = likeCount !== null && exercise.id.length > 0;
+const alreadyLiked =
+  showLike &&
+  hasDedupCookie(
+    Astro.request.headers.get('cookie'),
+    dedupCookieName(LIKE_COOKIE_PREFIX, exercise.id),
+  );
+
+/**
+ * The shareable address of THIS page, and its QR — both built on the server.
+ *
+ * `Astro.url` is derived from the incoming request, so the link follows whatever
+ * host actually served the page: production, a branch deploy, or a Netlify
+ * preview. `astro.config.mjs` sets no `site`, and hardcoding one here would
+ * generate previews whose QR silently pointed at production.
+ *
+ * Generating the code here rather than in the island is what keeps the promise
+ * that no third party ever learns which exercises get shared — and it means the
+ * dialog needs no network at all once it opens. The markup is ~9.6 KB raw but
+ * ~0.8 KB over the wire (it is extremely repetitive path data and compresses
+ * accordingly), which is cheaper than the request an on-demand endpoint would
+ * cost, and it removes a whole route whose input would have to be sanitised.
+ *
+ * `qr === null` hides the control, exactly like an unreadable like count: a
+ * share dialog is decoration on a page whose real job is grading an exercise.
+ */
+const shareLink = shareUrl(Astro.url);
+const shareQr = qrSvg(shareLink);
 
 // Seeded from the SLUG, never `Math.random()`. The slug is stable and unique
 // per (level, topic), so a given exercise page always shows the same heading —
 // a random pick on the SSR render path would reshuffle it on every reload and
 // read as a glitch rather than as variety.
 const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
+
+/**
+ * The taxonomy pills, resolved HERE and handed to the island as plain strings.
+ *
+ * "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus, topic
+ * and skill labels are exercise data and stay English in every locale
+ * (docs/exercise-model.md, "Authoring rules"). Composing them on this side is
+ * what keeps `exerciseTaxonomy.ts` and `UI_LABELS` out of the client bundle —
+ * the island carries no vocabulary of its own.
+ *
+ * The FOCUS sits first among the data badges: it is what the exercise teaches.
+ * The topic is LAST and conditional — it qualifies the exercise rather than
+ * naming it, and an exercise with no setting must render no badge at all
+ * instead of an empty pill.
+ *
+ * WHY THE ISLAND DRAWS THEM NOW: the countdown has to share their row, at the
+ * top-right of the exercise card, and the countdown is React state. Two halves
+ * of one flex row cannot live on two sides of the island boundary.
+ */
+const badges: ExerciseBadge[] = [
+  { label: `${t.level} ${exercise.level}`, variant: 'secondary' },
+  { label: FOCUS_LABELS[exercise.focus], variant: 'outline' },
+  { label: SKILL_LABELS[exercise.skill], variant: 'outline' },
+];
+
+if (exercise.topic) {
+  badges.push({
+    label: TOPIC_LABELS[exercise.topic] ?? exercise.topic,
+    variant: 'outline',
+  });
+}
 ---
 
 <BaseLayout lang={lang} title={heading} description={t.description}>
-  <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
-    <a
-      href={`/${lang}/ingles`}
-      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+  {/* WHY `max-w-6xl` (72rem) AND NOT SOMETHING NARROWER OR WIDER.
+      `max-w-3xl` (48rem) is an ARTICLE measure, and an exercise is not an
+      article: at that width a display-scale prompt and a two-column tile grid
+      have nowhere to go, which is what made the exercise the smallest thing on
+      a screen holding nothing else.
+
+      72rem is not an arbitrary jump — it is the site header's own `max-w-6xl`
+      (see `Header.astro`), so the exercise column now lines up with the masthead
+      above it instead of floating inside it.
+
+      READABILITY IS CAPPED SEPARATELY, on the prose itself: the prompt carries
+      `max-w-[32em]` (~64 characters, see `mechanics/scale.ts`), so widening this
+      container gives the ANSWER TILES room without stretching a line of text to
+      a width nobody can track back from. */}
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8"
+  >
+    {/* THE EXERCISE RESERVES THE FIRST SCREEN — MINUS A DELIBERATE SLIVER.
+        Nothing used to hint that anything followed the exercise: the related
+        cards sat below the fold with no edge showing, so a learner who finished
+        an exercise had no reason to scroll. This makes the TOP of the first row
+        of cards visible without a scroll listener, an IntersectionObserver or an
+        island — it is a min-height and the ordinary document flow.
+
+        THE ARITHMETIC, so the number is auditable rather than tuned by eye.
+        The related block's top edge lands at `header + page padding + this
+        min-height + the parent's gap-6` from the top of the viewport, so what is
+        left visible underneath it is `100svh` minus that sum. Reserving 231px
+        (mobile) leaves:
+
+           32px  the related section's own `pt-8`
+           32px  the `text-2xl` heading line
+           16px  the section's `gap-4`
+        +  30px  the top of the first card row
+          -----
+          110px  visible below the fold line
+
+        A card is ~105px tall (p-5 + a title line + gap-3 + a badge row), so
+        ~30px is a peek of roughly 25-30% — enough to read as "there is more",
+        not enough to read as a second section. The `sm` variant differs only
+        because the page padding grows from `py-8` to `py-12`.
+
+        🔴 WHAT THIS CANNOT GUARANTEE — and no layout-only solution could:
+        - It holds only at SCROLL TOP. That is the moment that matters, since it
+          is the only moment the learner has not yet decided whether to scroll.
+        - It holds only while the exercise's NATURAL height is under the reserve.
+          A long multi-slot exercise, or a short landscape-phone viewport, pushes
+          the related block fully below the fold and there is simply no peek.
+          Nothing breaks; the hint is just absent.
+        - `svh` is the SMALLEST viewport height (browser chrome expanded). When
+          the chrome retracts the real viewport is taller, so the peek grows
+          rather than disappearing — it fails toward MORE hint, never less.
+        - The 231/247px both encode the masthead at 65px (`Header.astro`:
+          `py-4` + a 32px logo row + a 1px border). IF THE MASTHEAD'S HEIGHT
+          CHANGES, THESE NUMBERS MUST CHANGE WITH IT. That coupling is real and
+          is the price of doing this without measuring at runtime.
+        - The cost, paid knowingly: when the exercise is short there is now empty
+          space between it and the related block. That space IS the mechanism. */}
+    <div
+      class="flex min-h-[calc(100svh-231px)] flex-col gap-6 sm:min-h-[calc(100svh-247px)]"
     >
-      &larr; {t.back}
-    </a>
+      {/* THE PAGE'S CONTROL ROW: leave on the left, act on the right.
+          `flex-wrap` is load-bearing rather than defensive. At 320px the back
+          link and the controls together exceed the 288px of content width left
+          by `px-4`, so without it this row would either overflow the viewport or
+          squash the link. Wrapping costs one extra line on the narrowest phones,
+          which is the cheap failure.
 
-    {/* "Nivel"/"Level" is chrome and localizes; the CEFR code and the focus,
-        topic and skill labels are exercise data and stay English in every
-        locale (docs/exercise-model.md, "Authoring rules").
+          It sits INSIDE the reserved first screen (see the min-height note
+          above), so it consumes part of that reserve rather than pushing the
+          related block down — the peek is unchanged until the exercise's own
+          height overflows the reserve, which was already the documented limit of
+          that mechanism. */}
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <a
+          href={`/${lang}/ingles`}
+          class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
+        >
+          &larr; {t.back}
+        </a>
 
-        The FOCUS sits first among the data badges: it is what the exercise
-        teaches. The topic is LAST and conditional — it qualifies the exercise
-        rather than naming it, and an exercise with no setting must render no
-        badge at all instead of an empty pill. */}
-    <header class="flex flex-wrap items-center gap-3">
-      <Badge variant="secondary">{`${t.level} ${exercise.level}`}</Badge>
-      <Badge variant="outline">{FOCUS_LABELS[exercise.focus]}</Badge>
-      <Badge variant="outline">{SKILL_LABELS[exercise.skill]}</Badge>
-      {
-        exercise.topic && (
-          <Badge variant="outline">
-            {TOPIC_LABELS[exercise.topic] ?? exercise.topic}
-          </Badge>
-        )
-      }
-    </header>
+        {/* The two page-level actions, grouped so they stay together when the
+            row wraps — a like that wrapped away from the share control would
+            read as belonging to whatever ended up beside it. */}
+        <div class="flex items-center gap-2">
+          {/* Rendered only when the counter is reachable — a Supabase outage
+              ships no island at all here (decided in the frontmatter). */}
+          {/* `lang`, not a resolved label: the control is a TOGGLE, so its name
+              depends on state only the island can see, and it owns that pair of
+              words itself (see the LikeButton header).
+
+              This comment sits OUTSIDE the expression on purpose: a JSX comment
+              used as the first child of an Astro `cond && (...)` block fails the
+              compiler with `Expected ")" but found "$$render"`.
+
+              AND IT NEVER SPELLS A COMMENT DELIMITER OUT. A JSX comment has no
+              escape: the first closing delimiter inside it ends it, so quoting
+              one here would end this comment early and ship the remaining prose
+              to the page as visible text. That is exactly the bug this line
+              replaces — the sentence appeared above the exercise card in the
+              browser. Describe delimiters in words, never in symbols. */}
+          {
+            showLike && (
+              <LikeButton
+                client:load
+                exerciseId={exercise.id}
+                count={likeCount}
+                liked={alreadyLiked}
+                lang={lang}
+              />
+            )
+          }
+
+          {/* `client:idle`, unlike the like button's `client:load`. This is the
+              heaviest island on the page (Radix Dialog brings a portal, a focus
+              trap and scroll locking) and the least urgent — nobody shares an
+              exercise before it has finished loading. Letting it hydrate after
+              the exercise itself is the whole reason it is a separate island. */}
+          {
+            shareQr && (
+              <ShareDialog
+                client:idle
+                url={shareLink}
+                qr={shareQr}
+                labels={{
+                  trigger: t.share,
+                  title: t.shareTitle,
+                  hint: t.shareHint,
+                  link: t.shareLink,
+                  copy: t.shareCopy,
+                  copied: t.shareCopied,
+                  qrAlt: t.shareQrAlt,
+                }}
+              />
+            )
+          }
+        </div>
+      </div>
 
     {/* Listening is a STIMULUS layered on any mechanic, never a type of its own
         (docs/exercise-model.md, "The two axes"). `hasAudio` was derived from the
-        row we already fetched — no HTTP check on the render path. */}
-    {
-      exercise.hasAudio && (
-        <audio controls preload="none" class="w-full" src={exercise.payload.media?.audio} />
-      )
-    }
+        row we already fetched — no HTTP check on the render path.
 
-    {/* Grading runs entirely in the browser: stateless, instant, no accounts. */}
-    <ExerciseIsland client:load lang={lang} payload={exercise.payload} />
+        DELIBERATELY OUTSIDE THE EXERCISE CARD. The card frames the one bounded
+        area the learner works inside; the audio is the stimulus they listen to
+        before working, and a native `<audio>` bar is a piece of browser chrome
+        that no styling of ours reaches. Putting it in the frame would make the
+        card's edge look like it belonged to the player.
+
+        Capped at `max-w-2xl` now that the container is 72rem: a native audio bar
+        stretched to full width puts its play button and its scrubber at opposite
+        ends of the screen, which is a worse control, not a bigger one. */}
+      {
+        exercise.hasAudio && (
+          <audio
+            controls
+            preload="none"
+            class="w-full max-w-2xl"
+            src={exercise.payload.media?.audio}
+          />
+        )
+      }
+
+      {/* Grading runs entirely in the browser: stateless, instant, no accounts.
+          The island draws the whole exercise CARD — badges, countdown, prompt,
+          stepper and action button — because the countdown and the gate are
+          React state and the card is the row they share. */}
+      <ExerciseIsland
+        client:load
+        lang={lang}
+        payload={exercise.payload}
+        badges={badges}
+      />
+    </div>
 
     {/* Related by LEVEL, not focus: someone browsing a level is roughly at that
         level, and narrowing to the current language point would hide most of
@@ -121,11 +344,20 @@ const relatedHeading = pickStable(t.relatedHeadings, exercise.slug);
     {
       related.length > 0 && (
         <section class="flex flex-col gap-4 border-t border-border pt-8">
-          <h2 class="text-xl font-bold tracking-tight text-accent">
+          {/* `text-2xl`, and the peek arithmetic above budgets exactly one
+              32px line for it. A taller heading eats the card sliver. */}
+          <h2 class="text-2xl font-bold tracking-tight text-accent">
             {relatedHeading}
           </h2>
 
-          <ul class="grid gap-4 sm:grid-cols-2">
+          {/* THREE COLUMNS AT `lg`, which the 72rem container now affords.
+              This serves the peek directly: `getRelatedExercises` returns up to
+              six cards, so at two columns the first row is a third of them and
+              the sliver hints at less than it should. At three, the first row is
+              half the block and reads as a real row of options rather than as a
+              pair. Below `lg` it degrades to two columns and then to one, where
+              a card is already as wide as the screen. */}
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* THE FOCUS LEADS. The card used to open with the first slot's
                 prompt — "___ rename this variable, please?" — which spoils the
                 exercise before the learner opens it and says nothing about what

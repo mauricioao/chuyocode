@@ -1,6 +1,6 @@
 # Exercise Model
 
-The data contract behind the English section. Every exercise — multiple choice, fill-in-the-blank, dropdown, drag-and-drop, matching, listening — is stored in **one table** with **one payload shape** and graded by **one function**.
+The data contract behind the English section. Every exercise — multiple choice, fill-in-the-blank, dropdown, drag-and-drop, listening — is stored in **one table** with **one payload shape** and graded by **one function**.
 
 This document is the source of truth. If code and this document disagree, that is a bug in one of them.
 
@@ -9,10 +9,37 @@ This document is the source of truth. If code and this document disagree, that i
 Adding a new exercise **mechanic** (a new way to answer):
 
 1. Write a renderer component.
-2. Pick a comparator (`set`, `text`, or `sequence` — you almost never need a new one).
-3. Add one line to the mechanic registry.
+2. Pick a comparator — `set` or `text`. Those are the two that ship, and a new mechanic almost never needs a third.
+3. Add one line to the mechanic registry, and one line to `COMPARATORS`.
 
-No migration. No table change. No change to the grading function. No change to existing exercises.
+No migration. No table change. No change to `check()`. No change to existing exercises.
+
+---
+
+## What ships today
+
+The rest of this document describes the model. This table describes the **build**, and it is the one thing here that goes stale — check it against
+`src/components/islands/mechanics/registry.ts` before authoring against it.
+
+| Mechanic (`slot.input`) | Renderer | Comparator | Ships |
+|---|---|---|---|
+| `choice` | radio group | `set` | ✅ |
+| `select` | `<select>` dropdown | `set` | ✅ |
+| `text` | typed input | `text` | ✅ |
+| `drop` | drag a tile into a box | `set` | ✅ |
+| `order` | — | — | ❌ neither renderer nor comparator |
+| `hotspot` | — | — | ❌ neither renderer nor comparator |
+
+One optional payload field, which degrades rather than rejects:
+
+| Field | Purpose |
+|---|---|
+| `layout` | Where the tile pool sits. See "Pool placement". |
+
+And two behaviours that are not fields at all, and cannot be authored:
+
+- Every exercise is timed by a **count-up stopwatch**. See "The stopwatch".
+- A multi-slot exercise is walked **one slot at a time**. See "The stepper".
 
 ---
 
@@ -23,7 +50,7 @@ The single most important idea here. Confusing these two produces a combinatoria
 | Axis | Field | What it describes | Values |
 |---|---|---|---|
 | **Stimulus** | `payload.media` | What the learner perceives | text, audio, image, video |
-| **Mechanic** | `slot.input` | How the learner answers | `choice`, `text`, `drop`, `select`, `order`, … |
+| **Mechanic** | `slot.input` | How the learner answers | `choice`, `text`, `drop`, `select` (shipped), `order`, `hotspot`, … |
 
 **Listening is not an exercise type.** It is an audio stimulus layered on any mechanic. A listening exercise can be multiple choice, fill-in-the-blank, or ordering. Modeling "listening" as a type would force duplicating every answer mechanic inside it.
 
@@ -64,11 +91,12 @@ The order of `FOCUSES` is roughly ascending difficulty because it is the order t
 
 ## Payload shape
 
-Three concepts. That is the whole model.
+Three concepts carry the model. One optional field sits beside them.
 
 ```jsonc
 {
   "media": { "audio": "https://…" },          // optional stimulus
+  "layout": { "pool": "top" },                // optional placement hint
   "pools": {
     "food": [
       { "id": "i_olives", "media": "https://…/olives.jpg" },
@@ -87,11 +115,14 @@ Three concepts. That is the whole model.
 }
 ```
 
-| Key | Purpose |
-|---|---|
-| `media` | The stimulus. Optional. Presence of `media.audio` is what makes an exercise "listening". |
-| `pools` | Named sets of selectable items. A pool is **shared across slots** — declare the 18 food images once, not once per row. |
-| `slots` | The things to answer. Each carries its own `answer`. |
+| Key | Required | Purpose |
+|---|---|---|
+| `slots` | **yes** | The things to answer. Each carries its own `answer`. |
+| `pools` | by convention | Named sets of selectable items. A pool is **shared across slots** — declare the 18 food images once, not once per row. A missing `pools` parses as `{}`, but always write it: see below. |
+| `media` | no | The stimulus. Presence of `media.audio` is what makes an exercise "listening". |
+| `layout` | no | Where the tile pool sits. Absence means "derive it". |
+
+**There is no `timer` field.** Timing is automatic and unconfigurable — see "The stopwatch".
 
 ### Why the answer lives inside the slot
 
@@ -102,6 +133,25 @@ An earlier draft used a separate `key: { slotId: [...] }` map. That allows a key
 Even for a plain multiple-choice question with one pool, where inline `choices` would be shorter.
 
 **One code path.** Allowing "sometimes a pool reference, sometimes inline options" forces a branch in every renderer and every validator, forever, for every mechanic added from now on. Three extra characters of JSON is a better trade than a permanent conditional.
+
+### A bad slot kills the exercise; a bad optional field does not
+
+`parsePayload` is the single gate between raw `jsonb` and anything a renderer may trust, and it is deliberately **asymmetric**:
+
+| What is wrong | Outcome |
+|---|---|
+| No `slots`, or `slots` is empty | Whole payload rejected → the page 404s |
+| Any slot missing `id` or `input` | Whole payload rejected → the page 404s |
+| Any slot with an empty `answer` | Whole payload rejected → the page 404s |
+| A malformed `layout` | Hint dropped. Placement falls back to the derived default. |
+| A key nothing reads (`timer`, `ordered`, a typo) | Dropped silently. The payload is rebuilt field by field, so unknown keys cannot survive it. |
+| A pool item without an `id` | That item dropped. The rest of the pool survives. |
+| A slot naming a pool that does not exist | That slot gets `[]` items. The exercise still renders. |
+| An `input` no renderer knows | That slot degrades alone. See "Why this cannot break existing exercises". |
+
+The rule behind the split: **a broken slot is ungradeable, so drawing it would lie to the learner.** A broken layout hint just means the tiles sit where they would have sat anyway — turning a typo in an optional field into a 404 on real content is the worse trade.
+
+The first three rows are the ones that bite authors. One slot with a forgotten `answer` takes down the *entire* exercise, not that slot — which is why "every slot has a non-empty `answer`" is the first line of the authoring rules.
 
 ---
 
@@ -120,19 +170,178 @@ Stable ids also unlock **shuffling options on every render**, which matters: wit
 
 ---
 
+## The stopwatch
+
+**Not a field. Nothing to author, nothing to configure, and no way to switch it off.**
+
+Every exercise carries a count-up stopwatch in the top-right corner of the card, reading `mm:ss` from `00:00`. It reports how long the learner took. It does not impose a limit, cannot grade, and cannot end an exercise.
+
+| Event | Behaviour |
+|---|---|
+| The exercise becomes answerable | Starts at `00:00`. |
+| Every second after that | `00:01`, `00:02`, … `01:05`, … `10:00`. No cap; an hour reads `60:00`. |
+| An **incorrect** submission | **Keeps running.** |
+| Reading an incorrect verdict, and pressing `Fix` | **Keeps running** — same attempt, and it never jumps backwards. |
+| A **fully correct** submission | **Stops.** The one finish line. |
+| Pressing `Try again` after a correct verdict | Resets to `00:00` and runs again. |
+| Leaving the page | The interval is cleared. Nothing is stored, so a reload starts a fresh attempt at zero. |
+
+### Why it replaced the countdown
+
+The countdown was an optional authored limit (`timer: { seconds: 90 }`) that graded the exercise when it hit zero. It went for three reasons:
+
+1. **It was authorable, so it was almost never authored.** A field most content omits describes the rare case, and the common case — "how long did this take me?" — had no answer at all.
+2. **A limit punishes; a measurement informs.** There are no accounts and no scores here (see "Non-goals"), so a clock that ends the exercise imposes a cost with nothing to spend it on. Measuring is the honest version of the same information.
+3. **Auto-grading at zero was the one path nobody exercised by hand.** It graded an attempt the learner had not finished, and it needed a latch to stop a retry from re-firing it. Deleting it removed a whole state machine.
+
+### Why it does not pause while a wrong verdict is on screen
+
+**This is a deliberate reversal**, and the countdown's opposite rule is worth stating so it is not "fixed" back.
+
+The countdown *paused* while feedback was up. That was right for a **budget**: draining it while the learner read would punish them for looking at the feedback we had just asked them to look at.
+
+A stopwatch has no budget and imposes no penalty — it reports elapsed time. Freezing it would make it report something else: two learners who took the same real time would see different numbers depending on how long they stared at a verdict, and a three-minute struggle could read `00:40`. **On a wrong answer, reading why is not a break in the attempt — it is the work.**
+
+The structural argument agrees. One stop condition means there is no resume, so no later state can restart the clock, and the machine terminates on the single event that means "finished".
+
+### Why a correct submission is the only stop
+
+It is the only event that means the exercise is *over*. `correct` already means "every gradeable slot is correct", so an exercise whose only non-correct slot was `unavailable` finishes too — the learner did everything that was asked of them.
+
+`Fix` and `Try again` look like one button but are two behaviours, and the clock follows that split exactly: `Fix` continues the same attempt (no reset), `Try again` discards it (reset to `00:00`).
+
+### Where the rules live
+
+`src/lib/exerciseStopwatch.ts` — pure, no React, no `setInterval`. The island owns the interval; the module owns every decision the interval makes, so the stop condition and the formatting are provable without a clock.
+
+---
+
+## Pool placement
+
+Optional. Where a mechanic's tile pool sits relative to the prompt it answers.
+
+```jsonc
+"layout": { "pool": "top" }
+```
+
+Accepted values: `bottom`, `top`, `left`, `right`. **Presentation only** — grading never sees this, and no comparator changes shape because of it.
+
+### The derived default
+
+When `layout` is absent (or unreadable), placement is derived from the one fact the content already gives us — **how many things there are to answer**:
+
+| Slots | Derived placement | Why |
+|---|---|---|
+| 1 | `bottom` | The sentence leads and the options sit under it: the reading order of every worksheet ever printed. |
+| 2 or more | `top` | The pool is SHARED between slots, so it must be reachable from any of them. Anchoring it above the prompt keeps it in one fixed place instead of moving as prompts of different heights come and go. |
+
+`left` and `right` are **explicit-only**. A side pool is only usable when there is a large block on the other side to balance it, and nothing in the payload says whether there is — an author can see that, a slot count cannot. Guessing it would produce a column of tiles beside a six-word sentence, which is worse than the default it replaced.
+
+Side placements also **collapse to a stack below `sm`**. At 320px there is no other side.
+
+### Why an unknown string is rejected rather than passed through
+
+The value reaches a lookup table of class names. An unrecognised key there would render a pool with no layout classes at all — a visibly broken exercise instead of a default one.
+
+### Why the placement is resolved once, for the whole exercise
+
+Placement is a property of the **exercise** (its authored hint, or its slot count), not of a renderer. Deriving it per renderer is how two pools on one page end up on two different sides after an edit touches only one of them.
+
+---
+
+## The `drop` rules
+
+`drop` is drag-a-tile-into-a-gap. It reports the dropped **item id**, exactly like `choice` and `select`, which is why it reuses the `set` comparator instead of growing a new one. Grading never learns that a drag happened.
+
+Two rules define the whole mechanic. Both follow from one idea: **the pool is derived, never stored.**
+
+A tile is "in the pool" precisely when no slot's answer names it. There is no second list of remaining tiles to keep in sync — which is the bug this design removes rather than guards against.
+
+### Rule 1 — a placed tile leaves the pool
+
+Placing a tile consumes it. It is subtracted from the pool of every `drop` slot in the exercise, not only the one it landed in, because **pools are shared across slots**. Without that, two `drop` slots reading one pool would each offer the same tile and the learner could answer with it twice — and nothing would throw and nothing would log.
+
+Consumption is scoped to `drop` slots only. A pool may back two mechanics at once, and counting a `select` answer as a consumed tile would make picking a dropdown option silently delete a draggable tile from an unrelated question.
+
+### Rule 2 — dropping onto an occupied slot returns the resident to the pool
+
+The incoming tile wins; the tile that was there goes back to the pool. **Not a swap.**
+
+A swap needs two boxes to exchange contents, but the incoming tile usually comes from the pool, which has no box to receive the displaced tile in return. So "swap" is undefined for the common case and would need a second, different rule for it. Returning the resident to the pool is the one rule that reads identically no matter where the incoming tile came from, and it never destroys an answer: the displaced tile is immediately available again, one square away.
+
+Rejecting the drop while the box is occupied was considered and rejected — it makes the learner hunt for a remove control before they can correct a mistake, and a drop that visibly lands and then silently does nothing is worse than either.
+
+Re-dropping the tile already in the box is a no-op, and nothing is displaced.
+
+### What this means for authoring
+
+| | |
+|---|---|
+| Pool size vs. slot count | A pool with exactly as many tiles as `drop` slots is a process-of-elimination puzzle. Add distractors if you do not want that. |
+| Removing an answer | Clicking a placed tile empties its box and returns the tile. The box is not draggable — one element, one keyboard meaning. |
+| Image tiles | A tile with `media` and no `text` is named by its `id` for screen readers. Give image tiles a readable `text` too when the word is not a spoiler. |
+| Keyboard | Space/Enter to pick up, arrows to move, Space/Enter to drop, Escape to cancel. Authored content needs to do nothing for this. |
+
+---
+
+## The stepper
+
+**A multi-slot exercise is a sequence, not a wall of questions.**
+
+When an exercise has **two or more slots**, only one slot is on screen at a time, with Previous / Next controls and a "2 of 5" position. A single-slot exercise gets no stepper at all — "1 of 1" beside two dead arrows is chrome that describes itself and does nothing.
+
+| Property | Behaviour |
+|---|---|
+| Threshold | 2 slots or more |
+| Order | `payload.slots` order, verbatim. The array *is* the sequence the learner walks. |
+| Ends | Clamped, not wrapped. "Next" on the last slot does nothing rather than sending the learner back to question one. |
+| Grading | Unchanged — the whole exercise is graded at once, and the stepper never grades, never clears an answer, and is never disabled by grading. |
+| After grading | The learner can walk back through every slot and read each verdict. |
+| On "Fix" | The exercise jumps to the first incorrect slot and focuses its control. |
+
+### What this changes for authoring
+
+This is the biggest authoring change in the model, and it is a change of *scale*, not of contract.
+
+Before the stepper, an exercise with eight slots rendered as eight stacked questions — a form, and an intimidating one, so exercises stayed short and single-mechanic. With the stepper, the same eight slots read as an **activity**: one question, answer it, next.
+
+So the practical guidance inverts:
+
+- **Longer, mixed exercises are now the target**, not the exception. Six to ten slots is comfortable.
+- **Mix mechanics inside one exercise.** A `drop`, then a `text`, then a `choice` is now a varied activity rather than a visually inconsistent wall. Per-slot dispatch always allowed this; the stepper is what makes it *read* well.
+- **Slot order is authored pacing.** Put the concrete recognition tasks early and the productive ones later, the way a lesson escalates.
+
+### Why the stepper is not navigation
+
+There is no URL, no query and no page transition. The stepper walks the questions *inside* one exercise; the answers it walks past live in the island's response state, so stepping cannot lose an answer because stepping does not own any.
+
+---
+
 ## Grading
 
 One function. Every mechanic.
 
 ```ts
-function check(payload: Payload, response: Response): boolean {
-  return payload.slots.every((slot) => {
-    const expected = slot.answer ?? [];
-    const given = response[slot.id] ?? [];
-    return slot.ordered
-      ? sameSequence(expected, given)
-      : sameSet(normalize(expected), normalize(given));
-  });
+function check(
+  payload: Payload,
+  response: ExerciseResponse,
+  comparatorFn = comparatorFor,
+): GradeResult {
+  const slots: Record<string, SlotOutcome> = {};
+  let correct = true;
+
+  for (const slot of payload.slots) {
+    const comparator = comparatorFn(slot.input);
+    if (!comparator) {
+      slots[slot.id] = 'unavailable';   // excluded from the verdict
+      continue;
+    }
+    const outcome = gradeSlot(slot, response[slot.id] ?? [], comparator);
+    slots[slot.id] = outcome;
+    if (outcome !== 'correct') correct = false;
+  }
+
+  return { correct, slots };
 }
 ```
 
@@ -140,41 +349,76 @@ Every slot is graded independently, which is what allows a single exercise to mi
 
 ### Comparators
 
-Eight mechanics collapse to three comparators. The comparator is **not** the axis that grows — the renderer is. That is why the extension point is the renderer.
+Four shipped mechanics collapse to **two** comparators. The comparator is **not** the axis that grows — the renderer is. That is why the extension point is the renderer.
 
-| Mechanic | Response shape | Comparator |
-|---|---|---|
-| Multiple choice | `["b"]` | `set` |
-| Multi-select | `["a","c"]` | `set` |
-| Drag and drop | `["i_olives"]` | `set` |
-| Matching | `["a"]` per slot | `set` |
-| Dropdown | `["some"]` | `set` |
-| Fill in the blank | `["sits"]` | `text` (normalized) |
-| Ordering | `["c","a","b"]` | `sequence` |
-| Hotspot | `[{x,y}]` | `proximity` |
+| Mechanic | Response shape | Comparator | Ships |
+|---|---|---|---|
+| `choice` — multiple choice | `["b"]` | `set` | ✅ |
+| `select` — dropdown | `["q_some"]` | `set` | ✅ |
+| `drop` — drag and drop | `["i_olives"]` | `set` | ✅ |
+| `text` — fill in the blank | `["sits"]` | `text` (normalized) | ✅ |
+| `order` — ordering | `["c","a","b"]` | `sequence` | ❌ not implemented |
+| `hotspot` | `[{x,y}]` | `proximity` | ❌ not implemented |
 
-Text normalization trims the edges and lowercases; inner spacing is preserved so multi-word answers stay distinguishable. Multiple accepted answers go in the same array: `"answer": ["sits", "is sitting"]`.
+`drop` reusing `set` is the point rather than a shortcut: the mechanic is how the learner *reports* an id, never how an id is *judged*. A tile dragged into a box and an option picked from a dropdown both produce `["i_honey"]`, so they must produce the same verdict.
+
+Text normalization trims the edges and lowercases; inner spacing is preserved so multi-word answers stay distinguishable. Multiple accepted answers go in the same array: `"answer": ["sits", "is sitting"]`, and **any one of them satisfies the slot** — it is a list of alternatives, not a required set.
+
+### `unavailable` — the third outcome
+
+A slot whose mechanic has not shipped is reported `unavailable` and **excluded from the verdict** rather than marked wrong.
+
+Content and code deploy through different pipelines and will drift. An exercise authored for a renderer that has not shipped must degrade that slot alone — penalizing the learner for our deployment gap would be the worse bug. The consequence is worth stating plainly: an exercise can report "all correct" while one of its slots was never gradeable at all.
+
+### A slot is graded only if it was drawn
+
+The comparator map is allowed to be **wider** than the renderer registry, because a comparator is cheap and a renderer is not, so one routinely lands first. Grading against the comparator map alone would show the learner no input for such a slot and then mark it `incorrect` — permanently wrong, for an answer they were never given the chance to give. Nothing throws, nothing logs.
+
+So the island grades through `comparatorForRenderable`, which resolves a comparator **only if that mechanic also renders**. The invariant is structural rather than a promise, and every future mechanic inherits it for free.
+
+### There is no `slot.ordered` flag
+
+An earlier draft parsed `ordered: true` into the `Slot` type for a `sequence` comparator that never shipped, so **nothing ever read it**. It has been removed from the contract.
+
+A documented field that does nothing is worse than an absent one: it is indistinguishable from a working feature, so authored content sets it believing ordering is switched on. `parsePayload` now drops the key silently — rows that still carry it parse exactly as before, minus a flag nobody consulted. The day a `sequence` comparator ships, ordering is decided by `slot.input`, which is already the mechanic discriminator.
 
 ---
 
 ## Adding a mechanic
 
-A mechanic is one file:
+A mechanic is one renderer component honouring the shared props contract (`MechanicRendererProps`) — the only genuinely new code:
 
 ```ts
-export const hotspot: Mechanic = {
-  input: 'hotspot',            // the discriminator matched against slot.input
-  compare: 'proximity',        // reuse an existing comparator when possible
-  schema: hotspotSlotSchema,   // zod — validates slot shape at parse time
-  Renderer: HotspotRenderer,   // the only genuinely new code
-}
+export default function HotspotRenderer(props: MechanicRendererProps) { … }
 ```
 
-Plus one line in the registry:
+Plus one line in the registry (`src/components/islands/mechanics/registry.ts`), which maps the `slot.input` discriminator to that component:
 
 ```ts
-const mechanics = { choice, text, drop, select, order, hotspot }
+const MECHANICS: Record<string, MechanicRenderer> = {
+  choice: ChoiceRenderer,
+  drop: DropRenderer,
+  select: SelectRenderer,
+  text: TextRenderer,
+};
 ```
+
+And one line in `COMPARATORS` (`src/lib/exerciseGrading.ts`), reusing an existing comparator whenever possible:
+
+```ts
+export const COMPARATORS: Record<string, Comparator> = {
+  choice: 'set',
+  drop: 'set',
+  select: 'set',
+  text: 'text',
+};
+```
+
+Two maps rather than one object per mechanic, because the two are allowed to be out of step: a comparator is cheap and lands early, a renderer is expensive and lands later. `comparatorForRenderable` is what makes that gap safe (see "A slot is graded only if it was drawn").
+
+Slot *shape* is not validated per mechanic. There is one central gate — `parsePayload` — and every mechanic goes through it. A per-mechanic schema would be a second place a slot can be rejected, and the two would drift.
+
+**Props are uniform across every mechanic.** A renderer that has no use for `placeholder`, `claimed`, `lang` or `poolPlacement` simply ignores it. That uniformity is what keeps the registry's dispatch free of a branch per mechanic.
 
 ### Why this cannot break existing exercises
 
@@ -341,38 +585,46 @@ Any mechanic plus an audio stimulus. Nothing else changes.
 
 ### Mixed mechanics in one exercise
 
-Two mechanics per row: drag the image into the box, **and** pick the quantifier. Two pools, two slots per row, one shared image pool across every row.
+**This is the target shape, not an advanced case.** Four slots, four mechanics, one placement hint. The stepper walks them one at a time, so this reads as an activity rather than a form.
 
 ```jsonc
 {
+  "layout": { "pool": "top" },
   "pools": {
     "food_images": [
-      { "id": "i_olives", "media": "https://…/olives.jpg" },
-      { "id": "i_honey",  "media": "https://…/honey.jpg"  }
+      { "id": "i_olives", "media": "https://…/olives.jpg", "text": "olives" },
+      { "id": "i_honey",  "media": "https://…/honey.jpg",  "text": "honey"  },
+      { "id": "i_bread",  "media": "https://…/bread.jpg",  "text": "bread"  }
     ],
     "quantifiers": [
-      { "id": "a",    "text": "a"    },
-      { "id": "an",   "text": "an"   },
-      { "id": "some", "text": "some" }
+      { "id": "q_a",    "text": "a"    },
+      { "id": "q_an",   "text": "an"   },
+      { "id": "q_some", "text": "some" }
     ]
   },
   "slots": [
-    { "id": "olives_img", "label": "olives", "input": "drop",
+    { "id": "s1", "label": "Drag the olives here:", "input": "drop",
       "pool": "food_images", "answer": ["i_olives"] },
-    { "id": "olives_qty", "label": "olives", "input": "select",
-      "pool": "quantifiers", "answer": ["some"] },
-
-    { "id": "honey_img", "label": "honey", "input": "drop",
-      "pool": "food_images", "answer": ["i_honey"] },
-    { "id": "honey_qty", "label": "honey", "input": "select",
-      "pool": "quantifiers", "answer": ["some"] }
+    { "id": "s2", "label": "There is ___ honey left in the jar.",
+      "input": "select", "pool": "quantifiers", "answer": ["q_some"] },
+    { "id": "s3", "label": "We ___ any bread, so I went to the bakery.",
+      "input": "text", "answer": ["didn't have", "did not have", "had no"] },
+    { "id": "s4", "label": "Drag the bread here:", "input": "drop",
+      "pool": "food_images", "answer": ["i_bread"] }
   ]
 }
 ```
 
+Two things are load-bearing here and are easy to miss:
+
+- `s1` and `s4` are both `drop` and both read `food_images`. Once the learner places `i_olives` in `s1`, that tile is **gone from the pool** for `s4` — the pool is shared, and a placed tile leaves it.
+- The pool has three tiles for two `drop` slots. `i_honey` is a distractor, so the second `drop` is not answerable by elimination alone.
+
 ### Ordering
 
-`ordered: true` switches that slot to the `sequence` comparator.
+⚠️ **Not implemented.** There is no `order` renderer and no `sequence` comparator, so a slot like this renders as unavailable and is excluded from the verdict. Kept here because it is the shape the mechanic will take; do not author it.
+
+There is no extra flag to set. `input: "order"` is the whole discriminator — the answer array's ORDER is the answer.
 
 ```jsonc
 {
@@ -386,7 +638,7 @@ Two mechanics per row: drag the image into the box, **and** pick the quantifier.
   },
   "slots": [
     { "id": "s1", "label": "Put the words in order",
-      "input": "order", "pool": "words", "ordered": true,
+      "input": "order", "pool": "words",
       "answer": ["w2", "w1", "w3", "w4"] }
   ]
 }
@@ -396,15 +648,20 @@ Two mechanics per row: drag the image into the box, **and** pick the quantifier.
 
 ## Authoring rules
 
-- [ ] Every slot has a non-empty `answer`.
+- [ ] Every slot has a non-empty `answer`. **One empty `answer` rejects the whole payload**, not that slot.
+- [ ] Every slot's `input` is one of the four that ship: `choice`, `select`, `text`, `drop`.
 - [ ] Every id in an `answer` exists in the slot's referenced pool (except `input: "text"`, where answers are literal strings).
 - [ ] Pool item ids are unique within their pool and are **never** reused for a different item after publishing — a published id is permanent.
 - [ ] A choice-style slot references a pool with at least two items.
+- [ ] A `drop` pool has enough tiles for every `drop` slot that shares it, plus distractors if elimination should not solve it.
+- [ ] `layout.pool` is one of `bottom` `top` `left` `right`, or the field is absent. Omit it unless the derived default is wrong.
+- [ ] No `timer` and no `ordered`. Neither is read; timing is automatic and unconfigurable.
 - [ ] `level` is one of `A1 A2 B1 B2 C1 C2`.
 - [ ] `focus` is set, and is one of the values in `FOCUSES`. **Required.** It is what the exercise teaches, and it is in the URL.
 - [ ] `topic` is either a value in `TOPICS` or **`NULL`**. Do NOT invent a context to fill it — an absent setting is a legitimate, expected answer for a pure grammar drill.
 - [ ] A `listening` exercise has `media.audio`. (Enforced by database constraint.)
 - [ ] Exercise content is **English only**. Site chrome is localized through `UI_LABELS`; exercise text is not mirrored `{es,en}`.
+- [ ] A multi-slot exercise reads as a **sequence**: slot order is the order the learner walks, and the mechanics vary across it.
 
 ### Picking the focus
 
@@ -504,5 +761,5 @@ Deliberately out of scope. Each would be a separate change.
 |---|---|
 | Per-user progress, scores, streaks | No accounts. Feedback is ephemeral and client-side. |
 | Server-side answer validation | Stateless instant feedback is the requirement; there is no score to protect. |
-| Free-text or spoken answers | Cannot be auto-graded by any comparator here. |
+| Open-ended writing or spoken answers | Cannot be auto-graded by any comparator here. The `text` mechanic grades a *blank*, not a paragraph. |
 | A `mechanics` database table | Mechanics are code. |

@@ -16,6 +16,7 @@ vi.mock('@lib/env', () => ({
 }));
 
 import EditorialRow from './EditorialRow.astro';
+import { CHEVRON_PATH } from '@lib/arrowControl';
 
 // A normalized MediaItem as produced by getRowsByTheme() → toMediaItem().
 const item = (n: number) => ({
@@ -52,6 +53,38 @@ describe('EditorialRow.astro', () => {
     expect(html).toContain('<script');
     expect(html).toContain('scrollBy');
     expect(html).toContain('data-astro-rerun');
+  });
+
+  /**
+   * THE PAGE-SCROLL-ON-CLICK GUARD — and be clear about what it is worth.
+   *
+   * jsdom has no layout engine and never scrolls, so the BUG itself cannot be
+   * reproduced or refuted here; only a browser can confirm the fix. What this
+   * pins is the SHAPE of the mitigation, which is the part that silently
+   * regresses: that focus is taken deliberately with `preventScroll` on
+   * `pointerdown` (one listener covering mouse, touch AND pen) rather than
+   * suppressed via `mousedown` + preventDefault, which covered mouse only and
+   * dropped focus to <body> on the path where it worked.
+   */
+  it('takes focus without scrolling, on pointerdown rather than mousedown', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    expect(html).toContain('pointerdown');
+    expect(html).toContain('preventScroll');
+    // The old approach must be gone: re-adding it is the regression.
+    expect(html).not.toContain("addEventListener('mousedown'");
+  });
+
+  it('draws both chevrons from the shared arrow-control geometry', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    // Same path data the exercise stepper's React arrows render, so the two
+    // controls cannot drift apart.
+    expect(html).toContain(CHEVRON_PATH.prev);
+    expect(html).toContain(CHEVRON_PATH.next);
+    // The glyph carries no name — the button's aria-label is the whole label.
+    expect(html).toContain('aria-label="Scroll left"');
+    expect(html).toContain('aria-label="Scroll right"');
   });
 
   it('renders an always-visible accent-colored right (next) arrow', async () => {
@@ -121,5 +154,47 @@ describe('EditorialRow.astro', () => {
     expect(html).not.toContain('data-editorial-row');
     expect(html).not.toContain('data-editorial-track');
     expect(html).not.toContain('<script');
+  });
+
+  /**
+   * THE DUPLICATE-VIEW-TRANSITION-NAME REGRESSION GUARD.
+   *
+   * `view-transition-name` must be UNIQUE per page. It is not a style hint —
+   * the spec makes a duplicate a hard error: the browser logs "Unexpected
+   * duplicate view-transition-name: cover-<id>" and ABORTS the transition with
+   * an `InvalidStateError`, taking down the default root cross-fade that
+   * `<ClientRouter />` gives every navigation.
+   *
+   * A document legitimately appears more than once on the home page: `themes`
+   * is a multi-select array, so one book sits in several EditorialRows AND in
+   * the RankedRow. A name keyed on the document id therefore CANNOT be unique
+   * per page. That is why `MediaCard` no longer emits one at all, instead of
+   * gating it behind an opt-in prop — an opt-in flag is a convention someone
+   * regresses, and this single row would still duplicate a document that
+   * belongs to two themes.
+   *
+   * WHY THIS ASSERTS ABSENCE RATHER THAN UNIQUENESS (measured, not assumed):
+   * Astro compiles `transition:name` into `data-astro-transition-scope` plus a
+   * scoped rule carrying the real name. The scope token is a PER-INSTANCE
+   * COUNTER (`astro-<hash>-1`, `astro-<hash>-2`), so the tokens are always
+   * distinct even when the names they map to are identical — asserting token
+   * uniqueness would pass vacuously. The Container API also emits no `<style>`,
+   * so the names themselves never reach this markup. Absence of the scope
+   * attribute is the sound proxy: no scope → no rule → no name → no duplicate,
+   * by construction.
+   */
+  it('emits no view-transition scope on covers when one document repeats', async () => {
+    const repeated = item(1);
+    const html = await render({ title: 'Row', items: [repeated, repeated] });
+
+    // Precondition: the row really did render the SAME document twice — this is
+    // the shape that produced the browser error.
+    expect(html.split('href="/es/libros/item-1"').length - 1).toBe(2);
+
+    const imgs = html.match(/<img[^>]*>/g) ?? [];
+    expect(imgs.length).toBe(2);
+    for (const img of imgs) {
+      expect(img).not.toContain('data-astro-transition-scope');
+    }
   });
 });

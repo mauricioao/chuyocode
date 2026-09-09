@@ -1,0 +1,21 @@
+{
+  "level": "C2",
+  "target": 100,
+  "current": 60,
+  "nextBatchNumber": 3,
+  "focusPool": ["inversion", "cleft-sentences", "unreal-past", "collocations", "idioms"],
+  "focusCounts": {
+    "inversion": 12,
+    "cleft-sentences": 12,
+    "unreal-past": 12,
+    "collocations": 12,
+    "idioms": 12
+  },
+  "usedSlugs": {
+    "inversion": ["rarely-have-witnessed", "under-no-circumstances", "had-she-known", "not-only-does", "scarcely-had-begun", "so-committed-is", "only-when-pressed", "nowhere-else-will", "hardly-could-she", "neither-did-they", "only-through-sustained", "no-sooner-had-we"],
+    "cleft-sentences": ["what-distinguishes", "it-was-not-the-delay", "what-accounts-for", "it-is-her-attention", "all-that-we-require", "it-was-precisely-her-silence", "what-really-matters", "it-is-the-subtlety", "all-that-distinguishes", "it-was-her-resistance", "what-enables-them", "it-is-precisely-the"],
+    "unreal-past": ["had-we-anticipated", "if-she-were-to-reconsider", "wish-i-hadnt-chosen", "suppose-we-had-known", "but-for-the-sudden-outage", "in-a-perfect-world", "were-it-not-for", "had-she-possessed", "if-only-i-had-recognized", "suppose-the-api", "without-his-intervention", "if-the-requirements"],
+    "collocations": ["draw-meaningful-conclusions", "wield-considerable-influence", "entrenched-in-tradition", "breach-of-contract", "cast-aspersions-on", "harbored-deep-resentment", "foster-an-environment", "incur-substantial-losses", "bear-striking-resemblance", "shoulder-the-burden", "levy-a-penalty", "glean-valuable-insights"],
+    "idioms": ["barking-up-the-wrong-tree", "a-dime-a-dozen", "keep-your-chin-up", "pulling-punches", "reading-between-the-lines", "the-ball-is-in-your-court", "cut-to-the-chase", "up-the-ante", "the-writing-is-on-the-wall", "bite-the-bullet", "low-man-on-the-totem-pole", "let-sleeping-dogs-lie"]
+  }
+}

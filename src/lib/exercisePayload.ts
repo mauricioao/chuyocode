@@ -31,7 +31,7 @@ export type Pool = PoolItem[];
 
 /**
  * One thing to answer. `input` is the mechanic discriminator matched against the
- * registry; `ordered` switches this slot to the `sequence` comparator.
+ * registry.
  */
 export interface Slot {
   id: string;
@@ -40,9 +40,31 @@ export interface Slot {
   input: string;
   /** Name of the pool this slot draws from. Absent when the learner types. */
   pool?: string;
-  ordered?: boolean;
   /** Accepted answers: item ids, or literal strings for `text` slots. */
   answer: string[];
+}
+
+/**
+ * Where a mechanic's item pool sits relative to the prompt it answers.
+ *
+ * PRESENTATION ONLY. Grading never sees this, and no comparator changes shape
+ * because of it — it decides where the tiles are drawn, nothing else.
+ */
+export type PoolPlacement = 'bottom' | 'top' | 'left' | 'right';
+
+/** The accepted values, in one place, so parsing and typing cannot drift. */
+const POOL_PLACEMENTS: readonly string[] = ['bottom', 'top', 'left', 'right'];
+
+/**
+ * OPTIONAL per-exercise layout hints.
+ *
+ * Payload data rather than a column: it is an authoring choice that most
+ * exercises will never make, and `jsonb` costs nothing for the ones that omit
+ * it. A column would put a nullable enum on every row to describe a rare case,
+ * and would need a migration the first time the shape grows a second hint.
+ */
+export interface Layout {
+  pool: PoolPlacement;
 }
 
 /** The full render payload for one exercise. */
@@ -50,6 +72,8 @@ export interface Payload {
   media?: { audio?: string };
   pools: Record<string, Pool>;
   slots: Slot[];
+  /** Absent unless the author overrode the derived default. */
+  layout?: Layout;
 }
 
 /** A learner's answers, keyed by slot id. Always an array, even for one value. */
@@ -122,6 +146,31 @@ function parsePool(value: unknown): Pool {
 }
 
 /**
+ * Parse an optional {@link Layout}, or `null` for "derive the default".
+ *
+ * DEGRADES, NEVER REJECTS. A typo in an optional presentation hint must not turn
+ * real, answerable content into a 404. Every exercise authored so far omits this
+ * field entirely, and every one of them renders correctly from the derived
+ * default, so "unreadable hint" and "no hint" can safely be the same outcome.
+ *
+ * Contrast {@link parseSlot}, which returns `null` and kills the whole payload:
+ * a broken slot is UNGRADEABLE, so drawing it would lie to the learner. A broken
+ * layout hint just means the tiles sit where they would have sat anyway.
+ *
+ * An unknown STRING is rejected rather than passed through. The value reaches a
+ * lookup table of class names, and an unrecognised key there would render a pool
+ * with no layout classes at all — a visibly broken exercise instead of a
+ * default one.
+ */
+function parseLayout(value: unknown): Layout | null {
+  if (!isRecord(value)) return null;
+  const pool = value.pool;
+  if (typeof pool !== 'string') return null;
+  if (!POOL_PLACEMENTS.includes(pool)) return null;
+  return { pool: pool as PoolPlacement };
+}
+
+/**
  * Parse a slot, or `null` if it could never be graded.
  *
  * An UNKNOWN `input` is deliberately accepted: content and code deploy through
@@ -146,7 +195,9 @@ function parseSlot(value: unknown): Slot | null {
     answer,
   };
   if (typeof value.pool === 'string') slot.pool = value.pool;
-  if (value.ordered === true) slot.ordered = true;
+  // Every other authored key is dropped here, deliberately. A slot is rebuilt
+  // field by field rather than spread, so a key nothing reads cannot survive
+  // the boundary and cannot be mistaken downstream for a feature that works.
   return slot;
 }
 
@@ -179,7 +230,41 @@ export function parsePayload(value: unknown): Payload | null {
   if (isRecord(value.media) && typeof value.media.audio === 'string') {
     payload.media = { audio: value.media.audio };
   }
+
+  // Set only when USABLE, so `payload.layout` is absent — not present and
+  // meaningless — for an exercise that omitted it AND for one that misspelled
+  // it. `poolPlacement` then has one condition, not two.
+  const layout = parseLayout(value.layout);
+  if (layout) payload.layout = layout;
+
   return payload;
+}
+
+/**
+ * Where this exercise's pool goes: the authored value, or a DERIVED default.
+ *
+ * Derived from the one fact the content already gives us — how many things there
+ * are to answer:
+ *
+ *   1 slot   -> `bottom`. The sentence leads and the options sit under it, which
+ *               is the reading order of every worksheet ever printed.
+ *   2+ slots -> `top`. The pool is SHARED between slots, so it must be reachable
+ *               from any of them; anchoring it above the prompt keeps it in one
+ *               fixed place instead of moving as prompts of different heights
+ *               come and go.
+ *
+ * `left` and `right` are deliberately EXPLICIT-ONLY. A side pool is only usable
+ * when there is a large block on the other side to balance it, and nothing in
+ * the payload tells us whether there is — an author can see that, a slot count
+ * cannot. Guessing it would produce a column of tiles beside a six-word
+ * sentence, which is worse than the default it replaced.
+ *
+ * A pure function of the payload, exactly like {@link hasAudio}: derived at
+ * render time, never stored, so it cannot fall out of sync with the content.
+ */
+export function poolPlacement(payload: Payload): PoolPlacement {
+  if (payload.layout) return payload.layout.pool;
+  return payload.slots.length === 1 ? 'bottom' : 'top';
 }
 
 /**

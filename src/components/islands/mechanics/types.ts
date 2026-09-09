@@ -7,7 +7,7 @@
  * identical across mechanics is what lets the registry dispatch on `slot.input`
  * alone, with no branch per mechanic.
  */
-import type { PoolItem, Slot } from '@/lib/exercisePayload';
+import type { PoolItem, PoolPlacement, Slot } from '@/lib/exercisePayload';
 
 export interface MechanicRendererProps {
   /** The slot being answered. `slot.answer` is present but never read here. */
@@ -30,6 +30,43 @@ export interface MechanicRendererProps {
    * English only (docs/exercise-model.md, "Authoring checklist").
    */
   placeholder?: string;
+  /**
+   * Pool item ids already consumed by OTHER slots of the same mechanic.
+   *
+   * Only `drop` needs this today: a pool is SHARED across slots, and a tile the
+   * learner has already dropped into another question must not still be offered
+   * here — otherwise the same answer can be used twice and the shared pool is a
+   * lie. That set cannot be derived from `value`, which describes THIS slot
+   * alone, so the island (the only holder of the whole response) supplies it.
+   *
+   * Optional and ignorable, exactly like {@link MechanicRendererProps.placeholder}:
+   * a mechanic whose items are not consumed simply never reads it, which is what
+   * keeps the registry's dispatch free of a branch per mechanic.
+   */
+  claimed?: readonly string[];
+  /**
+   * Active locale, for the few mechanics that own chrome copy beyond
+   * {@link MechanicRendererProps.placeholder} — currently only `drop`, whose
+   * screen-reader announcements are whole sentences rather than one label.
+   *
+   * The copy itself stays in a LOCAL map inside the renderer rather than
+   * `UI_LABELS`: these are React islands and must not pull the Astro-side i18n
+   * module into the client bundle (see AdModal.tsx and ExerciseIsland.tsx).
+   * Unknown values fall back to English.
+   */
+  lang?: string;
+  /**
+   * Where this mechanic's pool of items should sit relative to its prompt.
+   *
+   * Resolved ONCE by the island (`poolPlacement`) rather than per renderer, so
+   * two mechanics on one page cannot disagree about it. Only `drop` draws a pool
+   * as a separate block today, so only `drop` reads this.
+   *
+   * Optional and ignorable, exactly like {@link MechanicRendererProps.claimed}:
+   * a mechanic whose options are inline simply never reads it, which is what
+   * keeps the registry's dispatch free of a branch per mechanic.
+   */
+  poolPlacement?: PoolPlacement;
   /**
    * Callback ref for the slot's PRIMARY focusable control — the element a
    * caller should move focus to when it wants the learner's attention on this

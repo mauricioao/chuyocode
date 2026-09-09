@@ -16,24 +16,46 @@
 import { Label } from '@/components/ui/label';
 import { splitLabelAtBlank } from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
+import { CONTROL_SCALE, PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 import type { MechanicRendererProps } from './types';
 
 /**
  * Visual tokens shared by both layouts, so a spliced dropdown and a stacked one
  * on the same page cannot drift apart.
+ *
+ * `font-sans` OPTS THIS CONTROL OUT OF THE EXERCISE DISPLAY FACE, and it is the
+ * one mechanic that has to. A native `<select>` renders its closed state with a
+ * SINGLE font — the element's own — so it cannot show the placeholder in one
+ * face and the chosen answer in another. Its default state is the placeholder,
+ * which is Spanish chrome ("Elegir una opción"), and ChunkFive has no accented
+ * glyphs at all: the `ó` alone would fall back to Raleway mid-word, inside a
+ * control the learner is looking straight at.
+ *
+ * The cost is real and accepted: an inline dropdown reads in the UI face while
+ * the sentence around it reads in the display face. That is the same seam the
+ * `drop` mechanic already shows on its empty-box hint, so the rule is at least
+ * consistent — CONTENT gets the display face, a CONTROL'S CHROME does not.
  */
 const SELECT_BASE =
-  'rounded-md border border-input bg-card px-3 py-2 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+  'font-sans rounded-md border border-input bg-card px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
  * Inline: `w-auto` so the control is only as wide as its longest option — a
  * fixed width next to two-letter quantifiers reads as a form field, not a gap.
  * `max-w-full` keeps a long option from forcing horizontal scroll on a phone.
+ *
+ * `CONTROL_SCALE` makes `w-auto` mean the right thing at display size: the
+ * intrinsic width of a native select is derived from its option TEXT, so the
+ * font-size is what decides whether the gap looks like part of the sentence or
+ * like a body-size widget dropped into a headline.
  */
-const SELECT_INLINE = 'mx-1 inline-block w-auto max-w-full align-baseline';
+const SELECT_INLINE = `mx-1 inline-block w-auto max-w-full align-baseline ${CONTROL_SCALE}`;
 
-/** Stacked: unchanged from before this feature. */
-const SELECT_STACKED = 'w-full max-w-sm';
+/**
+ * Stacked: no sentence to inherit from, so it is sized directly — one step below
+ * the prompt above it.
+ */
+const SELECT_STACKED = 'w-full max-w-md text-xl';
 
 /**
  * Fallback for the empty option when the island passes no localized copy.
@@ -116,8 +138,11 @@ export default function SelectRenderer({
   // `<label htmlFor>` beats any ARIA attribute when the DOM allows one.
   if (!parts) {
     return (
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={selectId} className="text-base font-medium text-zinc-100">
+      <div className="flex flex-col gap-4">
+        <Label
+          htmlFor={selectId}
+          className={`${PROMPT_SCALE} ${PROMPT_MEASURE} font-medium text-zinc-100`}
+        >
           {slot.label}
         </Label>
         {box}
