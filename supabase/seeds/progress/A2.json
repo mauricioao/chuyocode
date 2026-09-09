@@ -1,0 +1,25 @@
+{
+  "level": "A2",
+  "target": 500,
+  "current": 81,
+  "nextBatchNumber": 3,
+  "focusPool": ["present-continuous", "past-simple", "comparatives", "quantifiers", "future-forms", "adverbs-of-frequency", "modal-verbs"],
+  "focusCounts": {
+    "present-continuous": 12,
+    "past-simple": 14,
+    "comparatives": 11,
+    "quantifiers": 12,
+    "future-forms": 11,
+    "adverbs-of-frequency": 10,
+    "modal-verbs": 11
+  },
+  "usedSlugs": {
+    "present-continuous": ["present-continuous-now", "present-continuous-question", "present-continuous-negative", "present-continuous-standups", "present-continuous-temporary", "present-continuous-right-now", "present-continuous-office", "present-continuous-family", "present-continuous-progressive", "present-continuous-studying", "present-continuous-debugging", "present-continuous-raining"],
+    "past-simple": ["regular-past-simple", "past-simple-negative", "past-simple-question", "irregular-past-simple", "past-simple-story", "past-simple-time-expressions", "past-simple-travel", "past-simple-negative-question", "past-irregular-food", "past-simple-job-history", "past-simple-went-vacation", "past-simple-did-homework", "past-simple-worked-late", "past-simple-bought-groceries"],
+    "comparatives": ["comparative-adjectives", "comparatives-shopping", "than-comparative", "comparatives-job-search", "irregular-comparatives", "comparative-adverbs-fast", "comparative-good-better", "comparative-size-comparison", "comparative-expensive", "comparative-interesting-code", "comparative-hot-weather"],
+    "quantifiers": ["some-any-basic", "some-affirmative", "much-many", "few-a-few", "quantifiers-code-review", "a-lot-vs-much", "several-quantity", "none-vs-any", "quantifiers-enough-sugar", "quantifiers-lots-of", "quantifiers-few-applications", "quantifiers-no-sugar"],
+    "future-forms": ["will-plans", "going-to-near-future", "will-future-decision", "present-tense-future", "future-continuous-question", "future-going-to-vacation", "future-will-prediction", "future-be-going-plans", "future-present-tense-schedule", "future-will-decision-rain", "future-continuous-working"],
+    "adverbs-of-frequency": ["usually-routine", "never-negative", "sometimes-frequency", "rarely-position", "frequency-stackexchange", "frequency-every-morning", "frequency-hardly", "frequency-position-adverb", "frequency-occasionally", "frequency-weekly-standups"],
+    "modal-verbs": ["can-ability", "can-permission", "must-obligation", "cannot-negative", "modal-verbs-mixed", "must-restaurant", "should-advice", "might-possibility", "dont-have-to", "modal-can-speak", "modal-must-permission"]
+  }
+}

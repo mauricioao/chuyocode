@@ -201,7 +201,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
  * merely unobserved.
  */
 const PROMPT_AREA =
-  'flex flex-1 flex-col text-center animate-in fade-in-0 duration-200 motion-reduce:animate-none';
+  'exercise-face flex flex-1 flex-col text-center animate-in fade-in-0 duration-200 motion-reduce:animate-none';
 
 /** Resolve copy for a locale, defaulting to English. */
 function copyFor(lang: string): Copy {
@@ -586,11 +586,16 @@ export default function ExerciseIsland({
             {(outcome === 'correct' || outcome === 'incorrect') && (
               <p
                 data-testid={`slot-feedback-${slot.id}`}
-                className={
+                // `font-sans`: the verdict is CHROME the app speaks in, not the
+                // English being learned, so it stays in the UI face even though
+                // both words happen to be ASCII today. Leaving it to inherit the
+                // display face is how "¡Todo correcto!" ends up half-rendered the
+                // first time this copy grows an accent.
+                className={`font-sans ${
                   outcome === 'correct'
                     ? 'text-base font-semibold text-emerald-400 sm:text-lg'
                     : 'text-base font-semibold text-destructive sm:text-lg'
-                }
+                }`}
               >
                 {outcome === 'correct' ? t.correct : t.incorrect}
               </p>

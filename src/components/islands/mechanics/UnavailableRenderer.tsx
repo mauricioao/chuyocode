@@ -33,7 +33,10 @@ export default function UnavailableRenderer({
       <p
         role="status"
         data-testid={`slot-unavailable-${slot.id}`}
-        className="rounded-lg border border-dashed border-base-muted bg-base-muted/40 p-3 text-sm text-zinc-400"
+        // `font-sans`: this message is the app apologising, not English to
+        // learn, and the Spanish copy ends in "aquí." — an accent the exercise
+        // display face does not carry.
+        className="font-sans rounded-lg border border-dashed border-base-muted bg-base-muted/40 p-3 text-sm text-zinc-400"
       >
         {message}
       </p>

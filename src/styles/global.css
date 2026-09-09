@@ -210,3 +210,28 @@ h3 {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* --- The exercise display face ------------------------------------------ *
+ * ChunkFive (see fonts.css for the licence and, more importantly, for the two
+ * limitations of the face). Set on ONE element — `PROMPT_AREA` in
+ * ExerciseIsland.tsx — which is the single surface all four mechanics render
+ * into. Putting it there rather than on each renderer is the same one-place
+ * argument `scale.ts` already makes about the size ramp: four mechanics, and
+ * one of them is always the one nobody remembers to update.
+ *
+ * A CLASS AND NOT A `@theme` TOKEN. A `--font-exercise` token would also give
+ * Tailwind a `font-exercise` utility, and then the face would have two ways in
+ * that can disagree — one carrying the two rules below and one not.
+ *
+ * `font-weight: 400` states what the face actually has, and
+ * `font-synthesis: none` is the load-bearing line rather than a nicety: this
+ * face ships a single weight, so any `font-bold`/`font-semibold` inside the
+ * exercise would otherwise be FAKED by the browser, which smears an outline
+ * over a design that is already ultra-bold. Both properties inherit, which is
+ * harmless for the chrome that opts back out with `font-sans` — Raleway
+ * Variable carries real weights, so it never needed synthesis either. */
+.exercise-face {
+  font-family: 'ChunkFive', 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+  font-synthesis: none;
+}

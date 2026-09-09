@@ -15,3 +15,44 @@
  * font-loading decision.
  */
 @import '@fontsource-variable/raleway/index.css';
+
+/**
+ * ChunkFive — the display face the exercise itself is set in.
+ *
+ * Meredith Mandel / The League of Moveable Type, Open Font License. The licence
+ * text ships beside the files (`src/assets/fonts/ChunkFive-OFL.txt`) because the
+ * OFL requires it to travel with the font, not because anything reads it.
+ *
+ * Self-hosted and referenced by RELATIVE path so Vite fingerprints and emits it
+ * like any other asset — the same reason Raleway comes from a package rather
+ * than a CDN. 22 KB in woff2; the woff is only there for browsers that predate
+ * woff2 support.
+ *
+ * TWO PROPERTIES OF THIS FACE CONSTRAIN EVERY CALL SITE, so they are written
+ * down here rather than rediscovered later:
+ *
+ *  1. IT HAS EXACTLY ONE WEIGHT. No bold, no italic. Anything asking for a
+ *     heavier weight gets a browser-synthesised fake bold smeared over a face
+ *     that is already ultra-bold. `.exercise-face` in global.css turns that off.
+ *
+ *  2. ITS GLYPH SET IS ASCII. 98 glyphs: Basic Latin plus only |, ¿, ˚, –, —,
+ *     • and −. There is NO á é í ó ú ñ ü and there are NO curly quotes (’ “ ”),
+ *     just the straight ' and ". A string containing one of those does not fail
+ *     loudly — the browser silently falls back to Raleway FOR THAT CHARACTER
+ *     ONLY, so "Casilla vacía" renders with one letter in a different typeface,
+ *     at a different weight, in the middle of the word. That is why the Spanish
+ *     chrome inside the exercise surface is explicitly opted out with
+ *     `font-sans` instead of being left to inherit.
+ *
+ * `font-display: swap` follows Raleway's rule above: never show invisible text.
+ * The accepted cost is one reflow of the sentence when the face lands.
+ */
+@font-face {
+  font-family: 'ChunkFive';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src:
+    url('../assets/fonts/ChunkFive-Regular.woff2') format('woff2'),
+    url('../assets/fonts/ChunkFive-Regular.woff') format('woff');
+}

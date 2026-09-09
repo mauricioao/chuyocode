@@ -322,7 +322,13 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
         // Deliberately NOT at tile scale. This is a hint about an empty target,
         // not content: at `1em` inside a display-size sentence it would read as
         // an answer already sitting in the box.
-        <span className="px-3 text-sm text-muted-foreground">{copy.empty}</span>
+        //
+        // `font-sans` for the SAME reason, one level up: the hint is chrome the
+        // app speaks, and the Spanish copy is "Casilla vacía". ChunkFive has no
+        // accented glyphs, so inheriting the display face would render `í` — and
+        // only `í` — in Raleway, in the middle of the word. Per-character
+        // fallback is invisible to CSS and impossible to catch in review.
+        <span className="font-sans px-3 text-sm text-muted-foreground">{copy.empty}</span>
       )}
     </span>
   );
@@ -510,6 +516,21 @@ export default function DropRenderer({
 
   return (
     <DndContext
+      // EXPLICIT AND DERIVED FROM THE SLOT, never left to dnd-kit.
+      //
+      // Without an `id`, dnd-kit names its screen-reader description element
+      // with `useUniqueId('DndDescribedBy')`, a MODULE-LEVEL COUNTER. On the
+      // client that module is fresh per page load, so the first context is
+      // `DndDescribedBy-0`. On the server the module lives for the whole SSR
+      // process and the counter keeps climbing across requests, so the same
+      // context renders `DndDescribedBy-1`, `-2`, `-3`… The `aria-describedby`
+      // React hydrated therefore disagreed with the one it rendered, and React
+      // reported a hydration mismatch it explicitly will NOT patch up.
+      //
+      // A slot id is stable, unique on the page, and identical on both sides,
+      // which is the only property the id actually needs. dnd-kit passes this
+      // value straight through instead of minting one.
+      id={`dnd-${slot.id}`}
       sensors={sensors}
       collisionDetection={closestCenter}
       accessibility={{ announcements, screenReaderInstructions }}

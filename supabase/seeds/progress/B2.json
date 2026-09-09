@@ -1,0 +1,21 @@
+{
+  "level": "B2",
+  "target": 250,
+  "current": 60,
+  "nextBatchNumber": 3,
+  "focusPool": ["past-perfect", "third-conditional", "present-perfect-continuous", "modals-of-deduction", "linking-words"],
+  "focusCounts": {
+    "past-perfect": 12,
+    "third-conditional": 12,
+    "present-perfect-continuous": 12,
+    "modals-of-deduction": 12,
+    "linking-words": 12
+  },
+  "usedSlugs": {
+    "past-perfect": ["had-finished-before", "already-packed", "had-not-seen", "code-merge-review", "realized-forgotten", "past-perfect-ordering", "had-left-message", "completed-before-deadline", "never-been-to", "eaten-breakfast-already", "prior-experience", "past-perfect-sequence"],
+    "third-conditional": ["if-had-known", "third-cond-negative", "standup-mistake", "third-conditional-interview", "regret-choice", "missed-opportunity", "would-have-stayed", "third-cond-family", "missed-the-train", "third-cond-doc-context", "third-cond-standup", "conditional-regret"],
+    "present-perfect-continuous": ["has-been-working", "how-long-continuous", "not-been-sleeping", "continuous-tech-doc", "have-you-been-studying", "keep-going-context", "have-been-coding", "how-long-learn", "has-been-raining", "continuous-travel", "have-been-cooking", "continuous-job-interview"],
+    "modals-of-deduction": ["must-have-forgotten", "can-have-done", "might-have-known", "modals-code-context", "could-have-been", "probably-modals", "must-have-left", "must-be-tired", "modals-code-debugging", "cant-have-seen", "might-have-forgotten-context", "should-have-known"],
+    "linking-words": ["moreover-addition", "although-contrast", "while-vs-whereas", "linking-interview", "consequently-result", "linking-words-daily-standup", "however-contrast", "therefore-result", "meanwhile-parallel", "linking-conditional", "on-the-other-hand", "linking-travel-context"]
+  }
+}

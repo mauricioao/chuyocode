@@ -252,9 +252,16 @@ if (exercise.topic) {
               depends on state only the island can see, and it owns that pair of
               words itself (see the LikeButton header).
 
-              This comment sits OUTSIDE the expression on purpose — a `{/* */}`
-              as the first child of an Astro `cond && (...)` block fails the
-              compiler with `Expected ")" but found "$$render"`. */}
+              This comment sits OUTSIDE the expression on purpose: a JSX comment
+              used as the first child of an Astro `cond && (...)` block fails the
+              compiler with `Expected ")" but found "$$render"`.
+
+              AND IT NEVER SPELLS A COMMENT DELIMITER OUT. A JSX comment has no
+              escape: the first closing delimiter inside it ends it, so quoting
+              one here would end this comment early and ship the remaining prose
+              to the page as visible text. That is exactly the bug this line
+              replaces — the sentence appeared above the exercise card in the
+              browser. Describe delimiters in words, never in symbols. */}
           {
             showLike && (
               <LikeButton

@@ -1,0 +1,29 @@
+{
+  "level": "B1",
+  "target": 250,
+  "current": 60,
+  "nextBatchNumber": 3,
+  "focusPool": ["present-perfect", "past-continuous", "first-conditional", "second-conditional", "passive-voice", "reported-speech", "gerunds-infinitives", "relative-clauses", "phrasal-verbs"],
+  "focusCounts": {
+    "present-perfect": 8,
+    "past-continuous": 7,
+    "first-conditional": 7,
+    "second-conditional": 7,
+    "passive-voice": 7,
+    "reported-speech": 6,
+    "gerunds-infinitives": 6,
+    "relative-clauses": 6,
+    "phrasal-verbs": 6
+  },
+  "usedSlugs": {
+    "present-perfect": ["visited-three-countries", "just-finished-deployment", "ever-eaten-durian", "present-perfect-order-words", "lived-in-three-cities", "never-tried-sushi", "already-merged-pull-request", "present-perfect-ever"],
+    "past-continuous": ["was-sleeping-when-called", "they-were-debugging", "past-continuous-while", "was-studying-when-arrived", "were-playing-football", "past-continuous-test", "past-continuous-while-order"],
+    "first-conditional": ["if-you-study-you-pass", "first-conditional-code-review", "if-rain-order", "if-you-are-late-they-leave", "if-i-find-bug-report", "first-conditional-help", "if-weather-is-nice-order"],
+    "second-conditional": ["if-i-won-lottery", "second-conditional-job", "if-i-knew-spanish", "if-i-had-money-travel", "if-you-spoke-portuguese", "second-conditional-boss", "if-i-were-younger"],
+    "passive-voice": ["was-built-by", "is-spoken-in", "passive-voice-food", "was-built-ten-years-ago", "are-spoken-in-africa", "has-been-decorated", "passive-voice-office"],
+    "reported-speech": ["he-said-he-was-tired", "she-told-me-she-would", "reported-speech-question", "she-said-she-was-busy", "they-asked-if-i-could", "reported-speech-told-me"],
+    "gerunds-infinitives": ["avoid-making-mistakes", "enjoys-cycling", "gerunds-infinitives-order", "stopped-working", "try-to-remember", "recommended-buying-laptop"],
+    "relative-clauses": ["the-person-who-started", "the-book-which-i-read", "the-place-where", "the-restaurant-where-we-ate", "the-reason-why", "the-developer-whom"],
+    "phrasal-verbs": ["put-off-the-meeting", "run-into-an-old-friend", "phrasal-verb-turn-down", "gave-up-smoking", "look-after-the-dog", "phrasal-verb-come-back"]
+  }
+}
