@@ -21,14 +21,17 @@ vi.mock('@lib/sanity', async () => {
 });
 
 import { NEWS_PAGE_SIZE } from '@lib/sanity';
+import { isValidLang, type Lang } from '@lib/i18n';
 
 import NewsPage from './[...page].astro';
 
 async function render(params: Record<string, string | undefined>) {
   const container = await AstroContainer.create();
+  const langParam = params.lang ?? 'es';
+  const lang: Lang = isValidLang(langParam) ? langParam : 'es';
   return container.renderToResponse(NewsPage, {
     params,
-    locals: { lang: (params.lang as string) ?? 'es' },
+    locals: { lang },
     request: new Request('https://chuyocode.test/'),
   });
 }

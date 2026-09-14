@@ -29,7 +29,7 @@ function makeContext(pathname: string) {
   return { context, locals, redirect };
 }
 
-const next = vi.fn<[], Promise<NextResult> | NextResult>(
+const next = vi.fn<() => Promise<NextResult> | NextResult>(
   () => new Response('OK', { status: 200 }),
 );
 

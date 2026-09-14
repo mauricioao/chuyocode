@@ -8,7 +8,15 @@
  * requirement and keeps the redirect working even if middleware ordering
  * changes.
  */
-import { DEFAULT_LANG } from '@lib/i18n';
-
-return Astro.redirect(`/${DEFAULT_LANG}/`, 302);
+// The locale is a LITERAL here, not `DEFAULT_LANG`, and that is forced rather than
+// chosen: `astro check` does not analyse the contents of a top-level `return` in
+// frontmatter, so ANY identifier referenced only inside it reports ts(6133)
+// "declared but its value is never read" — the import itself, or a const holding
+// the derived path. Both were tried; both fail.
+//
+// The coupling this literal loses is restored as a test, not a comment:
+// `src/lib/i18n.test.ts` reads this file and asserts the path matches DEFAULT_LANG,
+// so changing the default locale fails the suite instead of silently pointing the
+// site root at a locale that is no longer the default.
+return Astro.redirect('/es/', 302);
 ---
