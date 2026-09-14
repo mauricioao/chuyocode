@@ -167,9 +167,8 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
 
 <script>
   // Accent- and case-insensitive normalizer so "artificial" matches
-  // "Artificial" and "inteligencia" matches "Inteligencia". Plain JS (no TS
-  // type annotations) so the Astro dev dependency scanner parses it cleanly.
-  function normalize(s) {
+  // "Artificial" and "inteligencia" matches "Inteligencia".
+  function normalize(s: string): string {
     return s
       .toLowerCase()
       .normalize('NFD')
@@ -177,18 +176,18 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
       .trim();
   }
 
-  function wireSearch(root) {
-    const input = root.querySelector('input');
-    const bar = root.querySelector('.chu-search-bar');
-    const lens = root.querySelector('.chu-search-lens');
+  function wireSearch(root: HTMLElement): void {
+    const input = root.querySelector<HTMLInputElement>('input');
+    const bar = root.querySelector<HTMLElement>('.chu-search-bar');
+    const lens = root.querySelector<HTMLElement>('.chu-search-lens');
     const targetSelector = root.dataset.target;
     const emptyId = root.dataset.empty;
     if (!input || !bar || !targetSelector) return;
 
-    const items = Array.from(document.querySelectorAll(targetSelector));
+    const items = Array.from(document.querySelectorAll<HTMLElement>(targetSelector));
     const empty = emptyId ? document.getElementById(emptyId) : null;
 
-    const apply = () => {
+    const apply = (): void => {
       const q = normalize(input.value);
       let visible = 0;
       for (const item of items) {
@@ -204,9 +203,9 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
     //   open  -> add '.is-open' (bar grows right-to-left) -> on 'transitionend'
     //            of 'width', THEN focus the input (caret appears after grow).
     //   close -> blur first -> remove '.is-open' (bar shrinks to nothing).
-    let onOpenEnd = null;
+    let onOpenEnd: ((e: TransitionEvent) => void) | null = null;
 
-    const open = () => {
+    const open = (): void => {
       if (root.classList.contains('is-open')) return;
       // Clear any stale end-listener before starting a fresh open.
       if (onOpenEnd) bar.removeEventListener('transitionend', onOpenEnd);
@@ -220,18 +219,19 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
         }
         input.focus();
       }, 550);
-      onOpenEnd = (e) => {
+      const listener = (e: TransitionEvent): void => {
         if (e.propertyName !== 'width' || e.target !== bar) return;
         window.clearTimeout(fallback);
-        bar.removeEventListener('transitionend', onOpenEnd);
+        bar.removeEventListener('transitionend', listener);
         onOpenEnd = null;
         // Focus only AFTER the grow animation completes.
         input.focus();
       };
-      bar.addEventListener('transitionend', onOpenEnd);
+      onOpenEnd = listener;
+      bar.addEventListener('transitionend', listener);
     };
 
-    const close = () => {
+    const close = (): void => {
       if (!root.classList.contains('is-open')) return;
       if (onOpenEnd) {
         bar.removeEventListener('transitionend', onOpenEnd);
@@ -241,13 +241,13 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
       root.classList.remove('is-open');
     };
 
-    lens?.addEventListener('click', () => {
+    lens?.addEventListener('click', (): void => {
       if (root.classList.contains('is-open')) close();
       else open();
     });
 
     // Esc closes an open bar (keyboard affordance).
-    input.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', (e: KeyboardEvent): void => {
       if (e.key === 'Escape') close();
     });
 
@@ -256,8 +256,8 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
     apply();
   }
 
-  function init() {
-    document.querySelectorAll('.chu-search').forEach((el) => {
+  function init(): void {
+    document.querySelectorAll<HTMLElement>('.chu-search').forEach((el) => {
       // Guard against double-wiring: a component script can run once as a
       // module AND fire on astro:page-load. Mark each root so its listeners are
       // attached exactly once (a second wire would toggle open->closed).
