@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   LEVELS,
   SKILLS,
@@ -489,5 +491,25 @@ describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
     const strings = flattenStrings(UI_LABELS.es);
     expect(strings.length).toBeGreaterThan(50);
     expect(findVoseo(UI_LABELS.es)).toEqual([]);
+  });
+});
+
+describe('root redirect page (src/pages/index.astro)', () => {
+  // The page redirects `/` to the default locale, but it CANNOT reference
+  // DEFAULT_LANG: `astro check` does not analyse the contents of a top-level
+  // `return` in Astro frontmatter, so any identifier used only inside it reports
+  // ts(6133) "declared but its value is never read" — the import itself and a
+  // const holding the derived path were both tried, and both fail.
+  //
+  // The literal is therefore forced. This guard is the coupling a literal would
+  // otherwise lose: change DEFAULT_LANG and the suite fails here, instead of the
+  // site root silently pointing at a locale that is no longer the default.
+  const pagePath = fileURLToPath(new URL('../pages/index.astro', import.meta.url));
+  const source = readFileSync(pagePath, 'utf8');
+
+  it('redirects the site root to DEFAULT_LANG', () => {
+    const match = source.match(/Astro\.redirect\(\s*'\/([a-z]{2})\/'\s*,\s*302\s*\)/);
+    expect(match).not.toBeNull();
+    expect(match?.[1]).toBe(DEFAULT_LANG);
   });
 });
