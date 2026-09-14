@@ -41,3 +41,7 @@ Thumbs.db
 # absolute home-directory paths and which assistants are installed on one
 # developer's machine, so it is wrong for everyone else and useless in review.
 .atl/
+
+# Owner's internal product working document. Deliberately kept out of version
+# control. The versioned technical sources of truth are docs/ and openspec/.
+PRD-arquitectura.md
