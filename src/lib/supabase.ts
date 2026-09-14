@@ -6,6 +6,15 @@
  *  - `createServiceClient()` (service-role key): privileged pass writes issued
  *    by the SSR pass gate and the `validar-anuncio` endpoint.
  *
+ * A THIRD kind of client now exists and it does NOT live here:
+ * `createSessionClient()` in `src/lib/supabaseSession.ts` is built per request
+ * from that request's cookies and is the only client that carries a user
+ * identity. Neither client below has a session, and neither should grow one —
+ * they are module-level singletons, so a session on either would be shared
+ * across every concurrent request. Reach for `supabaseSession.ts` whenever the
+ * question is "who is asking?"; reach for this file when the answer does not
+ * matter.
+ *
  * Security (design decision #3): the service-role key bypasses row-level
  * security, so it MUST stay server-side. `astro.config.mjs` keeps these secrets
  * out of the client bundle. The service-role key is OPTIONAL for now — the pass
