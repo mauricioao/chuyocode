@@ -32,10 +32,17 @@ const {
   const builder: Record<string, unknown> = {
     maybeSingle: maybeSingleMock,
     /**
-     * `PostgrestBuilder implements PromiseLike` (verified in
-     * node_modules/.pnpm/@supabase+postgrest-js@2.110.7/.../src/PostgrestBuilder.ts:72),
-     * so awaiting a filter builder WITHOUT a terminal method is the real API
-     * and resolves to `{ data, error }`. The list queries rely on that.
+     * `PostgrestBuilder implements PromiseLike` (re-verified after the
+     * `@supabase/supabase-js` ^2.114.0 bump in
+     * node_modules/.pnpm/@supabase+postgrest-js@2.116.0/.../src/PostgrestBuilder.ts:17,
+     * with `then` implemented at :222), so awaiting a filter builder WITHOUT a
+     * terminal method is the real API and resolves to `{ data, error }`. The
+     * list queries rely on that.
+     *
+     * The vendored path carries the resolved version, so it MOVES on every
+     * bump. Re-read it and update this citation whenever supabase-js changes:
+     * if the builder ever stopped being thenable, this mock would keep passing
+     * while all four list reads broke in production.
      */
     then: (
       onfulfilled: (value: unknown) => unknown,
