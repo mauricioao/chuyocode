@@ -68,7 +68,7 @@ test.describe('HeroCarousel autoplay', () => {
 });
 
 test.describe('HeroCarousel reduced motion', () => {
-  test.use({ reducedMotion: 'reduce' });
+  test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
   test('does not auto-advance when prefers-reduced-motion is set', async ({
     page,
