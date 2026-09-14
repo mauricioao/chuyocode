@@ -8,7 +8,8 @@
  * requirement and keeps the redirect working even if middleware ordering
  * changes.
  */
-import { DEFAULT_LANG } from '@lib/i18n';
 
-return Astro.redirect(`/${DEFAULT_LANG}/`, 302);
+// Hardcoded to 'es' (the DEFAULT_LANG value) to avoid unused-import analysis issues
+// in Astro frontmatter. If the default locale changes, update this redirect path.
+return Astro.redirect('/es/', 302);
 ---
