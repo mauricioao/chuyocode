@@ -10,6 +10,22 @@ import tailwindcss from '@tailwindcss/vite';
 // serves from its CDN.
 export default defineConfig({
   output: 'server',
+  // 🔴 HARD RULE — the Netlify adapter is called with NO options, and must stay
+  // that way. Two of its options break authentication, and both break it
+  // SILENTLY: no error, no log, nothing a behavioral test could observe.
+  //
+  //  - Edge middleware mode. The adapter then JSON-serializes `context.locals`
+  //    into a header and ships it to the rendering function. The Supabase
+  //    session client that `src/middleware.ts` builds cannot survive JSON
+  //    serialization, so every visitor would simply never be signed in.
+  //  - On-demand page caching. A page rendered from `Astro.locals.user` must
+  //    never reach the shared CDN, or an anonymous visitor is served an
+  //    authenticated visitor's HTML.
+  //
+  // `src/astroConfig.test.ts` enforces this by reading THIS FILE as raw text,
+  // and it cannot tell a comment from a setting. That is why neither option is
+  // spelled by name here: a commented-out setting is one keystroke from live.
+  // The two names, and the full reasoning, live in that test.
   adapter: netlify(),
   integrations: [
     // React powers the islands only (AdModal).

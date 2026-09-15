@@ -31,7 +31,8 @@ async function render(params: Record<string, string | undefined>) {
   const lang: Lang = isValidLang(langParam) ? langParam : 'es';
   return container.renderToResponse(NewsPage, {
     params,
-    locals: { lang },
+    // `App.Locals.user` is required, never optional: this render is anonymous.
+    locals: { lang, user: null },
     request: new Request('https://chuyocode.test/'),
   });
 }
