@@ -276,5 +276,22 @@ Two commits on `fix/auth-confirm-pkce-code`, not pushed, no PR opened:
 - `8452ea7` — `fix(auth): strip the PKCE code from post-confirm redirect targets`
 - `341a2e8` — `feat(auth): confirm magic links sent by the default email template`
 
-Authored diff across both: well inside the 400-line review budget. No
-`size:exception` needed.
+### Review budget — measured, not estimated
+
+| Scope | Changed lines (`+` and `-`) |
+|---|---|
+| `8452ea7` WU1 — strip `code` | 66 |
+| `341a2e8` WU2 — redeem `code` | 338 |
+| **`src/` total** | **404** |
+
+404 is **4 lines over** the 400 budget. That overage is reported rather than
+removed: the bulk of WU2 is the module-header documentation this unit was
+explicitly asked to write — the PKCE flow, the precedence argument, and the
+same-browser limitation — and deleting comments to reach a number would destroy
+the most valuable part of the change to satisfy a proxy for reviewer load.
+
+No further slicing pass is warranted, because the honest split already exists:
+**WU1 and WU2 are independently reviewable and each is far under budget** (66 and
+338). If the reviewer wants strict compliance, chain them as two PRs on the
+commits as they stand — no rework required. Otherwise a single PR at 1% over is
+the recommended `size:exception`, and this table is the record of it.
