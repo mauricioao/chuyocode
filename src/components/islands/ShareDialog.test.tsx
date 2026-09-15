@@ -100,17 +100,31 @@ describe('ShareDialog', () => {
   });
 
   it('stops claiming "copied" after the reset window', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     stubClipboard(vi.fn().mockResolvedValue(undefined));
+    // Use real timers during async setup (open, findByTestId). This avoids a race
+    // where the fake timer can fire before waitFor polls observe the "copied" label
+    // under load. Once async setup is done, install controlled fake timers to test
+    // the timer behavior deterministically.
     await open();
     const copyButton = await screen.findByTestId('exercise-share-copy');
-    fireEvent.click(copyButton);
-    await waitFor(() => expect(copyButton.textContent).toBe(labels.copied));
-    // Wrapped in `act`: the reset lands via a timer, so without this React
-    // applies the update outside a test-controlled batch and warns.
+    
+    // NOW install fake timers — they do not advance with real time, so the
+    // clipboard promise and button update complete without timer interference.
+    vi.useFakeTimers();
+    
+    // Wrap click in act so the promise (writeText) and setState (copied=true)
+    // complete before we check the assertion.
+    await act(async () => {
+      fireEvent.click(copyButton);
+    });
+    
+    expect(copyButton.textContent).toBe(labels.copied);
+    
+    // Advance the timer and let React apply the state update via act.
     await act(async () => {
       vi.advanceTimersByTime(COPIED_RESET_MS + 1);
     });
+    
     expect(copyButton.textContent).toBe(labels.copy);
   });
 
