@@ -59,8 +59,10 @@ async function renderPage(
 ) {
   const container = await AstroContainer.create();
   return container.renderToResponse(Component, {
+    // `App.Locals.user` is required, never optional, so the default has to be
+    // stated: these renders are anonymous visitors. A caller may override it.
+    locals: { user: null, ...locals },
     params,
-    locals: locals ?? {},
     request: new Request(url),
   });
 }
