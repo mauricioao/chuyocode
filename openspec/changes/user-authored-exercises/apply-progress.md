@@ -1,11 +1,13 @@
 # Apply Progress: User-Authored Exercises
 
-**Artifact**: `gentle-ai.sdd-apply/v1` · **Rev**: 2 · **Change**: `user-authored-exercises`
+**Artifact**: `gentle-ai.sdd-apply/v1` · **Rev**: 3 · **Change**: `user-authored-exercises`
 **Store**: `hybrid` (OpenSpec + Engram `sdd/user-authored-exercises/apply-progress`)
 **Mode**: Strict TDD · **Test runner**: `pnpm test` → `vitest run`
-**Batches so far**: Slice 1 (`feat/auth-session-client`, merged as PR #13) · Slice 2 (`feat/auth-middleware`, local)
+**Batches so far**: Slice 1 (`feat/auth-session-client`, merged as PR #13) · Slice 2 (`feat/auth-middleware`, local) · Slice 2 correction (`4813e6d`, same branch)
 
-This artifact is CUMULATIVE. Rev 2 merges slice 2 into rev 1 rather than replacing it.
+This artifact is CUMULATIVE. Rev 2 merged slice 2 into rev 1; rev 3 appends the
+slice-2 correction (see the section at the end) and marks issue #4 resolved.
+Nothing from revs 1–2 was removed.
 
 ---
 
@@ -360,8 +362,9 @@ Nothing else deviates. The ordering (`locals.user = null` → redirect → 404 �
    estimate.** See the boundary section below. A cohesive three-way split exists and
    the commits are already shaped for it.
 
-4. **`getUser()` has no failure path, and that is a fail-OPEN-to-500 decision nobody has
-   explicitly made.** Design §1 writes
+4. **RESOLVED in the slice-2 correction (`4813e6d`) — see the section at the end of this
+   artifact.** `getUser()` had no failure path, and that was a fail-OPEN-to-500 decision
+   nobody had explicitly made. Design §1 writes
    `locals.user = (await client.auth.getUser()).data.user ?? null`, which is what
    shipped. `getUser()` returns `{data, error}` for auth failures — the tampered-cookie
    scenario is covered and tested — but a **network** failure reaching Supabase
@@ -369,10 +372,10 @@ Nothing else deviates. The ordering (`locals.user = null` → redirect → 404 �
    site**, including pages with no authenticated content at all. A `try`/`catch`
    degrading to `locals.user = null` would keep the site readable during a Supabase
    outage and would match the house fail-safe idiom in `exercises.ts` and `sanity.ts`.
-   It was **not** added: it is production behavior the design does not specify, adding
-   it unilaterally would be freelancing, and strict TDD forbids shipping it without a
-   test written first. **This needs a design decision before slice 3**, which puts far
-   more traffic through the same call.
+   It was **not** added at the time: it is production behavior the design does not
+   specify, adding it unilaterally would be freelancing, and strict TDD forbids shipping
+   it without a test written first. The owner has since decided, and it shipped as
+   `4813e6d`.
 
 5. **Task 2.8 as written cannot be fully executed at slice 2.** There is no sign-in
    route and nothing renders from `locals.user` until slice 3, so "confirm a session
@@ -443,14 +446,104 @@ Slice 2 leaves slice 3 four things it should not rediscover:
 2. `locals.user` is `User | null` and **never** `undefined`. Any new page-render test
    harness must pass `user: null` explicitly or it will not typecheck.
 3. Task 2.8's spike is still open and gates slice 3's own E2E. Run it FIRST.
-4. Issue #4 (`getUser()` with no failure path) should be decided before slice 3
-   multiplies the call sites.
+4. Identity resolution fails OPEN and permission enforcement fails CLOSED. `roles.ts`
+   must not be aligned with the middleware, nor the middleware with `roles.ts`. The
+   reasoning is in the `src/middleware.ts` module header.
 
 ## Status
 
 **8 / 9 slice-2 tasks complete** (2.1–2.7, 2.9), plus baseline task 2.0.
 Task 2.8 is **blocked on the owner**, deliberately not attempted and not faked.
 Cumulative: **15 / 16 executable tasks** across slices 1 and 2.
-`pnpm test` → `969 passed | 10 skipped`, three consecutive runs.
+`pnpm test` → `972 passed | 10 skipped` (after the correction).
 `pnpm typecheck` → `0 errors`.
 Ready for independent SDD verification of slice 2.
+
+---
+
+# Slice 2 correction — `getUser()` fails OPEN · COMPLETE
+
+Closes issue #4 above. Branch `feat/auth-middleware`, commit `4813e6d`, one work unit.
+
+**Owner's decision, implemented literally**: the middleware RESOLVES identity and fails
+OPEN; the guards ENFORCE permission and fail CLOSED. A `getUser()` rejection degrades to
+`locals.user = null` and the request renders, so a Supabase blip cannot 500 books, news
+or exercises — none of which read `locals.user`. This opens nothing: with no user, every
+downstream role guard denies exactly as it would for an anonymous visitor.
+
+## Baseline — recorded BEFORE the change
+
+| Command | Observed result |
+|---|---|
+| `pnpm vitest run src/middleware.test.ts` (safety net) | **PASS** — `Tests 25 passed (25)` |
+
+## Files changed
+
+| File | Action | What was done |
+|---|---|---|
+| `src/middleware.ts` | Modified | `try`/`catch` scoped to the `client.auth.getUser()` call only; `console.error('[middleware] getUser() threw:', err)`; 20-line header block documenting the OPEN/CLOSED asymmetry and naming `src/lib/roles.ts` as the CLOSED counterpart |
+| `src/middleware.test.ts` | Modified | +3 tests, +2 helpers (`armUnreachableSession`, `spyOnConsoleError`). The pre-existing resolve-with-`error` test was neither edited nor duplicated |
+
+118 authored lines. Nothing else in the tree changed; `PRD-arquitectura.md` untouched.
+
+## TDD cycle evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| fail-open | `src/middleware.test.ts` | Unit | ✅ 25/25 first | ✅ Observed: `Tests 3 failed \| 25 passed (28)`, each failing with the rejection propagating uncaught (`Error: fetch failed`, `Error: ECONNRESET`) — the 500 mechanism itself | ✅ `28 passed (28)` | ✅ 3 cases, plus the untouched resolve-path test | ➖ None needed |
+
+Triangulation, per behavior:
+
+| Behavior | Cases forcing real logic |
+|---|---|
+| Rejection vs. handled error | The NEW rejecting `getUser()` vs. the EXISTING `{data:{user:null}, error}` test at `/es/libros`. An implementation that only handles the value shape passes the old test and fails the new one — which is exactly the bug that was shipped |
+| Blast radius | `/es/libros` (locale page, asserts `locals.lang === 'es'` still set) vs. `/api/reacciones/abc` (no lang, where the guards live). Proves the catch is scoped to the call and did not swallow routing |
+| Not swallowed | `console.error` spy asserts the exact house pair `'[middleware] getUser() threw:'` + the cause object. A bare `catch {}` passes both status assertions and fails this one |
+
+Tests written: **3**. Passing: **3**. No banned assertion patterns; `res.status` is
+asserted both as `not.toBe(500)` and `toBe(200)`, and the body is still `'OK'`, so the
+fail-open path is proven to RENDER rather than to return a degraded empty response.
+
+## Work unit evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command | `pnpm vitest run src/middleware.test.ts` → `Test Files 1 passed (1) · Tests 28 passed (28)` |
+| Runtime harness | **N/A** — unchanged from slice 2. The real runtime boundary is still task 2.8's preview deploy, which remains blocked on the owner. This correction adds no new transport |
+| Rollback boundary | Revert `4813e6d`. It touches two files and removes only the `try`/`catch`, the log line, the header block, and three tests. No route, no schema, no UI, no config |
+
+## Verification commands (correction)
+
+| Command | Observed result |
+|---|---|
+| `pnpm test` run 1 | **PASS** — `Test Files 55 passed (55)` · `Tests 972 passed \| 10 skipped (982)` |
+| `pnpm test` run 2 | **FAIL** — `Test Files 1 failed \| 54 passed (55)` · `Tests 1 failed \| 971 passed \| 10 skipped (982)`. Single test, the known `ShareDialog.test.tsx` flake (issue #2). Not reproduced again |
+| `pnpm test` runs 3–7 | **PASS** — `972 passed \| 10 skipped` every time, five consecutive runs |
+| `pnpm typecheck` | **PASS** — `Result (142 files): 0 errors, 0 warnings, 0 hints` |
+
+Baseline was `969 passed | 10 skipped`; the delta is exactly this correction's 3 tests.
+The suite ran **7 times**: 6 green, 1 with a single failure. The failing file name was
+cut by the output filter on that run and was not reproduced in five subsequent runs,
+so it is reported honestly as unconfirmed — but it is a one-test delta in a suite whose
+only known flake is `ShareDialog.test.tsx`, and `src/middleware.test.ts` passed in all
+seven runs plus every isolated run.
+
+## Deviations from design (correction)
+
+**One, and it is the point of the correction.** Design §1 writes the `getUser()` call
+with no failure path, and slice 2 implemented it literally (deviation #4 above). The
+owner has now decided otherwise, so the shipped code intentionally diverges from design
+§1 on this line. **Design §1 should be amended during archive** to carry the fail-OPEN
+rule and the OPEN/CLOSED asymmetry; until then the module header is the authority.
+
+## Issues found (correction)
+
+**None new.** The `ShareDialog.test.tsx` flake (issue #2) surfaced once and remains
+pre-existing and unowned by this work.
+
+## Delivery state (correction)
+
+**Not pushed. No pull request. Not merged.** Branch `feat/auth-middleware` is local, at
+`4813e6d`, four commits ahead of `93a9490`. The slice-2 PR boundary above now carries a
+fourth commit at 118 lines; the "middleware + identity" unit becomes 430 lines if the
+three-way split is taken, which is 7.5% over budget on that unit alone.
