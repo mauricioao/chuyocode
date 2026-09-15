@@ -103,15 +103,15 @@ Base `main` · Delivers `locals.user`, cache-safety, the `edge`-mode guard · Es
 
 Base `main` · Delivers the full magic-link round trip · Est. ~350 lines · Rollback: revert PR, no schema change · E2E gated by owner prereqs 1–4
 
-- [ ] 3.1 RED T1 `src/lib/authRedirect.test.ts`: `next=//evil.com`, `/\evil`, `https://evil`, `javascript:` → `safeNextPath` returns `/${DEFAULT_LANG}/`
-- [ ] 3.2 RED T2 `src/pages/api/auth/confirm.test.ts`: `token_hash`/`type` stripped before the 303 redirect
-- [ ] 3.3 RED `src/pages/api/auth/signin.test.ts`: response body identical whether or not the email has an account (no enumeration)
-- [ ] 3.4 GREEN `src/lib/authRedirect.ts` (NEW): `safeNextPath` — accepts only a leading `/`, rejects `//`, `/\`, and any scheme
-- [ ] 3.5 GREEN `src/pages/api/auth/signin.ts` (NEW): `signInWithOtp({ email, options: { data:{lang}, emailRedirectTo }})`
-- [ ] 3.6 GREEN `src/pages/api/auth/confirm.ts` (NEW): `verifyOtp({type:'email', token_hash})` → `setAll` → 303 to `safeNextPath(next)`
-- [ ] 3.7 GREEN `src/pages/api/auth/signout.ts` (NEW): `signOut()` → 303 home
-- [ ] 3.8 Verify (E2E, gated): request link → confirm → authenticated; expired/used token → no session, invite message
-- [ ] 3.9 Verify: `pnpm test && pnpm typecheck && pnpm test:e2e`
+- [x] 3.1 RED T1 `src/lib/authRedirect.test.ts`: `next=//evil.com`, `/\evil`, `https://evil`, `javascript:` → `safeNextPath` returns `/${DEFAULT_LANG}/`
+- [x] 3.2 RED T2 `src/pages/api/auth/confirm.test.ts`: `token_hash`/`type` stripped before the 303 redirect
+- [x] 3.3 RED `src/pages/api/auth/signin.test.ts`: response body identical whether or not the email has an account (no enumeration)
+- [x] 3.4 GREEN `src/lib/authRedirect.ts` (NEW): `safeNextPath` — accepts only a leading `/`, rejects `//`, `/\`, and any scheme
+- [x] 3.5 GREEN `src/pages/api/auth/signin.ts` (NEW): `signInWithOtp({ email, options: { data:{lang}, emailRedirectTo }})`
+- [x] 3.6 GREEN `src/pages/api/auth/confirm.ts` (NEW): `verifyOtp({type:'email', token_hash})` → `setAll` → 303 to `safeNextPath(next)`
+- [x] 3.7 GREEN `src/pages/api/auth/signout.ts` (NEW): `signOut()` → 303 home
+- [ ] 3.8 Verify (E2E, gated): request link → confirm → authenticated; expired/used token → no session, invite message — **PARTIALLY DONE, remainder BLOCKED.** Everything below the mail transport is covered at unit level in `confirm.test.ts` (verification success, expired token, already-consumed token, missing `token_hash`, unreachable provider, and the session/no-session outcome of each). What remains unproven is the browser round trip that actually RECEIVES an email; see `apply-progress.md` → "Task 3.8 — what is proven and what is not"
+- [x] 3.9 Verify: `pnpm test && pnpm typecheck` — both green, `pnpm test` run twice with identical results. `pnpm test:e2e` not run: slice 3 adds no E2E spec, and the magic-link E2E it would carry is the blocked half of 3.8
 
 ### Slice 4 — `feat/auth-signin-ui`
 
