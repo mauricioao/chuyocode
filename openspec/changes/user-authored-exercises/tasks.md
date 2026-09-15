@@ -89,15 +89,15 @@ Base `main` · Delivers session client factory + hardened cookie options + the b
 
 Base `main` · Delivers `locals.user`, cache-safety, the `edge`-mode guard · Est. ~250 lines · Rollback: revert PR, middleware reverts to setting only `lang`
 
-- [ ] 2.1 RED `src/middleware.test.ts`: `needsSession(pathname)` — `false` for `_astro/*` and any dotted first segment; `true` otherwise
-- [ ] 2.2 RED (HARD RULE guard): unit test reads `astro.config.mjs` as text, asserts it contains neither `middlewareMode` nor `cacheOnDemandPages`
-- [ ] 2.3 RED T7 `src/lib/httpCache.test.ts`: `markPrivate(headers)` sets `cache-control: private, no-store`
-- [ ] 2.4 GREEN: add `Locals.user: User | null` (never optional) to `src/env.d.ts`
-- [ ] 2.5 GREEN `src/middleware.ts`: order per design §1 — `locals.user = null` first, path/lang routing, `needsSession` gate, `getUser()` → `locals.user`, flush `pendingHeaders` after `next()`
-- [ ] 2.6 GREEN `src/lib/httpCache.ts` (NEW): `PRIVATE_CACHE_CONTROL`, `markPrivate`
-- [ ] 2.7 GREEN: comment in `astro.config.mjs` documenting the `edge`-mode prohibition
-- [ ] 2.8 **Preview-deploy spike** (owner-blocking, design open question): deploy to a Netlify preview, manually confirm a `@supabase/ssr` session survives a real request; record the result in the PR body **before** Slices 3–4 branch
-- [ ] 2.9 Verify: `pnpm test && pnpm typecheck`
+- [x] 2.1 RED `src/middleware.test.ts`: `needsSession(pathname)` — `false` for `_astro/*` and any dotted first segment; `true` otherwise
+- [x] 2.2 RED (HARD RULE guard): unit test reads `astro.config.mjs` as text, asserts it contains neither `middlewareMode` nor `cacheOnDemandPages`
+- [x] 2.3 RED T7 `src/lib/httpCache.test.ts`: `markPrivate(headers)` sets `cache-control: private, no-store`
+- [x] 2.4 GREEN: add `Locals.user: User | null` (never optional) to `src/env.d.ts`
+- [x] 2.5 GREEN `src/middleware.ts`: order per design §1 — `locals.user = null` first, path/lang routing, `needsSession` gate, `getUser()` → `locals.user`, flush `pendingHeaders` after `next()`
+- [x] 2.6 GREEN `src/lib/httpCache.ts` (NEW): `PRIVATE_CACHE_CONTROL`, `markPrivate`
+- [x] 2.7 GREEN: comment in `astro.config.mjs` documenting the `edge`-mode prohibition
+- [ ] 2.8 **Preview-deploy spike** (owner-blocking, design open question) — **BLOCKED, not complete.** Requires a deploy only the owner can trigger. The exact observation checklist is in `apply-progress.md` → "Task 2.8 — owner checklist". Must pass **before** Slices 3–4 branch
+- [x] 2.9 Verify: `pnpm test && pnpm typecheck`
 
 ### Slice 3 — `feat/auth-routes`
 
