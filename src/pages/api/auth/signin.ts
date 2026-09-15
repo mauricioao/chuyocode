@@ -1,8 +1,18 @@
 /**
  * POST /api/auth/signin — request a magic link. Step one of two.
  *
- * Takes an email address and asks Supabase to send a `token_hash` link pointing
- * at `/api/auth/confirm`. It creates no session; only the confirm route does.
+ * Takes an email address and asks Supabase to email a link pointing at
+ * `/api/auth/confirm`. It creates no session; only the confirm route does.
+ *
+ * ⚠️ THIS RESPONSE CARRIES THE PKCE CODE VERIFIER, WHICH IS WHY THE LINK IS
+ * BROWSER-BOUND. `@supabase/ssr` runs the PKCE flow, so `signInWithOtp` mints a
+ * code verifier here and the session client writes it as a cookie on THIS
+ * response. `/api/auth/confirm` needs that cookie back to exchange the emailed
+ * `code`. The consequence is a limitation worth knowing before debugging a
+ * "broken" link: the mail must be opened in the SAME BROWSER that submitted this
+ * form. Requested on a laptop, clicked on a phone, there is no verifier and
+ * confirmation fails. `src/pages/api/auth/confirm.ts` documents the full flow
+ * and the `token_hash` path that is exempt from this.
  *
  * 🔴 THE RESPONSE IS THE SAME BYTES NO MATTER WHAT HAPPENS (threat matrix T3).
  * Same status, same body, same headers, whether the address has an account, has

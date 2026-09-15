@@ -5,9 +5,28 @@
 **Mode**: Strict TDD · **Test runner**: `pnpm test` → `vitest run`
 **Batches so far**: Slice 1 (`feat/auth-session-client`, merged as PR #13) · Slice 2 (`feat/auth-middleware`, merged as PR #14) · Slice 2 correction (`4813e6d`, same branch) · Slice 3 (`feat/auth-routes`, local)
 
-This artifact is CUMULATIVE. Rev 2 merged slice 2 into rev 1; rev 3 appended the
-slice-2 correction; rev 4 appends slice 3. Nothing from revs 1–3 was removed
-EXCEPT as recorded in the compression note immediately below.
+> **🔴 THIS FILE IS CLOSED AT SLICE 3. UNITS FROM SLICE 3b ONWARD LIVE IN
+> `apply-progress/`, ONE FILE PER WORK UNIT.**
+>
+> Reason: the cumulative format does not survive its own success. This file
+> reached 47,975 of Engram's silent 50,000-character truncation limit, and the
+> rev-4 append already had to COMPRESS slice 1 to make room — real detail was
+> destroyed to fit a number. One more cumulative append would have forced the
+> same trade again, and the next victim would have been slice 2.
+>
+> A per-unit file has no ceiling to hit, so no future unit ever pays for a past
+> one. Each file carries its own Engram topic key rather than sharing one
+> observation, which is what made the limit binding in the first place.
+>
+> Index of per-unit files:
+> - `apply-progress/slice-03b-confirm-pkce.md` — slice 3 correction: the PKCE
+>   `code` credential and the `STRIPPED_PARAMS` hole.
+>
+> Everything for slices 1–3 stays below, unchanged.
+
+This artifact is CUMULATIVE UP TO SLICE 3. Rev 2 merged slice 2 into rev 1; rev 3
+appended the slice-2 correction; rev 4 appends slice 3. Nothing from revs 1–3 was
+removed EXCEPT as recorded in the compression note immediately below.
 
 > **COMPRESSION NOTE (rev 4).** Engram silently truncates an observation at
 > 50,000 characters, and rev 3 already stood at ~35,000. Appending slice 3 in
