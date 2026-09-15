@@ -8,9 +8,11 @@
  *  - T1 `safeNextPath` — an open redirect on the confirm route is worse than an
  *    ordinary one. The visitor has just authenticated, so a link that looks like
  *    ours and lands them on someone else's page lands them there SIGNED IN.
- *  - T2 `stripAuthParams` — `token_hash` is a single-use session credential. If
- *    it survives into the `Location` header it is written to browser history and
- *    sent in the `Referer` of whatever the destination page loads next.
+ *  - T2 `stripAuthParams` — `token_hash` AND the PKCE `code` are both single-use
+ *    session credentials. If either survives into the `Location` header it is
+ *    written to browser history and sent in the `Referer` of whatever the
+ *    destination page loads next. A suite that proves one and not the other
+ *    passes while the hole is open, so both are covered case for case.
  *
  * Both are pure string functions, so every case here calls production code with
  * a concrete input and asserts a concrete output. No mocks exist in this file.
@@ -144,6 +146,15 @@ describe('stripAuthParams — T2 token leakage', () => {
     expect(stripAuthParams('/es/?token_hash=pkce_abc123')).toBe('/es/');
   });
 
+  it('removes the PKCE `code` from the redirect target', () => {
+    // `code` is a single-use session credential exactly like `token_hash`: it is
+    // what the DEFAULT email template sends, and `exchangeCodeForSession` turns
+    // it into a session. Leaking it into `Location` is the same hole.
+    expect(stripAuthParams('/es/?code=6a1f0c39-2b7d-4e18-9c55-0d3a')).toBe(
+      '/es/',
+    );
+  });
+
   it('removes type from the redirect target', () => {
     expect(stripAuthParams('/es/?type=email')).toBe('/es/');
   });
@@ -154,8 +165,22 @@ describe('stripAuthParams — T2 token leakage', () => {
     ).toBe('/es/ejercicios?nivel=a1');
   });
 
+  it('removes every credential at once and keeps the rest', () => {
+    // A crafted `next` is free to carry BOTH flavours of credential plus real
+    // parameters. Only the credentials leave.
+    expect(
+      stripAuthParams('/es/ejercicios?code=abc&token_hash=def&nivel=a1'),
+    ).toBe('/es/ejercicios?nivel=a1');
+  });
+
   it('removes REPEATED occurrences of the same parameter', () => {
     expect(stripAuthParams('/es/?token_hash=a&token_hash=b&nivel=a1')).toBe(
+      '/es/?nivel=a1',
+    );
+  });
+
+  it('removes REPEATED occurrences of `code`', () => {
+    expect(stripAuthParams('/es/?code=a&code=b&nivel=a1')).toBe(
       '/es/?nivel=a1',
     );
   });
