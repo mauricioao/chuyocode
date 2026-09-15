@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // `astro:middleware` is a virtual module only available inside the Astro
 // runtime. In unit tests we stub it: defineMiddleware is an identity wrapper
@@ -44,6 +44,30 @@ function armSession(getUserResult: unknown) {
     pendingHeaders,
   });
   return { pendingHeaders, getUser };
+}
+
+/**
+ * Arm the stubbed session client with a `getUser()` that REJECTS.
+ *
+ * This is the unreachable-Supabase shape, and it is NOT the same as
+ * `anonymous(error)`. A token Supabase dislikes comes back as
+ * `{ data: { user: null }, error }` — a value. A network that never answers
+ * throws. Only the throw can reach Astro uncaught, so only the throw can turn
+ * an outage into a site-wide 500, and it gets its own arming helper for that.
+ */
+function armUnreachableSession(reason: unknown) {
+  const pendingHeaders = new Map<string, string>();
+  const getUser = vi.fn().mockRejectedValue(reason);
+  createSessionClient.mockReturnValue({
+    client: { auth: { getUser } },
+    pendingHeaders,
+  });
+  return { pendingHeaders, getUser };
+}
+
+/** Silence and capture the house `console.error` reporting channel. */
+function spyOnConsoleError() {
+  return vi.spyOn(console, 'error').mockImplementation(() => {});
 }
 
 /** Build a minimal Astro middleware context for a given pathname. */
@@ -263,5 +287,62 @@ describe('session resolution (design §1 ordering)', () => {
     const res = await result;
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('OK');
+  });
+});
+
+// Identity resolution fails OPEN. The role guards and the mutating endpoints
+// fail CLOSED. See the module header of `src/middleware.ts` — that asymmetry is
+// the decision, not an inconsistency waiting to be tidied up.
+describe('identity resolution fails open when getUser() throws', () => {
+  let consoleError: ReturnType<typeof spyOnConsoleError>;
+
+  beforeEach(() => {
+    consoleError = spyOnConsoleError();
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+  });
+
+  it('renders the page as anonymous instead of returning a 500', async () => {
+    const { getUser } = armUnreachableSession(new Error('fetch failed'));
+    const { result, locals } = run('/es/libros');
+    const res = await result;
+    expect(getUser).toHaveBeenCalledOnce();
+    // The whole point: a Supabase blip must not take down the books page,
+    // which renders no authenticated content whatsoever.
+    expect(res.status).not.toBe(500);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('OK');
+    expect(next).toHaveBeenCalledOnce();
+    expect(locals.user).toBeNull();
+    // Routing still happened: the catch covers the `getUser()` call and
+    // nothing else.
+    expect(locals.lang).toBe('es');
+  });
+
+  it('degrades the same way on /api routes, where the guards live', async () => {
+    armUnreachableSession(new Error('ECONNRESET'));
+    const { result, locals } = run('/api/reacciones/abc');
+    const res = await result;
+    expect(res.status).toBe(200);
+    // No user means every downstream guard denies exactly as it would for an
+    // anonymous visitor. Failing open here opens nothing.
+    expect(locals.user).toBeNull();
+    expect(locals.lang).toBeUndefined();
+  });
+
+  it('reports the failure through the house console.error idiom', async () => {
+    const reason = new Error('fetch failed');
+    armUnreachableSession(reason);
+    const { result } = run('/es/libros');
+    await result;
+    // A bare `catch {}` would hide a programming error behind a site that is
+    // permanently signed out — worse than the 500 it replaced. Same shape as
+    // `src/lib/exercises.ts` and `src/lib/sanity.ts`.
+    expect(consoleError).toHaveBeenCalledWith(
+      '[middleware] getUser() threw:',
+      reason,
+    );
   });
 });

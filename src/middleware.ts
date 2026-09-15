@@ -20,6 +20,26 @@ import { createSessionClient } from '@lib/supabaseSession';
  *  - Everything else resolves the caller through `getUser()`, which is the only
  *    Supabase call that revalidates the token server-side. `getSession()` is
  *    never used for an authorization decision anywhere in this codebase.
+ *  - Identity resolution fails OPEN. A token Supabase dislikes already comes
+ *    back as a value (`{ data: { user: null }, error }`), but an unreachable
+ *    Supabase THROWS, and an uncaught throw in middleware is a 500 on every
+ *    page. So the call is wrapped, and a rejection degrades to
+ *    `locals.user = null` and renders.
+ *
+ * That last rule is deliberate, and it is deliberately the OPPOSITE of what
+ * `src/lib/roles.ts` is specified to do. They are different jobs with different
+ * blast radii:
+ *
+ *  - Resolving identity answers "who is this?". Answering "nobody" during an
+ *    outage costs one visitor a session they already had. THROWING costs every
+ *    visitor every page — books, news and exercises included, none of which
+ *    read `locals.user` at all. So it fails OPEN.
+ *  - Enforcing permission answers "may they do this?". Answering "yes" when it
+ *    cannot tell hands out access nobody granted. So it fails CLOSED.
+ *
+ * Failing open here opens nothing: with no user, every downstream role guard
+ * and every mutating endpoint denies exactly as it would for an anonymous
+ * visitor. Do not "fix" one direction to match the other.
  *
  * Ordering is the design (design §1) and is not incidental: the redirect and the
  * 404 come before the session gate so they cost no round trip, and the header
@@ -103,8 +123,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // `getUser()` is both the identity check and the session refresh. It costs one
   // authenticated round trip per request, which is the documented safe price of
   // a server-verified session.
-  const { data } = await client.auth.getUser();
-  context.locals.user = data.user ?? null;
+  //
+  // The `try` wraps this ONE call and nothing else, so a bug anywhere later in
+  // the handler still surfaces as the error it is.
+  try {
+    const { data } = await client.auth.getUser();
+    context.locals.user = data.user ?? null;
+  } catch (err) {
+    // `locals.user` is still the `null` assigned at the top of the handler, so
+    // the request renders signed out rather than dying. Reported, never
+    // swallowed: a silent catch would hide a programming error behind a site
+    // that is permanently anonymous, which is worse than the 500 it replaced.
+    console.error('[middleware] getUser() threw:', err);
+  }
 
   const response = await next();
 
