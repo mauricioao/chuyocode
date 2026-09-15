@@ -31,10 +31,10 @@
 import {
   createServerClient,
   parseCookieHeader,
+  serializeCookieHeader,
   type CookieOptions,
 } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AstroCookies } from 'astro';
 import { loadEnv } from './env';
 
 const env = loadEnv();
@@ -65,36 +65,95 @@ export function sessionCookieOptions(isProd: boolean): CookieOptions {
   return { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' };
 }
 
-/** What `createSessionClient` hands back to middleware and API routes. */
-export interface SessionClient {
-  /** Request-scoped Supabase client. Resolve identity with `auth.getUser()`. */
-  client: SupabaseClient;
+/** The buffered response state one request's Supabase client accumulated. */
+export interface SessionState {
   /**
    * Response headers Supabase asked for while writing auth cookies (cache
    * directives that keep a session response out of a shared cache).
-   *
-   * They are buffered rather than applied because middleware cannot reach the
-   * `Response` until `next()` resolves. The caller MUST flush this map onto the
-   * response headers after `next()`. Cookies need no such buffering:
-   * `AstroCookies` already targets the outgoing response.
    */
   pendingHeaders: Map<string, string>;
+  /**
+   * Fully serialized `Set-Cookie` values, in the order Supabase produced them.
+   *
+   * 🔴 A LIST, NOT A MAP KEYED BY NAME. `@supabase/ssr` deliberately emits two
+   * directives for the SAME cookie name when a parent domain is configured — a
+   * host-only clear beside a domain-scoped one — because the browser returns
+   * both and a stale one resurrects a session that was signed out. Anything
+   * keyed by name silently collapses that pair into whichever came last.
+   */
+  pendingCookies: string[];
+}
+
+/** What `createSessionClient` hands back to middleware and API routes. */
+export interface SessionClient extends SessionState {
+  /** Request-scoped Supabase client. Resolve identity with `auth.getUser()`. */
+  client: SupabaseClient;
+}
+
+/**
+ * Put everything Supabase buffered onto the headers of a response.
+ *
+ * 🔴 EVERY CALLER MUST DO THIS, AND MUST DO IT ON THE `Response` IT RETURNS.
+ * Nothing here reaches a browser on its own.
+ *
+ * This module used to write through `AstroCookies` instead, which reaches the
+ * wire by a route nothing in this repo owns: Astro attaches its cookie jar to
+ * whatever `Response` a route returns, and the Netlify adapter consumes the jar
+ * and appends the directives afterwards. That works right up until a version
+ * bump or an adapter option changes one of those two steps, and when it breaks
+ * it breaks silently — no error, no log, a visitor who is simply never signed
+ * in. It is also untestable from here: the header does not exist yet on the
+ * object the route hands back, so a test can only assert that the cookie jar
+ * was CALLED. A suite of 1062 passing tests did exactly that while the browser
+ * received no `Set-Cookie` at all.
+ *
+ * Putting the directives on the returned `Response` fixes both: it is the same
+ * thing `src/pages/api/me-gusta/[id].ts` already does with its dedup cookie,
+ * it is what Supabase documents for frameworks that build their own responses,
+ * and it is assertable by the caller.
+ *
+ * 🔴 ONE MECHANISM, DELIBERATELY. Keeping the `AstroCookies` writes as well
+ * would send every cookie TWICE, because the adapter appends the jar's copy on
+ * top of this one. Two copies of a `Max-Age=0` clear beside a fresh session
+ * cookie is not belt-and-braces, it is a race over which one the browser keeps.
+ *
+ * Headers are `set` (a second `Cache-Control` is an ambiguous directive, not a
+ * stricter one) and cookies are `append` (several are legitimate, and a `set`
+ * would drop one the route put there itself).
+ *
+ * @param headers - The outgoing response headers, mutated in place.
+ * @param session - The buffered state from {@link createSessionClient}.
+ */
+export function flushSessionHeaders(
+  headers: Headers,
+  session: SessionState,
+): void {
+  for (const [key, value] of session.pendingHeaders) {
+    headers.set(key, value);
+  }
+
+  for (const cookie of session.pendingCookies) {
+    headers.append('set-cookie', cookie);
+  }
 }
 
 /**
  * Build a Supabase client bound to one request's cookies.
  *
+ * Takes no cookie jar: the write side is the `pendingCookies` buffer, flushed
+ * by the caller through {@link flushSessionHeaders}. See that function for why
+ * the framework's jar is not an option here.
+ *
  * @param args.request - The incoming request; its `Cookie` header is the read side.
- * @param args.cookies - Astro's cookie jar for the outgoing response; the write side.
  * @param args.isProd - Whether this deployment is production. See {@link sessionCookieOptions}.
  */
 export function createSessionClient(args: {
   request: Request;
-  cookies: AstroCookies;
   isProd: boolean;
 }): SessionClient {
-  const { request, cookies, isProd } = args;
+  const { request, isProd } = args;
   const pendingHeaders = new Map<string, string>();
+  const pendingCookies: string[] = [];
 
   const client = createServerClient(
     env.SUPABASE_URL,
@@ -117,14 +176,12 @@ export function createSessionClient(args: {
         },
         setAll(cookiesToSet, headers) {
           for (const { name, value, options } of cookiesToSet) {
-            // An empty value means "remove this cookie". `set(name, '')` would
-            // leave a live, empty cookie behind — sign-out would then look
-            // like it worked while the browser kept a cookie for the name.
-            if (value === '') {
-              cookies.delete(name, options);
-            } else {
-              cookies.set(name, value, options);
-            }
+            // Serialized verbatim, removals included. `@supabase/ssr` asks for
+            // a removal as an empty value with `maxAge: 0` in `options`, so the
+            // directive that expires the cookie is already fully described
+            // here; re-deriving it would be a second, divergent opinion about
+            // what "remove" means.
+            pendingCookies.push(serializeCookieHeader(name, value, options));
           }
 
           for (const [key, headerValue] of Object.entries(headers ?? {})) {
@@ -135,5 +192,5 @@ export function createSessionClient(args: {
     },
   );
 
-  return { client, pendingHeaders };
+  return { client, pendingHeaders, pendingCookies };
 }

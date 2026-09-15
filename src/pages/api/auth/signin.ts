@@ -46,7 +46,11 @@ import type { APIRoute } from 'astro';
 import { safeNextPath } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
 import { DEFAULT_LANG, isValidLang } from '@lib/i18n';
-import { createSessionClient } from '@lib/supabaseSession';
+import {
+  createSessionClient,
+  flushSessionHeaders,
+  type SessionClient,
+} from '@lib/supabaseSession';
 
 /** The body shape the sign-in form posts. */
 interface SignInBody {
@@ -69,16 +73,31 @@ function looksLikeEmail(value: unknown): value is string {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-/** The single response every caller gets, built fresh each time. */
-function uniformAccepted(): Response {
+/**
+ * The single response every caller gets, built fresh each time.
+ *
+ * 🔴 THE PKCE VERIFIER COOKIE GOES ON *THIS* OBJECT. It is the only thing the
+ * caller receives, so a verifier that is not on these headers never reaches the
+ * browser, and every link this endpoint triggers is dead before it is sent.
+ *
+ * Flushing here keeps T3 intact rather than threatening it: a verifier is
+ * minted before Supabase is ever asked about the address, so both a known and
+ * an unknown address carry one. `null` means no client was even built — a
+ * malformed body, or an environment so broken that construction threw — and
+ * those paths mint nothing, so there is nothing to make them differ.
+ */
+function uniformAccepted(session: SessionClient | null): Response {
   const headers = new Headers({
     'content-type': 'application/json; charset=utf-8',
   });
+  if (session) {
+    flushSessionHeaders(headers, session);
+  }
   markPrivate(headers);
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
 }
 
-export const POST: APIRoute = async ({ request, cookies }) => {
+export const POST: APIRoute = async ({ request }) => {
   let body: SignInBody;
   try {
     body = (await request.json()) as SignInBody;
@@ -100,14 +119,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const confirmUrl = new URL('/api/auth/confirm', request.url);
   confirmUrl.searchParams.set('next', next);
 
+  // Declared out here so the response can still carry whatever was buffered
+  // before a failure, and stays `null` when construction itself threw.
+  let session: SessionClient | null = null;
+
   try {
-    const { client } = createSessionClient({
+    session = createSessionClient({
       request,
-      cookies,
       isProd: import.meta.env?.PROD === true,
     });
 
-    const { error } = await client.auth.signInWithOtp({
+    const { error } = await session.client.auth.signInWithOtp({
       email,
       options: {
         // Read back server-side when a moderation email is sent (design §9).
@@ -127,5 +149,5 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     console.error('[auth/signin] signInWithOtp threw:', err);
   }
 
-  return uniformAccepted();
+  return uniformAccepted(session);
 };

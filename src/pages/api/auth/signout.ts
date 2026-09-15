@@ -2,11 +2,12 @@
  * POST /api/auth/signout — end the session.
  *
  * `signOut()` clears the session cookies through the same `setAll` adapter the
- * confirm route sets them with: the library hands back an empty value per
- * cookie, and `src/lib/supabaseSession.ts` turns that into `cookies.delete`.
- * That is what makes the CHUNKED `sb-…-auth-token.0` / `.1` pair a real JWT
- * produces disappear together — the route never names a cookie itself, so it
- * cannot miss one when the chunk count changes.
+ * confirm route sets them with: the library hands back an empty value and a
+ * `maxAge: 0` per cookie, and `src/lib/supabaseSession.ts` serializes that into
+ * a `Set-Cookie` this route flushes onto its response. That is what makes the
+ * CHUNKED `sb-…-auth-token.0` / `.1` pair a real JWT produces disappear
+ * together — the route never names a cookie itself, so it cannot miss one when
+ * the chunk count changes.
  *
  * 🔴 POST-ONLY, AND THAT IS A SECURITY PROPERTY, NOT A STYLE CHOICE. With
  * `sameSite: 'lax'` the browser does not attach the session cookie to a
@@ -21,9 +22,12 @@
 import type { APIRoute } from 'astro';
 import { safeNextPath } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
-import { createSessionClient } from '@lib/supabaseSession';
+import {
+  createSessionClient,
+  flushSessionHeaders,
+} from '@lib/supabaseSession';
 
-export const POST: APIRoute = async ({ request, cookies }) => {
+export const POST: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
 
   // Home by default — `safeNextPath(null)` IS the default-locale home. An
@@ -32,14 +36,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   // link cannot become an open redirect either.
   const target = safeNextPath(url.searchParams.get('next'));
 
-  const { client, pendingHeaders } = createSessionClient({
+  const session = createSessionClient({
     request,
-    cookies,
     isProd: import.meta.env?.PROD === true,
   });
 
   try {
-    const { error } = await client.auth.signOut();
+    const { error } = await session.client.auth.signOut();
     if (error) {
       console.error('[auth/signout] signOut failed:', error.message);
     }
@@ -47,10 +50,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     console.error('[auth/signout] signOut threw:', err);
   }
 
+  // 🔴 THE CLEARING DIRECTIVES GO ON *THIS* OBJECT. `signOut()` returning
+  // without an error only means Supabase revoked the refresh token on its side.
+  // The browser keeps whatever it holds until this response tells it otherwise,
+  // and it presents that cookie on the very next request.
   const headers = new Headers({ location: target });
-  for (const [key, value] of pendingHeaders) {
-    headers.set(key, value);
-  }
+  flushSessionHeaders(headers, session);
   // Applied last: the response carries the cookie deletions, and a cached copy
   // would either hand a later visitor a sign-out or hide this one.
   markPrivate(headers);

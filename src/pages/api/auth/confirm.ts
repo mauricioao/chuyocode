@@ -2,8 +2,9 @@
  * GET /api/auth/confirm — the magic link lands here. Step two of two.
  *
  * Establishes the session server-side, which is what makes the session cookies
- * appear: the Supabase client writes them through the `setAll` adapter in
- * `src/lib/supabaseSession.ts`. It is GET because a link in an email can only
+ * appear: the Supabase client hands them to the `setAll` adapter in
+ * `src/lib/supabaseSession.ts`, which buffers them, and this route flushes them
+ * onto the `Response` it returns. It is GET because a link in an email can only
  * be a GET.
  *
  * 🔴 TWO CREDENTIALS ARRIVE HERE, AND THE ROUTE MUST KNOW BOTH.
@@ -80,20 +81,29 @@ import {
   withAuthError,
 } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
-import { createSessionClient } from '@lib/supabaseSession';
+import {
+  createSessionClient,
+  flushSessionHeaders,
+  type SessionState,
+} from '@lib/supabaseSession';
 
 /**
  * Build the 303.
  *
- * `pendingHeaders` is flushed FIRST and the cache directive applied AFTER, so a
- * permissive value the library asked for cannot end up caching a response that
- * carries a freshly minted session cookie.
+ * 🔴 THE SESSION COOKIE GOES ON *THIS* OBJECT, ON EVERY EXIT. A redemption that
+ * succeeds and then answers with no `Set-Cookie` is not a sign-in: the visitor
+ * lands on the page they asked for, still anonymous, with no error anywhere to
+ * explain it. The failure exits need it just as much — a spent flow retires its
+ * verifier, and a clear that never leaves the server leaves the browser holding
+ * one the server has already forgotten.
+ *
+ * The buffered state is flushed FIRST and the cache directive applied AFTER, so
+ * a permissive value the library asked for cannot end up caching a response
+ * that carries a freshly minted session cookie.
  */
-function redirect(target: string, pendingHeaders: Map<string, string>) {
+function redirect(target: string, session: SessionState) {
   const headers = new Headers({ location: target });
-  for (const [key, value] of pendingHeaders) {
-    headers.set(key, value);
-  }
+  flushSessionHeaders(headers, session);
   markPrivate(headers);
 
   return new Response(null, {
@@ -132,7 +142,7 @@ function selectCredential(params: URLSearchParams): Credential | null {
   return null;
 }
 
-export const GET: APIRoute = async ({ request, cookies }) => {
+export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
   const credential = selectCredential(url.searchParams);
 
@@ -140,16 +150,15 @@ export const GET: APIRoute = async ({ request, cookies }) => {
   // source for this value, which is the first of the two T2 barriers.
   const target = stripAuthParams(safeNextPath(url.searchParams.get('next')));
 
-  const { client, pendingHeaders } = createSessionClient({
+  const session = createSessionClient({
     request,
-    cookies,
     isProd: import.meta.env?.PROD === true,
   });
 
   // A bare `/api/auth/confirm` is a crawler or a truncated link, not a visitor
   // holding a credential. Nothing to redeem, so no round trip is spent on it.
   if (!credential) {
-    return redirect(withAuthError(target), pendingHeaders);
+    return redirect(withAuthError(target), session);
   }
 
   try {
@@ -157,8 +166,8 @@ export const GET: APIRoute = async ({ request, cookies }) => {
     // `token_hash`; the module header explains why that fallback is an attack.
     const { error } =
       credential.kind === 'code'
-        ? await client.auth.exchangeCodeForSession(credential.value)
-        : await client.auth.verifyOtp({
+        ? await session.client.auth.exchangeCodeForSession(credential.value)
+        : await session.client.auth.verifyOtp({
             type: 'email',
             token_hash: credential.value,
           });
@@ -171,14 +180,14 @@ export const GET: APIRoute = async ({ request, cookies }) => {
         `[auth/confirm] ${credential.kind} rejected:`,
         error.message,
       );
-      return redirect(withAuthError(target), pendingHeaders);
+      return redirect(withAuthError(target), session);
     }
   } catch (err) {
     // An unreachable Supabase throws. A 500 here would be a dead end on a link
     // the visitor did nothing wrong to receive; the invitation is actionable.
     console.error(`[auth/confirm] ${credential.kind} threw:`, err);
-    return redirect(withAuthError(target), pendingHeaders);
+    return redirect(withAuthError(target), session);
   }
 
-  return redirect(target, pendingHeaders);
+  return redirect(target, session);
 };

@@ -15,7 +15,22 @@ const { createSessionClient } = vi.hoisted(() => ({
   createSessionClient: vi.fn(),
 }));
 
-vi.mock('@lib/supabaseSession', () => ({ createSessionClient }));
+// `@lib/supabaseSession` reads the Supabase URL / anon key at module init, and
+// only `createSessionClient` is stubbed, so the module really loads.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({
+    SUPABASE_URL: 'https://x.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+  }),
+}));
+
+vi.mock('@lib/supabaseSession', async (importActual) => {
+  // 🔴 `flushSessionHeaders` IS DELIBERATELY NOT MOCKED. Whether a rotated
+  // session cookie actually lands on the response is the thing under test, and
+  // a stub would assert the call instead of the outcome.
+  const actual = await importActual<typeof import('@lib/supabaseSession')>();
+  return { ...actual, createSessionClient };
+});
 
 import { onRequest, needsSession } from './middleware';
 
@@ -38,12 +53,14 @@ function anonymous(error: unknown = null) {
  */
 function armSession(getUserResult: unknown) {
   const pendingHeaders = new Map<string, string>();
+  const pendingCookies: string[] = [];
   const getUser = vi.fn().mockResolvedValue(getUserResult);
   createSessionClient.mockReturnValue({
     client: { auth: { getUser } },
     pendingHeaders,
+    pendingCookies,
   });
-  return { pendingHeaders, getUser };
+  return { pendingHeaders, pendingCookies, getUser };
 }
 
 /**
@@ -57,12 +74,14 @@ function armSession(getUserResult: unknown) {
  */
 function armUnreachableSession(reason: unknown) {
   const pendingHeaders = new Map<string, string>();
+  const pendingCookies: string[] = [];
   const getUser = vi.fn().mockRejectedValue(reason);
   createSessionClient.mockReturnValue({
     client: { auth: { getUser } },
     pendingHeaders,
+    pendingCookies,
   });
-  return { pendingHeaders, getUser };
+  return { pendingHeaders, pendingCookies, getUser };
 }
 
 /** Silence and capture the house `console.error` reporting channel. */
@@ -241,12 +260,11 @@ describe('session resolution (design §1 ordering)', () => {
     expect(locals.lang).toBe('es');
   });
 
-  it('builds the client from this request, its cookie jar, and the environment', async () => {
-    const { request, cookies, result } = run('/es/libros');
+  it('builds the client from this request and the environment', async () => {
+    const { request, result } = run('/es/libros');
     await result;
     expect(createSessionClient).toHaveBeenCalledWith({
       request,
-      cookies,
       // Vitest runs with `import.meta.env.PROD` false, which is the
       // local-development branch: `secure` off, so the cookie survives http://.
       isProd: false,
@@ -287,6 +305,39 @@ describe('session resolution (design §1 ordering)', () => {
     const res = await result;
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('OK');
+  });
+
+  // 🔴 A REFRESHED TOKEN THAT NEVER REACHES THE BROWSER IS A SILENT LOGOUT.
+  // `getUser()` rotates the session, and the rotated cookie is buffered exactly
+  // like the auth endpoints' cookies are. Middleware is the only place that can
+  // put it on the response, because the `Response` does not exist until
+  // `next()` resolves.
+  it('flushes the rotated session cookie onto the response after next()', async () => {
+    const { pendingCookies } = armSession(signedIn('user-5'));
+    pendingCookies.push('sb-x-auth-token=rotated; Path=/; HttpOnly');
+    const { result } = run('/es/libros');
+    const res = await result;
+    expect(res.headers.getSetCookie()).toEqual([
+      'sb-x-auth-token=rotated; Path=/; HttpOnly',
+    ]);
+  });
+
+  it('emits each rotated cookie exactly once', async () => {
+    // Middleware and the framework's cookie jar writing the same cookie would
+    // send it twice, and the browser keeps whichever arrived last.
+    const { pendingCookies } = armSession(signedIn('user-6'));
+    pendingCookies.push('sb-x-auth-token.0=a; Path=/', 'sb-x-auth-token.1=b; Path=/');
+    const { result } = run('/es/libros');
+    const res = await result;
+    expect(res.headers.getSetCookie()).toHaveLength(2);
+  });
+
+  it('adds no cookie to the response when the session was not rotated', async () => {
+    const { pendingCookies } = armSession(signedIn('user-7'));
+    expect(pendingCookies).toEqual([]);
+    const { result } = run('/es/libros');
+    const res = await result;
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 });
 

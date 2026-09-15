@@ -20,11 +20,13 @@
  * each asserted on the OBSERVABLE outcome (status, `Location`, which Supabase
  * call was made) rather than on the provider's internals.
  *
- * SCOPE NOTE. Writing the session cookies is `@supabase/ssr`'s job through the
- * adapter proven in `src/lib/supabaseSession.test.ts`; this file proves the
- * ROUTE's decisions — what it calls, with what, and where it sends the visitor.
- * The two together are still not an end-to-end magic link: that needs a real
- * email and is recorded as blocked.
+ * SCOPE NOTE. DECIDING the session cookies is `@supabase/ssr`'s job through the
+ * adapter proven in `src/lib/supabaseSession.test.ts`. DELIVERING them is this
+ * route's, and the last block below is the one that proves it: every exit
+ * asserts the `Set-Cookie` on the `Response` object the handler returns. The
+ * rest proves the route's decisions — what it calls, with what, and where it
+ * sends the visitor. All of it together is still not an end-to-end magic link:
+ * that needs a real email and is recorded as blocked.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DEFAULT_LANG } from '@lib/i18n';
@@ -35,22 +37,39 @@ const {
   verifyOtpMock,
   exchangeCodeMock,
   pendingHeaders,
+  pendingCookies,
 } = vi.hoisted(() => ({
   createSessionClientMock: vi.fn(),
   verifyOtpMock: vi.fn(),
   exchangeCodeMock: vi.fn(),
   pendingHeaders: new Map<string, string>(),
+  pendingCookies: [] as string[],
 }));
 
-vi.mock('@lib/supabaseSession', () => ({
-  createSessionClient: createSessionClientMock,
+// `@lib/supabaseSession` reads the Supabase URL / anon key at module init, and
+// only `createSessionClient` is stubbed below, so the module really loads.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'anon-key' }),
 }));
+
+vi.mock('@lib/supabaseSession', async (importActual) => {
+  // 🔴 `flushSessionHeaders` IS DELIBERATELY NOT MOCKED — see the SET-COOKIE
+  // block below for why asserting on the Response is the whole point.
+  const actual = await importActual<typeof import('@lib/supabaseSession')>();
+  return { ...actual, createSessionClient: createSessionClientMock };
+});
 
 import { GET } from './confirm';
 
 const TOKEN = 'pkce_9f3c1d7e2b';
 /** What Supabase's DEFAULT email template actually delivers, as `?code=`. */
 const CODE = '6a1f0c39-2b7d-4e18-9c55-0d3a71b4e9cf';
+/** The session cookie a successful redemption writes, as it goes on the wire. */
+const SESSION_COOKIE =
+  'sb-x-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJhdCJ9; Max-Age=34560000; Path=/; HttpOnly; SameSite=Lax';
+/** The directive that retires a spent PKCE verifier, set or rejected alike. */
+const VERIFIER_CLEAR =
+  'sb-x-auth-token-code-verifier=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax';
 
 /** The auth surface both credential paths are dispatched against. */
 function authStub() {
@@ -63,10 +82,9 @@ function ctx(query: string) {
     `https://chuyocode.com/api/auth/confirm${query}`,
     { method: 'GET' },
   );
-  return {
-    request,
-    cookies: { set: vi.fn(), delete: vi.fn() },
-  } as unknown as Parameters<typeof GET>[0];
+  // No cookie jar: the route never touches one. Its cookies ride on the
+  // `Response` it returns, which is what the SET-COOKIE block asserts.
+  return { request } as unknown as Parameters<typeof GET>[0];
 }
 
 /** The `Location` header of a redirect response. */
@@ -85,9 +103,11 @@ function otpArgs() {
 beforeEach(() => {
   vi.clearAllMocks();
   pendingHeaders.clear();
+  pendingCookies.length = 0;
   createSessionClientMock.mockReturnValue({
     client: { auth: authStub() },
     pendingHeaders,
+    pendingCookies,
   });
   verifyOtpMock.mockResolvedValue({
     data: { user: { id: 'user-1' } },
@@ -379,7 +399,7 @@ describe('GET /api/auth/confirm — response mechanics', () => {
   it('flushes the headers Supabase asked for while writing cookies', async () => {
     createSessionClientMock.mockImplementation(() => {
       pendingHeaders.set('x-supabase-hint', 'refreshed');
-      return { client: { auth: authStub() }, pendingHeaders };
+      return { client: { auth: authStub() }, pendingHeaders, pendingCookies };
     });
 
     const res = await GET(ctx(`?token_hash=${TOKEN}&type=email`));
@@ -392,11 +412,88 @@ describe('GET /api/auth/confirm — response mechanics', () => {
     // so it is applied after anything the library asked for.
     createSessionClientMock.mockImplementation(() => {
       pendingHeaders.set('cache-control', 'public, max-age=3600');
-      return { client: { auth: authStub() }, pendingHeaders };
+      return { client: { auth: authStub() }, pendingHeaders, pendingCookies };
     });
 
     const res = await GET(ctx(`?token_hash=${TOKEN}&type=email`));
 
     expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+describe('GET /api/auth/confirm — the session cookie reaches the browser', () => {
+  // 🔴 REDEMPTION WITHOUT A `Set-Cookie` IS NOT A SIGN-IN. This route's job is
+  // to turn a one-use credential into a session the NEXT request can present.
+  // If the 303 carries no cookie, `exchangeCodeForSession` succeeded, the
+  // visitor is redirected to the page they asked for, and they are still
+  // anonymous when it renders — a failure with no error and no log.
+  //
+  // The old suite asserted which Supabase call was made and stopped there.
+  // These assert on the Response object the route returns.
+  it('carries the session cookie on a successful code exchange', async () => {
+    pendingCookies.push(SESSION_COOKIE);
+
+    const res = await GET(ctx(`?code=${CODE}&next=%2Fes%2Flibros`));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.getSetCookie()).toEqual([SESSION_COOKIE]);
+  });
+
+  it('carries the session cookie on a successful token_hash redemption', async () => {
+    pendingCookies.push(SESSION_COOKIE);
+
+    const res = await GET(ctx(`?token_hash=${TOKEN}&type=email`));
+
+    expect(res.headers.getSetCookie()).toEqual([SESSION_COOKIE]);
+  });
+
+  it('carries the clearing directive when the redemption is rejected', async () => {
+    // A spent or invalid flow retires its verifier. That directive has to reach
+    // the browser too, or the next attempt starts against a stale verifier the
+    // server already forgot.
+    exchangeCodeMock.mockResolvedValue({
+      data: {},
+      error: { message: 'invalid flow state' },
+    });
+    pendingCookies.push(VERIFIER_CLEAR);
+
+    const res = await GET(ctx(`?code=${CODE}`));
+
+    expect(location(res)).toContain(
+      `${AUTH_ERROR_PARAM}=${AUTH_ERROR_LINK_INVALID}`,
+    );
+    expect(res.headers.getSetCookie()).toEqual([VERIFIER_CLEAR]);
+  });
+
+  it('carries the clearing directive when the provider is unreachable', async () => {
+    exchangeCodeMock.mockRejectedValue(new Error('fetch failed'));
+    pendingCookies.push(VERIFIER_CLEAR);
+
+    const res = await GET(ctx(`?code=${CODE}`));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.getSetCookie()).toEqual([VERIFIER_CLEAR]);
+  });
+
+  it('emits every buffered directive exactly once, in order', async () => {
+    // A rotation clears the spent verifier and writes the session in the same
+    // response. Two names, two directives, no duplicates: writing through
+    // Astro's cookie jar as well would double each of them.
+    pendingCookies.push(VERIFIER_CLEAR, SESSION_COOKIE);
+
+    const res = await GET(ctx(`?code=${CODE}`));
+
+    expect(res.headers.getSetCookie()).toEqual([
+      VERIFIER_CLEAR,
+      SESSION_COOKIE,
+    ]);
+  });
+
+  it('sets no cookie when the link carried no credential at all', async () => {
+    // A bare `/api/auth/confirm` is a crawler or a truncated link. Nothing is
+    // redeemed, so Supabase buffers nothing and the 303 carries nothing.
+    const res = await GET(ctx(''));
+
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 });

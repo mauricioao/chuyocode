@@ -1,6 +1,9 @@
 import { defineMiddleware } from 'astro:middleware';
 import { DEFAULT_LANG, isValidLang, type Lang } from '@lib/i18n';
-import { createSessionClient } from '@lib/supabaseSession';
+import {
+  createSessionClient,
+  flushSessionHeaders,
+} from '@lib/supabaseSession';
 
 /**
  * Locale routing and identity resolution (spec 5: Lang Routing · user-identity).
@@ -110,9 +113,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
-  const { client, pendingHeaders } = createSessionClient({
+  const session = createSessionClient({
     request: context.request,
-    cookies: context.cookies,
     // `secure` is the one cookie flag that moves with the environment: a
     // browser discards a `Secure` cookie on `http://localhost`, which would
     // make local sign-in impossible. Same house rule as
@@ -127,7 +129,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // The `try` wraps this ONE call and nothing else, so a bug anywhere later in
   // the handler still surfaces as the error it is.
   try {
-    const { data } = await client.auth.getUser();
+    const { data } = await session.client.auth.getUser();
     context.locals.user = data.user ?? null;
   } catch (err) {
     // `locals.user` is still the `null` assigned at the top of the handler, so
@@ -139,11 +141,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const response = await next();
 
-  // Supabase may have asked for response headers while refreshing the session.
-  // They were buffered because the `Response` did not exist until now.
-  for (const [key, value] of pendingHeaders) {
-    response.headers.set(key, value);
-  }
+  // Supabase may have rotated the session while resolving identity, and asked
+  // for response headers alongside it. Both were buffered because the
+  // `Response` did not exist until now — which is the same reason the auth
+  // endpoints flush onto the `Response` they build: a rotated cookie that never
+  // reaches the browser is a silent logout on the request after this one.
+  flushSessionHeaders(response.headers, session);
 
   return response;
 });
