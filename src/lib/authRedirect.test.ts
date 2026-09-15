@@ -17,7 +17,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_LANG } from './i18n';
-import { safeNextPath, stripAuthParams } from './authRedirect';
+import {
+  AUTH_ERROR_LINK_INVALID,
+  AUTH_ERROR_PARAM,
+  safeNextPath,
+  stripAuthParams,
+  withAuthError,
+} from './authRedirect';
 
 /** Where an untrusted `next` must land instead. */
 const FALLBACK = `/${DEFAULT_LANG}/`;
@@ -172,5 +178,43 @@ describe('stripAuthParams — T2 token leakage', () => {
 
   it('preserves the fragment', () => {
     expect(stripAuthParams('/es/?token_hash=abc#seccion')).toBe('/es/#seccion');
+  });
+});
+
+/**
+ * `withAuthError` shipped under the confirm route's RED cycle, which drove its
+ * existence and its failure-path behaviour. These cases cover it DIRECTLY,
+ * because one of them is a security claim the module header makes and an
+ * untested claim in a comment is just an opinion.
+ */
+describe('withAuthError — the rejected-link marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_ERROR_LINK_INVALID}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withAuthError('/es/')).toBe(`/es/?${MARKER}`);
+  });
+
+  it('keeps the parameters already on the path', () => {
+    expect(withAuthError('/es/ejercicios?nivel=a1')).toBe(
+      `/es/ejercicios?nivel=a1&${MARKER}`,
+    );
+  });
+
+  it('REPLACES an auth value the caller tried to smuggle in', () => {
+    // `next` is attacker-supplied, so a crafted `?auth=…` must not survive
+    // alongside ours and let the link decide what the sign-in page says.
+    expect(withAuthError('/es/?auth=todo-bien')).toBe(`/es/?${MARKER}`);
+  });
+
+  it('leaves only one auth parameter even when several were smuggled', () => {
+    const marked = withAuthError('/es/?auth=uno&auth=dos&nivel=a1');
+
+    expect([...new URLSearchParams(marked.split('?')[1]).getAll('auth')]).toEqual(
+      [AUTH_ERROR_LINK_INVALID],
+    );
+  });
+
+  it('preserves the fragment', () => {
+    expect(withAuthError('/es/#seccion')).toBe(`/es/?${MARKER}#seccion`);
   });
 });
