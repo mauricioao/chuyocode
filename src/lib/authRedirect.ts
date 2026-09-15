@@ -31,6 +31,59 @@ import { DEFAULT_LANG } from './i18n';
 const STRIPPED_PARAMS = ['token_hash', 'type'] as const;
 
 /**
+ * Query parameter the confirm route appends when a magic link did not verify.
+ *
+ * It exists because the `user-identity` spec requires a rejected link to invite
+ * the visitor to request a new one, and the confirm route is a redirect with no
+ * body of its own to say so. The sign-in page reads this marker and renders the
+ * invitation.
+ *
+ * Exported as a constant rather than spelled at both ends: a marker the emitter
+ * and the reader disagree about fails silently, showing nothing at all.
+ */
+export const AUTH_ERROR_PARAM = 'auth';
+
+/** The only failure a visitor can act on: ask for another link. */
+export const AUTH_ERROR_LINK_INVALID = 'link-invalid';
+
+/** A path split into the three parts the helpers below rewrite independently. */
+interface SplitPath {
+  pathname: string;
+  query: string;
+  fragment: string;
+}
+
+/**
+ * Split a same-site path into pathname, query and fragment.
+ *
+ * Hand-rolled rather than delegating to `URL`, because `URL` demands a base and
+ * would hand back an absolute string that then has to be taken apart again. The
+ * fragment is removed FIRST: `#` may legally contain a `?`, so searching for the
+ * query in the whole string would find one inside the fragment.
+ */
+function splitPath(path: string): SplitPath {
+  const hashAt = path.indexOf('#');
+  const fragment = hashAt === -1 ? '' : path.slice(hashAt);
+  const withoutFragment = hashAt === -1 ? path : path.slice(0, hashAt);
+
+  const queryAt = withoutFragment.indexOf('?');
+  return queryAt === -1
+    ? { pathname: withoutFragment, query: '', fragment }
+    : {
+        pathname: withoutFragment.slice(0, queryAt),
+        query: withoutFragment.slice(queryAt + 1),
+        fragment,
+      };
+}
+
+/** Reassemble a split path, dropping a `?` that has nothing behind it. */
+function joinPath({ pathname, query, fragment }: SplitPath): string {
+  return query === ''
+    ? `${pathname}${fragment}`
+    : `${pathname}?${query}${fragment}`;
+}
+
+/**
  * C0 controls and DEL.
  *
  * Browsers STRIP tab, LF and CR from a URL before parsing it, which means a
@@ -170,25 +223,34 @@ export function safeNextPath(raw: string | null | undefined): string {
  * @returns The same path with `token_hash` and `type` removed.
  */
 export function stripAuthParams(path: string): string {
-  const hashAt = path.indexOf('#');
-  const fragment = hashAt === -1 ? '' : path.slice(hashAt);
-  const withoutFragment = hashAt === -1 ? path : path.slice(0, hashAt);
-
-  const queryAt = withoutFragment.indexOf('?');
-  if (queryAt === -1) {
+  const parts = splitPath(path);
+  if (parts.query === '') {
     return path;
   }
 
-  const pathname = withoutFragment.slice(0, queryAt);
-  const params = new URLSearchParams(withoutFragment.slice(queryAt + 1));
+  const params = new URLSearchParams(parts.query);
   for (const name of STRIPPED_PARAMS) {
     // `delete` removes EVERY occurrence, which is what a repeated
     // `?token_hash=a&token_hash=b` requires.
     params.delete(name);
   }
 
-  const query = params.toString();
-  return query === ''
-    ? `${pathname}${fragment}`
-    : `${pathname}?${query}${fragment}`;
+  return joinPath({ ...parts, query: params.toString() });
+}
+
+/**
+ * Mark a redirect target as "that link did not work, ask for another one".
+ *
+ * Used only on the confirm route's failure path. Any existing `auth` parameter
+ * is replaced rather than appended to, so a crafted `next` cannot smuggle a
+ * second value in and decide what the sign-in page says.
+ *
+ * @param path - A same-site path, normally the output of {@link safeNextPath}.
+ */
+export function withAuthError(path: string): string {
+  const parts = splitPath(path);
+  const params = new URLSearchParams(parts.query);
+  params.set(AUTH_ERROR_PARAM, AUTH_ERROR_LINK_INVALID);
+
+  return joinPath({ ...parts, query: params.toString() });
 }
