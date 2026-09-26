@@ -10,11 +10,11 @@
  * in, so a link that looks like ours delivers an authenticated visitor to
  * somebody else's page, primed to trust whatever it says.
  *
- * `stripAuthParams` keeps the single-use `token_hash` out of the `Location`
- * header. A credential that survives into a redirect target is written to
- * browser history and sent in the `Referer` header of the next request the
- * destination page makes — neither of which is a place a session token can be
- * recalled from.
+ * `stripAuthParams` keeps the single-use magic-link credentials — `token_hash`
+ * and the PKCE `code` — out of the `Location` header. A credential that survives
+ * into a redirect target is written to browser history and sent in the `Referer`
+ * header of the next request the destination page makes — neither of which is a
+ * place a session token can be recalled from.
  *
  * Kept in `src/lib/` rather than inside the route files so the rules are unit
  * tested directly instead of through a Request/Response round trip.
@@ -24,11 +24,18 @@ import { DEFAULT_LANG } from './i18n';
 /**
  * Query parameters that MUST NOT appear in a post-confirm redirect target.
  *
- * `token_hash` is the credential itself. `type` is not secret, but it is the
- * other half of a replayable confirm URL and it has no meaning anywhere else,
- * so it leaves with its partner.
+ * `token_hash` and `code` are BOTH credentials, and the list would be wrong
+ * with either one missing:
+ *  - `token_hash` is what a CUSTOM email template sends, redeemed by `verifyOtp`.
+ *  - `code` is what the DEFAULT email template sends under the PKCE flow,
+ *    redeemed by `exchangeCodeForSession`. It is a session in one exchange, so
+ *    it is exactly as dangerous in a `Location` header, and it is the parameter
+ *    the site actually receives today.
+ *
+ * `type` is not secret, but it is the other half of a replayable confirm URL and
+ * it has no meaning anywhere else, so it leaves with its partners.
  */
-const STRIPPED_PARAMS = ['token_hash', 'type'] as const;
+const STRIPPED_PARAMS = ['token_hash', 'code', 'type'] as const;
 
 /**
  * Query parameter the confirm route appends when a magic link did not verify.
@@ -210,17 +217,17 @@ export function safeNextPath(raw: string | null | undefined): string {
 /**
  * Remove the magic-link credentials from a redirect target (T2).
  *
- * Applied to the target of the post-confirm 303, so `token_hash` cannot reach
- * the `Location` header by riding inside `next`. The confirm route builds its
- * target from `next` alone and never from its own URL, so this is the second of
- * two independent barriers rather than the only one.
+ * Applied to the target of the post-confirm 303, so neither `token_hash` nor the
+ * PKCE `code` can reach the `Location` header by riding inside `next`. The
+ * confirm route builds its target from `next` alone and never from its own URL,
+ * so this is the second of two independent barriers rather than the only one.
  *
  * The fragment is preserved and the `?` disappears entirely when stripping
  * empties the query — a dangling `?` is a different URL string, and it would
  * show up in history and in every canonical-link comparison.
  *
  * @param path - A same-site path, normally the output of {@link safeNextPath}.
- * @returns The same path with `token_hash` and `type` removed.
+ * @returns The same path with `token_hash`, `code` and `type` removed.
  */
 export function stripAuthParams(path: string): string {
   const parts = splitPath(path);

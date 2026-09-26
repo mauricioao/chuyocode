@@ -9,26 +9,42 @@
  * `signOut()` clears the session cookies through the same `setAll` adapter the
  * confirm route sets them with — including the chunked `sb-…-auth-token.0/.1`
  * pair a real JWT produces. That adapter is proven in
- * `src/lib/supabaseSession.test.ts`; this file proves the ROUTE's decisions.
+ * `src/lib/supabaseSession.test.ts`; this file proves the ROUTE's decisions AND
+ * that the clearing directives actually reach the caller, asserted on the
+ * `Response` object the handler returns.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DEFAULT_LANG } from '@lib/i18n';
 
-const { createSessionClientMock, signOutMock, pendingHeaders } = vi.hoisted(
-  () => ({
+const { createSessionClientMock, signOutMock, pendingHeaders, pendingCookies } =
+  vi.hoisted(() => ({
     createSessionClientMock: vi.fn(),
     signOutMock: vi.fn(),
     pendingHeaders: new Map<string, string>(),
-  }),
-);
+    pendingCookies: [] as string[],
+  }));
 
-vi.mock('@lib/supabaseSession', () => ({
-  createSessionClient: createSessionClientMock,
+// `@lib/supabaseSession` reads the Supabase URL / anon key at module init, and
+// only `createSessionClient` is stubbed below, so the module really loads.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'anon-key' }),
 }));
+
+vi.mock('@lib/supabaseSession', async (importActual) => {
+  // 🔴 `flushSessionHeaders` IS DELIBERATELY NOT MOCKED — see the SET-COOKIE
+  // block below for why asserting on the Response is the whole point.
+  const actual = await importActual<typeof import('@lib/supabaseSession')>();
+  return { ...actual, createSessionClient: createSessionClientMock };
+});
 
 import { POST } from './signout';
 
 const HOME = `/${DEFAULT_LANG}/`;
+/** The two chunks a real JWT produces, as the directives that retire them. */
+const CLEAR_CHUNK_0 =
+  'sb-x-auth-token.0=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax';
+const CLEAR_CHUNK_1 =
+  'sb-x-auth-token.1=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax';
 
 /** Build the APIContext stub the handler reads. */
 function ctx(query = '') {
@@ -36,10 +52,9 @@ function ctx(query = '') {
     `https://chuyocode.com/api/auth/signout${query}`,
     { method: 'POST' },
   );
-  return {
-    request,
-    cookies: { set: vi.fn(), delete: vi.fn() },
-  } as unknown as Parameters<typeof POST>[0];
+  // No cookie jar: the route never touches one. Its clearing directives ride on
+  // the `Response` it returns, which is what the SET-COOKIE block asserts.
+  return { request } as unknown as Parameters<typeof POST>[0];
 }
 
 /** The `Location` header of a redirect response. */
@@ -50,9 +65,11 @@ function location(res: Response): string {
 beforeEach(() => {
   vi.clearAllMocks();
   pendingHeaders.clear();
+  pendingCookies.length = 0;
   createSessionClientMock.mockReturnValue({
     client: { auth: { signOut: signOutMock } },
     pendingHeaders,
+    pendingCookies,
   });
   signOutMock.mockResolvedValue({ error: null });
 });
@@ -97,7 +114,11 @@ describe('POST /api/auth/signout', () => {
   it('flushes the headers Supabase asked for while clearing cookies', async () => {
     createSessionClientMock.mockImplementation(() => {
       pendingHeaders.set('x-supabase-hint', 'cleared');
-      return { client: { auth: { signOut: signOutMock } }, pendingHeaders };
+      return {
+        client: { auth: { signOut: signOutMock } },
+        pendingHeaders,
+        pendingCookies,
+      };
     });
 
     const res = await POST(ctx());
@@ -108,7 +129,11 @@ describe('POST /api/auth/signout', () => {
   it('does not let a buffered header overwrite the cache directive', async () => {
     createSessionClientMock.mockImplementation(() => {
       pendingHeaders.set('cache-control', 'public, max-age=3600');
-      return { client: { auth: { signOut: signOutMock } }, pendingHeaders };
+      return {
+        client: { auth: { signOut: signOutMock } },
+        pendingHeaders,
+        pendingCookies,
+      };
     });
 
     const res = await POST(ctx());
@@ -134,5 +159,56 @@ describe('POST /api/auth/signout', () => {
 
     expect(res.status).toBe(303);
     expect(location(res)).toBe(HOME);
+  });
+});
+
+describe('POST /api/auth/signout — the clearing directives reach the browser', () => {
+  // 🔴 A SIGN-OUT THAT SENDS NO `Set-Cookie` IS NOT A SIGN-OUT. `signOut()`
+  // returning without an error only means Supabase revoked the refresh token
+  // server-side. The browser keeps whatever it holds until this response tells
+  // it otherwise, and it presents that cookie on the very next request.
+  //
+  // Asserting the route called `signOut()` never covered that. These assert on
+  // the Response the route returns.
+  it('carries every clearing directive on the response it returns', async () => {
+    pendingCookies.push(CLEAR_CHUNK_0, CLEAR_CHUNK_1);
+
+    const res = await POST(ctx());
+
+    expect(res.headers.getSetCookie()).toEqual([
+      CLEAR_CHUNK_0,
+      CLEAR_CHUNK_1,
+    ]);
+  });
+
+  it('expires the cookie rather than blanking it', async () => {
+    // `name=` with no expiry leaves a LIVE, empty cookie: the browser keeps
+    // sending the name and sign-out looks done while nothing was removed.
+    pendingCookies.push(CLEAR_CHUNK_0);
+
+    const res = await POST(ctx());
+
+    expect(res.headers.getSetCookie()[0]).toContain('Max-Age=0');
+  });
+
+  it('clears both chunks of a chunked token, not just the first', async () => {
+    // A real JWT does not fit in one cookie, so Supabase writes `.0` and `.1`.
+    // Leaving one behind hands the next request a truncated token.
+    pendingCookies.push(CLEAR_CHUNK_0, CLEAR_CHUNK_1);
+
+    const res = await POST(ctx());
+
+    expect(res.headers.getSetCookie()).toHaveLength(2);
+  });
+
+  it('still clears when Supabase reports a failure', async () => {
+    // The local cookie is the thing that keeps the browser signed in. A
+    // provider that says "session not found" must not leave it in place.
+    signOutMock.mockResolvedValue({ error: { message: 'session not found' } });
+    pendingCookies.push(CLEAR_CHUNK_0);
+
+    const res = await POST(ctx());
+
+    expect(res.headers.getSetCookie()).toEqual([CLEAR_CHUNK_0]);
   });
 });

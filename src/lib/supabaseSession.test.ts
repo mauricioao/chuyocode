@@ -2,13 +2,21 @@
  * Unit tests for the request-scoped Supabase session client
  * (src/lib/supabaseSession.ts).
  *
- * Two things are under test and they are NOT the same thing:
+ * Three things are under test and they are NOT the same thing:
  *  1. `sessionCookieOptions` produces the hardened cookie flags.
  *  2. `createSessionClient` actually HANDS those flags to `createServerClient`.
+ *  3. `flushSessionHeaders` puts what Supabase asked for onto a real `Headers`.
  *
  * Without (2) the constant can be perfectly correct and completely unused, and
  * `@supabase/ssr` would silently fall back to its own DEFAULT_COOKIE_OPTIONS —
  * which ship `httpOnly: false` and never set `secure`.
+ *
+ * 🔴 (3) IS THE ASSERTION WHOSE ABSENCE HID A DEAD SIGN-IN. The suite used to
+ * prove that `setAll` called Astro's cookie jar and stopped there, which is a
+ * test of what the code CALLED rather than of what the caller RECEIVES. A
+ * browser that got no `Set-Cookie` at all passed it. So the pending cookies are
+ * asserted as serialized header values here, and the endpoint suites assert
+ * them on the `Response` object each route actually returns.
  *
  * `createServerClient` is mocked so no Supabase client is ever constructed and
  * no network happens; the cookie adapter it receives is then exercised
@@ -18,7 +26,6 @@
  * depending on any particular version's coalescing behaviour.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { AstroCookies } from 'astro';
 
 const { createServerClientMock, parseCookieHeaderMock, ssrActual } = vi.hoisted(
   () => ({
@@ -55,7 +62,11 @@ vi.mock('./env', () => ({
   }),
 }));
 
-import { sessionCookieOptions, createSessionClient } from './supabaseSession';
+import {
+  sessionCookieOptions,
+  createSessionClient,
+  flushSessionHeaders,
+} from './supabaseSession';
 
 /** The four flags the user-identity spec requires, in production. */
 const PROD_COOKIE_OPTIONS = {
@@ -65,14 +76,9 @@ const PROD_COOKIE_OPTIONS = {
   path: '/',
 };
 
-/** Minimal AstroCookies stand-in: only `set` and `delete` are ever called. */
-function fakeAstroCookies() {
-  return { set: vi.fn(), delete: vi.fn() };
-}
-
 /**
  * Build a session client and expose everything the assertions need: the
- * AstroCookies spy, and the options object handed to `createServerClient`.
+ * buffered state, and the options object handed to `createServerClient`.
  */
 function buildSessionClient(
   opts: { cookieHeader?: string; isProd?: boolean } = {},
@@ -81,16 +87,13 @@ function buildSessionClient(
     'https://chuyocode.com/es/',
     opts.cookieHeader ? { headers: { cookie: opts.cookieHeader } } : undefined,
   );
-  const cookies = fakeAstroCookies();
   const created = createSessionClient({
     request,
-    cookies: cookies as unknown as AstroCookies,
     isProd: opts.isProd ?? true,
   });
   const call = createServerClientMock.mock.calls.at(-1);
   return {
     ...created,
-    cookies,
     args: call as unknown[],
     clientOptions: (call as unknown[])[2] as {
       cookieOptions: Record<string, unknown>;
@@ -207,8 +210,8 @@ describe('createSessionClient', () => {
     ]);
   });
 
-  it('writes each cookie to AstroCookies with its own options in setAll', () => {
-    const { clientOptions, cookies } = buildSessionClient();
+  it('serializes each cookie into a Set-Cookie value with its own options', () => {
+    const { clientOptions, pendingCookies } = buildSessionClient();
 
     clientOptions.cookies.setAll(
       [
@@ -222,31 +225,53 @@ describe('createSessionClient', () => {
       {},
     );
 
-    expect(cookies.set).toHaveBeenCalledTimes(2);
-    expect(cookies.set).toHaveBeenNthCalledWith(1, 'sb-access-token', 'abc', {
-      path: '/',
-      httpOnly: true,
-    });
-    expect(cookies.set).toHaveBeenNthCalledWith(2, 'sb-refresh-token', 'def', {
-      path: '/',
-    });
-    expect(cookies.delete).not.toHaveBeenCalled();
+    expect(pendingCookies).toEqual([
+      'sb-access-token=abc; Path=/; HttpOnly',
+      'sb-refresh-token=def; Path=/',
+    ]);
   });
 
-  it('deletes instead of setting when the value is empty', () => {
-    // An empty value means "remove this cookie". `set(name, '')` would leave a
-    // live, empty cookie behind and sign-out would not actually sign out.
-    const { clientOptions, cookies } = buildSessionClient();
+  it('serializes an empty value into a directive that expires the cookie', () => {
+    // An empty value means "remove this cookie", and `@supabase/ssr` always
+    // pairs it with `maxAge: 0`. A plain `name=` would leave a live, empty
+    // cookie behind and sign-out would not actually sign out.
+    const { clientOptions, pendingCookies } = buildSessionClient();
 
     clientOptions.cookies.setAll(
-      [{ name: 'sb-access-token', value: '', options: { path: '/' } }],
+      [{ name: 'sb-access-token', value: '', options: { path: '/', maxAge: 0 } }],
       {},
     );
 
-    expect(cookies.delete).toHaveBeenCalledExactlyOnceWith('sb-access-token', {
-      path: '/',
-    });
-    expect(cookies.set).not.toHaveBeenCalled();
+    expect(pendingCookies).toEqual(['sb-access-token=; Max-Age=0; Path=/']);
+  });
+
+  it('keeps two directives for the same name at different scopes', () => {
+    // `@supabase/ssr` deliberately emits a host-only clear NEXT TO a
+    // domain-scoped one when a parent domain is configured, because the browser
+    // returns both and a stale one resurrects the session. A buffer keyed by
+    // cookie NAME collapses the pair into one; a list does not.
+    const { clientOptions, pendingCookies } = buildSessionClient();
+
+    clientOptions.cookies.setAll(
+      [
+        { name: 'sb-access-token', value: '', options: { path: '/', maxAge: 0 } },
+        {
+          name: 'sb-access-token',
+          value: '',
+          options: { path: '/', maxAge: 0, domain: '.chuyocode.com' },
+        },
+      ],
+      {},
+    );
+
+    expect(pendingCookies).toEqual([
+      'sb-access-token=; Max-Age=0; Path=/',
+      'sb-access-token=; Max-Age=0; Domain=.chuyocode.com; Path=/',
+    ]);
+  });
+
+  it('starts with no pending cookies', () => {
+    expect(buildSessionClient().pendingCookies).toEqual([]);
   });
 
   it('buffers the response headers handed to setAll', () => {
@@ -275,5 +300,71 @@ describe('createSessionClient', () => {
     );
 
     expect(pendingHeaders.size).toBe(0);
+  });
+});
+
+describe('flushSessionHeaders', () => {
+  it('appends every pending cookie to the response headers', () => {
+    const headers = new Headers();
+
+    flushSessionHeaders(headers, {
+      pendingHeaders: new Map(),
+      pendingCookies: ['sb-a=1; Path=/', 'sb-b=2; Path=/'],
+    });
+
+    expect(headers.getSetCookie()).toEqual(['sb-a=1; Path=/', 'sb-b=2; Path=/']);
+  });
+
+  it('appends rather than overwrites, so a cookie already on the response survives', () => {
+    // `set` would silently drop a `Set-Cookie` a route put there itself.
+    const headers = new Headers();
+    headers.append('set-cookie', 'chu_like_x=1; Path=/');
+
+    flushSessionHeaders(headers, {
+      pendingHeaders: new Map(),
+      pendingCookies: ['sb-a=1; Path=/'],
+    });
+
+    expect(headers.getSetCookie()).toEqual([
+      'chu_like_x=1; Path=/',
+      'sb-a=1; Path=/',
+    ]);
+  });
+
+  it('sets the buffered response headers', () => {
+    const headers = new Headers();
+
+    flushSessionHeaders(headers, {
+      pendingHeaders: new Map([['pragma', 'no-cache']]),
+      pendingCookies: [],
+    });
+
+    expect(headers.get('pragma')).toBe('no-cache');
+  });
+
+  it('overwrites a buffered header rather than appending a second copy', () => {
+    // `Cache-Control` is the one Supabase always asks for. Two copies is not a
+    // stricter directive, it is an ambiguous one.
+    const headers = new Headers({ 'cache-control': 'public, max-age=3600' });
+
+    flushSessionHeaders(headers, {
+      pendingHeaders: new Map([['cache-control', 'private, no-store']]),
+      pendingCookies: [],
+    });
+
+    expect(headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('leaves the headers untouched when nothing was buffered', () => {
+    const headers = new Headers({ 'content-type': 'application/json' });
+
+    flushSessionHeaders(headers, {
+      pendingHeaders: new Map(),
+      pendingCookies: [],
+    });
+
+    expect([...headers.entries()]).toEqual([
+      ['content-type', 'application/json'],
+    ]);
   });
 });

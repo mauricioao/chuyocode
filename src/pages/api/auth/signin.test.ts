@@ -25,14 +25,28 @@ const { createSessionClientMock, signInWithOtpMock } = vi.hoisted(() => ({
   signInWithOtpMock: vi.fn(),
 }));
 
-vi.mock('@lib/supabaseSession', () => ({
-  createSessionClient: createSessionClientMock,
+// `@lib/supabaseSession` reads the Supabase URL / anon key at module init, and
+// only `createSessionClient` is stubbed below, so the module really loads.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'anon-key' }),
 }));
+
+vi.mock('@lib/supabaseSession', async (importActual) => {
+  // 🔴 `flushSessionHeaders` IS DELIBERATELY NOT MOCKED. It is the mechanism
+  // under test: stubbing it would put the assertions back on what the route
+  // CALLED instead of on what the caller RECEIVES, which is exactly the gap
+  // that let a sign-in emitting no cookie at all pass a green suite.
+  const actual = await importActual<typeof import('@lib/supabaseSession')>();
+  return { ...actual, createSessionClient: createSessionClientMock };
+});
 
 import { POST } from './signin';
 
 const KNOWN_EMAIL = 'ya-tiene-cuenta@chuyo.test';
 const UNKNOWN_EMAIL = 'nunca-se-registro@chuyo.test';
+/** What the PKCE code verifier cookie looks like on the wire. */
+const VERIFIER_COOKIE =
+  'sb-x-auth-token-code-verifier=abc123; Max-Age=34560000; Path=/; HttpOnly; SameSite=Lax';
 
 /** Build the APIContext stub the handler reads. */
 function ctx(body: unknown, contentType = 'application/json') {
@@ -68,10 +82,17 @@ function otpOptions() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  createSessionClientMock.mockReturnValue({
+  // A FRESH buffer per call, because the real client is built per request and
+  // holds one caller's cookies. Sharing one across requests would make the T3
+  // comparison below accumulate cookies instead of comparing two responses.
+  createSessionClientMock.mockImplementation(() => ({
     client: { auth: { signInWithOtp: signInWithOtpMock } },
     pendingHeaders: new Map<string, string>(),
-  });
+    // `signInWithOtp` mints a PKCE code verifier and the session client buffers
+    // it as a cookie. Modelled here as the buffer it really is, so the
+    // assertions can read it back off the Response.
+    pendingCookies: [VERIFIER_COOKIE],
+  }));
   signInWithOtpMock.mockResolvedValue({ data: {}, error: null });
 });
 
@@ -161,6 +182,59 @@ describe('POST /api/auth/signin — the request it makes', () => {
     await POST(ctx({ email: KNOWN_EMAIL, lang: 'fr' }));
 
     expect(otpOptions().options?.data).toEqual({ lang: DEFAULT_LANG });
+  });
+});
+
+describe('POST /api/auth/signin — the PKCE verifier reaches the browser', () => {
+  // 🔴 THE TEST WHOSE ABSENCE COST A WORKING SIGN-IN. A magic link is
+  // browser-bound: `/api/auth/confirm` can only redeem the emailed `code` if it
+  // gets the code verifier cookie back. If this response carries no
+  // `Set-Cookie`, every link ever sent is dead on arrival, and the only symptom
+  // is `?auth=link-invalid` at the far end of a mailbox round trip.
+  //
+  // Asserting `setAll` was called proves nothing here — that was the assumption
+  // that failed. The assertion has to be on the Response this route returns.
+  it('carries the verifier cookie on the response it returns', async () => {
+    const res = await POST(ctx({ email: KNOWN_EMAIL }));
+
+    expect(res.headers.getSetCookie()).toEqual([VERIFIER_COOKIE]);
+  });
+
+  it('carries it for an address with no account too', async () => {
+    // 🔴 T3 THROUGH THE SIDE DOOR. A verifier is minted before Supabase is ever
+    // asked about the address, so both classes must carry the cookie. A
+    // response that sets one for known addresses and not for unknown ones is
+    // the enumeration oracle back again, in a header instead of a body.
+    const res = await POST(ctx({ email: UNKNOWN_EMAIL }));
+
+    expect(res.headers.getSetCookie()).toEqual([VERIFIER_COOKIE]);
+  });
+
+  it('carries it even when Supabase rejects the address', async () => {
+    signInWithOtpMock.mockResolvedValueOnce({
+      data: {},
+      error: { message: 'Signups not allowed for otp', status: 422 },
+    });
+
+    const res = await POST(ctx({ email: UNKNOWN_EMAIL }));
+
+    expect(res.headers.getSetCookie()).toEqual([VERIFIER_COOKIE]);
+  });
+
+  it('emits each buffered cookie exactly once', async () => {
+    // Writing through Astro's cookie jar AND through these headers would send
+    // the verifier twice, and the browser would keep whichever arrived last.
+    const res = await POST(ctx({ email: KNOWN_EMAIL }));
+
+    expect(res.headers.getSetCookie()).toHaveLength(1);
+  });
+
+  it('sets no cookie on a request it rejects before contacting Supabase', async () => {
+    // No client is built for a malformed body, so there is no verifier to mint
+    // and nothing to store. A cookie here would be state with no flow behind it.
+    const res = await POST(ctx({ email: 'no-arroba-aqui' }));
+
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 });
 
