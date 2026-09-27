@@ -22,9 +22,13 @@ import { DEFAULT_LANG } from './i18n';
 import {
   AUTH_ERROR_LINK_INVALID,
   AUTH_ERROR_PARAM,
+  AUTH_SIGNED_IN,
+  AUTH_SIGNED_OUT,
   safeNextPath,
   stripAuthParams,
   withAuthError,
+  withAuthSuccess,
+  withSignedOut,
 } from './authRedirect';
 
 /** Where an untrusted `next` must land instead. */
@@ -241,5 +245,64 @@ describe('withAuthError — the rejected-link marker', () => {
 
   it('preserves the fragment', () => {
     expect(withAuthError('/es/#seccion')).toBe(`/es/?${MARKER}#seccion`);
+  });
+});
+
+/**
+ * `withAuthSuccess` and `withSignedOut` exist to defeat a Netlify behaviour
+ * verified on a deploy preview: Netlify appends the ORIGINAL request's query
+ * string to any redirect whose `Location` has none of its own. A success
+ * redirect built from a query-less `next` (the common case) would let a
+ * `?code=…`/`?token_hash=…` on the confirm request resurface on the
+ * destination page, undoing `stripAuthParams`. Both marker functions must
+ * therefore ALWAYS yield a target with a `?`, not just when the input already
+ * has one.
+ */
+describe('withAuthSuccess — the successful sign-in marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withAuthSuccess('/es/')).toBe(`/es/?${MARKER}`);
+  });
+
+  it('keeps the parameters already on the path', () => {
+    expect(withAuthSuccess('/es/mis-libros?orden=reciente')).toBe(
+      `/es/mis-libros?orden=reciente&${MARKER}`,
+    );
+  });
+
+  it('always yields a target with a query string', () => {
+    // The whole point: Netlify only appends the request's own query string
+    // when Location carries none, so a query-less success target is exactly
+    // the case the marker must close.
+    expect(withAuthSuccess('/es/')).toContain('?');
+  });
+
+  it('REPLACES an auth value the caller tried to smuggle in', () => {
+    expect(withAuthSuccess('/es/?auth=todo-bien')).toBe(`/es/?${MARKER}`);
+  });
+
+  it('preserves the fragment', () => {
+    expect(withAuthSuccess('/es/#seccion')).toBe(`/es/?${MARKER}#seccion`);
+  });
+});
+
+describe('withSignedOut — the sign-out marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_SIGNED_OUT}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withSignedOut(`/${DEFAULT_LANG}/`)).toBe(
+      `/${DEFAULT_LANG}/?${MARKER}`,
+    );
+  });
+
+  it('keeps the parameters already on the path', () => {
+    expect(withSignedOut('/en/?orden=reciente')).toBe(
+      `/en/?orden=reciente&${MARKER}`,
+    );
+  });
+
+  it('always yields a target with a query string', () => {
+    expect(withSignedOut(`/${DEFAULT_LANG}/`)).toContain('?');
   });
 });

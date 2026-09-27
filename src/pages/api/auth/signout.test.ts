@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DEFAULT_LANG } from '@lib/i18n';
+import { AUTH_ERROR_PARAM, AUTH_SIGNED_OUT } from '@lib/authRedirect';
 
 const { createSessionClientMock, signOutMock, pendingHeaders, pendingCookies } =
   vi.hoisted(() => ({
@@ -40,6 +41,8 @@ vi.mock('@lib/supabaseSession', async (importActual) => {
 import { POST } from './signout';
 
 const HOME = `/${DEFAULT_LANG}/`;
+/** Where the visitor lands, with the marker every success redirect must carry. */
+const SIGNED_OUT_HOME = `${HOME}?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_OUT}`;
 /** The two chunks a real JWT produces, as the directives that retire them. */
 const CLEAR_CHUNK_0 =
   'sb-x-auth-token.0=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax';
@@ -85,7 +88,7 @@ describe('POST /api/auth/signout', () => {
     const res = await POST(ctx());
 
     expect(res.status).toBe(303);
-    expect(location(res)).toBe(HOME);
+    expect(location(res)).toBe(SIGNED_OUT_HOME);
   });
 
   it('keeps the visitor in the locale they signed out from', async () => {
@@ -94,13 +97,21 @@ describe('POST /api/auth/signout', () => {
     // magic-link routes use, never as a raw value.
     const res = await POST(ctx('?next=%2Fen%2F'));
 
-    expect(location(res)).toBe('/en/');
+    expect(location(res)).toBe(`/en/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_OUT}`);
   });
 
   it('neutralises a hostile `next`', async () => {
     const res = await POST(ctx('?next=%2F%2Fevil.com'));
 
-    expect(location(res)).toBe(HOME);
+    expect(location(res)).toBe(SIGNED_OUT_HOME);
+  });
+
+  it('always carries a query string, defeating a query-less Location (Netlify)', async () => {
+    // Verified on a deploy preview: Netlify appends the original request's
+    // query string to any redirect whose Location has none of its own.
+    const res = await POST(ctx());
+
+    expect(location(res)).toContain('?');
   });
 
   it('keeps the response out of every cache', async () => {
@@ -149,7 +160,7 @@ describe('POST /api/auth/signout', () => {
     const res = await POST(ctx());
 
     expect(res.status).toBe(303);
-    expect(location(res)).toBe(HOME);
+    expect(location(res)).toBe(SIGNED_OUT_HOME);
   });
 
   it('still redirects when the provider is unreachable', async () => {
@@ -158,7 +169,7 @@ describe('POST /api/auth/signout', () => {
     const res = await POST(ctx());
 
     expect(res.status).toBe(303);
-    expect(location(res)).toBe(HOME);
+    expect(location(res)).toBe(SIGNED_OUT_HOME);
   });
 });
 

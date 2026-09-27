@@ -53,6 +53,26 @@ export const AUTH_ERROR_PARAM = 'auth';
 /** The only failure a visitor can act on: ask for another link. */
 export const AUTH_ERROR_LINK_INVALID = 'link-invalid';
 
+/**
+ * Marker for a redirect that follows a successful sign-in or sign-out.
+ *
+ * 🔴 EXISTS TO DEFEAT A NETLIFY BEHAVIOUR, NOT TO DECORATE THE URL. Verified on
+ * a deploy preview: Netlify appends the ORIGINAL REQUEST's query string to any
+ * redirect whose `Location` has none of its own (`POST /signout?probe=1` →
+ * `Location: /es/?probe=1`). `stripAuthParams` removes `code`/`token_hash` from
+ * the TARGET, but a query-less target still lets Netlify graft the confirm
+ * request's own `?code=…`/`?token_hash=…` back onto the `Location` the browser
+ * follows — silently undoing the strip. Every success redirect below is built
+ * through {@link withAuthSuccess} or {@link withSignedOut} so its `Location`
+ * always carries a query of its own and there is nothing query-less left for
+ * Netlify to append to. The failure path is unaffected: `withAuthError` already
+ * guarantees a query string.
+ */
+export const AUTH_SIGNED_IN = 'signed-in';
+
+/** Marker for a redirect that follows a successful sign-out. See {@link AUTH_SIGNED_IN}. */
+export const AUTH_SIGNED_OUT = 'signed-out';
+
 /** A path split into the three parts the helpers below rewrite independently. */
 interface SplitPath {
   pathname: string;
@@ -246,18 +266,54 @@ export function stripAuthParams(path: string): string {
 }
 
 /**
+ * Set the shared `auth` marker to `value`, replacing any existing one.
+ *
+ * Any existing `auth` parameter is replaced rather than appended to, so a
+ * crafted `next` cannot smuggle a second value in and decide what the sign-in
+ * page says.
+ *
+ * @param path - A same-site path, normally the output of {@link safeNextPath}.
+ */
+function withAuthMarker(path: string, value: string): string {
+  const parts = splitPath(path);
+  const params = new URLSearchParams(parts.query);
+  params.set(AUTH_ERROR_PARAM, value);
+
+  return joinPath({ ...parts, query: params.toString() });
+}
+
+/**
  * Mark a redirect target as "that link did not work, ask for another one".
  *
- * Used only on the confirm route's failure path. Any existing `auth` parameter
- * is replaced rather than appended to, so a crafted `next` cannot smuggle a
- * second value in and decide what the sign-in page says.
+ * Used only on the confirm route's failure path.
  *
  * @param path - A same-site path, normally the output of {@link safeNextPath}.
  */
 export function withAuthError(path: string): string {
-  const parts = splitPath(path);
-  const params = new URLSearchParams(parts.query);
-  params.set(AUTH_ERROR_PARAM, AUTH_ERROR_LINK_INVALID);
+  return withAuthMarker(path, AUTH_ERROR_LINK_INVALID);
+}
 
-  return joinPath({ ...parts, query: params.toString() });
+/**
+ * Mark a redirect target as "you are signed in".
+ *
+ * Used on the confirm route's SUCCESS path. See {@link AUTH_SIGNED_IN} for why
+ * this marker exists whether or not the sign-in page renders anything for it.
+ *
+ * @param path - A same-site path, normally the output of
+ *   `stripAuthParams(safeNextPath(...))`.
+ */
+export function withAuthSuccess(path: string): string {
+  return withAuthMarker(path, AUTH_SIGNED_IN);
+}
+
+/**
+ * Mark a redirect target as "you are signed out".
+ *
+ * Used on the sign-out route. See {@link AUTH_SIGNED_IN} for why this marker
+ * exists whether or not the sign-in page renders anything for it.
+ *
+ * @param path - A same-site path, normally the output of {@link safeNextPath}.
+ */
+export function withSignedOut(path: string): string {
+  return withAuthMarker(path, AUTH_SIGNED_OUT);
 }
