@@ -176,7 +176,15 @@ export default function UserMenu({ lang }: UserMenuProps) {
           <span className="mt-2 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
             {profile.plan === 'premium' ? t.planPremium : t.planFree}
           </span>
-          <form method="POST" action="/api/auth/signout" data-astro-reload className="mt-3">
+          <a
+            href={`/${lang}/crear`}
+            role="menuitem"
+            data-testid="user-menu-create-activity"
+            className="mt-3 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+          >
+            {t.createActivity}
+          </a>
+          <form method="POST" action="/api/auth/signout" data-astro-reload className="mt-1">
             <button
               type="submit"
               role="menuitem"

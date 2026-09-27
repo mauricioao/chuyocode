@@ -1,27 +1,27 @@
 ---
 /**
- * New-exercise authoring page — `/[lang]/crear` (SSR, slice 15).
+ * Activities creator start screen — `/[lang]/crear` (SSR, PR B "Activities
+ * creator").
  *
- * SSR-GATED ON `Astro.locals.user`. Anonymous visitors never see the
- * authoring markup at all: they are redirected to the sign-in page with a
- * `next` back to this same path, BEFORE anything renders.
+ * REPURPOSED FROM the old curated-exercise authoring page, which moved to
+ * `/[lang]/admin/ejercicios` (moderator-only) in this same PR — see that
+ * route's header. This path is now open to any SIGNED-IN visitor: choosing
+ * "Worksheet" here creates a brand-new activity and navigates to its editor
+ * (`/[lang]/crear/[id]`); "Preguntas/Questions" is shown disabled (PR C).
+ *
+ * SSR-GATED ON `Astro.locals.user`, same pattern the old page documented:
+ * anonymous visitors are redirected to sign-in, `next` pointing back here,
+ * before anything renders.
  *
  * 🔴 NETLIFY APPENDS THE ORIGINAL REQUEST'S QUERY STRING TO A 30x `Location`
- * THAT HAS NONE OF ITS OWN (`src/lib/authRedirect.ts`'s header, verified on a
- * deploy preview). The redirect below always carries its own `?next=…`, so
- * there is nothing query-less for Netlify to append to.
+ * THAT HAS NONE OF ITS OWN — the redirect below always carries its own
+ * `?next=…`, so there is nothing query-less for Netlify to append to.
  *
- * THIS ROUTE IS DELIBERATELY UNLINKED — no nav entry anywhere (slice 18).
- * Reachable only by a direct URL.
- *
- * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE, same rule
- * `src/pages/[lang]/auth/entrar.astro` documents: this page's HTML differs
- * by visitor (gated vs. redirect), so `markPrivate` runs unconditionally,
- * before either branch.
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE: this page's HTML differs
+ * by visitor (gated vs. redirect), so `markPrivate` runs unconditionally.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import ExerciseAuthorIsland from '@components/islands/authoring/ExerciseAuthorIsland';
-import { createEmptyDraft } from '@lib/authoringDraft';
+import ActivityStartIsland from '@components/islands/activities/ActivityStartIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 
@@ -39,22 +39,8 @@ markPrivate(Astro.response.headers);
 
 const user = Astro.locals.user;
 if (!user) {
-  // NOT `Astro.redirect()`: that helper builds its OWN `Response`, discarding
-  // the `markPrivate` mutation above — this response varies by
-  // `Astro.locals.user` (redirect vs. render), so the header has to travel
-  // WITH this exact `Response` object.
-  //
-  // 🔴 EVERYTHING IS INLINED HERE, DELIBERATELY, INCLUDING THE CACHE-CONTROL
-  // STRING (never a separate `const`, never the imported
-  // `PRIVATE_CACHE_CONTROL` — it must read `private, no-store`, identical to
-  // `src/lib/httpCache.ts`'s `PRIVATE_CACHE_CONTROL`). `astro check` reports a
-  // FALSE `ts(6133)` "declared but never read" against ANY binding — local
-  // `const` or imported — whose only use sits inside a `Response(...)`
-  // literal returned from inside an `if` block in `.astro` frontmatter, even
-  // though the code is correct and covered by this page's own tests
-  // (verified with a minimal repro isolating this exact shape). Inlining is
-  // the workaround; a future astro/`@astrojs/compiler` upgrade may remove
-  // the need for it.
+  // NOT `Astro.redirect()`: it builds its OWN `Response`, discarding the
+  // `markPrivate` mutation above.
   return new Response(null, {
     status: 303,
     headers: {
@@ -64,14 +50,14 @@ if (!user) {
   });
 }
 
-const t = UI_LABELS[lang].authoring;
+const t = UI_LABELS[lang].activities.start;
 ---
 
-<BaseLayout lang={lang} title={t.newTitle} description={t.newDescription}>
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
     <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
-      {t.newTitle}
+      {t.pageTitle}
     </h1>
-    <ExerciseAuthorIsland client:load lang={lang} initialDraft={createEmptyDraft()} />
+    <ActivityStartIsland client:load lang={lang} />
   </section>
 </BaseLayout>

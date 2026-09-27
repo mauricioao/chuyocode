@@ -155,6 +155,16 @@ describe('UserMenu — dropdown', () => {
     expect(dropdown.textContent).not.toContain(UI_LABELS.es.auth.userMenu.planFree);
   });
 
+  it('links to the activities creator, lang-prefixed', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const link = screen.getByTestId('user-menu-create-activity');
+    expect(link.getAttribute('href')).toBe('/es/crear');
+    expect(link.textContent).toBe(UI_LABELS.es.auth.userMenu.createActivity);
+  });
+
   it('renders sign-out as a plain POST form with data-astro-reload', async () => {
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" />);
