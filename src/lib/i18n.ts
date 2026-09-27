@@ -126,12 +126,26 @@ export const UI_LABELS = {
     auth: {
       title: 'Entrar',
       description:
-        'Solicitar un enlace de acceso por correo electrónico, sin contraseña.',
+        'Entrar con correo y contraseña, con Google o con un enlace de acceso.',
       linkInvalid:
         'Ese enlace no es válido o ya venció. Solicitar uno nuevo con el formulario de abajo.',
       signedIn: 'Sesión iniciada.',
       alreadySignedIn: 'Ya hay una sesión iniciada en este navegador.',
       signOut: 'Salir',
+      // Server-rendered page chrome only (no client state): the Google
+      // button is a plain `<form>` with no island, and the divider sits
+      // between it and the password island. Everything that depends on
+      // CLIENT state (sign-in/sign-up mode, pending/error/success) is LOCAL
+      // to `PasswordAuthForm.COPY` / `AuthPanel.COPY`, same rule as
+      // `SignInForm.COPY` — see that island's header.
+      google: 'Continuar con Google',
+      googleUnavailable:
+        'El acceso con Google no está disponible en este momento. Probar con correo y contraseña.',
+      orDivider: 'o',
+      nuevaClave: {
+        title: 'Nueva contraseña',
+        description: 'Elegir una nueva contraseña para la cuenta.',
+      },
     },
     // Authoring pages (`/[lang]/crear/*`, slice 15). UNLINKED routes — no nav
     // entry anywhere (slice 18). Static page chrome only; the interactive
@@ -327,12 +341,20 @@ export const UI_LABELS = {
     article: { back: 'Back to news' },
     auth: {
       title: 'Sign in',
-      description: 'Request a sign-in link by email, no password required.',
+      description: 'Sign in with email and password, Google, or a sign-in link.',
       linkInvalid:
         'That link is invalid or has expired. Request a new one with the form below.',
       signedIn: 'Signed in.',
       alreadySignedIn: 'You are already signed in on this browser.',
       signOut: 'Sign out',
+      google: 'Continue with Google',
+      googleUnavailable:
+        'Google sign-in is not available right now. Try email and password instead.',
+      orDivider: 'or',
+      nuevaClave: {
+        title: 'New password',
+        description: 'Choose a new password for the account.',
+      },
     },
     authoring: {
       newTitle: 'Create exercise',

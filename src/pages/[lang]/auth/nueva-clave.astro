@@ -1,0 +1,65 @@
+---
+/**
+ * New-password page — `/[lang]/auth/nueva-clave` (SSR, Login step 1).
+ *
+ * SESSION-GATED, same pattern as `/[lang]/crear`: reached only after
+ * `/api/auth/confirm` has redeemed a password-reset link and left the
+ * caller signed in (`src/pages/api/auth/password.ts`'s `reset` action
+ * points `resetPasswordForEmail`'s `redirectTo` at the confirm route with
+ * `next=/<lang>/auth/nueva-clave`). An anonymous visitor — including one who
+ * just bookmarked this URL — is redirected to sign in first, `next` pointed
+ * back at this same path.
+ *
+ * 🔴 NETLIFY APPENDS THE ORIGINAL REQUEST'S QUERY STRING TO A 30x `Location`
+ * THAT HAS NONE OF ITS OWN (`src/lib/authRedirect.ts`'s header, verified on
+ * a deploy preview). The redirect below always carries its own `?next=…`.
+ *
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE, same rule `crear/index.astro`
+ * and `entrar.astro` document: `markPrivate` runs unconditionally, before
+ * either branch.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import NuevaClaveForm from '@components/islands/NuevaClaveForm';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, so neither exit path can ship without it.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  // NOT `Astro.redirect()`: see `crear/index.astro` for why — it would build
+  // its own `Response` and discard the `markPrivate` mutation above. The
+  // cache-control string is inlined for the same `astro check` false-
+  // positive `crear/[id].astro` documents (a binding used only inside a
+  // `Response(...)` returned from an `if` in `.astro` frontmatter is
+  // flagged ts(6133) even though the code is correct and covered by tests).
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const t = UI_LABELS[lang].auth.nuevaClave;
+---
+
+<BaseLayout lang={lang} title={t.title} description={t.description}>
+  <section class="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-12 sm:py-16">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.title}
+    </h1>
+    <NuevaClaveForm client:load lang={lang} />
+  </section>
+</BaseLayout>
