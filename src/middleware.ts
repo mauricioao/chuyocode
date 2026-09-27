@@ -1,4 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
+import { hasAccess, requiresLogin } from '@lib/access';
+import { safeNextPath } from '@lib/authRedirect';
+import { markPrivate } from '@lib/httpCache';
 import { DEFAULT_LANG, isValidLang, type Lang } from '@lib/i18n';
 import {
   createSessionClient,
@@ -139,6 +142,35 @@ export const onRequest = defineMiddleware(async (context, next) => {
     console.error('[middleware] getUser() threw:', err);
   }
 
+  // Gate Inglés/Cursos (`@lib/access`) HERE, in the one place no page can
+  // forget it, rather than per-page like `/[lang]/crear` does. Scoped to
+  // lang-prefixed pages only (`isNonLocalePath` false) — `requiresLogin`
+  // inspects the THIRD path segment on the assumption the second one is a
+  // lang, so checking it against `/api/...` or an asset path would be
+  // meaningless. Libros, Noticias and the home page are untouched: they are
+  // simply never `requiresLogin`.
+  const gated = !isNonLocalePath && requiresLogin(pathname);
+
+  if (gated && !hasAccess(context.locals.user, pathname)) {
+    // `next`, via `safeNextPath` — same open-redirect guard the magic-link
+    // routes use, since a query string is attacker-controlled.
+    const next = safeNextPath(`${pathname}${context.url.search}`);
+    const headers = new Headers({
+      location: `/${context.locals.lang}/auth/entrar?next=${encodeURIComponent(next)}`,
+    });
+    // Flushed even on this exit: a rotated/cleared session cookie must reach
+    // the browser on every response, redirects included (same rule the auth
+    // endpoints follow).
+    flushSessionHeaders(headers, session);
+    // 🔴 NEVER CACHEABLE. A CDN caching this redirect would serve it to a
+    // visitor who IS signed in, or — worse — cache a signed-in visitor's
+    // gated page under this same key and hand it to the next anonymous
+    // request. See `src/lib/httpCache.ts` (design §2 / T7).
+    markPrivate(headers);
+
+    return new Response(null, { status: 303, statusText: 'See Other', headers });
+  }
+
   const response = await next();
 
   // Supabase may have rotated the session while resolving identity, and asked
@@ -147,6 +179,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // endpoints flush onto the `Response` they build: a rotated cookie that never
   // reaches the browser is a silent logout on the request after this one.
   flushSessionHeaders(response.headers, session);
+
+  // Defense in depth for the same T7 hazard as above: even a SIGNED-IN
+  // visitor's gated page must never reach a shared cache, because that cached
+  // copy would then be handed to the NEXT visitor's request for the same URL,
+  // anonymous or not. Applied here rather than trusted to each gated page,
+  // exactly like the redirect above — a page under `ingles`/`cursos` that
+  // forgets `markPrivate` itself is still covered.
+  if (gated) {
+    markPrivate(response.headers);
+  }
 
   return response;
 });
