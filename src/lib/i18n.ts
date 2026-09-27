@@ -254,6 +254,14 @@ export const UI_LABELS = {
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
         noZonesYet: 'Todavía no hay zonas dibujadas sobre esta imagen.',
+        panelEmpty: 'Dibujar un recuadro sobre la hoja o seleccionar uno para editarlo.',
+        panelEmptyHint:
+          'Atajos: flechas para mover una zona seleccionada, Suprimir para eliminarla, Ctrl/⌘ + rueda o los botones de abajo para hacer zoom.',
+        zoomOut: 'Alejar',
+        zoomIn: 'Acercar',
+        zoomFit: 'Ajustar',
+        zoomReset: '100%',
+        zoomLevel: 'Nivel de zoom',
       },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
@@ -555,6 +563,14 @@ export const UI_LABELS = {
         zoneMinOptions: 'At least 2 options are needed.',
         zoneAnswerNotInOptions: 'Every answer must also be one of the options.',
         noZonesYet: 'No zones drawn on this image yet.',
+        panelEmpty: 'Draw a box on the sheet or select one to edit it.',
+        panelEmptyHint:
+          'Shortcuts: arrow keys move a selected zone, Delete removes it, Ctrl/⌘ + wheel or the buttons below zoom.',
+        zoomOut: 'Zoom out',
+        zoomIn: 'Zoom in',
+        zoomFit: 'Fit',
+        zoomReset: '100%',
+        zoomLevel: 'Zoom level',
       },
       player: {
         notGraded: 'Preview: this view does not grade answers.',

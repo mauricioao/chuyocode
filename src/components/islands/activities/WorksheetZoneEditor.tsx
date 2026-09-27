@@ -1,12 +1,29 @@
 /**
  * WorksheetZoneEditor — the canvas + properties panel for drawing/editing a
- * worksheet block's answer zones (PR B, "Activities creator").
+ * worksheet block's answer zones (PR B, "Activities creator"; canvas UX
+ * fixes in the "creator canvas UX" pass).
  *
  * The image + its zones are ONE canvas: pointer drag on empty space draws a
  * new zone, drag on a zone's body moves it, drag on one of its four corner
  * handles resizes it — every one of those delegates its math to
  * `src/lib/activities/zoneGeometry.ts` (pure, unit-tested there), this
  * component only translates pointer coordinates into calls.
+ *
+ * CANVAS VIEWPORT (zoom/pan): the canvas' content box always renders at
+ * `image.width * zoom` by `image.height * zoom` CSS pixels, inside a
+ * scrollable, screen-bounded viewport — `src/lib/activities/canvasViewport.ts`
+ * (pure, unit-tested there) owns the zoom range, fit calculation, and the
+ * zoom-around-pointer scroll math. Every zone/pointer coordinate below stays
+ * in the SAME container-relative pixel space regardless of zoom, because it
+ * is always read off the content box's own `getBoundingClientRect()`, which
+ * already reflects the current zoom — so none of the drawing/move/resize
+ * math above needs to know a zoom level exists.
+ *
+ * PROPERTIES PANEL IS ALWAYS RENDERED, fixed width, whether or not a zone is
+ * selected — with no zone selected it shows a quiet empty state instead of
+ * disappearing. This is deliberate: hiding the panel let the canvas column
+ * grow to fill the freed width, which "zoomed" the image in and out every
+ * time a zone was selected/deselected (the bug this fixes).
  *
  * ACCESSIBLE FALLBACK, DELIBERATE: pointer dragging on a live image is a
  * manual/Playwright check (jsdom has no real layout — `getBoundingClientRect`
@@ -20,7 +37,7 @@
  * this component's analogue of the editor's "right panel". Arrow keys nudge
  * the selected zone; Delete/Backspace removes it.
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, Zone } from '@/lib/activities/blocks';
 import {
@@ -28,10 +45,18 @@ import {
   moveRect,
   resizeRect,
   nudgeRect,
+  MIN_ZONE_SIZE,
   type Handle,
   type Direction,
   type Rect,
 } from '@/lib/activities/zoneGeometry';
+import {
+  clampZoom,
+  fitZoom,
+  stepZoom,
+  zoomAroundPoint,
+  contentSize,
+} from '@/lib/activities/canvasViewport';
 import { Button } from '@/components/ui/button';
 
 export interface WorksheetZoneEditorProps {
@@ -52,6 +77,15 @@ const HANDLE_CURSOR: Record<Handle, string> = {
   sw: 'cursor-nesw-resize',
 };
 
+/**
+ * Bounds the viewport height to what is actually visible: `100dvh` minus a
+ * rough allowance for the page's own chrome above the editor (site header,
+ * the editor's top bar and the zoom toolbar), with a floor so it never
+ * collapses to something unusable on a short screen and a ceiling so it does
+ * not grow absurdly tall on a huge one.
+ */
+const VIEWPORT_HEIGHT = 'clamp(320px, calc(100dvh - 260px), 900px)';
+
 function defaultRect(): Rect {
   return { x: 0.3, y: 0.3, w: 0.2, h: 0.15 };
 }
@@ -63,7 +97,8 @@ function newZone(): Zone {
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
-  | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect };
+  | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect }
+  | { kind: 'pan'; startClientX: number; startClientY: number; startScrollLeft: number; startScrollTop: number };
 
 export default function WorksheetZoneEditor({
   lang,
@@ -75,10 +110,121 @@ export default function WorksheetZoneEditor({
   onSelectZone,
 }: WorksheetZoneEditorProps) {
   const t = UI_LABELS[lang].activities.worksheet;
+  const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragMode | null>(null);
+  const spaceHeldRef = useRef(false);
+
+  const [zoom, setZoom] = useState(1);
+  const [fitMode, setFitMode] = useState(true);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const [draftRect, setDraftRect] = useState<Rect | null>(null);
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
+
+  const computeFitZoom = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) return 1;
+    const box = el.getBoundingClientRect();
+    return fitZoom({ width: box.width, height: box.height }, { width: image.width, height: image.height });
+  }, [image.width, image.height]);
+
+  // Default view is fit-to-view (decision #5: the whole worksheet visible on
+  // load, however tall/portrait it is), computed once real layout exists.
+  useEffect(() => {
+    setZoom(computeFitZoom());
+    // Only on mount: a resize handler (below) keeps re-fitting afterwards
+    // while still in fit mode, and any explicit zoom action turns fit mode
+    // off — re-running this on every `computeFitZoom` identity change would
+    // fight both of those.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!fitMode) return undefined;
+    function onResize() {
+      setZoom(computeFitZoom());
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [fitMode, computeFitZoom]);
+
+  const applyZoom = useCallback((next: number, anchor?: { x: number; y: number }) => {
+    setFitMode(false);
+    setZoom((prev) => {
+      const clamped = clampZoom(next);
+      const viewport = viewportRef.current;
+      if (viewport && anchor) {
+        const nextScroll = zoomAroundPoint(
+          anchor,
+          { left: viewport.scrollLeft, top: viewport.scrollTop },
+          prev,
+          clamped,
+        );
+        // Applied after the state write lands, once the content box's new
+        // (zoomed) size is actually in the DOM — a same-tick write would
+        // clamp against the OLD scrollable range.
+        requestAnimationFrame(() => {
+          if (!viewportRef.current) return;
+          viewportRef.current.scrollLeft = nextScroll.left;
+          viewportRef.current.scrollTop = nextScroll.top;
+        });
+      }
+      return clamped;
+    });
+  }, []);
+
+  const handleZoomIn = useCallback(() => applyZoom(stepZoom(zoom, 'in')), [applyZoom, zoom]);
+  const handleZoomOut = useCallback(() => applyZoom(stepZoom(zoom, 'out')), [applyZoom, zoom]);
+  const handleZoomReset = useCallback(() => applyZoom(1), [applyZoom]);
+  const handleZoomFit = useCallback(() => {
+    setFitMode(true);
+    setZoom(computeFitZoom());
+  }, [computeFitZoom]);
+
+  // Ctrl/⌘ + wheel zooms around the pointer. A native, non-passive listener:
+  // React's synthetic wheel handler is attached passively, so `preventDefault`
+  // on it cannot reliably stop the page from also scrolling/zooming.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const rect = viewport!.getBoundingClientRect();
+      const anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const direction = e.deltaY < 0 ? 'in' : 'out';
+      applyZoom(stepZoom(zoom, direction, 0.1), anchor);
+    }
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', onWheel);
+  }, [applyZoom, zoom]);
+
+  // +/- zoom keys while the canvas viewport is focused; space toggles pan
+  // mode (grab cursor) for a space+drag pan over the canvas' empty area.
+  const handleViewportKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleZoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        handleZoomOut();
+      } else if (e.key === ' ' && !spaceHeldRef.current) {
+        spaceHeldRef.current = true;
+        setSpaceHeld(true);
+      }
+    },
+    [handleZoomIn, handleZoomOut],
+  );
+
+  const handleViewportKeyUp = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === ' ') {
+      spaceHeldRef.current = false;
+      setSpaceHeld(false);
+    }
+  }, []);
 
   const containerSize = useCallback(() => {
     const el = containerRef.current;
@@ -100,19 +246,39 @@ export default function WorksheetZoneEditor({
     [zones, onZonesChange],
   );
 
+  const startPan = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const viewport = viewportRef.current;
+    dragRef.current = {
+      kind: 'pan',
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startScrollLeft: viewport?.scrollLeft ?? 0,
+      startScrollTop: viewport?.scrollTop ?? 0,
+    };
+    setIsPanning(true);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }, []);
+
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return; // a zone/handle handles its own pointer down
+      if (e.button === 1 || spaceHeldRef.current) {
+        startPan(e);
+        return;
+      }
       onSelectZone(null);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'draw', start };
+      setDraftRect(null);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [onSelectZone, pointFromEvent],
+    [onSelectZone, pointFromEvent, startPan],
   );
 
   const handleZonePointerDown = useCallback(
     (zone: Zone) => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button === 1) return; // let it bubble to the canvas' middle-drag pan
       e.stopPropagation();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
@@ -124,6 +290,7 @@ export default function WorksheetZoneEditor({
 
   const handleHandlePointerDown = useCallback(
     (zone: Zone, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button === 1) return;
       e.stopPropagation();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
@@ -137,12 +304,25 @@ export default function WorksheetZoneEditor({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
       if (!drag) return;
+
+      if (drag.kind === 'pan') {
+        const viewport = viewportRef.current;
+        if (viewport) {
+          viewport.scrollLeft = drag.startScrollLeft - (e.clientX - drag.startClientX);
+          viewport.scrollTop = drag.startScrollTop - (e.clientY - drag.startClientY);
+        }
+        return;
+      }
+
       const size = containerSize();
       const point = pointFromEvent(e);
 
       if (drag.kind === 'draw') {
-        // The in-progress draft is shown by re-deriving it on every move; it
-        // is committed as a real zone only on pointer up.
+        // The rubber-band rectangle, live: re-derived from the drag start to
+        // the CURRENT pointer position on every move, and committed as a
+        // real zone only on pointer up (or discarded if it never grew past
+        // the minimum size — see `handlePointerUp`).
+        setDraftRect(rectFromDrag(drag.start, point, size));
         return;
       }
       if (size.width <= 0 || size.height <= 0) return;
@@ -159,23 +339,45 @@ export default function WorksheetZoneEditor({
     [containerSize, pointFromEvent, updateZoneRect],
   );
 
+  const endDrag = useCallback(() => {
+    dragRef.current = null;
+    setDraftRect(null);
+    setIsPanning(false);
+  }, []);
+
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
-      dragRef.current = null;
-      if (!drag) return;
+      endDrag();
+      if (!drag || drag.kind !== 'draw') return;
 
-      if (drag.kind === 'draw') {
-        const size = containerSize();
-        const end = pointFromEvent(e);
-        const rect = rectFromDrag(drag.start, end, size);
-        const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
-        onZonesChange([...zones, zone]);
-        onSelectZone(zone.id);
-      }
+      const size = containerSize();
+      const end = pointFromEvent(e);
+      if (size.width <= 0 || size.height <= 0) return;
+
+      // A drag that never grew past the minimum zone size (including a
+      // plain click with no movement at all) is discarded rather than
+      // committed as a tiny default-sized zone — no flicker, no accidental
+      // zone. `MIN_ZONE_SIZE` is `zoneGeometry.ts`'s own floor, checked here
+      // on the RAW (unclamped) drag distance before `rectFromDrag` would
+      // otherwise floor it up to a real zone.
+      const rawW = Math.abs(end.x - drag.start.x) / size.width;
+      const rawH = Math.abs(end.y - drag.start.y) / size.height;
+      if (rawW < MIN_ZONE_SIZE && rawH < MIN_ZONE_SIZE) return;
+
+      const rect = rectFromDrag(drag.start, end, size);
+      const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
+      onZonesChange([...zones, zone]);
+      onSelectZone(zone.id);
     },
-    [containerSize, pointFromEvent, zones, onZonesChange, onSelectZone],
+    [containerSize, pointFromEvent, zones, onZonesChange, onSelectZone, endDrag],
   );
+
+  const handlePointerCancel = useCallback(() => {
+    // An OS/browser-cancelled gesture never commits — same "no flicker, no
+    // accidental zone" rule as a too-small drag in `handlePointerUp`.
+    endDrag();
+  }, [endDrag]);
 
   const handleAddZone = useCallback(() => {
     const zone = newZone();
@@ -260,56 +462,111 @@ export default function WorksheetZoneEditor({
     [selectedZone, zones, onZonesChange],
   );
 
+  const canvasSize = contentSize(image, zoom);
+  const zoomPercent = Math.round(zoom * 100);
+  const canvasCursorClass = isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-crosshair';
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row" data-testid="worksheet-zone-editor">
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <div
-          ref={containerRef}
-          data-testid="zone-canvas"
-          onPointerDown={handleCanvasPointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          className="relative w-full touch-none overflow-hidden rounded-lg bg-muted select-none"
-          style={{ aspectRatio: `${image.width} / ${image.height}` }}
+          className="mb-2 flex flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
+          data-testid="zoom-toolbar"
         >
-          <img src={imageUrl} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
-          {zones.map((zone) => {
-            const selected = zone.id === selectedZoneId;
-            const style = {
-              left: `${zone.x * 100}%`,
-              top: `${zone.y * 100}%`,
-              width: `${zone.w * 100}%`,
-              height: `${zone.h * 100}%`,
-            };
-            return (
+          <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
+            −
+          </Button>
+          <span
+            data-testid="zoom-level"
+            role="status"
+            aria-label={t.zoomLevel}
+            className="min-w-12 text-center text-xs tabular-nums text-muted-foreground"
+          >
+            {zoomPercent}%
+          </span>
+          <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomIn} data-testid="zoom-in" onClick={handleZoomIn}>
+            +
+          </Button>
+          <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+          <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
+            {t.zoomFit}
+          </Button>
+          <Button type="button" size="sm" variant="outline" data-testid="zoom-reset" onClick={handleZoomReset}>
+            {t.zoomReset}
+          </Button>
+        </div>
+
+        <div
+          ref={viewportRef}
+          data-testid="zone-viewport"
+          tabIndex={0}
+          onKeyDown={handleViewportKeyDown}
+          onKeyUp={handleViewportKeyUp}
+          className="relative overflow-auto rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          style={{ height: VIEWPORT_HEIGHT }}
+        >
+          <div
+            ref={containerRef}
+            data-testid="zone-canvas"
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            className={`relative touch-none select-none ${canvasCursorClass}`}
+            style={{ width: canvasSize.width, height: canvasSize.height }}
+          >
+            <img src={imageUrl} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+            {zones.map((zone) => {
+              const selected = zone.id === selectedZoneId;
+              const style = {
+                left: `${zone.x * 100}%`,
+                top: `${zone.y * 100}%`,
+                width: `${zone.w * 100}%`,
+                height: `${zone.h * 100}%`,
+              };
+              return (
+                <div
+                  key={zone.id}
+                  data-testid={`zone-${zone.id}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={zone.kind === 'text' ? t.zoneKindText : t.zoneKindChoice}
+                  aria-pressed={selected}
+                  onPointerDown={handleZonePointerDown(zone)}
+                  onKeyDown={handleZoneKeyDown(zone)}
+                  className={`absolute cursor-move rounded border-2 ${
+                    selected ? 'border-primary bg-primary/20' : 'border-accent/70 bg-accent/10'
+                  } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
+                  style={style}
+                >
+                  {selected &&
+                    HANDLES.map((handle) => (
+                      <div
+                        key={handle}
+                        data-testid={`handle-${zone.id}-${handle}`}
+                        onPointerDown={handleHandlePointerDown(zone, handle)}
+                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary ${HANDLE_CURSOR[handle]} ${
+                          handle.includes('n') ? '-top-1.5' : '-bottom-1.5'
+                        } ${handle.includes('w') ? '-left-1.5' : '-right-1.5'}`}
+                      />
+                    ))}
+                </div>
+              );
+            })}
+            {draftRect && (
               <div
-                key={zone.id}
-                data-testid={`zone-${zone.id}`}
-                role="button"
-                tabIndex={0}
-                aria-label={zone.kind === 'text' ? t.zoneKindText : t.zoneKindChoice}
-                aria-pressed={selected}
-                onPointerDown={handleZonePointerDown(zone)}
-                onKeyDown={handleZoneKeyDown(zone)}
-                className={`absolute cursor-move rounded border-2 ${
-                  selected ? 'border-primary bg-primary/20' : 'border-accent/70 bg-accent/10'
-                } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
-                style={style}
-              >
-                {selected &&
-                  HANDLES.map((handle) => (
-                    <div
-                      key={handle}
-                      data-testid={`handle-${zone.id}-${handle}`}
-                      onPointerDown={handleHandlePointerDown(zone, handle)}
-                      className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary ${HANDLE_CURSOR[handle]} ${
-                        handle.includes('n') ? '-top-1.5' : '-bottom-1.5'
-                      } ${handle.includes('w') ? '-left-1.5' : '-right-1.5'}`}
-                    />
-                  ))}
-              </div>
-            );
-          })}
+                data-testid="zone-draft"
+                aria-hidden="true"
+                className="pointer-events-none absolute rounded border-2 border-dashed border-primary bg-primary/10"
+                style={{
+                  left: `${draftRect.x * 100}%`,
+                  top: `${draftRect.y * 100}%`,
+                  width: `${draftRect.w * 100}%`,
+                  height: `${draftRect.h * 100}%`,
+                }}
+              />
+            )}
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button type="button" size="sm" variant="outline" data-testid="add-zone" onClick={handleAddZone}>
@@ -320,119 +577,129 @@ export default function WorksheetZoneEditor({
         <p className="mt-1 text-xs text-muted-foreground">{t.addZoneHint}</p>
       </div>
 
-      {selectedZone && (
-        <div className="w-full flex-none lg:w-72" data-testid="zone-properties-panel">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
-            <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
-              ✕
-            </Button>
-          </div>
-          <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
-            <Button
-              type="button"
-              size="sm"
-              variant={selectedZone.kind === 'text' ? 'default' : 'outline'}
-              role="radio"
-              aria-checked={selectedZone.kind === 'text'}
-              onClick={() => setKind('text')}
-            >
-              {t.zoneKindText}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={selectedZone.kind === 'choice' ? 'default' : 'outline'}
-              role="radio"
-              aria-checked={selectedZone.kind === 'choice'}
-              onClick={() => setKind('choice')}
-            >
-              {t.zoneKindChoice}
-            </Button>
-          </div>
-
-          {selectedZone.kind === 'text' && (
-            <div className="mt-4 flex flex-col gap-2">
-              <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
-              {selectedZone.answers.map((answer, i) => (
-                <div key={i} className="flex gap-1">
-                  <input
-                    type="text"
-                    value={answer}
-                    placeholder={t.zoneAnswerPlaceholder}
-                    aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
-                    onChange={(e) => {
-                      const next = [...selectedZone.answers];
-                      next[i] = e.target.value;
-                      setAnswers(next);
-                    }}
-                    className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm"
-                  />
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={t.zoneAnswerRemove}
-                    disabled={selectedZone.answers.length <= 1}
-                    onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
-                  >
-                    ✕
-                  </Button>
-                </div>
-              ))}
-              <Button type="button" size="sm" variant="outline" onClick={() => setAnswers([...selectedZone.answers, ''])}>
-                + {t.zoneAnswerAdd}
+      {/* ALWAYS rendered, fixed width — see the file header. Hiding this
+          column when nothing is selected is exactly the bug that made the
+          canvas "zoom" on select/deselect. */}
+      <div className="w-full flex-none lg:w-72" data-testid="zone-properties-panel">
+        {selectedZone ? (
+          <div data-testid="zone-properties-content">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
+              <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
+                ✕
               </Button>
             </div>
-          )}
-
-          {selectedZone.kind === 'choice' && (
-            <div className="mt-4 flex flex-col gap-2">
-              <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
-              {(selectedZone.options ?? []).map((option, i) => (
-                <div key={i} className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    aria-label={t.zoneOptionCorrect}
-                    checked={selectedZone.answers.includes(option)}
-                    onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
-                  />
-                  <input
-                    type="text"
-                    value={option}
-                    placeholder={t.zoneOptionPlaceholder}
-                    aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
-                    onChange={(e) => {
-                      const options = [...(selectedZone.options ?? [])];
-                      options[i] = e.target.value;
-                      setOptions(options);
-                    }}
-                    className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm"
-                  />
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={t.zoneOptionRemove}
-                    disabled={(selectedZone.options ?? []).length <= 2}
-                    onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
-                  >
-                    ✕
-                  </Button>
-                </div>
-              ))}
+            <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
-                onClick={() => setOptions([...(selectedZone.options ?? []), ''])}
+                variant={selectedZone.kind === 'text' ? 'default' : 'outline'}
+                role="radio"
+                aria-checked={selectedZone.kind === 'text'}
+                onClick={() => setKind('text')}
               >
-                + {t.zoneOptionAdd}
+                {t.zoneKindText}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={selectedZone.kind === 'choice' ? 'default' : 'outline'}
+                role="radio"
+                aria-checked={selectedZone.kind === 'choice'}
+                onClick={() => setKind('choice')}
+              >
+                {t.zoneKindChoice}
               </Button>
             </div>
-          )}
-        </div>
-      )}
+
+            {selectedZone.kind === 'text' && (
+              <div className="mt-4 flex flex-col gap-2">
+                <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
+                {selectedZone.answers.map((answer, i) => (
+                  <div key={i} className="flex gap-1">
+                    <input
+                      type="text"
+                      value={answer}
+                      placeholder={t.zoneAnswerPlaceholder}
+                      aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
+                      onChange={(e) => {
+                        const next = [...selectedZone.answers];
+                        next[i] = e.target.value;
+                        setAnswers(next);
+                      }}
+                      className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+                    />
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={t.zoneAnswerRemove}
+                      disabled={selectedZone.answers.length <= 1}
+                      onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" size="sm" variant="outline" onClick={() => setAnswers([...selectedZone.answers, ''])}>
+                  + {t.zoneAnswerAdd}
+                </Button>
+              </div>
+            )}
+
+            {selectedZone.kind === 'choice' && (
+              <div className="mt-4 flex flex-col gap-2">
+                <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
+                {(selectedZone.options ?? []).map((option, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      aria-label={t.zoneOptionCorrect}
+                      checked={selectedZone.answers.includes(option)}
+                      onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
+                    />
+                    <input
+                      type="text"
+                      value={option}
+                      placeholder={t.zoneOptionPlaceholder}
+                      aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
+                      onChange={(e) => {
+                        const options = [...(selectedZone.options ?? [])];
+                        options[i] = e.target.value;
+                        setOptions(options);
+                      }}
+                      className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+                    />
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={t.zoneOptionRemove}
+                      disabled={(selectedZone.options ?? []).length <= 2}
+                      onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setOptions([...(selectedZone.options ?? []), ''])}
+                >
+                  + {t.zoneOptionAdd}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
+            <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
