@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
-import { AUTH_ERROR_PARAM, AUTH_ERROR_LINK_INVALID, AUTH_SIGNED_IN } from '@lib/authRedirect';
+import {
+  AUTH_ERROR_PARAM,
+  AUTH_ERROR_LINK_INVALID,
+  AUTH_ERROR_GOOGLE_UNAVAILABLE,
+  AUTH_SIGNED_IN,
+} from '@lib/authRedirect';
 import EntrarPage from './entrar.astro';
 
 /** Render the sign-in page with route params + middleware locals. */
@@ -44,19 +49,23 @@ describe('GET /[lang]/auth/entrar — response mechanics', () => {
 });
 
 /**
- * NOTE: the default (anonymous, no `auth` marker) render mounts `SignInForm`
- * (`client:load`), which `AstroContainer` cannot render without the
- * `@astrojs/react` server renderer configured — same limitation documented at
- * `src/pages/[lang]/libros/libros.test.ts:49`. The island itself is fully
- * covered at the unit level by `src/components/islands/SignInForm.test.tsx`;
- * the anonymous PAGE render (markup + the island mounted together) is
- * covered by hand / left for a future Playwright pass — see the apply
- * report's "Manual verification needed" list.
+ * NOTE: the default (anonymous, no `auth` marker) render mounts `AuthPanel`
+ * (`client:load`, wrapping `PasswordAuthForm`/`SignInForm`), which
+ * `AstroContainer` cannot render without the `@astrojs/react` server
+ * renderer configured — same limitation documented at
+ * `src/pages/[lang]/libros/libros.test.ts:49`. This also covers the plain
+ * Google `<form>` rendered alongside it: it needs no island of its own, but
+ * it sits in the SAME anonymous branch as `AuthPanel`, so the whole render
+ * throws before either produces assertable HTML. The islands are fully
+ * covered at the unit level (`AuthPanel.test.tsx`, `PasswordAuthForm.test.tsx`,
+ * `SignInForm.test.tsx`); the anonymous PAGE render (markup + islands mounted
+ * together, Google form included) is covered by hand / left for a future
+ * Playwright pass — see the apply report's "Manual verification needed" list.
  */
 describe('GET /[lang]/auth/entrar — the anonymous form (island)', () => {
   // See the NOTE above: no `@astrojs/react` server renderer is configured for
   // `AstroContainer` anywhere in this repo yet, so a render that mounts
-  // `SignInForm` throws here rather than producing assertable HTML.
+  // `AuthPanel` throws here rather than producing assertable HTML.
   it.skip('renders the sign-in form for an anonymous visitor', async () => {
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },
@@ -99,6 +108,18 @@ describe('GET /[lang]/auth/entrar — markers (no island mounted)', () => {
     const html = await res.text();
 
     expect(html).toContain('data-testid="auth-link-invalid"');
+    expect(html).not.toContain('data-testid="auth-signed-in-marker"');
+  });
+
+  it('shows the Google-unavailable invitation for ?auth=google-unavailable', async () => {
+    const res = await render(
+      `https://chuyocode.test/es/auth/entrar?${AUTH_ERROR_PARAM}=${AUTH_ERROR_GOOGLE_UNAVAILABLE}`,
+      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+    );
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="auth-google-unavailable"');
+    expect(html).not.toContain('data-testid="auth-link-invalid"');
     expect(html).not.toContain('data-testid="auth-signed-in-marker"');
   });
 });

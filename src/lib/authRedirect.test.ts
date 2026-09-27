@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_LANG } from './i18n';
 import {
+  AUTH_ERROR_GOOGLE_UNAVAILABLE,
   AUTH_ERROR_LINK_INVALID,
   AUTH_ERROR_PARAM,
   AUTH_SIGNED_IN,
@@ -28,6 +29,7 @@ import {
   stripAuthParams,
   withAuthError,
   withAuthSuccess,
+  withGoogleUnavailable,
   withSignedOut,
 } from './authRedirect';
 
@@ -245,6 +247,20 @@ describe('withAuthError — the rejected-link marker', () => {
 
   it('preserves the fragment', () => {
     expect(withAuthError('/es/#seccion')).toBe(`/es/?${MARKER}#seccion`);
+  });
+});
+
+describe('withGoogleUnavailable — the Google-not-configured marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_ERROR_GOOGLE_UNAVAILABLE}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withGoogleUnavailable('/es/auth/entrar')).toBe(`/es/auth/entrar?${MARKER}`);
+  });
+
+  it('REPLACES an auth value the caller tried to smuggle in', () => {
+    expect(withGoogleUnavailable('/es/auth/entrar?auth=todo-bien')).toBe(
+      `/es/auth/entrar?${MARKER}`,
+    );
   });
 });
 
