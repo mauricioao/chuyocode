@@ -152,7 +152,8 @@ export const UI_LABELS = {
       userMenu: {
         signIn: 'Entrar',
         accountMenu: 'Cuenta',
-        planFree: 'Plan Gratis',
+        planFree: 'Free',
+        planPremium: 'Premium',
         signOut: 'Cerrar sesión',
       },
     },
@@ -367,7 +368,8 @@ export const UI_LABELS = {
       userMenu: {
         signIn: 'Sign in',
         accountMenu: 'Account',
-        planFree: 'Free plan',
+        planFree: 'Free',
+        planPremium: 'Premium',
         signOut: 'Sign out',
       },
     },

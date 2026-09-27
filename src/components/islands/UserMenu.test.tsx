@@ -31,6 +31,14 @@ const PASSWORD_PROFILE: Profile = {
   plan: 'free',
 };
 
+const PREMIUM_PROFILE: Profile = {
+  name: 'lector',
+  email: 'lector@example.com',
+  avatarUrl: null,
+  initials: 'L',
+  plan: 'premium',
+};
+
 /** Install a `fetch` stub answering `GET /api/me` with the given profile. */
 function stubMe(profile: Profile | null) {
   const fetchMock = vi.fn().mockResolvedValue({
@@ -135,6 +143,16 @@ describe('UserMenu — dropdown', () => {
     expect(dropdown.textContent).toContain(PASSWORD_PROFILE.name);
     expect(dropdown.textContent).toContain(PASSWORD_PROFILE.email);
     expect(dropdown.textContent).toContain(UI_LABELS.es.auth.userMenu.planFree);
+  });
+
+  it('shows the Premium badge for a premium plan', async () => {
+    stubMe(PREMIUM_PROFILE);
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const dropdown = screen.getByTestId('user-menu-dropdown');
+    expect(dropdown.textContent).toContain(UI_LABELS.es.auth.userMenu.planPremium);
+    expect(dropdown.textContent).not.toContain(UI_LABELS.es.auth.userMenu.planFree);
   });
 
   it('renders sign-out as a plain POST form with data-astro-reload', async () => {

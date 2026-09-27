@@ -174,7 +174,7 @@ export default function UserMenu({ lang }: UserMenuProps) {
           <p className="truncate text-sm font-medium text-foreground">{profile.name}</p>
           <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
           <span className="mt-2 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            {t.planFree}
+            {profile.plan === 'premium' ? t.planPremium : t.planFree}
           </span>
           <form method="POST" action="/api/auth/signout" data-astro-reload className="mt-3">
             <button
