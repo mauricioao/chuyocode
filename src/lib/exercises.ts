@@ -137,8 +137,9 @@ export async function getExerciseBySlug(
       .eq('level', level)
       .eq('focus', focus)
       .eq('slug', slug)
-      // Unpublished drafts must not be reachable by guessing a deep link.
-      .eq('published', true)
+      // Draft, needs_work, removed and hidden rows must not be reachable by
+      // guessing a deep link; auditing rows still must (0007_exercise_authorship.sql).
+      .eq('visible', true)
       .maybeSingle();
 
     if (error) {
@@ -196,8 +197,9 @@ export async function getExerciseFacetRows(): Promise<FacetRow[]> {
     const { data, error } = await client
       .from(EXERCISES_TABLE)
       .select(FACET_COLUMNS)
-      // Drafts must never inflate a count the grid cannot honour.
-      .eq('published', true);
+      // Draft/needs_work/removed/hidden rows must never inflate a count the
+      // grid cannot honour; auditing rows still count (still visible).
+      .eq('visible', true);
 
     if (error) {
       console.error('[exercises] getExerciseFacetRows failed:', error.message);
@@ -247,7 +249,7 @@ export async function getPublishedExercises(
       .select(EXERCISE_COLUMNS)
       .eq('level', level)
       .eq('focus', focus)
-      .eq('published', true)
+      .eq('visible', true)
       // Deterministic order: without it Postgres may return rows in any order
       // and the grid would reshuffle between visits for no reason.
       .order('slug', { ascending: true });
@@ -352,8 +354,9 @@ export async function getRelatedExercises(
       .from(EXERCISES_TABLE)
       .select(EXERCISE_COLUMNS)
       .eq('level', current.level)
-      // Drafts must not be reachable through a suggestion either.
-      .eq('published', true)
+      // Drafts/needs_work/removed/hidden must not be suggested either;
+      // auditing rows still may be.
+      .eq('visible', true)
       .order('focus', { ascending: true })
       .order('slug', { ascending: true })
       // `limit + 1`: the current exercise is itself a row at this level and may

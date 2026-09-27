@@ -438,22 +438,32 @@ One table. **Columns for what you filter by, `jsonb` for what you render.**
 
 ```sql
 create table exercises (
-  id          uuid primary key default gen_random_uuid(),
-  slug        text not null,        -- URL segment; see "Deep links" below
-  skill       text not null,        -- writing | listening | reading (filter label)
-  level       text not null,        -- CEFR: A1 A2 B1 B2 C1 C2
-  focus       text not null,        -- PRIMARY axis: the language point
-  topic       text,                 -- SECONDARY axis: the context. NULLABLE.
-  payload     jsonb not null default '{}',
-  published   boolean not null default false,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),  -- maintained by trigger
-  updated_by  uuid references auth.users(id),
+  id           uuid primary key default gen_random_uuid(),
+  slug         text not null,        -- URL segment; see "Deep links" below
+  skill        text not null,        -- writing | listening | reading (filter label)
+  level        text not null,        -- CEFR: A1 A2 B1 B2 C1 C2
+  focus        text not null,        -- PRIMARY axis: the language point
+  topic        text,                 -- SECONDARY axis: the context. NULLABLE.
+  payload      jsonb not null default '{}',
+  status       text not null default 'draft',  -- draft|live|auditing|needs_work|removed
+  published_at timestamptz,          -- set once, on the first draft->live move
+  hidden_at    timestamptz,          -- paired with hidden_by; the ONLY path to invisibility
+  hidden_by    uuid references auth.users(id) on delete set null,
+  author_id    uuid references auth.users(id) on delete set null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),  -- maintained by trigger
+  updated_by   uuid references auth.users(id) on delete set null,
+
+  -- Generated, STORED: the ONE column every read site filters on. Never
+  -- written directly — Postgres rejects that because it is generated.
+  visible      boolean generated always as (
+                 status in ('live', 'auditing') and hidden_at is null
+               ) stored,
 
   unique (level, focus, slug)
 );
 
-create index on exercises (level, focus) where published;
+create index on exercises (level, focus) where visible;
 
 -- A listening exercise without audio is unplayable. Reject at the source.
 alter table exercises add constraint listening_requires_audio
@@ -462,6 +472,18 @@ alter table exercises add constraint listening_requires_audio
     or coalesce(payload->'media'->>'audio', '') <> ''
   );
 ```
+
+### Status, visibility, and who did it
+
+Three axes, kept deliberately separate (`supabase/migrations/0007_exercise_authorship.sql`, design.md §3):
+
+- **`status`** answers WHERE an exercise sits in its lifecycle: `draft`, `live`, `auditing`, `needs_work`, `removed`. The enum is exhaustive and closed — see `exercises_status_valid` — but it never records HOW it got there or WHO moved it.
+- **`hidden_at` / `hidden_by`** answer WHO hid it and WHEN, all-or-nothing (`exercises_hidden_pair`). This is the ONLY path to invisibility. Automatic entry into `auditing` — quality dislikes crossing a threshold — is a lifecycle move, not a visibility move: the exercise stays fully reachable until a moderator explicitly hides it.
+- **`visible`** is derived, never authored: `status in ('live', 'auditing') and hidden_at is null`, generated and `STORED` so every read site filters on this one column instead of re-deriving the rule at each call site.
+
+The rule to keep: **the enum answers WHERE, never HOW or WHO.** `status` alone can never explain a takedown — that always needs the paired `hidden_at`/`hidden_by`, which is why they are separate columns instead of extra `status` values like `hidden` or `removed_by_moderator`.
+
+Legal transitions between `status` values are enforced in TypeScript (`src/lib/exerciseLifecycle.ts:canTransition`), not SQL — see that file's header for why.
 
 ### Decisions worth remembering
 
@@ -520,7 +542,7 @@ The layered approach:
 Prefer **filtering over disabling**:
 
 ```sql
-where published and (skill <> 'listening' or media_ok)
+where visible and (skill <> 'listening' or media_ok)
 ```
 
 A greyed-out card tells the learner "something was here, and we will not explain what happened" while still consuming grid space. Also note that `<a>` has no `disabled` attribute — faking one requires removing `href` and adding `aria-disabled`, a well-known accessibility antipattern.
@@ -759,7 +781,7 @@ Deliberately out of scope. Each would be a separate change.
 
 | Not doing | Why |
 |---|---|
-| Per-user progress, scores, streaks | No accounts. Feedback is ephemeral and client-side. |
+| Per-learner progress, scores, streaks | Feedback is ephemeral and client-side, even though authors now have accounts (`supabase/migrations/0007_exercise_authorship.sql`). |
 | Server-side answer validation | Stateless instant feedback is the requirement; there is no score to protect. |
 | Open-ended writing or spoken answers | Cannot be auto-graded by any comparator here. The `text` mechanic grades a *blank*, not a paragraph. |
 | A `mechanics` database table | Mechanics are code. |

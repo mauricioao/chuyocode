@@ -148,7 +148,7 @@ describe('getExerciseBySlug', () => {
     expect(exercise?.payload.pools.opts).toHaveLength(2);
   });
 
-  it('queries the exercises table filtered by level, focus, slug and published', async () => {
+  it('queries the exercises table filtered by level, focus, slug and visible', async () => {
     maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
 
     await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
@@ -157,8 +157,9 @@ describe('getExerciseBySlug', () => {
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
     expect(eqMock).toHaveBeenCalledWith('focus', 'present-simple');
     expect(eqMock).toHaveBeenCalledWith('slug', 'cat-on-the-mat');
-    // Unpublished drafts must never be reachable by deep link.
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    // Drafts and removed/hidden rows must never be reachable by deep link;
+    // auditing rows still must (0007_exercise_authorship.sql).
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   it('never filters by topic — context is not an axis', async () => {
@@ -354,10 +355,10 @@ describe('getExerciseFacetRows', () => {
     expect(selected).not.toContain('topic');
   });
 
-  it('counts only published rows, so drafts never inflate a chip', async () => {
+  it('counts only visible rows, so drafts never inflate a chip', async () => {
     await getExerciseFacetRows();
 
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   // Spec — Scenario: Supabase failure yields empty result.
@@ -416,7 +417,7 @@ describe('getPublishedExercises', () => {
     expect(exercises[0]?.payload.slots[0]?.answer).toEqual(['b']);
   });
 
-  it('filters by level, focus and published', async () => {
+  it('filters by level, focus and visible', async () => {
     listResult.value = { data: [ROW], error: null };
 
     await getPublishedExercises('A1', 'present-simple');
@@ -424,7 +425,7 @@ describe('getPublishedExercises', () => {
     expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
     expect(eqMock).toHaveBeenCalledWith('focus', 'present-simple');
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   it('orders the listing deterministically so the grid does not reshuffle', async () => {
@@ -636,13 +637,13 @@ describe('getRelatedExercises', () => {
     expect(limitMock).toHaveBeenCalledWith(4);
   });
 
-  it('reads published rows only', async () => {
+  it('reads visible rows only', async () => {
     listResult.value = { data: [rowAt('a')], error: null };
 
     await getRelatedExercises(current);
 
     expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   it('orders by (focus, slug) — the new unique key — so the block cannot reshuffle', async () => {
