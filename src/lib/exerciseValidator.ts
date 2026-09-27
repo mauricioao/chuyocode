@@ -14,12 +14,9 @@
  * exact sentence (authoring-brief §6.11), that a `text` slot's answer list is
  * complete (§6.3), or that `focus`/`level` matches the sentence (§6.7/§6.12).
  * Those require reading English; this is a structural gate only.
- *
- * Slices 10-11: slice 10 delivers block/shape/pool rules below; the
- * mechanic-specific rules (multiple blanks, unknown mechanic, drop pool
- * sizing, listening/audio, slug format, mechanic variety) land in slice 11.
  */
-import type { Payload, Pool, Slot } from './exercisePayload';
+import { hasAudio, type Payload, type Pool, type Slot } from './exercisePayload';
+import { comparatorFor } from './exerciseGrading';
 
 /**
  * Closed union of every rule this validator enforces.
@@ -68,6 +65,22 @@ export interface ValidatorInput {
   slug: string;
   payload: Payload;
 }
+
+/**
+ * Same rule as `exercisePayload.ts`'s private `BLANK_MARKER`: a RUN of three or
+ * more underscores. Duplicated rather than imported because that constant is
+ * not exported; the shared home is `countBlanks` (slice 12). Keep both rules
+ * in sync until then.
+ */
+const BLANK_MARKER = /_{3,}/g;
+
+/** Short, kebab-case, non-empty (authoring-brief §6.5). "English" is not
+ * machine-checkable, so it is out of scope for a structural gate. */
+const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** Fewer than this many distinct mechanics is a style warning, never a
+ * publish blocker (authoring-brief §5.5; design §7). */
+const MECHANICS_FOR_VARIETY_RULE = 2;
 
 function issue(
   code: ValidationCode,
@@ -149,6 +162,40 @@ function checkSlot(slot: Slot, payload: Payload): ValidationIssue[] {
     }
   }
 
+  const blankCount = (slot.label.match(BLANK_MARKER) ?? []).length;
+  if (blankCount > 1) {
+    found.push(issue('slot_multiple_blanks', 'error', { slotId: slot.id }));
+  }
+
+  if (comparatorFor(slot.input) === null) {
+    found.push(
+      issue('slot_unknown_mechanic', 'error', { slotId: slot.id, detail: slot.input }),
+    );
+  }
+
+  return found;
+}
+
+/** A shared `drop` pool needs more tiles than the `drop` slots drawing from it
+ * (authoring-brief §6.9): a placed tile is removed from the pool for every
+ * other `drop` slot, so an exactly-sized pool leaves the last slot with
+ * exactly one option — it answers itself. Skips a pool that does not exist;
+ * `slot_pool_missing` already covers that. */
+function checkDropPools(payload: Payload): ValidationIssue[] {
+  const dropSlotsByPool = new Map<string, number>();
+  for (const slot of payload.slots) {
+    if (slot.input !== 'drop' || slot.pool === undefined) continue;
+    if (payload.pools[slot.pool] === undefined) continue;
+    dropSlotsByPool.set(slot.pool, (dropSlotsByPool.get(slot.pool) ?? 0) + 1);
+  }
+
+  const found: ValidationIssue[] = [];
+  for (const [poolName, dropCount] of dropSlotsByPool) {
+    const pool = payload.pools[poolName]!;
+    if (pool.length <= dropCount) {
+      found.push(issue('drop_pool_too_small', 'error', { poolName }));
+    }
+  }
   return found;
 }
 
@@ -186,6 +233,21 @@ export function validateExercise(input: ValidatorInput): ValidationResult {
 
   for (const slot of payload.slots) {
     issues.push(...checkSlot(slot, payload));
+  }
+
+  issues.push(...checkDropPools(payload));
+
+  if (input.skill === 'listening' && !hasAudio(payload)) {
+    issues.push(issue('listening_requires_audio', 'error'));
+  }
+
+  if (!SLUG_PATTERN.test(input.slug)) {
+    issues.push(issue('slug_invalid', 'error', { detail: input.slug }));
+  }
+
+  const distinctMechanics = new Set(payload.slots.map((s) => s.input));
+  if (distinctMechanics.size < MECHANICS_FOR_VARIETY_RULE) {
+    issues.push(issue('exercise_too_few_mechanics', 'warning'));
   }
 
   const sorted = sortIssues(payload, issues);

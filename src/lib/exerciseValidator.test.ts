@@ -82,11 +82,77 @@ const SHAPE_CASES: Case[] = [
   },
 ];
 
-describe.each(SHAPE_CASES)('validateExercise — $name', ({ payload, issue, overrides }) => {
-  it('reports the issue and fails the exercise', () => {
-    const result = validateExercise(inputFor(payload, overrides));
-    expect(result.ok).toBe(false);
-    expect(result.issues).toContainEqual(expect.objectContaining(issue));
+const MECHANIC_CASES: Case[] = [
+  {
+    name: 'slot_multiple_blanks — a second `___` in the same label',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'A ___ and a ___ walk in.', input: 'text', answer: ['dog'] }],
+    },
+    issue: { code: 'slot_multiple_blanks', severity: 'error', slotId: 's1' },
+  },
+  {
+    name: 'slot_unknown_mechanic — an `input` outside choice/select/text/drop',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'Put the items in order.', input: 'order', answer: ['a'] }],
+    },
+    issue: { code: 'slot_unknown_mechanic', severity: 'error', slotId: 's1', detail: 'order' },
+  },
+  {
+    name: 'drop_pool_too_small — as many shared tiles as drop slots',
+    payload: {
+      pools: { tiles: [{ id: 't1', text: 'one' }, { id: 't2', text: 'two' }] },
+      slots: [
+        { id: 's1', label: 'Drag ___ here.', input: 'drop', pool: 'tiles', answer: ['t1'] },
+        { id: 's2', label: 'Drag ___ there.', input: 'drop', pool: 'tiles', answer: ['t2'] },
+      ],
+    },
+    issue: { code: 'drop_pool_too_small', severity: 'error', poolName: 'tiles' },
+  },
+  {
+    name: 'listening_requires_audio — a listening exercise with no media.audio',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'What did she say?', input: 'text', answer: ['hello'] }],
+    },
+    issue: { code: 'listening_requires_audio', severity: 'error', slotId: null },
+    overrides: { skill: 'listening' },
+  },
+  {
+    name: 'slug_invalid — not kebab-case',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+    },
+    issue: { code: 'slug_invalid', severity: 'error', detail: 'Not Valid!' },
+    overrides: { slug: 'Not Valid!' },
+  },
+];
+
+describe.each([...SHAPE_CASES, ...MECHANIC_CASES])(
+  'validateExercise — $name',
+  ({ payload, issue, overrides }) => {
+    it('reports the issue and fails the exercise', () => {
+      const result = validateExercise(inputFor(payload, overrides));
+      expect(result.ok).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining(issue));
+    });
+  },
+);
+
+describe('validateExercise — exercise_too_few_mechanics', () => {
+  const payload: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+  };
+
+  it('is a warning, not an error — ok stays true when it is the only issue', () => {
+    const result = validateExercise(inputFor(payload));
+    expect(result.ok).toBe(true);
+    expect(result.issues).toEqual([
+      expect.objectContaining({ code: 'exercise_too_few_mechanics', severity: 'warning' }),
+    ]);
   });
 });
 
