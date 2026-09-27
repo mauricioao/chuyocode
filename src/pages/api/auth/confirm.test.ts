@@ -313,6 +313,23 @@ describe('GET /api/auth/confirm — the PKCE `code` credential', () => {
     expect(verifyOtpMock).not.toHaveBeenCalled();
   });
 
+  // Google OAuth (`/api/auth/google`) redeems through this SAME route: once
+  // the browser follows Supabase's callback, Supabase forwards it here with
+  // `?code=` under the same PKCE flow `@supabase/ssr` hardcodes for every
+  // provider — this route has no branch that knows or cares WHICH provider
+  // minted the code. This is that assumption, proven end to end: exchange,
+  // session cookie flushed, redirect to the destination.
+  it('completes an OAuth-style callback (Google) through the same code path', async () => {
+    pendingCookies.push(SESSION_COOKIE);
+
+    const res = await GET(ctx(`?code=${CODE}&next=%2Fes%2Fingles`));
+
+    expect(exchangeCodeMock).toHaveBeenCalledWith(CODE);
+    expect(res.status).toBe(303);
+    expect(location(res)).toBe(`/es/ingles?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`);
+    expect(res.headers.getSetCookie()).toEqual([SESSION_COOKIE]);
+  });
+
   it('never carries the code into the redirect target', async () => {
     const res = await GET(ctx(`?code=${CODE}&next=%2Fes%2Flibros`));
 

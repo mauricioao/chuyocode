@@ -73,6 +73,14 @@ export const AUTH_SIGNED_IN = 'signed-in';
 /** Marker for a redirect that follows a successful sign-out. See {@link AUTH_SIGNED_IN}. */
 export const AUTH_SIGNED_OUT = 'signed-out';
 
+/**
+ * Marker for a redirect that follows a Google sign-in attempt this project
+ * cannot complete — the provider is not configured in this Supabase
+ * project. `src/pages/api/auth/google.ts` degrades to this rather than a
+ * 500 whenever `signInWithOAuth` errors or hands back no provider URL.
+ */
+export const AUTH_ERROR_GOOGLE_UNAVAILABLE = 'google-unavailable';
+
 /** A path split into the three parts the helpers below rewrite independently. */
 interface SplitPath {
   pathname: string;
@@ -316,4 +324,16 @@ export function withAuthSuccess(path: string): string {
  */
 export function withSignedOut(path: string): string {
   return withAuthMarker(path, AUTH_SIGNED_OUT);
+}
+
+/**
+ * Mark a redirect target as "Google sign-in isn't available right now".
+ *
+ * Used only on `/api/auth/google`'s degrade path — never a 500, always a
+ * bounce back to sign in with an explanation the page can render.
+ *
+ * @param path - A same-site path, normally `/<lang>/auth/entrar`.
+ */
+export function withGoogleUnavailable(path: string): string {
+  return withAuthMarker(path, AUTH_ERROR_GOOGLE_UNAVAILABLE);
 }
