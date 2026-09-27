@@ -23,6 +23,7 @@ export const COPY: Record<'es' | 'en', Record<ValidationCode, string>> = {
     slug_invalid: 'El slug debe ser texto en inglés, en minúsculas y separado por guiones.',
     block_coverage_mismatch: 'Los bloques no cubren exactamente los espacios del ejercicio.',
     exercise_too_few_mechanics: 'Se recomienda combinar al menos dos mecánicas distintas.',
+    media_url_not_allowed: 'Esta URL de contenido multimedia no está permitida.',
   },
   en: {
     payload_unparseable: 'The exercise content could not be parsed.',
@@ -39,6 +40,7 @@ export const COPY: Record<'es' | 'en', Record<ValidationCode, string>> = {
     slug_invalid: 'The slug must be lowercase, hyphen-separated English text.',
     block_coverage_mismatch: "The blocks do not cover the exercise's slots exactly.",
     exercise_too_few_mechanics: 'Combining at least two distinct mechanics is recommended.',
+    media_url_not_allowed: 'This media URL is not allowed.',
   },
 };
 

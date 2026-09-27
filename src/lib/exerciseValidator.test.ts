@@ -113,6 +113,18 @@ const SHAPE_CASES: Case[] = [
     },
     issue: { code: 'block_coverage_mismatch', severity: 'error', slotId: 's1', blockId: 'r2' },
   },
+  {
+    name: 'media_url_not_allowed — a media block image on a host that is not allow-listed',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+      blocks: [
+        { kind: 'media', id: 'm1', image: 'https://evil.example/cat.png' },
+        { kind: 'row', id: 'r1', slotId: 's1' },
+      ],
+    },
+    issue: { code: 'media_url_not_allowed', severity: 'error', blockId: 'm1', detail: 'https://evil.example/cat.png' },
+  },
 ];
 
 const MECHANIC_CASES: Case[] = [
@@ -186,6 +198,32 @@ describe('validateExercise — exercise_too_few_mechanics', () => {
     expect(result.issues).toEqual([
       expect.objectContaining({ code: 'exercise_too_few_mechanics', severity: 'warning' }),
     ]);
+  });
+});
+
+describe('validateExercise — media_url_not_allowed', () => {
+  it('is silent for a media block on an allow-listed host', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'choice', pool: 'opts', answer: ['a'] }],
+    };
+    payload.pools.opts = [{ id: 'a', text: 'sits' }, { id: 'b', text: 'sit' }];
+    payload.blocks = [
+      { kind: 'media', id: 'm1', image: 'https://cdn.sanity.io/images/proj/production/cat.png' },
+      { kind: 'row', id: 'r1', slotId: 's1' },
+    ];
+
+    const result = validateExercise(inputFor(payload));
+    expect(result.issues.some((i) => i.code === 'media_url_not_allowed')).toBe(false);
+  });
+
+  it('is silent for a payload with no blocks at all', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+    };
+    const result = validateExercise(inputFor(payload));
+    expect(result.issues.some((i) => i.code === 'media_url_not_allowed')).toBe(false);
   });
 });
 

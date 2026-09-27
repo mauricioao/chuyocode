@@ -17,6 +17,7 @@
  */
 import { countBlanks, hasAudio, type Payload, type Pool, type Slot } from './exercisePayload';
 import { comparatorFor } from './exerciseGrading';
+import { isAllowedMediaUrl } from './exerciseMedia';
 
 /** Closed union of every rule this validator enforces. */
 export type ValidationCode =
@@ -33,7 +34,8 @@ export type ValidationCode =
   | 'listening_requires_audio'
   | 'slug_invalid'
   | 'block_coverage_mismatch'
-  | 'exercise_too_few_mechanics';
+  | 'exercise_too_few_mechanics'
+  | 'media_url_not_allowed';
 
 export interface ValidationIssue {
   code: ValidationCode;
@@ -241,6 +243,34 @@ function checkBlockCoverage(payload: Payload): ValidationIssue[] {
   return found;
 }
 
+/**
+ * `media_url_not_allowed` (media URL policy, owner decision pending — see
+ * `exerciseMedia.ts`'s header). Every `media` block's `image`/`audio` must
+ * be `https:` on an allow-listed host; `parseBlock` only enforces the
+ * scheme, so this is the one place the FULL authoring policy is checked
+ * before an exercise reaches `live`.
+ */
+function checkBlockMedia(payload: Payload): ValidationIssue[] {
+  if (payload.blocks === undefined) return [];
+  const found: ValidationIssue[] = [];
+
+  for (const block of payload.blocks) {
+    if (block.kind !== 'media') continue;
+    if (block.image !== undefined && !isAllowedMediaUrl(block.image)) {
+      found.push(
+        issue('media_url_not_allowed', 'error', { blockId: block.id, detail: block.image }),
+      );
+    }
+    if (block.audio !== undefined && !isAllowedMediaUrl(block.audio)) {
+      found.push(
+        issue('media_url_not_allowed', 'error', { blockId: block.id, detail: block.audio }),
+      );
+    }
+  }
+
+  return found;
+}
+
 /** Sort key: the index of the slot an issue points at, or -1 for an
  * exercise-/pool-wide issue (`slotId: null`), so those surface first. */
 function slotIndex(payload: Payload, slotId: string | null): number {
@@ -279,6 +309,7 @@ export function validateExercise(input: ValidatorInput): ValidationResult {
 
   issues.push(...checkDropPools(payload));
   issues.push(...checkBlockCoverage(payload));
+  issues.push(...checkBlockMedia(payload));
 
   if (input.skill === 'listening' && !hasAudio(payload)) {
     issues.push(issue('listening_requires_audio', 'error'));

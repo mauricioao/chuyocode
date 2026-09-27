@@ -18,6 +18,7 @@ const ALL_CODES: ValidationCode[] = [
   'slug_invalid',
   'block_coverage_mismatch',
   'exercise_too_few_mechanics',
+  'media_url_not_allowed',
 ];
 
 describe('exerciseValidatorCopy', () => {

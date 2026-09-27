@@ -133,6 +133,15 @@ export const UI_LABELS = {
       alreadySignedIn: 'Ya hay una sesión iniciada en este navegador.',
       signOut: 'Salir',
     },
+    // Authoring pages (`/[lang]/crear/*`, slice 15). UNLINKED routes — no nav
+    // entry anywhere (slice 18). Static page chrome only; the interactive
+    // block editors keep their own LOCAL copy, same rule as `ExerciseIsland`.
+    authoring: {
+      newTitle: 'Crear ejercicio',
+      newDescription: 'Crear un nuevo ejercicio de inglés.',
+      editTitle: 'Editar ejercicio',
+      editDescription: 'Editar este ejercicio.',
+    },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
     // whole page's Spanish out of reach of the neutral-Spanish guard — and that
     // is precisely where a voseo ("La página que buscás") quietly survived the
@@ -324,6 +333,12 @@ export const UI_LABELS = {
       signedIn: 'Signed in.',
       alreadySignedIn: 'You are already signed in on this browser.',
       signOut: 'Sign out',
+    },
+    authoring: {
+      newTitle: 'Create exercise',
+      newDescription: 'Create a new English exercise.',
+      editTitle: 'Edit exercise',
+      editDescription: 'Edit this exercise.',
     },
     notFound: {
       title: 'Page not found',

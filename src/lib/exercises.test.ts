@@ -98,6 +98,7 @@ import {
   getPublishedExercises,
   getRelatedExercises,
   getExercisesByAuthor,
+  getExerciseForEdit,
   clearExercisesClient,
   EXERCISES_TABLE,
   RELATED_LIMIT,
@@ -830,6 +831,96 @@ describe('getExercisesByAuthor', () => {
     clientState.available = false;
 
     expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('getExerciseForEdit', () => {
+  const AUTHOR_ID = '22222222-2222-2222-2222-222222222222';
+
+  it('filters by id AND author_id — ownership enforced in the query, not after', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { ...ROW, status: 'draft' }, error: null });
+
+    await getExerciseForEdit(ROW.id, AUTHOR_ID);
+
+    expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
+    expect(eqMock).toHaveBeenCalledWith('id', ROW.id);
+    expect(eqMock).toHaveBeenCalledWith('author_id', AUTHOR_ID);
+    const filtered = eqMock.mock.calls.map((call) => call[0]);
+    expect(filtered).not.toContain('visible');
+  });
+
+  it('returns the exercise with its status and parsed payload', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { ...ROW, status: 'draft' }, error: null });
+
+    const exercise = await getExerciseForEdit(ROW.id, AUTHOR_ID);
+
+    expect(exercise).toEqual({
+      id: ROW.id,
+      slug: ROW.slug,
+      skill: ROW.skill,
+      level: ROW.level,
+      focus: ROW.focus,
+      topic: ROW.topic,
+      status: 'draft',
+      payload: expect.objectContaining({ slots: expect.any(Array) }),
+    });
+  });
+
+  it('reaches a needs_work row too — not only draft/live', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { ...ROW, status: 'needs_work' }, error: null });
+
+    const exercise = await getExerciseForEdit(ROW.id, AUTHOR_ID);
+
+    expect(exercise?.status).toBe('needs_work');
+  });
+
+  it('returns null when Supabase finds no row matching BOTH id and author_id — same shape as "not yours"', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('returns null for an empty id or author id, before any query', async () => {
+    expect(await getExerciseForEdit('', AUTHOR_ID)).toBeNull();
+    expect(await getExerciseForEdit(ROW.id, '')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the row status falls outside the closed vocabulary', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { ...ROW, status: 'not-a-real-status' },
+      error: null,
+    });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('returns null when the payload is malformed', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { ...ROW, status: 'draft', payload: { slots: [] } },
+      error: null,
+    });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('fail-safes to null on a Supabase error', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: 'down' } });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('fail-safes to null when the driver throws', async () => {
+    maybeSingleMock.mockRejectedValue(new Error('network down'));
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('fail-safes to null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
     expect(fromMock).not.toHaveBeenCalled();
   });
 });

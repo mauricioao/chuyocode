@@ -59,6 +59,9 @@ const FACET_COLUMNS = 'level, focus';
  */
 const AUTHORED_COLUMNS = 'id, slug, level, focus, status, updated_at';
 
+/** Columns the authoring edit route needs — the full row, ownership included. */
+const EDITABLE_COLUMNS = 'id, slug, skill, level, focus, topic, status, payload';
+
 /** A published exercise, validated and ready to render. */
 export interface Exercise {
   id: string;
@@ -496,6 +499,86 @@ export async function getExercisesByAuthor(
   } catch (err) {
     console.error('[exercises] getExercisesByAuthor threw:', err);
     return [];
+  }
+}
+
+/**
+ * One exercise as the AUTHORING edit route (`crear/[id].astro`) needs it —
+ * the full row, at ANY status, for its OWNER only.
+ */
+export interface EditableExercise {
+  id: string;
+  slug: string;
+  skill: Skill;
+  level: Level;
+  focus: Focus;
+  topic: Topic | null;
+  status: Status;
+  payload: Payload;
+}
+
+/**
+ * Fetch one exercise by id, for editing — but ONLY for `authorId`, its owner.
+ *
+ * Ownership is enforced IN THE QUERY (`.eq('author_id', authorId)`), not
+ * checked afterward on a blind fetch-by-id: a mismatch and "does not exist"
+ * are indistinguishable by construction, which is exactly the fail-safe
+ * shape `getExerciseBySlug` already uses (both collapse to `null`, which the
+ * route turns into one 404 — never a 403 that would confirm the id exists).
+ * This is the server-side re-verification `specs/exercise-authoring/spec.md`
+ * requires independent of the page's own frontmatter check.
+ *
+ * Deliberately does NOT filter on `visible`: an author must reach their own
+ * `draft` or `needs_work` row to keep editing it, exactly like
+ * {@link getExercisesByAuthor}.
+ */
+export async function getExerciseForEdit(
+  id: string,
+  authorId: string,
+): Promise<EditableExercise | null> {
+  if (id.length === 0 || authorId.length === 0) return null;
+
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from(EXERCISES_TABLE)
+      .select(EDITABLE_COLUMNS)
+      .eq('id', id)
+      .eq('author_id', authorId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[exercises] getExerciseForEdit failed:', error.message);
+      return null;
+    }
+    if (!data) return null;
+
+    const row = data as unknown as Record<string, unknown>;
+    if (typeof row.id !== 'string' || row.id.length === 0) return null;
+    if (typeof row.slug !== 'string' || row.slug.length === 0) return null;
+    if (!isLevel(row.level) || !isFocus(row.focus) || !isStatus(row.status)) return null;
+
+    const payload = parsePayload(row.payload);
+    if (!payload) {
+      console.error('[exercises] malformed payload for edit id:', id);
+      return null;
+    }
+
+    return {
+      id: row.id,
+      slug: row.slug,
+      skill: row.skill as Skill,
+      level: row.level,
+      focus: row.focus,
+      topic: readTopic(row.topic),
+      status: row.status,
+      payload,
+    };
+  } catch (err) {
+    console.error('[exercises] getExerciseForEdit threw:', err);
+    return null;
   }
 }
 

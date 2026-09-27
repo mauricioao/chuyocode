@@ -183,6 +183,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Is `value` an `https:` URL? Scheme-only, deliberately — a DEFENSE-IN-DEPTH
+ * check, not the authoring host allow-list ({@link "./exerciseMedia"},
+ * `isAllowedMediaUrl`). This gate's ONLY job is making sure no renderer ever
+ * receives a `javascript:`/`http:`/`data:` URL out of stored `jsonb`; it must
+ * not also reject an https URL on a host that was not on the allow-list at
+ * authoring time (a host later removed from the list, or an exercise
+ * authored before the list existed) — that would silently break an already
+ * `live` exercise's media on every read. Zero I/O: `URL` parsing is pure.
+ */
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** Keep only well-formed `{ id, text?, media? }` entries; drop the rest. */
 function parsePool(value: unknown): Pool {
   if (!Array.isArray(value)) return [];
@@ -266,8 +284,16 @@ function parseBlock(value: unknown): Block | null {
     }
     case 'media': {
       const block: MediaBlock = { kind: 'media', id: value.id };
-      if (typeof value.image === 'string') block.image = value.image;
-      if (typeof value.audio === 'string') block.audio = value.audio;
+      // DEGRADES, NEVER REJECTS THE BLOCK: a non-https `image`/`audio` is
+      // dropped exactly like a bad `PoolItem` in {@link parsePool} — the
+      // block survives with one less field rather than disappearing and
+      // breaking `blocks` coverage.
+      if (typeof value.image === 'string' && isHttpsUrl(value.image)) {
+        block.image = value.image;
+      }
+      if (typeof value.audio === 'string' && isHttpsUrl(value.audio)) {
+        block.audio = value.audio;
+      }
       if (typeof value.alt === 'string') block.alt = value.alt;
       return block;
     }

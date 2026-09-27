@@ -508,6 +508,53 @@ describe('parsePayload — blocks', () => {
     ]);
   });
 
+  it('drops a non-https media image URL but keeps the rest of the block', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'javascript:alert(1)', alt: 'a cat' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks).toEqual([
+      { kind: 'row', id: 'r1', slotId: 's1' },
+      { kind: 'media', id: 'm1', alt: 'a cat' },
+      { kind: 'row', id: 'r2', slotId: 's2' },
+    ]);
+  });
+
+  it('drops a non-https media audio URL the same way', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', audio: 'data:audio/mp3;base64,aaaa' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks?.[1]).toEqual({ kind: 'media', id: 'm1' });
+  });
+
+  it('keeps an https media URL on a host that is not on the authoring allow-list', () => {
+    // Defense-in-depth only checks the SCHEME (see isHttpsUrl's header): an
+    // exercise authored before the allow-list existed must not lose its
+    // media on every subsequent read.
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks?.[1]).toEqual({
+      kind: 'media',
+      id: 'm1',
+      image: 'https://cdn.test/cat.png',
+    });
+  });
+
   it('drops one malformed block with an unknown kind but keeps blocks when coverage still holds', () => {
     const payload = parsePayload({
       ...TWO_SLOT_PAYLOAD,
