@@ -166,6 +166,12 @@ export const UI_LABELS = {
       editTitle: 'Editar ejercicio',
       editDescription: 'Editar este ejercicio.',
     },
+    // Activities creator (`/[lang]/crear`, `/[lang]/crear/[id]`, PR B "Activities
+    // creator"). `untitledTitle` is the server-computed default for a
+    // brand-new activity — the start screen never asks for a title up front.
+    activities: {
+      untitledTitle: 'Sin título',
+    },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
     // whole page's Spanish out of reach of the neutral-Spanish guard — and that
     // is precisely where a voseo ("La página que buscás") quietly survived the
@@ -378,6 +384,9 @@ export const UI_LABELS = {
       newDescription: 'Create a new English exercise.',
       editTitle: 'Edit exercise',
       editDescription: 'Edit this exercise.',
+    },
+    activities: {
+      untitledTitle: 'Untitled',
     },
     notFound: {
       title: 'Page not found',
