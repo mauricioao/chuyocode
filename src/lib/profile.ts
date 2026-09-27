@@ -100,15 +100,18 @@ function initialsFrom(name: string): string {
  * Normalize a server-verified Supabase `User` into the shape the header's
  * account chip and `/api/me` both read.
  *
+ * `plan` now requires a round trip through {@link getPlan} (`user_subscriptions`,
+ * service-role client), so this is `async` — every caller/test awaits it.
+ *
  * @param user - `Astro.locals.user`, already non-null at the call site.
  */
-export function toProfile(user: User): Profile {
+export async function toProfile(user: User): Promise<Profile> {
   const name = nameFrom(user);
   return {
     name,
     email: user.email ?? '',
     avatarUrl: avatarFrom(user),
     initials: initialsFrom(name),
-    plan: getPlan(user),
+    plan: await getPlan(user),
   };
 }

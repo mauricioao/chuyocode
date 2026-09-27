@@ -28,7 +28,7 @@ export const GET: APIRoute = async ({ locals }) => {
   });
   markPrivate(headers);
 
-  const profile = locals.user ? toProfile(locals.user) : null;
+  const profile = locals.user ? await toProfile(locals.user) : null;
 
   return new Response(JSON.stringify({ profile }), { status: 200, headers });
 };

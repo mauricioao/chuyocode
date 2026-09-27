@@ -1,11 +1,70 @@
-import { describe, it, expect } from 'vitest';
-import { requiresLogin, hasAccess, getPlan } from './access';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { User } from '@supabase/supabase-js';
+
+/**
+ * `getPlan` now reads `public.user_subscriptions` through the service-role
+ * client (mirrors `src/lib/roles.ts`'s pattern, including how it is mocked in
+ * `roles.test.ts`): the mock `from().select().eq()` chain resolves to
+ * whatever `listResult` holds when awaited.
+ */
+const { clientState, eqMock, fromMock, listResult } = vi.hoisted(() => {
+  const listResult: { value: unknown; throws: Error | null } = {
+    value: { data: [], error: null },
+    throws: null,
+  };
+  const builder: Record<string, unknown> = {
+    then: (
+      onfulfilled: (value: unknown) => unknown,
+      onrejected?: (reason: unknown) => unknown,
+    ) => {
+      const settled = listResult.throws
+        ? Promise.reject(listResult.throws)
+        : Promise.resolve(listResult.value);
+      return settled.then(onfulfilled, onrejected);
+    },
+  };
+  const eqMock = vi.fn((_column: string, _value: unknown) => builder);
+  builder.eq = eqMock;
+  const selectMock = vi.fn((_columns: string) => builder);
+  const fromMock = vi.fn(() => ({ select: selectMock }));
+  return {
+    clientState: { available: true },
+    eqMock,
+    selectMock,
+    fromMock,
+    listResult,
+  };
+});
+
+vi.mock('./supabase', () => ({
+  createServiceClient: () => {
+    if (!clientState.available) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
+    }
+    return { from: fromMock };
+  },
+}));
+
+import {
+  requiresLogin,
+  hasAccess,
+  getPlan,
+  clearAccessClient,
+  USER_SUBSCRIPTIONS_TABLE,
+} from './access';
 
 /** A minimal stand-in for a Supabase `User` — only `id` is ever read here. */
 function user(id = 'u1'): User {
   return { id } as User;
 }
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  clientState.available = true;
+  listResult.value = { data: [], error: null };
+  listResult.throws = null;
+  clearAccessClient();
+});
 
 describe('requiresLogin', () => {
   it.each([
@@ -60,8 +119,72 @@ describe('hasAccess', () => {
 });
 
 describe('getPlan', () => {
-  it('returns free for any signed-in user (Login step 1b: no paid tier yet)', () => {
-    expect(getPlan(user())).toBe('free');
-    expect(getPlan(user('another-id'))).toBe('free');
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+
+  it('is premium for an active subscription with no end date (manual/test grant)', async () => {
+    listResult.value = {
+      data: [{ status: 'active', current_period_end: null }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('premium');
+  });
+
+  it('is premium for an active subscription with a future end date', async () => {
+    listResult.value = {
+      data: [{ status: 'active', current_period_end: future }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('premium');
+  });
+
+  it('is free for an active subscription whose period already ended (expired)', async () => {
+    listResult.value = {
+      data: [{ status: 'active', current_period_end: past }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is free for a canceled subscription', async () => {
+    listResult.value = {
+      data: [{ status: 'canceled', current_period_end: future }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is free when there is no subscription row', async () => {
+    listResult.value = { data: [], error: null };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  // 🔴 THE LOAD-BEARING CASE, mirroring roles.ts: a Supabase failure MUST
+  // collapse to the LOWER plan ('free'), never to premium.
+  it('fails CLOSED to free on a Supabase error', async () => {
+    listResult.value = { data: null, error: { message: 'down' } };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('fails CLOSED to free when the client throws', async () => {
+    listResult.throws = new Error('network down');
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('fails CLOSED to free when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is free for a null user, without querying Supabase', async () => {
+    expect(await getPlan(null)).toBe('free');
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('queries user_subscriptions for the given user id', async () => {
+    listResult.value = { data: [], error: null };
+    await getPlan(user('another-id'));
+    expect(fromMock).toHaveBeenCalledWith(USER_SUBSCRIPTIONS_TABLE);
+    expect(eqMock).toHaveBeenCalledWith('user_id', 'another-id');
   });
 });

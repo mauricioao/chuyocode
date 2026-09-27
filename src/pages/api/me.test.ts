@@ -7,8 +7,22 @@
  * — the whole point of this response is per-visitor identity, so it must
  * never reach a shared cache.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { User } from '@supabase/supabase-js';
+
+/**
+ * `toProfile` (via `GET`) now awaits `getPlan`, which reads
+ * `user_subscriptions` through the service-role client. Mocked here so this
+ * endpoint test never touches the real Supabase project — same posture as
+ * `roles.test.ts`/`profile.test.ts`. Left "unconfigured", `getPlan` fails
+ * closed to `'free'`, matching this file's existing expectations.
+ */
+vi.mock('@lib/supabase', () => ({
+  createServiceClient: () => {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
+  },
+}));
+
 import { GET } from './me';
 
 function ctx(user: User | null) {
