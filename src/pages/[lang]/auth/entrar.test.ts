@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { experimental_AstroContainer as AstroContainer } from 'astro/container';
+import { createContainer } from '@/testSupport/astroContainer';
 import {
   AUTH_ERROR_PARAM,
   AUTH_ERROR_LINK_INVALID,
@@ -15,7 +15,7 @@ async function render(
   url: string,
   { params, locals }: { params: Record<string, string>; locals?: Record<string, unknown> },
 ) {
-  const container = await AstroContainer.create();
+  const container = await createContainer();
   return container.renderToResponse(EntrarPage, {
     // `App.Locals.user` is required, never optional — anonymous by default,
     // same convention as `src/pages/[lang]/libros/libros.test.ts`.
@@ -37,10 +37,10 @@ describe('GET /[lang]/auth/entrar — routing', () => {
 
 describe('GET /[lang]/auth/entrar — response mechanics', () => {
   it('is never publicly cacheable, anonymous or signed in', async () => {
-    // The signed-in branch mounts no island, so it is the one this suite can
-    // render fully (see the describe block below) — but the header must run
-    // on EVERY exit, so this asserts it on the branch that does not need the
-    // React renderer.
+    // The signed-in branch mounts no PAGE-level island of its own (no
+    // AuthPanel), so it is the one this suite can render fully (see the
+    // describe block below) — `render()` registers the React renderer
+    // `Header`'s own `UserMenu` island needs regardless (Login step 1b).
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
@@ -51,23 +51,18 @@ describe('GET /[lang]/auth/entrar — response mechanics', () => {
 });
 
 /**
- * NOTE: the default (anonymous, no `auth` marker) render mounts `AuthPanel`
- * (`client:load`, wrapping `PasswordAuthForm`/`SignInForm`), which
- * `AstroContainer` cannot render without the `@astrojs/react` server
- * renderer configured — same limitation documented at
- * `src/pages/[lang]/libros/libros.test.ts:49`. This also covers the plain
- * Google `<form>` rendered alongside it: it needs no island of its own, but
- * it sits in the SAME anonymous branch as `AuthPanel`, so the whole render
- * throws before either produces assertable HTML. The islands are fully
+ * NOTE: `render()` now registers the `@astrojs/react` server renderer
+ * (`createContainer`, added for Login step 1b's `UserMenu` island in
+ * `Header`), so this skip is no longer about a missing renderer. It stays
+ * `it.skip` because re-enabling a full anonymous-page render (markup + two
+ * islands, `AuthPanel` and now `UserMenu`, hydrated together) is out of
+ * scope for that unrelated slice and untried here. The islands are fully
  * covered at the unit level (`AuthPanel.test.tsx`, `PasswordAuthForm.test.tsx`,
- * `SignInForm.test.tsx`); the anonymous PAGE render (markup + islands mounted
- * together, Google form included) is covered by hand / left for a future
- * Playwright pass — see the apply report's "Manual verification needed" list.
+ * `SignInForm.test.tsx`, `UserMenu.test.tsx`); the anonymous PAGE render is
+ * covered by hand / left for a future Playwright pass — see the apply
+ * report's "Manual verification needed" list.
  */
 describe('GET /[lang]/auth/entrar — the anonymous form (island)', () => {
-  // See the NOTE above: no `@astrojs/react` server renderer is configured for
-  // `AstroContainer` anywhere in this repo yet, so a render that mounts
-  // `AuthPanel` throws here rather than producing assertable HTML.
   it.skip('renders the sign-in form for an anonymous visitor', async () => {
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },
@@ -79,7 +74,7 @@ describe('GET /[lang]/auth/entrar — the anonymous form (island)', () => {
   });
 });
 
-describe('GET /[lang]/auth/entrar — markers (no island mounted)', () => {
+describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', () => {
   it('shows the rejected-link invitation for ?auth=link-invalid', async () => {
     const res = await render(
       `https://chuyocode.test/es/auth/entrar?${AUTH_ERROR_PARAM}=${AUTH_ERROR_LINK_INVALID}`,

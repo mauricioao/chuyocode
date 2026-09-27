@@ -19,8 +19,19 @@
  * i18n note: nav labels come from the shared `src/lib/i18n.ts` (`UI_LABELS`),
  * the single source of truth for localized chrome. The previous inline
  * NAV_LABELS map was removed once i18n.ts landed (Phase 3).
+ *
+ * 🔴 THE ACCOUNT CHIP (`UserMenu`) IS THE ONE CLIENT-ONLY ISLAND HERE, AND
+ * THAT IS DELIBERATE (Login step 1b). `Header` is part of `BaseLayout`, which
+ * PUBLIC pages (home, libros, noticias) serve under a public cache policy
+ * (`src/lib/httpCache.ts`) — this file must therefore render BYTE-IDENTICAL
+ * markup for every visitor, signed in or not, or the CDN could serve one
+ * visitor's name/avatar to the next request for the same URL (T7). So
+ * `Header` reads no `Astro.locals.user` at all, ever: `UserMenu` hydrates
+ * client-side and asks `GET /api/me` (always private/no-store) instead. See
+ * that component's header for the full reasoning.
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
+import UserMenu from '@components/islands/UserMenu';
 
 interface Props {
   lang?: Lang;
@@ -67,27 +78,37 @@ const navLinks = [
       }
     </nav>
 
-    {/* Mobile: hamburger button + JS toggle stub. The toggle just flips the
-        `hidden` class on the mobile menu; no framework, no island. */}
-    <button
-      type="button"
-      id="mobile-menu-button"
-      class="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-primary md:hidden"
-      aria-label="Toggle navigation menu"
-      aria-controls="mobile-menu"
-      aria-expanded="false"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-6 w-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
+    <div class="flex items-center gap-3">
+      {/* Account chip — visible at every breakpoint, signed in or not. See
+          the file header: client-only, never server-rendered from
+          `Astro.locals.user`. `client:load` over `client:idle` so it starts
+          resolving immediately rather than waiting for the main thread to go
+          idle, which would stretch the loading placeholder's flash on a busy
+          page with several other islands ahead of it in the idle queue. */}
+      <UserMenu lang={lang} client:load />
+
+      {/* Mobile: hamburger button + JS toggle stub. The toggle just flips the
+          `hidden` class on the mobile menu; no framework, no island. */}
+      <button
+        type="button"
+        id="mobile-menu-button"
+        class="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-primary md:hidden"
+        aria-label="Toggle navigation menu"
+        aria-controls="mobile-menu"
+        aria-expanded="false"
       >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-    </button>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </div>
   </div>
 
   <nav
