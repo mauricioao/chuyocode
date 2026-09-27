@@ -119,6 +119,20 @@ export const UI_LABELS = {
     },
     news: { readMore: 'Leer más' },
     article: { back: 'Volver a noticias' },
+    // Sign-in page (`/[lang]/auth/entrar.astro`, slice 4). The form's own
+    // dynamic states (idle/pending/sent/error) are local to `SignInForm.COPY`,
+    // same reasoning as `LikeButton.COPY` — they depend on request state the
+    // page cannot see. This block covers only the page's static chrome.
+    auth: {
+      title: 'Entrar',
+      description:
+        'Solicitar un enlace de acceso por correo electrónico, sin contraseña.',
+      linkInvalid:
+        'Ese enlace no es válido o ya venció. Solicitar uno nuevo con el formulario de abajo.',
+      signedIn: 'Sesión iniciada.',
+      alreadySignedIn: 'Ya hay una sesión iniciada en este navegador.',
+      signOut: 'Salir',
+    },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
     // whole page's Spanish out of reach of the neutral-Spanish guard — and that
     // is precisely where a voseo ("La página que buscás") quietly survived the
@@ -302,6 +316,15 @@ export const UI_LABELS = {
     },
     news: { readMore: 'Read more' },
     article: { back: 'Back to news' },
+    auth: {
+      title: 'Sign in',
+      description: 'Request a sign-in link by email, no password required.',
+      linkInvalid:
+        'That link is invalid or has expired. Request a new one with the form below.',
+      signedIn: 'Signed in.',
+      alreadySignedIn: 'You are already signed in on this browser.',
+      signOut: 'Sign out',
+    },
     notFound: {
       title: 'Page not found',
       body: 'The page you are looking for does not exist or was moved.',

@@ -1,0 +1,125 @@
+---
+/**
+ * Localized sign-in page (design §1 route table; slice 4 of
+ * `openspec/changes/user-authored-exercises/tasks.md`).
+ *
+ * Renders the magic-link request form (`SignInForm`, the interactive half —
+ * see that island's header) plus whatever the redirect markers on the URL
+ * say:
+ *  - `?auth=link-invalid` — the confirm route's failure marker
+ *    (`AUTH_ERROR_LINK_INVALID` in `@lib/authRedirect`): the visitor's link
+ *    expired, was already used, or arrived in a browser with no PKCE
+ *    verifier. Shown as an alert above the form.
+ *  - `?auth=signed-in` — the confirm route's SUCCESS marker
+ *    (`AUTH_SIGNED_IN`). Optional per the task, shown as a quiet confirmation
+ *    when a visitor lands here right after signing in (e.g. `next` pointed
+ *    back at this page).
+ *
+ * 🔴 THIS PAGE IS SESSION-DEPENDENT AND MUST NEVER BE PUBLICLY CACHED.
+ * It reads `Astro.locals.user` to decide between the form and the
+ * already-signed-in view, so its HTML differs by visitor — the exact hazard
+ * `src/lib/httpCache.ts` exists to close (design §2 / T7). `markPrivate` runs
+ * unconditionally, before either branch, so neither one can ship without it.
+ *
+ * Sign-out stays POST-only here too (a plain `<form method="POST">` to
+ * `/api/auth/signout`, no fetch): `src/pages/api/auth/signout.ts` documents
+ * why GET would defeat the `sameSite: 'lax'` CSRF defense.
+ *
+ * NOT wired into the shared `Header`/`BaseLayout` chrome (assumption, see the
+ * apply report): `Header` currently takes no session-dependent prop, and
+ * `/[lang]/index.astro` applies `publicCachePolicy()` to the HOME page on the
+ * assumption its markup is byte-identical for every visitor. Threading
+ * `Astro.locals.user` into `Header` would make that no longer true and
+ * silently break that public-cache guarantee sitewide. That is a real design
+ * decision (e.g. a client-only auth chip), not a copy-paste omission, so it is
+ * left out of this slice rather than done unsafely.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import SignInForm from '@components/islands/SignInForm';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import {
+  AUTH_ERROR_PARAM,
+  AUTH_ERROR_LINK_INVALID,
+  AUTH_SIGNED_IN,
+  safeNextPath,
+} from '@lib/authRedirect';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// See the file header: this response varies by `Astro.locals.user` and must
+// never reach a shared cache.
+markPrivate(Astro.response.headers);
+
+const authParam = Astro.url.searchParams.get(AUTH_ERROR_PARAM);
+const linkInvalid = authParam === AUTH_ERROR_LINK_INVALID;
+const justSignedIn = authParam === AUTH_SIGNED_IN;
+
+// `next`, when present, rides through to `/api/auth/signin` and to the
+// sign-out form unchanged. Both routes re-validate it with the same
+// `safeNextPath` guard the confirm route uses, so running it here too costs
+// nothing extra in safety — it only saves this page from ever handing an
+// attacker-supplied string straight into a hidden form field.
+const rawNext = Astro.url.searchParams.get('next');
+const next = rawNext ? safeNextPath(rawNext) : undefined;
+
+const t = UI_LABELS[lang].auth;
+const user = Astro.locals.user;
+---
+
+<BaseLayout lang={lang} title={t.title} description={t.description}>
+  <section class="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-12 sm:py-16">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.title}
+    </h1>
+
+    {
+      linkInvalid && (
+        <p
+          role="alert"
+          data-testid="auth-link-invalid"
+          class="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {t.linkInvalid}
+        </p>
+      )
+    }
+
+    {
+      justSignedIn && !linkInvalid && (
+        <p
+          role="status"
+          data-testid="auth-signed-in-marker"
+          class="rounded-md border border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground"
+        >
+          {t.signedIn}
+        </p>
+      )
+    }
+
+    {
+      user ? (
+        <div class="flex flex-col gap-4" data-testid="auth-already-signed-in">
+          <p class="text-sm text-muted-foreground">{t.alreadySignedIn}</p>
+          <form method="POST" action="/api/auth/signout">
+            {next && <input type="hidden" name="next" value={next} />}
+            <button
+              type="submit"
+              class="inline-flex w-fit items-center justify-center rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              {t.signOut}
+            </button>
+          </form>
+        </div>
+      ) : (
+        <SignInForm client:load lang={lang} next={next} />
+      )
+    }
+  </section>
+</BaseLayout>
