@@ -15,17 +15,10 @@
  * complete (§6.3), or that `focus`/`level` matches the sentence (§6.7/§6.12).
  * Those require reading English; this is a structural gate only.
  */
-import { hasAudio, type Payload, type Pool, type Slot } from './exercisePayload';
+import { countBlanks, hasAudio, type Payload, type Pool, type Slot } from './exercisePayload';
 import { comparatorFor } from './exerciseGrading';
 
-/**
- * Closed union of every rule this validator enforces.
- *
- * `block_coverage_mismatch` is RESERVED, not yet wired: `Payload` has no
- * `blocks` field until slice 12 (openspec design §6, "Renderer integration")
- * lands it. Code is the source of truth over the old design here — there is
- * nothing to check yet, so no rule fires for this code today.
- */
+/** Closed union of every rule this validator enforces. */
 export type ValidationCode =
   | 'payload_unparseable'
   | 'slot_answer_empty'
@@ -66,14 +59,6 @@ export interface ValidatorInput {
   payload: Payload;
 }
 
-/**
- * Same rule as `exercisePayload.ts`'s private `BLANK_MARKER`: a RUN of three or
- * more underscores. Duplicated rather than imported because that constant is
- * not exported; the shared home is `countBlanks` (slice 12). Keep both rules
- * in sync until then.
- */
-const BLANK_MARKER = /_{3,}/g;
-
 /** Short, kebab-case, non-empty (authoring-brief §6.5). "English" is not
  * machine-checkable, so it is out of scope for a structural gate. */
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -85,14 +70,19 @@ const MECHANICS_FOR_VARIETY_RULE = 2;
 function issue(
   code: ValidationCode,
   severity: ValidationIssue['severity'],
-  opts: { slotId?: string | null; poolName?: string | null; detail?: string } = {},
+  opts: {
+    slotId?: string | null;
+    poolName?: string | null;
+    blockId?: string | null;
+    detail?: string;
+  } = {},
 ): ValidationIssue {
   return {
     code,
     severity,
     slotId: opts.slotId ?? null,
     poolName: opts.poolName ?? null,
-    blockId: null,
+    blockId: opts.blockId ?? null,
     ...(opts.detail !== undefined ? { detail: opts.detail } : {}),
   };
 }
@@ -162,8 +152,7 @@ function checkSlot(slot: Slot, payload: Payload): ValidationIssue[] {
     }
   }
 
-  const blankCount = (slot.label.match(BLANK_MARKER) ?? []).length;
-  if (blankCount > 1) {
+  if (countBlanks(slot.label) > 1) {
     found.push(issue('slot_multiple_blanks', 'error', { slotId: slot.id }));
   }
 
@@ -196,6 +185,59 @@ function checkDropPools(payload: Payload): ValidationIssue[] {
       found.push(issue('drop_pool_too_small', 'error', { poolName }));
     }
   }
+  return found;
+}
+
+/**
+ * `block_coverage_mismatch` (specs/exercise-blocks/spec.md; design.md §6).
+ *
+ * `parsePayload` already enforces the all-or-nothing coverage rule when
+ * `blocks` comes from stored `jsonb`, so a payload built that way never
+ * reaches this check with a mismatch — this rule exists for the authoring
+ * surface, which may hand the validator a `Payload` assembled directly (e.g.
+ * a live draft) BEFORE it has been round-tripped through that parser gate.
+ *
+ * Absent `payload.blocks` is not a mismatch — it just means the legacy
+ * render path is in effect, exactly as {@link hasAudio} and friends treat an
+ * absent optional field.
+ */
+function checkBlockCoverage(payload: Payload): ValidationIssue[] {
+  if (payload.blocks === undefined) return [];
+  const found: ValidationIssue[] = [];
+
+  const slotIds = new Set(payload.slots.map((s) => s.id));
+  const seen = new Set<string>();
+
+  for (const block of payload.blocks) {
+    if (block.kind !== 'row') continue;
+    if (!slotIds.has(block.slotId)) {
+      found.push(
+        issue('block_coverage_mismatch', 'error', {
+          slotId: block.slotId,
+          blockId: block.id,
+          detail: 'dangling',
+        }),
+      );
+    } else if (seen.has(block.slotId)) {
+      found.push(
+        issue('block_coverage_mismatch', 'error', {
+          slotId: block.slotId,
+          blockId: block.id,
+          detail: 'duplicate',
+        }),
+      );
+    }
+    seen.add(block.slotId);
+  }
+
+  for (const slotId of slotIds) {
+    if (!seen.has(slotId)) {
+      found.push(
+        issue('block_coverage_mismatch', 'error', { slotId, detail: 'missing' }),
+      );
+    }
+  }
+
   return found;
 }
 
@@ -236,6 +278,7 @@ export function validateExercise(input: ValidatorInput): ValidationResult {
   }
 
   issues.push(...checkDropPools(payload));
+  issues.push(...checkBlockCoverage(payload));
 
   if (input.skill === 'listening' && !hasAudio(payload)) {
     issues.push(issue('listening_requires_audio', 'error'));

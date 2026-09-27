@@ -80,6 +80,39 @@ const SHAPE_CASES: Case[] = [
     },
     issue: { code: 'pool_empty', severity: 'error', poolName: 'opts' },
   },
+  {
+    name: 'block_coverage_mismatch — a row block references a slot that does not exist',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+      blocks: [{ kind: 'row', id: 'r1', slotId: 'does-not-exist' }],
+    },
+    issue: { code: 'block_coverage_mismatch', severity: 'error', slotId: 'does-not-exist', blockId: 'r1' },
+  },
+  {
+    name: 'block_coverage_mismatch — a slot has no row block covering it',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] },
+        { id: 's2', label: 'The dog ___ in the yard', input: 'text', answer: ['runs'] },
+      ],
+      blocks: [{ kind: 'row', id: 'r1', slotId: 's1' }],
+    },
+    issue: { code: 'block_coverage_mismatch', severity: 'error', slotId: 's2', blockId: null },
+  },
+  {
+    name: 'block_coverage_mismatch — two row blocks duplicate the same slotId',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'row', id: 'r2', slotId: 's1' },
+      ],
+    },
+    issue: { code: 'block_coverage_mismatch', severity: 'error', slotId: 's1', blockId: 'r2' },
+  },
 ];
 
 const MECHANIC_CASES: Case[] = [

@@ -67,6 +67,40 @@ export interface Layout {
   pool: PoolPlacement;
 }
 
+/**
+ * Prose context. Never carries graded content — the gap's text stays in the
+ * `row` block's `slot.label` (specs/exercise-blocks/spec.md, "prose and media
+ * Blocks Are Context-Only").
+ */
+export interface ProseBlock {
+  kind: 'prose';
+  id: string;
+  text: string;
+}
+
+/** An image and/or audio stimulus, context-only like {@link ProseBlock}. */
+export interface MediaBlock {
+  kind: 'media';
+  id: string;
+  image?: string;
+  audio?: string;
+  alt?: string;
+}
+
+/**
+ * A row REFERENCES a slot; it does not contain one (design.md §6). `slots`
+ * stays the single source of truth for grading, the stepper, `claimedTileIds`
+ * and `isSubmittable` — embedding a slot here would create a second slot list
+ * all of those must learn.
+ */
+export interface RowBlock {
+  kind: 'row';
+  id: string;
+  slotId: string;
+}
+
+export type Block = ProseBlock | MediaBlock | RowBlock;
+
 /** The full render payload for one exercise. */
 export interface Payload {
   media?: { audio?: string };
@@ -74,6 +108,11 @@ export interface Payload {
   slots: Slot[];
   /** Absent unless the author overrode the derived default. */
   layout?: Layout;
+  /**
+   * OPTIONAL. Absent means exactly today's rendering
+   * (specs/exercise-blocks/spec.md, "Absent Blocks Renders Exactly as Today").
+   */
+  blocks?: Block[];
 }
 
 /** A learner's answers, keyed by slot id. Always an array, even for one value. */
@@ -124,6 +163,19 @@ export function splitLabelAtBlank(label: string): LabelParts | null {
     before: label.slice(0, match.index),
     after: label.slice(match.index + match[0].length),
   };
+}
+
+/**
+ * Count of {@link BLANK_MARKER} runs in a label — how many blanks it contains.
+ *
+ * Shares BLANK_MARKER's rule with {@link splitLabelAtBlank}, same comment
+ * block above: a RUN of three or more underscores is ONE blank, so a longer
+ * run (`_____`) still counts as one, and this is the single place that rule
+ * is evaluated for counting purposes. `exerciseValidator.ts`'s
+ * `slot_multiple_blanks` rule uses this instead of duplicating the regex.
+ */
+export function countBlanks(label: string): number {
+  return (label.match(new RegExp(BLANK_MARKER, 'g')) ?? []).length;
 }
 
 /** Narrow `unknown` to a plain object without trusting its keys. */
@@ -201,6 +253,66 @@ function parseSlot(value: unknown): Slot | null {
   return slot;
 }
 
+/** Parse one block, or `null` when its own shape is unusable. Dropped rather
+ * than thrown — same treatment {@link parsePool} gives a bad pool item. */
+function parseBlock(value: unknown): Block | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string' || value.id.length === 0) return null;
+
+  switch (value.kind) {
+    case 'prose': {
+      if (typeof value.text !== 'string') return null;
+      return { kind: 'prose', id: value.id, text: value.text };
+    }
+    case 'media': {
+      const block: MediaBlock = { kind: 'media', id: value.id };
+      if (typeof value.image === 'string') block.image = value.image;
+      if (typeof value.audio === 'string') block.audio = value.audio;
+      if (typeof value.alt === 'string') block.alt = value.alt;
+      return block;
+    }
+    case 'row': {
+      if (typeof value.slotId !== 'string' || value.slotId.length === 0) return null;
+      return { kind: 'row', id: value.id, slotId: value.slotId };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Parse the optional `blocks` array, or `undefined` for "no blocks / degrade
+ * to legacy rendering" (specs/exercise-blocks/spec.md).
+ *
+ * DEGRADES, NEVER REJECTS, like {@link parseLayout}. A malformed block costs
+ * only presentation and ordering, so an individual bad entry (unknown `kind`,
+ * missing `id`) is simply dropped, the same way {@link parsePool} drops a bad
+ * item instead of failing the whole pool.
+ *
+ * ALL-OR-NOTHING COVERAGE RULE (design.md §6). After dropping malformed
+ * entries, `blocks` is kept ONLY when the multiset of surviving row-block
+ * `slotId`s is EXACTLY the set of `slots` ids — each once, none missing, none
+ * extra. A dangling reference, a duplicate, or a coverage gap would half-render
+ * an exercise, worse than either extreme, so the whole array is dropped and
+ * rendering takes the legacy path instead.
+ */
+function parseBlocks(value: unknown, slots: Slot[]): Block[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const blocks = value.flatMap((raw): Block[] => {
+    const block = parseBlock(raw);
+    return block ? [block] : [];
+  });
+
+  const rowSlotIds = blocks.flatMap((b) => (b.kind === 'row' ? [b.slotId] : []));
+  const expected = [...slots.map((s) => s.id)].sort();
+  const actual = [...rowSlotIds].sort();
+  const coversExactly =
+    expected.length === actual.length && expected.every((id, i) => id === actual[i]);
+
+  return coversExactly ? blocks : undefined;
+}
+
 /**
  * Validate raw `jsonb` into a {@link Payload}, or `null` when it is unusable.
  *
@@ -236,6 +348,9 @@ export function parsePayload(value: unknown): Payload | null {
   // it. `poolPlacement` then has one condition, not two.
   const layout = parseLayout(value.layout);
   if (layout) payload.layout = layout;
+
+  const blocks = parseBlocks(value.blocks, slots);
+  if (blocks) payload.blocks = blocks;
 
   return payload;
 }
