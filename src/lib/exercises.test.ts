@@ -16,6 +16,7 @@ const {
   clientState,
   maybeSingleMock,
   eqMock,
+  neqMock,
   orderMock,
   limitMock,
   selectMock,
@@ -60,9 +61,11 @@ const {
   // that asserts a column was NEVER filtered on has to read `call[0]`, and an
   // untyped `vi.fn(() => …)` records a zero-length tuple.
   const eqMock = vi.fn((_column: string, _value: unknown) => builder);
+  const neqMock = vi.fn((_column: string, _value: unknown) => builder);
   const orderMock = vi.fn(() => builder);
   const limitMock = vi.fn((_count: number) => builder);
   builder.eq = eqMock;
+  builder.neq = neqMock;
   builder.order = orderMock;
   builder.limit = limitMock;
   const selectMock = vi.fn((_columns: string) => builder);
@@ -71,6 +74,7 @@ const {
     clientState: { available: true },
     maybeSingleMock,
     eqMock,
+    neqMock,
     orderMock,
     limitMock,
     selectMock,
@@ -93,6 +97,7 @@ import {
   getExerciseFacetRows,
   getPublishedExercises,
   getRelatedExercises,
+  getExercisesByAuthor,
   clearExercisesClient,
   EXERCISES_TABLE,
   RELATED_LIMIT,
@@ -742,6 +747,89 @@ describe('getRelatedExercises', () => {
 
   it('does not query at all for a non-positive cap', async () => {
     expect(await getRelatedExercises(current, 0)).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Author-scoped, lifecycle-aware read — the "my exercises" data layer, ahead
+ * of its UI (design.md §8: the page itself lands in a later slice).
+ *
+ * Spec — exercise-lifecycle, "Exercise Ownership": an author sees exercises
+ * they own, at ANY status except `removed` — including `draft` and
+ * `needs_work`, which every learner-facing read excludes via `visible`. This
+ * is deliberately the only read in this file that does NOT filter on
+ * `visible`: an author must see their own draft to keep editing it.
+ */
+describe('getExercisesByAuthor', () => {
+  const AUTHOR_ID = '22222222-2222-2222-2222-222222222222';
+
+  it('queries by author_id and excludes removed, never filtering on visible', async () => {
+    listResult.value = { data: [], error: null };
+
+    await getExercisesByAuthor(AUTHOR_ID);
+
+    expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
+    expect(eqMock).toHaveBeenCalledWith('author_id', AUTHOR_ID);
+    expect(neqMock).toHaveBeenCalledWith('status', 'removed');
+    const filtered = eqMock.mock.calls.map((call) => call[0]);
+    expect(filtered).not.toContain('visible');
+  });
+
+  it('returns a draft — a status no learner-facing read would ever surface', async () => {
+    listResult.value = {
+      data: [
+        {
+          id: ROW.id,
+          slug: ROW.slug,
+          level: ROW.level,
+          focus: ROW.focus,
+          status: 'draft',
+          updated_at: '2024-01-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    };
+
+    const rows = await getExercisesByAuthor(AUTHOR_ID);
+
+    expect(rows).toEqual([
+      {
+        id: ROW.id,
+        slug: ROW.slug,
+        level: ROW.level,
+        focus: ROW.focus,
+        status: 'draft',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('drops a row whose status fell outside the closed vocabulary', async () => {
+    listResult.value = {
+      data: [{ ...ROW, status: 'not-a-real-status', updated_at: null }],
+      error: null,
+    };
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list on a Supabase error', async () => {
+    listResult.value = { data: null, error: { message: 'down' } };
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when the driver throws', async () => {
+    listResult.throws = new Error('network down');
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
     expect(fromMock).not.toHaveBeenCalled();
   });
 });

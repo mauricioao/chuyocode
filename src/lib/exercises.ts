@@ -28,6 +28,7 @@ import {
   type Skill,
   type Topic,
 } from './exerciseTaxonomy';
+import { STATUSES, type Status } from './exerciseLifecycle';
 
 /** DB table name — must match the SQL migration. */
 export const EXERCISES_TABLE = 'exercises';
@@ -51,6 +52,12 @@ const EXERCISE_COLUMNS = 'id, slug, skill, level, focus, topic, payload';
  * counting exercises never needs their payloads, and `topic` is not an axis.
  */
 const FACET_COLUMNS = 'level, focus';
+
+/**
+ * Columns an author's own listing needs. No `payload`, no `topic` — a "my
+ * exercises" row is a link plus a status badge, not a rendered exercise.
+ */
+const AUTHORED_COLUMNS = 'id, slug, level, focus, status, updated_at';
 
 /** A published exercise, validated and ready to render. */
 export interface Exercise {
@@ -403,6 +410,91 @@ export async function getRelatedExercises(
       .slice(0, limit);
   } catch (err) {
     console.error('[exercises] getRelatedExercises threw:', err);
+    return [];
+  }
+}
+
+function isStatus(value: unknown): value is Status {
+  return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * One row of an author's OWN "my exercises" listing — deliberately not an
+ * {@link Exercise}: this never renders a payload, and it carries `status`,
+ * which no learner-facing read exposes at all.
+ */
+export interface AuthoredExercise {
+  id: string;
+  slug: string;
+  level: Level;
+  focus: Focus;
+  status: Status;
+  /** ISO timestamp, or `null` when the row did not come back as a usable one. */
+  updatedAt: string | null;
+}
+
+/**
+ * Fetch every exercise `authorId` owns, at ANY status except `removed`.
+ *
+ * The one deliberate exception to every other read in this file: it does NOT
+ * filter on `visible`. An author must see their own `draft` to keep editing
+ * it, and their own `needs_work` to see why it was sent back — both are
+ * invisible to every learner-facing query in this module by design
+ * (exercise-lifecycle spec, "Exercise Ownership"). `removed` is excluded
+ * because a soft-deleted exercise is gone from the author's OWN workspace
+ * too, not only from public view — "removed" has no further transition
+ * (`src/lib/exerciseLifecycle.ts`), so there is nothing left for the author
+ * to do with it.
+ *
+ * FAIL-SAFE: `[]` on any error, mirroring every other read here. A dashboard
+ * that cannot list an author's own exercises degrades to an empty state, not
+ * a 500.
+ */
+export async function getExercisesByAuthor(
+  authorId: string,
+): Promise<AuthoredExercise[]> {
+  const client = getClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from(EXERCISES_TABLE)
+      .select(AUTHORED_COLUMNS)
+      .eq('author_id', authorId)
+      .neq('status', 'removed')
+      // Most recently edited first — the ordinary order for a workspace
+      // listing. `id` breaks ties so the order is total: `updated_at` alone
+      // could tie between two rows saved in the same instant.
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('[exercises] getExercisesByAuthor failed:', error.message);
+      return [];
+    }
+    if (!Array.isArray(data)) return [];
+
+    return data.flatMap((raw): AuthoredExercise[] => {
+      const row = raw as unknown as Record<string, unknown>;
+      if (typeof row.id !== 'string' || row.id.length === 0) return [];
+      if (typeof row.slug !== 'string' || row.slug.length === 0) return [];
+      if (!isLevel(row.level) || !isFocus(row.focus) || !isStatus(row.status)) {
+        return [];
+      }
+
+      return [
+        {
+          id: row.id,
+          slug: row.slug,
+          level: row.level,
+          focus: row.focus,
+          status: row.status,
+          updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+        },
+      ];
+    });
+  } catch (err) {
+    console.error('[exercises] getExercisesByAuthor threw:', err);
     return [];
   }
 }
