@@ -12,9 +12,14 @@
  * author's exercise id exists.
  *
  * UNLINKED, same as `crear/index.astro` — no nav entry anywhere (slice 18).
+ *
+ * SAVE/PUBLISH IS WIRED HERE (slice 17): `ExercisePublishFlow` (not the bare
+ * `ExerciseAuthorIsland`) is what gets mounted, carrying this row's real
+ * `exercise.id` — see that component's header for why `crear/index.astro`
+ * (a brand-new exercise, no row yet) does not get the same treatment.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import ExerciseAuthorIsland from '@components/islands/authoring/ExerciseAuthorIsland';
+import ExercisePublishFlow from '@components/islands/authoring/ExercisePublishFlow';
 import { payloadToDraft } from '@lib/authoringDraft';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
@@ -79,9 +84,10 @@ const t = UI_LABELS[lang].authoring;
     <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
       {t.editTitle}
     </h1>
-    <ExerciseAuthorIsland
+    <ExercisePublishFlow
       client:load
       lang={lang}
+      exerciseId={exercise.id}
       initialDraft={payloadToDraft(exercise.payload)}
     />
   </section>
