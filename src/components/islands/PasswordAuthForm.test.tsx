@@ -1,0 +1,241 @@
+// @vitest-environment jsdom
+/**
+ * PasswordAuthForm tests — email + password sign-in, sign-up and reset
+ * (`POST /api/auth/password`).
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+import PasswordAuthForm, { COPY } from './PasswordAuthForm';
+
+function stubFetch(body: unknown, ok = true) {
+  const fetchMock = vi.fn().mockResolvedValue({ ok, json: async () => body });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+/** `window.location.assign` throws "not implemented" in jsdom unless stubbed. */
+function stubLocation() {
+  const assign = vi.fn();
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, assign },
+  });
+  return assign;
+}
+
+function emailInput(): HTMLInputElement {
+  return screen.getByLabelText(COPY.es.emailLabel) as HTMLInputElement;
+}
+
+function passwordInput(): HTMLInputElement {
+  return screen.getByLabelText(COPY.es.passwordLabel) as HTMLInputElement;
+}
+
+function submitButton(): HTMLElement {
+  return screen.getByTestId('password-auth-submit');
+}
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe('PasswordAuthForm — sign in (default mode)', () => {
+  it('POSTs action=signin with email and password', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/password', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'signin',
+        email: 'lector@example.com',
+        lang: 'es',
+        password: 'correcto-caballo-1',
+      }),
+    });
+  });
+
+  it('navigates to next on a successful sign-in', async () => {
+    stubFetch({ ok: true });
+    const assign = stubLocation();
+    render(<PasswordAuthForm lang="es" next="/es/ingles" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/es/ingles'));
+  });
+
+  it('navigates home when no next was given', async () => {
+    stubFetch({ ok: true });
+    const assign = stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/es/'));
+  });
+
+  it('shows the generic invalid-credentials error on a 401, keeping the form', async () => {
+    stubFetch({ ok: false, error: 'invalid_credentials' }, false);
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'wrong-password' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.signInError));
+    expect(screen.getByTestId('password-auth-form')).toBeTruthy();
+  });
+
+  it('shows the same error when fetch throws (offline)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'wrong-password' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.signInError));
+  });
+
+  it('disables the control while the request is in flight', async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise((resolve) => { release = () => resolve({ ok: true, json: async () => ({ ok: true }) }); })),
+    );
+    stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    expect(submitButton().hasAttribute('disabled')).toBe(true);
+    release?.();
+  });
+});
+
+describe('PasswordAuthForm — switching to sign up', () => {
+  it('shows the sign-up submit label after switching modes', () => {
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
+
+    expect(screen.getByRole('button', { name: COPY.es.signUpSubmit })).toBeTruthy();
+  });
+
+  it('rejects a too-short password locally, without a request', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
+    fireEvent.change(emailInput(), { target: { value: 'nuevo@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'short' } });
+    fireEvent.click(screen.getByRole('button', { name: COPY.es.signUpSubmit }));
+
+    expect(screen.getByRole('alert').textContent).toBe(COPY.es.tooShort);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('POSTs action=signup and shows the uniform confirmation message', async () => {
+    const fetchMock = stubFetch({ ok: true, signedIn: false });
+    render(<PasswordAuthForm lang="es" next="/es/ingles" />);
+    fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
+    fireEvent.change(emailInput(), { target: { value: 'nuevo@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(screen.getByRole('button', { name: COPY.es.signUpSubmit }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/password',
+      expect.objectContaining({
+        body: JSON.stringify({
+          action: 'signup',
+          email: 'nuevo@example.com',
+          lang: 'es',
+          password: 'correcto-caballo-1',
+          next: '/es/ingles',
+        }),
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('password-auth-sent').textContent).toBe(COPY.es.signUpSent),
+    );
+  });
+
+  it('navigates instead of showing the message when Supabase signs the visitor in immediately', async () => {
+    stubFetch({ ok: true, signedIn: true });
+    const assign = stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
+    fireEvent.change(emailInput(), { target: { value: 'nuevo@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(screen.getByRole('button', { name: COPY.es.signUpSubmit }));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/es/'));
+  });
+});
+
+describe('PasswordAuthForm — forgot password', () => {
+  it('hides the password field in reset mode', () => {
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.forgotPassword));
+
+    expect(screen.queryByLabelText(COPY.es.passwordLabel)).toBeNull();
+  });
+
+  it('POSTs action=reset and shows the uniform confirmation message', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.forgotPassword));
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: COPY.es.resetSubmit }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/password',
+      expect.objectContaining({
+        body: JSON.stringify({ action: 'reset', email: 'lector@example.com', lang: 'es' }),
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('password-auth-sent').textContent).toBe(COPY.es.resetSent),
+    );
+  });
+
+  it('returns to sign-in mode from the back link', () => {
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.forgotPassword));
+    fireEvent.click(screen.getByText(COPY.es.backToSignIn));
+
+    expect(screen.getByRole('button', { name: COPY.es.signInSubmit })).toBeTruthy();
+  });
+});
+
+describe('PasswordAuthForm — localization', () => {
+  it('localizes the form to English', () => {
+    render(<PasswordAuthForm lang="en" />);
+    expect(screen.getByLabelText(COPY.en.emailLabel)).toBeTruthy();
+    expect(screen.getByRole('button', { name: COPY.en.signInSubmit })).toBeTruthy();
+  });
+
+  it('falls back to Spanish for an unknown locale', () => {
+    render(<PasswordAuthForm lang="fr" />);
+    expect(screen.getByLabelText(COPY.es.emailLabel)).toBeTruthy();
+  });
+
+  it('writes its Spanish in neutral Spanish, with no voseo', () => {
+    expect(voseoWords('Revisá tu correo, vas a recibir un enlace.')).toEqual([
+      'Revisá',
+      'vas',
+    ]);
+    expect(findVoseo(COPY.es)).toEqual([]);
+  });
+});
