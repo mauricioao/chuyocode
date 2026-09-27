@@ -20,7 +20,7 @@
  * signed-in browser and no obvious way out.
  */
 import type { APIRoute } from 'astro';
-import { safeNextPath } from '@lib/authRedirect';
+import { safeNextPath, withSignedOut } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
 import {
   createSessionClient,
@@ -54,7 +54,13 @@ export const POST: APIRoute = async ({ request }) => {
   // without an error only means Supabase revoked the refresh token on its side.
   // The browser keeps whatever it holds until this response tells it otherwise,
   // and it presents that cookie on the very next request.
-  const headers = new Headers({ location: target });
+  //
+  // 🔴 THE LOCATION ALWAYS CARRIES A QUERY. Netlify appends the original
+  // request's query string to any redirect whose `Location` has none of its
+  // own (verified on a deploy preview). `withSignedOut` guarantees a `?` here
+  // so this route never hands Netlify a query-less target to append to. See
+  // `src/lib/authRedirect.ts`.
+  const headers = new Headers({ location: withSignedOut(target) });
   flushSessionHeaders(headers, session);
   // Applied last: the response carries the cookie deletions, and a cached copy
   // would either hand a later visitor a sign-out or hide this one.

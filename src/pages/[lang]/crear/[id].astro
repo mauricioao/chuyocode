@@ -1,0 +1,94 @@
+---
+/**
+ * Edit-exercise authoring page — `/[lang]/crear/[id]` (SSR, slice 15).
+ *
+ * SSR-GATED exactly like `crear/index.astro`: anonymous redirects to
+ * sign-in with `next`, before anything renders. Ownership is then
+ * re-verified server-side, in the frontmatter, by calling
+ * `getExerciseForEdit(id, user.id)` — that call filters by BOTH `id` and
+ * `author_id` in the query itself (`src/lib/exercises.ts`), so "does not
+ * exist" and "exists but is not yours" collapse to the identical `null` and
+ * the identical 404 here. Neither confirms to a caller that some OTHER
+ * author's exercise id exists.
+ *
+ * UNLINKED, same as `crear/index.astro` — no nav entry anywhere (slice 18).
+ *
+ * SAVE/PUBLISH IS WIRED HERE (slice 17): `ExercisePublishFlow` (not the bare
+ * `ExerciseAuthorIsland`) is what gets mounted, carrying this row's real
+ * `exercise.id` — see that component's header for why `crear/index.astro`
+ * (a brand-new exercise, no row yet) does not get the same treatment.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ExercisePublishFlow from '@components/islands/authoring/ExercisePublishFlow';
+import { payloadToDraft } from '@lib/authoringDraft';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getExerciseForEdit } from '@lib/exercises';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Session-dependent on every exit path — see crear/index.astro's header.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  // NOT `Astro.redirect()` — see `crear/index.astro`'s header for why: it
+  // builds its own `Response` and would discard the `markPrivate` mutation
+  // above.
+  //
+  // 🔴 EVERYTHING INLINED, DELIBERATELY — see `crear/index.astro`'s matching
+  // comment: `astro check` false-flags ANY binding (local `const` or
+  // imported) whose only use sits inside a `Response(...)` literal returned
+  // from an `if` block in `.astro` frontmatter (`ts(6133)`, isolated with a
+  // minimal repro). The literal below must stay `private, no-store`,
+  // identical to `src/lib/httpCache.ts`'s `PRIVATE_CACHE_CONTROL`.
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// OWNERSHIP CHECK, IN THE FRONTMATTER, SERVER-SIDE — independent of any UI
+// state the caller might have forged. See the file header.
+const exercise = await getExerciseForEdit(id, user.id);
+if (!exercise) {
+  // Also explicitly private: WHICH id 404s depends on `user.id` (someone
+  // else's exercise 404s for this caller, not for its real owner), so this
+  // response is exactly as session-dependent as the redirect above.
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].authoring;
+---
+
+<BaseLayout lang={lang} title={t.editTitle} description={t.editDescription}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.editTitle}
+    </h1>
+    <ExercisePublishFlow
+      client:load
+      lang={lang}
+      exerciseId={exercise.id}
+      initialDraft={payloadToDraft(exercise.payload)}
+    />
+  </section>
+</BaseLayout>

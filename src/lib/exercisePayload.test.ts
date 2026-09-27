@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parsePayload,
+  countBlanks,
   getSlotItems,
   hasAudio,
   poolPlacement,
@@ -439,5 +440,175 @@ describe('splitLabelAtBlank', () => {
   // underscores between letters must never be read as a gap.
   it('does not treat snake_case words as a blank', () => {
     expect(splitLabelAtBlank('The variable user_name is set.')).toBeNull();
+  });
+});
+
+describe('countBlanks', () => {
+  // Same rule as `splitLabelAtBlank`'s `BLANK_MARKER`: a RUN of 3+ underscores
+  // is ONE blank, so the count tracks runs, not underscore characters.
+  it('counts zero blanks in a label with no marker', () => {
+    expect(countBlanks('What did she say?')).toBe(0);
+  });
+
+  it('counts one blank for one run of underscores', () => {
+    expect(countBlanks('She ___ breakfast.')).toBe(1);
+  });
+
+  it('counts a longer run as ONE blank, not several', () => {
+    expect(countBlanks('She ______ breakfast.')).toBe(1);
+  });
+
+  it('counts two separate runs as two blanks', () => {
+    expect(countBlanks('A ___ and a ___ walk in.')).toBe(2);
+  });
+
+  it('does not count snake_case single/double underscores as a blank', () => {
+    expect(countBlanks('The variable user_name is set.')).toBe(0);
+  });
+});
+
+/** Two independent, otherwise-valid slots — the base fixture for `blocks`. */
+const TWO_SLOT_PAYLOAD = {
+  pools: {},
+  slots: [
+    { id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] },
+    { id: 's2', label: 'The dog ___ in the yard', input: 'text', answer: ['runs'] },
+  ],
+};
+
+describe('parsePayload — blocks', () => {
+  it('is absent on every exercise authored without one — additive by construction', () => {
+    expect(parsePayload(TWO_SLOT_PAYLOAD)?.blocks).toBeUndefined();
+  });
+
+  it('degrades to absent, never throws, when blocks is null', () => {
+    expect(() => parsePayload({ ...TWO_SLOT_PAYLOAD, blocks: null })).not.toThrow();
+    expect(parsePayload({ ...TWO_SLOT_PAYLOAD, blocks: null })?.blocks).toBeUndefined();
+  });
+
+  it('degrades to absent when blocks is an empty array — coverage cannot be met', () => {
+    expect(parsePayload({ ...TWO_SLOT_PAYLOAD, blocks: [] })?.blocks).toBeUndefined();
+  });
+
+  it('keeps a valid blocks array whose row slotIds exactly cover payload.slots', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'prose', id: 'p1', text: 'Context before the first row.' },
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks).toEqual([
+      { kind: 'prose', id: 'p1', text: 'Context before the first row.' },
+      { kind: 'row', id: 'r1', slotId: 's1' },
+      { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png' },
+      { kind: 'row', id: 'r2', slotId: 's2' },
+    ]);
+  });
+
+  it('drops a non-https media image URL but keeps the rest of the block', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'javascript:alert(1)', alt: 'a cat' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks).toEqual([
+      { kind: 'row', id: 'r1', slotId: 's1' },
+      { kind: 'media', id: 'm1', alt: 'a cat' },
+      { kind: 'row', id: 'r2', slotId: 's2' },
+    ]);
+  });
+
+  it('drops a non-https media audio URL the same way', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', audio: 'data:audio/mp3;base64,aaaa' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks?.[1]).toEqual({ kind: 'media', id: 'm1' });
+  });
+
+  it('keeps an https media URL on a host that is not on the authoring allow-list', () => {
+    // Defense-in-depth only checks the SCHEME (see isHttpsUrl's header): an
+    // exercise authored before the allow-list existed must not lose its
+    // media on every subsequent read.
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks?.[1]).toEqual({
+      kind: 'media',
+      id: 'm1',
+      image: 'https://cdn.test/cat.png',
+    });
+  });
+
+  it('drops one malformed block with an unknown kind but keeps blocks when coverage still holds', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'bogus', id: 'b1', text: 'nope' },
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    expect(payload?.blocks).toEqual([
+      { kind: 'row', id: 'r1', slotId: 's1' },
+      { kind: 'row', id: 'r2', slotId: 's2' },
+    ]);
+  });
+
+  it('drops a block missing an id, and drops the whole array when that breaks coverage', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', slotId: 's1' }, // no `id` — dropped
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    });
+    // s1 is no longer covered by any row block: all-or-nothing rule drops `blocks`.
+    expect(payload?.blocks).toBeUndefined();
+  });
+
+  it('drops the whole array when a row references a slotId that does not exist (dangling)', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'row', id: 'r2', slotId: 'does-not-exist' },
+      ],
+    });
+    expect(payload?.blocks).toBeUndefined();
+  });
+
+  it('drops the whole array when two rows duplicate the same slotId', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'row', id: 'r2', slotId: 's1' },
+      ],
+    });
+    expect(payload?.blocks).toBeUndefined();
+  });
+
+  it('drops the whole array when a slot has no row block covering it (coverage gap)', () => {
+    const payload = parsePayload({
+      ...TWO_SLOT_PAYLOAD,
+      blocks: [{ kind: 'row', id: 'r1', slotId: 's1' }],
+    });
+    expect(payload?.blocks).toBeUndefined();
   });
 });

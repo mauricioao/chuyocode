@@ -447,6 +447,31 @@ describe('UI_LABELS — 404 keys', () => {
   });
 });
 
+describe('UI_LABELS — auth keys (sign-in page, slice 4)', () => {
+  const locales = ['es', 'en'] as const;
+
+  it('exposes auth copy for both locales', () => {
+    for (const l of locales) {
+      const auth = UI_LABELS[l].auth;
+      for (const key of [
+        'title',
+        'description',
+        'linkInvalid',
+        'signedIn',
+        'alreadySignedIn',
+        'signOut',
+      ] as const) {
+        expect(typeof auth[key]).toBe('string');
+        expect(auth[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('localizes the sign-in title (es vs en)', () => {
+    expect(UI_LABELS.es.auth.title).not.toBe(UI_LABELS.en.auth.title);
+  });
+});
+
 describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
   // STANDING PROJECT RULE, and no longer scoped to the English section.
   //

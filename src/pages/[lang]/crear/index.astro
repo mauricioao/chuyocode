@@ -1,0 +1,77 @@
+---
+/**
+ * New-exercise authoring page — `/[lang]/crear` (SSR, slice 15).
+ *
+ * SSR-GATED ON `Astro.locals.user`. Anonymous visitors never see the
+ * authoring markup at all: they are redirected to the sign-in page with a
+ * `next` back to this same path, BEFORE anything renders.
+ *
+ * 🔴 NETLIFY APPENDS THE ORIGINAL REQUEST'S QUERY STRING TO A 30x `Location`
+ * THAT HAS NONE OF ITS OWN (`src/lib/authRedirect.ts`'s header, verified on a
+ * deploy preview). The redirect below always carries its own `?next=…`, so
+ * there is nothing query-less for Netlify to append to.
+ *
+ * THIS ROUTE IS DELIBERATELY UNLINKED — no nav entry anywhere (slice 18).
+ * Reachable only by a direct URL.
+ *
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE, same rule
+ * `src/pages/[lang]/auth/entrar.astro` documents: this page's HTML differs
+ * by visitor (gated vs. redirect), so `markPrivate` runs unconditionally,
+ * before either branch.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ExerciseAuthorIsland from '@components/islands/authoring/ExerciseAuthorIsland';
+import { createEmptyDraft } from '@lib/authoringDraft';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, so neither exit path can ship without it.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  // NOT `Astro.redirect()`: that helper builds its OWN `Response`, discarding
+  // the `markPrivate` mutation above — this response varies by
+  // `Astro.locals.user` (redirect vs. render), so the header has to travel
+  // WITH this exact `Response` object.
+  //
+  // 🔴 EVERYTHING IS INLINED HERE, DELIBERATELY, INCLUDING THE CACHE-CONTROL
+  // STRING (never a separate `const`, never the imported
+  // `PRIVATE_CACHE_CONTROL` — it must read `private, no-store`, identical to
+  // `src/lib/httpCache.ts`'s `PRIVATE_CACHE_CONTROL`). `astro check` reports a
+  // FALSE `ts(6133)` "declared but never read" against ANY binding — local
+  // `const` or imported — whose only use sits inside a `Response(...)`
+  // literal returned from inside an `if` block in `.astro` frontmatter, even
+  // though the code is correct and covered by this page's own tests
+  // (verified with a minimal repro isolating this exact shape). Inlining is
+  // the workaround; a future astro/`@astrojs/compiler` upgrade may remove
+  // the need for it.
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const t = UI_LABELS[lang].authoring;
+---
+
+<BaseLayout lang={lang} title={t.newTitle} description={t.newDescription}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.newTitle}
+    </h1>
+    <ExerciseAuthorIsland client:load lang={lang} initialDraft={createEmptyDraft()} />
+  </section>
+</BaseLayout>

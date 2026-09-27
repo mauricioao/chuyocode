@@ -79,6 +79,7 @@ import {
   safeNextPath,
   stripAuthParams,
   withAuthError,
+  withAuthSuccess,
 } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
 import {
@@ -189,5 +190,11 @@ export const GET: APIRoute = async ({ request }) => {
     return redirect(withAuthError(target), session);
   }
 
-  return redirect(target, session);
+  // 🔴 THE SUCCESS TARGET ALWAYS CARRIES A QUERY, NEVER A BARE PATH. Netlify
+  // appends the ORIGINAL request's query string — the one still holding
+  // `code`/`token_hash` — to any redirect whose `Location` has none of its
+  // own. `withAuthSuccess` guarantees a `?` here, so there is nothing
+  // query-less left for Netlify to graft the credential back onto. See
+  // `src/lib/authRedirect.ts`.
+  return redirect(withAuthSuccess(target), session);
 };

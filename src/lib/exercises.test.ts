@@ -16,6 +16,7 @@ const {
   clientState,
   maybeSingleMock,
   eqMock,
+  neqMock,
   orderMock,
   limitMock,
   selectMock,
@@ -60,9 +61,11 @@ const {
   // that asserts a column was NEVER filtered on has to read `call[0]`, and an
   // untyped `vi.fn(() => …)` records a zero-length tuple.
   const eqMock = vi.fn((_column: string, _value: unknown) => builder);
+  const neqMock = vi.fn((_column: string, _value: unknown) => builder);
   const orderMock = vi.fn(() => builder);
   const limitMock = vi.fn((_count: number) => builder);
   builder.eq = eqMock;
+  builder.neq = neqMock;
   builder.order = orderMock;
   builder.limit = limitMock;
   const selectMock = vi.fn((_columns: string) => builder);
@@ -71,6 +74,7 @@ const {
     clientState: { available: true },
     maybeSingleMock,
     eqMock,
+    neqMock,
     orderMock,
     limitMock,
     selectMock,
@@ -93,6 +97,8 @@ import {
   getExerciseFacetRows,
   getPublishedExercises,
   getRelatedExercises,
+  getExercisesByAuthor,
+  getExerciseForEdit,
   clearExercisesClient,
   EXERCISES_TABLE,
   RELATED_LIMIT,
@@ -148,7 +154,7 @@ describe('getExerciseBySlug', () => {
     expect(exercise?.payload.pools.opts).toHaveLength(2);
   });
 
-  it('queries the exercises table filtered by level, focus, slug and published', async () => {
+  it('queries the exercises table filtered by level, focus, slug and visible', async () => {
     maybeSingleMock.mockResolvedValue({ data: ROW, error: null });
 
     await getExerciseBySlug('A1', 'present-simple', 'cat-on-the-mat');
@@ -157,8 +163,9 @@ describe('getExerciseBySlug', () => {
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
     expect(eqMock).toHaveBeenCalledWith('focus', 'present-simple');
     expect(eqMock).toHaveBeenCalledWith('slug', 'cat-on-the-mat');
-    // Unpublished drafts must never be reachable by deep link.
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    // Drafts and removed/hidden rows must never be reachable by deep link;
+    // auditing rows still must (0007_exercise_authorship.sql).
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   it('never filters by topic — context is not an axis', async () => {
@@ -354,10 +361,10 @@ describe('getExerciseFacetRows', () => {
     expect(selected).not.toContain('topic');
   });
 
-  it('counts only published rows, so drafts never inflate a chip', async () => {
+  it('counts only visible rows, so drafts never inflate a chip', async () => {
     await getExerciseFacetRows();
 
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   // Spec — Scenario: Supabase failure yields empty result.
@@ -416,7 +423,7 @@ describe('getPublishedExercises', () => {
     expect(exercises[0]?.payload.slots[0]?.answer).toEqual(['b']);
   });
 
-  it('filters by level, focus and published', async () => {
+  it('filters by level, focus and visible', async () => {
     listResult.value = { data: [ROW], error: null };
 
     await getPublishedExercises('A1', 'present-simple');
@@ -424,7 +431,7 @@ describe('getPublishedExercises', () => {
     expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
     expect(eqMock).toHaveBeenCalledWith('level', 'A1');
     expect(eqMock).toHaveBeenCalledWith('focus', 'present-simple');
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   it('orders the listing deterministically so the grid does not reshuffle', async () => {
@@ -636,13 +643,13 @@ describe('getRelatedExercises', () => {
     expect(limitMock).toHaveBeenCalledWith(4);
   });
 
-  it('reads published rows only', async () => {
+  it('reads visible rows only', async () => {
     listResult.value = { data: [rowAt('a')], error: null };
 
     await getRelatedExercises(current);
 
     expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
-    expect(eqMock).toHaveBeenCalledWith('published', true);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
   });
 
   it('orders by (focus, slug) — the new unique key — so the block cannot reshuffle', async () => {
@@ -741,6 +748,179 @@ describe('getRelatedExercises', () => {
 
   it('does not query at all for a non-positive cap', async () => {
     expect(await getRelatedExercises(current, 0)).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Author-scoped, lifecycle-aware read — the "my exercises" data layer, ahead
+ * of its UI (design.md §8: the page itself lands in a later slice).
+ *
+ * Spec — exercise-lifecycle, "Exercise Ownership": an author sees exercises
+ * they own, at ANY status except `removed` — including `draft` and
+ * `needs_work`, which every learner-facing read excludes via `visible`. This
+ * is deliberately the only read in this file that does NOT filter on
+ * `visible`: an author must see their own draft to keep editing it.
+ */
+describe('getExercisesByAuthor', () => {
+  const AUTHOR_ID = '22222222-2222-2222-2222-222222222222';
+
+  it('queries by author_id and excludes removed, never filtering on visible', async () => {
+    listResult.value = { data: [], error: null };
+
+    await getExercisesByAuthor(AUTHOR_ID);
+
+    expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
+    expect(eqMock).toHaveBeenCalledWith('author_id', AUTHOR_ID);
+    expect(neqMock).toHaveBeenCalledWith('status', 'removed');
+    const filtered = eqMock.mock.calls.map((call) => call[0]);
+    expect(filtered).not.toContain('visible');
+  });
+
+  it('returns a draft — a status no learner-facing read would ever surface', async () => {
+    listResult.value = {
+      data: [
+        {
+          id: ROW.id,
+          slug: ROW.slug,
+          level: ROW.level,
+          focus: ROW.focus,
+          status: 'draft',
+          updated_at: '2024-01-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    };
+
+    const rows = await getExercisesByAuthor(AUTHOR_ID);
+
+    expect(rows).toEqual([
+      {
+        id: ROW.id,
+        slug: ROW.slug,
+        level: ROW.level,
+        focus: ROW.focus,
+        status: 'draft',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('drops a row whose status fell outside the closed vocabulary', async () => {
+    listResult.value = {
+      data: [{ ...ROW, status: 'not-a-real-status', updated_at: null }],
+      error: null,
+    };
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list on a Supabase error', async () => {
+    listResult.value = { data: null, error: { message: 'down' } };
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when the driver throws', async () => {
+    listResult.throws = new Error('network down');
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('fail-safes to an empty list when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+
+    expect(await getExercisesByAuthor(AUTHOR_ID)).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('getExerciseForEdit', () => {
+  const AUTHOR_ID = '22222222-2222-2222-2222-222222222222';
+
+  it('filters by id AND author_id — ownership enforced in the query, not after', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { ...ROW, status: 'draft' }, error: null });
+
+    await getExerciseForEdit(ROW.id, AUTHOR_ID);
+
+    expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
+    expect(eqMock).toHaveBeenCalledWith('id', ROW.id);
+    expect(eqMock).toHaveBeenCalledWith('author_id', AUTHOR_ID);
+    const filtered = eqMock.mock.calls.map((call) => call[0]);
+    expect(filtered).not.toContain('visible');
+  });
+
+  it('returns the exercise with its status and parsed payload', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { ...ROW, status: 'draft' }, error: null });
+
+    const exercise = await getExerciseForEdit(ROW.id, AUTHOR_ID);
+
+    expect(exercise).toEqual({
+      id: ROW.id,
+      slug: ROW.slug,
+      skill: ROW.skill,
+      level: ROW.level,
+      focus: ROW.focus,
+      topic: ROW.topic,
+      status: 'draft',
+      payload: expect.objectContaining({ slots: expect.any(Array) }),
+    });
+  });
+
+  it('reaches a needs_work row too — not only draft/live', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { ...ROW, status: 'needs_work' }, error: null });
+
+    const exercise = await getExerciseForEdit(ROW.id, AUTHOR_ID);
+
+    expect(exercise?.status).toBe('needs_work');
+  });
+
+  it('returns null when Supabase finds no row matching BOTH id and author_id — same shape as "not yours"', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('returns null for an empty id or author id, before any query', async () => {
+    expect(await getExerciseForEdit('', AUTHOR_ID)).toBeNull();
+    expect(await getExerciseForEdit(ROW.id, '')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the row status falls outside the closed vocabulary', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { ...ROW, status: 'not-a-real-status' },
+      error: null,
+    });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('returns null when the payload is malformed', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { ...ROW, status: 'draft', payload: { slots: [] } },
+      error: null,
+    });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('fail-safes to null on a Supabase error', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: 'down' } });
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('fail-safes to null when the driver throws', async () => {
+    maybeSingleMock.mockRejectedValue(new Error('network down'));
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
+  });
+
+  it('fail-safes to null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+
+    expect(await getExerciseForEdit(ROW.id, AUTHOR_ID)).toBeNull();
     expect(fromMock).not.toHaveBeenCalled();
   });
 });

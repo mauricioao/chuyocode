@@ -30,7 +30,11 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DEFAULT_LANG } from '@lib/i18n';
-import { AUTH_ERROR_PARAM, AUTH_ERROR_LINK_INVALID } from '@lib/authRedirect';
+import {
+  AUTH_ERROR_PARAM,
+  AUTH_ERROR_LINK_INVALID,
+  AUTH_SIGNED_IN,
+} from '@lib/authRedirect';
 
 const {
   createSessionClientMock,
@@ -144,7 +148,9 @@ describe('GET /api/auth/confirm — T2 credential stripping', () => {
     );
     const res = await GET(ctx(`?token_hash=${TOKEN}&type=email&next=${next}`));
 
-    expect(location(res)).toBe('/es/libros?orden=reciente');
+    expect(location(res)).toBe(
+      `/es/libros?orden=reciente&${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
   });
 
   it('sends the visitor to the requested destination on success', async () => {
@@ -152,7 +158,23 @@ describe('GET /api/auth/confirm — T2 credential stripping', () => {
       ctx(`?token_hash=${TOKEN}&type=email&next=%2Fen%2Flibros`),
     );
 
-    expect(location(res)).toBe('/en/libros');
+    expect(location(res)).toBe(
+      `/en/libros?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
+  });
+
+  it('always carries a query string on success, defeating a query-less Location (Netlify)', async () => {
+    // Verified on a deploy preview: Netlify appends the ORIGINAL request's
+    // query string — the one holding `token_hash`/`code` — to any redirect
+    // whose Location has none of its own. A bare `next` with no query of its
+    // own is exactly the case that must never reach the browser query-less.
+    const res = await GET(
+      ctx(`?token_hash=${TOKEN}&type=email&next=%2Fes%2F`),
+    );
+
+    expect(location(res)).toContain('?');
+    expect(location(res)).not.toContain('code=');
+    expect(location(res)).not.toContain('token_hash=');
   });
 
   it('uses 303 so the browser follows with GET', async () => {
@@ -168,7 +190,9 @@ describe('GET /api/auth/confirm — T2 credential stripping', () => {
       ctx(`?token_hash=${TOKEN}&type=email&next=%2F%2Fevil.com`),
     );
 
-    expect(location(res)).toBe(`/${DEFAULT_LANG}/`);
+    expect(location(res)).toBe(
+      `/${DEFAULT_LANG}/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
   });
 });
 
@@ -188,10 +212,11 @@ describe('GET /api/auth/confirm — verification', () => {
     expect(otpArgs().type).toBe('email');
   });
 
-  it('does not mark the redirect on a successful confirmation', async () => {
+  it('marks the redirect signed-in, never the rejected-link marker, on success', async () => {
     const res = await GET(ctx(`?token_hash=${TOKEN}&type=email`));
 
-    expect(location(res)).not.toContain(AUTH_ERROR_PARAM);
+    expect(location(res)).toContain(`${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`);
+    expect(location(res)).not.toContain(AUTH_ERROR_LINK_INVALID);
   });
 });
 
@@ -277,7 +302,9 @@ describe('GET /api/auth/confirm — the PKCE `code` credential', () => {
     const res = await GET(ctx(`?code=${CODE}&next=%2Fen%2Flibros`));
 
     expect(res.status).toBe(303);
-    expect(location(res)).toBe('/en/libros');
+    expect(location(res)).toBe(
+      `/en/libros?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
   });
 
   it('does not verify an OTP when the credential is a code', async () => {
@@ -297,7 +324,9 @@ describe('GET /api/auth/confirm — the PKCE `code` credential', () => {
     const next = encodeURIComponent(`/es/libros?code=${CODE}&orden=reciente`);
     const res = await GET(ctx(`?code=${CODE}&next=${next}`));
 
-    expect(location(res)).toBe('/es/libros?orden=reciente');
+    expect(location(res)).toBe(
+      `/es/libros?orden=reciente&${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
   });
 
   it('invites a new link when the exchange is rejected', async () => {
@@ -378,7 +407,9 @@ describe('GET /api/auth/confirm — credential precedence', () => {
       ctx(`?code=${CODE}&token_hash=${TOKEN}&type=email&next=%2Fes%2Flibros`),
     );
 
-    expect(location(res)).toBe('/es/libros');
+    expect(location(res)).toBe(
+      `/es/libros?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
   });
 
   it('still redeems a lone token_hash, for the day a custom template exists', async () => {

@@ -17,6 +17,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowButton } from '@/components/ui/ArrowButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { blocksForStep } from '@/lib/exerciseBlocks';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import {
@@ -42,6 +43,7 @@ import {
 } from '@/lib/exerciseStopwatch';
 import UnavailableRenderer from './mechanics/UnavailableRenderer';
 import { comparatorForRenderable, rendererFor } from './mechanics/registry';
+import { PROMPT_MEASURE } from './mechanics/scale';
 
 /**
  * One pill in the card's header row, already resolved to a string.
@@ -356,6 +358,10 @@ export default function ExerciseIsland({
   // block. Only ONE slot is on screen, so there is nothing left to map over.
   const Renderer = slot ? rendererFor(slot.input) : null;
   const outcome = slot ? result?.slots[slot.id] : undefined;
+  // `prose`/`media` context for the CURRENT step only. Absent `payload.blocks`
+  // (every exercise authored before this shipped) resolves to `[]`, so this
+  // adds nothing to the legacy render path (exerciseBlocks.ts).
+  const stepBlocks = blocksForStep(payload, current).filter((b) => b.kind !== 'row');
   // A bare `disabled` button explains nothing to a screen reader, so the reason
   // ships as visible text in reading order. It is withheld when NOTHING is
   // renderable: "pick an answer" would be a lie, and the per-slot unavailable
@@ -541,6 +547,41 @@ export default function ExerciseIsland({
           // already centred by its own internal flow, while the mechanics that
           // hug their content need this to sit mid-card.
           <div className="flex flex-1 flex-col justify-center gap-3">
+            {/* Authored `prose`/`media` context around this step's slot
+                (specs/exercise-blocks/spec.md, "prose and media Blocks Are
+                Context-Only"). `stepBlocks` is `[]` on every exercise with
+                no `blocks`, so this renders nothing extra for them. */}
+            {stepBlocks.map((block) =>
+              block.kind === 'prose' ? (
+                <p
+                  key={block.id}
+                  data-testid={`exercise-block-${block.id}`}
+                  className={`${PROMPT_MEASURE} font-sans text-base text-zinc-300`}
+                >
+                  {block.text}
+                </p>
+              ) : (
+                <div
+                  key={block.id}
+                  data-testid={`exercise-block-${block.id}`}
+                  className={PROMPT_MEASURE}
+                >
+                  {block.image && (
+                    <img
+                      src={block.image}
+                      alt={block.alt ?? ''}
+                      className="mx-auto max-h-48 w-auto object-contain"
+                    />
+                  )}
+                  {block.audio && (
+                    <audio controls src={block.audio} className="w-full">
+                      {/* No captions track exists for authored exercise audio yet. */}
+                    </audio>
+                  )}
+                </div>
+              ),
+            )}
+
             {Renderer ? (
               <Renderer
                 slot={slot}

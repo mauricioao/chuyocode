@@ -4,8 +4,10 @@
 -- (all previous seed files and DB rows were wiped when the exercise view/
 -- payload format changed).
 
+-- Run AFTER 0007_exercise_authorship.sql: `published` no longer exists,
+-- `status` replaces it (see supabase/migrations/0007_exercise_authorship.sql).
 insert into public.exercises
-  (slug, skill, level, focus, topic, payload, published)
+  (slug, skill, level, focus, topic, payload, status)
 values
 
 -- ---------- A1 · present-simple · daily-standup ----------
@@ -44,10 +46,11 @@ values
     { "id": "s5", "label": "After the standup, developers usually ___ working on their tasks.",
       "input": "text", "answer": ["continue", "keep", "resume"] }
   ]
-}', true)
+}', 'live')
 
 on conflict (level, focus, slug) do nothing;
 
 -- Verification
 select level, focus, count(*) from public.exercises
+where visible
 group by level, focus order by level, focus;

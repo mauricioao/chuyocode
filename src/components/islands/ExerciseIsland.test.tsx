@@ -300,6 +300,49 @@ describe('ExerciseIsland — rendering', () => {
   });
 });
 
+describe('ExerciseIsland — blocks (additive by construction)', () => {
+  function goToSlot(index: number) {
+    const next = screen.getByTestId('exercise-next');
+    for (let i = 0; i < index; i += 1) fireEvent.click(next);
+  }
+
+  it('renders no block markup at all for a payload with no blocks — the legacy path', () => {
+    render(<ExerciseIsland lang="en" payload={pair} />);
+    expect(screen.queryByTestId(/exercise-block-/)).toBeNull();
+  });
+
+  it("renders the current step's leading prose/media above the mechanic, and only that step's group", () => {
+    const withBlocks: Payload = {
+      ...pair,
+      blocks: [
+        { kind: 'prose', id: 'p1', text: 'Leading context.' },
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png', alt: 'A cat' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    };
+    render(<ExerciseIsland lang="en" payload={withBlocks} />);
+
+    expect(screen.getByTestId('exercise-block-p1').textContent).toBe('Leading context.');
+    expect(screen.queryByTestId('exercise-block-m1')).toBeNull();
+
+    goToSlot(1);
+    expect(screen.queryByTestId('exercise-block-p1')).toBeNull();
+    expect(screen.getByRole('img', { name: 'A cat' })).toBeTruthy();
+  });
+
+  it('never renders a `row` block itself as block markup — only prose/media', () => {
+    const withBlocks: Payload = {
+      ...single,
+      blocks: [{ kind: 'row', id: 'r1', slotId: 's1' }],
+    };
+    render(<ExerciseIsland lang="en" payload={withBlocks} />);
+    expect(screen.queryByTestId(/exercise-block-/)).toBeNull();
+    // The mechanic itself still renders normally.
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+});
+
 describe('ExerciseIsland — grading', () => {
   it('gives positive feedback for a correct answer, with NO network call', () => {
     const fetchMock = vi.fn();
