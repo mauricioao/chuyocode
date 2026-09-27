@@ -175,6 +175,14 @@ alter table public.activities
   add constraint activities_published_revision_id_fkey
   foreign key (published_revision_id) references public.activity_revisions(id) on delete set null;
 
+-- A live activity must point at the revision the public reads; otherwise it
+-- would be visible with no content. This also makes deleting a published
+-- revision fail (the FK's `set null` would break the check) instead of
+-- silently emptying a live activity.
+alter table public.activities
+  add constraint activities_live_has_revision
+  check (status <> 'live' or published_revision_id is not null);
+
 -- ---------------------------------------------------------------------------
 -- Storage buckets. Both webp-only, both capped at 2 MB (client pipeline
 -- re-encodes everything to webp before upload — `src/lib/activities/

@@ -92,6 +92,12 @@ describe('0011_activities.sql', () => {
       expect(sql).not.toMatch(/published_revision_id\s+uuid\s+not null/);
     });
 
+    it('never lets a live activity exist without a published revision', () => {
+      expect(sql).toMatch(
+        /check \(status <> 'live' or published_revision_id is not null\)/,
+      );
+    });
+
     it('points published_revision_id at activity_revisions, set null on delete', () => {
       expect(sql).toMatch(
         /foreign key \(published_revision_id\) references public\.activity_revisions\(id\) on delete set null/,
