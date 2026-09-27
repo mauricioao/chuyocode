@@ -89,4 +89,44 @@ describe('ExerciseAuthorIsland', () => {
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ acceptedTerms: true, publish: false }));
   });
+
+  /**
+   * Slice 16 end-to-end wiring: a new row block's slot answer editor is
+   * mounted, switching mechanic reveals the pool editor, and adding an
+   * option flows all the way through `addPoolItem` into the saved payload.
+   */
+  it('wires a new sentence block to its full answer editor, mechanic switch through pool option', () => {
+    const onSave = vi.fn();
+    render(<ExerciseAuthorIsland lang="en" initialDraft={createEmptyDraft()} onSave={onSave} />);
+
+    fireEvent.click(screen.getByTestId('add-row-block'));
+
+    const mechanicSelect = screen
+      .getByTestId('exercise-author-island')
+      .querySelector('select[data-testid^="mechanic-select-"]') as HTMLSelectElement;
+    expect(mechanicSelect).toBeTruthy();
+
+    fireEvent.change(mechanicSelect, { target: { value: 'choice' } });
+
+    const poolNameInput = screen
+      .getByTestId('exercise-author-island')
+      .querySelector('input[data-testid^="pool-name-"]') as HTMLInputElement;
+    fireEvent.change(poolNameInput, { target: { value: 'opts' } });
+
+    const addOptionButton = screen
+      .getByTestId('exercise-author-island')
+      .querySelector('button[data-testid^="add-pool-item-"]') as HTMLButtonElement;
+    fireEvent.click(addOptionButton);
+
+    fireEvent.click(screen.getByTestId('save-draft'));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          pools: { opts: [{ id: 'opt-3', text: '' }] },
+          slots: [expect.objectContaining({ input: 'choice', pool: 'opts' })],
+        }),
+      }),
+    );
+  });
 });

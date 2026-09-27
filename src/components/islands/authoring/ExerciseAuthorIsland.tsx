@@ -22,18 +22,26 @@ import BlockList from './BlockList';
 import ProseBlockEditor from './ProseBlockEditor';
 import MediaBlockEditor from './MediaBlockEditor';
 import RowBlockEditor from './RowBlockEditor';
+import SlotAnswerEditor from './SlotAnswerEditor';
 import ExercisePreview from './ExercisePreview';
 import {
   addMediaBlock,
+  addPoolItem,
   addProseBlock,
   addRowBlock,
   draftToPayload,
   removeBlock,
+  removePoolItem,
   setBlockAlt,
   setBlockAudio,
   setBlockImage,
   setBlockText,
+  setPoolItemMedia,
+  setPoolItemText,
   setRowLabel,
+  setSlotAnswer,
+  setSlotInput,
+  setSlotPool,
   type Draft,
 } from '@/lib/authoringDraft';
 import type { Block, Payload } from '@/lib/exercisePayload';
@@ -196,6 +204,35 @@ export default function ExerciseAuthorIsland({
                   lang={lang}
                   onLabelChange={(label) => setDraft((d) => setRowLabel(d, slot.id, label))}
                   onRemove={() => setDraft((d) => removeBlock(d, block.id))}
+                  answerEditor={
+                    <SlotAnswerEditor
+                      slot={slot}
+                      lang={lang}
+                      poolItems={slot.pool ? (draft.pools[slot.pool] ?? []) : []}
+                      poolNames={Object.keys(draft.pools)}
+                      onMechanicChange={(input) => setDraft((d) => setSlotInput(d, slot.id, input))}
+                      onPoolNameChange={(poolName) =>
+                        setDraft((d) => setSlotPool(d, slot.id, poolName))
+                      }
+                      onAnswerChange={(answer) => setDraft((d) => setSlotAnswer(d, slot.id, answer))}
+                      onAddPoolItem={(text) =>
+                        setDraft((d) =>
+                          slot.pool ? addPoolItem(d, slot.pool, { id: nextId('opt'), text }) : d,
+                        )
+                      }
+                      onRemovePoolItem={(itemId) =>
+                        setDraft((d) => (slot.pool ? removePoolItem(d, slot.pool, itemId) : d))
+                      }
+                      onSetPoolItemText={(itemId, text) =>
+                        setDraft((d) => (slot.pool ? setPoolItemText(d, slot.pool, itemId, text) : d))
+                      }
+                      onSetPoolItemMedia={(itemId, media) =>
+                        setDraft((d) =>
+                          slot.pool ? setPoolItemMedia(d, slot.pool, itemId, media) : d,
+                        )
+                      }
+                    />
+                  }
                 />
               );
             }}
