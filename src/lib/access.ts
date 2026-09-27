@@ -34,6 +34,33 @@ export function requiresLogin(pathname: string): boolean {
 }
 
 /**
+ * The plans a signed-in visitor may be on.
+ *
+ * A union of one value today, kept as a type rather than a literal `'free'`
+ * scattered at call sites so a future `'premium'` tier is ONE addition here,
+ * not a search-and-replace across every reader of {@link getPlan}.
+ */
+export type Plan = 'free';
+
+/**
+ * Which plan a signed-in visitor is on.
+ *
+ * Mirrors {@link isEntitled}'s reasoning: today entitlement and plan are both
+ * trivial (every signed-in visitor gets the same answer), and both are pure,
+ * one-line functions precisely so the day a real subscription lookup lands,
+ * only this body changes — callers (`toProfile`, in particular) never do.
+ *
+ * @param user - A signed-in caller. Callers only ever have a plan once
+ *   signed in, so this takes the user directly rather than `| null` like
+ *   {@link hasAccess} — resolve "no plan, they're anonymous" at the call
+ *   site instead of overloading this return type with that case.
+ */
+export function getPlan(user: Pick<User, 'id'>): Plan {
+  void user;
+  return 'free';
+}
+
+/**
  * The one function body a future subscription check replaces.
  *
  * Today: signed in is the whole entitlement. Tomorrow: signed in AND an

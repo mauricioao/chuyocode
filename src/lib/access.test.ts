@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { requiresLogin, hasAccess } from './access';
+import { requiresLogin, hasAccess, getPlan } from './access';
 import type { User } from '@supabase/supabase-js';
 
 /** A minimal stand-in for a Supabase `User` — only `id` is ever read here. */
@@ -56,5 +56,12 @@ describe('hasAccess', () => {
   it('grants a gated section to a signed-in visitor (today: login is the whole gate)', () => {
     expect(hasAccess(user(), '/es/ingles')).toBe(true);
     expect(hasAccess(user(), '/es/cursos')).toBe(true);
+  });
+});
+
+describe('getPlan', () => {
+  it('returns free for any signed-in user (Login step 1b: no paid tier yet)', () => {
+    expect(getPlan(user())).toBe('free');
+    expect(getPlan(user('another-id'))).toBe('free');
   });
 });
