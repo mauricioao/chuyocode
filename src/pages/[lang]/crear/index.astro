@@ -1,0 +1,63 @@
+---
+/**
+ * Activities creator start screen — `/[lang]/crear` (SSR, PR B "Activities
+ * creator").
+ *
+ * REPURPOSED FROM the old curated-exercise authoring page, which moved to
+ * `/[lang]/admin/ejercicios` (moderator-only) in this same PR — see that
+ * route's header. This path is now open to any SIGNED-IN visitor: choosing
+ * "Worksheet" here creates a brand-new activity and navigates to its editor
+ * (`/[lang]/crear/[id]`); "Preguntas/Questions" is shown disabled (PR C).
+ *
+ * SSR-GATED ON `Astro.locals.user`, same pattern the old page documented:
+ * anonymous visitors are redirected to sign-in, `next` pointing back here,
+ * before anything renders.
+ *
+ * 🔴 NETLIFY APPENDS THE ORIGINAL REQUEST'S QUERY STRING TO A 30x `Location`
+ * THAT HAS NONE OF ITS OWN — the redirect below always carries its own
+ * `?next=…`, so there is nothing query-less for Netlify to append to.
+ *
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE: this page's HTML differs
+ * by visitor (gated vs. redirect), so `markPrivate` runs unconditionally.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ActivityStartIsland from '@components/islands/activities/ActivityStartIsland';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, so neither exit path can ship without it.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  // NOT `Astro.redirect()`: it builds its OWN `Response`, discarding the
+  // `markPrivate` mutation above.
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const t = UI_LABELS[lang].activities.start;
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.pageTitle}
+    </h1>
+    <ActivityStartIsland client:load lang={lang} />
+  </section>
+</BaseLayout>
