@@ -154,6 +154,11 @@ export const UI_LABELS = {
         accountMenu: 'Cuenta',
         planFree: 'Free',
         planPremium: 'Premium',
+        // Links to the activities creator start screen (`/[lang]/crear`,
+        // PR B). Local here, not to `activities.*`, for the same reason as
+        // the rest of this map: it is chrome for the header's identity
+        // chip, not copy owned by the creator pages themselves.
+        createActivity: 'Crear actividad',
         signOut: 'Cerrar sesión',
       },
     },
@@ -460,6 +465,7 @@ export const UI_LABELS = {
         accountMenu: 'Account',
         planFree: 'Free',
         planPremium: 'Premium',
+        createActivity: 'Create activity',
         signOut: 'Sign out',
       },
     },
