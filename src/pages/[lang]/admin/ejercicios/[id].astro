@@ -1,22 +1,19 @@
 ---
 /**
- * Edit-exercise authoring page — `/[lang]/crear/[id]` (SSR, slice 15).
+ * Edit curated-exercise page — `/[lang]/admin/ejercicios/[id]` (SSR).
  *
- * SSR-GATED exactly like `crear/index.astro`: anonymous redirects to
- * sign-in with `next`, before anything renders. Ownership is then
- * re-verified server-side, in the frontmatter, by calling
- * `getExerciseForEdit(id, user.id)` — that call filters by BOTH `id` and
- * `author_id` in the query itself (`src/lib/exercises.ts`), so "does not
- * exist" and "exists but is not yours" collapse to the identical `null` and
- * the identical 404 here. Neither confirms to a caller that some OTHER
- * author's exercise id exists.
+ * MOVED from `/[lang]/crear/[id]` (PR B, "Activities creator") — see
+ * `index.astro`'s header for why this surface is now moderator-gated and
+ * lives under `/admin/ejercicios`.
  *
- * UNLINKED, same as `crear/index.astro` — no nav entry anywhere (slice 18).
- *
- * SAVE/PUBLISH IS WIRED HERE (slice 17): `ExercisePublishFlow` (not the bare
- * `ExerciseAuthorIsland`) is what gets mounted, carrying this row's real
- * `exercise.id` — see that component's header for why `crear/index.astro`
- * (a brand-new exercise, no row yet) does not get the same treatment.
+ * Gate order: anonymous -> sign-in redirect (`next` back here); signed in but
+ * not a moderator -> 404 (never a 403 — `requireRole`'s own "don't confirm
+ * the surface exists" posture); moderator -> ownership re-verified
+ * server-side exactly as before, by calling
+ * `getExerciseForEdit(id, user.id)` (`src/lib/exercises.ts`), which filters
+ * by BOTH `id` and `author_id` in the query itself, so "does not exist" and
+ * "exists but is not yours" collapse to the identical `null` and the
+ * identical 404 here.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import ExercisePublishFlow from '@components/islands/authoring/ExercisePublishFlow';
@@ -24,6 +21,7 @@ import { payloadToDraft } from '@lib/authoringDraft';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getExerciseForEdit } from '@lib/exercises';
+import { requireRole } from '@lib/roles';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -33,27 +31,28 @@ if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-// Session-dependent on every exit path — see crear/index.astro's header.
+// Session-dependent on every exit path — see index.astro's header.
 markPrivate(Astro.response.headers);
 
 const user = Astro.locals.user;
 if (!user) {
-  // NOT `Astro.redirect()` — see `crear/index.astro`'s header for why: it
-  // builds its own `Response` and would discard the `markPrivate` mutation
-  // above.
-  //
-  // 🔴 EVERYTHING INLINED, DELIBERATELY — see `crear/index.astro`'s matching
-  // comment: `astro check` false-flags ANY binding (local `const` or
-  // imported) whose only use sits inside a `Response(...)` literal returned
-  // from an `if` block in `.astro` frontmatter (`ts(6133)`, isolated with a
-  // minimal repro). The literal below must stay `private, no-store`,
-  // identical to `src/lib/httpCache.ts`'s `PRIVATE_CACHE_CONTROL`.
+  // NOT `Astro.redirect()` — see `index.astro`'s matching comment: it builds
+  // its own `Response` and would discard the `markPrivate` mutation above.
   return new Response(null, {
     status: 303,
     headers: {
       Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
       'cache-control': 'private, no-store',
     },
+  });
+}
+
+const moderator = await requireRole(user, 'moderator');
+if (!moderator) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
   });
 }
 
