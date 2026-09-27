@@ -1,11 +1,13 @@
 /**
  * Route tests for the whole English section — entry screen, listing, detail.
  *
- * The entry and listing pages mount NO island, so `AstroContainer` renders them
- * fully and their MARKUP is assertable, not merely their status code. That
- * matters here: this change moves the primary axis from `topic` to `focus`, and
- * a status code cannot tell you whether the grid is listing language points or
- * still listing settings. The detail page mounts `ExerciseIsland`, so only its
+ * The entry and listing pages mount no PAGE-level island of their own, so
+ * `createContainer()` (which registers the React renderer `Header`'s own
+ * `UserMenu` island needs — Login step 1b) renders them fully and their
+ * MARKUP is assertable, not merely their status code. That matters here:
+ * this change moves the primary axis from `topic` to `focus`, and a status
+ * code cannot tell you whether the grid is listing language points or still
+ * listing settings. The detail page mounts `ExerciseIsland`, so only its
  * 404 paths are assertable (`src/pages/[lang]/libros/libros.test.ts:47`).
  *
  * What is still NOT provable here is everything visual: which chip looks active,
@@ -15,7 +17,7 @@
  * pin the implementation, never the appearance.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { experimental_AstroContainer as AstroContainer } from 'astro/container';
+import { createContainer } from '@/testSupport/astroContainer';
 
 // env.ts reads import.meta.env — stub it before any module that calls loadEnv().
 vi.mock('@lib/env', () => ({
@@ -44,7 +46,9 @@ import EntryPage from './index.astro';
 import ListingPage from './[level]/[focus]/index.astro';
 import DetailPage from './[level]/[focus]/[slug].astro';
 
-type PageComponent = Parameters<AstroContainer['renderToResponse']>[0];
+type PageComponent = Parameters<
+  Awaited<ReturnType<typeof createContainer>>['renderToResponse']
+>[0];
 
 /**
  * Render a page the way the server would. `url` matters: the entry screen reads
@@ -57,7 +61,7 @@ async function renderPage(
   locals?: Record<string, unknown>,
   url = 'https://chuyocode.test/',
 ) {
-  const container = await AstroContainer.create();
+  const container = await createContainer();
   return container.renderToResponse(Component, {
     // `App.Locals.user` is required, never optional, so the default has to be
     // stated: these renders are anonymous visitors. A caller may override it.
@@ -339,7 +343,9 @@ describe('ingles/index.astro (section entry)', () => {
     it('keeps the filter free of any island or framework runtime', async () => {
       // `SearchFilter` is deliberately vanilla. A `client:` directive here would
       // trade a 40-line script for a hydrated component on a page whose entire
-      // design premise is that it ships no JavaScript framework.
+      // design premise is that it ships no JavaScript framework. Scoped to the
+      // filter's OWN markup (not the whole page) since `Header` now legitimately
+      // mounts the `UserMenu` island (Login step 1b) elsewhere on every page.
       getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
 
       const res = await renderPage(
@@ -350,7 +356,12 @@ describe('ingles/index.astro (section entry)', () => {
       );
       const html = await res.text();
 
-      expect(html).not.toContain('astro-island');
+      const filterSection = html.slice(
+        html.indexOf('class="chu-search"'),
+        html.indexOf('id="focuses-no-results"'),
+      );
+      expect(filterSection).not.toEqual('');
+      expect(filterSection).not.toContain('astro-island');
     });
   });
 

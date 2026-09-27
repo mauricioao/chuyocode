@@ -146,6 +146,16 @@ export const UI_LABELS = {
         title: 'Nueva contraseña',
         description: 'Elegir una nueva contraseña para la cuenta.',
       },
+      // Copy for `UserMenu` (Login step 1b), the header's client-only
+      // identity chip. Local to no island's own COPY map — see that
+      // component's header for why this slice keeps it here instead.
+      userMenu: {
+        signIn: 'Entrar',
+        accountMenu: 'Cuenta',
+        planFree: 'Free',
+        planPremium: 'Premium',
+        signOut: 'Cerrar sesión',
+      },
     },
     // Authoring pages (`/[lang]/crear/*`, slice 15). UNLINKED routes — no nav
     // entry anywhere (slice 18). Static page chrome only; the interactive
@@ -354,6 +364,13 @@ export const UI_LABELS = {
       nuevaClave: {
         title: 'New password',
         description: 'Choose a new password for the account.',
+      },
+      userMenu: {
+        signIn: 'Sign in',
+        accountMenu: 'Account',
+        planFree: 'Free',
+        planPremium: 'Premium',
+        signOut: 'Sign out',
       },
     },
     authoring: {
