@@ -135,7 +135,7 @@ const user = Astro.locals.user;
       user ? (
         <div class="flex flex-col gap-4" data-testid="auth-already-signed-in">
           <p class="text-sm text-muted-foreground">{t.alreadySignedIn}</p>
-          <form method="POST" action="/api/auth/signout">
+          <form method="POST" action="/api/auth/signout" data-astro-reload>
             {next && <input type="hidden" name="next" value={next} />}
             <button
               type="submit"
@@ -150,7 +150,7 @@ const user = Astro.locals.user;
           {/* Plain form, no island — see the file header for why. Fields
               ride as hidden inputs because there is no client JS here to
               build a JSON body from. */}
-          <form method="POST" action="/api/auth/google" data-testid="google-signin-form">
+          <form method="POST" action="/api/auth/google" data-testid="google-signin-form" data-astro-reload>
             <input type="hidden" name="lang" value={lang} />
             {next && <input type="hidden" name="next" value={next} />}
             <button

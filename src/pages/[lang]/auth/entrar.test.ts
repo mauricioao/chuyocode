@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import {
@@ -121,6 +123,27 @@ describe('GET /[lang]/auth/entrar — markers (no island mounted)', () => {
     expect(html).toContain('data-testid="auth-google-unavailable"');
     expect(html).not.toContain('data-testid="auth-link-invalid"');
     expect(html).not.toContain('data-testid="auth-signed-in-marker"');
+  });
+});
+
+describe('entrar.astro — plain forms bypass the ClientRouter', () => {
+  // Astro's ClientRouter intercepts form submissions and replays them through
+  // `fetch`. `/api/auth/google` answers with a 303 to accounts.google.com, which
+  // `fetch` cannot follow cross-origin, so the router fell back to a GET
+  // navigation of the form action — a 404, because the endpoint is POST-only.
+  // `data-astro-reload` makes the browser submit natively.
+  it('marks every plain <form> with data-astro-reload', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./entrar.astro', import.meta.url)),
+      'utf8',
+    );
+    // Only real tags carry an `action`; the doc comment mentions `<form …>` too.
+    const forms = source.match(/<form\b[^>]*\baction=[^>]*>/g) ?? [];
+
+    expect(forms.length).toBe(2);
+    for (const form of forms) {
+      expect(form).toContain('data-astro-reload');
+    }
   });
 });
 
