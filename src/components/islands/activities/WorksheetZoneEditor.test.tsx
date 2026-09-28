@@ -994,6 +994,37 @@ describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-sc
 
     expect(zoomLevel()).toBe('125%');
   });
+
+  it('does not re-fit after a PAN either (canvas camera pass: a pan turns fit mode off too, not just a zoom)', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    const canvas = screen.getByTestId('zone-canvas');
+    // A viewport SMALLER than the 800x400 image (at the identity scale-1
+    // camera the mount effect settles on) gives real room to pan — same
+    // reasoning as the "hand drag pans" test above: at scale 1, an
+    // 800x400-or-bigger viewport would already fully contain the image, so
+    // `clampCamera` centers it and the pan would be clamped back to a no-op.
+    mockRect(viewport, { width: 400, height: 200 });
+
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointermove', 60, 70);
+    firePointer(canvas, 'pointerup', 60, 70);
+    // Still 100% (a pan never changes scale) — but fit mode is now off.
+    expect(zoomLevel()).toBe('100%');
+
+    // A resize that WOULD compute a different fit zoom (200x100 -> 25%) must
+    // re-CLAMP the panned camera instead, leaving the zoom level exactly
+    // where the pan left it.
+    mockRect(viewport, { width: 200, height: 100 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+
+    expect(zoomLevel()).toBe('100%');
+  });
 });
 
 describe('WorksheetZoneEditor — state-leak cleanup (blur/pointercancel/lostpointercapture)', () => {
