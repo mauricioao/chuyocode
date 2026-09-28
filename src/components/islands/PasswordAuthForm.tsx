@@ -98,6 +98,13 @@ export interface PasswordAuthFormProps {
    * posture as `SignInForm`.
    */
   next?: string;
+  /**
+   * Preselects sign-up mode instead of the sign-in default. Set by
+   * `entrar.astro` from `?mode=signup` — the header's "Crear cuenta"/"Sign
+   * up" button (`UserMenu`) links here with that query param as a hint, via
+   * `AuthPanel`.
+   */
+  initialMode?: 'signin' | 'signup';
 }
 
 type Mode = 'signin' | 'signup' | 'reset';
@@ -108,8 +115,8 @@ interface PasswordResponseBody {
   signedIn?: boolean;
 }
 
-export default function PasswordAuthForm({ lang, next }: PasswordAuthFormProps) {
-  const [mode, setMode] = useState<Mode>('signin');
+export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAuthFormProps) {
+  const [mode, setMode] = useState<Mode>(initialMode ?? 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<Status>('idle');

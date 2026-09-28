@@ -53,9 +53,21 @@ export const CHEVRON_STROKE_WIDTH = 2;
  * Spread straight into `buttonVariants(...)` on the Astro side and onto
  * `<Button>` on the React side, so a retune of the arrow's weight happens once.
  */
+/**
+ * `press: 'none'` — an arrow control must never visibly dodge on click.
+ * `buttonVariants`' base classes otherwise add
+ * `active:not-aria-[haspopup]:translate-y-px` for a tactile "press"
+ * affordance; that utility shares the same transform slot as any
+ * `translate-y-*` a caller uses for its own centering, so on a
+ * transform-centered control (see `EditorialRow.astro`'s prev/next, before
+ * this fix) it silently REPLACED the centering offset instead of composing
+ * with it on `:active` — the button lost its offset and jumped. See
+ * `button.tsx`'s `press` variant doc comment.
+ */
 export const ARROW_BUTTON_VARIANT = {
   variant: 'outline',
   size: 'icon',
+  press: 'none',
 } as const;
 
 /**

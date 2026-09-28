@@ -121,6 +121,23 @@ describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', (
   });
 });
 
+describe('entrar.astro — ?mode=signup (header create-account button hint)', () => {
+  // The anonymous-form full render is `it.skip` above (out of scope,
+  // pre-existing); this pins the SOURCE contract at the same granularity as
+  // the plain-forms test below — `mode` is read and forwarded to
+  // `AuthPanel`, which is what makes the header's "Crear cuenta" button
+  // actually preselect sign-up.
+  it('reads ?mode=signup and forwards it to AuthPanel as initialMode', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./entrar.astro', import.meta.url)),
+      'utf8',
+    );
+
+    expect(source).toContain("searchParams.get('mode')");
+    expect(source).toMatch(/<AuthPanel[^>]*initialMode={initialMode}/);
+  });
+});
+
 describe('entrar.astro — plain forms bypass the ClientRouter', () => {
   // Astro's ClientRouter intercepts form submissions and replays them through
   // `fetch`. `/api/auth/google` answers with a 303 to accounts.google.com, which

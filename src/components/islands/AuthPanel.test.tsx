@@ -57,6 +57,19 @@ describe('AuthPanel — switching to the magic link', () => {
   });
 });
 
+describe('AuthPanel — initialMode', () => {
+  it('forwards initialMode="signup" to the password form (header create-account button)', () => {
+    render(<AuthPanel lang="es" initialMode="signup" />);
+    expect(screen.getByText(PASSWORD_COPY.es.signUpSubmit)).toBeTruthy();
+    expect(screen.queryByText(PASSWORD_COPY.es.signInSubmit)).toBeNull();
+  });
+
+  it('still starts on the password view (not magic-link) when initialMode is signup', () => {
+    render(<AuthPanel lang="es" initialMode="signup" />);
+    expect(screen.getByTestId('password-auth-form')).toBeTruthy();
+  });
+});
+
 describe('AuthPanel — localization', () => {
   it('localizes the toggle to English', () => {
     render(<AuthPanel lang="en" />);

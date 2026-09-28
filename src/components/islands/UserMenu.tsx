@@ -14,10 +14,16 @@
  * component never branches on which one was used.
  *
  * States:
- *  - loading — a fixed-size placeholder, so the header never jumps once the
- *    real answer (signed in or not) arrives.
- *  - signed out — a plain "Entrar"/"Sign in" link to the sign-in page, with
- *    `next` set to the current path so the visitor returns here afterwards.
+ *  - loading — a fixed-size placeholder (matching the signed-out layout, the
+ *    common case for a fresh visit) so the header never jumps once the real
+ *    answer (signed in or not) arrives.
+ *  - signed out — the common SaaS pattern: a ghost/outline "Ingresar"/"Sign
+ *    in" button and a primary (brand yellow) "Crear cuenta"/"Sign up"
+ *    button, both to the sign-in page with `next` set to the current path.
+ *    The create-account button also carries `mode=signup`, which
+ *    `entrar.astro` reads to preselect `PasswordAuthForm`'s sign-up mode
+ *    (see that page and `AuthPanel`). On narrow screens only "Ingresar"
+ *    shows, to keep the header compact.
  *  - signed in — an avatar button (photo, or initials in a colored circle)
  *    that opens an accessible dropdown: name, email, a free-plan badge, and
  *    sign-out.
@@ -33,7 +39,11 @@
  * important right after a sign-in/sign-out redirect.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { SignInIcon } from '@phosphor-icons/react/dist/ssr/SignIn';
+import { UserPlusIcon } from '@phosphor-icons/react/dist/ssr/UserPlus';
 import { UI_LABELS } from '@/lib/i18n';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { Profile } from '@/lib/profile';
 
 export interface UserMenuProps {
@@ -49,6 +59,13 @@ type State =
 function copyFor(lang: string) {
   return lang === 'en' ? UI_LABELS.en.auth.userMenu : UI_LABELS.es.auth.userMenu;
 }
+
+/**
+ * Responsive visibility for the "Crear cuenta"/"Sign up" button: hidden
+ * below `sm`, shown at `sm:` and up. Shared between the real button and its
+ * loading-state skeleton pill so the layout never shifts between them.
+ */
+const SIGNUP_VISIBILITY = 'sm:inline-flex';
 
 /** Where the current tab is, for the sign-in page's `next` round trip. */
 function currentPath(): string {
@@ -114,27 +131,60 @@ export default function UserMenu({ lang }: UserMenuProps) {
   }, [open, close]);
 
   if (state.status === 'loading') {
-    // Fixed size, matching the signed-in trigger below, so nothing in the
-    // header shifts once the real state (signed in or not) is known.
+    // Fixed size, matching the SIGNED-OUT layout below (the common case for
+    // a fresh visit) so nothing in the header shifts once the real state is
+    // known: one pill under `sm` (matching the compact "Ingresar"-only
+    // layout), two at `sm:` and up (matching "Ingresar" + "Crear cuenta").
     return (
-      <div
-        data-testid="user-menu-loading"
-        aria-hidden="true"
-        className="h-9 w-9 animate-pulse rounded-full bg-muted"
-      />
+      <div data-testid="user-menu-loading" aria-hidden="true" className="flex items-center gap-2">
+        <span data-loading-pill className="h-7 w-24 animate-pulse rounded-full bg-muted" />
+        {/* `sm:block`, not `sm:inline-flex` — this is an empty decorative
+            pill (no icon/text children to lay out with flex), and an empty
+            span whose class happens to contain "inline-flex" trips the
+            ingles listing's "no empty bordered pill" guard
+            (`_ingles.test.ts`). The real signup button below still uses
+            `SIGNUP_VISIBILITY` (`sm:inline-flex`), which is fine there — it
+            is never empty. */}
+        <span
+          data-loading-pill
+          className="hidden h-7 w-32 animate-pulse rounded-full bg-muted sm:block"
+        />
+      </div>
     );
   }
 
   if (state.status === 'signed-out') {
     const next = encodeURIComponent(currentPath());
+    const signInHref = `/${lang}/auth/entrar?next=${next}`;
     return (
-      <a
-        href={`/${lang}/auth/entrar?next=${next}`}
-        data-testid="user-menu-signin"
-        className="text-sm font-medium text-muted-foreground transition-theme duration-theme hover:text-primary"
-      >
-        {t.signIn}
-      </a>
+      <div className="flex items-center gap-2">
+        <a
+          href={signInHref}
+          data-testid="user-menu-signin"
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'sm' }),
+            'gap-1.5 rounded-full',
+          )}
+        >
+          <SignInIcon aria-hidden="true" size={16} />
+          <span>{t.signIn}</span>
+        </a>
+        {/* Create-account: the primary (brand yellow) action, with a hint
+            (`mode=signup`) that `entrar.astro`/`AuthPanel` read to preselect
+            the sign-up mode. Hidden below `sm` to keep the header compact on
+            narrow screens — "Ingresar" alone is enough there. */}
+        <a
+          href={`${signInHref}&mode=signup`}
+          data-testid="user-menu-signup"
+          className={cn(
+            buttonVariants({ variant: 'default', size: 'sm' }),
+            `hidden gap-1.5 rounded-full ${SIGNUP_VISIBILITY}`,
+          )}
+        >
+          <UserPlusIcon aria-hidden="true" size={16} />
+          <span>{t.signUp}</span>
+        </a>
+      </div>
     );
   }
 
@@ -150,7 +200,13 @@ export default function UserMenu({ lang }: UserMenuProps) {
         aria-controls={menuId}
         aria-label={t.accountMenu}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-sm font-semibold text-foreground transition-theme duration-theme hover:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        // No yellow ring/border on hover: a subtle, smooth scale instead
+        // (~1.06, `duration-300 ease-out`), disabled under
+        // `prefers-reduced-motion: reduce` via `motion-reduce:`. The
+        // `focus-visible` ring is untouched and NOT gated behind
+        // `motion-reduce` — it is the keyboard-focus indicator, an
+        // accessibility requirement, not a decorative hover effect.
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-sm font-semibold text-foreground transition-transform duration-300 ease-out hover:scale-[1.06] motion-reduce:transition-none motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {profile.avatarUrl ? (
           <img

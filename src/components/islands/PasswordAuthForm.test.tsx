@@ -42,6 +42,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('PasswordAuthForm — initialMode', () => {
+  it('starts in sign-up mode when initialMode="signup" (the header create-account button)', () => {
+    render(<PasswordAuthForm lang="es" initialMode="signup" />);
+    expect(screen.getByText(COPY.es.signUpSubmit)).toBeTruthy();
+    expect(screen.queryByText(COPY.es.signInSubmit)).toBeNull();
+  });
+
+  it('still defaults to sign-in mode when initialMode is omitted', () => {
+    render(<PasswordAuthForm lang="es" />);
+    expect(screen.getByText(COPY.es.signInSubmit)).toBeTruthy();
+  });
+});
+
 describe('PasswordAuthForm — sign in (default mode)', () => {
   it('POSTs action=signin with email and password', async () => {
     const fetchMock = stubFetch({ ok: true });

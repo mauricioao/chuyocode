@@ -37,18 +37,25 @@ function copyFor(lang: string): Copy {
 export interface AuthPanelProps {
   lang: string;
   next?: string;
+  /**
+   * Preselects `PasswordAuthForm`'s sign-up mode instead of sign-in. Set by
+   * `entrar.astro` from `?mode=signup` (the header's create-account button).
+   * Only affects the password form: the view toggle below (password vs.
+   * magic link) always still starts on "password".
+   */
+  initialMode?: 'signin' | 'signup';
 }
 
 type View = 'password' | 'magic-link';
 
-export default function AuthPanel({ lang, next }: AuthPanelProps) {
+export default function AuthPanel({ lang, next, initialMode }: AuthPanelProps) {
   const [view, setView] = useState<View>('password');
   const t = copyFor(lang);
 
   return (
     <div className="flex flex-col gap-4" data-testid="auth-panel">
       {view === 'password' ? (
-        <PasswordAuthForm lang={lang} next={next} />
+        <PasswordAuthForm lang={lang} next={next} initialMode={initialMode} />
       ) : (
         <SignInForm lang={lang} next={next} />
       )}
