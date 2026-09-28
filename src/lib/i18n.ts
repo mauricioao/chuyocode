@@ -379,6 +379,16 @@ export const UI_LABELS = {
         // "Preguntas (quiz) block") — same wording as `ExerciseIsland`'s own
         // local `unavailable` copy, kept in sync deliberately.
         quizUnavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
+        // The mobile per-zone bottom sheet (mobile layout pass) — a phone
+        // taps a zone instead of typing inline; desktop never shows these.
+        // `zoneOf` is composed at the call site as `${zoneOf} 2/5`, same
+        // convention as `practice.score`'s own `${t.score}: 3 / 5`.
+        zoneSheetTitle: 'Responder',
+        zoneEmpty: 'Sin responder',
+        zonePrev: 'Anterior',
+        zoneNext: 'Siguiente',
+        zoneDone: 'Listo',
+        zoneOf: 'Zona',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -492,6 +502,11 @@ export const UI_LABELS = {
         sortVistas: 'Más vistas',
         novistasLabel: 'No las he visto',
         filterSubmit: 'Filtrar',
+        // Mobile layout pass: the `<summary>` of the `<details>` collapsing
+        // level/sort/type/novistas/submit into a "Filtros" disclosure below
+        // `lg:` (search stays always visible) — distinct from `filterSubmit`
+        // above, which stays the actual submit button INSIDE it.
+        filtersToggle: 'Filtros',
         // Card badges (heart/eye counters, "Vista" badge) and the daily pick.
         viewedBadge: 'Vista',
         dailyPickLabel: 'Actividad del día',
@@ -961,6 +976,12 @@ export const UI_LABELS = {
         correct: 'Correct',
         incorrect: 'Incorrect',
         quizUnavailable: 'This part of the exercise cannot be answered here yet.',
+        zoneSheetTitle: 'Answer',
+        zoneEmpty: 'Not answered',
+        zonePrev: 'Previous',
+        zoneNext: 'Next',
+        zoneDone: 'Done',
+        zoneOf: 'Zone',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -1051,6 +1072,7 @@ export const UI_LABELS = {
         sortVistas: 'Most viewed',
         novistasLabel: "I haven't seen these",
         filterSubmit: 'Filter',
+        filtersToggle: 'Filters',
         viewedBadge: 'Seen',
         dailyPickLabel: "Today's activity",
       },

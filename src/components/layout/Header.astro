@@ -131,6 +131,13 @@ const navLinks = [
         </a>
       ))
     }
+    {/* Account entries (Ingresar / Crear actividad / Mis actividades /
+        Moderación / Cerrar sesión) — empty here on purpose, this panel must
+        stay byte-identical for every visitor (see the file header's 🔴
+        note). `UserMenu` (already mounted above, client-only) portals its
+        own account actions into this exact slot once it knows who is signed
+        in — see that component's own header. */}
+    <div id="mobile-menu-account" class="flex flex-col gap-2 border-t border-border pt-2" />
   </nav>
 </header>
 

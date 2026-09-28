@@ -149,7 +149,14 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
       {hasGradableContent && (
         <div
           data-testid="practice-controls"
-          className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/95 p-4 shadow-lg backdrop-blur-sm"
+          // Mobile layout pass: below `lg`, the bar respects the home
+          // indicator/gesture-bar safe area (`env(safe-area-inset-bottom)`)
+          // AND clears the global `ScrollToTop` button — which floats
+          // `fixed right-4 bottom-6` (see that component's own header) and
+          // would otherwise sit right on top of this card's right edge on a
+          // narrow screen. `lg:bottom-4` restores the exact original
+          // desktop position, unchanged.
+          className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/95 p-4 shadow-lg backdrop-blur-sm lg:bottom-4"
         >
           {!graded ? (
             <Button type="button" data-testid="practice-check-button" onClick={handleCheck}>

@@ -28,6 +28,8 @@ import { useEffect, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
+import { zoneAnswerFontSize } from '@/lib/activities/zoneAnswerDisplay';
+import { cn } from '@/lib/utils';
 
 /** PR D, "Activities practice" — turns the creator preview into a gradable, controlled player. See file header. */
 export interface WorksheetPracticeState {
@@ -50,6 +52,19 @@ export interface WorksheetPlayerProps {
   rotation?: Rotation;
   /** Omitted = creator preview (PR B, unchanged). Given = the real practice player (PR D). See file header. */
   practice?: WorksheetPracticeState;
+  /**
+   * Mobile layout pass: when given (only meaningful together with
+   * `practice`), every zone renders as a TAP TARGET — the learner's current
+   * answer, in an auto-shrinking font (`zoneAnswerFontSize`), or the
+   * `zoneEmpty` placeholder — instead of an inline input/select, and
+   * tapping one calls this instead of focusing a field. The caller (the
+   * practice page's mobile viewer) owns the actual input inside its own
+   * bottom sheet. Omitted keeps every existing caller (creator preview,
+   * moderation preview, desktop practice) pixel-identical to before.
+   */
+  onZoneTap?: (zoneId: string) => void;
+  /** The zone currently open in the caller's bottom sheet, for the tap target's highlight ring. Ignored without `onZoneTap`. */
+  activeZoneId?: string | null;
 }
 
 export default function WorksheetPlayer({
@@ -59,6 +74,8 @@ export default function WorksheetPlayer({
   imageUrl,
   rotation = 0,
   practice,
+  onZoneTap,
+  activeZoneId,
 }: WorksheetPlayerProps) {
   const t = UI_LABELS[lang].activities.player;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -139,6 +156,43 @@ export default function WorksheetPlayer({
             : 'border-border';
           const fieldClassName = `h-full w-full rounded border bg-background/95 px-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${gradedClassName}`;
           const statusLabel = isGraded ? (isCorrect ? t.correct : t.incorrect) : undefined;
+
+          // Mobile layout pass: a tap target instead of an inline input —
+          // see `onZoneTap`'s own doc on `WorksheetPlayerProps`.
+          if (onZoneTap) {
+            const value = practice?.values[zone.id] ?? '';
+            const displayText = value || t.zoneEmpty;
+            const isActive = activeZoneId === zone.id;
+            const kindLabel = zone.kind === 'text' ? t.textPlaceholder : t.choicePlaceholder;
+            const accessibleLabel = [kindLabel, value || t.zoneEmpty, statusLabel].filter(Boolean).join(' — ');
+
+            return (
+              <div key={zone.id} data-testid={`player-zone-${zone.id}`} className="absolute" style={style}>
+                <button
+                  type="button"
+                  data-testid={`player-zone-tap-${zone.id}`}
+                  onClick={() => onZoneTap(zone.id)}
+                  disabled={practice?.disabled}
+                  aria-label={accessibleLabel}
+                  aria-pressed={isActive}
+                  className={cn(
+                    'flex h-full w-full items-center justify-center overflow-hidden rounded border bg-background/95 px-1 text-center text-foreground shadow-sm',
+                    gradedClassName,
+                    isActive && 'ring-2 ring-primary',
+                    !value && 'text-muted-foreground',
+                  )}
+                  style={{ fontSize: `${zoneAnswerFontSize(displayText)}rem` }}
+                >
+                  <span className="truncate">{displayText}</span>
+                </button>
+                {statusLabel && (
+                  <span data-testid={`player-zone-result-${zone.id}`} className="sr-only">
+                    {statusLabel}
+                  </span>
+                )}
+              </div>
+            );
+          }
 
           return (
             <div key={zone.id} data-testid={`player-zone-${zone.id}`} className="absolute" style={style}>

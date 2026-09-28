@@ -11,6 +11,7 @@ import {
   rotateRectCCW,
   rotateRects,
   turnRotation,
+  orderZonesForReading,
   type Rect,
 } from './zoneGeometry';
 
@@ -282,5 +283,37 @@ describe('turnRotation', () => {
     expect(turnRotation(90, 'ccw')).toBe(0);
     expect(turnRotation(180, 'ccw')).toBe(90);
     expect(turnRotation(270, 'ccw')).toBe(180);
+  });
+});
+
+describe('orderZonesForReading (top-to-bottom, left-to-right — the practice page mobile sheet order)', () => {
+  function zone(id: string, x: number, y: number): Rect & { id: string } {
+    return { id, x, y, w: 0.1, h: 0.05 };
+  }
+
+  it('sorts a clean grid top-to-bottom, then left-to-right within each row', () => {
+    const zones = [zone('c', 0.6, 0.5), zone('a', 0.1, 0.1), zone('b', 0.5, 0.1), zone('d', 0.1, 0.5)];
+    expect(orderZonesForReading(zones).map((z) => z.id)).toEqual(['a', 'b', 'd', 'c']);
+  });
+
+  it('groups zones within the row tolerance even with small hand-drawn drift', () => {
+    const zones = [zone('right', 0.6, 0.101), zone('left', 0.1, 0.1)];
+    expect(orderZonesForReading(zones).map((z) => z.id)).toEqual(['left', 'right']);
+  });
+
+  it('starts a new row once the top drifts past the tolerance', () => {
+    const zones = [zone('below', 0.1, 0.2), zone('above', 0.1, 0.1)];
+    expect(orderZonesForReading(zones).map((z) => z.id)).toEqual(['above', 'below']);
+  });
+
+  it('does not mutate the input array', () => {
+    const zones = [zone('b', 0.5, 0.1), zone('a', 0.1, 0.1)];
+    const copy = [...zones];
+    orderZonesForReading(zones);
+    expect(zones).toEqual(copy);
+  });
+
+  it('handles an empty list', () => {
+    expect(orderZonesForReading([])).toEqual([]);
   });
 });

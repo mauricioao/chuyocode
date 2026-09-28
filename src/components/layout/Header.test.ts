@@ -127,3 +127,30 @@ describe('Header.astro — UserMenu island (Login step 1b)', () => {
     expect(html).not.toContain('/api/auth/signout');
   });
 });
+
+// Mobile layout pass: the hamburger panel's own account-entries slot —
+// UserMenu (already mounted above) portals into it client-side once it
+// knows who is signed in. The slot itself must stay EMPTY server-side (see
+// the describe block above's own "byte-identical for every visitor" note).
+describe('Header.astro — mobile menu account slot (mobile layout pass)', () => {
+  it('renders an empty slot for UserMenu to portal its mobile account entries into', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    expect(html).toMatch(/<div id="mobile-menu-account"[^>]*>\s*<\/div>/);
+  });
+
+  it('the slot lives inside the #mobile-menu panel, not the always-visible top bar', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    const mobileMenuIdx = html.indexOf('id="mobile-menu"');
+    const slotIdx = html.indexOf('id="mobile-menu-account"');
+    const mobileMenuCloseIdx = html.indexOf('</nav>', mobileMenuIdx);
+    expect(mobileMenuIdx).toBeGreaterThan(-1);
+    expect(slotIdx).toBeGreaterThan(mobileMenuIdx);
+    expect(slotIdx).toBeLessThan(mobileMenuCloseIdx);
+  });
+});

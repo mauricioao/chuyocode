@@ -52,6 +52,8 @@ import { PushPinIcon } from '@phosphor-icons/react/dist/ssr/PushPin';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import type { AutosaveStatus } from '@/lib/activities/autosave';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
+import { useHydrated } from '@/hooks/useHydrated';
 import {
   clampToolbarPosition,
   dockTargetPosition,
@@ -162,10 +164,13 @@ function BlockIndexPopover({
   lang,
   blocks,
   onGoToBlock,
+  /** Mobile layout pass: the bottom action bar opens this UPWARD (above the trigger) instead of sideways — a `right-full` popover from a bottom-edge bar would run off the left/bottom of a narrow screen. */
+  openUpward = false,
 }: {
   lang: Lang;
   blocks: Block[];
   onGoToBlock: (blockId: string) => void;
+  openUpward?: boolean;
 }) {
   const t = UI_LABELS[lang].activities.editor;
   const [open, setOpen] = useState(false);
@@ -198,7 +203,11 @@ function BlockIndexPopover({
         <div
           data-testid="block-index-popover"
           role="menu"
-          className="absolute right-full top-0 mr-2 w-56 rounded-md border border-border bg-popover p-2 shadow-lg"
+          className={
+            openUpward
+              ? 'absolute bottom-full left-0 mb-2 w-56 rounded-md border border-border bg-popover p-2 shadow-lg'
+              : 'absolute right-full top-0 mr-2 w-56 rounded-md border border-border bg-popover p-2 shadow-lg'
+          }
         >
           <p className="mb-1 px-2 text-xs font-medium text-muted-foreground">{t.blockIndexTitle}</p>
           {blocks.length === 0 ? (
@@ -288,6 +297,16 @@ export default function EditorSideToolbar({
   saveLabels,
 }: EditorSideToolbarProps) {
   const t = UI_LABELS[lang].activities.editor;
+
+  // Mobile layout pass: below `lg`, this whole component renders as a
+  // compact, ALWAYS-DOCKED bottom action bar instead — see the early
+  // return below. Undocking/floating (everything from here through
+  // `handleKeyDown`) stays desktop-only, per the mobile layout brief; none
+  // of those hooks ever fire on mobile since the drag handle that would
+  // trigger them is not rendered there, so leaving them mounted (React
+  // hooks cannot be called conditionally) is inert, not just harmless.
+  const isDesktop = useIsDesktop();
+  const hydrated = useHydrated();
 
   const railRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
@@ -505,7 +524,52 @@ export default function EditorSideToolbar({
       })()
     : null;
 
-  return (
+  const mobileBar = (
+    <div
+      data-testid="editor-side-toolbar-mobile"
+      role="toolbar"
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1 overflow-x-auto border-t border-border bg-card/95 px-2 py-1.5 shadow-lg backdrop-blur-sm pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
+    >
+      <ToolbarIconButton label={t.collapseAll} testId="collapse-all-button" onClick={onCollapseAll}>
+        <ArrowsInIcon aria-hidden="true" />
+      </ToolbarIconButton>
+      <ToolbarIconButton label={t.expandAll} testId="expand-all-button" onClick={onExpandAll}>
+        <ArrowsOutIcon aria-hidden="true" />
+      </ToolbarIconButton>
+      <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} openUpward />
+      <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
+        <PlusIcon aria-hidden="true" />
+      </ToolbarIconButton>
+
+      <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
+
+      <ToolbarIconButton label={preview ? t.previewOff : t.previewOn} testId="preview-toggle" onClick={onTogglePreview}>
+        {preview ? <EyeSlashIcon aria-hidden="true" /> : <EyeIcon aria-hidden="true" />}
+      </ToolbarIconButton>
+
+      <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
+
+      <ToolbarIconButton label={t.undo} testId="undo-button" disabled={!canUndo} onClick={onUndo}>
+        <ArrowUUpLeftIcon aria-hidden="true" />
+      </ToolbarIconButton>
+      <ToolbarIconButton label={t.redo} testId="redo-button" disabled={!canRedo} onClick={onRedo}>
+        <ArrowUUpRightIcon aria-hidden="true" />
+      </ToolbarIconButton>
+
+      <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
+
+      <ShortcutsDialog lang={lang} />
+
+      <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
+
+      <ToolbarIconButton label={t.save} testId="save-button" disabled={saveDisabled} onClick={onSave}>
+        <FloppyDiskIcon aria-hidden="true" />
+      </ToolbarIconButton>
+      <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
+    </div>
+  );
+
+  const desktopRail = (
     <>
     {!docked && ghostPosition && (
       <button
@@ -593,6 +657,35 @@ export default function EditorSideToolbar({
       </ToolbarIconButton>
       <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
     </div>
+    </>
+  );
+
+  // No-flash split (mobile layout pass, priority fix): `isDesktop` alone
+  // used to pick DOM structure directly, which defaults to `true` before
+  // hydration and therefore briefly rendered the wrong (desktop) rail on a
+  // phone's very first paint. `!hydrated` (server render + the first client
+  // paint, before any effect has run) instead renders BOTH bars, gated
+  // purely by CSS (`lg:` — real media queries, applied by the browser with
+  // zero JS, correct on every viewport immediately) — see `useHydrated`'s
+  // own header. The one that does not match the SSR-safe desktop-first
+  // default is also `inert`, so none of its buttons are reachable by tab
+  // order or a screen reader before hydration has run; this is a STATIC
+  // (not `isDesktop`-driven) choice on purpose, so the `inert` attribute
+  // itself never disagrees between server and the first client render
+  // either. Once `hydrated` is true (flushed synchronously by Testing
+  // Library's own `render()`, so every existing test above still queries a
+  // single bar), this collapses to mounting only the one `isDesktop` says
+  // matches — identical to this component's previous behavior from then on.
+  if (hydrated) {
+    return isDesktop ? desktopRail : mobileBar;
+  }
+
+  return (
+    <>
+      <div className="contents lg:hidden" inert>
+        {mobileBar}
+      </div>
+      <div className="hidden lg:contents">{desktopRail}</div>
     </>
   );
 }

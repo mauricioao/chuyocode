@@ -36,8 +36,25 @@
  * Astro navigation unmounts and remounts it fresh on the new page, which
  * re-runs the `/api/me` fetch and always reflects the CURRENT session —
  * important right after a sign-in/sign-out redirect.
+ *
+ * MOBILE HAMBURGER MENU (mobile layout pass): `Header.astro`'s own
+ * `#mobile-menu` panel (opened by the hamburger button, `md:hidden`) used to
+ * show only the primary nav links — no way to sign in, get to "Mis
+ * actividades", or sign out without first finding the avatar chip. That
+ * panel is plain server-rendered markup, though, and per this file's own
+ * "byte-identical for every visitor" constraint above, `Header.astro` still
+ * can't read `Astro.locals.user` to add those entries itself. Instead, THIS
+ * island (already the one client-side source of truth for who is signed in)
+ * portals a second copy of its account actions into an empty, pre-rendered
+ * slot inside that panel (`#mobile-menu-account`, found by id after mount) —
+ * one `/api/me` fetch, two renderings: the avatar+dropdown stays in the top
+ * bar exactly as before, at every breakpoint, and the SAME state additionally
+ * reaches the hamburger panel. `createPortal` returns `null` gracefully if
+ * that element isn't found (an older layout, or a test rendering this
+ * component in isolation) — the top-bar rendering is entirely unaffected.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { SignInIcon } from '@phosphor-icons/react/dist/ssr/SignIn';
 // Sign-up entry hidden for now; users register from the sign-in page. Kept
 // commented, not deleted, so it can be restored with a one-line revert.
@@ -46,6 +63,9 @@ import { UI_LABELS } from '@/lib/i18n';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/lib/profile';
+
+/** The id `Header.astro`'s `#mobile-menu` panel reserves for this island's portaled account entries — see the file header. */
+export const MOBILE_MENU_ACCOUNT_SLOT_ID = 'mobile-menu-account';
 
 export interface UserMenuProps {
   /** Active locale. Drives the sign-in link target and all copy. */
@@ -93,6 +113,16 @@ export default function UserMenu({ lang }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+
+  // Mobile hamburger menu (mobile layout pass) — see the file header. Found
+  // by id after mount (`Header.astro` already renders the empty slot in its
+  // static markup); stays `null` — and the portal below simply renders
+  // nothing extra — if that slot isn't present (this component under test in
+  // isolation, or an older layout).
+  const [mobileMenuSlot, setMobileMenuSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setMobileMenuSlot(document.getElementById(MOBILE_MENU_ACCOUNT_SLOT_ID));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +172,68 @@ export default function UserMenu({ lang }: UserMenuProps) {
     };
   }, [open, close]);
 
+  /**
+   * The account entries `Header.astro`'s hamburger panel gets, portaled into
+   * `mobileMenuSlot` — see the file header. `null` while still loading (the
+   * panel simply keeps showing only its nav links until the real state
+   * arrives, same "no visible jump" posture as the top-bar placeholder
+   * above; the panel starts closed, so this never causes a flash either way).
+   */
+  function mobileAccountEntries(): React.ReactNode {
+    if (state.status === 'loading') return null;
+
+    if (state.status === 'signed-out') {
+      const signInHref = isAuthPagePath(currentPathname())
+        ? `/${lang}/auth/entrar`
+        : `/${lang}/auth/entrar?next=${encodeURIComponent(currentPath())}`;
+      return (
+        <a href={signInHref} data-testid="mobile-account-signin" className="py-1 text-sm font-medium text-primary">
+          {t.signIn}
+        </a>
+      );
+    }
+
+    const { profile } = state;
+    return (
+      <>
+        <a href={`/${lang}/crear`} data-testid="mobile-account-create-activity" className="py-1 text-sm font-medium text-muted-foreground hover:text-primary">
+          {t.createActivity}
+        </a>
+        <a
+          href={`/${lang}/mis-actividades`}
+          data-testid="mobile-account-my-activities"
+          className="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
+        >
+          {t.myActivities}
+        </a>
+        {profile.isModerator && (
+          <a
+            href={`/${lang}/admin/actividades`}
+            data-testid="mobile-account-moderation"
+            className="flex items-center justify-between py-1 text-sm font-medium text-muted-foreground hover:text-primary"
+          >
+            <span>{t.moderation}</span>
+            {profile.moderationPendingCount > 0 && (
+              <span
+                data-testid="mobile-account-moderation-badge"
+                className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground"
+              >
+                {profile.moderationPendingCount}
+              </span>
+            )}
+          </a>
+        )}
+        <form method="POST" action="/api/auth/signout" data-astro-reload>
+          <button type="submit" data-testid="mobile-account-signout" className="w-full py-1 text-left text-sm font-medium text-muted-foreground hover:text-primary">
+            {t.signOut}
+          </button>
+        </form>
+      </>
+    );
+  }
+
+  const mobilePortal = mobileMenuSlot ? createPortal(mobileAccountEntries(), mobileMenuSlot) : null;
+
   if (state.status === 'loading') {
     // Fixed size, matching the single "Ingresar" button below (the only one
     // rendered now, at every breakpoint) so nothing in the header shifts
@@ -186,6 +278,7 @@ export default function UserMenu({ lang }: UserMenuProps) {
           <span>{t.signUp}</span>
         </a>
         */}
+        {mobilePortal}
       </div>
     );
   }
@@ -279,6 +372,7 @@ export default function UserMenu({ lang }: UserMenuProps) {
           </form>
         </div>
       )}
+      {mobilePortal}
     </div>
   );
 }

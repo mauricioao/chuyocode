@@ -208,3 +208,108 @@ describe('WorksheetPlayer — practice mode (PR D, "Activities practice")', () =
     expect((screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement).disabled).toBe(false);
   });
 });
+
+describe('WorksheetPlayer — onZoneTap (mobile per-zone bottom sheet)', () => {
+  it('renders a tap target instead of an inline input/select when onZoneTap is given', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE, CHOICE_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-z1').querySelector('input')).toBeNull();
+    expect(screen.getByTestId('player-zone-z2').querySelector('select')).toBeNull();
+    expect(screen.getByTestId('player-zone-tap-z1')).toBeTruthy();
+    expect(screen.getByTestId('player-zone-tap-z2')).toBeTruthy();
+  });
+
+  it('calls onZoneTap with the zone id when tapped', () => {
+    const onZoneTap = vi.fn();
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+        onZoneTap={onZoneTap}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('player-zone-tap-z1'));
+    expect(onZoneTap).toHaveBeenCalledWith('z1');
+  });
+
+  it('shows the current answer, and the empty placeholder when unanswered', () => {
+    const { rerender } = render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-tap-z1').textContent).toContain('Sin responder');
+
+    rerender(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {} }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-tap-z1').textContent).toContain('sat');
+  });
+
+  it('marks the active zone (the one open in the caller\'s sheet) as pressed', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE, CHOICE_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+        onZoneTap={() => {}}
+        activeZoneId="z1"
+      />,
+    );
+    expect(screen.getByTestId('player-zone-tap-z1').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('player-zone-tap-z2').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('disables every tap target once graded (locked, same as the inline inputs)', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {}, results: { z1: true }, disabled: true }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect((screen.getByTestId('player-zone-tap-z1') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('still exposes the graded result for a screen reader', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
+  });
+});

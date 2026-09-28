@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo } from '@/lib/neutralSpanish';
 import { UI_LABELS } from '@/lib/i18n';
-import UserMenu from './UserMenu';
+import UserMenu, { MOBILE_MENU_ACCOUNT_SLOT_ID } from './UserMenu';
 import type { Profile } from '@/lib/profile';
 
 const GOOGLE_PROFILE: Profile = {
@@ -69,7 +69,22 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  document.getElementById(MOBILE_MENU_ACCOUNT_SLOT_ID)?.remove();
 });
+
+/**
+ * `Header.astro`'s own empty `#mobile-menu-account` slot — see `UserMenu.tsx`'s
+ * own header. Real component tests don't render `Header.astro` itself, so
+ * these tests stand the slot up by hand, the same way a real page already
+ * has it present (empty) in its server-rendered markup before this island
+ * ever mounts.
+ */
+function withMobileMenuSlot(): HTMLElement {
+  const slot = document.createElement('div');
+  slot.id = MOBILE_MENU_ACCOUNT_SLOT_ID;
+  document.body.appendChild(slot);
+  return slot;
+}
 
 describe('UserMenu — loading', () => {
   it('renders a fixed-size placeholder before the fetch resolves', () => {
@@ -347,5 +362,66 @@ describe('UserMenu — dropdown', () => {
 describe('UserMenu — localization', () => {
   it('writes its Spanish in neutral Spanish, with no voseo', () => {
     expect(findVoseo(UI_LABELS.es.auth.userMenu)).toEqual([]);
+  });
+});
+
+describe('UserMenu — mobile hamburger menu account entries (mobile layout pass)', () => {
+  it('does nothing (no crash, no stray nodes) when Header\'s mobile-menu slot is not present', async () => {
+    stubMe(null);
+    render(<UserMenu lang="es" />);
+    await screen.findByTestId('user-menu-signin');
+    // Nothing to assert on directly — the absence of a crash IS the test;
+    // the top-bar rendering above is proof the component still works fine.
+  });
+
+  it('signed out: portals a single "Ingresar" link into the slot', async () => {
+    const slot = withMobileMenuSlot();
+    stubMe(null);
+    render(<UserMenu lang="es" />);
+
+    await screen.findByTestId('user-menu-signin'); // top-bar rendering, unaffected
+    const mobileLink = await screen.findByTestId('mobile-account-signin');
+    expect(slot.contains(mobileLink)).toBe(true);
+    expect(mobileLink.textContent).toBe(UI_LABELS.es.auth.userMenu.signIn);
+    expect(mobileLink.getAttribute('href')).toContain('/es/auth/entrar');
+  });
+
+  it('signed in: portals Crear actividad / Mis actividades / Cerrar sesión, no moderación for an ordinary user', async () => {
+    const slot = withMobileMenuSlot();
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+
+    const create = await screen.findByTestId('mobile-account-create-activity');
+    expect(slot.contains(create)).toBe(true);
+    expect(create.getAttribute('href')).toBe('/es/crear');
+
+    const mine = screen.getByTestId('mobile-account-my-activities');
+    expect(mine.getAttribute('href')).toBe('/es/mis-actividades');
+
+    expect(screen.queryByTestId('mobile-account-moderation')).toBeNull();
+
+    const signOutForm = screen.getByTestId('mobile-account-signout').closest('form');
+    expect(signOutForm?.getAttribute('action')).toBe('/api/auth/signout');
+    expect(signOutForm?.hasAttribute('data-astro-reload')).toBe(true);
+
+    // The top-bar avatar+dropdown still renders too — the portal is ADDITIVE.
+    expect(screen.getByTestId('user-menu-trigger')).toBeTruthy();
+  });
+
+  it('signed in as a moderator: portals the moderación entry with its pending-count badge', async () => {
+    withMobileMenuSlot();
+    stubMe(MODERATOR_PROFILE);
+    render(<UserMenu lang="es" />);
+
+    const moderation = await screen.findByTestId('mobile-account-moderation');
+    expect(moderation.getAttribute('href')).toBe('/es/admin/actividades');
+    expect(screen.getByTestId('mobile-account-moderation-badge').textContent).toBe('4');
+  });
+
+  it('portals nothing while still loading (avoids a flash of empty-state content)', () => {
+    const slot = withMobileMenuSlot();
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    render(<UserMenu lang="es" />);
+    expect(slot.childElementCount).toBe(0);
   });
 });

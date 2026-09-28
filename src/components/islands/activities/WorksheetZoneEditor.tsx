@@ -107,7 +107,15 @@ import {
   type Camera,
   type Size,
 } from '@/lib/activities/canvasViewport';
+import {
+  reduceTouchGesture,
+  INITIAL_TOUCH_GESTURE_STATE,
+  type TouchGestureState,
+} from '@/lib/activities/touchGesture';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
+import { useHydrated } from '@/hooks/useHydrated';
 import { Button } from '@/components/ui/button';
+import BottomSheet from '@/components/ui/BottomSheet';
 
 export interface ZonesChangeOptions {
   /**
@@ -157,7 +165,9 @@ type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
   | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect }
-  | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera };
+  | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera }
+  /** Mobile layout pass: a two-finger touch pinch/pan — see `touchGesture.ts`'s own header; all the actual math lives there, this is just the marker `handlePointerMove`/`handlePointerUp` branch on. */
+  | { kind: 'touch-pinch' };
 
 export default function WorksheetZoneEditor({
   lang,
@@ -176,6 +186,10 @@ export default function WorksheetZoneEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragMode | null>(null);
   const spaceHeldRef = useRef(false);
+  // Mobile layout pass: two-finger pinch/pan tracking, TOUCH pointers only
+  // (see `touchGesture.ts`'s own header — mouse/pen never reach it, so
+  // their behavior is completely unchanged).
+  const touchGestureRef = useRef<TouchGestureState>(INITIAL_TOUCH_GESTURE_STATE);
 
   const [camera, setCamera] = useState<Camera>(IDENTITY_CAMERA);
   const [fitMode, setFitMode] = useState(true);
@@ -183,6 +197,18 @@ export default function WorksheetZoneEditor({
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // Mobile layout pass: below `lg`, the properties column becomes a
+  // BottomSheet instead — see the render below and its own comment.
+  // `mobilePanelExpanded` starts (and resets to) collapsed/peek on every
+  // NEW selection, so tapping a zone always shows the compact peek first,
+  // never jumping straight to the full form.
+  const isDesktop = useIsDesktop();
+  const hydrated = useHydrated();
+  const [mobilePanelExpanded, setMobilePanelExpanded] = useState(false);
+  useEffect(() => {
+    setMobilePanelExpanded(false);
+  }, [selectedZoneId]);
 
   // Kept in sync every render (not just on change) so the wheel listener and
   // the pan pointer-move handler below — both read this inside a
@@ -425,6 +451,18 @@ export default function WorksheetZoneEditor({
     return screenToContentPoint(screenPoint, cameraRef.current);
   }, []);
 
+  /**
+   * The VIEWPORT-relative point (not `pointFromEvent`'s content-native
+   * space) — what `touchGesture.ts`'s pinch math (and the camera it wraps
+   * via `anchoredZoom`) expects, same convention `WorksheetPracticePlayerMobile.tsx`'s
+   * own pinch already uses.
+   */
+  const viewportPointFromEvent = useCallback((e: { clientX: number; clientY: number }) => {
+    const el = viewportRef.current;
+    const box = el?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
+  }, []);
+
   const updateZoneRect = useCallback(
     (zoneId: string, rect: Rect, opts?: ZonesChangeOptions) => {
       onZonesChange(
@@ -449,9 +487,83 @@ export default function WorksheetZoneEditor({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }, []);
 
+  // Ends whatever ONE-FINGER/mouse/pen gesture is currently in `dragRef`
+  // WITHOUT committing anything: a draw's draft is simply dropped, a
+  // move/resize's live (`commit: false`) edits stay wherever they last
+  // landed but no final `commit: true` step is pushed (`handlePointerUp` is
+  // what does that, on a NORMAL end), and an in-progress pan's last frame is
+  // still applied so the camera doesn't visually snap back. Used both by a
+  // genuine cancel (OS/browser pointercancel, losing capture) AND — mobile
+  // layout pass — by a second touch finger landing mid-gesture, which must
+  // cancel the first finger's action the exact same way (see
+  // `handleTouchGesturePointerDown` below and `touchGesture.ts`'s own
+  // header: "no history entry" for that case).
+  const endDrag = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDraftRect(null);
+    setIsPanning(false);
+    if (panFrameRef.current.id != null) {
+      cancelAnimationFrame(panFrameRef.current.id);
+      panFrameRef.current.id = null;
+    }
+    if (drag?.kind === 'pan') {
+      // Commit the FINAL camera synchronously, even if a batched frame was
+      // still pending — see the file header's Performance note.
+      const finalCamera = panFrameRef.current.target ?? drag.startCamera;
+      panFrameRef.current.target = null;
+      cameraRef.current = finalCamera;
+      setCamera(finalCamera);
+      // An actual pan (not just a middle-click with zero movement) exits fit
+      // mode too — otherwise the NEXT resize-driven re-fit would silently
+      // discard it (see the file header).
+      if (finalCamera.x !== drag.startCamera.x || finalCamera.y !== drag.startCamera.y) {
+        setFitMode(false);
+      }
+    }
+  }, []);
+
+  /**
+   * Mobile layout pass — the touch multi-pointer GATE every `onPointerDown`
+   * handler below calls FIRST. Feeds `touchGesture.ts`'s pure reducer a
+   * `pointerdown` and applies whatever it decides:
+   *  - a non-touch pointer (mouse/pen) is untouched — returns `false`
+   *    immediately, the caller proceeds exactly as before this pass.
+   *  - the FIRST touch finger: the reducer enters its `'single'` phase, this
+   *    returns `false` too — the caller starts its own normal draw/move/
+   *    resize/pan for that one finger, unchanged.
+   *  - a SECOND touch finger: the reducer emits `cancel-single` (the
+   *    caller's in-progress one-finger action is discarded via `endDrag()`,
+   *    never committed — no history entry) and enters `'pinch'`; this sets
+   *    `dragRef` to `{ kind: 'touch-pinch' }` and returns `true`, so the
+   *    caller returns immediately WITHOUT starting its own draw/move/resize
+   *    for this second finger.
+   */
+  const handleTouchGesturePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>): boolean => {
+      if (e.pointerType !== 'touch') return false;
+      const point = viewportPointFromEvent(e);
+      const { state, effect } = reduceTouchGesture(
+        touchGestureRef.current,
+        { type: 'pointerdown', id: e.pointerId, point, camera: cameraRef.current },
+        { image: displaySize, viewport: viewportSize() },
+      );
+      touchGestureRef.current = state;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      if (effect.type === 'cancel-single') endDrag();
+      if (state.phase === 'pinch') {
+        dragRef.current = { kind: 'touch-pinch' };
+        return true;
+      }
+      return false;
+    },
+    [viewportPointFromEvent, displaySize, viewportSize, endDrag],
+  );
+
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return; // a zone/handle handles its own pointer down
+      if (handleTouchGesturePointerDown(e)) return;
       if (e.button === 1) {
         startPan(e); // middle-button: always pans, in either tool
         return;
@@ -467,11 +579,12 @@ export default function WorksheetZoneEditor({
       setDraftRect(null);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
   );
 
   const handleZonePointerDown = useCallback(
     (zone: Zone) => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (handleTouchGesturePointerDown(e)) return;
       if (e.button === 1) {
         startPan(e); // middle-button on a zone still pans, not moves it
         return;
@@ -488,11 +601,12 @@ export default function WorksheetZoneEditor({
       dragRef.current = { kind: 'move', zoneId: zone.id, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
   );
 
   const handleHandlePointerDown = useCallback(
     (zone: Zone, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (handleTouchGesturePointerDown(e)) return;
       if (e.button === 1) {
         startPan(e);
         return;
@@ -507,12 +621,38 @@ export default function WorksheetZoneEditor({
       dragRef.current = { kind: 'resize', zoneId: zone.id, handle, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
+
+      // Mobile layout pass: every TOUCH move keeps `touchGesture.ts`'s own
+      // tracked point fresh — even during a one-finger draw/move/resize —
+      // so a SECOND finger landing later anchors its pinch to where the
+      // first finger actually is right now, not where it started.
+      if (e.pointerType === 'touch' && e.pointerId in touchGestureRef.current.pointers) {
+        const bounds = { image: displaySize, viewport: viewportSize() };
+        const { state, effect } = reduceTouchGesture(
+          touchGestureRef.current,
+          { type: 'pointermove', id: e.pointerId, point: viewportPointFromEvent(e) },
+          bounds,
+        );
+        touchGestureRef.current = state;
+        if (drag?.kind === 'touch-pinch' && effect.type === 'camera') {
+          cameraRef.current = effect.camera;
+          setCamera(effect.camera);
+          setFitMode(false);
+        }
+      }
+
+      // Every kind of pinch move is fully handled above; nothing below this
+      // applies to it (draw/move/resize/pan all belong to a ONE-finger — or
+      // mouse/pen — gesture only). Checked unconditionally (not nested under
+      // the touch branch above) so TypeScript can narrow `drag`'s type for
+      // the rest of this function too.
+      if (drag?.kind === 'touch-pinch') return;
       if (!drag) return;
 
       if (drag.kind === 'pan') {
@@ -558,37 +698,36 @@ export default function WorksheetZoneEditor({
         updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
       }
     },
-    [pointFromEvent, updateZoneRect, displaySize, viewportSize],
+    [pointFromEvent, updateZoneRect, displaySize, viewportSize, viewportPointFromEvent],
   );
-
-  const endDrag = useCallback(() => {
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDraftRect(null);
-    setIsPanning(false);
-    if (panFrameRef.current.id != null) {
-      cancelAnimationFrame(panFrameRef.current.id);
-      panFrameRef.current.id = null;
-    }
-    if (drag?.kind === 'pan') {
-      // Commit the FINAL camera synchronously, even if a batched frame was
-      // still pending — see the file header's Performance note.
-      const finalCamera = panFrameRef.current.target ?? drag.startCamera;
-      panFrameRef.current.target = null;
-      cameraRef.current = finalCamera;
-      setCamera(finalCamera);
-      // An actual pan (not just a middle-click with zero movement) exits fit
-      // mode too — otherwise the NEXT resize-driven re-fit would silently
-      // discard it (see the file header).
-      if (finalCamera.x !== drag.startCamera.x || finalCamera.y !== drag.startCamera.y) {
-        setFitMode(false);
-      }
-    }
-  }, []);
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
+
+      // Mobile layout pass: a touch finger lifting — feed it to
+      // `touchGesture.ts` first. While still `'touch-pinch'` (this WAS the
+      // active pinch and at least 2 fingers remain down), stay in pinch mode
+      // entirely: no `endDrag()`, no zone commit, just keep tracking. Once
+      // the reducer says the pinch itself has ended (dropped below 2
+      // fingers — `'suppressed'`/`'idle'`), fall through to `endDrag()`
+      // below to null `dragRef` out, then return before the move/resize/draw
+      // commit logic (none of which applies to a pinch).
+      if (e.pointerType === 'touch' && e.pointerId in touchGestureRef.current.pointers) {
+        const bounds = { image: displaySize, viewport: viewportSize() };
+        const { state } = reduceTouchGesture(
+          touchGestureRef.current,
+          { type: 'pointerup', id: e.pointerId },
+          bounds,
+        );
+        touchGestureRef.current = state;
+        if (drag?.kind === 'touch-pinch') {
+          if (state.phase === 'pinch') return; // still >= 2 fingers — keep pinching
+          endDrag();
+          return;
+        }
+      }
+
       endDrag();
       // Seal a move/resize gesture into exactly ONE undo step now that it is
       // done — every pointermove frame during it was a `commit: false`
@@ -618,14 +757,28 @@ export default function WorksheetZoneEditor({
       onZonesChange([...zones, zone]);
       onSelectZone(zone.id);
     },
-    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize],
+    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize, viewportSize],
   );
 
-  const handlePointerCancel = useCallback(() => {
-    // An OS/browser-cancelled gesture never commits — same "no flicker, no
-    // accidental zone" rule as a too-small drag in `handlePointerUp`.
-    endDrag();
-  }, [endDrag]);
+  const handlePointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (e.pointerType === 'touch' && e.pointerId in touchGestureRef.current.pointers) {
+        const bounds = { image: displaySize, viewport: viewportSize() };
+        const { state } = reduceTouchGesture(
+          touchGestureRef.current,
+          { type: 'pointercancel', id: e.pointerId },
+          bounds,
+        );
+        touchGestureRef.current = state;
+        if (drag?.kind === 'touch-pinch' && state.phase === 'pinch') return; // still >= 2 fingers
+      }
+      // An OS/browser-cancelled gesture never commits — same "no flicker, no
+      // accidental zone" rule as a too-small drag in `handlePointerUp`.
+      endDrag();
+    },
+    [endDrag, displaySize, viewportSize],
+  );
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedZoneId) return;
@@ -760,6 +913,145 @@ export default function WorksheetZoneEditor({
       ? 'cursor-grab'
       : 'cursor-crosshair';
 
+  // The selected zone's short kind label ("Texto"/"Opción") — the mobile
+  // properties sheet's peek bar and title (see below); `null` with nothing
+  // selected, which is also what makes that sheet disappear entirely.
+  const selectedZoneKindLabel = selectedZone
+    ? selectedZone.kind === 'text'
+      ? t.zoneKindText
+      : t.zoneKindChoice
+    : null;
+
+  // The properties FORM itself — identical markup for the desktop column
+  // and the mobile bottom sheet (mobile layout pass), computed once here
+  // instead of duplicated in both render branches below. `null` with
+  // nothing selected; the desktop branch falls back to its own empty-state
+  // card, the mobile sheet simply renders nothing (see the file header).
+  const zonePropertiesContent = selectedZone ? (
+    <div data-testid="zone-properties-content">
+      {/* Zone-level incomplete pointer (creator polish round 3, owner
+          feedback #1) — only shown while THIS zone is the one
+          `enviar.ts` pointed back at. */}
+      {incompleteMessage && incompleteZoneId === selectedZone.id && (
+        <p
+          data-testid="zone-incomplete-message"
+          className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+        >
+          {incompleteMessage}
+        </p>
+      )}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
+        <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
+          <XIcon aria-hidden="true" />
+        </Button>
+      </div>
+      <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
+        <Button
+          type="button"
+          size="sm"
+          variant={selectedZone.kind === 'text' ? 'default' : 'outline'}
+          role="radio"
+          aria-checked={selectedZone.kind === 'text'}
+          onClick={() => setKind('text')}
+        >
+          {t.zoneKindText}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={selectedZone.kind === 'choice' ? 'default' : 'outline'}
+          role="radio"
+          aria-checked={selectedZone.kind === 'choice'}
+          onClick={() => setKind('choice')}
+        >
+          {t.zoneKindChoice}
+        </Button>
+      </div>
+
+      {selectedZone.kind === 'text' && (
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
+          {selectedZone.answers.map((answer, i) => (
+            <div key={i} className="flex gap-1">
+              <input
+                type="text"
+                value={answer}
+                placeholder={t.zoneAnswerPlaceholder}
+                aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
+                onChange={(e) => {
+                  const next = [...selectedZone.answers];
+                  next[i] = e.target.value;
+                  setAnswers(next);
+                }}
+                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+              />
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t.zoneAnswerRemove}
+                disabled={selectedZone.answers.length <= 1}
+                onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
+              >
+                <XIcon aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="outline" onClick={() => setAnswers([...selectedZone.answers, ''])}>
+            + {t.zoneAnswerAdd}
+          </Button>
+        </div>
+      )}
+
+      {selectedZone.kind === 'choice' && (
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
+          {(selectedZone.options ?? []).map((option, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                aria-label={t.zoneOptionCorrect}
+                checked={selectedZone.answers.includes(option)}
+                onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
+              />
+              <input
+                type="text"
+                value={option}
+                placeholder={t.zoneOptionPlaceholder}
+                aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
+                onChange={(e) => {
+                  const options = [...(selectedZone.options ?? [])];
+                  options[i] = e.target.value;
+                  setOptions(options);
+                }}
+                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+              />
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t.zoneOptionRemove}
+                disabled={(selectedZone.options ?? []).length <= 2}
+                onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
+              >
+                <XIcon aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setOptions([...(selectedZone.options ?? []), ''])}
+          >
+            + {t.zoneOptionAdd}
+          </Button>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row"
@@ -847,7 +1139,13 @@ export default function WorksheetZoneEditor({
           // harness with no real layout). `overflow-hidden`, no native
           // scrollbars (canvas camera pass) — panning is entirely the
           // content layer's own CSS transform now, never native scroll.
-          className="relative min-h-80 flex-1 overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          // `touch-none` (mobile layout pass) lives HERE, on the viewport —
+          // not the content layer below, which can be smaller OR larger
+          // than the viewport at any given zoom — so the browser's own
+          // touch gestures (page scroll, pinch-zoom-the-page) never fire
+          // anywhere inside this bounded box, matching this component's own
+          // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
+          className="relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div
             ref={containerRef}
@@ -862,7 +1160,7 @@ export default function WorksheetZoneEditor({
             // leaving the DOM, etc). Bubbles up from a zone/handle child the
             // same way `onPointerCancel` already does — see the file header.
             onLostPointerCapture={handlePointerCancel}
-            className={`absolute left-0 top-0 touch-none select-none ${canvasCursorClass}`}
+            className={`absolute left-0 top-0 select-none ${canvasCursorClass}`}
             style={{
               width: displaySize.width,
               height: displaySize.height,
@@ -925,7 +1223,14 @@ export default function WorksheetZoneEditor({
                         key={handle}
                         data-testid={`handle-${zone.id}-${handle}`}
                         onPointerDown={handleHandlePointerDown(zone, handle)}
-                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary ${
+                        // `before:` grows the TOUCH hit area to >= 32px
+                        // (mobile layout pass) without touching the dot's
+                        // own visual size: a transparent `::before` box,
+                        // 10px past each edge of the 12px (`h-3 w-3`) dot on
+                        // every side, still resolves a tap anywhere inside
+                        // it to THIS element (a pseudo-element is never
+                        // itself an event target).
+                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary before:absolute before:-inset-2.5 before:content-[''] ${
                           effectiveTool === 'hand' ? canvasCursorClass : HANDLE_CURSOR[handle]
                         } ${handle.includes('n') ? '-top-1.5' : '-bottom-1.5'} ${
                           handle.includes('w') ? '-left-1.5' : '-right-1.5'
@@ -970,147 +1275,67 @@ export default function WorksheetZoneEditor({
         )}
       </div>
 
-      {/* ALWAYS rendered, fixed width (~280-300px) — see the file header.
-          Hiding this column when nothing is selected is exactly the bug that
-          made the canvas "zoom" on select/deselect. `overflow-y-auto` +
-          `min-h-0` (creator "one-screen" pass): once this row has a real,
-          bounded height (from the flex chain above), a long properties
-          panel scrolls WITHIN its own column instead of growing the row and
-          pushing the canvas off-screen. */}
-      <div
-        className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72"
-        data-testid="zone-properties-panel"
-      >
-        {selectedZone ? (
-          <div data-testid="zone-properties-content">
-            {/* Zone-level incomplete pointer (creator polish round 3, owner
-                feedback #1) — only shown while THIS zone is the one
-                `enviar.ts` pointed back at. */}
-            {incompleteMessage && incompleteZoneId === selectedZone.id && (
-              <p
-                data-testid="zone-incomplete-message"
-                className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
-              >
-                {incompleteMessage}
-              </p>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
-              <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
-                <XIcon aria-hidden="true" />
-              </Button>
-            </div>
-            <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
-              <Button
-                type="button"
-                size="sm"
-                variant={selectedZone.kind === 'text' ? 'default' : 'outline'}
-                role="radio"
-                aria-checked={selectedZone.kind === 'text'}
-                onClick={() => setKind('text')}
-              >
-                {t.zoneKindText}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={selectedZone.kind === 'choice' ? 'default' : 'outline'}
-                role="radio"
-                aria-checked={selectedZone.kind === 'choice'}
-                onClick={() => setKind('choice')}
-              >
-                {t.zoneKindChoice}
-              </Button>
-            </div>
-
-            {selectedZone.kind === 'text' && (
-              <div className="mt-4 flex flex-col gap-2">
-                <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
-                {selectedZone.answers.map((answer, i) => (
-                  <div key={i} className="flex gap-1">
-                    <input
-                      type="text"
-                      value={answer}
-                      placeholder={t.zoneAnswerPlaceholder}
-                      aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
-                      onChange={(e) => {
-                        const next = [...selectedZone.answers];
-                        next[i] = e.target.value;
-                        setAnswers(next);
-                      }}
-                      className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
-                    />
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={t.zoneAnswerRemove}
-                      disabled={selectedZone.answers.length <= 1}
-                      onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
-                    >
-                      <XIcon aria-hidden="true" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" size="sm" variant="outline" onClick={() => setAnswers([...selectedZone.answers, ''])}>
-                  + {t.zoneAnswerAdd}
-                </Button>
-              </div>
-            )}
-
-            {selectedZone.kind === 'choice' && (
-              <div className="mt-4 flex flex-col gap-2">
-                <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
-                {(selectedZone.options ?? []).map((option, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      aria-label={t.zoneOptionCorrect}
-                      checked={selectedZone.answers.includes(option)}
-                      onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
-                    />
-                    <input
-                      type="text"
-                      value={option}
-                      placeholder={t.zoneOptionPlaceholder}
-                      aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
-                      onChange={(e) => {
-                        const options = [...(selectedZone.options ?? [])];
-                        options[i] = e.target.value;
-                        setOptions(options);
-                      }}
-                      className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
-                    />
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={t.zoneOptionRemove}
-                      disabled={(selectedZone.options ?? []).length <= 2}
-                      onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
-                    >
-                      <XIcon aria-hidden="true" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setOptions([...(selectedZone.options ?? []), ''])}
-                >
-                  + {t.zoneOptionAdd}
-                </Button>
+      {/* Desktop ALWAYS renders this column, fixed width (~280-300px) — see
+          the file header. Hiding it when nothing is selected is exactly the
+          bug that made the canvas "zoom" on select/deselect. Below `lg`
+          (mobile layout pass) this becomes a `BottomSheet` instead: a
+          collapsed PEEK bar (the selected zone's own kind label) while
+          `mobilePanelExpanded` is false, tap it to expand to the full
+          properties form, and it disappears ENTIRELY on deselect (no
+          "select a zone" empty-state card floating at the bottom of a
+          phone — that hint is what `addZoneHint` below the canvas already
+          says). `zonePropertiesContent` is the exact same JSX either way,
+          computed once. */}
+      {(() => {
+        const desktopPanel = (
+          <div className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72" data-testid="zone-properties-panel">
+            {zonePropertiesContent ?? (
+              <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
+                <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
               </div>
             )}
           </div>
-        ) : (
-          <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
-            <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
-          </div>
-        )}
-      </div>
+        );
+        const mobileSheet = (
+          <BottomSheet
+            open={mobilePanelExpanded && selectedZone !== null}
+            onOpenChange={setMobilePanelExpanded}
+            title={selectedZoneKindLabel ?? t.zoneKindLabel}
+            testId="zone-properties-sheet"
+            peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
+          >
+            {zonePropertiesContent}
+          </BottomSheet>
+        );
+
+        // No-flash split (mobile layout pass, priority fix): these are two
+        // genuinely different subtrees (a plain always-visible column vs. a
+        // Radix-backed BottomSheet) — a CSS-only `hidden lg:block` toggle
+        // would mount BOTH (duplicate zone-properties inputs/ids). `isDesktop`
+        // alone defaults to `true` before hydration, so it used to render the
+        // desktop column's structure on a phone's very first paint. `!hydrated`
+        // (server render + the very first client paint) instead renders BOTH,
+        // gated purely by CSS `lg:` classes (real media queries, correct on
+        // every viewport immediately, no JS needed) — see `useHydrated`'s own
+        // header. The mobile sheet is additionally `inert` there: a STATIC
+        // (not `isDesktop`-driven) choice matching `useIsDesktop`'s own
+        // desktop-first SSR default, so the attribute itself never disagrees
+        // between the server and the first client render either. Once
+        // `hydrated` is true (flushed synchronously by Testing Library's own
+        // `render()` — every existing test above still finds exactly one of
+        // `zone-properties-panel`/`zone-properties-sheet`), this collapses to
+        // mounting only the one `isDesktop` says matches, same as before.
+        if (hydrated) return isDesktop ? desktopPanel : mobileSheet;
+        return (
+          <>
+            <div className="hidden lg:contents">{desktopPanel}</div>
+            <div className="contents lg:hidden" inert>
+              {mobileSheet}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

@@ -32,6 +32,7 @@
  * (Ctrl/⌘+S).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -108,6 +109,9 @@ export default function ActivityEditorIsland({
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
+  // Mobile layout pass: the inline back button's own labels — same source
+  // `BackButton.astro` itself reads.
+  const tCommon = UI_LABELS[lang].common;
 
   const [history, setHistory] = useState<HistoryState<ActivityDoc>>(() =>
     initHistory({ title: initialTitle, level: initialLevel, blocks: initialBlocks }),
@@ -604,7 +608,12 @@ export default function ActivityEditorIsland({
     // working; a dedicated mobile layout comes later.
     <div
       data-testid="activity-editor-island"
-      className="flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-2 lg:pr-16"
+      // Mobile layout pass: `pb-*` reserves room for `EditorSideToolbar`'s
+      // own fixed bottom action bar there (safe-area aware, same pattern as
+      // the practice page's sticky Comprobar bar) — cleared entirely at
+      // `lg:`, where that component goes back to its original floating
+      // rail and `lg:pr-16` (unchanged) reserves ITS docked slot instead.
+      className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16"
     >
       {/* THE card: everything below is inside it, one bordered/rounded
           surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays
@@ -626,50 +635,80 @@ export default function ActivityEditorIsland({
             (it names the whole card), and at `lg:` this row IS the card's
             own header (`border-b`, not a separate boxed element) — no other
             action row lives here. */}
-        <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="sr-only">{t.titleLabel}</span>
-            <input
-              type="text"
-              data-testid="activity-title-input"
-              aria-label={t.titleLabel}
-              value={title}
-              onChange={(e) => changeTitle(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="sr-only">{t.levelLabel}</span>
-            <select
-              data-testid="activity-level-select"
-              aria-label={t.levelLabel}
-              value={level ?? ''}
-              onChange={(e) => changeLevel(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2 text-foreground"
+        <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
+          <div className="flex flex-1 items-center gap-3">
+            {/* Mobile layout pass (owner request): below `lg:`, the back
+                button sits INLINE left of the title — the same "icon then
+                heading" row `PageTitle.astro` uses everywhere else — instead
+                of its own dedicated row above the card. `[id].astro` keeps
+                the ORIGINAL floating-gutter `BackButton` for `lg:` and up,
+                unchanged: this is a second, mobile-ONLY (`lg:hidden`) copy
+                with the exact same markup/behavior (`data-back-button` opts
+                it into the same site-wide `initBackButtons` history.back()
+                enhancement — see `BackButton.astro`'s own header), just
+                inline instead of floating. */}
+            <a
+              href={`/${lang}/mis-actividades`}
+              data-back-button
+              aria-label={tCommon.back}
+              title={tCommon.backTooltip}
+              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
             >
-              <option value="">{t.levelNone}</option>
-              {LEVELS.map((lvl) => (
-                <option key={lvl} value={lvl}>
-                  {levelLabels[lvl]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
-            <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-              {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-                ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-                : t.statusDraft}
-            </span>
-            {status === 'rejected' && initialReviewNote && (
-              <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-                {t.reviewNoteLabel}: {initialReviewNote}
-              </span>
-            )}
+              <ArrowLeftIcon size={20} aria-hidden="true" />
+            </a>
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+              <span className="sr-only">{t.titleLabel}</span>
+              <input
+                type="text"
+                data-testid="activity-title-input"
+                aria-label={t.titleLabel}
+                value={title}
+                onChange={(e) => changeTitle(e.target.value)}
+                className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
+              />
+            </label>
           </div>
-          <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
-            {t.submitForReview}
-          </Button>
+          {/* Mobile layout pass: title stays alone on its own line above
+              (the label right before this); level + status + "Enviar a
+              revisión" group onto the line below it, wrapping together if
+              they don't all fit at 360-430px. `lg:contents` un-wraps this
+              group at `lg:` so its three children become direct flex items
+              of the row above — the EXACT original desktop DOM shape/gaps,
+              unchanged. */}
+          <div className="flex flex-wrap items-center gap-2 lg:contents">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="sr-only">{t.levelLabel}</span>
+              <select
+                data-testid="activity-level-select"
+                aria-label={t.levelLabel}
+                value={level ?? ''}
+                onChange={(e) => changeLevel(e.target.value)}
+                className="h-9 rounded border border-border bg-background px-2 text-foreground"
+              >
+                <option value="">{t.levelNone}</option>
+                {LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {levelLabels[lvl]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+                  : t.statusDraft}
+              </span>
+              {status === 'rejected' && initialReviewNote && (
+                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+                  {t.reviewNoteLabel}: {initialReviewNote}
+                </span>
+              )}
+            </div>
+            <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
+              {t.submitForReview}
+            </Button>
+          </div>
         </div>
 
         {preview ? (

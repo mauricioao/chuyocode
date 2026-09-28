@@ -84,6 +84,13 @@ describe('ActivityPracticeIsland — Comprobar/Reintentar', () => {
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
   });
 
+  it('respects the safe-area inset and clears the floating scroll-to-top button on mobile, while keeping the original desktop position', () => {
+    renderIsland([QUIZ]);
+    const className = screen.getByTestId('practice-controls').className;
+    expect(className).toContain('env(safe-area-inset-bottom)');
+    expect(className).toContain('lg:bottom-4');
+  });
+
   it('shows Comprobar before grading', () => {
     renderIsland([WORKSHEET]);
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
