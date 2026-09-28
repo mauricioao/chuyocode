@@ -1,16 +1,42 @@
 /**
- * EditorSideToolbar — the editor's sticky, vertically-centered icon rail
- * (creator polish round 2, owner request #7). Everything that used to sit
- * scattered across the top bar (preview toggle, save button, save status)
- * plus the new block-navigation/collapse controls and undo/redo now live
- * here, keeping the top bar down to just title + level (owner request #1).
+ * EditorSideToolbar — the editor's icon rail (creator polish round 2, owner
+ * request #7; FLOATING in the "floating side toolbar" pass). Everything
+ * that used to sit scattered across the top bar (preview toggle, save
+ * button, save status) plus the new block-navigation/collapse controls and
+ * undo/redo now live here, keeping the top bar down to just title + level
+ * (owner request #1).
  *
  * Every button is icon-only with an accessible `aria-label` (also its
  * `title`, so a mouse user gets a native tooltip for free) — no icon here
  * needs a visible text caption, matching `SaveStatusIndicator`'s own
  * icon-only posture.
+ *
+ * FLOATING (this pass): a `docked` boolean plus an `{ x, y }` `position`
+ * (meaningful only while undocked) drive the rail's own placement. DOCKED —
+ * the default, and every existing caller's prior behavior — renders the
+ * ORIGINAL fixed/centered/right-aligned classes unchanged, no inline style,
+ * no measurement, no localStorage read even attempted. Only dragging the
+ * handle (or a keyboard nudge) actually undocks it; from then on the rail is
+ * `fixed` at an explicit `{ left, top }` inline style, clamped by
+ * `src/lib/activities/toolbarPosition.ts` (pure, unit-tested there) to stay
+ * fully within the visible area BETWEEN the site header and footer — this
+ * component only measures the real `<header>`/`<footer>` elements and the
+ * rail's own box, then hands plain numbers to that module.
+ *
+ * PERSISTENCE: `{ docked, x, y }` in `localStorage`, wrapped in try/catch on
+ * every read AND write (a private window, blocked storage, or a corrupted
+ * value must never crash the editor) — invalid/missing data is read back as
+ * the DOCKED default via `parsePersistedToolbarState`. The very first
+ * write-effect run (right after the read-effect's own initial hydration) is
+ * skipped so a not-yet-hydrated default state can never clobber a real
+ * persisted value with a redundant write.
+ *
+ * NO LAYOUT SHIFT ON UNDOCK: `ActivityEditorIsland.tsx`'s own root still
+ * reserves `lg:pr-16` unconditionally (this component's docked slot's own
+ * width) regardless of whether THIS component is currently docked there or
+ * floating anywhere else — see that component's own header.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ListBulletsIcon } from '@phosphor-icons/react/dist/ssr/ListBullets';
@@ -21,9 +47,21 @@ import { ArrowUUpLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpLeft';
 import { ArrowUUpRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpRight';
 import { KeyboardIcon } from '@phosphor-icons/react/dist/ssr/Keyboard';
 import { FloppyDiskIcon } from '@phosphor-icons/react/dist/ssr/FloppyDisk';
+import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVertical';
+import { PushPinIcon } from '@phosphor-icons/react/dist/ssr/PushPin';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import type { AutosaveStatus } from '@/lib/activities/autosave';
+import {
+  clampToolbarPosition,
+  dockTargetPosition,
+  keyboardStep,
+  parsePersistedToolbarState,
+  shouldSnapToDock,
+  type Bounds,
+  type Point,
+  type ToolbarSize,
+} from '@/lib/activities/toolbarPosition';
 import { blockDisplayName } from './BlockList';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +71,42 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import SaveStatusIndicator, { type SaveStatusLabels } from './SaveStatusIndicator';
+
+/** `localStorage` key — one fixed key is enough (per-BROWSER, not per-activity — see the file header). */
+const STORAGE_KEY = 'chuyocode:editor-side-toolbar';
+
+/** The ghost dock target's own rendered size (`h-8 w-8`, 2rem). */
+const DOCK_TARGET_SIZE = 32;
+
+/**
+ * The visible area the floating rail (and the ghost dock target) may occupy
+ * — between the real `<header>`/`<footer>` elements' own edges, full window
+ * width. Only ever called client-side (inside an effect or an event
+ * handler, never during the render body while `docked` could still be the
+ * server-matching default) — `document`/`window` don't exist during SSR,
+ * and the guard below is defensive insurance on top of that, not the only
+ * thing preventing an SSR crash.
+ */
+function measureBounds(): Bounds {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { left: 0, right: 0, top: 0, bottom: 0 };
+  }
+  const header = document.querySelector('header');
+  const footer = document.querySelector('footer');
+  return {
+    left: 0,
+    right: window.innerWidth,
+    top: header?.getBoundingClientRect().bottom ?? 0,
+    bottom: footer?.getBoundingClientRect().top ?? window.innerHeight,
+  };
+}
+
+/** The rail's own current rendered size, or `{0,0}` before it has ever mounted. */
+function measureSize(el: HTMLElement | null): ToolbarSize {
+  if (!el) return { width: 0, height: 0 };
+  const rect = el.getBoundingClientRect();
+  return { width: rect.width, height: rect.height };
+}
 
 export interface EditorSideToolbarProps {
   lang: Lang;
@@ -215,11 +289,269 @@ export default function EditorSideToolbar({
 }: EditorSideToolbarProps) {
   const t = UI_LABELS[lang].activities.editor;
 
+  const railRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
+
+  const [docked, setDocked] = useState(true);
+  const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  // The rail's OWN size, measured once on mount (it never changes — a fixed
+  // icon rail's own content never resizes itself) — only needed to position
+  // the ghost dock target during render; every drag/keyboard handler below
+  // re-measures live instead, on demand.
+  const [railSize, setRailSize] = useState<ToolbarSize>({ width: 0, height: 0 });
+
+  type DragState = { startClientX: number; startClientY: number; startPosition: Point; pointerId: number; preDrag: { docked: boolean; position: Point } };
+  const dragRef = useRef<DragState | null>(null);
+  // The latest CLAMPED candidate from an in-flight drag — read by pointerup
+  // instead of the (possibly not-yet-re-rendered) `position` state, so the
+  // drag never commits a stale position.
+  const latestDragPositionRef = useRef<Point>({ x: 0, y: 0 });
+
+  // Mount-only: measure the rail's own size once, and hydrate `docked`/
+  // `position` from `localStorage` (wrapped in try/catch — a private
+  // window, blocked storage, or corrupted JSON must never crash the
+  // editor; anything invalid/missing reads back as the DOCKED default via
+  // `parsePersistedToolbarState`, so `docked`/`position`'s own `useState`
+  // defaults above already ARE that fallback). `useLayoutEffect` so an
+  // undocked restore applies before the first paint, not after a visible
+  // docked flash.
+  useLayoutEffect(() => {
+    const size = measureSize(railRef.current);
+    setRailSize(size);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      const restored = parsePersistedToolbarState(parsed);
+      if (!restored.docked) {
+        const clamped = clampToolbarPosition({ x: restored.x, y: restored.y }, size, measureBounds());
+        setPosition(clamped);
+        setDocked(false);
+      }
+    } catch {
+      // Invalid/missing -> stay at the DOCKED default already set above.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist on every `docked`/`position` change — EXCEPT the very first run
+  // (mount), which would otherwise write the not-yet-hydrated DOCKED default
+  // right over a real persisted value before the hydration effect above's
+  // own state updates have had a chance to land (both effects run in the
+  // same initial commit, in declaration order — this one second).
+  const skipNextPersistRef = useRef(true);
+  useEffect(() => {
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ docked, x: position.x, y: position.y }));
+    } catch {
+      // Best-effort only.
+    }
+  }, [docked, position]);
+
+  // Re-clamp (never re-fit — there is no "fit" here, just "stay visible")
+  // on every window resize/scroll while undocked, so the rail can never end
+  // up outside the visible header-to-footer area — e.g. the footer
+  // scrolling into view, or the window shrinking. A no-op while docked: the
+  // original fixed/centered CSS classes already keep it correctly placed on
+  // their own, no JS involved.
+  useEffect(() => {
+    if (docked) return undefined;
+    function reclamp() {
+      const size = measureSize(railRef.current);
+      setPosition((prev) => clampToolbarPosition(prev, size, measureBounds()));
+    }
+    window.addEventListener('resize', reclamp);
+    window.addEventListener('scroll', reclamp, true);
+    return () => {
+      window.removeEventListener('resize', reclamp);
+      window.removeEventListener('scroll', reclamp, true);
+    };
+  }, [docked]);
+
+  // Escape DURING a drag cancels it back to the pre-drag state (docked
+  // origin, or wherever it was already floating) — a WINDOW listener since
+  // focus stays on the drag handle but the gesture is pointer-driven, not
+  // itself a key event the handle would otherwise see mid-drag.
+  useEffect(() => {
+    if (!isDragging) return undefined;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      const drag = dragRef.current;
+      if (!drag) return;
+      dragRef.current = null;
+      setIsDragging(false);
+      setDocked(drag.preDrag.docked);
+      setPosition(drag.preDrag.position);
+      handleRef.current?.releasePointerCapture?.(drag.pointerId);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDragging]);
+
+  const dock = useCallback(() => setDocked(true), []);
+
+  // Pointer-drag undock/move — the handle's own `onPointerDown`/Move/Up.
+  // Dragging FROM docked captures the rail's actual on-screen position
+  // first (it has no JS-tracked position while docked — the CSS classes
+  // place it), so undocking never jumps: it detaches exactly where it
+  // already visually was.
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const rail = railRef.current;
+      if (!rail) return;
+      const rect = rail.getBoundingClientRect();
+      const startPosition = docked ? { x: rect.left, y: rect.top } : position;
+      dragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startPosition,
+        pointerId: e.pointerId,
+        preDrag: { docked, position },
+      };
+      latestDragPositionRef.current = startPosition;
+      setIsDragging(true);
+      if (docked) {
+        setDocked(false);
+        setPosition(startPosition);
+      }
+      handleRef.current?.setPointerCapture?.(e.pointerId);
+    },
+    [docked, position],
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const size = measureSize(railRef.current);
+    const proposed = {
+      x: drag.startPosition.x + (e.clientX - drag.startClientX),
+      y: drag.startPosition.y + (e.clientY - drag.startClientY),
+    };
+    const clamped = clampToolbarPosition(proposed, size, measureBounds());
+    latestDragPositionRef.current = clamped;
+    setPosition(clamped);
+  }, []);
+
+  const endDrag = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setIsDragging(false);
+    if (!drag) return;
+    const size = measureSize(railRef.current);
+    const bounds = measureBounds();
+    const finalPosition = clampToolbarPosition(latestDragPositionRef.current, size, bounds);
+    const target = dockTargetPosition(size, bounds);
+    if (shouldSnapToDock(finalPosition, target)) {
+      setDocked(true);
+    } else {
+      setPosition(finalPosition);
+    }
+  }, []);
+
+  const handlePointerUp = useCallback(() => endDrag(), [endDrag]);
+  const handlePointerCancel = useCallback(() => endDrag(), [endDrag]);
+
+  // Keyboard on the handle: arrows nudge (Shift = bigger step), Home docks.
+  // A nudge from DOCKED undocks first, from its current on-screen position
+  // (the dock target's own computed position — the same place the CSS
+  // classes would have rendered it), same "never jumps" rule as a pointer
+  // drag.
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Home') {
+        e.preventDefault();
+        dock();
+        return;
+      }
+      const deltas: Record<string, Point> = {
+        ArrowUp: { x: 0, y: -1 },
+        ArrowDown: { x: 0, y: 1 },
+        ArrowLeft: { x: -1, y: 0 },
+        ArrowRight: { x: 1, y: 0 },
+      };
+      const delta = deltas[e.key];
+      if (!delta) return;
+      e.preventDefault();
+      const step = keyboardStep(e.shiftKey);
+      const size = measureSize(railRef.current);
+      const bounds = measureBounds();
+      const current = docked ? dockTargetPosition(size, bounds) : position;
+      const clamped = clampToolbarPosition({ x: current.x + delta.x * step, y: current.y + delta.y * step }, size, bounds);
+      setDocked(false);
+      setPosition(clamped);
+    },
+    [docked, position, dock],
+  );
+
+  // The ghost dock target's own position (small circle centered where the
+  // full rail would sit if docked) — only computed while undocked; never
+  // touches `document`/`window` during SSR since `docked` is always `true`
+  // there (this component has no external control over its own initial
+  // state).
+  const ghostPosition = !docked
+    ? (() => {
+        const bounds = measureBounds();
+        const target = dockTargetPosition(railSize, bounds);
+        return {
+          x: target.x + (railSize.width - DOCK_TARGET_SIZE) / 2,
+          y: target.y + (railSize.height - DOCK_TARGET_SIZE) / 2,
+        };
+      })()
+    : null;
+
   return (
+    <>
+    {!docked && ghostPosition && (
+      <button
+        type="button"
+        data-testid="toolbar-dock-target"
+        aria-label={t.dockToolbar}
+        title={t.dockToolbar}
+        onClick={dock}
+        className="fixed z-40 flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-border bg-card/70 text-muted-foreground shadow-lg backdrop-blur-sm hover:text-foreground"
+        style={{ left: ghostPosition.x, top: ghostPosition.y }}
+      >
+        <PushPinIcon aria-hidden="true" />
+      </button>
+    )}
     <div
+      ref={railRef}
       data-testid="editor-side-toolbar"
-      className="fixed top-1/2 right-3 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-sm"
+      data-docked={docked}
+      className={
+        docked
+          ? 'fixed top-1/2 right-3 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-sm'
+          : 'fixed z-40 flex flex-col items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-sm'
+      }
+      style={docked ? undefined : { left: position.x, top: position.y }}
     >
+      <div
+        ref={handleRef}
+        role="button"
+        tabIndex={0}
+        aria-label={t.moveToolbar}
+        title={t.moveToolbar}
+        data-testid="toolbar-drag-handle"
+        className={`flex h-4 w-7 touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handlePointerCancel}
+        onDoubleClick={dock}
+        onKeyDown={handleKeyDown}
+      >
+        <DotsSixVerticalIcon aria-hidden="true" />
+      </div>
+
+      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+
       <ToolbarIconButton label={t.collapseAll} testId="collapse-all-button" onClick={onCollapseAll}>
         <ArrowsInIcon aria-hidden="true" />
       </ToolbarIconButton>
@@ -261,5 +593,6 @@ export default function EditorSideToolbar({
       </ToolbarIconButton>
       <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
     </div>
+    </>
   );
 }

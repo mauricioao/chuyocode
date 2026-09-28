@@ -1,18 +1,24 @@
 /**
- * Pure zoom/pan math for the worksheet zone editor's canvas viewport (PR
- * "creator canvas UX"). Zero DOM, zero I/O — same posture as
- * `zoneGeometry.ts` right beside it: the component only translates real
- * `getBoundingClientRect()`/scroll reads into calls here, so the actual
- * arithmetic stays unit-testable without a real layout engine (jsdom has
- * none — see `WorksheetZoneEditor.test.tsx`'s own header).
+ * Pure zoom/pan/camera math for the worksheet zone editor's canvas viewport
+ * (PR "creator canvas UX"; camera model added in the "canvas camera" pass).
+ * Zero DOM, zero I/O — same posture as `zoneGeometry.ts` right beside it:
+ * the component only translates real `getBoundingClientRect()` reads and
+ * pointer events into calls here, so the actual arithmetic stays
+ * unit-testable without a real layout engine (jsdom has none — see
+ * `WorksheetZoneEditor.test.tsx`'s own header).
  *
- * The canvas' content box is always rendered at `image.width * zoom` by
- * `image.height * zoom` CSS pixels inside a scrollable viewport; zone
- * fractions (`Rect` in `zoneGeometry.ts`) never change with zoom, because
- * every pointer coordinate the editor reads is already relative to that
- * content box's own `getBoundingClientRect()` — which reflects the zoom
- * automatically. Zoom math here is ONLY: how big to render the content box,
- * and where to scroll so a zoom stays anchored under the pointer.
+ * Two families of exports live here:
+ *  - Plain ZOOM helpers (`clampZoom`, `fitZoom`, `stepZoom`, `wheelZoom`,
+ *    `contentSize`, `rotatedSize`, …) — a single number, reused as-is by
+ *    `WorksheetPracticePlayer.tsx`'s own, deliberately simpler zoom model
+ *    (see that component's own header).
+ *  - The worksheet CREATOR canvas' own bounded CAMERA (`Camera`,
+ *    `fitCamera`, `zoomAt`, `panBy`, `clampCamera`, `screenToContentPoint`) —
+ *    `{ scale, x, y }` applied as a CSS `transform` on the content layer,
+ *    replacing the older scroll-based viewport (native `scrollLeft`/`scrollTop`)
+ *    this module used to also expose (`zoomAroundPoint`, `clampPanAxis`,
+ *    `clampPanScroll` — removed once `WorksheetZoneEditor.tsx` fully migrated
+ *    to the camera; git history has them if ever needed again).
  */
 
 export interface Size {
@@ -23,11 +29,6 @@ export interface Size {
 export interface Point {
   x: number;
   y: number;
-}
-
-export interface ScrollOffset {
-  left: number;
-  top: number;
 }
 
 /** The zoom range every clamp/fit/step helper here enforces: 25%–400%. */
@@ -92,35 +93,6 @@ export function stepZoom(zoom: number, direction: 'in' | 'out', step: number = Z
 }
 
 /**
- * The scroll offset that keeps `pointer` (pixels from the VIEWPORT's own
- * top-left — i.e. a plain `clientX/Y` minus its `getBoundingClientRect()`,
- * never mind scrolling) anchored over the same content point after zooming
- * from `fromZoom` to `toZoom`, given the viewport's `scroll` offset before
- * the change.
- *
- * The pointer's content-space position is `(scroll + pointer) / fromZoom`
- * (content pixels, in the UNZOOMED image's own coordinate space); solving
- * `scroll' + pointer = contentPos * toZoom` for `scroll'` gives the formula
- * below. `fromZoom <= 0` is defensive only — it never happens once `zoom`
- * itself is always clamped to `MIN_ZOOM` — and returns `scroll` unchanged
- * rather than dividing by zero.
- */
-export function zoomAroundPoint(
-  pointer: Point,
-  scroll: ScrollOffset,
-  fromZoom: number,
-  toZoom: number,
-): ScrollOffset {
-  if (fromZoom <= 0) return scroll;
-  const contentX = (scroll.left + pointer.x) / fromZoom;
-  const contentY = (scroll.top + pointer.y) / fromZoom;
-  return {
-    left: contentX * toZoom - pointer.x,
-    top: contentY * toZoom - pointer.y,
-  };
-}
-
-/**
  * Wheel-zoom tuning (canvas tools pass): the fraction of the CURRENT zoom
  * applied per accumulated `deltaY` pixel, and the largest zoom-factor change
  * one batched animation frame may apply. Proportional to the current zoom
@@ -144,37 +116,174 @@ export function wheelZoom(zoom: number, deltaY: number): number {
   return clampZoom(zoom + step);
 }
 
-/**
- * The valid scroll range on ONE axis while actively panning: the content box
- * may be dragged until (at most) its far edge reaches the viewport's own
- * center, never further — past that point the pan gesture stops moving the
- * content rather than dragging it fully out of view. This is a DELIBERATELY
- * wider allowance than the browser's own native scrollable range (which for
- * content bigger than the viewport already prevents dragging it fully out —
- * this clamp is then a harmless no-op, since the native range is always the
- * tighter of the two); it only actually matters once the content is smaller
- * than the viewport on that axis (zoomed out below 100%), where there is no
- * native scrollable range at all and nothing would otherwise stop a pan
- * gesture from pushing the whole image arbitrarily far off-screen.
- */
-export function clampPanAxis(scroll: number, viewportLength: number, contentLength: number): number {
-  const center = viewportLength / 2;
-  const min = -center;
-  const max = contentLength - center;
-  return Math.min(max, Math.max(min, scroll));
-}
-
-/** {@link clampPanAxis}, applied to both axes of a scroll offset at once. */
-export function clampPanScroll(scroll: ScrollOffset, viewport: Size, content: Size): ScrollOffset {
-  return {
-    left: clampPanAxis(scroll.left, viewport.width, content.width),
-    top: clampPanAxis(scroll.top, viewport.height, content.height),
-  };
-}
-
 /** The content box's rendered CSS pixel size at `zoom` — what the canvas' `style.width/height` are set to. */
 export function contentSize(image: Size, zoom: number): Size {
   return { width: image.width * zoom, height: image.height * zoom };
+}
+
+/**
+ * {@link stepZoom}, but clamped to the WIDER `[INPUT_MIN_ZOOM, MAX_ZOOM]`
+ * range (10%-400%) instead of `[MIN_ZOOM, MAX_ZOOM]` (canvas camera pass,
+ * owner-approved design: "unify the −/+ button clamp with the input").
+ * `stepZoom` itself stays UNCHANGED — `WorksheetPracticePlayer.tsx` still
+ * uses it directly and keeps its own, narrower 25% floor; this is a
+ * DIFFERENT/ADDITIONAL export the worksheet CREATOR canvas' own −/+ buttons
+ * and wheel/keyboard zoom switch to instead, so every zoom entry point in
+ * that one editor agrees on the same floor as its editable % field.
+ */
+export function stepZoomInput(zoom: number, direction: 'in' | 'out', step: number = ZOOM_STEP): number {
+  return clampZoomInput(direction === 'in' ? zoom + step : zoom - step);
+}
+
+/**
+ * {@link wheelZoom}, but clamped to the wider `[INPUT_MIN_ZOOM, MAX_ZOOM]`
+ * range — see {@link stepZoomInput}'s own header for why this is a sibling
+ * export rather than a change to `wheelZoom` itself.
+ */
+export function wheelZoomInput(zoom: number, deltaY: number): number {
+  const rawStep = -deltaY * WHEEL_ZOOM_SENSITIVITY * zoom;
+  const step = Math.max(-MAX_WHEEL_ZOOM_STEP, Math.min(MAX_WHEEL_ZOOM_STEP, rawStep));
+  return clampZoomInput(zoom + step);
+}
+
+/**
+ * The worksheet creator canvas' CAMERA (canvas camera pass — replaces
+ * scroll-based panning): `scale` is the same zoom factor every function
+ * above already works with; `x`/`y` are the CSS pixel offset applied as
+ * `transform: translate(x, y) scale(scale)` (`transform-origin: 0 0`) to the
+ * image+zones layer, which itself always renders at its CONTENT-native size
+ * (`image`/`rotatedSize(...)`'s own width/height, never multiplied by
+ * `scale` — the CSS transform is the only thing that scales it visually).
+ * Every point the caller reads off `getBoundingClientRect()` for pointer
+ * math must be relative to the (untransformed, bounded, `overflow: hidden`)
+ * VIEWPORT, never to this transformed layer itself — see
+ * {@link screenToContentPoint}.
+ */
+export interface Camera {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+/** `image`/`viewport` bounds a camera is clamped against — see {@link clampCamera}. */
+export interface CameraBounds {
+  image: Size;
+  viewport: Size;
+}
+
+/**
+ * Clamp one axis of a camera offset against `viewportLength`/`contentLength`
+ * (the scaled content size on that axis): when the content is smaller than
+ * (or equal to) the viewport, it is CENTERED regardless of the proposed
+ * offset; when it is larger, the offset is clamped so the content's near
+ * edge can reach the viewport's near edge and no further — every corner of
+ * an oversized image stays reachable, with no empty overshoot past either
+ * edge (a DELIBERATELY tighter allowance than the old scroll-based
+ * `clampPanAxis`, which let a pan continue until the content's FAR edge
+ * merely reached the viewport's own center).
+ */
+function clampCameraAxis(offset: number, viewportLength: number, contentLength: number): number {
+  if (contentLength <= viewportLength) return (viewportLength - contentLength) / 2;
+  const min = viewportLength - contentLength;
+  return Math.min(0, Math.max(min, offset));
+}
+
+/**
+ * The camera every other camera helper below re-clamps its result through:
+ * `scale` clamped to `[INPUT_MIN_ZOOM, MAX_ZOOM]` (the unified 10%-400%
+ * camera range — see {@link stepZoomInput}'s header), `x`/`y` clamped per
+ * axis via {@link clampCameraAxis} using the CONTENT size at that (already
+ * clamped) scale. Called after every zoom, pan, AND on a viewport/image
+ * resize while NOT in fit mode (re-clamping the user's own camera instead of
+ * silently re-fitting it away — see `WorksheetZoneEditor.tsx`'s own resize
+ * effect).
+ */
+export function clampCamera(camera: Camera, image: Size, viewport: Size): Camera {
+  const scale = clampZoomInput(camera.scale);
+  const content = contentSize(image, scale);
+  return {
+    scale,
+    x: clampCameraAxis(camera.x, viewport.width, content.width),
+    y: clampCameraAxis(camera.y, viewport.height, content.height),
+  };
+}
+
+/**
+ * The camera that shows the WHOLE `image` (already the rotated display
+ * size — see `rotatedSize`) centered inside `viewport` — "Ajustar"/Fit, and
+ * the editor's default view. Reuses {@link fitZoom}'s own scale (its
+ * narrower `[MIN_ZOOM, MAX_ZOOM]` clamp is intentional here too: FIT is a
+ * derived/automatic camera, not a manual zoom action, so it keeps the more
+ * conservative floor rather than the wider one manual zoom gets), then
+ * clamps through {@link clampCamera} — which, for a scale that fits the
+ * whole image, always centers both axes, so the `x`/`y` passed in here
+ * don't matter.
+ */
+export function fitCamera(image: Size, viewport: Size): Camera {
+  const scale = fitZoom(viewport, image);
+  return clampCamera({ scale, x: 0, y: 0 }, image, viewport);
+}
+
+/**
+ * Zoom `camera` to `nextScale` (already computed and clamped by the caller —
+ * {@link stepZoomInput}, {@link wheelZoomInput}, or a typed %) while keeping
+ * `point` (VIEWPORT-relative pixels, e.g. `clientX/Y` minus the viewport's
+ * own `getBoundingClientRect()`) visually anchored to the same content
+ * pixel — the direct camera-space analogue of the old scroll-based
+ * `zoomAroundPoint`. `camera.scale <= 0` is defensive only (every camera
+ * this module hands back already has a positive, clamped scale) and skips
+ * the anchor math rather than dividing by zero. The result is always
+ * re-clamped via {@link clampCamera}, so zooming OUT past the point where
+ * the content becomes smaller than the viewport re-centers it instead of
+ * leaving it pinned to a now-stale anchor.
+ */
+export function zoomAt(camera: Camera, nextScale: number, point: Point, bounds: CameraBounds): Camera {
+  if (camera.scale <= 0) {
+    return clampCamera({ ...camera, scale: nextScale }, bounds.image, bounds.viewport);
+  }
+  const contentX = (point.x - camera.x) / camera.scale;
+  const contentY = (point.y - camera.y) / camera.scale;
+  return clampCamera(
+    { scale: nextScale, x: point.x - contentX * nextScale, y: point.y - contentY * nextScale },
+    bounds.image,
+    bounds.viewport,
+  );
+}
+
+/** Translate `camera` by a pixel `(dx, dy)`, clamped like every other camera change via {@link clampCamera}. */
+export function panBy(camera: Camera, dx: number, dy: number, bounds: CameraBounds): Camera {
+  return clampCamera({ ...camera, x: camera.x + dx, y: camera.y + dy }, bounds.image, bounds.viewport);
+}
+
+/**
+ * Convert a point given relative to the camera's own (untransformed,
+ * bounded) VIEWPORT — e.g. `clientX/Y` minus the viewport's own
+ * `getBoundingClientRect()` — into the CONTENT layer's own native,
+ * unscaled pixel space: the same units `zoneGeometry.ts`'s rect helpers
+ * already work in when given the image's plain `Size` (`rotatedSize(...)`'s
+ * own width/height), at ANY camera scale/offset. This is how
+ * `WorksheetZoneEditor.tsx` turns a pointer event into the coordinates it
+ * hands to `rectFromDrag`/`moveRect`/`resizeRect`, instead of reading the
+ * (CSS-transformed) content layer's own `getBoundingClientRect()` — which
+ * real browsers DO reflect transforms in, but relying on it would still
+ * couple every drag/resize test to a transform-aware DOM mock jsdom cannot
+ * provide; going through the camera's own numbers directly needs only the
+ * viewport's (untransformed) rect and the camera state, both already
+ * mocked/asserted elsewhere in this codebase's own precedent.
+ */
+export function screenToContentPoint(point: Point, camera: Camera): Point {
+  return {
+    x: (point.x - camera.x) / camera.scale,
+    y: (point.y - camera.y) / camera.scale,
+  };
+}
+
+/** The exact inverse of {@link screenToContentPoint}. */
+export function contentToScreenPoint(point: Point, camera: Camera): Point {
+  return {
+    x: point.x * camera.scale + camera.x,
+    y: point.y * camera.scale + camera.y,
+  };
 }
 
 /**

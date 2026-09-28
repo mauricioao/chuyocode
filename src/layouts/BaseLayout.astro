@@ -18,6 +18,19 @@
  *  - Scroll-reveal motion (design decision #6, PR 5): an inline module script
  *    runs `initReveals()` on `DOMContentLoaded` and again after Astro View
  *    Transitions swaps (`astro:after-swap`) so `.reveal` elements fade up.
+ *  - Opt-in FULL-HEIGHT mode (`fullHeight` prop, floating side toolbar pass,
+ *    owner request): every page defaults to normal document flow
+ *    (`min-h-screen` — the page grows with its content and the WHOLE
+ *    document scrolls). A page that passes `fullHeight` additionally gets,
+ *    at `lg:` only, `body` pinned to exactly one viewport tall
+ *    (`lg:h-dvh lg:overflow-hidden`) and `<main>` bounded to the remaining
+ *    space after the header/footer (`lg:min-h-0 lg:overflow-hidden`, on top
+ *    of its own already-unconditional `flex-1`) — so the PAGE never scrolls
+ *    at `lg:`, and it is entirely up to that page's own content to decide
+ *    what (if anything) scrolls internally. Below `lg:`, `fullHeight` is a
+ *    complete no-op: every page, including one that passes it, keeps
+ *    ordinary scrolling on a narrow screen. The activity editor
+ *    (`src/pages/[lang]/crear/[id].astro`) is the first user of this.
  */
 import { ClientRouter } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
@@ -43,6 +56,8 @@ interface Props {
   description?: string;
   /** Optional absolute/relative image URL for `og:image` + Twitter card. */
   ogImage?: string;
+  /** Opt-in, `lg:`-only non-scrolling body — see the file header. Defaults to `false` (normal document flow) for every existing page. */
+  fullHeight?: boolean;
 }
 
 const {
@@ -50,6 +65,7 @@ const {
   title = 'ChuyoCode',
   description,
   ogImage,
+  fullHeight = false,
 } = Astro.props;
 
 // Localized fallback description keeps every page indexable even when a page
@@ -98,7 +114,10 @@ const faviconSvg =
     <slot name="head" />
   </head>
   <body
-    class="flex min-h-screen flex-col bg-base text-zinc-100 antialiased transition-theme duration-theme dark:bg-base"
+    class:list={[
+      'flex min-h-screen flex-col bg-base text-zinc-100 antialiased transition-theme duration-theme dark:bg-base',
+      fullHeight && 'lg:h-dvh lg:overflow-hidden',
+    ]}
   >
     {/* Skip-to-content link — FIRST focusable body element (decision #7 / a11y).
         Off-screen until focused (`.skip-link` in global.css), then jumps keyboard
@@ -107,7 +126,7 @@ const faviconSvg =
       {lang === 'en' ? 'Skip to content' : 'Saltar al contenido'}
     </a>
     <Header lang={lang} />
-    <main id="content" class="w-full flex-1">
+    <main id="content" class:list={['w-full flex-1', fullHeight && 'lg:min-h-0 lg:overflow-hidden']}>
       <slot />
     </main>
     <Footer lang={lang} />

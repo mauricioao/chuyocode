@@ -29,6 +29,16 @@ function zoomLevel(): string {
 }
 
 /**
+ * The content layer's (`zone-canvas`) own camera transform — canvas camera
+ * pass: panning/zooming is a CSS `transform: translate(x, y) scale(scale)`
+ * now, never native `scrollLeft`/`scrollTop`. Every pan/zoom-position
+ * assertion below reads THIS instead.
+ */
+function cameraTransform(): string {
+  return screen.getByTestId('zone-canvas').style.transform;
+}
+
+/**
  * Wheel-zoom is now batched behind ONE `requestAnimationFrame` per frame
  * (canvas tools pass — see `WorksheetZoneEditor.tsx`'s own wheel effect):
  * every wheel test needs this so its accumulated delta flushes
@@ -343,36 +353,45 @@ function firePointer(
 }
 
 describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
-  it('draws a new zone from a pointer drag, using the real container size', () => {
+  // Canvas camera pass: drawing/moving/resizing math now goes through
+  // `screenToContentPoint` against the content layer's own NATIVE (unscaled)
+  // size — always `displaySize` (IMAGE's 800x400 here, unrotated), never a
+  // mockable "current canvas box" the way the old scroll-based viewport's
+  // (zoom-dependent) `getBoundingClientRect()` was. With the viewport's own
+  // rect unmocked (jsdom defaults every `getBoundingClientRect()` to zeros —
+  // see this file's own header), the mount effect's `fitCamera` computes the
+  // identity camera (`scale: 1, x: 0, y: 0`, since a zero-sized viewport
+  // makes `fitZoom` fall back to 100% and `clampCamera` clamps the offset
+  // back to 0) — so a raw `clientX/Y` maps 1:1 onto content pixels, and
+  // fractions are plain `clientX/Y / 800` or `/ 400`.
+  it('draws a new zone from a pointer drag, against the image\'s own native pixel size', () => {
     render(<Harness />);
     const canvas = screen.getByTestId('zone-canvas');
-    mockRect(canvas, { width: 200, height: 100 });
 
     firePointer(canvas, 'pointerdown', 20, 10);
     firePointer(canvas, 'pointerup', 60, 50);
 
     const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
     expect(zones).toHaveLength(1);
-    expect(zones[0].style.left).toBe('10%');
-    expect(zones[0].style.top).toBe('10%');
-    expect(zones[0].style.width).toBe('20%');
-    expect(zones[0].style.height).toBe('40%');
+    expect(zones[0].style.left).toBe('2.5%'); // 20 / 800
+    expect(zones[0].style.top).toBe('2.5%'); // 10 / 400
+    expect(zones[0].style.width).toBe('5%'); // (60 - 20) / 800
+    expect(zones[0].style.height).toBe('10%'); // (50 - 10) / 400
   });
 
   it('renders a live dashed rubber-band rectangle from pointerdown to pointerup, then removes it', () => {
     render(<Harness />);
     const canvas = screen.getByTestId('zone-canvas');
-    mockRect(canvas, { width: 200, height: 100 });
 
     firePointer(canvas, 'pointerdown', 20, 10);
     expect(screen.queryByTestId('zone-draft')).toBeNull();
 
     firePointer(canvas, 'pointermove', 60, 50);
     const draft = screen.getByTestId('zone-draft');
-    expect(draft.style.left).toBe('10%');
-    expect(draft.style.top).toBe('10%');
-    expect(draft.style.width).toBe('20%');
-    expect(draft.style.height).toBe('40%');
+    expect(draft.style.left).toBe('2.5%');
+    expect(draft.style.top).toBe('2.5%');
+    expect(draft.style.width).toBe('5%');
+    expect(draft.style.height).toBe('10%');
 
     firePointer(canvas, 'pointerup', 60, 50);
     expect(screen.queryByTestId('zone-draft')).toBeNull();
@@ -381,14 +400,13 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
   it('updates the draft rectangle continuously as the pointer keeps moving', () => {
     render(<Harness />);
     const canvas = screen.getByTestId('zone-canvas');
-    mockRect(canvas, { width: 200, height: 100 });
 
     firePointer(canvas, 'pointerdown', 0, 0);
     firePointer(canvas, 'pointermove', 40, 20);
-    expect(screen.getByTestId('zone-draft').style.width).toBe('20%');
+    expect(screen.getByTestId('zone-draft').style.width).toBe('5%'); // 40 / 800
 
     firePointer(canvas, 'pointermove', 100, 50);
-    expect(screen.getByTestId('zone-draft').style.width).toBe('50%');
+    expect(screen.getByTestId('zone-draft').style.width).toBe('12.5%'); // 100 / 800
   });
 
   it('discards a too-small drag (including a plain click) without committing a zone', () => {
@@ -423,6 +441,58 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
   });
 });
 
+describe('WorksheetZoneEditor — camera coordinate conversion at scale != 1 with a non-zero offset (canvas camera pass regression check)', () => {
+  it('draws a zone at the correct fraction through a scaled, offset camera', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(viewport, { width: 300, height: 200 });
+
+    // Zoom in once: scale 1 -> 1.25, anchored at the (now-mocked) viewport's
+    // own center (150, 100). zoomAt keeps that content point fixed:
+    // contentX = (150-0)/1 = 150, contentY = 100; next.x = 150 - 150*1.25 =
+    // -37.5, next.y = 100 - 100*1.25 = -25. Both stay unclamped (content
+    // 1000x500 is bigger than the 300x200 viewport on both axes, range
+    // [-700, 0] / [-300, 0]).
+    fireEvent.click(screen.getByTestId('zoom-in'));
+    expect(zoomLevel()).toBe('125%');
+
+    // content = (screen - camera.xy) / scale:
+    // pointerdown (100,100) -> ((100+37.5)/1.25, (100+25)/1.25) = (110, 100).
+    // pointerup (350,350) -> ((350+37.5)/1.25, (350+25)/1.25) = (310, 300).
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointerup', 350, 350);
+
+    const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
+    expect(zones).toHaveLength(1);
+    // `toBeCloseTo` (not exact string equality): floating-point division
+    // through the camera (`/1.25`) can land a few ULPs off a clean decimal.
+    expect(parseFloat(zones[0].style.left)).toBeCloseTo(13.75); // 110 / 800
+    expect(parseFloat(zones[0].style.top)).toBeCloseTo(25); // 100 / 400
+    expect(parseFloat(zones[0].style.width)).toBeCloseTo(25); // (310 - 110) / 800
+    expect(parseFloat(zones[0].style.height)).toBeCloseTo(50); // (300 - 100) / 400
+  });
+
+  it('moves an existing zone by the correct fraction through the same scaled, offset camera', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} />);
+    const viewport = screen.getByTestId('zone-viewport');
+    mockRect(viewport, { width: 300, height: 200 });
+    fireEvent.click(screen.getByTestId('zoom-in')); // same camera as above: scale 1.25, offset (-37.5, -25)
+    expect(zoomLevel()).toBe('125%');
+
+    const zoneEl = screen.getByTestId('zone-z1');
+    // content start (100,100) -> (110, 100); content end (150,120) ->
+    // ((150+37.5)/1.25, (120+25)/1.25) = (150, 116).
+    // dx = (150-110)/800 = 0.05; dy = (116-100)/400 = 0.04.
+    firePointer(zoneEl, 'pointerdown', 100, 100);
+    firePointer(zoneEl, 'pointermove', 150, 120);
+
+    expect(parseFloat(zoneEl.style.left)).toBeCloseTo(15); // 0.1 + 0.05
+    expect(parseFloat(zoneEl.style.top)).toBeCloseTo(14); // 0.1 + 0.04
+  });
+});
+
 describe('WorksheetZoneEditor — zoom controls', () => {
   it('shows 100% by default when the viewport has no real layout (jsdom fallback)', () => {
     render(<Harness />);
@@ -438,10 +508,10 @@ describe('WorksheetZoneEditor — zoom controls', () => {
     expect(zoomLevel()).toBe('75%');
   });
 
-  it('clamps zoom-out at the 25% floor', () => {
+  it('clamps zoom-out at the unified 10% floor (canvas camera pass: same floor as the editable % input, not the narrower 25%)', () => {
     render(<Harness />);
     for (let i = 0; i < 10; i++) fireEvent.click(screen.getByTestId('zoom-out'));
-    expect(zoomLevel()).toBe('25%');
+    expect(zoomLevel()).toBe('10%');
   });
 
   it('clamps zoom-in at the 400% ceiling', () => {
@@ -838,22 +908,26 @@ describe('WorksheetZoneEditor — panning', () => {
     expect(screen.getByTestId('zone-canvas').className).toContain('cursor-crosshair');
   });
 
-  it('hand drag pans (viewport scroll position changes) and does not draw a zone', () => {
+  it('hand drag pans (the camera transform changes) and does not draw a zone', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('tool-hand'));
     const viewport = screen.getByTestId('zone-viewport');
     const canvas = screen.getByTestId('zone-canvas');
-    mockRect(canvas, { width: 200, height: 100 });
-    mockRect(viewport, { width: 800, height: 400 });
+    // A viewport SMALLER than the 800x400 image (at the identity scale-1
+    // camera the mount effect settles on against this same unmocked-at-mount
+    // viewport) gives real room to pan — see `clampCamera`'s own header:
+    // once content exactly fills or is smaller than the viewport, panning is
+    // a clamped no-op by design (nothing left to reveal).
+    mockRect(viewport, { width: 400, height: 200 });
 
     firePointer(canvas, 'pointerdown', 100, 100);
     firePointer(canvas, 'pointermove', 60, 70);
     firePointer(canvas, 'pointerup', 60, 70);
 
-    // scrollLeft = 0 - (60 - 100) = 40; scrollTop = 0 - (70 - 100) = 30 —
-    // both well within the pan bounds for this viewport/content size.
-    expect(viewport.scrollLeft).toBe(40);
-    expect(viewport.scrollTop).toBe(30);
+    // camera.x = 0 + (60 - 100) = -40; camera.y = 0 + (70 - 100) = -30 — both
+    // well within the pan bounds for this viewport/content size (range
+    // [-400, 0] / [-200, 0]).
+    expect(cameraTransform()).toBe('translate(-40px, -30px) scale(1)');
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
   });
 
@@ -862,8 +936,7 @@ describe('WorksheetZoneEditor — panning', () => {
     render(<Harness initialZones={[zone]} />);
     fireEvent.click(screen.getByTestId('tool-hand'));
     const viewport = screen.getByTestId('zone-viewport');
-    mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
-    mockRect(viewport, { width: 800, height: 400 });
+    mockRect(viewport, { width: 400, height: 200 });
     const zoneEl = screen.getByTestId('zone-z1');
     const originalLeft = zoneEl.style.left;
 
@@ -871,7 +944,7 @@ describe('WorksheetZoneEditor — panning', () => {
     firePointer(zoneEl, 'pointermove', 60, 70);
     firePointer(zoneEl, 'pointerup', 60, 70);
 
-    expect(viewport.scrollLeft).toBe(40);
+    expect(cameraTransform()).toBe('translate(-40px, -30px) scale(1)');
     expect(screen.getByTestId('zone-z1').style.left).toBe(originalLeft);
   });
 });
@@ -920,6 +993,37 @@ describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-sc
     });
 
     expect(zoomLevel()).toBe('125%');
+  });
+
+  it('does not re-fit after a PAN either (canvas camera pass: a pan turns fit mode off too, not just a zoom)', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    const canvas = screen.getByTestId('zone-canvas');
+    // A viewport SMALLER than the 800x400 image (at the identity scale-1
+    // camera the mount effect settles on) gives real room to pan — same
+    // reasoning as the "hand drag pans" test above: at scale 1, an
+    // 800x400-or-bigger viewport would already fully contain the image, so
+    // `clampCamera` centers it and the pan would be clamped back to a no-op.
+    mockRect(viewport, { width: 400, height: 200 });
+
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointermove', 60, 70);
+    firePointer(canvas, 'pointerup', 60, 70);
+    // Still 100% (a pan never changes scale) — but fit mode is now off.
+    expect(zoomLevel()).toBe('100%');
+
+    // A resize that WOULD compute a different fit zoom (200x100 -> 25%) must
+    // re-CLAMP the panned camera instead, leaving the zoom level exactly
+    // where the pan left it.
+    mockRect(viewport, { width: 200, height: 100 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+
+    expect(zoomLevel()).toBe('100%');
   });
 });
 

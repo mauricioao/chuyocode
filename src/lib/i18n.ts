@@ -261,6 +261,10 @@ export const UI_LABELS = {
         shortcutEscape: 'Deseleccionar',
         shortcutZoomIn: 'Acercar',
         shortcutZoomOut: 'Alejar',
+        // Floating side toolbar pass: the drag handle, and the ghost "dock"
+        // target shown while undocked.
+        moveToolbar: 'Mover barra',
+        dockToolbar: 'Volver a su lugar',
         savingStatus: 'Guardando cambios',
         savedStatus: 'Cambios guardados',
         errorStatus: 'No se pudo guardar',
@@ -831,6 +835,8 @@ export const UI_LABELS = {
         shortcutEscape: 'Deselect',
         shortcutZoomIn: 'Zoom in',
         shortcutZoomOut: 'Zoom out',
+        moveToolbar: 'Move toolbar',
+        dockToolbar: 'Dock',
         savingStatus: 'Saving changes',
         savedStatus: 'Changes saved',
         errorStatus: 'Could not save',

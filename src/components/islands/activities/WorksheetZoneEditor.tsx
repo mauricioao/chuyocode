@@ -1,7 +1,8 @@
 /**
  * WorksheetZoneEditor — the canvas + properties panel for drawing/editing a
  * worksheet block's answer zones (PR B, "Activities creator"; canvas UX
- * fixes in the "creator canvas UX" pass).
+ * fixes in the "creator canvas UX" pass; camera model in the "canvas camera"
+ * pass).
  *
  * The image + its zones are ONE canvas: pointer drag on empty space draws a
  * new zone, drag on a zone's body moves it, drag on one of its four corner
@@ -9,15 +10,41 @@
  * `src/lib/activities/zoneGeometry.ts` (pure, unit-tested there), this
  * component only translates pointer coordinates into calls.
  *
- * CANVAS VIEWPORT (zoom/pan): the canvas' content box always renders at
- * `image.width * zoom` by `image.height * zoom` CSS pixels, inside a
- * scrollable, screen-bounded viewport — `src/lib/activities/canvasViewport.ts`
- * (pure, unit-tested there) owns the zoom range, fit calculation, and the
- * zoom-around-pointer scroll math. Every zone/pointer coordinate below stays
- * in the SAME container-relative pixel space regardless of zoom, because it
- * is always read off the content box's own `getBoundingClientRect()`, which
- * already reflects the current zoom — so none of the drawing/move/resize
- * math above needs to know a zoom level exists.
+ * CAMERA (canvas camera pass — replaces the old scroll-based viewport): the
+ * canvas is a BOUNDED, `overflow: hidden` viewport (no native scrollbars —
+ * it fills whatever height its flex ancestors give it, same as before) with
+ * one child, the "content layer" (`containerRef`, `data-testid="zone-canvas"`),
+ * always rendered at its own NATIVE (unscaled) size — `displaySize`, the
+ * already-ROTATED image dimensions — and moved/scaled entirely via a CSS
+ * `transform: translate(x, y) scale(scale)` (`transform-origin: 0 0`) driven
+ * by the `camera` state, `{ scale, x, y }`. `src/lib/activities/canvasViewport.ts`
+ * (pure, unit-tested there) owns the camera math: `fitCamera` (whole image
+ * centered), `zoomAt` (keeps a viewport-relative point fixed under a scale
+ * change), `panBy`/`clampCamera` (bounded translation — every corner of an
+ * oversized image reachable, no empty overshoot; a smaller-than-viewport
+ * axis is always centered), and `screenToContentPoint` (viewport-relative
+ * pixels -> the content layer's own native pixel space). Every zone
+ * draw/move/resize below goes through THAT conversion — never the content
+ * layer's own (CSS-transformed) `getBoundingClientRect()` — so none of
+ * `zoneGeometry.ts`'s math needs to know a camera exists at all: it always
+ * receives points/sizes in the image's native, unscaled pixel space,
+ * regardless of the current `camera.scale`.
+ *
+ * FIT MODE: `fitMode` tracks whether the camera should still auto-refit on a
+ * viewport/image resize (block expand/collapse, sibling reflow, a properties
+ * panel change — none of which fire a window `resize` event). Any EXPLICIT
+ * zoom (buttons, wheel, +/-/0 keys, the typed % field) or PAN (Mano drag,
+ * middle-drag, Space-drag) turns it off — a later resize then RE-CLAMPS the
+ * user's own camera instead of silently re-fitting it away and discarding
+ * their pan/zoom. "Ajustar" and the `0` key turn it back on.
+ *
+ * PERFORMANCE: an active PAN drag never calls `setCamera` per pointer event
+ * — every pointermove during a pan only computes the candidate camera and
+ * stores it in a ref; ONE `requestAnimationFrame` per frame flushes the
+ * latest candidate into real React state (same batching shape as the wheel
+ * listener below, already established before this pass). The drag commits
+ * its FINAL camera into state synchronously on pointerup/cancel, canceling
+ * any still-pending frame, so the camera is never left one frame stale.
  *
  * PROPERTIES PANEL IS ALWAYS RENDERED, fixed width, whether or not a zone is
  * selected — with no zone selected it shows a quiet empty state instead of
@@ -48,12 +75,11 @@
  * this component's analogue of the editor's "right panel". Arrow keys nudge
  * the selected zone; Delete/Backspace removes it.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
-import { BoundingBoxIcon } from '@phosphor-icons/react/dist/ssr/BoundingBox';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
@@ -68,16 +94,18 @@ import {
   type Rect,
 } from '@/lib/activities/zoneGeometry';
 import {
-  clampZoom,
   clampZoomInput,
   parseZoomPercentInput,
-  fitZoom,
-  stepZoom,
-  zoomAroundPoint,
-  wheelZoom,
-  clampPanScroll,
-  contentSize,
+  stepZoomInput,
+  wheelZoomInput,
+  fitCamera,
+  clampCamera,
+  zoomAt,
+  panBy,
+  screenToContentPoint,
   rotatedSize,
+  type Camera,
+  type Size,
 } from '@/lib/activities/canvasViewport';
 import { Button } from '@/components/ui/button';
 
@@ -123,11 +151,13 @@ const HANDLE_CURSOR: Record<Handle, string> = {
   sw: 'cursor-nesw-resize',
 };
 
+const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
+
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
   | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect }
-  | { kind: 'pan'; startClientX: number; startClientY: number; startScrollLeft: number; startScrollTop: number };
+  | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera };
 
 export default function WorksheetZoneEditor({
   lang,
@@ -147,19 +177,28 @@ export default function WorksheetZoneEditor({
   const dragRef = useRef<DragMode | null>(null);
   const spaceHeldRef = useRef(false);
 
-  const [zoom, setZoom] = useState(1);
+  const [camera, setCamera] = useState<Camera>(IDENTITY_CAMERA);
   const [fitMode, setFitMode] = useState(true);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
 
-  // Kept in sync every render (not just on change) so the wheel listener
-  // below — attached once, never re-attached per zoom change, to avoid
-  // fighting its own in-flight `requestAnimationFrame` batching — can always
-  // read the CURRENT zoom without going stale inside its closure.
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
+  // Kept in sync every render (not just on change) so the wheel listener and
+  // the pan pointer-move handler below — both read this inside a
+  // `requestAnimationFrame`-batched closure that must never go stale — can
+  // always read the CURRENT camera without depending on `camera` itself (a
+  // dependency that would tear down/re-attach the wheel listener on every
+  // zoom, fighting its own in-flight batching).
+  const cameraRef = useRef(camera);
+  cameraRef.current = camera;
+
+  // A pending pan frame: the LATEST candidate camera from a still-in-flight
+  // pointermove batch, and the `requestAnimationFrame` id flushing it — see
+  // the file header's Performance note. `target` is read (and cleared) by
+  // `endDrag` on pointerup/cancel to commit the final position even if a
+  // frame is still pending.
+  const panFrameRef = useRef<{ id: number | null; target: Camera | null }>({ id: null, target: null });
 
   // Space temporarily forces the hand tool regardless of the selected one —
   // see the file header. Every pointer handler below branches on THIS, never
@@ -168,17 +207,30 @@ export default function WorksheetZoneEditor({
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
 
-  // The DISPLAYED size, after rotation — every fit/content-box calculation
-  // below must use this, not `image.width`/`image.height` directly (a 90/270
-  // rotation swaps the two).
-  const displaySize = rotatedSize(image, rotation);
+  // The DISPLAYED size, after rotation — every fit/camera calculation below
+  // must use this, not `image.width`/`image.height` directly (a 90/270
+  // rotation swaps the two). MEMOIZED (canvas camera pass): `rotatedSize`
+  // returns a fresh object every call, and it feeds the camera
+  // reconcile effect's own dependency array below — an unmemoized new
+  // reference on EVERY render would re-run that effect every render, and
+  // since a `Camera` is an object (never `Object.is`-equal to the last one
+  // even with identical numbers, unlike the old plain-number `zoom` state),
+  // that would call `setCamera` every render, in turn causing another
+  // render — an infinite loop. Keying on the primitive `width`/`height`/
+  // `rotation` values (not the `image` prop's own object identity) means
+  // this stays stable even if a parent re-renders with a structurally
+  // identical but newly-allocated `image` object.
+  const displaySize = useMemo(
+    () => rotatedSize(image, rotation),
+    [image.width, image.height, rotation],
+  );
 
-  const computeFitZoom = useCallback(() => {
+  const viewportSize = useCallback((): Size => {
     const el = viewportRef.current;
-    if (!el) return 1;
+    if (!el) return { width: 0, height: 0 };
     const box = el.getBoundingClientRect();
-    return fitZoom({ width: box.width, height: box.height }, displaySize);
-  }, [displaySize]);
+    return { width: box.width, height: box.height };
+  }, []);
 
   // Default view is fit-to-view (decision #5: the whole worksheet visible on
   // load, however tall/portrait it is — and again on the block re-opening,
@@ -192,64 +244,63 @@ export default function WorksheetZoneEditor({
   // active, or the properties panel reflowing all change this element's
   // height with no window resize event at all.
   //
-  // FIT BUG FIX (canvas tools pass): this used to be a plain `useEffect`
-  // that only (re)computed fit INSIDE the `ResizeObserver`'s own callback —
-  // relying entirely on the observer firing once, asynchronously, right
-  // after `observe()`. That is correct per spec, but it raced the very
-  // first paint: `zoom` started at the hardcoded 100% (see its `useState`
-  // above) and stayed there — a real, wrong-looking "fit is broken, shows
-  // 100% instead" — until that async callback eventually landed. Computing
-  // the fit SYNCHRONOUSLY here, in a `useLayoutEffect` (runs after the DOM
-  // is committed but before the browser paints), removes that race
-  // entirely: the very first paint already shows the correct fit zoom. The
-  // observer below still exists, unchanged, to re-fit on LATER resizes
-  // (sibling block collapsing, properties panel reflowing, etc.) — jsdom has
-  // no `ResizeObserver` (see this file's own tests, which mock it where the
-  // behavior matters), guarded the same way `WorksheetPlayer.tsx`'s own
-  // resize watcher is.
+  // FIT BUG FIX (canvas tools pass), STILL synchronous here (canvas camera
+  // pass): computing the fit camera in a `useLayoutEffect` (runs after the
+  // DOM is committed but before the browser paints) removes the race
+  // against the very first paint that a plain `useEffect` + async
+  // `ResizeObserver` callback alone would have. The observer below re-runs
+  // this on LATER resizes; while NOT in fit mode, a resize RE-CLAMPS the
+  // user's own camera instead (see the file header) rather than leaving it
+  // referencing a viewport size that no longer exists.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
-    if (fitMode) setZoom(computeFitZoom());
+    const reconcile = () => {
+      const vp = viewportSize();
+      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCamera(prev, displaySize, vp)));
+    };
+    reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(() => {
-      if (fitMode) setZoom(computeFitZoom());
-    });
+    const observer = new ResizeObserver(reconcile);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [fitMode, computeFitZoom]);
+  }, [fitMode, displaySize, viewportSize]);
 
-  const applyZoom = useCallback((next: number, anchor?: { x: number; y: number }) => {
-    setFitMode(false);
-    setZoom((prev) => {
-      const clamped = clampZoom(next);
-      const viewport = viewportRef.current;
-      if (viewport && anchor) {
-        const nextScroll = zoomAroundPoint(
-          anchor,
-          { left: viewport.scrollLeft, top: viewport.scrollTop },
-          prev,
-          clamped,
-        );
-        // Applied after the state write lands, once the content box's new
-        // (zoomed) size is actually in the DOM — a same-tick write would
-        // clamp against the OLD scrollable range.
-        requestAnimationFrame(() => {
-          if (!viewportRef.current) return;
-          viewportRef.current.scrollLeft = nextScroll.left;
-          viewportRef.current.scrollTop = nextScroll.top;
-        });
-      }
-      return clamped;
-    });
-  }, []);
+  // Zoom to `nextScale` (already computed/clamped by the caller — see
+  // `stepZoomInput`/`wheelZoomInput`/the typed % field below), anchored at
+  // `anchor` (viewport-relative pixels) or the viewport's own center when no
+  // anchor is given (a plain button/keyboard zoom has no pointer position to
+  // anchor to). Always turns fit mode off — an explicit zoom is the user
+  // taking the camera away from "whatever fits".
+  const applyCameraZoom = useCallback(
+    (nextScale: number, anchor?: { x: number; y: number }) => {
+      setFitMode(false);
+      setCamera((prev) => {
+        const vp = viewportSize();
+        const point = anchor ?? { x: vp.width / 2, y: vp.height / 2 };
+        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp });
+      });
+    },
+    [displaySize, viewportSize],
+  );
 
-  const handleZoomIn = useCallback(() => applyZoom(stepZoom(zoom, 'in')), [applyZoom, zoom]);
-  const handleZoomOut = useCallback(() => applyZoom(stepZoom(zoom, 'out')), [applyZoom, zoom]);
+  // Unified 10%-400% range for every explicit zoom entry point in this
+  // editor (owner-approved design) — `stepZoomInput`/`wheelZoomInput` are
+  // the WIDER-floor siblings of `stepZoom`/`wheelZoom`
+  // (`WorksheetPracticePlayer.tsx` keeps using the narrower, unchanged
+  // originals directly — see `canvasViewport.ts`'s own header on each).
+  const handleZoomIn = useCallback(
+    () => applyCameraZoom(stepZoomInput(camera.scale, 'in')),
+    [applyCameraZoom, camera.scale],
+  );
+  const handleZoomOut = useCallback(
+    () => applyCameraZoom(stepZoomInput(camera.scale, 'out')),
+    [applyCameraZoom, camera.scale],
+  );
   const handleZoomFit = useCallback(() => {
     setFitMode(true);
-    setZoom(computeFitZoom());
-  }, [computeFitZoom]);
+    setCamera(fitCamera(displaySize, viewportSize()));
+  }, [displaySize, viewportSize]);
 
   // Wheel over the canvas viewport zooms, in EITHER tool (owner-approved
   // design — no Ctrl/⌘ required any more; Ctrl/⌘+wheel still zooms the same
@@ -263,12 +314,12 @@ export default function WorksheetZoneEditor({
   //
   // BATCHED PER ANIMATION FRAME: a trackpad/high-resolution wheel can fire
   // many `wheel` events within a single frame; applying each one immediately
-  // (the previous behavior) meant a zoom + scroll-compensation DOM write per
+  // (the previous behavior) meant a zoom + camera-recompute DOM write per
   // event, which was visibly janky. Every event in the same frame instead
   // only accumulates `deltaY` and remembers the latest pointer anchor; ONE
   // `requestAnimationFrame` flushes the accumulated delta through
-  // `wheelZoom` (proportional to the current zoom, clamped per frame — see
-  // `canvasViewport.ts`) right before the next paint.
+  // `wheelZoomInput` (proportional to the current zoom, clamped per frame —
+  // see `canvasViewport.ts`) right before the next paint.
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return undefined;
@@ -281,7 +332,7 @@ export default function WorksheetZoneEditor({
       const delta = accumulatedDelta;
       accumulatedDelta = 0;
       if (delta === 0 || !anchor) return;
-      applyZoom(wheelZoom(zoomRef.current, delta), anchor);
+      applyCameraZoom(wheelZoomInput(cameraRef.current.scale, delta), anchor);
     }
 
     function onWheel(e: WheelEvent) {
@@ -297,7 +348,7 @@ export default function WorksheetZoneEditor({
       viewport.removeEventListener('wheel', onWheel);
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, [applyZoom]);
+  }, [applyCameraZoom]);
 
   // V/H switch tools, 0 fits, +/- zoom, Space temporarily forces the hand
   // tool — all while the canvas viewport itself is focused (never global:
@@ -348,11 +399,7 @@ export default function WorksheetZoneEditor({
     }
     function onWindowBlur() {
       releaseSpace();
-      if (dragRef.current) {
-        dragRef.current = null;
-        setDraftRect(null);
-        setIsPanning(false);
-      }
+      if (dragRef.current) endDrag();
     }
     window.addEventListener('keyup', onWindowKeyUp);
     window.addEventListener('blur', onWindowBlur);
@@ -360,19 +407,22 @@ export default function WorksheetZoneEditor({
       window.removeEventListener('keyup', onWindowKeyUp);
       window.removeEventListener('blur', onWindowBlur);
     };
+    // `endDrag` is declared below with `useCallback([])` (stable identity),
+    // so it is safe to reference here without adding it to the deps array
+    // and re-subscribing every render — matches this effect's original,
+    // mount-only shape.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const containerSize = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return { width: 0, height: 0 };
-    const box = el.getBoundingClientRect();
-    return { width: box.width, height: box.height };
-  }, []);
-
+  // Convert a pointer event into the content layer's own NATIVE (unscaled)
+  // pixel space — see the file header's Camera note. Every draw/move/resize
+  // call below already expects points in exactly this space (the same one
+  // `displaySize` describes), regardless of the current `camera.scale`.
   const pointFromEvent = useCallback((e: { clientX: number; clientY: number }) => {
-    const el = containerRef.current;
+    const el = viewportRef.current;
     const box = el?.getBoundingClientRect() ?? { left: 0, top: 0 };
-    return { x: e.clientX - box.left, y: e.clientY - box.top };
+    const screenPoint = { x: e.clientX - box.left, y: e.clientY - box.top };
+    return screenToContentPoint(screenPoint, cameraRef.current);
   }, []);
 
   const updateZoneRect = useCallback(
@@ -389,13 +439,11 @@ export default function WorksheetZoneEditor({
   // autoscroll UI on a middle-button press unless it's prevented.
   const startPan = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const viewport = viewportRef.current;
     dragRef.current = {
       kind: 'pan',
       startClientX: e.clientX,
       startClientY: e.clientY,
-      startScrollLeft: viewport?.scrollLeft ?? 0,
-      startScrollTop: viewport?.scrollTop ?? 0,
+      startCamera: cameraRef.current,
     };
     setIsPanning(true);
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -468,33 +516,26 @@ export default function WorksheetZoneEditor({
       if (!drag) return;
 
       if (drag.kind === 'pan') {
-        const viewport = viewportRef.current;
-        if (viewport) {
-          const proposed = {
-            left: drag.startScrollLeft - (e.clientX - drag.startClientX),
-            top: drag.startScrollTop - (e.clientY - drag.startClientY),
-          };
-          // Pan bounds (canvas tools pass): the content box may be dragged
-          // until (at most) its far edge reaches the viewport's own center —
-          // see `clampPanScroll`'s own header. A no-op once content is
-          // bigger than the viewport (the browser's own native scroll
-          // clamping is already tighter there); it only actually matters
-          // once zoomed out below the viewport's own size, where there is no
-          // native scrollable range at all.
-          const viewportBox = viewport.getBoundingClientRect();
-          const content = contentSize(displaySize, zoom);
-          const clamped = clampPanScroll(
-            proposed,
-            { width: viewportBox.width, height: viewportBox.height },
-            content,
-          );
-          viewport.scrollLeft = clamped.left;
-          viewport.scrollTop = clamped.top;
+        // Never `setCamera` per pointer event here — see the file header's
+        // Performance note. Only the LATEST candidate is kept; at most one
+        // `requestAnimationFrame` is ever in flight for this drag.
+        const dx = e.clientX - drag.startClientX;
+        const dy = e.clientY - drag.startClientY;
+        const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() });
+        panFrameRef.current.target = next;
+        if (panFrameRef.current.id == null) {
+          panFrameRef.current.id = requestAnimationFrame(() => {
+            panFrameRef.current.id = null;
+            const cam = panFrameRef.current.target;
+            if (cam) {
+              cameraRef.current = cam;
+              setCamera(cam);
+            }
+          });
         }
         return;
       }
 
-      const size = containerSize();
       const point = pointFromEvent(e);
 
       if (drag.kind === 'draw') {
@@ -502,13 +543,13 @@ export default function WorksheetZoneEditor({
         // the CURRENT pointer position on every move, and committed as a
         // real zone only on pointer up (or discarded if it never grew past
         // the minimum size — see `handlePointerUp`).
-        setDraftRect(rectFromDrag(drag.start, point, size));
+        setDraftRect(rectFromDrag(drag.start, point, displaySize));
         return;
       }
-      if (size.width <= 0 || size.height <= 0) return;
+      if (displaySize.width <= 0 || displaySize.height <= 0) return;
 
-      const dx = (point.x - drag.start.x) / size.width;
-      const dy = (point.y - drag.start.y) / size.height;
+      const dx = (point.x - drag.start.x) / displaySize.width;
+      const dy = (point.y - drag.start.y) / displaySize.height;
 
       if (drag.kind === 'move') {
         // Live frame: no undo step per pixel — see `ZonesChangeOptions`.
@@ -517,13 +558,32 @@ export default function WorksheetZoneEditor({
         updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
       }
     },
-    [containerSize, pointFromEvent, updateZoneRect, displaySize, zoom],
+    [pointFromEvent, updateZoneRect, displaySize, viewportSize],
   );
 
   const endDrag = useCallback(() => {
+    const drag = dragRef.current;
     dragRef.current = null;
     setDraftRect(null);
     setIsPanning(false);
+    if (panFrameRef.current.id != null) {
+      cancelAnimationFrame(panFrameRef.current.id);
+      panFrameRef.current.id = null;
+    }
+    if (drag?.kind === 'pan') {
+      // Commit the FINAL camera synchronously, even if a batched frame was
+      // still pending — see the file header's Performance note.
+      const finalCamera = panFrameRef.current.target ?? drag.startCamera;
+      panFrameRef.current.target = null;
+      cameraRef.current = finalCamera;
+      setCamera(finalCamera);
+      // An actual pan (not just a middle-click with zero movement) exits fit
+      // mode too — otherwise the NEXT resize-driven re-fit would silently
+      // discard it (see the file header).
+      if (finalCamera.x !== drag.startCamera.x || finalCamera.y !== drag.startCamera.y) {
+        setFitMode(false);
+      }
+    }
   }, []);
 
   const handlePointerUp = useCallback(
@@ -540,9 +600,8 @@ export default function WorksheetZoneEditor({
       }
       if (!drag || drag.kind !== 'draw') return;
 
-      const size = containerSize();
       const end = pointFromEvent(e);
-      if (size.width <= 0 || size.height <= 0) return;
+      if (displaySize.width <= 0 || displaySize.height <= 0) return;
 
       // A drag that never grew past the minimum zone size (including a
       // plain click with no movement at all) is discarded rather than
@@ -550,16 +609,16 @@ export default function WorksheetZoneEditor({
       // zone. `MIN_ZONE_SIZE` is `zoneGeometry.ts`'s own floor, checked here
       // on the RAW (unclamped) drag distance before `rectFromDrag` would
       // otherwise floor it up to a real zone.
-      const rawW = Math.abs(end.x - drag.start.x) / size.width;
-      const rawH = Math.abs(end.y - drag.start.y) / size.height;
+      const rawW = Math.abs(end.x - drag.start.x) / displaySize.width;
+      const rawH = Math.abs(end.y - drag.start.y) / displaySize.height;
       if (rawW < MIN_ZONE_SIZE && rawH < MIN_ZONE_SIZE) return;
 
-      const rect = rectFromDrag(drag.start, end, size);
+      const rect = rectFromDrag(drag.start, end, displaySize);
       const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
       onZonesChange([...zones, zone]);
       onSelectZone(zone.id);
     },
-    [containerSize, pointFromEvent, zones, onZonesChange, onSelectZone, endDrag],
+    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize],
   );
 
   const handlePointerCancel = useCallback(() => {
@@ -646,35 +705,36 @@ export default function WorksheetZoneEditor({
   );
 
   // Editable zoom % field (owner-approved design): a local "draft" string,
-  // kept in sync with the actual `zoom` whenever the input is NOT focused (a
-  // toolbar zoom, Ajustar, a wheel, or a resize-driven re-fit must all still
-  // update the displayed number), left alone while the author is actively
-  // typing so their keystrokes are never clobbered mid-edit.
+  // kept in sync with the actual `camera.scale` whenever the input is NOT
+  // focused (a toolbar zoom, Ajustar, a wheel, a pan, or a resize-driven
+  // re-fit/re-clamp must all still update the displayed number), left alone
+  // while the author is actively typing so their keystrokes are never
+  // clobbered mid-edit.
   const zoomInputFocusedRef = useRef(false);
   const [zoomDraft, setZoomDraft] = useState('100');
   useEffect(() => {
-    if (!zoomInputFocusedRef.current) setZoomDraft(String(Math.round(zoom * 100)));
-  }, [zoom]);
+    if (!zoomInputFocusedRef.current) setZoomDraft(String(Math.round(camera.scale * 100)));
+  }, [camera.scale]);
 
   const handleZoomInputFocus = useCallback(() => {
     zoomInputFocusedRef.current = true;
   }, []);
 
   // Enter or blur applies; accepts "80" or "80%"; an unparseable value
-  // reverts to the last-applied zoom instead of guessing. Wider clamp than
-  // the toolbar buttons (10%–400% — see `clampZoomInput`'s own header).
+  // reverts to the last-applied zoom instead of guessing. Same unified
+  // 10%-400% clamp as every other zoom entry point in this editor now (see
+  // `handleZoomIn`/`handleZoomOut`'s own header).
   const commitZoomDraft = useCallback(() => {
     zoomInputFocusedRef.current = false;
     const parsed = parseZoomPercentInput(zoomDraft);
     if (parsed === null) {
-      setZoomDraft(String(Math.round(zoom * 100)));
+      setZoomDraft(String(Math.round(camera.scale * 100)));
       return;
     }
     const clamped = clampZoomInput(parsed / 100);
-    setFitMode(false);
-    setZoom(clamped);
+    applyCameraZoom(clamped);
     setZoomDraft(String(Math.round(clamped * 100)));
-  }, [zoomDraft, zoom]);
+  }, [zoomDraft, camera.scale, applyCameraZoom]);
 
   const handleZoomInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -685,19 +745,13 @@ export default function WorksheetZoneEditor({
       } else if (e.key === 'Escape') {
         e.preventDefault();
         zoomInputFocusedRef.current = false;
-        setZoomDraft(String(Math.round(zoom * 100))); // revert, discard the draft
+        setZoomDraft(String(Math.round(camera.scale * 100))); // revert, discard the draft
         e.currentTarget.blur();
       }
     },
-    [commitZoomDraft, zoom],
+    [commitZoomDraft, camera.scale],
   );
 
-  const canvasSize = contentSize(displaySize, zoom);
-  // The <img> itself always renders at its OWN (unrotated) content size —
-  // rotation is a pure CSS transform around its center, and the OUTER
-  // canvas (sized to `canvasSize` above, using the ROTATED dimensions) is
-  // what the rotated image ends up filling exactly.
-  const imageContentSize = contentSize(image, zoom);
   // Cursor reflects the EFFECTIVE tool (Space's temporary hand included),
   // not the persisted `tool` — see the file header.
   const canvasCursorClass = isPanning
@@ -747,7 +801,12 @@ export default function WorksheetZoneEditor({
           <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
           {/* Tool toggle (owner-approved design): icon-only, active tool in
               brand yellow (`variant="default"`) — replaces the old
-              25/50/100/125 preset row and the "+ Zona" button entirely. */}
+              25/50/100/125 preset row and the "+ Zona" button entirely. The
+              Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
+              same weight) as the side toolbar's "Agregar bloque" button, to
+              match this tool's own crosshair cursor — see
+              `EditorSideToolbar.tsx`'s `toolbar-add-block`. Its own tooltip
+              stays "Zona (V)"; only the icon is shared. */}
           <Button
             type="button"
             size="icon-sm"
@@ -758,7 +817,7 @@ export default function WorksheetZoneEditor({
             data-testid="tool-zone"
             onClick={() => setTool('zone')}
           >
-            <BoundingBoxIcon aria-hidden="true" />
+            <PlusIcon aria-hidden="true" />
           </Button>
           <Button
             type="button"
@@ -785,8 +844,10 @@ export default function WorksheetZoneEditor({
           // `100dvh`-based column) instead of a fixed/clamped CSS height —
           // `min-h-80` is only a FLOOR so it still renders usably outside
           // that flex chain (narrow/stacked layout below `lg:`, or a test
-          // harness with no real layout).
-          className="relative min-h-80 flex-1 overflow-auto rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          // harness with no real layout). `overflow-hidden`, no native
+          // scrollbars (canvas camera pass) — panning is entirely the
+          // content layer's own CSS transform now, never native scroll.
+          className="relative min-h-80 flex-1 overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div
             ref={containerRef}
@@ -801,8 +862,14 @@ export default function WorksheetZoneEditor({
             // leaving the DOM, etc). Bubbles up from a zone/handle child the
             // same way `onPointerCancel` already does — see the file header.
             onLostPointerCapture={handlePointerCancel}
-            className={`relative touch-none select-none ${canvasCursorClass}`}
-            style={{ width: canvasSize.width, height: canvasSize.height }}
+            className={`absolute left-0 top-0 touch-none select-none ${canvasCursorClass}`}
+            style={{
+              width: displaySize.width,
+              height: displaySize.height,
+              transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+              transformOrigin: '0 0',
+              willChange: isPanning ? 'transform' : undefined,
+            }}
           >
             <img
               src={imageUrl}
@@ -812,12 +879,14 @@ export default function WorksheetZoneEditor({
               style={{
                 top: '50%',
                 left: '50%',
-                width: imageContentSize.width,
-                height: imageContentSize.height,
+                width: image.width,
+                height: image.height,
                 // Rotation (creator polish round 2) is a pure CSS transform
-                // around the image's own center — the outer canvas above is
-                // already sized to the ROTATED dimensions, so the rotated
-                // image exactly fills it.
+                // around the image's own center — the outer content layer
+                // above is already sized to the ROTATED dimensions
+                // (`displaySize`), so the rotated image exactly fills it.
+                // The camera's own scale/translate lives on that OUTER
+                // layer, so this transform stays rotation-only.
                 transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
               }}
             />

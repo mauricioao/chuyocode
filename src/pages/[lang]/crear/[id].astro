@@ -58,30 +58,33 @@ if (!activity) {
 const t = UI_LABELS[lang].activities.editor;
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} fullHeight>
   {/*
-    One-screen creator layout (desktop only), creator polish round 3: the
-    editor is ONE framed card with real breathing room from the site header
-    AND the footer — never glued to either. The back-button row below (site-
-    wide navigation, PR "Navigation + Inglés hub") has NO page-level title to
-    sit beside — the activity's own title is an editable field INSIDE
-    `ActivityEditorIsland`'s card header, a different thing — so it renders
-    as its own row above this section instead of inline with a `<h1>`.
-    `lg:pt-6` (wrapper) + `lg:pb-6` (section) together are the same 1.5rem
-    top + 1.5rem bottom margin this layout always had; the back-button row
-    ADDS its own `h-9` + `mb-3` = `3rem` on top of that. `ActivityEditorIsland`'s
-    own root sizes itself to `calc(100dvh - <site header height> - 3rem -
-    3rem)` (the original margin, then the back-button row) — so THIS markup
-    and that calc must change together (see its own comment). Horizontal
-    padding is untouched; below `lg:` this keeps its normal padded,
-    scrollable layout.
+    One-screen creator layout (desktop only, `lg:`), NO PAGE-LEVEL SCROLL
+    (floating side toolbar pass, owner request: the old dedicated
+    back-button row above this section was empty dead space once the back
+    button itself went floating/sticky — see `BackButton.astro`'s own
+    header — so it is gone at `lg:`; only the editor's OWN interior areas
+    (block list, properties panel) scroll, via `<BaseLayout fullHeight>`
+    above). Below `lg:` this whole page is untouched: the back button keeps
+    its own row here, and the page scrolls normally with everything in it —
+    narrow screens never got the dedicated-row treatment in the first place.
   */}
-  <div class="mx-auto flex w-full max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12 lg:px-8 lg:pt-6">
-    <div class="mb-3 flex lg:mb-3">
+  <div class="mx-auto flex w-full max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12 lg:hidden">
+    <div class="mb-3 flex">
       <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
     </div>
   </div>
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-8 sm:px-6 sm:pb-12 lg:gap-0 lg:px-8 lg:pb-6">
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-8 sm:px-6 sm:pb-12 lg:h-full lg:min-h-0 lg:flex-row lg:items-start lg:gap-0 lg:px-8 lg:py-6">
+    {/* `lg:`-only: the SAME `BackButton`, floating sticky in the left
+        gutter (see its own header) — the first item of this row, so its
+        normal-flow starting position lines up with the card's own top edge
+        (`items-start` on the row). No reserved height of its own: it
+        overlaps into the gutter via its own `-ml-12`, so the row's actual
+        width is unaffected by its presence. */}
+    <div class="hidden lg:flex lg:flex-none">
+      <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
+    </div>
     <ActivityEditorIsland
       client:load
       lang={lang}
