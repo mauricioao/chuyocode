@@ -203,3 +203,57 @@ export async function countUserUploads(userId: string): Promise<number | null> {
     return null;
   }
 }
+
+/**
+ * Copy an approved upload from the PRIVATE `activity-uploads` bucket to its
+ * moderator-approved home in the PUBLIC `activity-images` bucket (PR E,
+ * "Moderation"). Called by `aprobar.ts` for every worksheet image the
+ * revision being approved references, BEFORE the approval RPC itself runs —
+ * see that endpoint's own header for why (copy first: an RPC failure after a
+ * successful copy leaves a harmless orphan, never a live activity pointing
+ * at a path nothing backs).
+ *
+ * `fromPath` must be a well-formed `activity-uploads/…` path and `toPath` a
+ * well-formed `activity-images/…` one — both checked with {@link parseImagePath}
+ * rather than trusted from the caller, even though the caller (`aprobar.ts`)
+ * already derives `toPath` itself via {@link approvedImagePath}.
+ *
+ * IDEMPOTENT: if an object already sits at `toPath` (a retried approval, or
+ * two images that happen to share an id across revisions), the existing copy
+ * is left untouched and this returns `true` without writing again.
+ */
+export async function copyToImagesBucket(fromPath: string, toPath: string): Promise<boolean> {
+  const fromParsed = parseImagePath(fromPath);
+  const toParsed = parseImagePath(toPath);
+  if (!fromParsed || fromParsed.bucket !== UPLOADS_BUCKET) return false;
+  if (!toParsed || toParsed.bucket !== IMAGES_BUCKET) return false;
+
+  const client = getClient();
+  if (!client) return false;
+
+  try {
+    const objectName = `${toParsed.objectId}.webp`;
+    const { data: existing, error: listError } = await client.storage
+      .from(IMAGES_BUCKET)
+      .list(toParsed.ownerId, { search: objectName });
+    if (listError) {
+      console.error('[activities/storage] copyToImagesBucket list failed:', listError.message);
+      return false;
+    }
+    if (Array.isArray(existing) && existing.some((file) => file.name === objectName)) {
+      return true;
+    }
+
+    const { error } = await client.storage
+      .from(UPLOADS_BUCKET)
+      .copy(fromParsed.objectPath, toParsed.objectPath, { destinationBucket: IMAGES_BUCKET });
+    if (error) {
+      console.error('[activities/storage] copyToImagesBucket copy failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[activities/storage] copyToImagesBucket threw:', err);
+    return false;
+  }
+}
