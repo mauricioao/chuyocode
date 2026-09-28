@@ -45,6 +45,14 @@ export interface Zone {
   answers: string[];
   /** `choice` only: the offered options, which must include every answer. */
   options?: string[];
+  /**
+   * Optional author-supplied text for the "Escuchar/Listen" affordance (D4)
+   * — a worksheet is an uploaded IMAGE, so unlike a `quiz` slot's own
+   * `label` there is no machine-readable text to read aloud unless the
+   * author types one. `undefined` = no affordance for this zone. Trimmed,
+   * non-empty, capped at {@link MAX_ZONE_SPEAK_LENGTH} characters.
+   */
+  speak?: string;
 }
 
 /** A worksheet image's rotation, clockwise from its uploaded orientation. */
@@ -88,6 +96,9 @@ export const MAX_ZONES_PER_WORKSHEET = 60;
 
 /** A block's author-editable name may not exceed this many characters. */
 export const MAX_BLOCK_NAME_LENGTH = 60;
+
+/** A zone's optional "Escuchar/Listen" text (D4) may not exceed this many characters. */
+export const MAX_ZONE_SPEAK_LENGTH = 200;
 
 /**
  * `parseBlocks`' two validation postures (creator polish round 3, owner
@@ -188,6 +199,9 @@ function parseZone(value: unknown, mode: BlocksParseMode): Zone | null {
   const answers = parseTrimmedStrings(value.answers);
   if (mode === 'submit' && answers.length === 0) return null;
 
+  const speak = parseZoneSpeak(value.speak);
+  if (speak === INVALID_SPEAK) return null;
+
   const zone: Zone = {
     id: value.id,
     x: value.x,
@@ -197,6 +211,7 @@ function parseZone(value: unknown, mode: BlocksParseMode): Zone | null {
     kind,
     answers,
   };
+  if (speak !== undefined) zone.speak = speak;
 
   if (kind === 'choice') {
     const options = parseTrimmedStrings(value.options);
@@ -208,6 +223,24 @@ function parseZone(value: unknown, mode: BlocksParseMode): Zone | null {
   }
 
   return zone;
+}
+
+/**
+ * Parse a zone's optional `speak` text (D4, "Escuchar/Listen"), or the
+ * sentinel `INVALID_SPEAK` if present but unusable — same all-or-nothing
+ * posture as {@link parseName}: a non-string, or one that stays over
+ * {@link MAX_ZONE_SPEAK_LENGTH} after trimming, fails the WHOLE block. A
+ * missing value, or one that is blank after trimming, is NOT an error: both
+ * parse to `undefined`, meaning "no affordance for this zone".
+ */
+const INVALID_SPEAK = Symbol('invalid-speak');
+
+function parseZoneSpeak(value: unknown): string | undefined | typeof INVALID_SPEAK {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return INVALID_SPEAK;
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_ZONE_SPEAK_LENGTH) return INVALID_SPEAK;
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 /**

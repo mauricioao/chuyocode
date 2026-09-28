@@ -173,6 +173,66 @@ describe('WorksheetPracticePlayerMobile — per-zone bottom sheet', () => {
   });
 });
 
+/** D4 "Escuchar/Listen": the sheet's own SpeakButton, next to the input. */
+describe('WorksheetPracticePlayerMobile — speak affordance (D4)', () => {
+  const BLOCK_WITH_SPEAK: WorksheetBlock = {
+    ...BLOCK,
+    zones: BLOCK.zones.map((z) => (z.id === 'top-left' ? { ...z, speak: 'The cat sat.' } : z)),
+  };
+
+  function HarnessWithSpeak() {
+    const [values, setValues] = useState<Record<string, string>>({});
+    return (
+      <WorksheetPracticePlayerMobile
+        lang="es"
+        block={BLOCK_WITH_SPEAK}
+        imageUrl="/img.webp"
+        practice={{ values, onChange: (id, v) => setValues((prev) => ({ ...prev, [id]: v })) }}
+      />
+    );
+  }
+
+  function installSynth() {
+    Object.defineProperty(window, 'speechSynthesis', {
+      value: { getVoices: () => [], speak: vi.fn(), cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      value: class {
+        constructor(public text: string) {}
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'speechSynthesis');
+    Reflect.deleteProperty(window, 'SpeechSynthesisUtterance');
+  });
+
+  it('shows no speak button for a zone with no speak text', () => {
+    installSynth();
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.queryByTestId('speak-button')).toBeNull();
+  });
+
+  it('shows a speak button next to the input for a zone with speak text', () => {
+    installSynth();
+    render(<HarnessWithSpeak />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.getByTestId('speak-button')).toBeTruthy();
+  });
+
+  it('renders nothing when speechSynthesis is unsupported (jsdom default)', () => {
+    render(<HarnessWithSpeak />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.queryByTestId('speak-button')).toBeNull();
+  });
+});
+
 describe('WorksheetPracticePlayerMobile — pinch/pan camera wiring', () => {
   it('a two-finger pinch scales the content layer and exits fit mode (touch-action switches to none)', () => {
     render(<Harness />);

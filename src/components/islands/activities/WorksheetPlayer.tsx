@@ -26,6 +26,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import SpeakButton from '@/lib/speech/SpeakButton';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 import { zoneAnswerFontSize } from '@/lib/activities/zoneAnswerDisplay';
@@ -238,6 +239,21 @@ export default function WorksheetPlayer({
                 <span data-testid={`player-zone-result-${zone.id}`} className="sr-only">
                   {statusLabel}
                 </span>
+              )}
+              {/* D4 "Escuchar/Listen": a small speaker affordance for a zone
+                  the author gave text to — a worksheet is an uploaded image
+                  with no machine-readable text otherwise. Same in the
+                  editor's own preview mode (`practice` omitted) and the real
+                  practice player. A corner badge rather than inline: the
+                  zone box is sized to the drawn rectangle, often far too
+                  small to fit a button beside its input. */}
+              {zone.speak && (
+                <div
+                  data-testid={`player-zone-speak-${zone.id}`}
+                  className="absolute -right-2 -top-2 z-10 rounded-full bg-card shadow-sm"
+                >
+                  <SpeakButton text={zone.speak} lang={lang} compact />
+                </div>
               )}
             </div>
           );

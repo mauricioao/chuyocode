@@ -82,7 +82,7 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
+import { MAX_ZONE_SPEAK_LENGTH, type ImageRef, type Rotation, type Zone } from '@/lib/activities/blocks';
 import {
   rectFromDrag,
   moveRect,
@@ -813,7 +813,16 @@ export default function WorksheetZoneEditor({
       if (!selectedZone) return;
       const next: Zone =
         kind === 'text'
-          ? { id: selectedZone.id, x: selectedZone.x, y: selectedZone.y, w: selectedZone.w, h: selectedZone.h, kind: 'text', answers: selectedZone.answers.length > 0 ? selectedZone.answers : [''] }
+          ? {
+              id: selectedZone.id,
+              x: selectedZone.x,
+              y: selectedZone.y,
+              w: selectedZone.w,
+              h: selectedZone.h,
+              kind: 'text',
+              answers: selectedZone.answers.length > 0 ? selectedZone.answers : [''],
+              speak: selectedZone.speak,
+            }
           : {
               id: selectedZone.id,
               x: selectedZone.x,
@@ -823,6 +832,7 @@ export default function WorksheetZoneEditor({
               kind: 'choice',
               answers: [],
               options: selectedZone.options && selectedZone.options.length >= 2 ? selectedZone.options : ['', ''],
+              speak: selectedZone.speak,
             };
       onZonesChange(zones.map((z) => (z.id === next.id ? next : z)));
     },
@@ -833,6 +843,24 @@ export default function WorksheetZoneEditor({
     (answers: string[]) => {
       if (!selectedZone) return;
       onZonesChange(zones.map((z) => (z.id === selectedZone.id ? { ...z, answers } : z)));
+    },
+    [selectedZone, zones, onZonesChange],
+  );
+
+  /**
+   * D4 "Escuchar/Listen": the zone's optional speak text. An empty field
+   * clears the affordance entirely (stored as `undefined`, matching
+   * `parseZone`'s own "blank after trim = absent" rule) rather than an
+   * empty string, so a cleared field and a never-set one are the same
+   * on-disk shape.
+   */
+  const setSpeak = useCallback(
+    (speak: string) => {
+      if (!selectedZone) return;
+      const trimmed = speak.trim();
+      onZonesChange(
+        zones.map((z) => (z.id === selectedZone.id ? { ...z, speak: trimmed.length > 0 ? speak : undefined } : z)),
+      );
     },
     [selectedZone, zones, onZonesChange],
   );
@@ -967,6 +995,23 @@ export default function WorksheetZoneEditor({
         >
           {t.zoneKindChoice}
         </Button>
+      </div>
+
+      {/* D4 "Escuchar/Listen": optional per-zone text for the practice
+          player's speaker affordance — a worksheet image has no
+          machine-readable text otherwise. Applies to both zone kinds. */}
+      <div className="mt-4 flex flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">{t.zoneSpeakLabel}</span>
+        <input
+          type="text"
+          data-testid="zone-properties-speak-input"
+          aria-label={t.zoneSpeakLabel}
+          value={selectedZone.speak ?? ''}
+          maxLength={MAX_ZONE_SPEAK_LENGTH}
+          placeholder={t.zoneSpeakPlaceholder}
+          onChange={(e) => setSpeak(e.target.value)}
+          className="h-8 rounded border border-border bg-background px-2 text-sm text-foreground"
+        />
       </div>
 
       {selectedZone.kind === 'text' && (

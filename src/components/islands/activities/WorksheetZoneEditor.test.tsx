@@ -268,6 +268,75 @@ describe('WorksheetZoneEditor — zone kind switching', () => {
   });
 });
 
+/** D4 "Escuchar/Listen" — the optional per-zone speak text field. */
+describe('WorksheetZoneEditor — speak text (D4)', () => {
+  it('starts empty for a zone with no speak text', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-speak-input') as HTMLInputElement;
+    expect(input.value).toBe('');
+  });
+
+  it('shows an already-authored speak text', () => {
+    const zone: Zone = {
+      id: 'z1',
+      x: 0.1,
+      y: 0.1,
+      w: 0.2,
+      h: 0.1,
+      kind: 'text',
+      answers: ['x'],
+      speak: 'The cat sat.',
+    };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-speak-input') as HTMLInputElement;
+    expect(input.value).toBe('The cat sat.');
+  });
+
+  it('types a speak text and keeps it on the zone', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-speak-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'The cat sat.' } });
+    expect(input.value).toBe('The cat sat.');
+  });
+
+  it('clearing the field back to blank drops the speak text entirely', () => {
+    const zone: Zone = {
+      id: 'z1',
+      x: 0.1,
+      y: 0.1,
+      w: 0.2,
+      h: 0.1,
+      kind: 'text',
+      answers: ['x'],
+      speak: 'The cat sat.',
+    };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-speak-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect(input.value).toBe('');
+  });
+
+  it('survives a text -> choice -> text kind switch', () => {
+    const zone: Zone = {
+      id: 'z1',
+      x: 0.1,
+      y: 0.1,
+      w: 0.2,
+      h: 0.1,
+      kind: 'text',
+      answers: ['x'],
+      speak: 'The cat sat.',
+    };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    fireEvent.click(screen.getByText('Opción'));
+    expect((screen.getByTestId('zone-properties-speak-input') as HTMLInputElement).value).toBe('The cat sat.');
+    fireEvent.click(screen.getByText('Texto'));
+    expect((screen.getByTestId('zone-properties-speak-input') as HTMLInputElement).value).toBe('The cat sat.');
+  });
+});
+
 describe('WorksheetZoneEditor — text answers', () => {
   it('adds and edits an answer', () => {
     const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['sat'] };

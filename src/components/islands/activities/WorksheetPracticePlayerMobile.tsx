@@ -36,6 +36,7 @@
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import SpeakButton from '@/lib/speech/SpeakButton';
 import type { WorksheetBlock, Zone } from '@/lib/activities/blocks';
 import {
   fitCamera,
@@ -256,41 +257,54 @@ export default function WorksheetPracticePlayerMobile({
         {activeZone && (
           <div className="flex flex-col gap-4">
             {activeZone.kind === 'text' ? (
-              <input
-                type="text"
-                autoFocus
-                data-testid="zone-sheet-text-input"
-                aria-label={t.textPlaceholder}
-                placeholder={t.textPlaceholder}
-                value={practice.values[activeZone.id] ?? ''}
-                disabled={practice.disabled}
-                onChange={(e) => practice.onChange(activeZone.id, e.target.value)}
-                className="h-12 w-full rounded-md border border-border bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              />
+              // D4 "Escuchar/Listen": the speak affordance sits next to the
+              // input itself (owner-approved design) — the tap target
+              // rendered behind this sheet stays a plain answer preview.
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  data-testid="zone-sheet-text-input"
+                  aria-label={t.textPlaceholder}
+                  placeholder={t.textPlaceholder}
+                  value={practice.values[activeZone.id] ?? ''}
+                  disabled={practice.disabled}
+                  onChange={(e) => practice.onChange(activeZone.id, e.target.value)}
+                  className="h-12 flex-1 rounded-md border border-border bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                />
+                {activeZone.speak && <SpeakButton text={activeZone.speak} lang={lang} />}
+              </div>
             ) : (
-              <div className="flex flex-col gap-2" role="radiogroup" aria-label={t.choicePlaceholder}>
-                {(activeZone.options ?? []).map((option) => {
-                  const selected = practice.values[activeZone.id] === option;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      disabled={practice.disabled}
-                      data-testid={`zone-sheet-option-${option}`}
-                      onClick={() => practice.onChange(activeZone.id, option)}
-                      className={cn(
-                        'min-h-11 w-full rounded-md border px-4 py-3 text-left text-base',
-                        selected
-                          ? 'border-primary bg-primary/10 text-foreground'
-                          : 'border-border bg-background text-foreground',
-                      )}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
+              <div className="flex flex-col gap-2">
+                {activeZone.speak && (
+                  <div className="flex justify-end">
+                    <SpeakButton text={activeZone.speak} lang={lang} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-2" role="radiogroup" aria-label={t.choicePlaceholder}>
+                  {(activeZone.options ?? []).map((option) => {
+                    const selected = practice.values[activeZone.id] === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={practice.disabled}
+                        data-testid={`zone-sheet-option-${option}`}
+                        onClick={() => practice.onChange(activeZone.id, option)}
+                        className={cn(
+                          'min-h-11 w-full rounded-md border px-4 py-3 text-left text-base',
+                          selected
+                            ? 'border-primary bg-primary/10 text-foreground'
+                            : 'border-border bg-background text-foreground',
+                        )}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
