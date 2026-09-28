@@ -374,6 +374,36 @@ export const UI_LABELS = {
         viewedBefore: 'Ya lo viste',
         viewedTimesMany: 'veces',
       },
+      // "Reportar" button + dialog on the practice page (PR E, "Moderation").
+      // Hidden for the activity's own author and for anonymous visitors —
+      // `POST /api/actividades/[id]/reportar` refuses both server-side too
+      // (`recordReport`'s own header).
+      report: {
+        button: 'Reportar',
+        dialogTitle: 'Reportar esta actividad',
+        reasonLabel: 'Motivo',
+        reasons: {
+          inappropriate: 'Contenido inapropiado',
+          off_topic: 'Fuera de tema',
+          copyright: 'Derechos de autor',
+          wrong_answers: 'Respuestas incorrectas',
+          other: 'Otro',
+        },
+        detailsLabel: 'Detalles (opcional)',
+        detailsPlaceholder: 'Agregar más información…',
+        cancel: 'Cancelar',
+        submit: 'Enviar reporte',
+        submitting: 'Enviando…',
+        success: 'Gracias, lo vamos a revisar.',
+        close: 'Cerrar',
+        // Keyed by the endpoint's own reason codes (`reportar.ts`'s header).
+        errors: {
+          self_report: 'No se puede reportar la propia actividad.',
+          invalid_reason: 'Elegir un motivo antes de enviar el reporte.',
+          invalid_details: 'Los detalles son demasiado largos.',
+          report_failed: 'No se pudo enviar el reporte. Intentar de nuevo.',
+        },
+      },
       // Author's own workspace (`/[lang]/mis-actividades`, PR D "Activities
       // practice"). Status badges reuse `editor.status*` rather than
       // duplicating them — same status vocabulary, same screen family.
@@ -824,6 +854,31 @@ export const UI_LABELS = {
         viewedFirstTime: 'First time',
         viewedBefore: "You've seen this",
         viewedTimesMany: 'times',
+      },
+      report: {
+        button: 'Report',
+        dialogTitle: 'Report this activity',
+        reasonLabel: 'Reason',
+        reasons: {
+          inappropriate: 'Inappropriate content',
+          off_topic: 'Off topic',
+          copyright: 'Copyright',
+          wrong_answers: 'Wrong answers',
+          other: 'Other',
+        },
+        detailsLabel: 'Details (optional)',
+        detailsPlaceholder: 'Add more information…',
+        cancel: 'Cancel',
+        submit: 'Send report',
+        submitting: 'Sending…',
+        success: "Thanks, we'll take a look.",
+        close: 'Close',
+        errors: {
+          self_report: 'You cannot report your own activity.',
+          invalid_reason: 'Choose a reason before sending the report.',
+          invalid_details: 'The details are too long.',
+          report_failed: 'Could not send the report. Try again.',
+        },
       },
       myActivities: {
         pageTitle: 'My activities',

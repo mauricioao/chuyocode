@@ -23,6 +23,7 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import ActivityPracticeIsland from '@components/islands/activities/ActivityPracticeIsland';
 import ActivityViewBadge from '@components/islands/activities/ActivityViewBadge';
+import ReportActivityButton from '@components/islands/activities/ReportActivityButton';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
 
@@ -47,6 +48,14 @@ if (!activity) {
 const t = UI_LABELS[lang].activities.practice;
 const levelLabels = UI_LABELS[lang].english.levels;
 
+// Hidden for the activity's own author and for anonymous visitors (this
+// route is already sign-in gated by the middleware, so `user` is expected
+// non-null here — the check stays defensive rather than assumed). The
+// endpoint refuses both cases again server-side (`recordReport`'s header);
+// this only decides whether the island is mounted at all.
+const user = Astro.locals.user;
+const canReport = user !== null && user.id !== activity.authorId;
+
 function resolveImageUrl(path: string): string {
   return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
 }
@@ -55,7 +64,12 @@ function resolveImageUrl(path: string): string {
 <BaseLayout lang={lang} title={activity.title} description={t.pageDescription}>
   <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
     <header class="flex flex-col gap-2">
-      <PageTitle lang={lang} backHref={`/${lang}/ingles/actividades`}>{activity.title}</PageTitle>
+      <PageTitle lang={lang} backHref={`/${lang}/ingles/actividades`}>
+        {activity.title}
+        {canReport && (
+          <ReportActivityButton slot="actions" client:load lang={lang} activityId={activity.id} />
+        )}
+      </PageTitle>
       <p class="text-sm text-zinc-400">
         {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}
       </p>
