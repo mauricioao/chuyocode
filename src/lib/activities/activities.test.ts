@@ -661,7 +661,7 @@ describe('getPublishedActivity', () => {
     maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
     await getPublishedActivity(ACTIVITY_ID);
     expect(selectMock).toHaveBeenCalledWith(
-      'id, title, level, author_id, activity_revisions!activities_published_revision_id_fkey(blocks)',
+      'id, title, level, author_id, heart_count, view_total, activity_revisions!activities_published_revision_id_fkey(blocks)',
     );
   });
 
@@ -691,7 +691,15 @@ describe('getPublishedActivity', () => {
 
   it('returns the activity + published blocks on success (object-shaped embed)', async () => {
     maybeSingleMock.mockResolvedValueOnce({
-      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', author_id: AUTHOR_ID, activity_revisions: { blocks: SOME_BLOCKS } },
+      data: {
+        id: ACTIVITY_ID,
+        title: 'Mi actividad',
+        level: 'B1',
+        author_id: AUTHOR_ID,
+        heart_count: 5,
+        view_total: 42,
+        activity_revisions: { blocks: SOME_BLOCKS },
+      },
       error: null,
     });
     const result = await getPublishedActivity(ACTIVITY_ID);
@@ -701,7 +709,19 @@ describe('getPublishedActivity', () => {
       level: 'B1',
       blocks: SOME_BLOCKS,
       authorId: AUTHOR_ID,
+      heartCount: 5,
+      viewTotal: 42,
     });
+  });
+
+  it('defaults heartCount and viewTotal to 0 when missing from the row', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'x', level: null, author_id: AUTHOR_ID, activity_revisions: { blocks: [] } },
+      error: null,
+    });
+    const result = await getPublishedActivity(ACTIVITY_ID);
+    expect(result?.heartCount).toBe(0);
+    expect(result?.viewTotal).toBe(0);
   });
 
   it('tolerates an array-shaped embed defensively', async () => {

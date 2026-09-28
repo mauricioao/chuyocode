@@ -393,6 +393,14 @@ export const UI_LABELS = {
         viewedFirstTime: 'Primera vez',
         viewedBefore: 'Ya lo viste',
         viewedTimesMany: 'veces',
+        // "Corazón" toggle (Descubrir/discovery). Two names, one per
+        // direction — same reasoning as `LikeButton`'s own `COPY`: the
+        // action the press performs, not the current state (`aria-pressed`
+        // already carries that).
+        heartAdd: 'Dar corazón',
+        heartRemove: 'Quitar corazón',
+        heartsOne: 'corazón',
+        heartsMany: 'corazones',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -944,6 +952,10 @@ export const UI_LABELS = {
         viewedFirstTime: 'First time',
         viewedBefore: "You've seen this",
         viewedTimesMany: 'times',
+        heartAdd: 'Heart',
+        heartRemove: 'Remove heart',
+        heartsOne: 'heart',
+        heartsMany: 'hearts',
       },
       report: {
         button: 'Report',

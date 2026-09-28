@@ -462,6 +462,10 @@ export interface PublishedActivity {
    * header), this is only the UI-level courtesy of not offering it.
    */
   authorId: string;
+  /** Denormalized "gustadas" counter (`0014_activity_discovery.sql`). */
+  heartCount: number;
+  /** Denormalized "vistas" counter (`0014_activity_discovery.sql`). */
+  viewTotal: number;
 }
 
 /**
@@ -490,7 +494,9 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
   try {
     const { data, error } = await client
       .from(ACTIVITIES_TABLE)
-      .select('id, title, level, author_id, activity_revisions!activities_published_revision_id_fkey(blocks)')
+      .select(
+        'id, title, level, author_id, heart_count, view_total, activity_revisions!activities_published_revision_id_fkey(blocks)',
+      )
       .eq('id', id)
       .eq('visible', true)
       .maybeSingle();
@@ -524,6 +530,8 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
       level: isLevel(row.level) ? row.level : null,
       blocks,
       authorId: row.author_id,
+      heartCount: typeof row.heart_count === 'number' ? row.heart_count : 0,
+      viewTotal: typeof row.view_total === 'number' ? row.view_total : 0,
     };
   } catch (err) {
     console.error('[activities] getPublishedActivity threw:', err);

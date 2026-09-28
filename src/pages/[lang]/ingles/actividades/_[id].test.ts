@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
-const { activityResult } = vi.hoisted(() => ({ activityResult: { value: null as unknown } }));
+const { activityResult, heartedResult, hasHeartedActivityMock } = vi.hoisted(() => ({
+  activityResult: { value: null as unknown },
+  heartedResult: { value: false },
+  hasHeartedActivityMock: vi.fn(async () => heartedResult.value),
+}));
 
 vi.mock('@lib/activities/activities', () => ({
   getPublishedActivity: vi.fn(async () => activityResult.value),
+}));
+
+vi.mock('@lib/activities/hearts', () => ({
+  hasHeartedActivity: hasHeartedActivityMock,
 }));
 
 import PracticePage from './[id].astro';
@@ -23,6 +31,8 @@ async function render(
 
 beforeEach(() => {
   activityResult.value = null;
+  heartedResult.value = false;
+  hasHeartedActivityMock.mockClear();
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — routing', () => {
@@ -160,5 +170,44 @@ describe('GET /[lang]/ingles/actividades/[id] — report button (PR E, Moderatio
     });
     const html = await res.text();
     expect(html).not.toContain('data-testid="report-activity-button"');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id] — heart control (Descubrir)', () => {
+  it('renders the interactive heart button for a signed-in visitor who is not the author', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else', heartCount: 5 };
+    heartedResult.value = true;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-heart-button"');
+    expect(html).not.toContain('data-testid="activity-heart-readonly"');
+    expect(hasHeartedActivityMock).toHaveBeenCalledWith('abc', 'user-1');
+  });
+
+  it("shows a read-only count for the activity's own author, never the interactive button", async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'user-1', heartCount: 7 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-heart-readonly"');
+    expect(html).not.toContain('data-testid="activity-heart-button"');
+    expect(html).toContain('7');
+    expect(hasHeartedActivityMock).not.toHaveBeenCalled();
+  });
+
+  it('shows a read-only count for an anonymous visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else', heartCount: 2 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-heart-readonly"');
+    expect(html).not.toContain('data-testid="activity-heart-button"');
   });
 });
