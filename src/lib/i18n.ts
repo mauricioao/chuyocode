@@ -251,6 +251,17 @@ export const UI_LABELS = {
         savingStatus: 'Guardando cambios',
         savedStatus: 'Cambios guardados',
         errorStatus: 'No se pudo guardar',
+        // Icon-only retry button (creator polish round 3, owner feedback #1):
+        // the ONE accessible label/tooltip for the button itself, replacing
+        // the separate status-icon + "Reintentar" text pair.
+        saveErrorRetry: 'No se pudo guardar, reintentar',
+        // Inline messages next to the exact block/zone `enviar.ts` points
+        // back to on a rejected submit (creator polish round 3, `t.submitErrors`'s
+        // sibling, keyed by `findIncompleteBlock`'s own reason codes).
+        incompleteNoZones: 'Esta hoja de trabajo necesita al menos una zona de respuesta.',
+        incompleteNoAnswers: 'Esta zona todavía no tiene una respuesta.',
+        incompleteTooFewOptions: 'Esta zona de opción múltiple necesita al menos dos opciones.',
+        incompleteAnswerNotInOptions: 'La respuesta marcada debe estar entre las opciones.',
         unsavedModalTitle: 'El ejercicio tiene cambios sin guardar',
         unsavedModalSaveAndLeave: 'Guardar y salir',
         unsavedModalLeaveWithoutSaving: 'Salir sin guardar',
@@ -689,6 +700,11 @@ export const UI_LABELS = {
         savingStatus: 'Saving changes',
         savedStatus: 'Changes saved',
         errorStatus: 'Could not save',
+        saveErrorRetry: "Couldn't save, retry",
+        incompleteNoZones: 'This worksheet needs at least one answer zone.',
+        incompleteNoAnswers: "This zone doesn't have an answer yet.",
+        incompleteTooFewOptions: 'This multiple-choice zone needs at least two options.',
+        incompleteAnswerNotInOptions: 'The marked answer must be one of the options.',
         unsavedModalTitle: 'This exercise has unsaved changes',
         unsavedModalSaveAndLeave: 'Save and leave',
         unsavedModalLeaveWithoutSaving: 'Leave without saving',

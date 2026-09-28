@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseBlocks, MAX_BLOCKS, MAX_ZONES_PER_WORKSHEET, type Block } from './blocks';
+import { parseBlocks, findIncompleteBlock, MAX_BLOCKS, MAX_ZONES_PER_WORKSHEET, type Block } from './blocks';
 import { uploadPath } from './paths';
 
 const USER = 'a1b2c3d4-0000-4000-8000-000000000001';
@@ -347,6 +347,143 @@ describe('parseBlocks — block name (creator polish round 2)', () => {
 
   it('rejects a non-string name', () => {
     expect(parseBlocks([quizBlock({ name: 42 })])).toBeNull();
+  });
+});
+
+describe("parseBlocks — 'draft' mode (creator polish round 3, owner feedback #1)", () => {
+  it('accepts a zone with zero answers', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ answers: [] })] })], 'draft');
+    expect(result).toEqual([
+      expect.objectContaining({ zones: [expect.objectContaining({ answers: [] })] }),
+    ]);
+  });
+
+  it('accepts a choice zone with fewer than 2 options', () => {
+    const result = parseBlocks(
+      [worksheetBlock({ zones: [choiceZone({ options: ['cat'] })] })],
+      'draft',
+    );
+    expect(result).not.toBeNull();
+  });
+
+  it('accepts a choice zone missing options entirely', () => {
+    const result = parseBlocks(
+      [worksheetBlock({ zones: [choiceZone({ options: undefined })] })],
+      'draft',
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ zones: [expect.objectContaining({ options: [] })] }),
+    ]);
+  });
+
+  it('accepts a choice zone whose answer is not among its options', () => {
+    const result = parseBlocks(
+      [worksheetBlock({ zones: [choiceZone({ answers: ['fish'], options: ['cat', 'dog'] })] })],
+      'draft',
+    );
+    expect(result).not.toBeNull();
+  });
+
+  it('accepts a worksheet with zero zones (already true in both modes)', () => {
+    expect(parseBlocks([worksheetBlock({ zones: [] })], 'draft')).not.toBeNull();
+  });
+
+  it('still rejects a malformed image path (a bare URL, traversal, or an unknown bucket)', () => {
+    expect(
+      parseBlocks(
+        [worksheetBlock({ image: { path: 'https://evil.example/x.webp', width: 800, height: 600 } })],
+        'draft',
+      ),
+    ).toBeNull();
+    expect(
+      parseBlocks(
+        [worksheetBlock({ image: { path: `${IMAGE_PATH}/../../etc/passwd`, width: 800, height: 600 } })],
+        'draft',
+      ),
+    ).toBeNull();
+  });
+
+  it('still rejects coordinates out of range', () => {
+    expect(
+      parseBlocks([worksheetBlock({ zones: [textZone({ x: 1.1, answers: [] })] })], 'draft'),
+    ).toBeNull();
+    expect(
+      parseBlocks([worksheetBlock({ zones: [textZone({ w: 0, answers: [] })] })], 'draft'),
+    ).toBeNull();
+  });
+
+  it('still rejects more than MAX_BLOCKS blocks', () => {
+    const blocks = Array.from({ length: MAX_BLOCKS + 1 }, (_, i) => quizBlock({ id: `b${i}` }));
+    expect(parseBlocks(blocks, 'draft')).toBeNull();
+  });
+
+  it('still rejects more than MAX_ZONES_PER_WORKSHEET zones', () => {
+    const zones = Array.from({ length: MAX_ZONES_PER_WORKSHEET + 1 }, (_, i) =>
+      textZone({ id: `z${i}`, answers: [] }),
+    );
+    expect(parseBlocks([worksheetBlock({ zones })], 'draft')).toBeNull();
+  });
+
+  it('still rejects an unknown block type, a missing id, and an invalid rotation', () => {
+    expect(parseBlocks([{ id: 'b1', type: 'flashcard' }], 'draft')).toBeNull();
+    expect(parseBlocks([quizBlock({ id: undefined })], 'draft')).toBeNull();
+    expect(parseBlocks([worksheetBlock({ rotation: 45 })], 'draft')).toBeNull();
+  });
+
+  it('still caps a name over the 60-char limit', () => {
+    expect(parseBlocks([quizBlock({ name: 'x'.repeat(61) })], 'draft')).toBeNull();
+  });
+
+  it("defaults to 'submit' (strict) when mode is omitted — existing behavior unchanged", () => {
+    expect(parseBlocks([worksheetBlock({ zones: [textZone({ answers: [] })] })])).toBeNull();
+  });
+});
+
+describe('findIncompleteBlock', () => {
+  it('returns null when every block is already submit-complete', () => {
+    expect(findIncompleteBlock(parseBlocks([worksheetBlock()], 'draft') as Block[])).toBeNull();
+  });
+
+  it('reports a worksheet with no zones (zoneId null)', () => {
+    const blocks = parseBlocks([worksheetBlock({ zones: [] })], 'draft') as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({ blockId: 'b1', zoneId: null, reason: 'no_zones' });
+  });
+
+  it('reports a zone with no answers', () => {
+    const blocks = parseBlocks(
+      [worksheetBlock({ zones: [textZone({ answers: [] })] })],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({ blockId: 'b1', zoneId: 'z1', reason: 'no_answers' });
+  });
+
+  it('reports a choice zone with fewer than 2 options', () => {
+    const blocks = parseBlocks(
+      [worksheetBlock({ zones: [choiceZone({ options: ['cat'] })] })],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({
+      blockId: 'b1',
+      zoneId: 'z1',
+      reason: 'too_few_options',
+    });
+  });
+
+  it('reports a choice zone whose answer is not among its options', () => {
+    const blocks = parseBlocks(
+      [worksheetBlock({ zones: [choiceZone({ answers: ['fish'], options: ['cat', 'dog'] })] })],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({
+      blockId: 'b1',
+      zoneId: 'z1',
+      reason: 'answer_not_in_options',
+    });
+  });
+
+  it('ignores quiz blocks (nothing to complete there)', () => {
+    const blocks = parseBlocks([quizBlock()], 'draft') as Block[];
+    expect(findIncompleteBlock(blocks)).toBeNull();
   });
 });
 

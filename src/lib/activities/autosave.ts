@@ -1,10 +1,17 @@
 /**
- * Autosave scheduler (creator polish round 2, owner request #8): debounce a
- * stream of "something changed" notifications into a single save call ~3s
- * after the last one, NEVER run two saves in flight (a save that finishes
- * while a newer value is waiting immediately re-runs with that latest value,
- * rather than dropping it or overlapping requests), and skip a save whose
- * value is unchanged from what is already saved.
+ * Autosave scheduler (creator polish round 2, owner request #8; delay bumped
+ * to ~5s in creator polish round 3, owner feedback #1): debounce a stream of
+ * "something changed" notifications into a single save call ~5s after the
+ * last one, NEVER run two saves in flight (a save that finishes while a
+ * newer value is waiting immediately re-runs with that latest value, rather
+ * than dropping it or overlapping requests), and skip a save whose value is
+ * unchanged from what is already saved.
+ *
+ * DOES NOT know about pointer drags: whether a zone drag is in progress is
+ * an editor-level concern (`ActivityEditorIsland`'s own `notifyChange`
+ * gating, driven by its undo-history transaction state), not this pure
+ * scheduler's — see that component's own comment for why "never save while
+ * dragging" lives there instead of here.
  *
  * Zero I/O of its own: `save` is supplied by the caller (the real one hits
  * `POST /api/actividades/:id/guardar`; a test supplies a fake). This module
@@ -17,7 +24,7 @@
 export type AutosaveStatus = 'pending' | 'saving' | 'saved' | 'error';
 
 export interface AutosaveSchedulerOptions<T> {
-  /** Delay after the last change before a save fires. Defaults to 3000ms. */
+  /** Delay after the last change before a save fires. Defaults to 5000ms. */
   delayMs?: number;
   /** Persist `value`. Rejecting/throwing is reported as the `'error'` status. */
   save: (value: T) => Promise<void>;
@@ -48,7 +55,7 @@ export interface AutosaveScheduler<T> {
 export function createAutosaveScheduler<T>(
   options: AutosaveSchedulerOptions<T>,
 ): AutosaveScheduler<T> {
-  const delayMs = options.delayMs ?? 3000;
+  const delayMs = options.delayMs ?? 5000;
   const isEqual = options.isEqual ?? Object.is;
 
   let timer: ReturnType<typeof setTimeout> | null = null;

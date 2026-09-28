@@ -173,7 +173,12 @@ export async function getActivityForEdit(
     if (typeof revisionRow.id !== 'string' || revisionRow.id.length === 0) return null;
     if (typeof revisionRow.status !== 'string') return null;
 
-    const blocks = parseBlocks(revisionRow.blocks);
+    // 'draft' mode (creator polish round 3): the latest revision may be an
+    // in-progress draft with an incomplete zone (no answer yet, a choice
+    // zone with < 2 options) — `guardar.ts` now happily saves exactly that,
+    // so the editor must be able to reopen it too, not just write it. See
+    // `blocks.ts`'s own `BlocksParseMode` doc.
+    const blocks = parseBlocks(revisionRow.blocks, 'draft');
     if (!blocks) {
       console.error('[activities] malformed blocks for activity id:', id);
       return null;

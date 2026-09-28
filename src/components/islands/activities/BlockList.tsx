@@ -80,6 +80,15 @@ export interface BlockListProps {
   onToggleExpand: (blockId: string) => void;
   onSelectZone: (zoneId: string | null) => void;
   onBlocksChange: (blocks: Block[], opts?: BlocksChangeOptions) => void;
+  /**
+   * The exact block/zone `enviar.ts` pointed back to on a rejected submit
+   * (creator polish round 3, owner feedback #1) — `incompleteZoneId` is
+   * `null` for a block-level gap (a worksheet with no zones at all).
+   * `incompleteMessage` is only rendered on the ONE matching block.
+   */
+  incompleteBlockId?: string | null;
+  incompleteZoneId?: string | null;
+  incompleteMessage?: string | null;
 }
 
 function isWorksheet(block: Block): block is WorksheetBlock {
@@ -211,6 +220,9 @@ export default function BlockList({
   onToggleExpand,
   onSelectZone,
   onBlocksChange,
+  incompleteBlockId = null,
+  incompleteZoneId = null,
+  incompleteMessage = null,
 }: BlockListProps) {
   const t = UI_LABELS[lang].activities.editor;
 
@@ -372,6 +384,8 @@ export default function BlockList({
                         selectedZoneId={selectedZoneId}
                         onZonesChange={(zones, opts) => updateZones(block.id, zones, opts)}
                         onSelectZone={onSelectZone}
+                        incompleteZoneId={block.id === incompleteBlockId ? incompleteZoneId : undefined}
+                        incompleteMessage={block.id === incompleteBlockId ? incompleteMessage : null}
                       />
                     </div>
                   )}

@@ -218,6 +218,31 @@ describe('getActivityForEdit', () => {
     expect(await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID)).toBeNull();
   });
 
+  it('reopens a latest revision with an in-progress zone (no answer yet) — creator polish round 3', async () => {
+    const worksheetWithEmptyZone: Block[] = [
+      {
+        id: 'block-1',
+        type: 'worksheet',
+        rotation: 0,
+        image: {
+          path: `activity-uploads/${AUTHOR_ID}/33333333-3333-3333-3333-333333333333.webp`,
+          width: 800,
+          height: 600,
+        },
+        zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: [] }],
+      },
+    ];
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', status: 'draft', review_note: null },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: worksheetWithEmptyZone, status: 'draft' }, error: null });
+
+    const result = await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);
+    expect(result?.blocks).toEqual(worksheetWithEmptyZone);
+  });
+
   it('returns the activity + its latest revision blocks on success', async () => {
     maybeSingleMock
       .mockResolvedValueOnce({

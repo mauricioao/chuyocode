@@ -17,7 +17,14 @@ function worksheetBlock(id: string, name?: string): WorksheetBlock {
   };
 }
 
-const SAVE_LABELS = { saving: 'Guardando cambios', saved: 'Cambios guardados', error: 'No se pudo guardar', unsaved: 'Cambios sin guardar', retry: 'Reintentar' };
+const SAVE_LABELS = {
+  saving: 'Guardando cambios',
+  saved: 'Cambios guardados',
+  error: 'No se pudo guardar',
+  unsaved: 'Cambios sin guardar',
+  retry: 'Reintentar',
+  errorRetry: 'No se pudo guardar, reintentar',
+};
 
 function renderToolbar(overrides: Partial<Parameters<typeof EditorSideToolbar>[0]> = {}) {
   const props = {

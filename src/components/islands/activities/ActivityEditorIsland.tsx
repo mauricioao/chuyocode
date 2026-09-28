@@ -124,6 +124,17 @@ export default function ActivityEditorIsland({
     submitting: boolean;
     error: string | null;
   }>({ open: false, submitting: false, error: null });
+  // `enviar.ts`'s `{ error: 'incomplete', blockId, zoneId, reason }` response
+  // (creator polish round 3, owner feedback #1): instead of a generic dialog
+  // error, the submit dialog closes and the editor jumps straight to the
+  // exact block/zone that still needs work, with a short inline message
+  // there. Cleared on the next blocks edit (see the `blocks`-watching effect
+  // below) — an old pointer is stale the moment the author starts fixing it.
+  const [incompleteTarget, setIncompleteTarget] = useState<{
+    blockId: string;
+    zoneId: string | null;
+    reason: 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options';
+  } | null>(null);
   const [preview, setPreview] = useState(false);
   const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -196,6 +207,13 @@ export default function ActivityEditorIsland({
     }
   }, []);
 
+  // A rejected submit's exact incomplete spot is stale the moment the
+  // author touches ANY block content again — clear it on the next blocks
+  // edit rather than leaving a pointer to a gap that may already be fixed.
+  useEffect(() => {
+    setIncompleteTarget(null);
+  }, [blocks]);
+
   const handleUndo = useCallback(() => setHistory(undo), []);
   const handleRedo = useCallback(() => setHistory(redo), []);
 
@@ -232,13 +250,23 @@ export default function ActivityEditorIsland({
     };
   }, [activityId]);
 
-  // Skip the very first run (mount) — nothing changed yet, so nothing to autosave.
+  // Skip the very first run (mount) — nothing changed yet, so nothing to
+  // autosave. Also skip every LIVE, in-progress frame of a zone drag/resize
+  // (creator polish round 3, owner feedback #1): `updateDoc` above sets
+  // `transactionBaselineRef` on the FIRST `commit: false` update of a drag
+  // and clears it back to `null` exactly on the commit that seals the whole
+  // gesture into one undo step (`replacePresent`/`commitTransaction`) — so
+  // "still non-null when this effect runs" means "a drag is still in
+  // progress", and `notifyChange` (which (re)starts the ~5s debounce) is
+  // deferred until the commit that ends it, instead of firing — and
+  // resetting the timer — on every single pointermove frame.
   const skippedFirstNotifyRef = useRef(false);
   useEffect(() => {
     if (!skippedFirstNotifyRef.current) {
       skippedFirstNotifyRef.current = true;
       return;
     }
+    if (transactionBaselineRef.current !== null) return;
     schedulerRef.current?.notifyChange(doc);
   }, [doc]);
 
@@ -404,7 +432,40 @@ export default function ActivityEditorIsland({
         body: JSON.stringify({ acceptedRights: true }),
       });
       if (!submitRes.ok) {
-        const errBody = (await submitRes.json().catch(() => ({}))) as { error?: string };
+        const errBody = (await submitRes.json().catch(() => ({}))) as {
+          error?: string;
+          blockId?: string;
+          zoneId?: string | null;
+          reason?: string;
+        };
+        if (
+          errBody.error === 'incomplete' &&
+          typeof errBody.blockId === 'string' &&
+          typeof errBody.reason === 'string'
+        ) {
+          // Points the author straight at the exact gap instead of a
+          // generic dialog error (creator polish round 3, owner feedback
+          // #1) — close the dialog, expand/select that block/zone, and let
+          // `BlockList`/`WorksheetZoneEditor` show a short inline message
+          // there.
+          const { blockId, reason } = errBody;
+          const zoneId = errBody.zoneId ?? null;
+          setSubmitDialog({ open: false, submitting: false, error: null });
+          setExpandedBlockIds(new Set([blockId]));
+          setSelectedZoneId(zoneId);
+          setIncompleteTarget({
+            blockId,
+            zoneId,
+            reason: reason as 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options',
+          });
+          if (typeof document !== 'undefined') {
+            const el = document.getElementById(`block-${blockId}`);
+            if (el && typeof el.scrollIntoView === 'function') {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+          return;
+        }
         throw new Error(errBody.error ?? 'submit_failed');
       }
 
@@ -444,9 +505,26 @@ export default function ActivityEditorIsland({
   );
 
   const saveLabels = useMemo(
-    () => ({ saving: t.savingStatus, saved: t.savedStatus, error: t.errorStatus, unsaved: t.unsaved, retry: t.saveRetry }),
+    () => ({
+      saving: t.savingStatus,
+      saved: t.savedStatus,
+      error: t.errorStatus,
+      unsaved: t.unsaved,
+      retry: t.saveRetry,
+      errorRetry: t.saveErrorRetry,
+    }),
     [t],
   );
+
+  // Maps `findIncompleteBlock`'s own reason codes (`blocks.ts`) onto their
+  // inline message — see `incompleteTarget`'s own comment above.
+  const INCOMPLETE_REASON_KEYS = {
+    no_zones: 'incompleteNoZones',
+    no_answers: 'incompleteNoAnswers',
+    too_few_options: 'incompleteTooFewOptions',
+    answer_not_in_options: 'incompleteAnswerNotInOptions',
+  } as const;
+  const incompleteMessage = incompleteTarget ? t[INCOMPLETE_REASON_KEYS[incompleteTarget.reason]] : null;
 
   const navGuardLabels = useMemo(
     () => ({
@@ -557,6 +635,9 @@ export default function ActivityEditorIsland({
               onToggleExpand={toggleBlockExpanded}
               onSelectZone={setSelectedZoneId}
               onBlocksChange={changeBlocks}
+              incompleteBlockId={incompleteTarget?.blockId ?? null}
+              incompleteZoneId={incompleteTarget?.zoneId ?? null}
+              incompleteMessage={incompleteMessage}
             />
           </div>
 

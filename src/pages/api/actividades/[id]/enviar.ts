@@ -21,9 +21,20 @@
  *    since — there is nothing new to send)
  * 9. activity title empty or the untranslated      -> 422 { error: 'invalid_title' }
  *    "Sin título"/"Untitled" placeholder
- * 10. parseBlocks(latest revision.blocks) === null -> 422 { error: 'invalid_blocks' }
+ * 10. parseBlocks(revision.blocks, 'draft')         -> 422 { error: 'invalid_blocks' }
+ *     === null (STRUCTURALLY unusable — ids,          (should never happen for a revision
+ *     types, coordinates, limits, image paths,         `guardar.ts` itself wrote, since it
+ *     name length, rotation; see `blocks.ts`'s          enforces those same safety checks —
+ *     own `BlocksParseMode` doc)                        defensive here regardless)
  * 11. zero blocks                                  -> 422 { error: 'no_blocks' }
- * 12. a worksheet block with zero zones            -> 422 { error: 'missing_zones' }
+ * 12. a block/zone that is structurally fine but   -> 422 { error: 'incomplete', blockId,
+ *     still SUBMIT-incomplete (creator polish          zoneId, reason } — `zoneId` is `null`
+ *     round 3: a worksheet with no zones, a zone       for a block-level gap (`reason:
+ *     with no answers, a choice zone with < 2          'no_zones'`), otherwise one of
+ *     options, or an answer not among its options)     'no_answers'/'too_few_options'/
+ *     — see `findIncompleteBlock`'s own doc.            'answer_not_in_options'. Points the
+ *                                                        editor straight at the exact gap
+ *                                                        instead of a generic error.
  * 13. mark the revision pending_review, stamp       -> UPDATE activity_revisions
  *     rights_accepted_at = now()
  * 14. activity.status is draft/rejected            -> UPDATE activities.status
@@ -40,7 +51,7 @@
 import type { APIRoute } from 'astro';
 import { markPrivate } from '@lib/httpCache';
 import { UI_LABELS } from '@lib/i18n';
-import { parseBlocks } from '@lib/activities/blocks';
+import { parseBlocks, findIncompleteBlock } from '@lib/activities/blocks';
 import { isUuid } from '@lib/activities/paths';
 import { createServiceClient } from '@lib/supabase';
 
@@ -55,6 +66,10 @@ const PLACEHOLDER_TITLES: ReadonlySet<string> = new Set(
 interface EnviarResponse {
   ok?: boolean;
   error?: string;
+  /** Present only on `error: 'incomplete'` — see the file header. */
+  blockId?: string;
+  zoneId?: string | null;
+  reason?: string;
 }
 
 function json(body: EnviarResponse, status: number): Response {
@@ -170,16 +185,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return json({ error: 'invalid_title' }, 422);
   }
 
-  const blocks = parseBlocks(revision.blocks);
+  const blocks = parseBlocks(revision.blocks, 'draft');
   if (!blocks) {
     return json({ error: 'invalid_blocks' }, 422);
   }
   if (blocks.length === 0) {
     return json({ error: 'no_blocks' }, 422);
   }
-  const hasEmptyWorksheet = blocks.some((block) => block.type === 'worksheet' && block.zones.length === 0);
-  if (hasEmptyWorksheet) {
-    return json({ error: 'missing_zones' }, 422);
+  const incomplete = findIncompleteBlock(blocks);
+  if (incomplete) {
+    return json(
+      { error: 'incomplete', blockId: incomplete.blockId, zoneId: incomplete.zoneId, reason: incomplete.reason },
+      422,
+    );
   }
 
   const { error: revisionUpdateError } = await client
