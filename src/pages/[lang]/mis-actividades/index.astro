@@ -1,0 +1,56 @@
+---
+/**
+ * Author's own workspace — `/[lang]/mis-actividades` (SSR, PR D "Activities
+ * practice"). Same SSR-GATED shape as `/[lang]/crear` (this route is NOT
+ * under `ingles`/`cursos`, so the middleware's own gate does not cover it —
+ * see `@lib/access`'s `GATED_SECTIONS`): anonymous visitors are redirected
+ * to sign-in, `next` pointing back here, before anything renders.
+ *
+ * Lists every activity `getActivitiesByAuthor` returns (newest updated
+ * first, `removed` excluded) through `MisActividadesIsland`, which owns the
+ * one interactive action this page needs (delete, behind a confirm dialog).
+ *
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE — `markPrivate` runs
+ * unconditionally, same reasoning as `crear/index.astro`.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import MisActividadesIsland from '@components/islands/activities/MisActividadesIsland';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getActivitiesByAuthor } from '@lib/activities/activities';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, same as every other session-dependent exit.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const t = UI_LABELS[lang].activities.myActivities;
+const activities = await getActivitiesByAuthor(user.id);
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.pageTitle}
+    </h1>
+    <MisActividadesIsland client:load lang={lang} initialActivities={activities} />
+  </section>
+</BaseLayout>

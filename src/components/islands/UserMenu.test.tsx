@@ -206,6 +206,16 @@ describe('UserMenu — dropdown', () => {
     expect(link.textContent).toBe(UI_LABELS.es.auth.userMenu.createActivity);
   });
 
+  it('links to the author workspace, lang-prefixed', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const link = screen.getByTestId('user-menu-my-activities');
+    expect(link.getAttribute('href')).toBe('/es/mis-actividades');
+    expect(link.textContent).toBe(UI_LABELS.es.auth.userMenu.myActivities);
+  });
+
   it('renders sign-out as a plain POST form with data-astro-reload', async () => {
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" />);

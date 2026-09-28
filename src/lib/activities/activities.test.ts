@@ -1,35 +1,39 @@
 /**
- * Data-access tests for src/lib/activities/activities.ts (create + edit-loader).
+ * Data-access tests for src/lib/activities/activities.ts (create + edit-loader
+ * + the author's own workspace listing).
  *
  * The Supabase service client is mocked so no network happens, mirroring the
  * mock-chain style of `exercises.test.ts`: one shared, chainable builder
  * object backs every `.from(...)` call, `.maybeSingle()` resolves whatever a
  * test queues next, and awaiting the builder directly (no `.maybeSingle()`)
- * resolves to `awaitResult.value` — the shape a plain `.insert(...)` (no
- * `.select()`) is awaited as.
+ * resolves to the NEXT queued `awaitResults` entry (shifted off, like
+ * `_guardar.test.ts`'s `writeOutcomes`) — the shape a plain `.insert(...)`
+ * (no `.select()`) or a plain `.select()...order()` list read is awaited as.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { clientState, maybeSingleMock, awaitResult, neqMock, orderMock, limitMock, insertMock, fromMock } =
+const { clientState, maybeSingleMock, awaitResults, neqMock, orderMock, limitMock, inMock, insertMock, fromMock } =
   vi.hoisted(() => {
     const maybeSingleMock = vi.fn();
-    const awaitResult: { value: unknown } = { value: { error: null } };
+    const awaitResults: unknown[] = [];
 
     const builder: Record<string, unknown> = {
       maybeSingle: maybeSingleMock,
       then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
-        Promise.resolve(awaitResult.value).then(onFulfilled, onRejected),
+        Promise.resolve(awaitResults.shift() ?? { error: null }).then(onFulfilled, onRejected),
     };
     const eqMock = vi.fn(() => builder);
     const neqMock = vi.fn(() => builder);
     const orderMock = vi.fn(() => builder);
     const limitMock = vi.fn(() => builder);
+    const inMock = vi.fn(() => builder);
     const selectMock = vi.fn(() => builder);
     const insertMock = vi.fn((_payload: Record<string, unknown>) => builder);
     builder.eq = eqMock;
     builder.neq = neqMock;
     builder.order = orderMock;
     builder.limit = limitMock;
+    builder.in = inMock;
     builder.select = selectMock;
     builder.insert = insertMock;
 
@@ -37,10 +41,11 @@ const { clientState, maybeSingleMock, awaitResult, neqMock, orderMock, limitMock
     return {
       clientState: { available: true },
       maybeSingleMock,
-      awaitResult,
+      awaitResults,
       neqMock,
       orderMock,
       limitMock,
+      inMock,
       insertMock,
       fromMock,
     };
@@ -55,7 +60,7 @@ vi.mock('../supabase', () => ({
   },
 }));
 
-import { createActivity, getActivityForEdit, clearActivitiesClient } from './activities';
+import { createActivity, getActivityForEdit, getActivitiesByAuthor, clearActivitiesClient } from './activities';
 import type { Block } from './blocks';
 
 const AUTHOR_ID = '11111111-1111-1111-1111-111111111111';
@@ -78,7 +83,7 @@ const SOME_BLOCKS: Block[] = [
 beforeEach(() => {
   vi.clearAllMocks();
   clientState.available = true;
-  awaitResult.value = { error: null };
+  awaitResults.length = 0;
   clearActivitiesClient();
 });
 
@@ -97,7 +102,7 @@ describe('createActivity', () => {
 
   it('inserts the activity row, then its first draft revision, and returns the new id', async () => {
     maybeSingleMock.mockResolvedValueOnce({ data: { id: ACTIVITY_ID }, error: null });
-    awaitResult.value = { error: null };
+    awaitResults.push({ error: null });
 
     const id = await createActivity(AUTHOR_ID, { title: 'Sin título', level: null, blocks: SOME_BLOCKS });
 
@@ -129,7 +134,7 @@ describe('createActivity', () => {
 
   it('returns null when the revision insert fails, after the activity row was created', async () => {
     maybeSingleMock.mockResolvedValueOnce({ data: { id: ACTIVITY_ID }, error: null });
-    awaitResult.value = { error: { message: 'revision failed' } };
+    awaitResults.push({ error: { message: 'revision failed' } });
     const id = await createActivity(AUTHOR_ID, { title: 'Sin título', level: null, blocks: SOME_BLOCKS });
     expect(id).toBeNull();
   });
@@ -260,5 +265,142 @@ describe('getActivityForEdit', () => {
       throw new Error('network down');
     });
     expect(await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID)).toBeNull();
+  });
+});
+
+const LIVE_ID = '66666666-6666-6666-6666-666666666666';
+const DRAFT_ID = '77777777-7777-7777-7777-777777777777';
+
+describe('getActivitiesByAuthor', () => {
+  it('returns [] and never queries when authorId is empty', async () => {
+    expect(await getActivitiesByAuthor('')).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns [] when the service client is unavailable', async () => {
+    clientState.available = false;
+    expect(await getActivitiesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('returns [] when the fetch errors', async () => {
+    awaitResults.push({ data: null, error: { message: 'down' } });
+    expect(await getActivitiesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('returns [] when the data is not an array', async () => {
+    awaitResults.push({ data: null, error: null });
+    expect(await getActivitiesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+
+  it('excludes removed activities from the query', async () => {
+    awaitResults.push({ data: [], error: null });
+    await getActivitiesByAuthor(AUTHOR_ID);
+    expect(neqMock).toHaveBeenCalledWith('status', 'removed');
+  });
+
+  it('orders by updated_at desc, id asc (total order)', async () => {
+    awaitResults.push({ data: [], error: null });
+    await getActivitiesByAuthor(AUTHOR_ID);
+    expect(orderMock).toHaveBeenNthCalledWith(1, 'updated_at', { ascending: false });
+    expect(orderMock).toHaveBeenNthCalledWith(2, 'id', { ascending: true });
+  });
+
+  it('skips a malformed row (missing id) and keeps the rest', async () => {
+    awaitResults.push({
+      data: [
+        { id: '', title: 'broken', status: 'draft', level: null, review_note: null, block_count: 0, updated_at: null },
+        { id: DRAFT_ID, title: 'Buena', status: 'draft', level: null, review_note: null, block_count: 2, updated_at: '2026-01-01T00:00:00Z' },
+      ],
+      error: null,
+    });
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(DRAFT_ID);
+  });
+
+  it('normalizes an out-of-taxonomy level to null', async () => {
+    awaitResults.push({
+      data: [{ id: DRAFT_ID, title: 'x', status: 'draft', level: 'not-a-level', review_note: null, block_count: 0, updated_at: null }],
+      error: null,
+    });
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(result[0].level).toBeNull();
+  });
+
+  it('never queries the pending-revision check when nothing is live', async () => {
+    awaitResults.push({
+      data: [{ id: DRAFT_ID, title: 'x', status: 'draft', level: null, review_note: null, block_count: 1, updated_at: null }],
+      error: null,
+    });
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(result[0].hasPendingRevision).toBe(false);
+    expect(inMock).not.toHaveBeenCalled();
+  });
+
+  it('flags hasPendingRevision only for a live activity with a fresh pending_review revision', async () => {
+    awaitResults.push({
+      data: [
+        { id: LIVE_ID, title: 'Publicada con cambios', status: 'live', level: 'B1', review_note: null, block_count: 3, updated_at: null },
+        { id: DRAFT_ID, title: 'Borrador', status: 'draft', level: null, review_note: null, block_count: 1, updated_at: null },
+      ],
+      error: null,
+    });
+    awaitResults.push({ data: [{ activity_id: LIVE_ID }], error: null });
+
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(inMock).toHaveBeenCalledWith('activity_id', [LIVE_ID]);
+    const live = result.find((r) => r.id === LIVE_ID);
+    const draft = result.find((r) => r.id === DRAFT_ID);
+    expect(live?.hasPendingRevision).toBe(true);
+    expect(draft?.hasPendingRevision).toBe(false);
+  });
+
+  it('does not flag a live activity with no pending revision', async () => {
+    awaitResults.push({
+      data: [{ id: LIVE_ID, title: 'Publicada', status: 'live', level: null, review_note: null, block_count: 3, updated_at: null }],
+      error: null,
+    });
+    awaitResults.push({ data: [], error: null });
+
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(result[0].hasPendingRevision).toBe(false);
+  });
+
+  it('falls back to unflagged rows when the pending-revision check itself errors', async () => {
+    awaitResults.push({
+      data: [{ id: LIVE_ID, title: 'Publicada', status: 'live', level: null, review_note: null, block_count: 3, updated_at: null }],
+      error: null,
+    });
+    awaitResults.push({ data: null, error: { message: 'down' } });
+
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(result).toHaveLength(1);
+    expect(result[0].hasPendingRevision).toBe(false);
+  });
+
+  it('surfaces the rejection reviewNote', async () => {
+    awaitResults.push({
+      data: [
+        {
+          id: DRAFT_ID,
+          title: 'Rechazada',
+          status: 'rejected',
+          level: null,
+          review_note: 'Falta una zona.',
+          block_count: 1,
+          updated_at: null,
+        },
+      ],
+      error: null,
+    });
+    const result = await getActivitiesByAuthor(AUTHOR_ID);
+    expect(result[0].reviewNote).toBe('Falta una zona.');
+  });
+
+  it('returns [] when the query throws', async () => {
+    fromMock.mockImplementationOnce(() => {
+      throw new Error('network down');
+    });
+    expect(await getActivitiesByAuthor(AUTHOR_ID)).toEqual([]);
   });
 });

@@ -242,6 +242,14 @@ export default function UserMenu({ lang }: UserMenuProps) {
           >
             {t.createActivity}
           </a>
+          <a
+            href={`/${lang}/mis-actividades`}
+            role="menuitem"
+            data-testid="user-menu-my-activities"
+            className="block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+          >
+            {t.myActivities}
+          </a>
           <form method="POST" action="/api/auth/signout" data-astro-reload className="mt-1">
             <button
               type="submit"

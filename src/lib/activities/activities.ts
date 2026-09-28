@@ -194,3 +194,105 @@ export async function getActivityForEdit(
     return null;
   }
 }
+
+/** One activity as the author's own workspace (`/[lang]/mis-actividades`, PR D) needs it. */
+export interface AuthoredActivity {
+  id: string;
+  title: string;
+  level: Level | null;
+  status: string;
+  blockCount: number;
+  reviewNote: string | null;
+  /**
+   * True only when `status === 'live'` AND a fresher `pending_review`
+   * revision already exists — the published revision keeps serving while
+   * that edit awaits a moderator (0011 migration's own lifecycle rule). A
+   * `draft`/`pending_review`/`rejected` activity is never flagged here: its
+   * OWN status badge already says everything this flag would add.
+   */
+  hasPendingRevision: boolean;
+  updatedAt: string | null;
+}
+
+/**
+ * Fetch every activity `authorId` owns, newest updated first — their own
+ * workspace listing. `removed` is excluded (see file header); nothing else
+ * is, unlike {@link getActivityForEdit} which serves exactly one row: an
+ * author must see every draft/pending/live/rejected activity they have.
+ *
+ * FAIL-SAFE: `[]` on any failure, same posture as `getExercisesByAuthor`.
+ */
+export async function getActivitiesByAuthor(authorId: string): Promise<AuthoredActivity[]> {
+  if (authorId.length === 0) return [];
+
+  const client = getClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from(ACTIVITIES_TABLE)
+      .select('id, title, level, status, review_note, block_count, updated_at')
+      .eq('author_id', authorId)
+      .neq('status', REMOVED_STATUS)
+      // Most recently edited first; `id` breaks ties so the order is total.
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('[activities] getActivitiesByAuthor failed:', error.message);
+      return [];
+    }
+    if (!Array.isArray(data)) return [];
+
+    const rows = data.flatMap((raw): AuthoredActivity[] => {
+      const row = raw as unknown as Record<string, unknown>;
+      if (typeof row.id !== 'string' || row.id.length === 0) return [];
+      if (typeof row.title !== 'string') return [];
+      if (typeof row.status !== 'string') return [];
+
+      return [
+        {
+          id: row.id,
+          title: row.title,
+          level: isLevel(row.level) ? row.level : null,
+          status: row.status,
+          blockCount: typeof row.block_count === 'number' ? row.block_count : 0,
+          reviewNote: typeof row.review_note === 'string' ? row.review_note : null,
+          hasPendingRevision: false,
+          updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+        },
+      ];
+    });
+
+    // A second, narrow read: only for the LIVE activities, is there a
+    // fresher pending_review revision already? One query for the whole
+    // page rather than one per row.
+    const liveIds = rows.filter((row) => row.status === 'live').map((row) => row.id);
+    if (liveIds.length === 0) return rows;
+
+    const { data: pendingData, error: pendingError } = await client
+      .from(ACTIVITY_REVISIONS_TABLE)
+      .select('activity_id')
+      .eq('status', 'pending_review')
+      .in('activity_id', liveIds);
+
+    if (pendingError) {
+      console.error('[activities] getActivitiesByAuthor pending-revision check failed:', pendingError.message);
+      return rows;
+    }
+    if (!Array.isArray(pendingData)) return rows;
+
+    const pendingIds = new Set(
+      pendingData.flatMap((raw): string[] => {
+        const id = (raw as unknown as Record<string, unknown>).activity_id;
+        return typeof id === 'string' ? [id] : [];
+      }),
+    );
+    if (pendingIds.size === 0) return rows;
+
+    return rows.map((row) => (pendingIds.has(row.id) ? { ...row, hasPendingRevision: true } : row));
+  } catch (err) {
+    console.error('[activities] getActivitiesByAuthor threw:', err);
+    return [];
+  }
+}

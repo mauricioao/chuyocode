@@ -160,6 +160,10 @@ export const UI_LABELS = {
         // the rest of this map: it is chrome for the header's identity
         // chip, not copy owned by the creator pages themselves.
         createActivity: 'Crear actividad',
+        // Links to the author's own workspace (`/[lang]/mis-actividades`, PR
+        // D "Activities practice"). Same placement/chrome rule as
+        // `createActivity` right above it.
+        myActivities: 'Mis actividades',
         signOut: 'Cerrar sesión',
       },
     },
@@ -330,6 +334,27 @@ export const UI_LABELS = {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
         textPlaceholder: 'Escribir la respuesta',
         choicePlaceholder: 'Elegir una opción',
+      },
+      // Author's own workspace (`/[lang]/mis-actividades`, PR D "Activities
+      // practice"). Status badges reuse `editor.status*` rather than
+      // duplicating them — same status vocabulary, same screen family.
+      myActivities: {
+        pageTitle: 'Mis actividades',
+        pageDescription: 'Las actividades creadas: editar, ver o eliminar cada una.',
+        empty: 'Todavía no se creó ninguna actividad.',
+        createCta: 'Crear actividad',
+        noLevel: 'Sin nivel',
+        blockCountOne: 'bloque',
+        blockCountMany: 'bloques',
+        pendingChangesNote: 'Cambios en revisión',
+        edit: 'Editar',
+        view: 'Ver',
+        delete: 'Eliminar',
+        deleteConfirmTitle: '¿Eliminar esta actividad?',
+        deleteConfirmBody: 'Esta acción no se puede deshacer.',
+        deleteConfirmCancel: 'Cancelar',
+        deleteConfirmAccept: 'Eliminar',
+        deleteError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -538,6 +563,7 @@ export const UI_LABELS = {
         planFree: 'Free',
         planPremium: 'Premium',
         createActivity: 'Create activity',
+        myActivities: 'My activities',
         signOut: 'Sign out',
       },
     },
@@ -696,6 +722,24 @@ export const UI_LABELS = {
         notGraded: 'Preview: this view does not grade answers.',
         textPlaceholder: 'Type the answer',
         choicePlaceholder: 'Choose an option',
+      },
+      myActivities: {
+        pageTitle: 'My activities',
+        pageDescription: 'Activities created so far: edit, view, or delete each one.',
+        empty: 'No activities created yet.',
+        createCta: 'Create activity',
+        noLevel: 'No level',
+        blockCountOne: 'block',
+        blockCountMany: 'blocks',
+        pendingChangesNote: 'Changes in review',
+        edit: 'Edit',
+        view: 'View',
+        delete: 'Delete',
+        deleteConfirmTitle: 'Delete this activity?',
+        deleteConfirmBody: 'This cannot be undone.',
+        deleteConfirmCancel: 'Cancel',
+        deleteConfirmAccept: 'Delete',
+        deleteError: 'Could not delete the activity. Try again.',
       },
     },
     notFound: {
