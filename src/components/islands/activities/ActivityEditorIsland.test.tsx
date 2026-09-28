@@ -24,6 +24,7 @@ afterEach(() => {
 const WORKSHEET_BLOCK: WorksheetBlock = {
   id: 'b1',
   type: 'worksheet',
+  rotation: 0,
   image: { path: 'activity-uploads/u1/b1.webp', width: 800, height: 600 },
   zones: [],
 };

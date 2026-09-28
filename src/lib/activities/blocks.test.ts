@@ -132,6 +132,7 @@ describe('parseBlocks — worksheet block: image', () => {
       {
         id: 'b1',
         type: 'worksheet',
+        rotation: 0,
         image: { path: IMAGE_PATH, width: 800, height: 600 },
         zones: [textZone()],
       },
@@ -141,7 +142,7 @@ describe('parseBlocks — worksheet block: image', () => {
   it('accepts a worksheet block with zero zones (mid-authoring draft)', () => {
     const result = parseBlocks([worksheetBlock({ zones: [] })]);
     expect(result).toEqual([
-      { id: 'b1', type: 'worksheet', image: { path: IMAGE_PATH, width: 800, height: 600 }, zones: [] },
+      { id: 'b1', type: 'worksheet', rotation: 0, image: { path: IMAGE_PATH, width: 800, height: 600 }, zones: [] },
     ]);
   });
 
@@ -307,5 +308,64 @@ describe('parseBlocks — choice zones', () => {
         ],
       }),
     ]);
+  });
+});
+
+describe('parseBlocks — block name (creator polish round 2)', () => {
+  it('accepts a block with no name at all (positional default is a UI concern)', () => {
+    const result = parseBlocks([quizBlock()]);
+    expect(result).not.toBeNull();
+    expect((result as Block[])[0].name).toBeUndefined();
+  });
+
+  it('accepts and trims a valid name on a quiz block', () => {
+    const result = parseBlocks([quizBlock({ name: '  Warm-up  ' })]);
+    expect(result).toEqual([expect.objectContaining({ name: 'Warm-up' })]);
+  });
+
+  it('accepts and trims a valid name on a worksheet block', () => {
+    const result = parseBlocks([worksheetBlock({ name: '  Hoja de repaso  ' })]);
+    expect(result).toEqual([expect.objectContaining({ name: 'Hoja de repaso' })]);
+  });
+
+  it('accepts a name at exactly the 60-char limit', () => {
+    const name = 'x'.repeat(60);
+    const result = parseBlocks([quizBlock({ name })]);
+    expect(result).toEqual([expect.objectContaining({ name })]);
+  });
+
+  it('rejects a name over the 60-char limit', () => {
+    const name = 'x'.repeat(61);
+    expect(parseBlocks([quizBlock({ name })])).toBeNull();
+  });
+
+  it('treats a blank (whitespace-only) name as absent rather than rejecting the block', () => {
+    const result = parseBlocks([quizBlock({ name: '   ' })]);
+    expect(result).not.toBeNull();
+    expect((result as Block[])[0].name).toBeUndefined();
+  });
+
+  it('rejects a non-string name', () => {
+    expect(parseBlocks([quizBlock({ name: 42 })])).toBeNull();
+  });
+});
+
+describe('parseBlocks — worksheet rotation (creator polish round 2)', () => {
+  it('defaults rotation to 0 when absent (backward compatible with pre-rotation activities)', () => {
+    const result = parseBlocks([worksheetBlock()]);
+    expect(result).toEqual([expect.objectContaining({ rotation: 0 })]);
+  });
+
+  it.each([0, 90, 180, 270])('accepts rotation %d', (rotation) => {
+    const result = parseBlocks([worksheetBlock({ rotation })]);
+    expect(result).toEqual([expect.objectContaining({ rotation })]);
+  });
+
+  it.each([45, -90, 360, 1])('rejects an invalid rotation angle %d', (rotation) => {
+    expect(parseBlocks([worksheetBlock({ rotation })])).toBeNull();
+  });
+
+  it('rejects a non-numeric rotation', () => {
+    expect(parseBlocks([worksheetBlock({ rotation: '90' })])).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ function worksheetBlock(id: string): WorksheetBlock {
   return {
     id,
     type: 'worksheet',
+    rotation: 0,
     image: { path: `activity-uploads/u1/${id}.webp`, width: 800, height: 600 },
     zones: [],
   };

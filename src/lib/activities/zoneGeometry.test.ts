@@ -7,6 +7,11 @@ import {
   moveRect,
   resizeRect,
   nudgeRect,
+  rotateRectCW,
+  rotateRectCCW,
+  rotateRects,
+  turnRotation,
+  type Rect,
 } from './zoneGeometry';
 
 describe('clampRect', () => {
@@ -204,5 +209,78 @@ describe('nudgeRect', () => {
     const atEdge = { x: 0, y: 0, w: 0.1, h: 0.1 };
     expect(nudgeRect(atEdge, 'up')).toEqual(atEdge);
     expect(nudgeRect(atEdge, 'left')).toEqual(atEdge);
+  });
+});
+
+describe('rotateRectCW / rotateRectCCW (worksheet rotation)', () => {
+  it('sends the top-left corner to the top-right on a clockwise turn', () => {
+    // A small rect pinned at the image's own top-left corner.
+    const rect: Rect = { x: 0, y: 0, w: 0.1, h: 0.2 };
+    expect(rotateRectCW(rect)).toEqual({ x: 0.8, y: 0, w: 0.2, h: 0.1 });
+  });
+
+  it('sends the top-left corner to the bottom-left on a counter-clockwise turn', () => {
+    const rect: Rect = { x: 0, y: 0, w: 0.1, h: 0.2 };
+    expect(rotateRectCCW(rect)).toEqual({ x: 0, y: 0.9, w: 0.2, h: 0.1 });
+  });
+
+  it('CCW is the exact inverse of CW', () => {
+    const rect: Rect = { x: 0.15, y: 0.35, w: 0.2, h: 0.1 };
+    const roundTrip = rotateRectCCW(rotateRectCW(rect));
+    expect(roundTrip.x).toBeCloseTo(rect.x);
+    expect(roundTrip.y).toBeCloseTo(rect.y);
+    expect(roundTrip.w).toBeCloseTo(rect.w);
+    expect(roundTrip.h).toBeCloseTo(rect.h);
+  });
+
+  it('four clockwise turns return to the original rect', () => {
+    const rect: Rect = { x: 0.15, y: 0.35, w: 0.2, h: 0.1 };
+    const full = rotateRectCW(rotateRectCW(rotateRectCW(rotateRectCW(rect))));
+    expect(full.x).toBeCloseTo(rect.x);
+    expect(full.y).toBeCloseTo(rect.y);
+    expect(full.w).toBeCloseTo(rect.w);
+    expect(full.h).toBeCloseTo(rect.h);
+  });
+
+  it('keeps a centered square rect centered', () => {
+    const rect: Rect = { x: 0.4, y: 0.4, w: 0.2, h: 0.2 };
+    const result = rotateRectCW(rect);
+    expect(result.x).toBeCloseTo(0.4);
+    expect(result.y).toBeCloseTo(0.4);
+    expect(result.w).toBeCloseTo(0.2);
+    expect(result.h).toBeCloseTo(0.2);
+  });
+});
+
+describe('rotateRects', () => {
+  it('rotates every rect in a list, preserving non-geometry fields', () => {
+    const zones = [
+      { id: 'z1', x: 0, y: 0, w: 0.1, h: 0.2, kind: 'text' as const, answers: ['cat'] },
+      { id: 'z2', x: 0.5, y: 0.5, w: 0.1, h: 0.1, kind: 'choice' as const, answers: ['a'], options: ['a', 'b'] },
+    ];
+    const rotated = rotateRects(zones, 'cw');
+    expect(rotated[0]).toEqual({ id: 'z1', x: 0.8, y: 0, w: 0.2, h: 0.1, kind: 'text', answers: ['cat'] });
+    expect(rotated[1].id).toBe('z2');
+    expect(rotated[1].options).toEqual(['a', 'b']);
+  });
+
+  it('returns an empty array unchanged', () => {
+    expect(rotateRects([], 'cw')).toEqual([]);
+  });
+});
+
+describe('turnRotation', () => {
+  it('adds 90 clockwise, wrapping past 270 back to 0', () => {
+    expect(turnRotation(0, 'cw')).toBe(90);
+    expect(turnRotation(90, 'cw')).toBe(180);
+    expect(turnRotation(180, 'cw')).toBe(270);
+    expect(turnRotation(270, 'cw')).toBe(0);
+  });
+
+  it('subtracts 90 counter-clockwise, wrapping past 0 back to 270', () => {
+    expect(turnRotation(0, 'ccw')).toBe(270);
+    expect(turnRotation(90, 'ccw')).toBe(0);
+    expect(turnRotation(180, 'ccw')).toBe(90);
+    expect(turnRotation(270, 'ccw')).toBe(180);
   });
 });

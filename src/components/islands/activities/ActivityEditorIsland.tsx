@@ -147,6 +147,7 @@ export default function ActivityEditorIsland({
       const newBlocks: WorksheetBlock[] = images.map((image) => ({
         id: crypto.randomUUID(),
         type: 'worksheet',
+        rotation: 0,
         image,
         zones: [],
       }));
