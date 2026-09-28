@@ -150,7 +150,13 @@ export default function UserMenu({ lang }: UserMenuProps) {
         aria-controls={menuId}
         aria-label={t.accountMenu}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-sm font-semibold text-foreground transition-theme duration-theme hover:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        // No yellow ring/border on hover: a subtle, smooth scale instead
+        // (~1.06, `duration-300 ease-out`), disabled under
+        // `prefers-reduced-motion: reduce` via `motion-reduce:`. The
+        // `focus-visible` ring is untouched and NOT gated behind
+        // `motion-reduce` — it is the keyboard-focus indicator, an
+        // accessibility requirement, not a decorative hover effect.
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-sm font-semibold text-foreground transition-transform duration-300 ease-out hover:scale-[1.06] motion-reduce:transition-none motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {profile.avatarUrl ? (
           <img

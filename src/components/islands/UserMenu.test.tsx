@@ -227,6 +227,26 @@ describe('UserMenu — dropdown', () => {
     trigger.focus();
     expect(document.activeElement).toBe(trigger);
   });
+
+  /**
+   * AVATAR HOVER: no yellow ring/border on hover, a subtle smooth scale
+   * instead, disabled under reduced motion, and the keyboard focus indicator
+   * kept regardless.
+   */
+  it('scales the avatar on hover instead of ringing it, and keeps a focus-visible indicator', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+    const trigger = await screen.findByTestId('user-menu-trigger');
+
+    expect(trigger.className).not.toContain('hover:border-primary');
+    expect(trigger.className).toContain('hover:scale-');
+    expect(trigger.className).toContain('transition-transform');
+    // Reduced motion turns the scale (and its transition) off.
+    expect(trigger.className).toMatch(/motion-reduce:.*scale-100|motion-reduce:transition-none/);
+    // The keyboard-focus ring is untouched, and not itself motion-gated.
+    expect(trigger.className).toContain('focus-visible:ring-3');
+    expect(trigger.className).toContain('focus-visible:ring-ring/50');
+  });
 });
 
 describe('UserMenu — localization', () => {
