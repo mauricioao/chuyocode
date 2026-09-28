@@ -96,6 +96,11 @@
   --destructive: #ef4444;
   --destructive-foreground: #f4f4f5;
 
+  /* A light, characteristic emerald that reads well on the dark surfaces
+   * above — the activity editor's "saved" autosave status icon
+   * (`CheckCircle`, weight "fill") uses it directly as `text-success`. */
+  --success: #34d399;
+
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
@@ -118,9 +123,62 @@
   --accent-foreground: #f4f4f5;
   --destructive: #ef4444;
   --destructive-foreground: #f4f4f5;
+  --success: #34d399;
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
+}
+
+/* --- Form control legibility + site-wide pointer cursor ------------------ *
+ * Two related, previously-reported production bugs, fixed once here instead
+ * of per component:
+ *
+ * 1. INVISIBLE TEXT IN INPUTS. The site is dark-only, but native form
+ *    controls do not pick that up on their own: `color-scheme` defaults to
+ *    `light`, which drives what the BROWSER (not this stylesheet) paints for
+ *    the parts no CSS can reach — select/date-picker popups, the disclosure
+ *    arrow, autofill chrome — and some UAs also repaint an unstyled
+ *    control's own text using that same light-scheme default, landing dark
+ *    text on our dark surfaces. `color-scheme: dark` plus an explicit
+ *    foreground color on every input/select/textarea is the one fix for
+ *    every occurrence of that bug site-wide; no component needs its own
+ *    `text-foreground` class just to stay legible.
+ * 2. NO POINTER CURSOR. Tailwind 4's preflight dropped the `cursor: pointer`
+ *    v3 used to set on `button`. Restored here for every clickable so the
+ *    whole site (not just this editor) shows a hand over things it can
+ *    click, and `not-allowed` over anything disabled. */
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  input,
+  select,
+  textarea {
+    color: var(--foreground);
+  }
+
+  ::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  select:not(:disabled),
+  summary,
+  label[for],
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: not-allowed;
+  }
 }
 
 @theme inline {
@@ -140,6 +198,7 @@
   --color-accent-role-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

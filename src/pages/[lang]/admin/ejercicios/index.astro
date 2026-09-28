@@ -1,0 +1,83 @@
+---
+/**
+ * New curated-exercise authoring page — `/[lang]/admin/ejercicios` (SSR).
+ *
+ * MOVED from `/[lang]/crear` (PR B, "Activities creator"): that path is now
+ * the activities creator start screen for ordinary signed-in users. Curated
+ * exercise authoring is a MODERATOR-ONLY surface, so it lives under
+ * `/admin/ejercicios` and is gated with `src/lib/roles.ts` in addition to the
+ * ordinary sign-in gate: anonymous visitors are redirected to sign-in
+ * (`next` pointing back here), and a signed-in NON-moderator gets a plain
+ * 404 rather than a 403 — same "don't confirm the surface exists" posture
+ * `requireRole`'s own header documents for the moderation surfaces.
+ *
+ * 🔴 NETLIFY APPENDS THE ORIGINAL REQUEST'S QUERY STRING TO A 30x `Location`
+ * THAT HAS NONE OF ITS OWN (`src/lib/authRedirect.ts`'s header, verified on a
+ * deploy preview). The redirect below always carries its own `?next=…`, so
+ * there is nothing query-less for Netlify to append to.
+ *
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE, same rule
+ * `src/pages/[lang]/auth/entrar.astro` documents: this page's HTML differs
+ * by visitor (gated vs. redirect vs. 404), so `markPrivate` runs
+ * unconditionally, before every branch.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ExerciseAuthorIsland from '@components/islands/authoring/ExerciseAuthorIsland';
+import { createEmptyDraft } from '@lib/authoringDraft';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, so no exit path can ship without it.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  // NOT `Astro.redirect()`: that helper builds its OWN `Response`, discarding
+  // the `markPrivate` mutation above — this response varies by
+  // `Astro.locals.user` (redirect vs. render), so the header has to travel
+  // WITH this exact `Response` object.
+  //
+  // 🔴 EVERYTHING IS INLINED HERE, DELIBERATELY, INCLUDING THE CACHE-CONTROL
+  // STRING — see `crear/index.astro`'s original comment (before this move):
+  // `astro check` reports a FALSE `ts(6133)` against any binding whose only
+  // use sits inside a `Response(...)` literal returned from an `if` block in
+  // `.astro` frontmatter.
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const moderator = await requireRole(user, 'moderator');
+if (!moderator) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].authoring;
+---
+
+<BaseLayout lang={lang} title={t.newTitle} description={t.newDescription}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+      {t.newTitle}
+    </h1>
+    <ExerciseAuthorIsland client:load lang={lang} initialDraft={createEmptyDraft()} />
+  </section>
+</BaseLayout>

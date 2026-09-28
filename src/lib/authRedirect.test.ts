@@ -8,9 +8,11 @@
  *  - T1 `safeNextPath` — an open redirect on the confirm route is worse than an
  *    ordinary one. The visitor has just authenticated, so a link that looks like
  *    ours and lands them on someone else's page lands them there SIGNED IN.
- *  - T2 `stripAuthParams` — `token_hash` is a single-use session credential. If
- *    it survives into the `Location` header it is written to browser history and
- *    sent in the `Referer` of whatever the destination page loads next.
+ *  - T2 `stripAuthParams` — `token_hash` AND the PKCE `code` are both single-use
+ *    session credentials. If either survives into the `Location` header it is
+ *    written to browser history and sent in the `Referer` of whatever the
+ *    destination page loads next. A suite that proves one and not the other
+ *    passes while the hole is open, so both are covered case for case.
  *
  * Both are pure string functions, so every case here calls production code with
  * a concrete input and asserts a concrete output. No mocks exist in this file.
@@ -18,11 +20,17 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_LANG } from './i18n';
 import {
+  AUTH_ERROR_GOOGLE_UNAVAILABLE,
   AUTH_ERROR_LINK_INVALID,
   AUTH_ERROR_PARAM,
+  AUTH_SIGNED_IN,
+  AUTH_SIGNED_OUT,
   safeNextPath,
   stripAuthParams,
   withAuthError,
+  withAuthSuccess,
+  withGoogleUnavailable,
+  withSignedOut,
 } from './authRedirect';
 
 /** Where an untrusted `next` must land instead. */
@@ -125,6 +133,43 @@ describe('safeNextPath — encoded and control-character bypasses', () => {
   });
 });
 
+describe('safeNextPath — post-login destination must never be an auth page', () => {
+  it('rejects a next pointed at the sign-in page itself (entrar)', () => {
+    expect(safeNextPath('/es/auth/entrar')).toBe(FALLBACK);
+  });
+
+  it('rejects a next pointed at the sign-in page with its own query', () => {
+    expect(safeNextPath('/es/auth/entrar?next=%2Fes%2Flibros')).toBe(FALLBACK);
+  });
+
+  it('rejects a next pointed at nueva-clave by default', () => {
+    expect(safeNextPath('/en/auth/nueva-clave')).toBe(FALLBACK);
+  });
+
+  it('rejects any other locale-prefixed auth page', () => {
+    expect(safeNextPath('/es/auth/whatever-comes-next')).toBe(FALLBACK);
+  });
+
+  it('allows nueva-clave when the caller explicitly opts in (the password-reset flow)', () => {
+    expect(safeNextPath('/en/auth/nueva-clave', { allowAuthPages: true })).toBe(
+      '/en/auth/nueva-clave',
+    );
+  });
+
+  it('the escape hatch is a blanket option, not nueva-clave-specific', () => {
+    // `allowAuthPages` guards ANY auth page — only ONE caller ever passes
+    // it (`password.ts`'s `handleReset`, hardcoded to nueva-clave), so this
+    // pins the option's actual shape rather than implying a narrower one.
+    expect(safeNextPath('/es/auth/entrar', { allowAuthPages: true })).toBe(
+      '/es/auth/entrar',
+    );
+  });
+
+  it('leaves an ordinary same-site path untouched regardless of the option', () => {
+    expect(safeNextPath('/es/libros', { allowAuthPages: true })).toBe('/es/libros');
+  });
+});
+
 describe('safeNextPath — absent or empty input', () => {
   it('falls back when `next` is missing', () => {
     expect(safeNextPath(null)).toBe(FALLBACK);
@@ -144,6 +189,15 @@ describe('stripAuthParams — T2 token leakage', () => {
     expect(stripAuthParams('/es/?token_hash=pkce_abc123')).toBe('/es/');
   });
 
+  it('removes the PKCE `code` from the redirect target', () => {
+    // `code` is a single-use session credential exactly like `token_hash`: it is
+    // what the DEFAULT email template sends, and `exchangeCodeForSession` turns
+    // it into a session. Leaking it into `Location` is the same hole.
+    expect(stripAuthParams('/es/?code=6a1f0c39-2b7d-4e18-9c55-0d3a')).toBe(
+      '/es/',
+    );
+  });
+
   it('removes type from the redirect target', () => {
     expect(stripAuthParams('/es/?type=email')).toBe('/es/');
   });
@@ -154,8 +208,22 @@ describe('stripAuthParams — T2 token leakage', () => {
     ).toBe('/es/ejercicios?nivel=a1');
   });
 
+  it('removes every credential at once and keeps the rest', () => {
+    // A crafted `next` is free to carry BOTH flavours of credential plus real
+    // parameters. Only the credentials leave.
+    expect(
+      stripAuthParams('/es/ejercicios?code=abc&token_hash=def&nivel=a1'),
+    ).toBe('/es/ejercicios?nivel=a1');
+  });
+
   it('removes REPEATED occurrences of the same parameter', () => {
     expect(stripAuthParams('/es/?token_hash=a&token_hash=b&nivel=a1')).toBe(
+      '/es/?nivel=a1',
+    );
+  });
+
+  it('removes REPEATED occurrences of `code`', () => {
+    expect(stripAuthParams('/es/?code=a&code=b&nivel=a1')).toBe(
       '/es/?nivel=a1',
     );
   });
@@ -216,5 +284,78 @@ describe('withAuthError — the rejected-link marker', () => {
 
   it('preserves the fragment', () => {
     expect(withAuthError('/es/#seccion')).toBe(`/es/?${MARKER}#seccion`);
+  });
+});
+
+describe('withGoogleUnavailable — the Google-not-configured marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_ERROR_GOOGLE_UNAVAILABLE}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withGoogleUnavailable('/es/auth/entrar')).toBe(`/es/auth/entrar?${MARKER}`);
+  });
+
+  it('REPLACES an auth value the caller tried to smuggle in', () => {
+    expect(withGoogleUnavailable('/es/auth/entrar?auth=todo-bien')).toBe(
+      `/es/auth/entrar?${MARKER}`,
+    );
+  });
+});
+
+/**
+ * `withAuthSuccess` and `withSignedOut` exist to defeat a Netlify behaviour
+ * verified on a deploy preview: Netlify appends the ORIGINAL request's query
+ * string to any redirect whose `Location` has none of its own. A success
+ * redirect built from a query-less `next` (the common case) would let a
+ * `?code=…`/`?token_hash=…` on the confirm request resurface on the
+ * destination page, undoing `stripAuthParams`. Both marker functions must
+ * therefore ALWAYS yield a target with a `?`, not just when the input already
+ * has one.
+ */
+describe('withAuthSuccess — the successful sign-in marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withAuthSuccess('/es/')).toBe(`/es/?${MARKER}`);
+  });
+
+  it('keeps the parameters already on the path', () => {
+    expect(withAuthSuccess('/es/mis-libros?orden=reciente')).toBe(
+      `/es/mis-libros?orden=reciente&${MARKER}`,
+    );
+  });
+
+  it('always yields a target with a query string', () => {
+    // The whole point: Netlify only appends the request's own query string
+    // when Location carries none, so a query-less success target is exactly
+    // the case the marker must close.
+    expect(withAuthSuccess('/es/')).toContain('?');
+  });
+
+  it('REPLACES an auth value the caller tried to smuggle in', () => {
+    expect(withAuthSuccess('/es/?auth=todo-bien')).toBe(`/es/?${MARKER}`);
+  });
+
+  it('preserves the fragment', () => {
+    expect(withAuthSuccess('/es/#seccion')).toBe(`/es/?${MARKER}#seccion`);
+  });
+});
+
+describe('withSignedOut — the sign-out marker', () => {
+  const MARKER = `${AUTH_ERROR_PARAM}=${AUTH_SIGNED_OUT}`;
+
+  it('marks a path that has no query string', () => {
+    expect(withSignedOut(`/${DEFAULT_LANG}/`)).toBe(
+      `/${DEFAULT_LANG}/?${MARKER}`,
+    );
+  });
+
+  it('keeps the parameters already on the path', () => {
+    expect(withSignedOut('/en/?orden=reciente')).toBe(
+      `/en/?orden=reciente&${MARKER}`,
+    );
+  });
+
+  it('always yields a target with a query string', () => {
+    expect(withSignedOut(`/${DEFAULT_LANG}/`)).toContain('?');
   });
 });

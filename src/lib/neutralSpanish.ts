@@ -45,6 +45,10 @@ export const NON_VOSEO_ACCENTED_WORDS = [
   'quizá',
   'café',
   'sí',
+  // Interrogative/exclamative, not an imperative — "¿Qué esperas?" is
+  // impersonal register, same shape as "¿Qué tal?"; it carries no more of a
+  // tú/vos fork than "aquí" or "café" do.
+  'qué',
   // Stressed final syllable + `s`. Same shape as the vos present indicative
   // (`tenés`, `podés`), so rule 2 cannot tell them apart without this list.
   'inglés',

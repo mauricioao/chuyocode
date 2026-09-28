@@ -64,3 +64,37 @@ describe('tailwind theme tokens (CSS-first @theme)', () => {
     },
   );
 });
+
+// Regression guard for a real production bug: an input/select/textarea
+// rendering dark text on this theme's dark surfaces (looked empty/invisible).
+// The fix is site-wide, in the base layer, so no component has to remember
+// its own `text-foreground` class — see `global.css`'s own comment for why.
+describe('form control legibility (no dark text on a dark surface)', () => {
+  it('declares a dark color-scheme so native form-control chrome matches the theme', () => {
+    expect(css).toMatch(/:root\s*{[^}]*color-scheme:\s*dark;/);
+  });
+
+  it('gives every input/select/textarea an explicit theme foreground color', () => {
+    expect(css).toMatch(/input,\s*select,\s*textarea\s*{\s*color:\s*var\(--foreground\);/);
+  });
+
+  it('gives placeholders a readable, non-transparent muted color', () => {
+    expect(css).toMatch(/::placeholder\s*{\s*color:\s*var\(--muted-foreground\);\s*opacity:\s*1;/);
+  });
+});
+
+// Tailwind 4's preflight dropped v3's `cursor: pointer` on `button`; restored
+// site-wide here rather than per component (bug: buttons/links showed the
+// plain arrow cursor instead of a hand).
+describe('site-wide pointer cursor', () => {
+  it('sets a pointer cursor on clickable elements', () => {
+    expect(css).toMatch(/button:not\(:disabled\),/);
+    expect(css).toContain("[role='button']:not([aria-disabled='true']),");
+    expect(css).toContain("a[href],");
+    expect(css).toMatch(/cursor:\s*pointer;/);
+  });
+
+  it('sets a not-allowed cursor on disabled buttons', () => {
+    expect(css).toMatch(/button:disabled,[\s\S]*?cursor:\s*not-allowed;/);
+  });
+});

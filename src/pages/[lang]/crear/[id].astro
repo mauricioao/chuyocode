@@ -1,0 +1,79 @@
+---
+/**
+ * Activity editor page — `/[lang]/crear/[id]` (SSR, PR B "Activities
+ * creator").
+ *
+ * SSR-GATED exactly like `crear/index.astro`: anonymous redirects to
+ * sign-in with `next`, before anything renders. Ownership is then
+ * re-verified server-side, in the frontmatter, by calling
+ * `getActivityForEdit(id, user.id)` (`src/lib/activities/activities.ts`) —
+ * that call filters by BOTH `id` and `author_id` in the query itself, so
+ * "does not exist" and "exists but is not yours" collapse to the identical
+ * `null` and the identical 404 here. Neither confirms to a caller that some
+ * OTHER author's activity id exists.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ActivityEditorIsland from '@components/islands/activities/ActivityEditorIsland';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getActivityForEdit } from '@lib/activities/activities';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Session-dependent on every exit path — see index.astro's header.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const activity = await getActivityForEdit(id, user.id);
+if (!activity) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].activities.editor;
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  {/*
+    One-screen creator layout (desktop only): no extra `lg:` vertical
+    padding here — `ActivityEditorIsland`'s own root sizes itself to
+    `calc(100dvh - <site header height>)`, and any padding this section
+    added on top of that would throw that calculation off. Horizontal
+    padding is untouched; below `lg:` this section keeps its normal
+    padded, scrollable layout.
+  */}
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:gap-0 lg:px-8 lg:py-0">
+    <ActivityEditorIsland
+      client:load
+      lang={lang}
+      activityId={activity.id}
+      initialTitle={activity.title}
+      initialLevel={activity.level}
+      initialBlocks={activity.blocks}
+    />
+  </section>
+</BaseLayout>

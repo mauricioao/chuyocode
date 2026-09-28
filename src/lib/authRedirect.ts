@@ -10,11 +10,11 @@
  * in, so a link that looks like ours delivers an authenticated visitor to
  * somebody else's page, primed to trust whatever it says.
  *
- * `stripAuthParams` keeps the single-use `token_hash` out of the `Location`
- * header. A credential that survives into a redirect target is written to
- * browser history and sent in the `Referer` header of the next request the
- * destination page makes — neither of which is a place a session token can be
- * recalled from.
+ * `stripAuthParams` keeps the single-use magic-link credentials — `token_hash`
+ * and the PKCE `code` — out of the `Location` header. A credential that survives
+ * into a redirect target is written to browser history and sent in the `Referer`
+ * header of the next request the destination page makes — neither of which is a
+ * place a session token can be recalled from.
  *
  * Kept in `src/lib/` rather than inside the route files so the rules are unit
  * tested directly instead of through a Request/Response round trip.
@@ -24,11 +24,18 @@ import { DEFAULT_LANG } from './i18n';
 /**
  * Query parameters that MUST NOT appear in a post-confirm redirect target.
  *
- * `token_hash` is the credential itself. `type` is not secret, but it is the
- * other half of a replayable confirm URL and it has no meaning anywhere else,
- * so it leaves with its partner.
+ * `token_hash` and `code` are BOTH credentials, and the list would be wrong
+ * with either one missing:
+ *  - `token_hash` is what a CUSTOM email template sends, redeemed by `verifyOtp`.
+ *  - `code` is what the DEFAULT email template sends under the PKCE flow,
+ *    redeemed by `exchangeCodeForSession`. It is a session in one exchange, so
+ *    it is exactly as dangerous in a `Location` header, and it is the parameter
+ *    the site actually receives today.
+ *
+ * `type` is not secret, but it is the other half of a replayable confirm URL and
+ * it has no meaning anywhere else, so it leaves with its partners.
  */
-const STRIPPED_PARAMS = ['token_hash', 'type'] as const;
+const STRIPPED_PARAMS = ['token_hash', 'code', 'type'] as const;
 
 /**
  * Query parameter the confirm route appends when a magic link did not verify.
@@ -45,6 +52,34 @@ export const AUTH_ERROR_PARAM = 'auth';
 
 /** The only failure a visitor can act on: ask for another link. */
 export const AUTH_ERROR_LINK_INVALID = 'link-invalid';
+
+/**
+ * Marker for a redirect that follows a successful sign-in or sign-out.
+ *
+ * 🔴 EXISTS TO DEFEAT A NETLIFY BEHAVIOUR, NOT TO DECORATE THE URL. Verified on
+ * a deploy preview: Netlify appends the ORIGINAL REQUEST's query string to any
+ * redirect whose `Location` has none of its own (`POST /signout?probe=1` →
+ * `Location: /es/?probe=1`). `stripAuthParams` removes `code`/`token_hash` from
+ * the TARGET, but a query-less target still lets Netlify graft the confirm
+ * request's own `?code=…`/`?token_hash=…` back onto the `Location` the browser
+ * follows — silently undoing the strip. Every success redirect below is built
+ * through {@link withAuthSuccess} or {@link withSignedOut} so its `Location`
+ * always carries a query of its own and there is nothing query-less left for
+ * Netlify to append to. The failure path is unaffected: `withAuthError` already
+ * guarantees a query string.
+ */
+export const AUTH_SIGNED_IN = 'signed-in';
+
+/** Marker for a redirect that follows a successful sign-out. See {@link AUTH_SIGNED_IN}. */
+export const AUTH_SIGNED_OUT = 'signed-out';
+
+/**
+ * Marker for a redirect that follows a Google sign-in attempt this project
+ * cannot complete — the provider is not configured in this Supabase
+ * project. `src/pages/api/auth/google.ts` degrades to this rather than a
+ * 500 whenever `signInWithOAuth` errors or hands back no provider URL.
+ */
+export const AUTH_ERROR_GOOGLE_UNAVAILABLE = 'google-unavailable';
 
 /** A path split into the three parts the helpers below rewrite independently. */
 interface SplitPath {
@@ -184,6 +219,37 @@ function isSafeNextPath(raw: string): boolean {
 }
 
 /**
+ * Matches this site's own `/<lang>/auth/...` pages (`entrar`, `nueva-clave`),
+ * any two-letter locale prefix.
+ *
+ * A post-login `next` that points BACK at an auth page is a loop, not a
+ * destination: landing a freshly authenticated visitor on `entrar` used to
+ * mean the page's own "already signed in" branch (removed — see
+ * `entrar.astro`'s signed-in redirect, which uses this same guard).
+ */
+const AUTH_PAGE_PATTERN = /^\/[a-z]{2}\/auth(?:\/|$)/;
+
+/** Is `pathname` one of this site's own `/auth/...` pages? See {@link AUTH_PAGE_PATTERN}. */
+function isAuthPagePath(pathname: string): boolean {
+  return AUTH_PAGE_PATTERN.test(pathname);
+}
+
+/** Options for {@link safeNextPath}. */
+export interface SafeNextPathOptions {
+  /**
+   * Allow the result to point at one of this site's own `/auth/...` pages.
+   *
+   * Defaults to `false` so an attacker-supplied (or merely stale) `next`
+   * can never bounce a freshly authenticated visitor back to `/auth/entrar`
+   * — or to `/auth/nueva-clave` out of context. The ONE legitimate exception
+   * is the password-reset flow itself (`password.ts`'s `handleReset`), which
+   * explicitly targets `/auth/nueva-clave` as the whole point of the reset
+   * link — that caller passes `allowAuthPages: true`.
+   */
+  allowAuthPages?: boolean;
+}
+
+/**
  * Resolve an attacker-supplied `next` into a path this site may redirect to.
  *
  * Returns `raw` UNCHANGED when it is a same-site path — the caller asked for a
@@ -195,32 +261,42 @@ function isSafeNextPath(raw: string): boolean {
  * on the home page costs them one click.
  *
  * @param raw - The `next` query parameter, already decoded once by `URLSearchParams`.
+ * @param options - See {@link SafeNextPathOptions}.
  * @returns A path that is guaranteed to stay on this origin.
  */
-export function safeNextPath(raw: string | null | undefined): string {
+export function safeNextPath(
+  raw: string | null | undefined,
+  { allowAuthPages = false }: SafeNextPathOptions = {},
+): string {
   const fallback = `/${DEFAULT_LANG}/`;
 
   if (typeof raw !== 'string') {
     return fallback;
   }
+  if (!isSafeNextPath(raw)) {
+    return fallback;
+  }
+  if (!allowAuthPages && isAuthPagePath(splitPath(raw).pathname)) {
+    return fallback;
+  }
 
-  return isSafeNextPath(raw) ? raw : fallback;
+  return raw;
 }
 
 /**
  * Remove the magic-link credentials from a redirect target (T2).
  *
- * Applied to the target of the post-confirm 303, so `token_hash` cannot reach
- * the `Location` header by riding inside `next`. The confirm route builds its
- * target from `next` alone and never from its own URL, so this is the second of
- * two independent barriers rather than the only one.
+ * Applied to the target of the post-confirm 303, so neither `token_hash` nor the
+ * PKCE `code` can reach the `Location` header by riding inside `next`. The
+ * confirm route builds its target from `next` alone and never from its own URL,
+ * so this is the second of two independent barriers rather than the only one.
  *
  * The fragment is preserved and the `?` disappears entirely when stripping
  * empties the query — a dangling `?` is a different URL string, and it would
  * show up in history and in every canonical-link comparison.
  *
  * @param path - A same-site path, normally the output of {@link safeNextPath}.
- * @returns The same path with `token_hash` and `type` removed.
+ * @returns The same path with `token_hash`, `code` and `type` removed.
  */
 export function stripAuthParams(path: string): string {
   const parts = splitPath(path);
@@ -239,18 +315,66 @@ export function stripAuthParams(path: string): string {
 }
 
 /**
+ * Set the shared `auth` marker to `value`, replacing any existing one.
+ *
+ * Any existing `auth` parameter is replaced rather than appended to, so a
+ * crafted `next` cannot smuggle a second value in and decide what the sign-in
+ * page says.
+ *
+ * @param path - A same-site path, normally the output of {@link safeNextPath}.
+ */
+function withAuthMarker(path: string, value: string): string {
+  const parts = splitPath(path);
+  const params = new URLSearchParams(parts.query);
+  params.set(AUTH_ERROR_PARAM, value);
+
+  return joinPath({ ...parts, query: params.toString() });
+}
+
+/**
  * Mark a redirect target as "that link did not work, ask for another one".
  *
- * Used only on the confirm route's failure path. Any existing `auth` parameter
- * is replaced rather than appended to, so a crafted `next` cannot smuggle a
- * second value in and decide what the sign-in page says.
+ * Used only on the confirm route's failure path.
  *
  * @param path - A same-site path, normally the output of {@link safeNextPath}.
  */
 export function withAuthError(path: string): string {
-  const parts = splitPath(path);
-  const params = new URLSearchParams(parts.query);
-  params.set(AUTH_ERROR_PARAM, AUTH_ERROR_LINK_INVALID);
+  return withAuthMarker(path, AUTH_ERROR_LINK_INVALID);
+}
 
-  return joinPath({ ...parts, query: params.toString() });
+/**
+ * Mark a redirect target as "you are signed in".
+ *
+ * Used on the confirm route's SUCCESS path. See {@link AUTH_SIGNED_IN} for why
+ * this marker exists whether or not the sign-in page renders anything for it.
+ *
+ * @param path - A same-site path, normally the output of
+ *   `stripAuthParams(safeNextPath(...))`.
+ */
+export function withAuthSuccess(path: string): string {
+  return withAuthMarker(path, AUTH_SIGNED_IN);
+}
+
+/**
+ * Mark a redirect target as "you are signed out".
+ *
+ * Used on the sign-out route. See {@link AUTH_SIGNED_IN} for why this marker
+ * exists whether or not the sign-in page renders anything for it.
+ *
+ * @param path - A same-site path, normally the output of {@link safeNextPath}.
+ */
+export function withSignedOut(path: string): string {
+  return withAuthMarker(path, AUTH_SIGNED_OUT);
+}
+
+/**
+ * Mark a redirect target as "Google sign-in isn't available right now".
+ *
+ * Used only on `/api/auth/google`'s degrade path — never a 500, always a
+ * bounce back to sign in with an explanation the page can render.
+ *
+ * @param path - A same-site path, normally `/<lang>/auth/entrar`.
+ */
+export function withGoogleUnavailable(path: string): string {
+  return withAuthMarker(path, AUTH_ERROR_GOOGLE_UNAVAILABLE);
 }

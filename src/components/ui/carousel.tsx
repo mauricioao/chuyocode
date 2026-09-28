@@ -182,6 +182,9 @@ function CarouselPrevious({
       data-slot="carousel-previous"
       variant={variant}
       size={size}
+      // `press="none"`: this control must never dodge on click. See
+      // `button.tsx`'s `press` variant doc comment and `carousel.test.tsx`.
+      press="none"
       className={cn(
         "absolute touch-manipulation rounded-full",
         orientation === "horizontal"
@@ -212,6 +215,9 @@ function CarouselNext({
       data-slot="carousel-next"
       variant={variant}
       size={size}
+      // `press="none"`: this control must never dodge on click. See
+      // `button.tsx`'s `press` variant doc comment and `carousel.test.tsx`.
+      press="none"
       className={cn(
         "absolute touch-manipulation rounded-full",
         orientation === "horizontal"

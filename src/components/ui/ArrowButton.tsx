@@ -49,6 +49,7 @@ export function ArrowButton({
       type="button"
       variant={ARROW_BUTTON_VARIANT.variant}
       size={ARROW_BUTTON_VARIANT.size}
+      press={ARROW_BUTTON_VARIANT.press}
       className={ARROW_BUTTON_SHAPE}
       aria-label={label}
       disabled={disabled}

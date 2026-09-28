@@ -15,7 +15,22 @@ const { createSessionClient } = vi.hoisted(() => ({
   createSessionClient: vi.fn(),
 }));
 
-vi.mock('@lib/supabaseSession', () => ({ createSessionClient }));
+// `@lib/supabaseSession` reads the Supabase URL / anon key at module init, and
+// only `createSessionClient` is stubbed, so the module really loads.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({
+    SUPABASE_URL: 'https://x.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+  }),
+}));
+
+vi.mock('@lib/supabaseSession', async (importActual) => {
+  // 🔴 `flushSessionHeaders` IS DELIBERATELY NOT MOCKED. Whether a rotated
+  // session cookie actually lands on the response is the thing under test, and
+  // a stub would assert the call instead of the outcome.
+  const actual = await importActual<typeof import('@lib/supabaseSession')>();
+  return { ...actual, createSessionClient };
+});
 
 import { onRequest, needsSession } from './middleware';
 
@@ -38,12 +53,14 @@ function anonymous(error: unknown = null) {
  */
 function armSession(getUserResult: unknown) {
   const pendingHeaders = new Map<string, string>();
+  const pendingCookies: string[] = [];
   const getUser = vi.fn().mockResolvedValue(getUserResult);
   createSessionClient.mockReturnValue({
     client: { auth: { getUser } },
     pendingHeaders,
+    pendingCookies,
   });
-  return { pendingHeaders, getUser };
+  return { pendingHeaders, pendingCookies, getUser };
 }
 
 /**
@@ -57,12 +74,14 @@ function armSession(getUserResult: unknown) {
  */
 function armUnreachableSession(reason: unknown) {
   const pendingHeaders = new Map<string, string>();
+  const pendingCookies: string[] = [];
   const getUser = vi.fn().mockRejectedValue(reason);
   createSessionClient.mockReturnValue({
     client: { auth: { getUser } },
     pendingHeaders,
+    pendingCookies,
   });
-  return { pendingHeaders, getUser };
+  return { pendingHeaders, pendingCookies, getUser };
 }
 
 /** Silence and capture the house `console.error` reporting channel. */
@@ -241,12 +260,11 @@ describe('session resolution (design §1 ordering)', () => {
     expect(locals.lang).toBe('es');
   });
 
-  it('builds the client from this request, its cookie jar, and the environment', async () => {
-    const { request, cookies, result } = run('/es/libros');
+  it('builds the client from this request and the environment', async () => {
+    const { request, result } = run('/es/libros');
     await result;
     expect(createSessionClient).toHaveBeenCalledWith({
       request,
-      cookies,
       // Vitest runs with `import.meta.env.PROD` false, which is the
       // local-development branch: `secure` off, so the cookie survives http://.
       isProd: false,
@@ -287,6 +305,39 @@ describe('session resolution (design §1 ordering)', () => {
     const res = await result;
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('OK');
+  });
+
+  // 🔴 A REFRESHED TOKEN THAT NEVER REACHES THE BROWSER IS A SILENT LOGOUT.
+  // `getUser()` rotates the session, and the rotated cookie is buffered exactly
+  // like the auth endpoints' cookies are. Middleware is the only place that can
+  // put it on the response, because the `Response` does not exist until
+  // `next()` resolves.
+  it('flushes the rotated session cookie onto the response after next()', async () => {
+    const { pendingCookies } = armSession(signedIn('user-5'));
+    pendingCookies.push('sb-x-auth-token=rotated; Path=/; HttpOnly');
+    const { result } = run('/es/libros');
+    const res = await result;
+    expect(res.headers.getSetCookie()).toEqual([
+      'sb-x-auth-token=rotated; Path=/; HttpOnly',
+    ]);
+  });
+
+  it('emits each rotated cookie exactly once', async () => {
+    // Middleware and the framework's cookie jar writing the same cookie would
+    // send it twice, and the browser keeps whichever arrived last.
+    const { pendingCookies } = armSession(signedIn('user-6'));
+    pendingCookies.push('sb-x-auth-token.0=a; Path=/', 'sb-x-auth-token.1=b; Path=/');
+    const { result } = run('/es/libros');
+    const res = await result;
+    expect(res.headers.getSetCookie()).toHaveLength(2);
+  });
+
+  it('adds no cookie to the response when the session was not rotated', async () => {
+    const { pendingCookies } = armSession(signedIn('user-7'));
+    expect(pendingCookies).toEqual([]);
+    const { result } = run('/es/libros');
+    const res = await result;
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 });
 
@@ -344,5 +395,121 @@ describe('identity resolution fails open when getUser() throws', () => {
       '[middleware] getUser() threw:',
       reason,
     );
+  });
+});
+
+// Gating Inglés/Cursos behind login (`@lib/access`). Libros, Noticias and the
+// home page must stay untouched by this — see the final block below.
+describe('gating private sections', () => {
+  it('redirects an anonymous visitor away from a gated ingles path with a safe next', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/entrar?next=%2Fes%2Fingles',
+    );
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('carries the original query string in next, safely encoded', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles?nivel=B1');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/entrar?next=%2Fes%2Fingles%3Fnivel%3DB1',
+    );
+  });
+
+  it('redirects an anonymous visitor away from a gated cursos path, in en', async () => {
+    armSession(anonymous());
+    const { result } = run('/en/cursos/react-basics');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/en/auth/entrar?next=%2Fen%2Fcursos%2Freact-basics',
+    );
+  });
+
+  it('never calls next() for a gated path when anonymous', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/A1/present-simple');
+    await result;
+
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('lets a signed-in visitor through to a gated ingles path', async () => {
+    armSession(signedIn('user-9'));
+    const { result, locals } = run('/es/ingles');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    expect(locals.user).toEqual({ id: 'user-9' });
+  });
+
+  it('lets a signed-in visitor through to a gated cursos path', async () => {
+    armSession(signedIn('user-11'));
+    const { result } = run('/es/cursos/react-basico');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('marks a gated response private/no-store even once it passes through', async () => {
+    armSession(signedIn('user-10'));
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('flushes a buffered session cookie onto the gate redirect too', async () => {
+    const { pendingCookies } = armSession(anonymous());
+    pendingCookies.push('sb-x-auth-token=cleared; Path=/; Max-Age=0');
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(res.headers.getSetCookie()).toEqual([
+      'sb-x-auth-token=cleared; Path=/; Max-Age=0',
+    ]);
+  });
+
+  it('leaves libros untouched for an anonymous visitor', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/libros');
+    const res = await result;
+
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalledOnce();
+    // Not forced private by the gate — libros keeps whatever cache policy it
+    // sets for itself, untouched by this feature.
+    expect(res.headers.has('cache-control')).toBe(false);
+  });
+
+  it('leaves noticias untouched for an anonymous visitor', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/noticias');
+    const res = await result;
+
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.headers.has('cache-control')).toBe(false);
+  });
+
+  it('leaves the localized home untouched for an anonymous visitor', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/');
+    const res = await result;
+
+    expect(res.status).toBe(200);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.headers.has('cache-control')).toBe(false);
   });
 });
