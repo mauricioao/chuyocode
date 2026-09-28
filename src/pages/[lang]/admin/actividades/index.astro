@@ -1,0 +1,78 @@
+---
+/**
+ * Moderator queue — `/[lang]/admin/actividades` (SSR, PR E "Moderation").
+ * Same gate shape as `/[lang]/admin/ejercicios`: anonymous visitors are
+ * redirected to sign-in (`next` pointing back here), a signed-in
+ * NON-moderator gets a plain 404 (never a 403 — `requireRole`'s own "don't
+ * confirm the surface exists" posture), and a moderator sees the queue.
+ *
+ * 🔴 NETLIFY APPENDS THE ORIGINAL REQUEST'S QUERY STRING TO A 30x `Location`
+ * THAT HAS NONE OF ITS OWN — the redirect below always carries its own
+ * `?next=…`, so there is nothing query-less for Netlify to append to
+ * (`admin/ejercicios/index.astro`'s own header documents this in full).
+ *
+ * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE — `markPrivate` runs
+ * unconditionally, before every branch, same rule as every gated page in
+ * this codebase.
+ *
+ * `getReviewQueue()` (`@lib/activities/moderation`) does the actual data
+ * work — both the pending-revisions and reported-activities lists, in one
+ * server-side call — and is handed straight to `ModerationQueueIsland` as
+ * seed data, same "SSR loads, the island only mutates" shape as
+ * `MisActividadesIsland`.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import ModerationQueueIsland from '@components/islands/activities/ModerationQueueIsland';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+import { getReviewQueue } from '@lib/activities/moderation';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, so no exit path can ship without it.
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const moderator = await requireRole(user, 'moderator');
+if (!moderator) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].activities.moderation;
+const queue = await getReviewQueue();
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+    <ModerationQueueIsland
+      client:load
+      lang={lang}
+      initialPending={queue.pending}
+      initialReported={queue.reported}
+    />
+  </section>
+</BaseLayout>

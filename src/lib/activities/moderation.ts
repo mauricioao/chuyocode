@@ -127,6 +127,42 @@ export async function getReviewQueue(): Promise<ReviewQueue> {
   return { pending, reported };
 }
 
+/**
+ * The header's "Moderación" badge count: pending revisions + activities
+ * hidden by reports, without loading either list's full content. FAIL-SAFE:
+ * `0` on any failure — a broken count must never show a wrong badge, and
+ * `getReviewQueue` (called separately, by the admin page itself) is still
+ * the source of truth for the actual queue.
+ */
+export async function getPendingModerationCount(): Promise<number> {
+  const client = getClient();
+  if (!client) return 0;
+
+  try {
+    const [pendingResult, reportedResult] = await Promise.all([
+      client.from(ACTIVITY_REVISIONS_TABLE).select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
+      client
+        .from(ACTIVITIES_TABLE)
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending_review')
+        .not('published_revision_id', 'is', null),
+    ]);
+
+    if (pendingResult.error || reportedResult.error) {
+      console.error(
+        '[activities/moderation] getPendingModerationCount failed:',
+        pendingResult.error?.message ?? reportedResult.error?.message,
+      );
+      return 0;
+    }
+
+    return (pendingResult.count ?? 0) + (reportedResult.count ?? 0);
+  } catch (err) {
+    console.error('[activities/moderation] getPendingModerationCount threw:', err);
+    return 0;
+  }
+}
+
 async function loadPendingRevisions(client: SupabaseClient): Promise<ReviewQueueItem[]> {
   try {
     const { data: revisionsData, error: revisionsError } = await client

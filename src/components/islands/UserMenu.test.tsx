@@ -21,6 +21,8 @@ const GOOGLE_PROFILE: Profile = {
   avatarUrl: 'https://lh3.googleusercontent.com/a/photo.jpg',
   initials: 'JP',
   plan: 'free',
+  isModerator: false,
+  moderationPendingCount: 0,
 };
 
 const PASSWORD_PROFILE: Profile = {
@@ -29,6 +31,8 @@ const PASSWORD_PROFILE: Profile = {
   avatarUrl: null,
   initials: 'L',
   plan: 'free',
+  isModerator: false,
+  moderationPendingCount: 0,
 };
 
 const PREMIUM_PROFILE: Profile = {
@@ -37,6 +41,18 @@ const PREMIUM_PROFILE: Profile = {
   avatarUrl: null,
   initials: 'L',
   plan: 'premium',
+  isModerator: false,
+  moderationPendingCount: 0,
+};
+
+const MODERATOR_PROFILE: Profile = {
+  name: 'moderador',
+  email: 'moderador@example.com',
+  avatarUrl: null,
+  initials: 'M',
+  plan: 'free',
+  isModerator: true,
+  moderationPendingCount: 4,
 };
 
 /** Install a `fetch` stub answering `GET /api/me` with the given profile. */
@@ -214,6 +230,34 @@ describe('UserMenu — dropdown', () => {
     const link = screen.getByTestId('user-menu-my-activities');
     expect(link.getAttribute('href')).toBe('/es/mis-actividades');
     expect(link.textContent).toBe(UI_LABELS.es.auth.userMenu.myActivities);
+  });
+
+  it('never shows a moderation link for an ordinary user', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    expect(screen.queryByTestId('user-menu-moderation')).toBeNull();
+  });
+
+  it('shows a moderation link with a pending-count badge for a moderator', async () => {
+    stubMe(MODERATOR_PROFILE);
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const link = screen.getByTestId('user-menu-moderation');
+    expect(link.getAttribute('href')).toBe('/es/admin/actividades');
+    expect(link.textContent).toContain(UI_LABELS.es.auth.userMenu.moderation);
+    expect(screen.getByTestId('user-menu-moderation-badge').textContent).toBe('4');
+  });
+
+  it('hides the badge when the moderator has nothing pending', async () => {
+    stubMe({ ...MODERATOR_PROFILE, moderationPendingCount: 0 });
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    expect(screen.getByTestId('user-menu-moderation')).toBeTruthy();
+    expect(screen.queryByTestId('user-menu-moderation-badge')).toBeNull();
   });
 
   it('renders sign-out as a plain POST form with data-astro-reload', async () => {

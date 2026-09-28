@@ -21,6 +21,19 @@ vi.mock('./supabase', () => ({
   },
 }));
 
+/**
+ * `toProfile` also now resolves `isModerator`/`moderationPendingCount` (PR E,
+ * "Moderation") via `./roles` and `./activities/moderation` — both mocked
+ * here so this file stays about name/email/avatar/plan normalization; their
+ * own behavior is covered by `roles.test.ts` and `moderation.test.ts`.
+ */
+const { hasRoleMock, pendingCountMock } = vi.hoisted(() => ({
+  hasRoleMock: vi.fn(async () => false),
+  pendingCountMock: vi.fn(async () => 0),
+}));
+vi.mock('./roles', () => ({ hasRole: hasRoleMock }));
+vi.mock('./activities/moderation', () => ({ getPendingModerationCount: pendingCountMock }));
+
 import { toProfile } from './profile';
 
 /**
@@ -40,6 +53,8 @@ function user(overrides: Partial<User> = {}): User {
 
 beforeEach(() => {
   clientState.available = false;
+  hasRoleMock.mockReset().mockResolvedValue(false);
+  pendingCountMock.mockReset().mockResolvedValue(0);
 });
 
 describe('toProfile — name', () => {
@@ -180,6 +195,8 @@ describe('toProfile — google-shaped, email-only and missing-metadata users, en
       avatarUrl: 'https://lh3.googleusercontent.com/a/photo.jpg',
       initials: 'JP',
       plan: 'free',
+      isModerator: false,
+      moderationPendingCount: 0,
     });
   });
 
@@ -193,6 +210,26 @@ describe('toProfile — google-shaped, email-only and missing-metadata users, en
       avatarUrl: null,
       initials: 'S',
       plan: 'free',
+      isModerator: false,
+      moderationPendingCount: 0,
     });
+  });
+});
+
+describe('toProfile — moderation (PR E)', () => {
+  it('is isModerator: false and moderationPendingCount: 0 for an ordinary user, without even querying the count', async () => {
+    hasRoleMock.mockResolvedValue(false);
+    const profile = await toProfile(user());
+    expect(profile.isModerator).toBe(false);
+    expect(profile.moderationPendingCount).toBe(0);
+    expect(pendingCountMock).not.toHaveBeenCalled();
+  });
+
+  it('is isModerator: true and carries the pending count for a moderator', async () => {
+    hasRoleMock.mockResolvedValue(true);
+    pendingCountMock.mockResolvedValue(7);
+    const profile = await toProfile(user());
+    expect(profile.isModerator).toBe(true);
+    expect(profile.moderationPendingCount).toBe(7);
   });
 });

@@ -59,6 +59,7 @@ vi.mock('../supabase', () => ({
 
 import {
   getReviewQueue,
+  getPendingModerationCount,
   approveRevision,
   rejectRevision,
   restoreActivity,
@@ -152,6 +153,25 @@ describe('getReviewQueue', () => {
     expect(queue.reported).toHaveLength(1);
     expect(queue.reported[0].reports).toHaveLength(1);
     expect(queue.reported[0].reports[0].reason).toBe('inappropriate');
+  });
+});
+
+describe('getPendingModerationCount', () => {
+  it('returns 0 when the service-role key is unconfigured', async () => {
+    state.available = false;
+    expect(await getPendingModerationCount()).toBe(0);
+  });
+
+  it('sums pending revisions and reported activities counts', async () => {
+    push('activity_revisions', { data: null, error: null, count: 3 });
+    push('activities', { data: null, error: null, count: 2 });
+    expect(await getPendingModerationCount()).toBe(5);
+  });
+
+  it('fails closed to 0 when either count query errors', async () => {
+    push('activity_revisions', { data: null, error: { message: 'down' } });
+    push('activities', { data: null, error: null, count: 2 });
+    expect(await getPendingModerationCount()).toBe(0);
   });
 });
 

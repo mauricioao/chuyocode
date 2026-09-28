@@ -13,6 +13,8 @@
  */
 import type { User } from '@supabase/supabase-js';
 import { getPlan, type Plan } from './access';
+import { hasRole } from './roles';
+import { getPendingModerationCount } from './activities/moderation';
 
 /** The normalized shape every signed-in-aware surface reads. */
 export interface Profile {
@@ -21,6 +23,14 @@ export interface Profile {
   avatarUrl: string | null;
   initials: string;
   plan: Plan;
+  /** PR E, "Moderation": drives the header's "Moderación" link. */
+  isModerator: boolean;
+  /**
+   * The moderator queue's total pending count (revisions awaiting review +
+   * activities hidden by reports) — the badge next to "Moderación". Always
+   * `0` for a non-moderator, without even querying it (see below).
+   */
+  moderationPendingCount: number;
 }
 
 /** The local part of an email address, or the whole string if there is no `@`. */
@@ -107,11 +117,16 @@ function initialsFrom(name: string): string {
  */
 export async function toProfile(user: User): Promise<Profile> {
   const name = nameFrom(user);
+  const isModerator = await hasRole(user.id, 'moderator');
   return {
     name,
     email: user.email ?? '',
     avatarUrl: avatarFrom(user),
     initials: initialsFrom(name),
     plan: await getPlan(user),
+    isModerator,
+    // Never queried for a non-moderator — no point paying for a count
+    // nobody's UI will ever show.
+    moderationPendingCount: isModerator ? await getPendingModerationCount() : 0,
   };
 }

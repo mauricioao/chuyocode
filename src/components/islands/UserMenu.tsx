@@ -250,6 +250,24 @@ export default function UserMenu({ lang }: UserMenuProps) {
           >
             {t.myActivities}
           </a>
+          {profile.isModerator && (
+            <a
+              href={`/${lang}/admin/actividades`}
+              role="menuitem"
+              data-testid="user-menu-moderation"
+              className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <span>{t.moderation}</span>
+              {profile.moderationPendingCount > 0 && (
+                <span
+                  data-testid="user-menu-moderation-badge"
+                  className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground"
+                >
+                  {profile.moderationPendingCount}
+                </span>
+              )}
+            </a>
+          )}
           <form method="POST" action="/api/auth/signout" data-astro-reload className="mt-1">
             <button
               type="submit"
