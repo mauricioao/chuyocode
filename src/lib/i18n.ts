@@ -367,6 +367,10 @@ export const UI_LABELS = {
         // never does, so these two never render there).
         correct: 'Correcto',
         incorrect: 'Incorrecto',
+        // A quiz question's mechanic has no shipped renderer yet (PR C,
+        // "Preguntas (quiz) block") — same wording as `ExerciseIsland`'s own
+        // local `unavailable` copy, kept in sync deliberately.
+        quizUnavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -375,8 +379,6 @@ export const UI_LABELS = {
         pageDescription: 'Practicar esta actividad de inglés: hojas de trabajo y preguntas con corrección al instante.',
         back: 'Volver a actividades',
         noLevel: 'Sin nivel',
-        quizComingSoonTitle: 'Próximamente',
-        quizComingSoonBody: 'Este tipo de bloque todavía no está disponible para practicar.',
         check: 'Comprobar',
         retry: 'Reintentar',
         score: 'Puntaje',
@@ -916,13 +918,12 @@ export const UI_LABELS = {
         choicePlaceholder: 'Choose an option',
         correct: 'Correct',
         incorrect: 'Incorrect',
+        quizUnavailable: 'This part of the exercise cannot be answered here yet.',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
         back: 'Back to activities',
         noLevel: 'No level',
-        quizComingSoonTitle: 'Coming soon',
-        quizComingSoonBody: 'This block type is not yet available to practise.',
         check: 'Check',
         retry: 'Try again',
         score: 'Score',
