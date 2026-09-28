@@ -443,3 +443,76 @@ export async function getPublishedActivities(opts: {
     return { activities: [], total: 0 };
   }
 }
+
+/** One activity + its PUBLISHED revision, as the practice page needs it. */
+export interface PublishedActivity {
+  id: string;
+  title: string;
+  level: Level | null;
+  blocks: Block[];
+}
+
+/**
+ * Fetch one LIVE activity and its published revision's blocks, in ONE round
+ * trip — a Postgrest embedded select through `activities.published_revision_id`'s
+ * own FK (`activities_published_revision_id_fkey`, named explicitly in
+ * `0011_activities.sql` for exactly this: `activities` and
+ * `activity_revisions` have TWO FKs between them — this one, and
+ * `activity_revisions.activity_id` back the other way — so the relationship
+ * must be named or Postgrest cannot tell which embed is meant).
+ *
+ * `visible = true` (i.e. `status = 'live'`) is the ONLY access rule: no
+ * ownership check, because the practice page is public to any signed-in
+ * visitor, not just the author — a non-live activity 404s for everyone,
+ * author included (the editor's own preview covers that case instead; see
+ * `WorksheetPlayer`'s creator-preview mode).
+ *
+ * FAIL-SAFE: `null` on any failure — same posture as `getActivityForEdit`.
+ */
+export async function getPublishedActivity(id: string): Promise<PublishedActivity | null> {
+  if (id.length === 0) return null;
+
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from(ACTIVITIES_TABLE)
+      .select('id, title, level, activity_revisions!activities_published_revision_id_fkey(blocks)')
+      .eq('id', id)
+      .eq('visible', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[activities] getPublishedActivity failed:', error.message);
+      return null;
+    }
+    if (!data) return null;
+
+    const row = data as unknown as Record<string, unknown>;
+    if (typeof row.title !== 'string') return null;
+
+    // A `belongs-to` embed (the FK lives on `activities`) comes back as a
+    // single object, not an array — but this is still a boundary read, so
+    // both shapes are tolerated defensively rather than assumed.
+    const embedded = row.activity_revisions;
+    const revision = Array.isArray(embedded) ? embedded[0] : embedded;
+    if (typeof revision !== 'object' || revision === null) return null;
+
+    const blocks = parseBlocks((revision as Record<string, unknown>).blocks);
+    if (!blocks) {
+      console.error('[activities] malformed published blocks for activity id:', id);
+      return null;
+    }
+
+    return {
+      id,
+      title: row.title,
+      level: isLevel(row.level) ? row.level : null,
+      blocks,
+    };
+  } catch (err) {
+    console.error('[activities] getPublishedActivity threw:', err);
+    return null;
+  }
+}

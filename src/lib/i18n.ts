@@ -334,6 +334,27 @@ export const UI_LABELS = {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
         textPlaceholder: 'Escribir la respuesta',
         choicePlaceholder: 'Elegir una opción',
+        // Per-zone grading feedback (PR D "Activities practice" — the
+        // practice player passes `practice.results`; the creator preview
+        // never does, so these two never render there).
+        correct: 'Correcto',
+        incorrect: 'Incorrecto',
+      },
+      // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
+      // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
+      // per-zone inputs; this block is the page's chrome around it.
+      practice: {
+        pageDescription: 'Practicar esta actividad de inglés: hojas de trabajo y preguntas con corrección al instante.',
+        back: 'Volver a actividades',
+        noLevel: 'Sin nivel',
+        quizComingSoonTitle: 'Próximamente',
+        quizComingSoonBody: 'Este tipo de bloque todavía no está disponible para practicar.',
+        check: 'Comprobar',
+        retry: 'Reintentar',
+        score: 'Puntaje',
+        viewedFirstTime: 'Primera vez',
+        viewedBefore: 'Ya lo viste',
+        viewedTimesMany: 'veces',
       },
       // Author's own workspace (`/[lang]/mis-actividades`, PR D "Activities
       // practice"). Status badges reuse `editor.status*` rather than
@@ -745,6 +766,21 @@ export const UI_LABELS = {
         notGraded: 'Preview: this view does not grade answers.',
         textPlaceholder: 'Type the answer',
         choicePlaceholder: 'Choose an option',
+        correct: 'Correct',
+        incorrect: 'Incorrect',
+      },
+      practice: {
+        pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
+        back: 'Back to activities',
+        noLevel: 'No level',
+        quizComingSoonTitle: 'Coming soon',
+        quizComingSoonBody: 'This block type is not yet available to practise.',
+        check: 'Check',
+        retry: 'Try again',
+        score: 'Score',
+        viewedFirstTime: 'First time',
+        viewedBefore: "You've seen this",
+        viewedTimesMany: 'times',
       },
       myActivities: {
         pageTitle: 'My activities',

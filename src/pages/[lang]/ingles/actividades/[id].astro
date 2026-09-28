@@ -1,0 +1,76 @@
+---
+/**
+ * Practice page — `/[lang]/ingles/actividades/[id]` (SSR, PR D "Activities
+ * practice"). Loads the activity + its PUBLISHED revision in one round trip
+ * (`getPublishedActivity`, `@lib/activities/activities`) and 404s for
+ * anything not `visible` — including the AUTHOR'S OWN non-live activity:
+ * this route is the public player, not a preview, and an author checking
+ * their own draft/pending work already has the editor's own preview mode
+ * (`WorksheetPlayer`'s creator-preview, unchanged from PR B) for that.
+ *
+ * Under `ingles/**`, so this route is ALREADY gated and marked
+ * private/no-store by the middleware — same posture as
+ * `/[lang]/ingles/actividades/index.astro`'s own header, no per-page gate
+ * or `markPrivate` call needed here.
+ *
+ * Renders EVERY block in order through `ActivityPracticeIsland`, which owns
+ * the one combined Comprobar/Reintentar/score interaction for the whole
+ * activity. `ActivityViewBadge` records this view (fire-and-forget, from
+ * the client, right after mount — see its own header for why) and shows
+ * "Ya lo viste · N veces" / "Primera vez" once the count comes back.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import ActivityPracticeIsland from '@components/islands/activities/ActivityPracticeIsland';
+import ActivityViewBadge from '@components/islands/activities/ActivityViewBadge';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getPublishedActivity } from '@lib/activities/activities';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const activity = await getPublishedActivity(id);
+if (!activity) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].activities.practice;
+const levelLabels = UI_LABELS[lang].english.levels;
+
+function resolveImageUrl(path: string): string {
+  return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
+}
+---
+
+<BaseLayout lang={lang} title={activity.title} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+    <header class="flex flex-col gap-2">
+      <a href={`/${lang}/ingles/actividades`} class="w-fit text-sm text-muted-foreground hover:text-accent">
+        &larr; {t.back}
+      </a>
+      <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
+        {activity.title}
+      </h1>
+      <p class="text-sm text-zinc-400">
+        {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}
+      </p>
+      <ActivityViewBadge client:load lang={lang} activityId={activity.id} />
+    </header>
+
+    <ActivityPracticeIsland
+      client:load
+      lang={lang}
+      blocks={activity.blocks}
+      resolveImageUrl={resolveImageUrl}
+    />
+  </section>
+</BaseLayout>

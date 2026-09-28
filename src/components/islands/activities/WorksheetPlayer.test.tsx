@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import WorksheetPlayer from './WorksheetPlayer';
 import type { Zone } from '@/lib/activities/blocks';
 
@@ -80,5 +80,131 @@ describe('WorksheetPlayer — rotation (creator polish round 2)', () => {
     const wrapper = screen.getByTestId('player-zone-z1');
     expect(wrapper.style.left).toBe('10%');
     expect(wrapper.style.top).toBe('20%');
+  });
+});
+
+describe('WorksheetPlayer — practice mode (PR D, "Activities practice")', () => {
+  it('hides the "not graded" notice when practice is given', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+      />,
+    );
+    expect(screen.getByTestId('worksheet-player').textContent).not.toContain('no corrige');
+  });
+
+  it('binds a text zone to practice.values and calls onChange while typing', () => {
+    const onChange = vi.fn();
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sa' }, onChange }}
+      />,
+    );
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(input.value).toBe('sa');
+    fireEvent.change(input, { target: { value: 'sat' } });
+    expect(onChange).toHaveBeenCalledWith('z1', 'sat');
+  });
+
+  it('binds a choice zone to practice.values and calls onChange on selection', () => {
+    const onChange = vi.fn();
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[CHOICE_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange }}
+      />,
+    );
+    const select = screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'b' } });
+    expect(onChange).toHaveBeenCalledWith('z2', 'b');
+  });
+
+  it('renders no correctness indicator before grading (no results yet)', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-result-z1')).toBeNull();
+  });
+
+  it('marks a correct zone with an accessible "Correcto" label', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } }}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
+  });
+
+  it('marks an incorrect zone with an accessible "Incorrecto" label', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Incorrecto');
+  });
+
+  it('disables every input once practice.disabled is true', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE, CHOICE_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {}, disabled: true }}
+      />,
+    );
+    expect((screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it('re-enables inputs and clears the correctness indicator after Reintentar (results/disabled cleared)', () => {
+    const { rerender } = render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false }, disabled: true }}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-result-z1')).toBeTruthy();
+
+    rerender(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-result-z1')).toBeNull();
+    expect((screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement).disabled).toBe(false);
   });
 });

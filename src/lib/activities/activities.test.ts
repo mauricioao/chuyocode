@@ -82,6 +82,7 @@ import {
   getActivityForEdit,
   getActivitiesByAuthor,
   getPublishedActivities,
+  getPublishedActivity,
   ACTIVITIES_PAGE_SIZE,
   clearActivitiesClient,
 } from './activities';
@@ -600,5 +601,92 @@ describe('getPublishedActivities', () => {
       throw new Error('network down');
     });
     expect(await getPublishedActivities({ level: null, page: 1 })).toEqual({ activities: [], total: 0 });
+  });
+});
+
+describe('getPublishedActivity', () => {
+  it('returns null when id is empty', async () => {
+    expect(await getPublishedActivity('')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the service client is unavailable', async () => {
+    clientState.available = false;
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('returns null when the fetch errors', async () => {
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('returns null when no visible activity matches (does not exist, or not live)', async () => {
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('filters on visible = true, not on ownership', async () => {
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
+    await getPublishedActivity(ACTIVITY_ID);
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
+    expect(eqMock).not.toHaveBeenCalledWith('author_id', expect.anything());
+  });
+
+  it('embeds through the named FK (activities_published_revision_id_fkey)', async () => {
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
+    await getPublishedActivity(ACTIVITY_ID);
+    expect(selectMock).toHaveBeenCalledWith(
+      'id, title, level, activity_revisions!activities_published_revision_id_fkey(blocks)',
+    );
+  });
+
+  it('returns null when the embedded revision is malformed blocks', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'x', level: null, activity_revisions: { blocks: 'not-an-array' } },
+      error: null,
+    });
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('returns null when there is no embedded revision at all', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'x', level: null, activity_revisions: null },
+      error: null,
+    });
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('returns the activity + published blocks on success (object-shaped embed)', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', activity_revisions: { blocks: SOME_BLOCKS } },
+      error: null,
+    });
+    const result = await getPublishedActivity(ACTIVITY_ID);
+    expect(result).toEqual({ id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', blocks: SOME_BLOCKS });
+  });
+
+  it('tolerates an array-shaped embed defensively', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: null, activity_revisions: [{ blocks: SOME_BLOCKS }] },
+      error: null,
+    });
+    const result = await getPublishedActivity(ACTIVITY_ID);
+    expect(result?.blocks).toEqual(SOME_BLOCKS);
+  });
+
+  it('normalizes an out-of-taxonomy level to null', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'x', level: 'zz', activity_revisions: { blocks: [] } },
+      error: null,
+    });
+    const result = await getPublishedActivity(ACTIVITY_ID);
+    expect(result?.level).toBeNull();
+  });
+
+  it('returns null when the client throws', async () => {
+    maybeSingleMock.mockImplementationOnce(() => {
+      throw new Error('network down');
+    });
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
   });
 });

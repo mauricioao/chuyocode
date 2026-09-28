@@ -476,11 +476,10 @@ export default function ActivityEditorIsland({
       {/* Compact top bar (owner request #1): title + level, plus — PR D,
           "Activities practice" — the review-state badge and "Enviar a
           revisión" (placed HERE, next to the rest of the top bar's own
-          controls, not in the sticky side toolbar: the owner is removing
-          that side toolbar in the very next PR, so nothing new should be
-          added to it). `lg:min-h-12` (was a hard `lg:h-12`) lets this row
-          grow if the badge/note wrap onto a second line instead of clipping
-          — everything else about this row is unchanged from PR B/C. */}
+          controls, per coordinator direction — `EditorSideToolbar` itself is
+          untouched by this PR). `lg:min-h-12` (was a hard `lg:h-12`) lets
+          this row grow if the badge/note wrap onto a second line instead of
+          clipping — everything else about this row is unchanged from PR B/C. */}
       <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-12 lg:flex-row lg:items-center lg:py-1.5">
         <label className="flex flex-1 flex-col gap-1 text-sm">
           <span className="sr-only">{t.titleLabel}</span>
