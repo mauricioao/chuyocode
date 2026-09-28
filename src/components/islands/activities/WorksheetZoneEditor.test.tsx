@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { useState } from 'react';
 import WorksheetZoneEditor from './WorksheetZoneEditor';
 import type { Zone } from '@/lib/activities/blocks';
 
 const IMAGE = { path: 'activity-uploads/u1/img.webp', width: 800, height: 400 };
+const SSR_ZONE: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
 
 afterEach(() => {
   cleanup();
@@ -1172,5 +1174,26 @@ describe('WorksheetZoneEditor — mobile properties bottom sheet (mobile layout 
     fireEvent.click(screen.getByTestId('select-z2'));
     expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
     expect(screen.getByTestId('zone-properties-sheet-peek').textContent).toContain('Opción');
+  });
+});
+
+describe('WorksheetZoneEditor — no layout flash on the server render (mobile layout pass, priority fix)', () => {
+  it('renders BOTH the desktop properties column and the mobile sheet on the server, gated by CSS `lg:` classes only', () => {
+    // Same "no real matchMedia" shape as a true server render — see
+    // `useIsDesktop.test.ts`'s own "defaults to true" test.
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
+    // The desktop column is hidden by default, shown only at `lg:` — never
+    // visible-by-default DOM/structure for a small screen (the bug this fixes).
+    expect(html).toContain('class="hidden lg:contents"');
+    expect(html).toContain('zone-properties-panel');
+    // The mobile sheet's own wrapper is visible by default, hidden only at `lg:`.
+    expect(html).toMatch(/class="contents lg:hidden" inert(="")?[^>]*>/);
+  });
+
+  it('does not mark the desktop column `inert` on the server (matches the SSR-safe desktop-first default)', () => {
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
+    expect(html).not.toMatch(/class="hidden lg:contents" inert/);
   });
 });

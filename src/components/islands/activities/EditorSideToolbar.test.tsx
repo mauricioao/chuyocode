@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import EditorSideToolbar from './EditorSideToolbar';
 import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
 import { clampToolbarPosition, dockTargetPosition } from '@/lib/activities/toolbarPosition';
@@ -563,5 +564,50 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     stubMobileViewport();
     renderToolbar();
     expect(screen.getByTestId('editor-side-toolbar-mobile').className).toContain('env(safe-area-inset-bottom)');
+  });
+});
+
+describe('EditorSideToolbar — no layout flash on the server render (mobile layout pass, priority fix)', () => {
+  /** Same default props shape `renderToolbar` builds, without mounting. */
+  function ssrProps(): Parameters<typeof EditorSideToolbar>[0] {
+    return {
+      lang: 'es',
+      blocks: [],
+      onCollapseAll: vi.fn(),
+      onExpandAll: vi.fn(),
+      onGoToBlock: vi.fn(),
+      onAddBlock: vi.fn(),
+      preview: false,
+      onTogglePreview: vi.fn(),
+      canUndo: false,
+      canRedo: false,
+      onUndo: vi.fn(),
+      onRedo: vi.fn(),
+      onSave: vi.fn(),
+      saveDisabled: false,
+      saveState: 'idle',
+      saveLabels: SAVE_LABELS,
+    };
+  }
+
+  it('renders BOTH the mobile bottom bar and the desktop rail, gated by CSS `lg:` classes only', () => {
+    // Same "no real matchMedia" shape as a true server render — see
+    // `useIsDesktop.test.ts`'s own "defaults to true" test.
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
+    expect(html).toContain('editor-side-toolbar-mobile');
+    expect(html).toContain('editor-side-toolbar"');
+    // The mobile bar's own wrapper is visible by default, hidden only at `lg:`.
+    expect(html).toMatch(/class="contents lg:hidden"[^>]*>\s*<div[^>]*data-testid="editor-side-toolbar-mobile"/);
+    // The desktop rail's own wrapper is hidden by default, shown only at `lg:` —
+    // never visible-by-default DOM/structure for a small screen (the bug this fixes).
+    expect(html).toContain('class="hidden lg:contents"');
+  });
+
+  it('marks the mobile bar `inert` on the server (matches `useIsDesktop`\'s SSR-safe desktop-first default)', () => {
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
+    expect(html).toMatch(/class="contents lg:hidden" inert(="")?[^>]*>/);
+    expect(html).not.toMatch(/class="hidden lg:contents" inert/);
   });
 });

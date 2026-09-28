@@ -108,6 +108,7 @@ import {
   type Size,
 } from '@/lib/activities/canvasViewport';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
+import { useHydrated } from '@/hooks/useHydrated';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/ui/BottomSheet';
 
@@ -192,6 +193,7 @@ export default function WorksheetZoneEditor({
   // NEW selection, so tapping a zone always shows the compact peek first,
   // never jumping straight to the full form.
   const isDesktop = useIsDesktop();
+  const hydrated = useHydrated();
   const [mobilePanelExpanded, setMobilePanelExpanded] = useState(false);
   useEffect(() => {
     setMobilePanelExpanded(false);
@@ -1140,26 +1142,56 @@ export default function WorksheetZoneEditor({
           phone — that hint is what `addZoneHint` below the canvas already
           says). `zonePropertiesContent` is the exact same JSX either way,
           computed once. */}
-      {isDesktop ? (
-        <div className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72" data-testid="zone-properties-panel">
-          {zonePropertiesContent ?? (
-            <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
-              <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
-              <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
+      {(() => {
+        const desktopPanel = (
+          <div className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72" data-testid="zone-properties-panel">
+            {zonePropertiesContent ?? (
+              <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
+                <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
+              </div>
+            )}
+          </div>
+        );
+        const mobileSheet = (
+          <BottomSheet
+            open={mobilePanelExpanded && selectedZone !== null}
+            onOpenChange={setMobilePanelExpanded}
+            title={selectedZoneKindLabel ?? t.zoneKindLabel}
+            testId="zone-properties-sheet"
+            peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
+          >
+            {zonePropertiesContent}
+          </BottomSheet>
+        );
+
+        // No-flash split (mobile layout pass, priority fix): these are two
+        // genuinely different subtrees (a plain always-visible column vs. a
+        // Radix-backed BottomSheet) — a CSS-only `hidden lg:block` toggle
+        // would mount BOTH (duplicate zone-properties inputs/ids). `isDesktop`
+        // alone defaults to `true` before hydration, so it used to render the
+        // desktop column's structure on a phone's very first paint. `!hydrated`
+        // (server render + the very first client paint) instead renders BOTH,
+        // gated purely by CSS `lg:` classes (real media queries, correct on
+        // every viewport immediately, no JS needed) — see `useHydrated`'s own
+        // header. The mobile sheet is additionally `inert` there: a STATIC
+        // (not `isDesktop`-driven) choice matching `useIsDesktop`'s own
+        // desktop-first SSR default, so the attribute itself never disagrees
+        // between the server and the first client render either. Once
+        // `hydrated` is true (flushed synchronously by Testing Library's own
+        // `render()` — every existing test above still finds exactly one of
+        // `zone-properties-panel`/`zone-properties-sheet`), this collapses to
+        // mounting only the one `isDesktop` says matches, same as before.
+        if (hydrated) return isDesktop ? desktopPanel : mobileSheet;
+        return (
+          <>
+            <div className="hidden lg:contents">{desktopPanel}</div>
+            <div className="contents lg:hidden" inert>
+              {mobileSheet}
             </div>
-          )}
-        </div>
-      ) : (
-        <BottomSheet
-          open={mobilePanelExpanded && selectedZone !== null}
-          onOpenChange={setMobilePanelExpanded}
-          title={selectedZoneKindLabel ?? t.zoneKindLabel}
-          testId="zone-properties-sheet"
-          peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
-        >
-          {zonePropertiesContent}
-        </BottomSheet>
-      )}
+          </>
+        );
+      })()}
     </div>
   );
 }

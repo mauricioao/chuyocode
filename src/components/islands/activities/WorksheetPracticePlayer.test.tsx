@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import type { WorksheetBlock } from '@/lib/activities/blocks';
 
@@ -84,5 +85,33 @@ describe('WorksheetPracticePlayer', () => {
   it('shows grading feedback once practice.results is provided', () => {
     renderPlayer({ practice: { values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } } });
     expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
+  });
+});
+
+describe('WorksheetPracticePlayer — no layout flash on the server render (mobile layout pass, priority fix)', () => {
+  it('renders BOTH the desktop zoom toolbar and the mobile pinch viewport on the server, gated by CSS `lg:` classes only', () => {
+    // Same "no real matchMedia" shape as a true server render — see
+    // `useIsDesktop.test.ts`'s own "defaults to true" test.
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(
+      <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
+    );
+    // The desktop toolbar+scroll wrapper is hidden by default, shown only at
+    // `lg:` — never visible-by-default DOM/structure for a small screen.
+    expect(html).toContain('class="hidden lg:contents"');
+    expect(html).toContain('practice-zoom-content');
+    // The mobile camera viewport's own wrapper is visible by default, hidden
+    // only at `lg:`, and marked `inert` (matches the SSR-safe desktop-first
+    // default `useIsDesktop` documents).
+    expect(html).toMatch(/class="contents lg:hidden" inert(="")?[^>]*>/);
+    expect(html).toContain('practice-mobile-viewport');
+  });
+
+  it('does not mark the desktop toolbar `inert` on the server', () => {
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(
+      <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
+    );
+    expect(html).not.toMatch(/class="hidden lg:contents" inert/);
   });
 });

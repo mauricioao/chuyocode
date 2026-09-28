@@ -28,6 +28,7 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { WorksheetBlock } from '@/lib/activities/blocks';
 import { clampZoom, stepZoom } from '@/lib/activities/canvasViewport';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
+import { useHydrated } from '@/hooks/useHydrated';
 import { Button } from '@/components/ui/button';
 import WorksheetPlayer, { type WorksheetPracticeState } from './WorksheetPlayer';
 import WorksheetPracticePlayerMobile from './WorksheetPracticePlayerMobile';
@@ -48,12 +49,9 @@ export default function WorksheetPracticePlayer({ lang, block, imageUrl, practic
   const t = UI_LABELS[lang].activities.worksheet;
   const [zoom, setZoom] = useState(FIT_ZOOM);
   const isDesktop = useIsDesktop();
+  const hydrated = useHydrated();
 
-  if (!isDesktop) {
-    return <WorksheetPracticePlayerMobile lang={lang} block={block} imageUrl={imageUrl} practice={practice} />;
-  }
-
-  return (
+  const desktopView = (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-end gap-1" role="group" aria-label={t.zoomLevel}>
         <Button
@@ -100,5 +98,36 @@ export default function WorksheetPracticePlayer({ lang, block, imageUrl, practic
         </div>
       </div>
     </div>
+  );
+
+  const mobileView = (
+    <WorksheetPracticePlayerMobile lang={lang} block={block} imageUrl={imageUrl} practice={practice} />
+  );
+
+  // No-flash split (mobile layout pass, priority fix): the desktop
+  // toolbar+horizontal-scroll model and the mobile pinch/pan camera are two
+  // genuinely different subtrees (different gesture model entirely — see
+  // this file's own header and `WorksheetPracticePlayerMobile.tsx`'s), not a
+  // CSS-only toggle away from each other. `isDesktop` alone defaults to
+  // `true` before hydration, so it used to render the desktop toolbar's
+  // structure on a phone's very first paint. `!hydrated` (server render +
+  // the very first client paint) instead renders BOTH, gated purely by CSS
+  // `lg:` classes (real media queries, correct on every viewport
+  // immediately, no JS needed) — see `useHydrated`'s own header. The mobile
+  // view is additionally `inert` there: a STATIC (not `isDesktop`-driven)
+  // choice matching `useIsDesktop`'s own desktop-first SSR default, so the
+  // attribute itself never disagrees between the server and the first
+  // client render either. Once `hydrated` is true (flushed synchronously by
+  // Testing Library's own `render()` — every existing test keeps finding
+  // exactly one `WorksheetPlayer`/zoom toolbar), this collapses to mounting
+  // only the one `isDesktop` says matches, same as before.
+  if (hydrated) return isDesktop ? desktopView : mobileView;
+  return (
+    <>
+      <div className="hidden lg:contents">{desktopView}</div>
+      <div className="contents lg:hidden" inert>
+        {mobileView}
+      </div>
+    </>
   );
 }
