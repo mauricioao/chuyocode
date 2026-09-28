@@ -538,94 +538,115 @@ export default function ActivityEditorIsland({
   );
 
   return (
-    // Desktop "one-screen" layout: `lg:h-[calc(100dvh-65px)]` sizes this
-    // whole island to EXACTLY the viewport height still left after the site
-    // header (`Header.astro`, unchanged — 65px = its 1px border-b + 32px
-    // `py-4` + a 32px `h-8` logo row) — see `[id].astro`'s own comment for
-    // why it, in turn, adds no extra vertical padding of its own at `lg:`.
-    // `lg:pr-16` reserves room for `EditorSideToolbar`'s `fixed right-3`
-    // icon rail so it never overlaps the canvas/properties column. Below
-    // `lg:` this is intentionally untouched — today's stacked, scrollable
-    // layout keeps working; a dedicated mobile layout comes later.
+    // Desktop "one-screen" layout, creator polish round 3: ONE framed card
+    // (border, rounded, `bg-card`) with real vertical margins from the site
+    // header AND the footer — `[id].astro`'s `lg:py-6` section padding IS
+    // those margins, so `lg:h-[calc(100dvh-65px-3rem)]` here must change
+    // together with it (65px = `Header.astro`'s own height, unchanged — its
+    // 1px border-b + 32px `py-4` + a 32px `h-8` logo row; 3rem = that
+    // section's `lg:py-6`, top + bottom). `lg:pr-16` reserves room for
+    // `EditorSideToolbar`'s `fixed right-3` icon rail — UNTOUCHED by this
+    // pass, per owner decision — so it never overlaps the canvas/properties
+    // column. Below `lg:` this is intentionally untouched — today's
+    // stacked, scrollable layout keeps working; a dedicated mobile layout
+    // comes later.
     <div
       data-testid="activity-editor-island"
-      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px)] lg:gap-2 lg:pr-16"
+      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px-3rem)] lg:gap-2 lg:pr-16"
     >
-      {/* Compact top bar (owner request #1): title + level, plus — PR D,
-          "Activities practice" — the review-state badge and "Enviar a
-          revisión" (placed HERE, next to the rest of the top bar's own
-          controls, per coordinator direction — `EditorSideToolbar` itself is
-          untouched by this PR). `lg:min-h-12` (was a hard `lg:h-12`) lets
-          this row grow if the badge/note wrap onto a second line instead of
-          clipping — everything else about this row is unchanged from PR B/C. */}
-      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-12 lg:flex-row lg:items-center lg:py-1.5">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          <span className="sr-only">{t.titleLabel}</span>
-          <input
-            type="text"
-            data-testid="activity-title-input"
-            aria-label={t.titleLabel}
-            value={title}
-            onChange={(e) => changeTitle(e.target.value)}
-            className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="sr-only">{t.levelLabel}</span>
-          <select
-            data-testid="activity-level-select"
-            aria-label={t.levelLabel}
-            value={level ?? ''}
-            onChange={(e) => changeLevel(e.target.value)}
-            className="h-9 rounded border border-border bg-background px-2 text-foreground"
-          >
-            <option value="">{t.levelNone}</option>
-            {LEVELS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {levelLabels[lvl]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
-          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-              : t.statusDraft}
-          </span>
-          {status === 'rejected' && initialReviewNote && (
-            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-              {t.reviewNoteLabel}: {initialReviewNote}
+      {/* THE card: everything below is inside it, one bordered/rounded
+          surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays
+          fully visible on screen" guarantee — the header row below is
+          `flex-none` (its own intrinsic height), the body below it is the
+          ONLY flexible, scrolling area, so the card as a whole can never
+          grow past the height the root above gives it. */}
+      <div
+        data-testid="activity-editor-card"
+        className="flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:bg-card"
+      >
+        {/* Compact header row (owner request #1, creator polish round 2):
+            title + level, plus — PR D, "Activities practice" — the
+            review-state badge and "Enviar a revisión". `lg:min-h-14` (was a
+            hard `lg:h-12`) lets this row grow if the badge/note wrap onto a
+            second line instead of clipping. Creator polish round 3
+            (desktop only — below `lg:` this row keeps its own original box
+            untouched): the title becomes the visibly larger, semibold field
+            (it names the whole card), and at `lg:` this row IS the card's
+            own header (`border-b`, not a separate boxed element) — no other
+            action row lives here. */}
+        <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            <span className="sr-only">{t.titleLabel}</span>
+            <input
+              type="text"
+              data-testid="activity-title-input"
+              aria-label={t.titleLabel}
+              value={title}
+              onChange={(e) => changeTitle(e.target.value)}
+              className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="sr-only">{t.levelLabel}</span>
+            <select
+              data-testid="activity-level-select"
+              aria-label={t.levelLabel}
+              value={level ?? ''}
+              onChange={(e) => changeLevel(e.target.value)}
+              className="h-9 rounded border border-border bg-background px-2 text-foreground"
+            >
+              <option value="">{t.levelNone}</option>
+              {LEVELS.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {levelLabels[lvl]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+            <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+              {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+                ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+                : t.statusDraft}
             </span>
-          )}
+            {status === 'rejected' && initialReviewNote && (
+              <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+                {t.reviewNoteLabel}: {initialReviewNote}
+              </span>
+            )}
+          </div>
+          <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
+            {t.submitForReview}
+          </Button>
         </div>
-        <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
-          {t.submitForReview}
-        </Button>
-      </div>
 
-      {preview ? (
-        <div data-testid="activity-preview" className="flex flex-col gap-6">
-          {blocks
-            .filter((b): b is WorksheetBlock => b.type === 'worksheet')
-            .map((block) => (
-              <WorksheetPlayer
-                key={block.id}
-                lang={lang}
-                image={block.image}
-                zones={block.zones}
-                rotation={block.rotation}
-                imageUrl={resolveImageUrl(block.image.path)}
-              />
-            ))}
-        </div>
-      ) : (
-        <>
-          {/* `lg:min-h-0 lg:flex-1`: this row (not the whole island) is what
-              actually fills the remaining one-screen height — see
-              `BlockList.tsx`'s own header for how its ONE active/expanded
-              block then gets the flexible height inside it. */}
-          <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+        {preview ? (
+          <div
+            data-testid="activity-preview"
+            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:p-3"
+          >
+            {blocks
+              .filter((b): b is WorksheetBlock => b.type === 'worksheet')
+              .map((block) => (
+                <WorksheetPlayer
+                  key={block.id}
+                  lang={lang}
+                  image={block.image}
+                  zones={block.zones}
+                  rotation={block.rotation}
+                  imageUrl={resolveImageUrl(block.image.path)}
+                />
+              ))}
+          </div>
+        ) : (
+          // The card's body: consistent inner padding (`p-3`) so nothing
+          // touches the card edges, and THIS is the one scrolling region
+          // (`min-h-0 flex-1 overflow-y-auto`) — see `BlockList.tsx`'s own
+          // header for how its ONE active/expanded block then gets the
+          // flexible height inside it. The add-block flow (picker/uploader)
+          // scrolls into view here too, inside the same card, instead of
+          // growing the page past it.
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3">
             <BlockList
               lang={lang}
               blocks={blocks}
@@ -639,35 +660,31 @@ export default function ActivityEditorIsland({
               incompleteZoneId={incompleteTarget?.zoneId ?? null}
               incompleteMessage={incompleteMessage}
             />
+
+            {/* Desktop already has this same action in the sticky side
+                toolbar's icon (`toolbar-add-block`, always reachable
+                without scrolling); this text button stays for
+                mobile/narrow layouts. */}
+            {!addingBlock && (
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="add-block-button"
+                onClick={() => setAddingBlock(true)}
+                className="flex-none lg:hidden"
+              >
+                + {t.addBlock}
+              </Button>
+            )}
+
+            {addingBlock && !showUploader && (
+              <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
+            )}
+
+            {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
           </div>
-
-          {/* Desktop already has this same action in the sticky side
-              toolbar's icon (`toolbar-add-block`, always reachable without
-              scrolling); this text button stays for mobile/narrow layouts,
-              which don't have that fixed-height constraint to begin with. */}
-          {!addingBlock && (
-            <Button
-              type="button"
-              variant="outline"
-              data-testid="add-block-button"
-              onClick={() => setAddingBlock(true)}
-              className="lg:hidden"
-            >
-              + {t.addBlock}
-            </Button>
-          )}
-
-          {/* The add-block flow (picker/uploader) is an occasional, one-off
-              action, not the steady "editing a block" state the one-screen
-              layout targets — on desktop it deliberately falls back to
-              normal page scrolling if it doesn't fit, same as "expand all". */}
-          {addingBlock && !showUploader && (
-            <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
-          )}
-
-          {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
-        </>
-      )}
+        )}
+      </div>
 
       <EditorSideToolbar
         lang={lang}

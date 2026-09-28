@@ -59,14 +59,16 @@ const t = UI_LABELS[lang].activities.editor;
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
   {/*
-    One-screen creator layout (desktop only): no extra `lg:` vertical
-    padding here — `ActivityEditorIsland`'s own root sizes itself to
-    `calc(100dvh - <site header height>)`, and any padding this section
-    added on top of that would throw that calculation off. Horizontal
-    padding is untouched; below `lg:` this section keeps its normal
-    padded, scrollable layout.
+    One-screen creator layout (desktop only), creator polish round 3: the
+    editor is ONE framed card with real breathing room from the site header
+    AND the footer — never glued to either. `lg:py-6` here IS that margin
+    (1.5rem top + 1.5rem bottom); `ActivityEditorIsland`'s own root sizes
+    itself to `calc(100dvh - <site header height> - <this section's own
+    lg:py-6>)`, so THIS value and that calc must change together (see its
+    own comment). Horizontal padding is untouched; below `lg:` this section
+    keeps its normal padded, scrollable layout.
   */}
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:gap-0 lg:px-8 lg:py-0">
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:gap-0 lg:px-8 lg:py-6">
     <ActivityEditorIsland
       client:load
       lang={lang}

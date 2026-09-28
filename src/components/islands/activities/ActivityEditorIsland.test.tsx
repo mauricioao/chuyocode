@@ -107,6 +107,31 @@ describe('ActivityEditorIsland — initial render', () => {
   });
 });
 
+describe('ActivityEditorIsland — one framed card (creator polish round 3)', () => {
+  it('wraps the title/level header row and the block list inside ONE bordered card', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const card = screen.getByTestId('activity-editor-card');
+    expect(card.className).toContain('lg:rounded-lg');
+    expect(card.className).toContain('lg:border');
+    expect(card.className).toContain('lg:bg-card');
+    expect(card.contains(screen.getByTestId('activity-title-input'))).toBe(true);
+    expect(card.contains(screen.getByTestId('block-list'))).toBe(true);
+    // The header row no longer carries its own separate box at `lg:` —
+    // only a bottom border, since the card itself supplies the frame.
+    const header = screen.getByTestId('activity-title-input').closest('label')?.parentElement;
+    expect(header?.className).toContain('lg:border-b');
+    expect(header?.className).toContain('lg:rounded-none');
+  });
+
+  it('keeps the sticky side toolbar exactly outside/unaffected by the card', () => {
+    renderEditor();
+    const card = screen.getByTestId('activity-editor-card');
+    const toolbar = screen.getByTestId('editor-side-toolbar');
+    expect(card.contains(toolbar)).toBe(false);
+    expect(toolbar.className).toContain('fixed');
+  });
+});
+
 describe('ActivityEditorIsland — autosave', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

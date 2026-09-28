@@ -514,8 +514,11 @@ export default function WorksheetZoneEditor({
   const canvasCursorClass = isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-crosshair';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row" data-testid="worksheet-zone-editor">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row"
+      data-testid="worksheet-zone-editor"
+    >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div
           className="mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
           data-testid="zoom-toolbar"

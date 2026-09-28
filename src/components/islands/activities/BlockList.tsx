@@ -190,11 +190,11 @@ function SortableBlockItem({
       style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
       data-dragging={isDragging ? 'true' : undefined}
       data-focus-active={focusActive ? 'true' : undefined}
-      className={`flex min-h-0 flex-col rounded-lg border border-border ${
+      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border ${
         focusActive ? 'lg:min-h-[22rem] lg:flex-1' : 'lg:flex-none'
       }`}
     >
-      <div className="flex min-h-0 flex-1 items-start gap-1 px-1 pt-1">
+      <div className="flex min-h-0 min-w-0 flex-1 items-start gap-1 px-1 pt-1">
         <button
           type="button"
           aria-label={handleLabel}
@@ -296,7 +296,7 @@ export default function BlockList({
                 handleLabel={`${t.dragHandle}: ${name}`}
                 focusActive={focusBlockId === block.id}
               >
-                <div data-testid={`block-${block.id}`} className="flex min-h-0 flex-1 flex-col">
+                <div data-testid={`block-${block.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <div className="flex flex-none flex-wrap items-center gap-2 py-1">
                     <button
                       type="button"
@@ -374,7 +374,7 @@ export default function BlockList({
                     // its name/handle (this header, then the canvas' own
                     // zoom toolbar) rather than one padded content area —
                     // every pixel here is height the canvas doesn't get.
-                    <div className="flex min-h-0 flex-1 flex-col border-t border-border px-2 pb-2 pt-1">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border px-2 pb-2 pt-1">
                       <WorksheetZoneEditor
                         lang={lang}
                         image={worksheet.image}
