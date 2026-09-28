@@ -1,9 +1,22 @@
 /**
  * WorksheetPlayer — renders a worksheet block the way a LEARNER sees it:
- * the image, with one input/select positioned over each zone, NOT GRADED
- * (PR B, "Activities creator" — the editor's own preview mode). Kept as its
- * own component, separate from the editor, so PR D's real player can mount
- * it unchanged against a published revision's blocks.
+ * the image, with one input/select positioned over each zone (PR B,
+ * "Activities creator" — the editor's own preview mode). Kept as its own
+ * component, separate from the editor, so PR D's real practice player could
+ * mount it unchanged — and does, via the optional `practice` prop below.
+ *
+ * TWO MODES, one component:
+ *  - `practice` omitted (default): the editor's creator-preview mode —
+ *    uncontrolled inputs, nothing graded, the "Vista previa" notice shown.
+ *    Unchanged from PR B.
+ *  - `practice` given (PR D, "Activities practice"): the real learner
+ *    player — CONTROLLED inputs bound to `practice.values`/`onChange`, no
+ *    "not graded" notice, and — once `practice.results` is provided by the
+ *    caller's own "Comprobar" action — each zone gets a green/red ring plus
+ *    an accessible correct/incorrect label. `practice.disabled` locks every
+ *    input after grading, until the caller's own "Reintentar" clears
+ *    `results` and re-enables them. `WorksheetPracticePlayer` is the caller
+ *    that supplies all of this, wrapped with zoom controls.
  *
  * Positioning is pure CSS percentages derived from each {@link Zone}'s
  * fractional `x`/`y`/`w`/`h` — the same fractions `parseZone` accepts —
@@ -16,6 +29,17 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 
+/** PR D, "Activities practice" — turns the creator preview into a gradable, controlled player. See file header. */
+export interface WorksheetPracticeState {
+  /** zone id -> the learner's current answer (text) or selected option (choice). */
+  values: Record<string, string>;
+  onChange: (zoneId: string, value: string) => void;
+  /** zone id -> correct/incorrect, present only once graded. Absent entirely = not graded yet. */
+  results?: Record<string, boolean>;
+  /** Locks every input once graded, until "Reintentar" clears `results`. */
+  disabled?: boolean;
+}
+
 export interface WorksheetPlayerProps {
   lang: Lang;
   image: ImageRef;
@@ -24,9 +48,18 @@ export interface WorksheetPlayerProps {
   imageUrl: string;
   /** The worksheet's own rotation (creator polish round 2) — rendered here exactly like the editor. */
   rotation?: Rotation;
+  /** Omitted = creator preview (PR B, unchanged). Given = the real practice player (PR D). See file header. */
+  practice?: WorksheetPracticeState;
 }
 
-export default function WorksheetPlayer({ lang, image, zones, imageUrl, rotation = 0 }: WorksheetPlayerProps) {
+export default function WorksheetPlayer({
+  lang,
+  image,
+  zones,
+  imageUrl,
+  rotation = 0,
+  practice,
+}: WorksheetPlayerProps) {
   const t = UI_LABELS[lang].activities.player;
   const containerRef = useRef<HTMLDivElement>(null);
   // Only needed for a 90/270 rotation, where the pre-rotation image box must
@@ -73,7 +106,7 @@ export default function WorksheetPlayer({ lang, image, zones, imageUrl, rotation
 
   return (
     <div data-testid="worksheet-player" className="w-full">
-      <p className="mb-2 text-xs text-muted-foreground">{t.notGraded}</p>
+      {!practice && <p className="mb-2 text-xs text-muted-foreground">{t.notGraded}</p>}
       <div
         ref={containerRef}
         className="relative w-full overflow-hidden rounded-lg bg-muted"
@@ -92,20 +125,50 @@ export default function WorksheetPlayer({ lang, image, zones, imageUrl, rotation
             width: `${zone.w * 100}%`,
             height: `${zone.h * 100}%`,
           };
+
+          // Present only once `practice.results` exists AND names this
+          // zone — a zone the caller's grading pass could not reach for
+          // some reason stays neither-green-nor-red rather than defaulting
+          // to either color.
+          const isGraded = practice?.results !== undefined && zone.id in practice.results;
+          const isCorrect = isGraded ? practice!.results![zone.id] : undefined;
+          const gradedClassName = isGraded
+            ? isCorrect
+              ? 'border-emerald-500 ring-2 ring-emerald-500/50'
+              : 'border-destructive ring-2 ring-destructive/50'
+            : 'border-border';
+          const fieldClassName = `h-full w-full rounded border bg-background/95 px-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${gradedClassName}`;
+          const statusLabel = isGraded ? (isCorrect ? t.correct : t.incorrect) : undefined;
+
           return (
             <div key={zone.id} data-testid={`player-zone-${zone.id}`} className="absolute" style={style}>
               {zone.kind === 'text' ? (
                 <input
                   type="text"
-                  aria-label={t.textPlaceholder}
+                  aria-label={statusLabel ? `${t.textPlaceholder} — ${statusLabel}` : t.textPlaceholder}
                   placeholder={t.textPlaceholder}
-                  className="h-full w-full rounded border border-border bg-background/95 px-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className={fieldClassName}
+                  {...(practice
+                    ? {
+                        value: practice.values[zone.id] ?? '',
+                        onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                          practice.onChange(zone.id, e.target.value),
+                        disabled: practice.disabled,
+                      }
+                    : {})}
                 />
               ) : (
                 <select
-                  aria-label={t.choicePlaceholder}
-                  defaultValue=""
-                  className="h-full w-full rounded border border-border bg-background/95 px-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  aria-label={statusLabel ? `${t.choicePlaceholder} — ${statusLabel}` : t.choicePlaceholder}
+                  className={fieldClassName}
+                  {...(practice
+                    ? {
+                        value: practice.values[zone.id] ?? '',
+                        onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
+                          practice.onChange(zone.id, e.target.value),
+                        disabled: practice.disabled,
+                      }
+                    : { defaultValue: '' })}
                 >
                   <option value="" disabled>
                     {t.choicePlaceholder}
@@ -116,6 +179,11 @@ export default function WorksheetPlayer({ lang, image, zones, imageUrl, rotation
                     </option>
                   ))}
                 </select>
+              )}
+              {statusLabel && (
+                <span data-testid={`player-zone-result-${zone.id}`} className="sr-only">
+                  {statusLabel}
+                </span>
               )}
             </div>
           );

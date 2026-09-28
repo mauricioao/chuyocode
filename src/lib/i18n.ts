@@ -160,6 +160,10 @@ export const UI_LABELS = {
         // the rest of this map: it is chrome for the header's identity
         // chip, not copy owned by the creator pages themselves.
         createActivity: 'Crear actividad',
+        // Links to the author's own workspace (`/[lang]/mis-actividades`, PR
+        // D "Activities practice"). Same placement/chrome rule as
+        // `createActivity` right above it.
+        myActivities: 'Mis actividades',
         signOut: 'Cerrar sesión',
       },
     },
@@ -251,6 +255,33 @@ export const UI_LABELS = {
         unsavedModalSaveAndLeave: 'Guardar y salir',
         unsavedModalLeaveWithoutSaving: 'Salir sin guardar',
         unsavedModalCancel: 'Cancelar',
+        // Review-state badge (PR D, "Activities practice") — mirrors
+        // `activities.status` exactly (draft/pending_review/live/rejected);
+        // `removed` never reaches the editor (excluded from the author's own
+        // edit surface, `getActivityForEdit`'s header).
+        statusDraft: 'Borrador',
+        statusPendingReview: 'En revisión',
+        statusLive: 'Publicada',
+        statusRejected: 'Rechazada',
+        reviewNoteLabel: 'Nota del revisor',
+        // Submit-for-review dialog.
+        submitForReview: 'Enviar a revisión',
+        submitDialogTitle: 'Enviar esta actividad a revisión',
+        submitDialogNote: 'La actividad va a ser revisada por un moderador antes de publicarse.',
+        submitRightsLabel: 'Confirmo que tengo el derecho de usar este material.',
+        submitConfirm: 'Enviar',
+        submitCancel: 'Cancelar',
+        submitting: 'Enviando…',
+        // Keyed by the endpoint's own reason codes (`enviar.ts`'s header).
+        submitErrors: {
+          rights_required: 'Hace falta confirmar el derecho de uso del material.',
+          invalid_title: 'Poner un título antes de enviar la actividad.',
+          no_blocks: 'Agregar al menos un bloque antes de enviar la actividad.',
+          missing_zones: 'Cada hoja de trabajo necesita al menos una zona de respuesta.',
+          invalid_blocks: 'El contenido de la actividad no es válido.',
+          no_draft: 'No hay cambios nuevos para enviar a revisión.',
+          submit_failed: 'No se pudo enviar la actividad. Intentar de nuevo.',
+        },
       },
       worksheet: {
         uploadTitle: 'Subir una imagen o un PDF',
@@ -303,6 +334,71 @@ export const UI_LABELS = {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
         textPlaceholder: 'Escribir la respuesta',
         choicePlaceholder: 'Elegir una opción',
+        // Per-zone grading feedback (PR D "Activities practice" — the
+        // practice player passes `practice.results`; the creator preview
+        // never does, so these two never render there).
+        correct: 'Correcto',
+        incorrect: 'Incorrecto',
+      },
+      // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
+      // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
+      // per-zone inputs; this block is the page's chrome around it.
+      practice: {
+        pageDescription: 'Practicar esta actividad de inglés: hojas de trabajo y preguntas con corrección al instante.',
+        back: 'Volver a actividades',
+        noLevel: 'Sin nivel',
+        quizComingSoonTitle: 'Próximamente',
+        quizComingSoonBody: 'Este tipo de bloque todavía no está disponible para practicar.',
+        check: 'Comprobar',
+        retry: 'Reintentar',
+        score: 'Puntaje',
+        viewedFirstTime: 'Primera vez',
+        viewedBefore: 'Ya lo viste',
+        viewedTimesMany: 'veces',
+      },
+      // Author's own workspace (`/[lang]/mis-actividades`, PR D "Activities
+      // practice"). Status badges reuse `editor.status*` rather than
+      // duplicating them — same status vocabulary, same screen family.
+      myActivities: {
+        pageTitle: 'Mis actividades',
+        pageDescription: 'Las actividades creadas: editar, ver o eliminar cada una.',
+        empty: 'Todavía no se creó ninguna actividad.',
+        createCta: 'Crear actividad',
+        noLevel: 'Sin nivel',
+        blockCountOne: 'bloque',
+        blockCountMany: 'bloques',
+        pendingChangesNote: 'Cambios en revisión',
+        edit: 'Editar',
+        view: 'Ver',
+        delete: 'Eliminar',
+        deleteConfirmTitle: '¿Eliminar esta actividad?',
+        deleteConfirmBody: 'Esta acción no se puede deshacer.',
+        deleteConfirmCancel: 'Cancelar',
+        deleteConfirmAccept: 'Eliminar',
+        deleteError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
+      },
+      // Public feed (`/[lang]/ingles/actividades`, PR D "Activities
+      // practice") — live activities only, newest published first. Under
+      // `ingles/**`, so `@lib/access`'s section gate and the middleware's
+      // own `markPrivate` already cover it; nothing extra is needed here.
+      explore: {
+        pageTitle: 'Actividades de la comunidad',
+        pageDescription:
+          'Actividades creadas por otros usuarios de ChuyoCode: hojas de trabajo y preguntas para practicar.',
+        heading: 'Actividades de la comunidad',
+        cardTitle: 'Actividades de la comunidad',
+        cardDescription: 'Practicar con hojas de trabajo y preguntas creadas por otros usuarios.',
+        empty: 'Todavía no hay actividades publicadas.',
+        emptyLevel: 'Todavía no hay actividades publicadas para este nivel.',
+        allLevels: 'Todos los niveles',
+        noLevel: 'Sin nivel',
+        blockCountOne: 'bloque',
+        blockCountMany: 'bloques',
+        pagination: 'Paginación',
+        prevPage: 'Anterior',
+        nextPage: 'Siguiente',
+        pageLabel: 'Página',
+        ofLabel: 'de',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -511,6 +607,7 @@ export const UI_LABELS = {
         planFree: 'Free',
         planPremium: 'Premium',
         createActivity: 'Create activity',
+        myActivities: 'My activities',
         signOut: 'Sign out',
       },
     },
@@ -596,6 +693,27 @@ export const UI_LABELS = {
         unsavedModalSaveAndLeave: 'Save and leave',
         unsavedModalLeaveWithoutSaving: 'Leave without saving',
         unsavedModalCancel: 'Cancel',
+        statusDraft: 'Draft',
+        statusPendingReview: 'In review',
+        statusLive: 'Published',
+        statusRejected: 'Rejected',
+        reviewNoteLabel: "Reviewer's note",
+        submitForReview: 'Submit for review',
+        submitDialogTitle: 'Submit this activity for review',
+        submitDialogNote: 'A moderator will review your activity before it is published.',
+        submitRightsLabel: 'I confirm I have the right to use this material.',
+        submitConfirm: 'Submit',
+        submitCancel: 'Cancel',
+        submitting: 'Submitting…',
+        submitErrors: {
+          rights_required: 'Confirming the right to use this material is required.',
+          invalid_title: 'Add a title before submitting this activity.',
+          no_blocks: 'Add at least one block before submitting this activity.',
+          missing_zones: 'Every worksheet needs at least one answer zone.',
+          invalid_blocks: "This activity's content is not valid.",
+          no_draft: 'There are no new changes to submit for review.',
+          submit_failed: 'Could not submit the activity. Try again.',
+        },
       },
       worksheet: {
         uploadTitle: 'Upload an image or a PDF',
@@ -648,6 +766,57 @@ export const UI_LABELS = {
         notGraded: 'Preview: this view does not grade answers.',
         textPlaceholder: 'Type the answer',
         choicePlaceholder: 'Choose an option',
+        correct: 'Correct',
+        incorrect: 'Incorrect',
+      },
+      practice: {
+        pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
+        back: 'Back to activities',
+        noLevel: 'No level',
+        quizComingSoonTitle: 'Coming soon',
+        quizComingSoonBody: 'This block type is not yet available to practise.',
+        check: 'Check',
+        retry: 'Try again',
+        score: 'Score',
+        viewedFirstTime: 'First time',
+        viewedBefore: "You've seen this",
+        viewedTimesMany: 'times',
+      },
+      myActivities: {
+        pageTitle: 'My activities',
+        pageDescription: 'Activities created so far: edit, view, or delete each one.',
+        empty: 'No activities created yet.',
+        createCta: 'Create activity',
+        noLevel: 'No level',
+        blockCountOne: 'block',
+        blockCountMany: 'blocks',
+        pendingChangesNote: 'Changes in review',
+        edit: 'Edit',
+        view: 'View',
+        delete: 'Delete',
+        deleteConfirmTitle: 'Delete this activity?',
+        deleteConfirmBody: 'This cannot be undone.',
+        deleteConfirmCancel: 'Cancel',
+        deleteConfirmAccept: 'Delete',
+        deleteError: 'Could not delete the activity. Try again.',
+      },
+      explore: {
+        pageTitle: 'Community activities',
+        pageDescription: "Activities created by other ChuyoCode users: worksheets and questions to practise with.",
+        heading: 'Community activities',
+        cardTitle: 'Community activities',
+        cardDescription: 'Practise with worksheets and questions created by other users.',
+        empty: 'No activities published yet.',
+        emptyLevel: 'No activities published for this level yet.',
+        allLevels: 'All levels',
+        noLevel: 'No level',
+        blockCountOne: 'block',
+        blockCountMany: 'blocks',
+        pagination: 'Pagination',
+        prevPage: 'Previous',
+        nextPage: 'Next',
+        pageLabel: 'Page',
+        ofLabel: 'of',
       },
     },
     notFound: {

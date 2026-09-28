@@ -53,6 +53,7 @@ import BlockList, { type BlocksChangeOptions } from './BlockList';
 import WorksheetPlayer from './WorksheetPlayer';
 import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
+import SubmitForReviewDialog from './SubmitForReviewDialog';
 
 export interface ActivityEditorIslandProps {
   lang: Lang;
@@ -60,6 +61,10 @@ export interface ActivityEditorIslandProps {
   initialTitle: string;
   initialLevel: Level | null;
   initialBlocks: Block[];
+  /** `activities.status` (PR D, "Activities practice") — drives the review-state badge. Defaults to `'draft'` for a brand-new activity. */
+  initialStatus?: string;
+  /** `activities.review_note` — shown alongside the badge when `initialStatus === 'rejected'`. */
+  initialReviewNote?: string | null;
 }
 
 /** The editor's whole undo/redo-able document. */
@@ -77,12 +82,27 @@ function isMac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');
 }
 
+/**
+ * `activities.status` -> the `t.status*` key that names it (PR D, "Activities
+ * practice"). `removed` is deliberately absent — it never reaches the editor
+ * (excluded from the author's own edit surface, `getActivityForEdit`'s
+ * header) — so an unrecognized status falls back to `statusDraft` below.
+ */
+const STATUS_LABEL_KEYS = {
+  draft: 'statusDraft',
+  pending_review: 'statusPendingReview',
+  live: 'statusLive',
+  rejected: 'statusRejected',
+} as const;
+
 export default function ActivityEditorIsland({
   lang,
   activityId,
   initialTitle,
   initialLevel,
   initialBlocks,
+  initialStatus = 'draft',
+  initialReviewNote = null,
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
@@ -94,6 +114,16 @@ export default function ActivityEditorIsland({
   const { title, level, blocks } = doc;
 
   const [saveState, setSaveState] = useState<AutosaveStatus | 'idle'>('idle');
+  // Review-state badge (PR D, "Activities practice"). Updated OPTIMISTICALLY
+  // after a successful submit — see `handleConfirmSubmit` — mirroring exactly
+  // what `enviar.ts` itself computes server-side (draft/rejected ->
+  // pending_review; live stays live).
+  const [status, setStatus] = useState(initialStatus);
+  const [submitDialog, setSubmitDialog] = useState<{
+    open: boolean;
+    submitting: boolean;
+    error: string | null;
+  }>({ open: false, submitting: false, error: null });
   const [preview, setPreview] = useState(false);
   const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -343,6 +373,50 @@ export default function ActivityEditorIsland({
     }
   }, [activityId, navGuard.href]);
 
+  const openSubmitDialog = useCallback(() => {
+    setSubmitDialog({ open: true, submitting: false, error: null });
+  }, []);
+
+  const closeSubmitDialog = useCallback(() => {
+    setSubmitDialog((s) => (s.submitting ? s : { open: false, submitting: false, error: null }));
+  }, []);
+
+  // Flushes the CURRENT document first (same direct-fetch shape as
+  // `handleSaveAndLeave` — the debounced autosave scheduler is bypassed so
+  // the submit sees exactly what is on screen, not whatever it last
+  // scheduled), then submits it for review. `enviar.ts`'s own reason codes
+  // (`rights_required`, `invalid_title`, `no_blocks`, `missing_zones`,
+  // `invalid_blocks`, `no_draft`) map straight onto `t.submitErrors`.
+  const handleConfirmSubmit = useCallback(async () => {
+    setSubmitDialog((s) => ({ ...s, submitting: true, error: null }));
+    try {
+      const value = docRef.current;
+      const saveRes = await fetch(`/api/actividades/${activityId}/guardar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
+      });
+      if (!saveRes.ok) throw new Error('submit_failed');
+
+      const submitRes = await fetch(`/api/actividades/${activityId}/enviar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ acceptedRights: true }),
+      });
+      if (!submitRes.ok) {
+        const errBody = (await submitRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errBody.error ?? 'submit_failed');
+      }
+
+      setStatus((prev) => (prev === 'live' ? 'live' : 'pending_review'));
+      setSubmitDialog({ open: false, submitting: false, error: null });
+    } catch (err) {
+      const code = err instanceof Error ? err.message : 'submit_failed';
+      const message = t.submitErrors[code as keyof typeof t.submitErrors] ?? t.submitErrors.submit_failed;
+      setSubmitDialog((s) => ({ ...s, submitting: false, error: message }));
+    }
+  }, [activityId, t.submitErrors]);
+
   const handleWorksheetChosen = useCallback(() => {
     setShowUploader(true);
   }, []);
@@ -399,11 +473,14 @@ export default function ActivityEditorIsland({
       data-testid="activity-editor-island"
       className="flex flex-col gap-4 lg:h-[calc(100dvh-65px)] lg:gap-2 lg:pr-16"
     >
-      {/* Compact top bar (owner request #1): just title + level. Everything
-          else (preview, save, undo/redo, block navigation) lives in the
-          sticky side toolbar so this row stays a single, short line — on
-          desktop, a fixed ~48px (`lg:h-12`) row (creator "one-screen" pass). */}
-      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:h-12 lg:flex-row lg:items-center lg:py-1.5">
+      {/* Compact top bar (owner request #1): title + level, plus — PR D,
+          "Activities practice" — the review-state badge and "Enviar a
+          revisión" (placed HERE, next to the rest of the top bar's own
+          controls, per coordinator direction — `EditorSideToolbar` itself is
+          untouched by this PR). `lg:min-h-12` (was a hard `lg:h-12`) lets
+          this row grow if the badge/note wrap onto a second line instead of
+          clipping — everything else about this row is unchanged from PR B/C. */}
+      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-12 lg:flex-row lg:items-center lg:py-1.5">
         <label className="flex flex-1 flex-col gap-1 text-sm">
           <span className="sr-only">{t.titleLabel}</span>
           <input
@@ -432,6 +509,21 @@ export default function ActivityEditorIsland({
             ))}
           </select>
         </label>
+        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+              : t.statusDraft}
+          </span>
+          {status === 'rejected' && initialReviewNote && (
+            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+              {t.reviewNoteLabel}: {initialReviewNote}
+            </span>
+          )}
+        </div>
+        <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
+          {t.submitForReview}
+        </Button>
       </div>
 
       {preview ? (
@@ -523,6 +615,15 @@ export default function ActivityEditorIsland({
         onSaveAndLeave={() => void handleSaveAndLeave()}
         onLeaveWithoutSaving={handleLeaveWithoutSaving}
         onCancel={closeNavGuard}
+      />
+
+      <SubmitForReviewDialog
+        lang={lang}
+        open={submitDialog.open}
+        submitting={submitDialog.submitting}
+        errorMessage={submitDialog.error}
+        onConfirm={() => void handleConfirmSubmit()}
+        onCancel={closeSubmitDialog}
       />
     </div>
   );

@@ -1,0 +1,163 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import MisActividadesIsland, { type MisActividadesActivity } from './MisActividadesIsland';
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+const DRAFT: MisActividadesActivity = {
+  id: 'act-draft',
+  title: 'Mi borrador',
+  level: null,
+  status: 'draft',
+  blockCount: 2,
+  reviewNote: null,
+  hasPendingRevision: false,
+};
+
+const LIVE_WITH_PENDING: MisActividadesActivity = {
+  id: 'act-live',
+  title: 'Publicada',
+  level: 'B1',
+  status: 'live',
+  blockCount: 3,
+  reviewNote: null,
+  hasPendingRevision: true,
+};
+
+const REJECTED: MisActividadesActivity = {
+  id: 'act-rejected',
+  title: 'Rechazada',
+  level: 'A2',
+  status: 'rejected',
+  blockCount: 1,
+  reviewNote: 'Falta una zona en la hoja 2.',
+  hasPendingRevision: false,
+};
+
+describe('MisActividadesIsland — empty state', () => {
+  it('shows the empty message and a create-activity CTA when there is nothing', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[]} />);
+    expect(screen.getByTestId('mis-actividades-empty')).toBeTruthy();
+    const cta = screen.getByText('Crear actividad');
+    expect(cta.getAttribute('href')).toBe('/es/crear');
+  });
+});
+
+describe('MisActividadesIsland — listing', () => {
+  it('renders each activity with its title, status badge, level and block count', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+    const row = screen.getByTestId(`activity-row-${DRAFT.id}`);
+    expect(row.textContent).toContain('Mi borrador');
+    expect(screen.getByTestId(`activity-status-${DRAFT.id}`).textContent).toContain('Borrador');
+    expect(row.textContent).toContain('Sin nivel');
+    expect(row.textContent).toContain('2 bloques');
+  });
+
+  it('shows the "cambios en revisión" note only for a live activity with a pending revision', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[LIVE_WITH_PENDING, DRAFT]} />);
+    expect(screen.getByTestId(`activity-pending-${LIVE_WITH_PENDING.id}`)).toBeTruthy();
+    expect(screen.queryByTestId(`activity-pending-${DRAFT.id}`)).toBeNull();
+  });
+
+  it('shows the reviewer note only for a rejected activity', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[REJECTED, DRAFT]} />);
+    expect(screen.getByTestId(`activity-review-note-${REJECTED.id}`).textContent).toContain(
+      'Falta una zona en la hoja 2.',
+    );
+    expect(screen.queryByTestId(`activity-review-note-${DRAFT.id}`)).toBeNull();
+  });
+
+  it('links Editar to the creator editor for every activity', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+    expect(screen.getByTestId(`activity-edit-${DRAFT.id}`).getAttribute('href')).toBe(
+      `/es/crear/${DRAFT.id}`,
+    );
+  });
+
+  it('only shows Ver for a live activity', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT, LIVE_WITH_PENDING]} />);
+    expect(screen.queryByTestId(`activity-view-${DRAFT.id}`)).toBeNull();
+    expect(screen.getByTestId(`activity-view-${LIVE_WITH_PENDING.id}`).getAttribute('href')).toBe(
+      `/es/ingles/actividades/${LIVE_WITH_PENDING.id}`,
+    );
+  });
+});
+
+describe('MisActividadesIsland — delete', () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it('opens a confirmation dialog before deleting anything', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    expect(screen.getByTestId('delete-activity-dialog')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels without deleting', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    fireEvent.click(screen.getByTestId('delete-dialog-cancel'));
+    expect(screen.queryByTestId('delete-activity-dialog')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId(`activity-row-${DRAFT.id}`)).toBeTruthy();
+  });
+
+  it('deletes on confirm, removing the row and posting to the eliminar endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT, LIVE_WITH_PENDING]} />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('delete-dialog-confirm'));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/actividades/${DRAFT.id}/eliminar`, { method: 'POST' });
+    expect(screen.queryByTestId(`activity-row-${DRAFT.id}`)).toBeNull();
+    expect(screen.getByTestId(`activity-row-${LIVE_WITH_PENDING.id}`)).toBeTruthy();
+  });
+
+  it('shows an inline error and keeps the row when the delete fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('delete-dialog-confirm'));
+    });
+
+    expect(screen.getByTestId('delete-activity-error')).toBeTruthy();
+    expect(screen.getByTestId(`activity-row-${DRAFT.id}`)).toBeTruthy();
+  });
+
+  it('shows the empty state once the last activity is deleted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('delete-dialog-confirm'));
+    });
+
+    expect(screen.getByTestId('mis-actividades-empty')).toBeTruthy();
+  });
+});
+
+describe('MisActividadesIsland — locale', () => {
+  it('renders English copy for lang="en"', () => {
+    render(<MisActividadesIsland lang="en" initialActivities={[]} />);
+    expect(screen.getByTestId('mis-actividades-empty').textContent).toContain('No activities created yet.');
+  });
+});

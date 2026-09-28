@@ -456,3 +456,113 @@ describe('ActivityEditorIsland — beforeunload guard', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 });
+
+describe('ActivityEditorIsland — review-state badge', () => {
+  it('shows "Borrador" for a brand-new activity by default', () => {
+    renderEditor();
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Borrador');
+  });
+
+  it('shows "En revisión" for a pending_review activity', () => {
+    renderEditor({ initialStatus: 'pending_review' });
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('En revisión');
+  });
+
+  it('shows "Publicada" for a live activity', () => {
+    renderEditor({ initialStatus: 'live' });
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada');
+  });
+
+  it('shows "Rechazada" plus the reviewer note for a rejected activity', () => {
+    renderEditor({ initialStatus: 'rejected', initialReviewNote: 'Falta una zona en la hoja 2.' });
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Rechazada');
+    expect(screen.getByTestId('activity-review-note').textContent).toContain('Falta una zona en la hoja 2.');
+  });
+
+  it('shows no reviewer note when the activity was never rejected', () => {
+    renderEditor();
+    expect(screen.queryByTestId('activity-review-note')).toBeNull();
+  });
+});
+
+describe('ActivityEditorIsland — submit for review', () => {
+  it('opens the submit dialog from the top bar button', () => {
+    renderEditor();
+    expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+
+  it('saves first, then submits, and updates the badge to "En revisión" on success', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/actividades/act-1/guardar',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/actividades/act-1/enviar',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ acceptedRights: true }),
+      }),
+    );
+    expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('En revisión');
+  });
+
+  it('keeps the badge on "Publicada" when a live activity is submitted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor({ initialStatus: 'live' });
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
+    });
+
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada');
+  });
+
+  it('shows an inline error and keeps the dialog open when the submit endpoint rejects it', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }) // guardar
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'no_blocks' }) }); // enviar
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
+    });
+
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+    expect(screen.getByTestId('submit-dialog-error').textContent).toContain(
+      'Agregar al menos un bloque',
+    );
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Borrador');
+  });
+
+  it('cancels the dialog without submitting anything', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-dialog-cancel'));
+
+    expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
