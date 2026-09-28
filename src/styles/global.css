@@ -150,6 +150,15 @@
 @layer base {
   :root {
     color-scheme: dark;
+    /* Creator polish round 3: reserves the scrollbar's own gutter at the
+     * PAGE level, always, so a route whose content starts/stops overflowing
+     * (e.g. the activity editor) never reflows everything else sideways by
+     * ~15px when the scrollbar appears/disappears. Paired with the same
+     * property on the editor's own block-list scroll container below, and
+     * with the always-visible (never auto-hidden) thin scrollbar further
+     * down this file — an auto-hidden scrollbar would still cause the same
+     * jump on hover/scroll. */
+    scrollbar-gutter: stable;
   }
 
   input,
@@ -293,4 +302,35 @@ h3 {
   font-family: 'ChunkFive', 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
   font-weight: 400;
   font-synthesis: none;
+}
+
+/* --- Thin, dark-theme scrollbar (creator polish round 3) ----------------- *
+ * Site-wide, not auto-hidden — an auto-hidden (overlay) scrollbar still
+ * causes the same layout jump `scrollbar-gutter: stable` (above, and on the
+ * editor's own block-list scroll container) fixes, the moment it appears.
+ * Firefox reads `scrollbar-width`/`scrollbar-color`; every other engine
+ * (Chrome/Safari/Edge) reads the `::-webkit-scrollbar*` pseudo-elements
+ * instead — both are declared so the whole site gets ONE consistent, brand-
+ * dark scrollbar rather than each browser's own light default. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--muted);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
 }

@@ -282,7 +282,15 @@ export default function BlockList({
   return (
     <DndContext id="activities-block-list" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-        <ul data-testid="block-list" className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        {/* `lg:[scrollbar-gutter:stable]` (creator polish round 3): this is
+            the block list's own scroll container — reserving its gutter
+            here (paired with the same property on `html`, `global.css`)
+            stops the canvas/panel from reflowing sideways by ~15px the
+            moment this list's content starts/stops overflowing. */}
+        <ul
+          data-testid="block-list"
+          className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:[scrollbar-gutter:stable]"
+        >
           {blocks.map((block, index) => {
             const expanded = expandedBlockIds.has(block.id);
             const worksheet = isWorksheet(block) ? block : null;
