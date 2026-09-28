@@ -10,11 +10,8 @@ import {
   fitZoom,
   stepZoom,
   stepZoomInput,
-  zoomAroundPoint,
   wheelZoom,
   wheelZoomInput,
-  clampPanAxis,
-  clampPanScroll,
   contentSize,
   rotatedSize,
   fitCamera,
@@ -98,34 +95,6 @@ describe('stepZoom', () => {
   it('clamps at the floor and ceiling', () => {
     expect(stepZoom(MIN_ZOOM, 'out')).toBe(MIN_ZOOM);
     expect(stepZoom(MAX_ZOOM, 'in')).toBe(MAX_ZOOM);
-  });
-});
-
-describe('zoomAroundPoint', () => {
-  it('keeps the pointer anchored to the same content pixel when zooming in', () => {
-    // pointer at (50, 50) in the viewport, no prior scroll, zooming 1x -> 2x:
-    // content pixel under the pointer was (50, 50); after zoom it's at
-    // (100, 100), so the viewport must scroll by 50 to keep it under the
-    // still-stationary (50, 50) pointer.
-    const next = zoomAroundPoint({ x: 50, y: 50 }, { left: 0, top: 0 }, 1, 2);
-    expect(next).toEqual({ left: 50, top: 50 });
-  });
-
-  it('accounts for existing scroll', () => {
-    const next = zoomAroundPoint({ x: 10, y: 10 }, { left: 100, top: 200 }, 1, 2);
-    // content point = (110, 210); at 2x that's (220, 420); minus the pointer
-    // (10, 10) -> scroll (210, 410).
-    expect(next).toEqual({ left: 210, top: 410 });
-  });
-
-  it('is a no-op in scroll terms when zoom does not change', () => {
-    const next = zoomAroundPoint({ x: 30, y: 40 }, { left: 5, top: 5 }, 1.5, 1.5);
-    expect(next).toEqual({ left: 5, top: 5 });
-  });
-
-  it('never divides by zero for a defensive non-positive fromZoom', () => {
-    const scroll = { left: 5, top: 5 };
-    expect(zoomAroundPoint({ x: 1, y: 1 }, scroll, 0, 2)).toEqual(scroll);
   });
 });
 
@@ -222,37 +191,6 @@ describe('wheelZoom (batched, proportional wheel zoom)', () => {
     const stepAtLowZoom = wheelZoom(0.5, -100) - 0.5;
     const stepAtHighZoom = wheelZoom(2, -100) - 2;
     expect(stepAtHighZoom).toBeGreaterThan(stepAtLowZoom);
-  });
-});
-
-describe('clampPanAxis / clampPanScroll (pan bounds)', () => {
-  it('is a no-op within the native scrollable range for content bigger than the viewport', () => {
-    // viewport 400, content 1000 -> center 200, allowed [-200, 800]; a normal
-    // native-range scroll (0..600) is untouched.
-    expect(clampPanAxis(300, 400, 1000)).toBe(300);
-  });
-
-  it('stops a pan before the content is dragged fully out of view when it is SMALLER than the viewport', () => {
-    // viewport 800, content 100 -> center 400; range is [-400, -300].
-    // Panning far in one direction (very negative scroll) clamps at the
-    // MIN bound (-400): the content's left edge stops exactly at the
-    // viewport's center, never past it.
-    expect(clampPanAxis(-10_000, 800, 100)).toBe(-400);
-  });
-
-  it('stops a pan the other direction at the MAX bound', () => {
-    // Same range [-400, -300]; a huge positive scroll clamps at -300: the
-    // content's right edge stops exactly at the viewport's center instead.
-    expect(clampPanAxis(10_000, 800, 100)).toBe(-300);
-  });
-
-  it('the min bound is -viewportLength/2 for a viewport-filling axis', () => {
-    expect(clampPanAxis(-10_000, 1000, 1000)).toBe(-500);
-  });
-
-  it('applies both axes at once via clampPanScroll', () => {
-    const result = clampPanScroll({ left: -10_000, top: 10_000 }, { width: 800, height: 800 }, { width: 100, height: 100 });
-    expect(result).toEqual({ left: -400, top: -300 });
   });
 });
 
