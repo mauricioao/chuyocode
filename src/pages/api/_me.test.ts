@@ -23,6 +23,15 @@ vi.mock('@lib/supabase', () => ({
   },
 }));
 
+/**
+ * `toProfile` also resolves `isModerator`/`moderationPendingCount` (PR E,
+ * "Moderation") via `@lib/roles`/`@lib/activities/moderation` — both mocked
+ * to a plain non-moderator here, same posture as the service-client mock
+ * above: this file is about the HTTP envelope, not moderation itself.
+ */
+vi.mock('@lib/roles', () => ({ hasRole: vi.fn(async () => false) }));
+vi.mock('@lib/activities/moderation', () => ({ getPendingModerationCount: vi.fn(async () => 0) }));
+
 import { GET } from './me';
 
 function ctx(user: User | null) {
@@ -51,6 +60,8 @@ describe('GET /api/me — signed in', () => {
       avatarUrl: 'https://lh3.googleusercontent.com/a/photo.jpg',
       initials: 'JP',
       plan: 'free',
+      isModerator: false,
+      moderationPendingCount: 0,
     });
   });
 });

@@ -455,6 +455,13 @@ export interface PublishedActivity {
   title: string;
   level: Level | null;
   blocks: Block[];
+  /**
+   * The activity's author (PR E, "Moderation"): the practice page uses it to
+   * hide the "Reportar" button from the activity's own author — reporting
+   * one's own activity is refused server-side too (`recordReport`'s own
+   * header), this is only the UI-level courtesy of not offering it.
+   */
+  authorId: string;
 }
 
 /**
@@ -483,7 +490,7 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
   try {
     const { data, error } = await client
       .from(ACTIVITIES_TABLE)
-      .select('id, title, level, activity_revisions!activities_published_revision_id_fkey(blocks)')
+      .select('id, title, level, author_id, activity_revisions!activities_published_revision_id_fkey(blocks)')
       .eq('id', id)
       .eq('visible', true)
       .maybeSingle();
@@ -496,6 +503,7 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
 
     const row = data as unknown as Record<string, unknown>;
     if (typeof row.title !== 'string') return null;
+    if (typeof row.author_id !== 'string' || row.author_id.length === 0) return null;
 
     // A `belongs-to` embed (the FK lives on `activities`) comes back as a
     // single object, not an array — but this is still a boundary read, so
@@ -515,6 +523,7 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
       title: row.title,
       level: isLevel(row.level) ? row.level : null,
       blocks,
+      authorId: row.author_id,
     };
   } catch (err) {
     console.error('[activities] getPublishedActivity threw:', err);

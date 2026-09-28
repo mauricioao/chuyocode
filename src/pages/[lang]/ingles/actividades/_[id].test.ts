@@ -130,3 +130,35 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('GET /[lang]/ingles/actividades/[id] — report button (PR E, Moderation)', () => {
+  it('renders it for a signed-in visitor who is not the author', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="report-activity-button"');
+  });
+
+  it("hides it from the activity's own author", async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'user-1' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="report-activity-button"');
+  });
+
+  it('hides it from an anonymous visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="report-activity-button"');
+  });
+});

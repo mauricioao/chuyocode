@@ -661,13 +661,13 @@ describe('getPublishedActivity', () => {
     maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
     await getPublishedActivity(ACTIVITY_ID);
     expect(selectMock).toHaveBeenCalledWith(
-      'id, title, level, activity_revisions!activities_published_revision_id_fkey(blocks)',
+      'id, title, level, author_id, activity_revisions!activities_published_revision_id_fkey(blocks)',
     );
   });
 
   it('returns null when the embedded revision is malformed blocks', async () => {
     maybeSingleMock.mockResolvedValueOnce({
-      data: { id: ACTIVITY_ID, title: 'x', level: null, activity_revisions: { blocks: 'not-an-array' } },
+      data: { id: ACTIVITY_ID, title: 'x', level: null, author_id: AUTHOR_ID, activity_revisions: { blocks: 'not-an-array' } },
       error: null,
     });
     expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
@@ -675,7 +675,15 @@ describe('getPublishedActivity', () => {
 
   it('returns null when there is no embedded revision at all', async () => {
     maybeSingleMock.mockResolvedValueOnce({
-      data: { id: ACTIVITY_ID, title: 'x', level: null, activity_revisions: null },
+      data: { id: ACTIVITY_ID, title: 'x', level: null, author_id: AUTHOR_ID, activity_revisions: null },
+      error: null,
+    });
+    expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('returns null when author_id is missing (a boundary read, checked not assumed)', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'x', level: null, activity_revisions: { blocks: SOME_BLOCKS } },
       error: null,
     });
     expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
@@ -683,16 +691,22 @@ describe('getPublishedActivity', () => {
 
   it('returns the activity + published blocks on success (object-shaped embed)', async () => {
     maybeSingleMock.mockResolvedValueOnce({
-      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', activity_revisions: { blocks: SOME_BLOCKS } },
+      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', author_id: AUTHOR_ID, activity_revisions: { blocks: SOME_BLOCKS } },
       error: null,
     });
     const result = await getPublishedActivity(ACTIVITY_ID);
-    expect(result).toEqual({ id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', blocks: SOME_BLOCKS });
+    expect(result).toEqual({
+      id: ACTIVITY_ID,
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: SOME_BLOCKS,
+      authorId: AUTHOR_ID,
+    });
   });
 
   it('tolerates an array-shaped embed defensively', async () => {
     maybeSingleMock.mockResolvedValueOnce({
-      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: null, activity_revisions: [{ blocks: SOME_BLOCKS }] },
+      data: { id: ACTIVITY_ID, title: 'Mi actividad', level: null, author_id: AUTHOR_ID, activity_revisions: [{ blocks: SOME_BLOCKS }] },
       error: null,
     });
     const result = await getPublishedActivity(ACTIVITY_ID);
@@ -701,7 +715,7 @@ describe('getPublishedActivity', () => {
 
   it('normalizes an out-of-taxonomy level to null', async () => {
     maybeSingleMock.mockResolvedValueOnce({
-      data: { id: ACTIVITY_ID, title: 'x', level: 'zz', activity_revisions: { blocks: [] } },
+      data: { id: ACTIVITY_ID, title: 'x', level: 'zz', author_id: AUTHOR_ID, activity_revisions: { blocks: [] } },
       error: null,
     });
     const result = await getPublishedActivity(ACTIVITY_ID);
