@@ -53,7 +53,6 @@ import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
-import { BoundingBoxIcon } from '@phosphor-icons/react/dist/ssr/BoundingBox';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
@@ -747,7 +746,12 @@ export default function WorksheetZoneEditor({
           <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
           {/* Tool toggle (owner-approved design): icon-only, active tool in
               brand yellow (`variant="default"`) — replaces the old
-              25/50/100/125 preset row and the "+ Zona" button entirely. */}
+              25/50/100/125 preset row and the "+ Zona" button entirely. The
+              Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
+              same weight) as the side toolbar's "Agregar bloque" button, to
+              match this tool's own crosshair cursor — see
+              `EditorSideToolbar.tsx`'s `toolbar-add-block`. Its own tooltip
+              stays "Zona (V)"; only the icon is shared. */}
           <Button
             type="button"
             size="icon-sm"
@@ -758,7 +762,7 @@ export default function WorksheetZoneEditor({
             data-testid="tool-zone"
             onClick={() => setTool('zone')}
           >
-            <BoundingBoxIcon aria-hidden="true" />
+            <PlusIcon aria-hidden="true" />
           </Button>
           <Button
             type="button"
