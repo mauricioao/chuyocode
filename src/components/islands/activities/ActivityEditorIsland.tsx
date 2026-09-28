@@ -558,11 +558,26 @@ export default function ActivityEditorIsland({
     [t],
   );
 
-  // Points at whichever of the two scroll containers below is currently
-  // mounted (block list or preview — the two branches are mutually
-  // exclusive), so the scoped `ScrollToTop` always tracks the right one
-  // without needing to know which mode is active.
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // The scoped `ScrollToTop`'s target: whichever of these two is the
+  // ACTUAL scrolling element for the currently-mounted mode (`preview` and
+  // the block list are mutually exclusive, so exactly one of these two refs
+  // is ever attached to anything at a time).
+  //
+  // WRONG-REF BUG, FIXED (nav buttons pass): `previewScrollRef` below is a
+  // real, self-contained scroll container — but the non-preview branch's OWN
+  // wrapper div (further down) ALSO carries `overflow-y-auto`, and used to
+  // be the ref `ScrollToTop` tracked. It is not the element that actually
+  // scrolls there: `BlockList.tsx`'s own `<ul>` is `lg:flex-1 lg:min-h-0
+  // lg:overflow-y-auto` INSIDE it, so that inner list fills the wrapper's
+  // exact height and scrolls internally, while the wrapper itself stays
+  // sized to fit (no overflow of its own) in ordinary use. Tracking the
+  // wrapper's `scrollTop` therefore near-permanently read `0`, so the
+  // button's appear threshold was never crossed — see `ScrollToTop.tsx`'s own
+  // header for the other half of the "never appears in the editor" fix.
+  // `blockListRef` is threaded through as `BlockList`'s new `listRef` prop
+  // instead, straight onto that real `<ul>`.
+  const previewScrollRef = useRef<HTMLDivElement>(null);
+  const blockListRef = useRef<HTMLUListElement>(null);
 
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
@@ -652,7 +667,7 @@ export default function ActivityEditorIsland({
 
         {preview ? (
           <div
-            ref={scrollContainerRef}
+            ref={previewScrollRef}
             data-testid="activity-preview"
             className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:p-3"
           >
@@ -677,11 +692,9 @@ export default function ActivityEditorIsland({
           // flexible height inside it. The add-block flow (picker/uploader)
           // scrolls into view here too, inside the same card, instead of
           // growing the page past it.
-          <div
-            ref={scrollContainerRef}
-            className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3"
-          >
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3">
             <BlockList
+              listRef={blockListRef}
               lang={lang}
               blocks={blocks}
               expandedBlockIds={expandedBlockIds}
@@ -725,10 +738,14 @@ export default function ActivityEditorIsland({
 
         {/* Scoped "back to top" for the card's own scroll container (block
             list or preview, whichever is mounted) — reuses the same island
-            `BaseLayout` mounts globally, targeted at `scrollContainerRef`
-            instead of the window. Positioned inside THIS card (the
-            `relative` ancestor above), never the page. */}
-        <ScrollToTop lang={lang} targetRef={scrollContainerRef} />
+            `BaseLayout` mounts globally, targeted at the REAL scrolling
+            element for whichever mode is active (see `previewScrollRef`'s
+            own header above) instead of the window. Positioned inside THIS
+            card (the `relative` ancestor above), never the page. Clicking it
+            scrolls that container to its top — in the block-list mode, that
+            IS the first block, since `BlockList.tsx`'s `<ul>` renders blocks
+            in order with nothing else above them. */}
+        <ScrollToTop lang={lang} targetRef={preview ? previewScrollRef : blockListRef} />
       </div>
 
       <EditorSideToolbar

@@ -12,6 +12,29 @@
  * following `href`, so the visitor lands exactly where they came from
  * (scroll position included) rather than at the top of a fresh render of the
  * same parent.
+ *
+ * BRAND YELLOW + FLOATING (nav buttons pass, owner feedback): filled with
+ * `bg-primary`/`text-primary-foreground` — the same brand yellow/dark-icon
+ * pairing every other primary control uses (`Button`'s own `default`
+ * variant) — everywhere, not just at `lg:`.
+ *
+ * At `lg:` it additionally leaves the content column for the page's left
+ * gutter: `lg:sticky` keeps it at its normal in-FLOW position (still
+ * literally the first element of whatever row a page puts it in — e.g.
+ * `PageTitle`'s title row — so it stays "aligned with the content
+ * container's top edge" for free, no separate positioning math needed per
+ * page) until scrolling would carry it above `lg:top-20` (roughly the site
+ * header's own height plus a gap), at which point it pins there instead of
+ * scrolling out of view — see `Header.astro`'s `sticky top-0` (~4rem tall).
+ * `lg:-ml-12` is what actually moves it OUTSIDE the content column into that
+ * gutter: a negative left margin needs no knowledge of which `max-w-*` a
+ * given page's own container happens to use (they differ — `max-w-3xl`
+ * through `max-w-6xl` across the site), because it is relative to wherever
+ * this element already sits in ITS OWN row, not to the viewport. `lg:z-30`
+ * keeps it above ordinary content while staying below the header (`z-40`).
+ * A `relative`/`overflow-hidden` ancestor between it and the viewport would
+ * clip or reposition this — none of the current callers have one on the row
+ * `BackButton` itself sits in.
  */
 import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@lib/i18n';
@@ -33,7 +56,8 @@ const t = UI_LABELS[lang].common;
   aria-label={t.back}
   title={t.backTooltip}
   class:list={[
-    'inline-flex h-9 w-9 flex-none items-center justify-center rounded-full border border-border bg-base-soft text-zinc-300 transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+    'inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+    'lg:sticky lg:top-20 lg:z-30 lg:-ml-12',
     className,
   ]}
 >

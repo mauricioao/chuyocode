@@ -91,6 +91,17 @@ export interface BlockListProps {
   incompleteBlockId?: string | null;
   incompleteZoneId?: string | null;
   incompleteMessage?: string | null;
+  /**
+   * Ref to this list's own `<ul>` — the ACTUAL scrolling element at `lg:`
+   * (`lg:overflow-y-auto lg:flex-1 lg:min-h-0`, below). `ActivityEditorIsland.tsx`
+   * passes its scoped `ScrollToTop`'s `targetRef` through here (nav buttons
+   * pass, fixing the "never appears in the editor" bug): the OUTER wrapper
+   * it used to hand that ref to also carries `overflow-y-auto`, but never
+   * actually overflows itself in ordinary use — this `<ul>`, sized to fill
+   * the remaining space and scrolling INTERNALLY, does. Optional so every
+   * other/test caller keeps working unchanged.
+   */
+  listRef?: React.Ref<HTMLUListElement>;
 }
 
 function isWorksheet(block: Block): block is WorksheetBlock {
@@ -229,6 +240,7 @@ export default function BlockList({
   incompleteBlockId = null,
   incompleteZoneId = null,
   incompleteMessage = null,
+  listRef,
 }: BlockListProps) {
   const t = UI_LABELS[lang].activities.editor;
 
@@ -298,6 +310,7 @@ export default function BlockList({
             stops the canvas/panel from reflowing sideways by ~15px the
             moment this list's content starts/stops overflowing. */}
         <ul
+          ref={listRef}
           data-testid="block-list"
           className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:[scrollbar-gutter:stable]"
         >

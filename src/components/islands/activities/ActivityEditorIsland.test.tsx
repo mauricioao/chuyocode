@@ -741,3 +741,36 @@ describe('ActivityEditorIsland — submit for review', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('ActivityEditorIsland — scoped ScrollToTop wiring (nav buttons pass)', () => {
+  it('appears after scrolling the block list — the list is the ACTUAL scroll container, not its outer wrapper', () => {
+    // Regression test for the actual root cause: the scoped ScrollToTop
+    // used to track the outer wrapper div, which also carries
+    // `overflow-y-auto` but never actually overflows in ordinary use —
+    // `BlockList.tsx`'s own `<ul>` does (see `ActivityEditorIsland.tsx`'s
+    // `blockListRef` header). Scrolling that `<ul>` directly is exactly
+    // what would have stayed invisible under the old wiring.
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const list = screen.getByTestId('block-list');
+    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('true');
+
+    Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(list, 'scrollTop', { value: 500, configurable: true });
+    act(() => {
+      list.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('false');
+  });
+
+  it('scrolls the block list to the top (the first block) on click', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const list = screen.getByTestId('block-list') as HTMLUListElement;
+    const scrollTo = vi.fn();
+    list.scrollTo = scrollTo;
+
+    fireEvent.click(screen.getByTestId('scroll-to-top-scoped'));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+  });
+});
