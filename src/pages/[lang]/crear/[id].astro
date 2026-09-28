@@ -13,6 +13,7 @@
  * OTHER author's activity id exists.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import BackButton from '@components/ui/BackButton.astro';
 import ActivityEditorIsland from '@components/islands/activities/ActivityEditorIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
@@ -59,14 +60,28 @@ const t = UI_LABELS[lang].activities.editor;
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
   {/*
-    One-screen creator layout (desktop only): no extra `lg:` vertical
-    padding here — `ActivityEditorIsland`'s own root sizes itself to
-    `calc(100dvh - <site header height>)`, and any padding this section
-    added on top of that would throw that calculation off. Horizontal
-    padding is untouched; below `lg:` this section keeps its normal
-    padded, scrollable layout.
+    One-screen creator layout (desktop only), creator polish round 3: the
+    editor is ONE framed card with real breathing room from the site header
+    AND the footer — never glued to either. The back-button row below (site-
+    wide navigation, PR "Navigation + Inglés hub") has NO page-level title to
+    sit beside — the activity's own title is an editable field INSIDE
+    `ActivityEditorIsland`'s card header, a different thing — so it renders
+    as its own row above this section instead of inline with a `<h1>`.
+    `lg:pt-6` (wrapper) + `lg:pb-6` (section) together are the same 1.5rem
+    top + 1.5rem bottom margin this layout always had; the back-button row
+    ADDS its own `h-9` + `mb-3` = `3rem` on top of that. `ActivityEditorIsland`'s
+    own root sizes itself to `calc(100dvh - <site header height> - 3rem -
+    3rem)` (the original margin, then the back-button row) — so THIS markup
+    and that calc must change together (see its own comment). Horizontal
+    padding is untouched; below `lg:` this keeps its normal padded,
+    scrollable layout.
   */}
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:gap-0 lg:px-8 lg:py-0">
+  <div class="mx-auto flex w-full max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12 lg:px-8 lg:pt-6">
+    <div class="mb-3 flex lg:mb-3">
+      <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
+    </div>
+  </div>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-8 sm:px-6 sm:pb-12 lg:gap-0 lg:px-8 lg:pb-6">
     <ActivityEditorIsland
       client:load
       lang={lang}

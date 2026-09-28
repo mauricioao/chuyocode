@@ -169,11 +169,49 @@ describe('POST /api/actividades/[id]/enviar — validation', () => {
     expect((await res.json()).error).toBe('no_blocks');
   });
 
-  it('422s a worksheet block with no zones', async () => {
+  it('422s a worksheet block with no zones, naming the block (creator polish round 3)', async () => {
     queueActivityAndRevision({ title: 'Mi actividad', status: 'draft' }, { id: 'rev-1', status: 'draft', blocks: [WORKSHEET_NO_ZONE] });
     const res = await POST(ctx({ body: { acceptedRights: true } }));
     expect(res.status).toBe(422);
-    expect((await res.json()).error).toBe('missing_zones');
+    const body = await res.json();
+    expect(body).toEqual({ error: 'incomplete', blockId: 'block-1', zoneId: null, reason: 'no_zones' });
+  });
+
+  it('422s a zone with no answers, naming the block AND zone (creator polish round 3)', async () => {
+    const worksheetZoneNoAnswers = {
+      id: 'block-1',
+      type: 'worksheet',
+      image: { path: `activity-uploads/${AUTHOR.id}/33333333-3333-3333-3333-333333333333.webp`, width: 800, height: 600 },
+      zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: [] }],
+    };
+    queueActivityAndRevision(
+      { title: 'Mi actividad', status: 'draft' },
+      { id: 'rev-1', status: 'draft', blocks: [worksheetZoneNoAnswers] },
+    );
+    const res = await POST(ctx({ body: { acceptedRights: true } }));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: 'incomplete', blockId: 'block-1', zoneId: 'z1', reason: 'no_answers' });
+  });
+
+  it('422s a choice zone with fewer than 2 options', async () => {
+    const worksheetTooFewOptions = {
+      id: 'block-1',
+      type: 'worksheet',
+      image: { path: `activity-uploads/${AUTHOR.id}/33333333-3333-3333-3333-333333333333.webp`, width: 800, height: 600 },
+      zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'choice', answers: ['cat'], options: ['cat'] }],
+    };
+    queueActivityAndRevision(
+      { title: 'Mi actividad', status: 'draft' },
+      { id: 'rev-1', status: 'draft', blocks: [worksheetTooFewOptions] },
+    );
+    const res = await POST(ctx({ body: { acceptedRights: true } }));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({
+      error: 'incomplete',
+      blockId: 'block-1',
+      zoneId: 'z1',
+      reason: 'too_few_options',
+    });
   });
 
   it('422s malformed blocks', async () => {

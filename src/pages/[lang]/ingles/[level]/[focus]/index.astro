@@ -21,6 +21,7 @@
  * Zero JavaScript: cards are links, and links do not need hydration.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
@@ -54,9 +55,10 @@ const t = UI_LABELS[lang].english;
 // English in every locale: the focus is exercise data, not chrome
 // (docs/exercise-model.md, "Authoring rules").
 const focusName = FOCUS_LABELS[focus];
-// Back to the entry screen ON THE LEVEL THE USER CAME FROM. Dropping `?nivel=`
-// would silently return them to the default level and lose their place.
-const backHref = `/${lang}/ingles?nivel=${level}`;
+// Back to the curated-exercises picker ON THE LEVEL THE USER CAME FROM.
+// Dropping `?nivel=` would silently return them to the default level and
+// lose their place.
+const backHref = `/${lang}/ingles/propuestos?nivel=${level}`;
 ---
 
 <BaseLayout
@@ -65,17 +67,8 @@ const backHref = `/${lang}/ingles?nivel=${level}`;
   description={t.section.description}
 >
   <section class="reveal mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:py-12">
-    <a
-      href={backHref}
-      class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
-    >
-      {`\u2190 ${t.exercise.back}`}
-    </a>
-
     <header class="flex flex-col gap-3">
-      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-        {focusName}
-      </h1>
+      <PageTitle lang={lang} backHref={backHref}>{focusName}</PageTitle>
       <div class="flex flex-wrap items-center gap-2">
         <span class={badgeVariants({ variant: 'secondary' })}>
           {`${t.exercise.level} ${level}`}

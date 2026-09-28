@@ -89,6 +89,27 @@ export const MAX_ZONES_PER_WORKSHEET = 60;
 /** A block's author-editable name may not exceed this many characters. */
 export const MAX_BLOCK_NAME_LENGTH = 60;
 
+/**
+ * `parseBlocks`' two validation postures (creator polish round 3, owner
+ * feedback #1):
+ *
+ *  - `'submit'` (the default, unchanged from before this round): every field
+ *    that grading/the public reads must be COMPLETE — a zone needs at least
+ *    one answer, a `choice` zone needs >= 2 options with every answer among
+ *    them. Used for `enviar` and anything the public reads
+ *    (`getPublishedActivity`/`getPublishedActivities`).
+ *  - `'draft'`: everything that matters for SAFETY/INTEGRITY still applies
+ *    unchanged (ids, types, coordinates in `[0, 1]` and inside the image,
+ *    the `MAX_BLOCKS`/`MAX_ZONES_PER_WORKSHEET` limits, image paths, name
+ *    length, rotation values, field-by-field rebuild) — only the
+ *    COMPLETENESS checks above are relaxed, so an author mid-drafting (a
+ *    zone with no answer yet, a choice zone with one option) can still
+ *    autosave. Used by `guardar` (a save is not a publish) and by
+ *    `getActivityForEdit` (the editor must be able to reopen its own
+ *    in-progress draft).
+ */
+export type BlocksParseMode = 'draft' | 'submit';
+
 const ZONE_KINDS: ReadonlySet<string> = new Set(['text', 'choice']);
 const ROTATIONS: ReadonlySet<number> = new Set([0, 90, 180, 270]);
 
@@ -138,16 +159,22 @@ function parseImageRef(value: unknown): ImageRef | null {
 }
 
 /**
- * Parse one zone, or `null` if it could never be graded or drawn.
+ * Parse one zone, or `null` if it is unusable.
  *
  * Geometry rules mirror what a normalized (fraction-of-image) rectangle must
  * satisfy to stay ON the image: `x`/`y` in `[0, 1]`, `w`/`h` strictly
  * positive and no larger than the remaining room (`x + w <= 1`, `y + h <=
- * 1`). `choice` additionally requires at least two options and EVERY answer
- * to be one of them — an answer the learner could never see offered is not a
- * gradeable choice zone.
+ * 1`) — enforced in EVERY mode, a zone off the image is never safe to store.
+ *
+ * `mode === 'submit'` additionally requires the zone to be GRADEABLE: at
+ * least one answer, and a `choice` zone needs >= 2 options with EVERY answer
+ * among them (an answer the learner could never see offered is not a
+ * gradeable choice zone). `mode === 'draft'` skips those two completeness
+ * checks — an author mid-drafting may have drawn a zone with no answer yet,
+ * or a `choice` zone with one option — but still trims/caps every string the
+ * same way.
  */
-function parseZone(value: unknown): Zone | null {
+function parseZone(value: unknown, mode: BlocksParseMode): Zone | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== 'string' || value.id.length === 0) return null;
 
@@ -159,7 +186,7 @@ function parseZone(value: unknown): Zone | null {
   const kind = value.kind as Zone['kind'];
 
   const answers = parseTrimmedStrings(value.answers);
-  if (answers.length === 0) return null;
+  if (mode === 'submit' && answers.length === 0) return null;
 
   const zone: Zone = {
     id: value.id,
@@ -173,8 +200,10 @@ function parseZone(value: unknown): Zone | null {
 
   if (kind === 'choice') {
     const options = parseTrimmedStrings(value.options);
-    if (options.length < 2) return null;
-    if (!answers.every((answer) => options.includes(answer))) return null;
+    if (mode === 'submit') {
+      if (options.length < 2) return null;
+      if (!answers.every((answer) => options.includes(answer))) return null;
+    }
     zone.options = options;
   }
 
@@ -215,6 +244,7 @@ function parseWorksheetBlock(
   id: string,
   name: string | undefined,
   value: Record<string, unknown>,
+  mode: BlocksParseMode,
 ): WorksheetBlock | null {
   const image = parseImageRef(value.image);
   if (!image) return null;
@@ -222,15 +252,18 @@ function parseWorksheetBlock(
   const rotation = parseRotation(value.rotation);
   if (rotation === null) return null;
 
-  // No minimum: a worksheet mid-authoring (image uploaded, no zone drawn
-  // yet) is still a valid, saveable draft block — only the maximum is a hard
-  // limit (`design.md`/task spec: "<= 60 zones per worksheet").
+  // No minimum in EITHER mode here: a worksheet mid-authoring (image
+  // uploaded, no zone drawn yet) is still a valid, saveable draft block —
+  // only the maximum is a hard limit (`design.md`/task spec: "<= 60 zones
+  // per worksheet"). `enviar.ts` enforces its OWN "at least one zone"
+  // completeness rule on top, via `findIncompleteBlock` below, once it can
+  // name which block is missing zones.
   if (!Array.isArray(value.zones)) return null;
   if (value.zones.length > MAX_ZONES_PER_WORKSHEET) return null;
 
   const zones: Zone[] = [];
   for (const raw of value.zones) {
-    const zone = parseZone(raw);
+    const zone = parseZone(raw, mode);
     if (!zone) return null;
     zones.push(zone);
   }
@@ -250,7 +283,7 @@ function parseQuizBlock(
 }
 
 /** Parse one block, or `null` if its own shape is unusable. */
-function parseBlock(value: unknown): Block | null {
+function parseBlock(value: unknown, mode: BlocksParseMode): Block | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== 'string' || value.id.length === 0) return null;
 
@@ -259,7 +292,7 @@ function parseBlock(value: unknown): Block | null {
 
   switch (value.type) {
     case 'worksheet':
-      return parseWorksheetBlock(value.id, name, value);
+      return parseWorksheetBlock(value.id, name, value, mode);
     case 'quiz':
       return parseQuizBlock(value.id, name, value);
     default:
@@ -274,16 +307,18 @@ function parseBlock(value: unknown): Block | null {
  * ALL-OR-NOTHING (see file header): the first unparseable block fails the
  * whole list, and block ids must be unique within it — a duplicate id makes
  * "which block is this zone/answer on" ambiguous for both the creator and
- * the player.
+ * the player. `mode` (default `'submit'`, unchanged from before creator
+ * polish round 3) only relaxes the COMPLETENESS checks inside a zone — see
+ * {@link BlocksParseMode}'s own doc.
  */
-export function parseBlocks(value: unknown): Block[] | null {
+export function parseBlocks(value: unknown, mode: BlocksParseMode = 'submit'): Block[] | null {
   if (!Array.isArray(value)) return null;
   if (value.length > MAX_BLOCKS) return null;
 
   const blocks: Block[] = [];
   const seenIds = new Set<string>();
   for (const raw of value) {
-    const block = parseBlock(raw);
+    const block = parseBlock(raw, mode);
     if (!block) return null;
     if (seenIds.has(block.id)) return null;
     seenIds.add(block.id);
@@ -291,4 +326,46 @@ export function parseBlocks(value: unknown): Block[] | null {
   }
 
   return blocks;
+}
+
+/** What's still missing before a `'draft'`-parsed block list would also pass `'submit'`. */
+export interface IncompleteBlockInfo {
+  blockId: string;
+  /** `null` for a block-level gap (a worksheet with no zones at all). */
+  zoneId: string | null;
+  reason: 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options';
+}
+
+/**
+ * Find the first SUBMIT-incomplete spot in an already `'draft'`-parsed block
+ * list — a worksheet with no zones yet, or a zone still missing what grading
+ * needs (no answer, a `choice` zone with < 2 options, or an answer not among
+ * its options). `null` means every block already satisfies `'submit'`'s
+ * stricter rules too, i.e. nothing here blocks `enviar`.
+ *
+ * Used by `enviar.ts` to name the EXACT block/zone a rejected submit must
+ * point the author back to, instead of a generic "something's wrong".
+ */
+export function findIncompleteBlock(blocks: Block[]): IncompleteBlockInfo | null {
+  for (const block of blocks) {
+    if (block.type !== 'worksheet') continue;
+    if (block.zones.length === 0) {
+      return { blockId: block.id, zoneId: null, reason: 'no_zones' };
+    }
+    for (const zone of block.zones) {
+      if (zone.answers.length === 0) {
+        return { blockId: block.id, zoneId: zone.id, reason: 'no_answers' };
+      }
+      if (zone.kind === 'choice') {
+        const options = zone.options ?? [];
+        if (options.length < 2) {
+          return { blockId: block.id, zoneId: zone.id, reason: 'too_few_options' };
+        }
+        if (!zone.answers.every((answer) => options.includes(answer))) {
+          return { blockId: block.id, zoneId: zone.id, reason: 'answer_not_in_options' };
+        }
+      }
+    }
+  }
+  return null;
 }

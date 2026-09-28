@@ -43,6 +43,7 @@ vi.mock('@lib/exercises', () => ({
 }));
 
 import EntryPage from './index.astro';
+import PropuestosPage from './propuestos/index.astro';
 import ListingPage from './[level]/[focus]/index.astro';
 import DetailPage from './[level]/[focus]/[slug].astro';
 
@@ -100,14 +101,77 @@ const publishedExercise = (slug: string, topic: string | null = 'job-interview')
 
 const valid = { lang: 'es', level: 'B1', focus: 'phrasal-verbs', slug: 'greetings' };
 
-describe('ingles/index.astro (section entry)', () => {
+describe('ingles/index.astro (hub)', () => {
+  it('returns 404 for an unsupported language', async () => {
+    const res = await renderPage(EntryPage, { lang: 'fr' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 200 for a supported language', async () => {
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('headlines the hub and offers both destinations, in Spanish', async () => {
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('Ejercicios de inglés');
+    expect(html).toContain('Escoge qué quieres hacer hoy');
+    expect(html).toContain('href="/es/ingles/propuestos"');
+    expect(html).toContain('Ejercicios propuestos');
+    expect(html).toContain('href="/es/ingles/actividades"');
+    expect(html).toContain('Actividades de la comunidad');
+    // The old mixed entry screen (level chips, search) no longer lives here.
+    expect(html).not.toContain('Elegir nivel');
+    expect(html).not.toContain('chu-search');
+  });
+
+  it('headlines the hub and offers both destinations, in English', async () => {
+    const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+    const html = await res.text();
+
+    expect(html).toContain('English exercises');
+    expect(html).toContain('Choose what you want to do today');
+    expect(html).toContain('href="/en/ingles/propuestos"');
+    expect(html).toContain('Curated exercises');
+    expect(html).toContain('href="/en/ingles/actividades"');
+    expect(html).toContain('Community activities');
+  });
+
+  it('ships no framework island — two plain links, nothing else', async () => {
+    // Scoped to the hub's OWN markup: `Header.astro` legitimately mounts the
+    // `UserMenu` island (Login step 1b) on every page, this one included.
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    const hubSection = html.slice(
+      html.indexOf('grid grid-cols-1 gap-4 sm:grid-cols-2'),
+      html.indexOf('</section>'),
+    );
+    expect(hubSection).not.toEqual('');
+    expect(hubSection).not.toContain('astro-island');
+  });
+
+  it('renders a back button to home, beside the title', async () => {
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es"');
+  });
+});
+
+describe('ingles/propuestos/index.astro (curated exercises)', () => {
   beforeEach(() => {
     getExerciseFacetRows.mockReset();
     getExerciseFacetRows.mockResolvedValue([]);
   });
 
   it('returns 404 for an unsupported language', async () => {
-    const res = await renderPage(EntryPage, { lang: 'fr' });
+    const res = await renderPage(PropuestosPage, { lang: 'fr' });
 
     expect(res.status).toBe(404);
     // Rejected before the query: an unsupported locale has no page to fill.
@@ -120,7 +184,7 @@ describe('ingles/index.astro (section entry)', () => {
       facetRow('B1', 'present-perfect'),
     ]);
 
-    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
 
     expect(res.status).toBe(200);
     // Proves the page actually reached its data path rather than short-circuiting.
@@ -137,10 +201,10 @@ describe('ingles/index.astro (section entry)', () => {
     ]);
 
     const res = await renderPage(
-      EntryPage,
+      PropuestosPage,
       { lang: 'es' },
       { lang: 'es' },
-      'https://chuyocode.test/es/ingles?nivel=B1',
+      'https://chuyocode.test/es/ingles/propuestos?nivel=B1',
     );
     const html = await res.text();
 
@@ -153,10 +217,10 @@ describe('ingles/index.astro (section entry)', () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('A2', 'quantifiers')]);
 
     const res = await renderPage(
-      EntryPage,
+      PropuestosPage,
       { lang: 'es' },
       { lang: 'es' },
-      'https://chuyocode.test/es/ingles?nivel=A2',
+      'https://chuyocode.test/es/ingles/propuestos?nivel=A2',
     );
     const html = await res.text();
 
@@ -170,10 +234,10 @@ describe('ingles/index.astro (section entry)', () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('A1', 'present-simple')]);
 
     const res = await renderPage(
-      EntryPage,
+      PropuestosPage,
       { lang: 'es' },
       { lang: 'es' },
-      'https://chuyocode.test/es/ingles?nivel=A1',
+      'https://chuyocode.test/es/ingles/propuestos?nivel=A1',
     );
     const html = await res.text();
 
@@ -184,7 +248,7 @@ describe('ingles/index.astro (section entry)', () => {
   it('returns 200 in English', async () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('A2', 'quantifiers')]);
 
-    const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+    const res = await renderPage(PropuestosPage, { lang: 'en' }, { lang: 'en' });
     const html = await res.text();
 
     expect(res.status).toBe(200);
@@ -201,10 +265,10 @@ describe('ingles/index.astro (section entry)', () => {
     ]);
 
     const res = await renderPage(
-      EntryPage,
+      PropuestosPage,
       { lang: 'es' },
       { lang: 'es' },
-      'https://chuyocode.test/es/ingles?nivel=B1',
+      'https://chuyocode.test/es/ingles/propuestos?nivel=B1',
     );
     const html = await res.text();
 
@@ -214,13 +278,13 @@ describe('ingles/index.astro (section entry)', () => {
     expect(html).not.toContain('subjunctive-mood');
   });
 
-  // THE reason this route exists: `Header.astro:38` links here from every page
-  // in both locales. An outage must degrade to an explanation, never a 404 or a
-  // 500 sitting in the site chrome.
+  // THE reason this route exists: `Header.astro:38` links to the hub, which
+  // links here, from every page in both locales. An outage must degrade to an
+  // explanation, never a 404 or a 500 sitting in the site chrome.
   it('returns 200 when the fail-safe query degrades an outage to no rows', async () => {
     getExerciseFacetRows.mockResolvedValue([]);
 
-    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
 
     expect(res.status).toBe(200);
     expect(getExerciseFacetRows).toHaveBeenCalledTimes(1);
@@ -229,7 +293,7 @@ describe('ingles/index.astro (section entry)', () => {
   it('headlines the screen with the section, not with its audience', async () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('A1', 'present-simple')]);
 
-    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
     const html = await res.text();
 
     expect(html).toContain('Ejercicios de inglés');
@@ -244,11 +308,33 @@ describe('ingles/index.astro (section entry)', () => {
   it('headlines the screen in English too', async () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('A1', 'present-simple')]);
 
-    const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+    const res = await renderPage(PropuestosPage, { lang: 'en' }, { lang: 'en' });
     const html = await res.text();
 
     expect(html).toContain('English exercises');
     expect(html).not.toContain('English for developers');
+  });
+
+  // No more community-activities link on this page — that choice now happens
+  // one screen up, on the hub.
+  it('does not link to the community activities feed', async () => {
+    getExerciseFacetRows.mockResolvedValue([]);
+
+    const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).not.toContain('href="/es/ingles/actividades"');
+    expect(html).not.toContain('Actividades de la comunidad');
+  });
+
+  it('renders a back button to the hub, beside the title', async () => {
+    getExerciseFacetRows.mockResolvedValue([]);
+
+    const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es/ingles"');
   });
 
   // The magnifier filter over the language-point grid. It filters the cards
@@ -260,10 +346,10 @@ describe('ingles/index.astro (section entry)', () => {
       getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
 
       const res = await renderPage(
-        EntryPage,
+        PropuestosPage,
         { lang: 'es' },
         { lang: 'es' },
-        'https://chuyocode.test/es/ingles?nivel=B1',
+        'https://chuyocode.test/es/ingles/propuestos?nivel=B1',
       );
       const html = await res.text();
 
@@ -280,10 +366,10 @@ describe('ingles/index.astro (section entry)', () => {
       ]);
 
       const res = await renderPage(
-        EntryPage,
+        PropuestosPage,
         { lang: 'es' },
         { lang: 'es' },
-        'https://chuyocode.test/es/ingles?nivel=B1',
+        'https://chuyocode.test/es/ingles/propuestos?nivel=B1',
       );
       const html = await res.text();
 
@@ -299,10 +385,10 @@ describe('ingles/index.astro (section entry)', () => {
       getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
 
       const res = await renderPage(
-        EntryPage,
+        PropuestosPage,
         { lang: 'es' },
         { lang: 'es' },
-        'https://chuyocode.test/es/ingles?nivel=B1',
+        'https://chuyocode.test/es/ingles/propuestos?nivel=B1',
       );
       const html = await res.text();
 
@@ -312,10 +398,10 @@ describe('ingles/index.astro (section entry)', () => {
       expect(html).toContain('No hay puntos gramaticales que coincidan con la búsqueda.');
       // Localized, not hardcoded — same key, other locale.
       const enRes = await renderPage(
-        EntryPage,
+        PropuestosPage,
         { lang: 'en' },
         { lang: 'en' },
-        'https://chuyocode.test/en/ingles?nivel=B1',
+        'https://chuyocode.test/en/ingles/propuestos?nivel=B1',
       );
       expect(await enRes.text()).toContain('No language points match that search.');
     });
@@ -327,10 +413,10 @@ describe('ingles/index.astro (section entry)', () => {
       getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
 
       const res = await renderPage(
-        EntryPage,
+        PropuestosPage,
         { lang: 'es' },
         { lang: 'es' },
-        'https://chuyocode.test/es/ingles?nivel=C2',
+        'https://chuyocode.test/es/ingles/propuestos?nivel=C2',
       );
       const html = await res.text();
 
@@ -349,10 +435,10 @@ describe('ingles/index.astro (section entry)', () => {
       getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'phrasal-verbs')]);
 
       const res = await renderPage(
-        EntryPage,
+        PropuestosPage,
         { lang: 'es' },
         { lang: 'es' },
-        'https://chuyocode.test/es/ingles?nivel=B1',
+        'https://chuyocode.test/es/ingles/propuestos?nivel=B1',
       );
       const html = await res.text();
 
@@ -369,10 +455,10 @@ describe('ingles/index.astro (section entry)', () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'past-simple')]);
 
     const res = await renderPage(
-      EntryPage,
+      PropuestosPage,
       { lang: 'es' },
       { lang: 'es' },
-      'https://chuyocode.test/es/ingles?nivel=b1-lowercase',
+      'https://chuyocode.test/es/ingles/propuestos?nivel=b1-lowercase',
     );
 
     // A junk level falls back to the default level — never a 404, because the
@@ -380,24 +466,14 @@ describe('ingles/index.astro (section entry)', () => {
     expect(res.status).toBe(200);
   });
 
-  it('links to the community activities feed (PR D "Activities practice")', async () => {
-    getExerciseFacetRows.mockResolvedValue([]);
-
-    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
-    const html = await res.text();
-
-    expect(html).toContain('href="/es/ingles/actividades"');
-    expect(html).toContain('Actividades de la comunidad');
-  });
-
   it('returns 200 for a valid ?nivel= level that has no exercises', async () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'past-simple')]);
 
     const res = await renderPage(
-      EntryPage,
+      PropuestosPage,
       { lang: 'es' },
       { lang: 'es' },
-      'https://chuyocode.test/es/ingles?nivel=C2',
+      'https://chuyocode.test/es/ingles/propuestos?nivel=C2',
     );
 
     // C2 is real but empty. It is honoured, not swapped out, and it renders the
@@ -487,6 +563,16 @@ describe('ingles/[level]/[focus]/index.astro (listing)', () => {
     expect(html).toContain('Phrasal verbs');
   });
 
+  it('renders a back button to the picker, on the same level the visitor came from', async () => {
+    getPublishedExercises.mockResolvedValue([publishedExercise('greetings')]);
+
+    const res = await renderPage(ListingPage, pair, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es/ingles/propuestos?nivel=B1"');
+  });
+
   it('links each card into the (level, focus) deep link', async () => {
     getPublishedExercises.mockResolvedValue([publishedExercise('greetings')]);
 
@@ -561,7 +647,7 @@ describe('ingles/[level]/[focus]/index.astro (listing)', () => {
     // The empty state, and a way out of it — an empty screen with no exit is a
     // dead end.
     expect(html).toContain('Todavía no hay ejercicios');
-    expect(html).toContain('href="/es/ingles?nivel=B1"');
+    expect(html).toContain('href="/es/ingles/propuestos?nivel=B1"');
   });
 
   it('returns 200 in English', async () => {

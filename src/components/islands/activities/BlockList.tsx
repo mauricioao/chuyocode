@@ -80,6 +80,15 @@ export interface BlockListProps {
   onToggleExpand: (blockId: string) => void;
   onSelectZone: (zoneId: string | null) => void;
   onBlocksChange: (blocks: Block[], opts?: BlocksChangeOptions) => void;
+  /**
+   * The exact block/zone `enviar.ts` pointed back to on a rejected submit
+   * (creator polish round 3, owner feedback #1) — `incompleteZoneId` is
+   * `null` for a block-level gap (a worksheet with no zones at all).
+   * `incompleteMessage` is only rendered on the ONE matching block.
+   */
+  incompleteBlockId?: string | null;
+  incompleteZoneId?: string | null;
+  incompleteMessage?: string | null;
 }
 
 function isWorksheet(block: Block): block is WorksheetBlock {
@@ -181,11 +190,11 @@ function SortableBlockItem({
       style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
       data-dragging={isDragging ? 'true' : undefined}
       data-focus-active={focusActive ? 'true' : undefined}
-      className={`flex min-h-0 flex-col rounded-lg border border-border ${
+      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border ${
         focusActive ? 'lg:min-h-[22rem] lg:flex-1' : 'lg:flex-none'
       }`}
     >
-      <div className="flex min-h-0 flex-1 items-start gap-1 px-1 pt-1">
+      <div className="flex min-h-0 min-w-0 flex-1 items-start gap-1 px-1 pt-1">
         <button
           type="button"
           aria-label={handleLabel}
@@ -211,6 +220,9 @@ export default function BlockList({
   onToggleExpand,
   onSelectZone,
   onBlocksChange,
+  incompleteBlockId = null,
+  incompleteZoneId = null,
+  incompleteMessage = null,
 }: BlockListProps) {
   const t = UI_LABELS[lang].activities.editor;
 
@@ -270,7 +282,15 @@ export default function BlockList({
   return (
     <DndContext id="activities-block-list" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-        <ul data-testid="block-list" className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        {/* `lg:[scrollbar-gutter:stable]` (creator polish round 3): this is
+            the block list's own scroll container — reserving its gutter
+            here (paired with the same property on `html`, `global.css`)
+            stops the canvas/panel from reflowing sideways by ~15px the
+            moment this list's content starts/stops overflowing. */}
+        <ul
+          data-testid="block-list"
+          className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:[scrollbar-gutter:stable]"
+        >
           {blocks.map((block, index) => {
             const expanded = expandedBlockIds.has(block.id);
             const worksheet = isWorksheet(block) ? block : null;
@@ -284,7 +304,7 @@ export default function BlockList({
                 handleLabel={`${t.dragHandle}: ${name}`}
                 focusActive={focusBlockId === block.id}
               >
-                <div data-testid={`block-${block.id}`} className="flex min-h-0 flex-1 flex-col">
+                <div data-testid={`block-${block.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <div className="flex flex-none flex-wrap items-center gap-2 py-1">
                     <button
                       type="button"
@@ -362,7 +382,7 @@ export default function BlockList({
                     // its name/handle (this header, then the canvas' own
                     // zoom toolbar) rather than one padded content area —
                     // every pixel here is height the canvas doesn't get.
-                    <div className="flex min-h-0 flex-1 flex-col border-t border-border px-2 pb-2 pt-1">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border px-2 pb-2 pt-1">
                       <WorksheetZoneEditor
                         lang={lang}
                         image={worksheet.image}
@@ -372,6 +392,8 @@ export default function BlockList({
                         selectedZoneId={selectedZoneId}
                         onZonesChange={(zones, opts) => updateZones(block.id, zones, opts)}
                         onSelectZone={onSelectZone}
+                        incompleteZoneId={block.id === incompleteBlockId ? incompleteZoneId : undefined}
+                        incompleteMessage={block.id === incompleteBlockId ? incompleteMessage : null}
                       />
                     </div>
                   )}

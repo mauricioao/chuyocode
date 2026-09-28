@@ -98,3 +98,26 @@ describe('site-wide pointer cursor', () => {
     expect(css).toMatch(/button:disabled,[\s\S]*?cursor:\s*not-allowed;/);
   });
 });
+
+// Creator polish round 3: a scrollbar appearing/disappearing (e.g. the
+// activity editor's block list) used to steal ~15px and reflow the canvas
+// and properties panel sideways. Fixed with a reserved scrollbar gutter at
+// the page level PLUS a thin, always-visible (never auto-hidden) scrollbar —
+// an auto-hidden one would still cause the same jump on hover/scroll.
+describe('scrollbar (creator polish round 3 — no layout jump)', () => {
+  it('reserves the scrollbar gutter at the page level', () => {
+    expect(css).toMatch(/:root\s*{[^}]*scrollbar-gutter:\s*stable;/);
+  });
+
+  it('declares a thin, dark-theme scrollbar for Firefox (scrollbar-width/scrollbar-color)', () => {
+    expect(css).toMatch(/scrollbar-width:\s*thin;/);
+    expect(css).toMatch(/scrollbar-color:\s*var\(--muted\)\s+transparent;/);
+  });
+
+  it('declares a matching WebKit fallback with a rounded thumb that lightens on hover', () => {
+    expect(css).toContain('::-webkit-scrollbar {');
+    expect(css).toMatch(/::-webkit-scrollbar\s*{[^}]*width:\s*8px;/);
+    expect(css).toMatch(/::-webkit-scrollbar-thumb\s*{[^}]*border-radius:\s*9999px;/);
+    expect(css).toMatch(/::-webkit-scrollbar-thumb:hover\s*{\s*background-color:\s*var\(--muted-foreground\);/);
+  });
+});

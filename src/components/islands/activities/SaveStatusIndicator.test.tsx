@@ -5,7 +5,14 @@ import SaveStatusIndicator from './SaveStatusIndicator';
 
 afterEach(() => cleanup());
 
-const LABELS = { saving: 'Guardando cambios', saved: 'Cambios guardados', error: 'No se pudo guardar', unsaved: 'Cambios sin guardar', retry: 'Reintentar' };
+const LABELS = {
+  saving: 'Guardando cambios',
+  saved: 'Cambios guardados',
+  error: 'No se pudo guardar',
+  unsaved: 'Cambios sin guardar',
+  retry: 'Reintentar',
+  errorRetry: 'No se pudo guardar, reintentar',
+};
 
 describe('SaveStatusIndicator', () => {
   it('shows a spinning icon while saving', () => {
@@ -39,11 +46,14 @@ describe('SaveStatusIndicator', () => {
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
   });
 
-  it('shows a "Reintentar" action on error, which is never silent', () => {
+  it('shows an icon-only retry action on error, which is never silent', () => {
     const onRetry = vi.fn();
     render(<SaveStatusIndicator status="error" onRetry={onRetry} labels={LABELS} />);
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('error');
-    fireEvent.click(screen.getByTestId('save-retry'));
+    const retry = screen.getByTestId('save-retry');
+    expect(retry.textContent).toBe(''); // icon only, no visible "Reintentar" text
+    expect(retry.getAttribute('aria-label')).toBe('No se pudo guardar, reintentar');
+    fireEvent.click(retry);
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

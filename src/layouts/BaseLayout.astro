@@ -22,6 +22,7 @@
 import { ClientRouter } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
 import Footer from '@components/layout/Footer.astro';
+import ScrollToTop from '@components/islands/ScrollToTop';
 // Visual-identity styles (PR 2). `fonts.css` self-hosts Raleway Variable
 // (font-display: swap baked into the @font-face blocks); `global.css` applies
 // the display-font heading rule, the Andean pattern mask, and the skip-link
@@ -111,11 +112,19 @@ const faviconSvg =
     </main>
     <Footer lang={lang} />
 
+    {/* Global "back to top" button (site-wide). `client:load` like
+        `UserMenu` — always-relevant chrome, not below-the-fold content —
+        and, same as that island, its SSR markup depends only on `lang`
+        (never per-visitor data), so it stays safe on publicly cached pages
+        (home, libros, noticias). */}
+    <ScrollToTop client:load lang={lang} />
+
     {/* Scroll-reveal init (decision #6). A module script so we can import
         `initReveals`; runs on first load and again after every Astro View
         Transitions swap so `.reveal` elements on the incoming page animate. */}
     <script>
       import { initReveals } from '@lib/reveal';
+      import { initBackButtons } from '@lib/backNavigation';
 
       const run = () => initReveals();
 
@@ -127,6 +136,11 @@ const faviconSvg =
 
       // Re-run after client-side navigations (View Transitions safety).
       document.addEventListener('astro:after-swap', run);
+
+      // `BackButton`'s progressive enhancement: ONE delegated listener for
+      // the whole session — `document` survives View Transitions swaps, so
+      // (unlike reveals) this needs no re-init on `astro:after-swap`.
+      initBackButtons();
     </script>
   </body>
 </html>

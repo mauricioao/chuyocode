@@ -8,8 +8,11 @@
  * - saving: `CircleNotch`, spinning.
  * - saved: `CheckCircle`, weight "fill", in `--color-success` (a light,
  *   characteristic emerald — see `global.css`).
- * - error: `WarningCircle` in destructive red, PLUS a "Reintentar" action —
- *   a failed autosave must never be silent (owner request #8).
+ * - error: `WarningCircle` in destructive red, ICON-ONLY (creator polish
+ *   round 3, owner feedback #1: no separate "Reintentar" text) — the icon
+ *   itself IS the retry button, its accessible name/tooltip stating both the
+ *   failure and the action ("No se pudo guardar, reintentar"/"Couldn't save,
+ *   retry"). A failed autosave must never be silent (owner request #8).
  * - pending ("unsaved"): a plain (non-spinning) `CircleNotch` — a change is
  *   queued but the ~3s autosave debounce hasn't fired yet.
  *
@@ -29,6 +32,8 @@ export interface SaveStatusLabels {
   error: string;
   unsaved: string;
   retry: string;
+  /** The error state's ONE accessible label/tooltip — combines the failure and the retry action. */
+  errorRetry: string;
 }
 
 export interface SaveStatusIndicatorProps {
@@ -39,13 +44,20 @@ export interface SaveStatusIndicatorProps {
 
 export default function SaveStatusIndicator({ status, onRetry, labels }: SaveStatusIndicatorProps) {
   if (status === 'error') {
+    // Icon-only, clickable — no separate "Reintentar" text (creator polish
+    // round 3, owner feedback #1).
     return (
-      <span className="flex items-center gap-1" data-testid="save-status" data-status="error">
-        <span role="status" aria-label={labels.error} title={labels.error}>
+      <span data-testid="save-status" data-status="error">
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={labels.errorRetry}
+          title={labels.errorRetry}
+          data-testid="save-retry"
+          onClick={onRetry}
+        >
           <WarningCircleIcon aria-hidden="true" className="text-destructive" size={18} />
-        </span>
-        <Button type="button" size="xs" variant="ghost" data-testid="save-retry" onClick={onRetry}>
-          {labels.retry}
         </Button>
       </span>
     );

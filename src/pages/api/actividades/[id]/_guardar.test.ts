@@ -192,6 +192,101 @@ describe('POST /api/actividades/[id]/guardar — blocks validation', () => {
   });
 });
 
+describe('POST /api/actividades/[id]/guardar — tolerant DRAFT validation (creator polish round 3)', () => {
+  it('accepts a worksheet zone with no answers yet (normal mid-drafting state)', async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({
+          blocks: [
+            {
+              id: 'b1',
+              type: 'worksheet',
+              image: { path: OWN_UPLOAD_PATH, width: 800, height: 600 },
+              zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: [] }],
+            },
+          ],
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts a choice zone with fewer than 2 options', async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({
+          blocks: [
+            {
+              id: 'b1',
+              type: 'worksheet',
+              image: { path: OWN_UPLOAD_PATH, width: 800, height: 600 },
+              zones: [
+                { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'choice', answers: [], options: ['cat'] },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts a worksheet with zero zones', async () => {
+    const res = await POST(ctx({ body: saveInput({ blocks: [worksheetBlock(OWN_UPLOAD_PATH)] }) }));
+    expect(res.status).toBe(200);
+  });
+
+  it('still 422s a zone with out-of-range coordinates', async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({
+          blocks: [
+            {
+              id: 'b1',
+              type: 'worksheet',
+              image: { path: OWN_UPLOAD_PATH, width: 800, height: 600 },
+              zones: [{ id: 'z1', x: 1.5, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: [] }],
+            },
+          ],
+        }),
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_blocks');
+  });
+
+  it('still 422s more than MAX_BLOCKS blocks', async () => {
+    const blocks = Array.from({ length: 21 }, (_, i) => ({
+      id: `b${i}`,
+      type: 'worksheet',
+      image: { path: OWN_UPLOAD_PATH, width: 800, height: 600 },
+      zones: [],
+    }));
+    const res = await POST(ctx({ body: saveInput({ blocks }) }));
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_blocks');
+  });
+
+  it("still 422s a foreign (neither own-upload nor this activity's) image path even in draft", async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({
+          blocks: [
+            {
+              id: 'b1',
+              type: 'worksheet',
+              image: { path: OTHER_UPLOAD_PATH, width: 800, height: 600 },
+              zones: [],
+            },
+          ],
+        }),
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_image_path');
+  });
+});
+
 describe('POST /api/actividades/[id]/guardar — image ownership', () => {
   it("422s a worksheet image that is neither the caller's own upload nor this activity's own images path", async () => {
     const res = await POST(

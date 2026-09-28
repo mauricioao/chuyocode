@@ -84,6 +84,15 @@ export interface WorksheetZoneEditorProps {
   onSelectZone: (zoneId: string | null) => void;
   /** The worksheet's own rotation (creator polish round 2). Defaults to `0` — every image saved before rotation existed. */
   rotation?: Rotation;
+  /**
+   * This block's own incomplete spot, if `enviar.ts` pointed back at it
+   * (creator polish round 3, owner feedback #1): `undefined` means this
+   * block has nothing to show; `null` means the gap is BLOCK-level (a
+   * worksheet with no zones at all); a real zone id shows the message in
+   * that zone's own properties panel instead.
+   */
+  incompleteZoneId?: string | null;
+  incompleteMessage?: string | null;
 }
 
 /** The zoom levels behind the "25/50/100/125%" preset row. */
@@ -120,6 +129,8 @@ export default function WorksheetZoneEditor({
   onZonesChange,
   onSelectZone,
   rotation = 0,
+  incompleteZoneId,
+  incompleteMessage = null,
 }: WorksheetZoneEditorProps) {
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -503,8 +514,11 @@ export default function WorksheetZoneEditor({
   const canvasCursorClass = isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-crosshair';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row" data-testid="worksheet-zone-editor">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row"
+      data-testid="worksheet-zone-editor"
+    >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div
           className="mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
           data-testid="zoom-toolbar"
@@ -648,6 +662,18 @@ export default function WorksheetZoneEditor({
           {zones.length === 0 && <span>{t.noZonesYet}</span>}
           <span>{t.addZoneHint}</span>
         </div>
+        {/* Block-level incomplete pointer (creator polish round 3, owner
+            feedback #1): `incompleteZoneId === null` means the gap is
+            "this worksheet has no zones at all" rather than one specific
+            zone — see `WorksheetZoneEditorProps`'s own doc. */}
+        {incompleteMessage && incompleteZoneId === null && (
+          <p
+            data-testid="worksheet-incomplete-message"
+            className="mt-1 flex-none rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+          >
+            {incompleteMessage}
+          </p>
+        )}
       </div>
 
       {/* ALWAYS rendered, fixed width (~280-300px) — see the file header.
@@ -663,6 +689,17 @@ export default function WorksheetZoneEditor({
       >
         {selectedZone ? (
           <div data-testid="zone-properties-content">
+            {/* Zone-level incomplete pointer (creator polish round 3, owner
+                feedback #1) — only shown while THIS zone is the one
+                `enviar.ts` pointed back at. */}
+            {incompleteMessage && incompleteZoneId === selectedZone.id && (
+              <p
+                data-testid="zone-incomplete-message"
+                className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+              >
+                {incompleteMessage}
+              </p>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
               <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>

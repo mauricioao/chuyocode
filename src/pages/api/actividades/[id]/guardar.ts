@@ -13,7 +13,14 @@
  * 4. bad JSON / wrong shape                    -> 400
  * 5. title not 1..120 chars (trimmed)          -> 422 { error: 'invalid_title' }
  * 6. level neither null nor a CEFR code        -> 422 { error: 'invalid_level' }
- * 7. parseBlocks(blocks) === null              -> 422 { error: 'invalid_blocks' }
+ * 7. parseBlocks(blocks, 'draft') === null     -> 422 { error: 'invalid_blocks' }
+ *    (TOLERANT — creator polish round 3: a save is not a publish. A zone
+ *    with no answer yet, a choice zone with < 2 options, or a worksheet with
+ *    0 zones are all normal mid-drafting states and MUST autosave without
+ *    error; `enviar.ts` alone enforces submit-completeness. Safety/integrity
+ *    checks — ids, types, coordinates, the block/zone limits, image paths,
+ *    name length, rotation — still apply exactly as before; see
+ *    `blocks.ts`'s own `BlocksParseMode` doc.)
  * 8. a worksheet image.path is neither the      -> 422 { error: 'invalid_image_path' }
  *    caller's own upload path NOR an
  *    `activity-images/<thisId>/…` path
@@ -157,7 +164,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return json({ error: 'invalid_level' }, 422);
   }
 
-  const blocks = parseBlocks(body.blocks);
+  const blocks = parseBlocks(body.blocks, 'draft');
   if (!blocks) {
     return json({ error: 'invalid_blocks' }, 422);
   }

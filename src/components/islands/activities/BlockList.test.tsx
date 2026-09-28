@@ -49,6 +49,13 @@ function Harness({
   );
 }
 
+describe('BlockList — scrollbar gutter (creator polish round 3, no layout jump)', () => {
+  it('reserves the scroll container\'s own gutter so its content reflow never steals width', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
+    expect(screen.getByTestId('block-list').className).toContain('[scrollbar-gutter:stable]');
+  });
+});
+
 describe('BlockList — empty state', () => {
   it('shows the empty-state copy when there are no blocks', () => {
     render(<Harness initialBlocks={[]} />);

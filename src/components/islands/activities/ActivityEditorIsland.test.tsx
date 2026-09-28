@@ -37,6 +37,49 @@ const WORKSHEET_BLOCK: WorksheetBlock = {
   zones: [],
 };
 
+const WORKSHEET_BLOCK_WITH_ZONE: WorksheetBlock = {
+  ...WORKSHEET_BLOCK,
+  zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] }],
+};
+
+/** A DOMRect-shaped mock — same helper as `WorksheetZoneEditor.test.tsx`'s own. */
+function mockRect(el: Element, box: { left?: number; top?: number; width: number; height: number }) {
+  const left = box.left ?? 0;
+  const top = box.top ?? 0;
+  vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+    left,
+    top,
+    width: box.width,
+    height: box.height,
+    right: left + box.width,
+    bottom: top + box.height,
+    x: left,
+    y: top,
+    toJSON() {
+      return {};
+    },
+  });
+}
+
+/**
+ * Dispatches a hand-built native pointer event through React's real event
+ * system — jsdom has no `PointerEvent` constructor, so `fireEvent.pointerX`
+ * drops `clientX`/`clientY`; same posture as `WorksheetZoneEditor.test.tsx`'s
+ * own `firePointer`.
+ */
+function firePointer(
+  el: Element,
+  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  clientX: number,
+  clientY: number,
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, { clientX, clientY, pointerId: 1, button: 0 });
+  act(() => {
+    el.dispatchEvent(event);
+  });
+}
+
 function renderEditor(overrides: Partial<Parameters<typeof ActivityEditorIsland>[0]> = {}) {
   return render(
     <ActivityEditorIsland
@@ -64,11 +107,36 @@ describe('ActivityEditorIsland — initial render', () => {
   });
 });
 
+describe('ActivityEditorIsland — one framed card (creator polish round 3)', () => {
+  it('wraps the title/level header row and the block list inside ONE bordered card', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const card = screen.getByTestId('activity-editor-card');
+    expect(card.className).toContain('lg:rounded-lg');
+    expect(card.className).toContain('lg:border');
+    expect(card.className).toContain('lg:bg-card');
+    expect(card.contains(screen.getByTestId('activity-title-input'))).toBe(true);
+    expect(card.contains(screen.getByTestId('block-list'))).toBe(true);
+    // The header row no longer carries its own separate box at `lg:` —
+    // only a bottom border, since the card itself supplies the frame.
+    const header = screen.getByTestId('activity-title-input').closest('label')?.parentElement;
+    expect(header?.className).toContain('lg:border-b');
+    expect(header?.className).toContain('lg:rounded-none');
+  });
+
+  it('keeps the sticky side toolbar exactly outside/unaffected by the card', () => {
+    renderEditor();
+    const card = screen.getByTestId('activity-editor-card');
+    const toolbar = screen.getByTestId('editor-side-toolbar');
+    expect(card.contains(toolbar)).toBe(false);
+    expect(toolbar.className).toContain('fixed');
+  });
+});
+
 describe('ActivityEditorIsland — autosave', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('saves automatically ~3s after the last change, with no manual save click', async () => {
+  it('saves automatically ~5s after the last change, with no manual save click', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
     renderEditor();
@@ -77,9 +145,13 @@ describe('ActivityEditorIsland — autosave', () => {
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(4999);
     });
+    expect(fetchMock).not.toHaveBeenCalled();
 
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
   });
@@ -94,7 +166,7 @@ describe('ActivityEditorIsland — autosave', () => {
 
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(5000);
     });
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('error');
     expect(screen.getByTestId('save-retry')).toBeTruthy();
@@ -104,6 +176,40 @@ describe('ActivityEditorIsland — autosave', () => {
     });
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('never autosaves mid-drag, then debounces ~5s from the moment the drag ends (creator polish round 3)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
+
+    fireEvent.click(screen.getByTestId('block-header-b1'));
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(canvas, { width: 200, height: 100 });
+    const zone = screen.getByTestId('zone-z1');
+
+    firePointer(zone, 'pointerdown', 20, 10);
+    firePointer(canvas, 'pointermove', 40, 10); // a live, in-progress move frame
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved'); // no autosave scheduled yet
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000); // well past 5s, but still mid-drag
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
+
+    firePointer(canvas, 'pointerup', 40, 10); // seals the drag into one commit
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4999);
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -552,6 +658,53 @@ describe('ActivityEditorIsland — submit for review', () => {
       'Agregar al menos un bloque',
     );
     expect(screen.getByTestId('activity-status-badge').textContent).toContain('Borrador');
+  });
+
+  it('jumps to the exact block/zone on an "incomplete" submit response (creator polish round 3)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }) // guardar
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'incomplete', blockId: 'b1', zoneId: 'z1', reason: 'no_answers' }),
+      }); // enviar
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
+    });
+
+    // Dialog closed, block expanded, zone selected, inline message shown.
+    expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+    expect(screen.getByTestId('zone-incomplete-message').textContent).toContain(
+      'todavía no tiene una respuesta',
+    );
+  });
+
+  it('clears the inline incomplete message once the author edits the block again', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'incomplete', blockId: 'b1', zoneId: null, reason: 'no_zones' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
+    });
+    expect(screen.getByTestId('worksheet-incomplete-message')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('add-zone'));
+    expect(screen.queryByTestId('worksheet-incomplete-message')).toBeNull();
   });
 
   it('cancels the dialog without submitting anything', () => {

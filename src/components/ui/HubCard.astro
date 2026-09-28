@@ -1,0 +1,45 @@
+---
+/**
+ * HubCard — a big, square, icon-led navigation card.
+ *
+ * Introduced for the Inglés hub (`/[lang]/ingles`, two cards: curated
+ * exercises vs. community activities) as the new reusable "pick one of a
+ * few equally-weighted destinations" look, instead of one more variant of
+ * the site's existing text-only link cards.
+ *
+ * Square via `aspect-square`, capped to a compact width on phones
+ * (`max-w-xs`) so a single mobile column stays a card, not a nearly
+ * full-viewport-tall tile; `sm:` and up let the grid column set the width.
+ *
+ * The icon is a named slot so the caller decides which Phosphor icon to
+ * render (typically `weight="duotone"`, unhydrated — a framework component
+ * with no `client:*` directive renders to static SSR HTML like any other
+ * Astro-nested content, so this stays zero extra JavaScript). Icon color
+ * comes from the wrapping `text-accent`; Phosphor icons default to
+ * `currentColor` when no explicit `color` prop is passed.
+ *
+ * Hover/focus: a subtle lift + scale, disabled under
+ * `prefers-reduced-motion: reduce` via `motion-reduce:` (site convention —
+ * see `UserMenu.tsx`'s avatar button for the same pattern). The
+ * `focus-visible` ring stays on regardless of reduced motion; it is the
+ * keyboard-focus indicator, not decorative motion.
+ */
+interface Props {
+  href: string;
+  title: string;
+  description: string;
+}
+
+const { href, title, description } = Astro.props;
+---
+
+<a
+  href={href}
+  class="group mx-auto flex aspect-square w-full max-w-xs flex-col items-center justify-center gap-3 rounded-lg border border-border bg-base-soft p-6 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:scale-[1.02] hover:border-accent focus-visible:-translate-y-1 focus-visible:scale-[1.02] focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:max-w-none motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 motion-reduce:focus-visible:translate-y-0 motion-reduce:focus-visible:scale-100"
+>
+  <span class="text-accent" aria-hidden="true">
+    <slot name="icon" />
+  </span>
+  <span class="text-lg font-semibold text-zinc-100 sm:text-xl">{title}</span>
+  <span class="text-sm text-zinc-400">{description}</span>
+</a>

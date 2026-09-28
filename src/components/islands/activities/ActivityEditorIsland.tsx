@@ -47,6 +47,7 @@ import {
 } from '@/lib/activities/history';
 import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
+import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
 import BlockList, { type BlocksChangeOptions } from './BlockList';
@@ -124,6 +125,17 @@ export default function ActivityEditorIsland({
     submitting: boolean;
     error: string | null;
   }>({ open: false, submitting: false, error: null });
+  // `enviar.ts`'s `{ error: 'incomplete', blockId, zoneId, reason }` response
+  // (creator polish round 3, owner feedback #1): instead of a generic dialog
+  // error, the submit dialog closes and the editor jumps straight to the
+  // exact block/zone that still needs work, with a short inline message
+  // there. Cleared on the next blocks edit (see the `blocks`-watching effect
+  // below) — an old pointer is stale the moment the author starts fixing it.
+  const [incompleteTarget, setIncompleteTarget] = useState<{
+    blockId: string;
+    zoneId: string | null;
+    reason: 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options';
+  } | null>(null);
   const [preview, setPreview] = useState(false);
   const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -196,6 +208,13 @@ export default function ActivityEditorIsland({
     }
   }, []);
 
+  // A rejected submit's exact incomplete spot is stale the moment the
+  // author touches ANY block content again — clear it on the next blocks
+  // edit rather than leaving a pointer to a gap that may already be fixed.
+  useEffect(() => {
+    setIncompleteTarget(null);
+  }, [blocks]);
+
   const handleUndo = useCallback(() => setHistory(undo), []);
   const handleRedo = useCallback(() => setHistory(redo), []);
 
@@ -232,13 +251,23 @@ export default function ActivityEditorIsland({
     };
   }, [activityId]);
 
-  // Skip the very first run (mount) — nothing changed yet, so nothing to autosave.
+  // Skip the very first run (mount) — nothing changed yet, so nothing to
+  // autosave. Also skip every LIVE, in-progress frame of a zone drag/resize
+  // (creator polish round 3, owner feedback #1): `updateDoc` above sets
+  // `transactionBaselineRef` on the FIRST `commit: false` update of a drag
+  // and clears it back to `null` exactly on the commit that seals the whole
+  // gesture into one undo step (`replacePresent`/`commitTransaction`) — so
+  // "still non-null when this effect runs" means "a drag is still in
+  // progress", and `notifyChange` (which (re)starts the ~5s debounce) is
+  // deferred until the commit that ends it, instead of firing — and
+  // resetting the timer — on every single pointermove frame.
   const skippedFirstNotifyRef = useRef(false);
   useEffect(() => {
     if (!skippedFirstNotifyRef.current) {
       skippedFirstNotifyRef.current = true;
       return;
     }
+    if (transactionBaselineRef.current !== null) return;
     schedulerRef.current?.notifyChange(doc);
   }, [doc]);
 
@@ -404,7 +433,40 @@ export default function ActivityEditorIsland({
         body: JSON.stringify({ acceptedRights: true }),
       });
       if (!submitRes.ok) {
-        const errBody = (await submitRes.json().catch(() => ({}))) as { error?: string };
+        const errBody = (await submitRes.json().catch(() => ({}))) as {
+          error?: string;
+          blockId?: string;
+          zoneId?: string | null;
+          reason?: string;
+        };
+        if (
+          errBody.error === 'incomplete' &&
+          typeof errBody.blockId === 'string' &&
+          typeof errBody.reason === 'string'
+        ) {
+          // Points the author straight at the exact gap instead of a
+          // generic dialog error (creator polish round 3, owner feedback
+          // #1) — close the dialog, expand/select that block/zone, and let
+          // `BlockList`/`WorksheetZoneEditor` show a short inline message
+          // there.
+          const { blockId, reason } = errBody;
+          const zoneId = errBody.zoneId ?? null;
+          setSubmitDialog({ open: false, submitting: false, error: null });
+          setExpandedBlockIds(new Set([blockId]));
+          setSelectedZoneId(zoneId);
+          setIncompleteTarget({
+            blockId,
+            zoneId,
+            reason: reason as 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options',
+          });
+          if (typeof document !== 'undefined') {
+            const el = document.getElementById(`block-${blockId}`);
+            if (el && typeof el.scrollIntoView === 'function') {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+          return;
+        }
         throw new Error(errBody.error ?? 'submit_failed');
       }
 
@@ -444,9 +506,26 @@ export default function ActivityEditorIsland({
   );
 
   const saveLabels = useMemo(
-    () => ({ saving: t.savingStatus, saved: t.savedStatus, error: t.errorStatus, unsaved: t.unsaved, retry: t.saveRetry }),
+    () => ({
+      saving: t.savingStatus,
+      saved: t.savedStatus,
+      error: t.errorStatus,
+      unsaved: t.unsaved,
+      retry: t.saveRetry,
+      errorRetry: t.saveErrorRetry,
+    }),
     [t],
   );
+
+  // Maps `findIncompleteBlock`'s own reason codes (`blocks.ts`) onto their
+  // inline message — see `incompleteTarget`'s own comment above.
+  const INCOMPLETE_REASON_KEYS = {
+    no_zones: 'incompleteNoZones',
+    no_answers: 'incompleteNoAnswers',
+    too_few_options: 'incompleteTooFewOptions',
+    answer_not_in_options: 'incompleteAnswerNotInOptions',
+  } as const;
+  const incompleteMessage = incompleteTarget ? t[INCOMPLETE_REASON_KEYS[incompleteTarget.reason]] : null;
 
   const navGuardLabels = useMemo(
     () => ({
@@ -459,95 +538,129 @@ export default function ActivityEditorIsland({
     [t],
   );
 
+  // Points at whichever of the two scroll containers below is currently
+  // mounted (block list or preview — the two branches are mutually
+  // exclusive), so the scoped `ScrollToTop` always tracks the right one
+  // without needing to know which mode is active.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   return (
-    // Desktop "one-screen" layout: `lg:h-[calc(100dvh-65px)]` sizes this
-    // whole island to EXACTLY the viewport height still left after the site
-    // header (`Header.astro`, unchanged — 65px = its 1px border-b + 32px
-    // `py-4` + a 32px `h-8` logo row) — see `[id].astro`'s own comment for
-    // why it, in turn, adds no extra vertical padding of its own at `lg:`.
-    // `lg:pr-16` reserves room for `EditorSideToolbar`'s `fixed right-3`
-    // icon rail so it never overlaps the canvas/properties column. Below
-    // `lg:` this is intentionally untouched — today's stacked, scrollable
-    // layout keeps working; a dedicated mobile layout comes later.
+    // Desktop "one-screen" layout, creator polish round 3: ONE framed card
+    // (border, rounded, `bg-card`) with real vertical margins from the site
+    // header AND the footer — `[id].astro`'s section padding (`lg:pt-6` on
+    // the back-button wrapper + `lg:pb-6` on the section, 3rem together) IS
+    // those margins, so `lg:h-[calc(100dvh-65px-6rem)]` here must change
+    // together with it (65px = `Header.astro`'s own height, unchanged — its
+    // 1px border-b + 32px `py-4` + a 32px `h-8` logo row; the first 3rem is
+    // that top+bottom padding; the SECOND 3rem is the `BackButton` row
+    // `[id].astro` renders above this section — `h-9` button + `mb-3` gap —
+    // added for site-wide back navigation, PR "Navigation + Inglés hub").
+    // `lg:pr-16` reserves room for `EditorSideToolbar`'s `fixed right-3` icon
+    // rail — UNTOUCHED by this pass, per owner decision — so it never
+    // overlaps the canvas/properties column. Below `lg:` this is
+    // intentionally untouched — today's stacked, scrollable layout keeps
+    // working; a dedicated mobile layout comes later.
     <div
       data-testid="activity-editor-island"
-      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px)] lg:gap-2 lg:pr-16"
+      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px-6rem)] lg:gap-2 lg:pr-16"
     >
-      {/* Compact top bar (owner request #1): title + level, plus — PR D,
-          "Activities practice" — the review-state badge and "Enviar a
-          revisión" (placed HERE, next to the rest of the top bar's own
-          controls, per coordinator direction — `EditorSideToolbar` itself is
-          untouched by this PR). `lg:min-h-12` (was a hard `lg:h-12`) lets
-          this row grow if the badge/note wrap onto a second line instead of
-          clipping — everything else about this row is unchanged from PR B/C. */}
-      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-12 lg:flex-row lg:items-center lg:py-1.5">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          <span className="sr-only">{t.titleLabel}</span>
-          <input
-            type="text"
-            data-testid="activity-title-input"
-            aria-label={t.titleLabel}
-            value={title}
-            onChange={(e) => changeTitle(e.target.value)}
-            className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="sr-only">{t.levelLabel}</span>
-          <select
-            data-testid="activity-level-select"
-            aria-label={t.levelLabel}
-            value={level ?? ''}
-            onChange={(e) => changeLevel(e.target.value)}
-            className="h-9 rounded border border-border bg-background px-2 text-foreground"
-          >
-            <option value="">{t.levelNone}</option>
-            {LEVELS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {levelLabels[lvl]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
-          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-              : t.statusDraft}
-          </span>
-          {status === 'rejected' && initialReviewNote && (
-            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-              {t.reviewNoteLabel}: {initialReviewNote}
+      {/* THE card: everything below is inside it, one bordered/rounded
+          surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays
+          fully visible on screen" guarantee — the header row below is
+          `flex-none` (its own intrinsic height), the body below it is the
+          ONLY flexible, scrolling area, so the card as a whole can never
+          grow past the height the root above gives it. */}
+      <div
+        data-testid="activity-editor-card"
+        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:bg-card"
+      >
+        {/* Compact header row (owner request #1, creator polish round 2):
+            title + level, plus — PR D, "Activities practice" — the
+            review-state badge and "Enviar a revisión". `lg:min-h-14` (was a
+            hard `lg:h-12`) lets this row grow if the badge/note wrap onto a
+            second line instead of clipping. Creator polish round 3
+            (desktop only — below `lg:` this row keeps its own original box
+            untouched): the title becomes the visibly larger, semibold field
+            (it names the whole card), and at `lg:` this row IS the card's
+            own header (`border-b`, not a separate boxed element) — no other
+            action row lives here. */}
+        <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            <span className="sr-only">{t.titleLabel}</span>
+            <input
+              type="text"
+              data-testid="activity-title-input"
+              aria-label={t.titleLabel}
+              value={title}
+              onChange={(e) => changeTitle(e.target.value)}
+              className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="sr-only">{t.levelLabel}</span>
+            <select
+              data-testid="activity-level-select"
+              aria-label={t.levelLabel}
+              value={level ?? ''}
+              onChange={(e) => changeLevel(e.target.value)}
+              className="h-9 rounded border border-border bg-background px-2 text-foreground"
+            >
+              <option value="">{t.levelNone}</option>
+              {LEVELS.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {levelLabels[lvl]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+            <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+              {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+                ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+                : t.statusDraft}
             </span>
-          )}
+            {status === 'rejected' && initialReviewNote && (
+              <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+                {t.reviewNoteLabel}: {initialReviewNote}
+              </span>
+            )}
+          </div>
+          <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
+            {t.submitForReview}
+          </Button>
         </div>
-        <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
-          {t.submitForReview}
-        </Button>
-      </div>
 
-      {preview ? (
-        <div data-testid="activity-preview" className="flex flex-col gap-6">
-          {blocks
-            .filter((b): b is WorksheetBlock => b.type === 'worksheet')
-            .map((block) => (
-              <WorksheetPlayer
-                key={block.id}
-                lang={lang}
-                image={block.image}
-                zones={block.zones}
-                rotation={block.rotation}
-                imageUrl={resolveImageUrl(block.image.path)}
-              />
-            ))}
-        </div>
-      ) : (
-        <>
-          {/* `lg:min-h-0 lg:flex-1`: this row (not the whole island) is what
-              actually fills the remaining one-screen height — see
-              `BlockList.tsx`'s own header for how its ONE active/expanded
-              block then gets the flexible height inside it. */}
-          <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+        {preview ? (
+          <div
+            ref={scrollContainerRef}
+            data-testid="activity-preview"
+            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:p-3"
+          >
+            {blocks
+              .filter((b): b is WorksheetBlock => b.type === 'worksheet')
+              .map((block) => (
+                <WorksheetPlayer
+                  key={block.id}
+                  lang={lang}
+                  image={block.image}
+                  zones={block.zones}
+                  rotation={block.rotation}
+                  imageUrl={resolveImageUrl(block.image.path)}
+                />
+              ))}
+          </div>
+        ) : (
+          // The card's body: consistent inner padding (`p-3`) so nothing
+          // touches the card edges, and THIS is the one scrolling region
+          // (`min-h-0 flex-1 overflow-y-auto`) — see `BlockList.tsx`'s own
+          // header for how its ONE active/expanded block then gets the
+          // flexible height inside it. The add-block flow (picker/uploader)
+          // scrolls into view here too, inside the same card, instead of
+          // growing the page past it.
+          <div
+            ref={scrollContainerRef}
+            className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3"
+          >
             <BlockList
               lang={lang}
               blocks={blocks}
@@ -557,36 +670,42 @@ export default function ActivityEditorIsland({
               onToggleExpand={toggleBlockExpanded}
               onSelectZone={setSelectedZoneId}
               onBlocksChange={changeBlocks}
+              incompleteBlockId={incompleteTarget?.blockId ?? null}
+              incompleteZoneId={incompleteTarget?.zoneId ?? null}
+              incompleteMessage={incompleteMessage}
             />
+
+            {/* Desktop already has this same action in the sticky side
+                toolbar's icon (`toolbar-add-block`, always reachable
+                without scrolling); this text button stays for
+                mobile/narrow layouts. */}
+            {!addingBlock && (
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="add-block-button"
+                onClick={() => setAddingBlock(true)}
+                className="flex-none lg:hidden"
+              >
+                + {t.addBlock}
+              </Button>
+            )}
+
+            {addingBlock && !showUploader && (
+              <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
+            )}
+
+            {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
           </div>
+        )}
 
-          {/* Desktop already has this same action in the sticky side
-              toolbar's icon (`toolbar-add-block`, always reachable without
-              scrolling); this text button stays for mobile/narrow layouts,
-              which don't have that fixed-height constraint to begin with. */}
-          {!addingBlock && (
-            <Button
-              type="button"
-              variant="outline"
-              data-testid="add-block-button"
-              onClick={() => setAddingBlock(true)}
-              className="lg:hidden"
-            >
-              + {t.addBlock}
-            </Button>
-          )}
-
-          {/* The add-block flow (picker/uploader) is an occasional, one-off
-              action, not the steady "editing a block" state the one-screen
-              layout targets — on desktop it deliberately falls back to
-              normal page scrolling if it doesn't fit, same as "expand all". */}
-          {addingBlock && !showUploader && (
-            <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
-          )}
-
-          {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
-        </>
-      )}
+        {/* Scoped "back to top" for the card's own scroll container (block
+            list or preview, whichever is mounted) — reuses the same island
+            `BaseLayout` mounts globally, targeted at `scrollContainerRef`
+            instead of the window. Positioned inside THIS card (the
+            `relative` ancestor above), never the page. */}
+        <ScrollToTop lang={lang} targetRef={scrollContainerRef} />
+      </div>
 
       <EditorSideToolbar
         lang={lang}

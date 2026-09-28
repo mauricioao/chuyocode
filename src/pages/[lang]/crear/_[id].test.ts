@@ -98,6 +98,8 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="activity-editor-island"');
     expect(html).toContain('Mi actividad');
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es/mis-actividades"');
   });
 
   it('seeds the review-state badge from the stored activity status and note', async () => {

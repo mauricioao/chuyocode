@@ -1,10 +1,11 @@
 /**
- * Level x focus facets for the English section entry screen.
+ * Level x focus facets for the curated-exercises picker.
  *
  * Zero I/O, zero dependencies — this is the whole decision layer behind
- * `/[lang]/ingles`, deliberately kept pure so it can be proven without a
- * browser. The entry page mounts no island, but anything that could silently be
- * WRONG still belongs in a function here rather than in a template expression.
+ * `/[lang]/ingles/propuestos`, deliberately kept pure so it can be proven
+ * without a browser. That page mounts no island, but anything that could
+ * silently be WRONG still belongs in a function here rather than in a
+ * template expression.
  *
  * THE AXIS IS `focus`, NOT `topic`. Someone opening this section is choosing a
  * LANGUAGE POINT to practise — present simple, conditionals, phrasal verbs —

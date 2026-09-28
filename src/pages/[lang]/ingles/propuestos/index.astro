@@ -1,0 +1,226 @@
+---
+/**
+ * Curated-exercises level picker — `/[lang]/ingles/propuestos` (SSR).
+ *
+ * Moved here, unchanged, from what used to be `/[lang]/ingles` itself (see
+ * the hub at `src/pages/[lang]/ingles/index.astro`, which now links here as
+ * "Ejercicios propuestos"). This is a STATIC route, so it wins over the
+ * dynamic `[level]/...` sibling in Astro's router (static segments are
+ * always preferred over dynamic ones at the same position) — verified by
+ * `pnpm build` and the route table under `.netlify/build/pages`.
+ *
+ * Zero JavaScript FRAMEWORK. The active level travels in `?nivel=`, so the
+ * screen is deep-linkable, shareable and survives with scripting disabled — a
+ * level selector that needed an island to work would be a worse version of a
+ * link, and that has not changed.
+ *
+ * The language-point filter is the one piece of script here, and it is a
+ * DIFFERENT job: it narrows the cards ALREADY on the page for the active level.
+ * It issues no request and never touches `?nivel=`, so the URL still says
+ * exactly what the server rendered. `SearchFilter` is vanilla — reaching for an
+ * island to hide `<li>` elements would ship a framework runtime to do what forty
+ * lines of DOM code already do. With scripting off the grid simply stays whole,
+ * which is the correct degraded state for a narrowing control.
+ *
+ * All the decision logic lives in `src/lib/exerciseFacets.ts` (pure, 21 tests)
+ * because AstroContainer cannot assert appearance: anything that could silently
+ * be wrong belongs in a function, not in a template expression.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import SearchFilter from '@components/ui/SearchFilter.astro';
+import { badgeVariants } from '@components/ui/badge';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { FOCUS_LABELS } from '@lib/exerciseTaxonomy';
+import { getExerciseFacetRows } from '@lib/exercises';
+import {
+  buildFacets,
+  resolveLevel,
+  focusesForLevel,
+} from '@lib/exerciseFacets';
+
+// Prefer the middleware-validated lang; fall back to the route param and 404 if
+// neither is supported (defensive — middleware normally sets it).
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].english;
+
+// ONE flat read of every published `(level, focus)` pair, grouped in memory.
+// Fail-safe by contract: `[]` on any error, which is why an outage lands on the
+// "nothing published yet" panel instead of a 500 in the site chrome.
+const facets = buildFacets(await getExerciseFacetRows());
+
+// A VALID but empty level is honoured on purpose — the user asked for it, so the
+// grid answers "nothing here yet" instead of silently swapping in another level
+// and contradicting the URL they are looking at. Only a non-level falls back.
+const activeLevel = resolveLevel(facets, Astro.url.searchParams.get('nivel'));
+// The grid under a level lists LANGUAGE POINTS. Someone opening this section is
+// deciding what to practise — conditionals, phrasal verbs — not what setting to
+// read about; `topic` is context that qualifies an exercise, never the way in.
+const focuses = focusesForLevel(facets, activeLevel);
+const totalPublished = facets.reduce((total, facet) => total + facet.count, 0);
+
+/**
+ * "3 ejercicios" / "1 ejercicio". Built as ONE expression: two adjacent Astro
+ * expressions collapse the whitespace between them and would render "3ejercicios".
+ */
+function countLabel(count: number): string {
+  return `${count} ${count === 1 ? t.section.exerciseOne : t.section.exerciseMany}`;
+}
+
+/**
+ * A level chip. Composed from `badgeVariants` rather than the `Badge` component
+ * so the chip can be an anchor without dragging a React island onto a page that
+ * ships no JavaScript.
+ *
+ * The active chip is FILLED (yellow on black) while the rest are outlined — a
+ * difference in kind, not a one-pixel border tweak that disappears on a bad
+ * monitor. Empty levels are dimmed but stay above the contrast floor, because
+ * "unavailable" must never mean "unreadable"; the count beside the label carries
+ * the same information as text for anyone the dimming does not reach.
+ */
+function chipClass(isActive: boolean, isEmpty: boolean): string {
+  return [
+    badgeVariants({ variant: isActive ? 'default' : 'outline' }),
+    'h-auto gap-2 rounded-full px-4 py-2 text-sm',
+    isEmpty ? 'opacity-60' : 'hover:border-accent hover:text-accent',
+    isActive ? 'font-semibold shadow-elevation-1' : '',
+  ].join(' ');
+}
+---
+
+<BaseLayout lang={lang} title={t.section.title} description={t.section.description}>
+  <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 sm:py-12">
+    <header class="flex flex-col gap-3">
+      <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.section.title}</PageTitle>
+      <p class="max-w-2xl text-lg text-zinc-300">{t.section.intro}</p>
+    </header>
+
+    <nav class="flex flex-col gap-4" aria-label={t.section.chooseLevel}>
+      <h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
+        {t.section.chooseLevel}
+      </h2>
+      <ul class="flex flex-wrap gap-3">
+        {
+          facets.map((facet) => {
+            const isActive = facet.level === activeLevel;
+            const isEmpty = facet.count === 0;
+            const label = t.levels[facet.level];
+            // A level with nothing published is NOT a link. Rendering it as an
+            // anchor would offer a click whose only possible destination is an
+            // empty screen, so the dead combination is unreachable by
+            // construction rather than by styling.
+            return (
+              <li>
+                {isEmpty ? (
+                  <span class={chipClass(isActive, true)}>
+                    <span>{`${facet.level} · ${label}`}</span>
+                    <span class="tabular-nums">{countLabel(facet.count)}</span>
+                  </span>
+                ) : (
+                  <a
+                    href={`/${lang}/ingles/propuestos?nivel=${facet.level}`}
+                    class={chipClass(isActive, false)}
+                    aria-current={isActive ? 'true' : undefined}
+                  >
+                    <span>{`${facet.level} · ${label}`}</span>
+                    <span class="tabular-nums">{countLabel(facet.count)}</span>
+                  </a>
+                )}
+              </li>
+            );
+          })
+        }
+      </ul>
+    </nav>
+
+    <section class="flex flex-col gap-4">
+      <div class="flex items-center justify-between gap-4">
+        <h2 class="text-xl font-semibold text-zinc-100">{t.section.focusesTitle}</h2>
+        {
+          /* Same placement and shape as the books catalog: the magnifier sits on
+             the heading row it filters, so the control and its target read as
+             one unit. Rendered only when there is a grid to narrow — a search
+             box over zero cards is a control whose every keystroke is a no-op,
+             and it would sit directly above a message explaining that the level
+             is empty. */
+          focuses.length > 0 && (
+            <SearchFilter
+              targetSelector="[data-focus-item]"
+              emptyId="focuses-no-results"
+              label={t.section.searchFocus}
+            />
+          )
+        }
+      </div>
+
+      {
+        /* Three DIFFERENT empty states, because they are three different facts
+           and one generic message would be a lie in two of them:
+             1. nothing published anywhere (also what an outage degrades to)
+             2. this level has no language points yet, but other levels do
+             3. handled by the listing route: a real pair with nothing in it */
+        totalPublished === 0 ? (
+          <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+            {t.section.empty}
+          </p>
+        ) : focuses.length === 0 ? (
+          <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+            {t.section.emptyLevel}
+          </p>
+        ) : (
+          <>
+            {/* Filter empty state — the FOURTH fact this screen can report, and
+                the only one that is about the query rather than the data:
+                everything is published and visible, the typed text just matches
+                none of it. Hidden until the script hides every card;
+                `aria-live` announces the transition, because a grid silently
+                emptying is invisible to anyone not watching it. */}
+            <p
+              id="focuses-no-results"
+              hidden
+              aria-live="polite"
+              class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300"
+            >
+              {t.section.focusesNoResults}
+            </p>
+            <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {focuses.map((entry) => (
+                // The wrapper carries the haystack, so `SearchFilter` stays
+                // decoupled from the card markup. It holds the LABEL and the
+                // SLUG because they answer different queries: the label is what
+                // is on screen ("Modal verbs"), while the slug is where the
+                // shared stem is spelled identically across siblings — "past"
+                // reaches `past-simple` AND `past-perfect` only through it.
+                <li
+                  data-focus-item
+                  data-search={`${FOCUS_LABELS[entry.focus]} ${entry.focus}`}
+                >
+                  <a
+                    href={`/${lang}/ingles/${activeLevel}/${entry.focus}`}
+                    class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+                  >
+                    {/* English in every locale: the focus is exercise data, not
+                        chrome (docs/exercise-model.md, "Authoring rules"). */}
+                    <span class="text-lg font-semibold text-zinc-100">
+                      {FOCUS_LABELS[entry.focus]}
+                    </span>
+                    <span class="text-sm text-zinc-400 tabular-nums">
+                      {countLabel(entry.count)}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      }
+    </section>
+  </section>
+</BaseLayout>

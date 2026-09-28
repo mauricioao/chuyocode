@@ -21,17 +21,17 @@ describe('createAutosaveScheduler — debounce', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    vi.advanceTimersByTime(2999);
+    vi.advanceTimersByTime(4999);
     expect(save).not.toHaveBeenCalled();
   });
 
-  it('saves ~3s after the last change', async () => {
+  it('saves ~5s after the last change', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     const { onStatusChange } = statusRecorder();
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(save).toHaveBeenCalledWith('a');
     expect(save).toHaveBeenCalledTimes(1);
   });
@@ -46,7 +46,7 @@ describe('createAutosaveScheduler — debounce', () => {
     scheduler.notifyChange('b');
     vi.advanceTimersByTime(2000);
     expect(save).not.toHaveBeenCalled(); // only 2s since the last change
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(3000);
     expect(save).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith('b');
   });
@@ -58,7 +58,7 @@ describe('createAutosaveScheduler — debounce', () => {
 
     scheduler.notifyChange('a');
     expect(statuses).toEqual(['pending']);
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(statuses).toEqual(['pending', 'saving', 'saved']);
   });
 });
@@ -74,13 +74,13 @@ describe('createAutosaveScheduler — single flight, queue the latest', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000); // save('a') starts, still pending
+    await vi.advanceTimersByTimeAsync(5000); // save('a') starts, still pending
     expect(save).toHaveBeenCalledTimes(1);
     expect(statuses.at(-1)).toBe('saving');
 
     // A change arrives WHILE the first save is in flight.
     scheduler.notifyChange('b');
-    await vi.advanceTimersByTimeAsync(3000); // debounce for 'b' elapses too
+    await vi.advanceTimersByTimeAsync(5000); // debounce for 'b' elapses too
     // Still only one save call — the second is queued, not started, because one is in flight.
     expect(save).toHaveBeenCalledTimes(1);
 
@@ -98,12 +98,12 @@ describe('createAutosaveScheduler — skip if nothing changed', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange, isEqual: (a, b) => a === b });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(save).toHaveBeenCalledTimes(1);
 
     // Same value again (e.g. an undo back to the saved state).
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(save).toHaveBeenCalledTimes(1);
   });
 
@@ -113,7 +113,7 @@ describe('createAutosaveScheduler — skip if nothing changed', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     statuses.length = 0;
 
     scheduler.notifyChange('b');
@@ -133,7 +133,7 @@ describe('createAutosaveScheduler — errors', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(statuses).toEqual(['pending', 'saving', 'error']);
   });
 
@@ -143,7 +143,7 @@ describe('createAutosaveScheduler — errors', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(statuses).toEqual(['pending', 'saving', 'error']);
 
     scheduler.flushNow();
@@ -180,7 +180,7 @@ describe('createAutosaveScheduler — saveNow (manual save always forces a real 
     const scheduler = createAutosaveScheduler({ save, onStatusChange, isEqual: (a, b) => a === b });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(save).toHaveBeenCalledTimes(1);
 
     scheduler.saveNow('a'); // nothing changed, but this is a manual save
@@ -246,7 +246,7 @@ describe('createAutosaveScheduler — dispose', () => {
     const scheduler = createAutosaveScheduler({ save, onStatusChange });
 
     scheduler.notifyChange('a');
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(statuses.at(-1)).toBe('saving');
     scheduler.dispose();
     resolveSave();
