@@ -45,3 +45,5 @@ Thumbs.db
 # Owner's internal product working document. Deliberately kept out of version
 # control. The versioned technical sources of truth are docs/ and openspec/.
 PRD-arquitectura.md
+BACKLOG.md
+CLAUDE.md
