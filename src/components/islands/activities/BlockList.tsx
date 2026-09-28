@@ -15,6 +15,18 @@
  * Only `worksheet` blocks are editable in this PR (`quiz` ships in PR C's
  * question type; none can be authored here, so that branch is defensive,
  * not a real path).
+ *
+ * DESKTOP "FOCUS" LAYOUT (creator "one-screen" pass): `expandedBlockIds`
+ * still means exactly what it always has (owner request #6, above) — this
+ * component does not change that model. But when it holds EXACTLY ONE id,
+ * that block is the "focus" active block (`focusBlockId`, derived, not a
+ * prop): its `<li>` gets `flex-1` so its `WorksheetZoneEditor` canvas can
+ * fill the remaining column height, while every OTHER block (collapsed, by
+ * definition, in that state) stays a fixed-height, compact row — see
+ * `SortableBlockItem`. Zero or 2+ expanded (e.g. the sticky toolbar's
+ * "expand all") is deliberately NOT a focus state: every block then keeps
+ * its natural height and the page falls back to normal scrolling, which is
+ * acceptable and expected for that explicit, occasional action.
  */
 import { useState } from 'react';
 import {
@@ -143,10 +155,21 @@ function DeleteBlockButton({
 function SortableBlockItem({
   id,
   handleLabel,
+  focusActive,
   children,
 }: {
   id: string;
   handleLabel: string;
+  /**
+   * Desktop "focus" layout (creator "one-screen" pass): true for the ONE
+   * expanded block when it is the sole expanded one — see `focusBlockId`
+   * below. It gets the flexible height that lets its canvas fill the
+   * remaining space; every other row (including a collapsed block, or ANY
+   * block when zero/multiple are expanded — e.g. "expand all") stays a
+   * fixed-height, compact row and the page falls back to normal scrolling
+   * if that no longer fits (documented, acceptable).
+   */
+  focusActive: boolean;
   children: React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -157,9 +180,12 @@ function SortableBlockItem({
       id={`block-${id}`}
       style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
       data-dragging={isDragging ? 'true' : undefined}
-      className="rounded-lg border border-border"
+      data-focus-active={focusActive ? 'true' : undefined}
+      className={`flex min-h-0 flex-col rounded-lg border border-border ${
+        focusActive ? 'lg:min-h-[22rem] lg:flex-1' : 'lg:flex-none'
+      }`}
     >
-      <div className="flex items-start gap-1 px-1 pt-1">
+      <div className="flex min-h-0 flex-1 items-start gap-1 px-1 pt-1">
         <button
           type="button"
           aria-label={handleLabel}
@@ -170,7 +196,7 @@ function SortableBlockItem({
         >
           <DotsSixVerticalIcon aria-hidden="true" />
         </button>
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
       </div>
     </li>
   );
@@ -234,10 +260,17 @@ export default function BlockList({
     );
   }
 
+  // The desktop "focus" layout's active block: exactly ONE currently-expanded
+  // block, derived straight from `expandedBlockIds` (no new prop — every
+  // existing caller, including this component's own tests, keeps working
+  // unchanged). Zero or 2+ expanded is not a focus state — see
+  // `SortableBlockItem`'s own comment.
+  const focusBlockId = expandedBlockIds.size === 1 ? [...expandedBlockIds][0] : null;
+
   return (
     <DndContext id="activities-block-list" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-        <ul data-testid="block-list" className="flex flex-col gap-3">
+        <ul data-testid="block-list" className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {blocks.map((block, index) => {
             const expanded = expandedBlockIds.has(block.id);
             const worksheet = isWorksheet(block) ? block : null;
@@ -245,9 +278,14 @@ export default function BlockList({
             const zoneCount = worksheet?.zones.length ?? 0;
 
             return (
-              <SortableBlockItem key={block.id} id={block.id} handleLabel={`${t.dragHandle}: ${name}`}>
-                <div data-testid={`block-${block.id}`}>
-                  <div className="flex flex-wrap items-center gap-2 py-1">
+              <SortableBlockItem
+                key={block.id}
+                id={block.id}
+                handleLabel={`${t.dragHandle}: ${name}`}
+                focusActive={focusBlockId === block.id}
+              >
+                <div data-testid={`block-${block.id}`} className="flex min-h-0 flex-1 flex-col">
+                  <div className="flex flex-none flex-wrap items-center gap-2 py-1">
                     <button
                       type="button"
                       data-testid={`block-header-${block.id}`}
@@ -319,7 +357,12 @@ export default function BlockList({
                   </div>
 
                   {expanded && worksheet && (
-                    <div className="border-t border-border p-3">
+                    // Tight, minimal chrome (creator "one-screen" pass): this
+                    // block's bar is really TWO compact rows directly under
+                    // its name/handle (this header, then the canvas' own
+                    // zoom toolbar) rather than one padded content area —
+                    // every pixel here is height the canvas doesn't get.
+                    <div className="flex min-h-0 flex-1 flex-col border-t border-border px-2 pb-2 pt-1">
                       <WorksheetZoneEditor
                         lang={lang}
                         image={worksheet.image}

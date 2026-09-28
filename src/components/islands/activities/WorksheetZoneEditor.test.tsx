@@ -7,7 +7,33 @@ import type { Zone } from '@/lib/activities/blocks';
 
 const IMAGE = { path: 'activity-uploads/u1/img.webp', width: 800, height: 400 };
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+/**
+ * A controllable `ResizeObserver` stub (jsdom has none — see this file's own
+ * header, and `WorksheetPlayer.tsx`'s identical guard/precedent): captures
+ * every constructed instance's callback so a test can invoke it directly,
+ * simulating the viewport's box actually changing size from flex layout
+ * alone (no window `resize` event involved at all).
+ */
+class MockResizeObserver {
+  static instances: MockResizeObserver[] = [];
+  callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    MockResizeObserver.instances.push(this);
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  /** Simulates the observed element's box changing size. */
+  fire() {
+    this.callback([], this as unknown as ResizeObserver);
+  }
+}
 
 /** Stateful wrapper so onZonesChange/onSelectZone actually drive re-renders, like the real editor. */
 function Harness({ initialZones = [] as Zone[], initialSelected = null as string | null }) {
@@ -533,5 +559,52 @@ describe('WorksheetZoneEditor — panning', () => {
     expect(screen.getByTestId('zone-canvas').className).toContain('cursor-grabbing');
     firePointer(canvas, 'pointerup', 60, 50, { button: 1 });
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
+  });
+});
+
+describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-screen" pass)', () => {
+  it('never sets a fixed/clamped CSS height on the viewport — it fills its flex ancestors instead', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    expect(viewport.style.height).toBe('');
+    expect(viewport.className).toContain('flex-1');
+  });
+
+  it('re-fits in place when the viewport is still in fit mode and its OWN box resizes (mocked ResizeObserver, no window resize event)', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    // Default (fit) view falls back to 100% with jsdom's zero-sized rect.
+    expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+
+    // The viewport's flex-driven box "grows" (e.g. a sibling block
+    // collapsed, or this one became the active/focus block) — simulated by
+    // changing its measured rect and firing the observer callback, with NO
+    // window `resize` event at all.
+    mockRect(viewport, { width: 400, height: 200 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+
+    // IMAGE is 800x400: a 400x200 box fits it at 50% on both axes.
+    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+  });
+
+  it('does not re-fit once an explicit zoom action has turned fit mode off', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+
+    fireEvent.click(screen.getByTestId('zoom-in')); // turns fitMode off
+    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
+
+    mockRect(viewport, { width: 400, height: 200 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+
+    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
   });
 });

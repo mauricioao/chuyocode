@@ -112,6 +112,22 @@ describe('BlockList — rendering, naming, and expand/collapse', () => {
   });
 });
 
+describe('BlockList — desktop focus layout (creator "one-screen" pass)', () => {
+  it('marks the sole expanded block focus-active; a collapsed block is not', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialExpanded={['b1']} />);
+    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBe('true');
+    expect(document.getElementById('block-b2')?.getAttribute('data-focus-active')).toBeNull();
+    expect(screen.getByTestId('block-b1').closest('li')?.className).toContain('lg:flex-1');
+    expect(screen.getByTestId('block-b2').closest('li')?.className).toContain('lg:flex-none');
+  });
+
+  it('marks NO block focus-active when several are expanded at once (e.g. "expand all")', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialExpanded={['b1', 'b2']} />);
+    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBeNull();
+    expect(document.getElementById('block-b2')?.getAttribute('data-focus-active')).toBeNull();
+  });
+});
+
 describe('BlockList — reordering (drag-and-drop wiring)', () => {
   it('renders a labeled, focusable drag handle per block', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} />);

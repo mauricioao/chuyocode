@@ -97,15 +97,6 @@ const HANDLE_CURSOR: Record<Handle, string> = {
   sw: 'cursor-nesw-resize',
 };
 
-/**
- * Bounds the viewport height to what is actually visible: `100dvh` minus a
- * rough allowance for the page's own chrome above the editor (site header,
- * the editor's top bar and the zoom toolbar), with a floor so it never
- * collapses to something unusable on a short screen and a ceiling so it does
- * not grow absurdly tall on a huge one.
- */
-const VIEWPORT_HEIGHT = 'clamp(320px, calc(100dvh - 260px), 900px)';
-
 function defaultRect(): Rect {
   return { x: 0.3, y: 0.3, w: 0.2, h: 0.15 };
 }
@@ -157,23 +148,26 @@ export default function WorksheetZoneEditor({
   }, [displaySize]);
 
   // Default view is fit-to-view (decision #5: the whole worksheet visible on
-  // load, however tall/portrait it is), computed once real layout exists.
+  // load, however tall/portrait it is). The viewport's own box is now
+  // layout-driven (creator "one-screen" pass: it grows to fill whatever
+  // height the active block's flex row gives it — see `BlockList.tsx` —
+  // instead of a fixed/clamped CSS height), so a plain mount effect + window
+  // `resize` listener is no longer enough: collapsing/expanding a SIBLING
+  // block, switching which block is active, or the properties panel
+  // reflowing all change this element's height with no window resize event
+  // at all. `ResizeObserver` is the correct primitive for that — it also
+  // fires once with the initial size right after `observe()`, which replaces
+  // the old separate "compute once on mount" effect for free. Guarded like
+  // `WorksheetPlayer.tsx`'s own resize watcher: jsdom has no `ResizeObserver`
+  // (see this file's own tests, which mock it where the behavior matters).
   useEffect(() => {
-    setZoom(computeFitZoom());
-    // Only on mount: a resize handler (below) keeps re-fitting afterwards
-    // while still in fit mode, and any explicit zoom action turns fit mode
-    // off — re-running this on every `computeFitZoom` identity change would
-    // fight both of those.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!fitMode) return undefined;
-    function onResize() {
-      setZoom(computeFitZoom());
-    }
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const el = viewportRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (fitMode) setZoom(computeFitZoom());
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [fitMode, computeFitZoom]);
 
   const applyZoom = useCallback((next: number, anchor?: { x: number; y: number }) => {
@@ -509,10 +503,10 @@ export default function WorksheetZoneEditor({
   const canvasCursorClass = isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-crosshair';
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row" data-testid="worksheet-zone-editor">
-      <div className="min-w-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row" data-testid="worksheet-zone-editor">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
-          className="mb-2 flex flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
+          className="mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
           data-testid="zoom-toolbar"
         >
           <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
@@ -560,8 +554,14 @@ export default function WorksheetZoneEditor({
           tabIndex={0}
           onKeyDown={handleViewportKeyDown}
           onKeyUp={handleViewportKeyUp}
-          className="relative overflow-auto rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          style={{ height: VIEWPORT_HEIGHT }}
+          // Layout-driven height (creator "one-screen" pass): this viewport
+          // fills whatever height its flex ancestors give it (the active
+          // block's row in `BlockList.tsx`, ultimately the editor page's own
+          // `100dvh`-based column) instead of a fixed/clamped CSS height —
+          // `min-h-80` is only a FLOOR so it still renders usably outside
+          // that flex chain (narrow/stacked layout below `lg:`, or a test
+          // harness with no real layout).
+          className="relative min-h-80 flex-1 overflow-auto rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div
             ref={containerRef}
@@ -642,16 +642,25 @@ export default function WorksheetZoneEditor({
             )}
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {zones.length === 0 && <p className="text-xs text-muted-foreground">{t.noZonesYet}</p>}
+        {/* One compact line (creator "one-screen" pass: every extra row here
+            is height the canvas doesn't get) instead of two stacked hints. */}
+        <div className="mt-1 flex flex-none flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          {zones.length === 0 && <span>{t.noZonesYet}</span>}
+          <span>{t.addZoneHint}</span>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{t.addZoneHint}</p>
       </div>
 
-      {/* ALWAYS rendered, fixed width — see the file header. Hiding this
-          column when nothing is selected is exactly the bug that made the
-          canvas "zoom" on select/deselect. */}
-      <div className="w-full flex-none lg:w-72" data-testid="zone-properties-panel">
+      {/* ALWAYS rendered, fixed width (~280-300px) — see the file header.
+          Hiding this column when nothing is selected is exactly the bug that
+          made the canvas "zoom" on select/deselect. `overflow-y-auto` +
+          `min-h-0` (creator "one-screen" pass): once this row has a real,
+          bounded height (from the flex chain above), a long properties
+          panel scrolls WITHIN its own column instead of growing the row and
+          pushing the canvas off-screen. */}
+      <div
+        className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72"
+        data-testid="zone-properties-panel"
+      >
         {selectedZone ? (
           <div data-testid="zone-properties-content">
             <div className="flex items-center justify-between">

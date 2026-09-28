@@ -134,24 +134,29 @@ export default function ActivityEditorIsland({
     [doc, updateDoc],
   );
 
+  // Accordion (creator "one-screen" pass): expanding a block makes it the
+  // SOLE expanded one — `BlockList`'s desktop "focus" layout derives its
+  // active block straight from this being a one-element set, so clicking a
+  // different block's header both collapses the previous one AND makes the
+  // new one active in the same step (owner request: "selecting another
+  // block makes it the active/expanded one"). Toggling the already-expanded
+  // block back off clears the set entirely — no block is active.
   const toggleBlockExpanded = useCallback((blockId: string) => {
-    setExpandedBlockIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(blockId)) next.delete(blockId);
-      else next.add(blockId);
-      return next;
-    });
+    setExpandedBlockIds((prev) => (prev.has(blockId) ? new Set() : new Set([blockId])));
   }, []);
 
   const collapseAllBlocks = useCallback(() => setExpandedBlockIds(new Set()), []);
+  // Deliberately NOT the focus layout (see `BlockList.tsx`'s own header):
+  // expanding every block at once falls back to normal page scrolling.
   const expandAllBlocks = useCallback(() => {
     setExpandedBlockIds(new Set(blocks.map((b) => b.id)));
   }, [blocks]);
 
-  // Block-index popover: expand the chosen block and scroll it into view —
-  // it may already be off-screen above/below the current scroll position.
+  // Block-index popover: make the chosen block the sole active one (same
+  // accordion rule as `toggleBlockExpanded`) and scroll it into view — it
+  // may already be off-screen above/below the current scroll position.
   const goToBlock = useCallback((blockId: string) => {
-    setExpandedBlockIds((prev) => new Set(prev).add(blockId));
+    setExpandedBlockIds(new Set([blockId]));
     if (typeof document === 'undefined') return;
     const el = document.getElementById(`block-${blockId}`);
     // `scrollIntoView` does not exist in jsdom (and is not guaranteed on
@@ -354,13 +359,12 @@ export default function ActivityEditorIsland({
       changeBlocks([...blocks, ...newBlocks]);
       setAddingBlock(false);
       setShowUploader(false);
-      if (newBlocks.length > 0) {
-        setExpandedBlockIds((prev) => {
-          const next = new Set(prev);
-          for (const b of newBlocks) next.add(b.id);
-          return next;
-        });
-      }
+      // Accordion (creator "one-screen" pass): only the LAST uploaded block
+      // becomes the sole active one, even when several images were uploaded
+      // at once — matches `toggleBlockExpanded`'s "one active block" model
+      // instead of expanding all of them together.
+      const last = newBlocks.at(-1);
+      if (last) setExpandedBlockIds(new Set([last.id]));
     },
     [blocks, changeBlocks],
   );
@@ -382,11 +386,24 @@ export default function ActivityEditorIsland({
   );
 
   return (
-    <div data-testid="activity-editor-island" className="flex flex-col gap-4">
+    // Desktop "one-screen" layout: `lg:h-[calc(100dvh-65px)]` sizes this
+    // whole island to EXACTLY the viewport height still left after the site
+    // header (`Header.astro`, unchanged — 65px = its 1px border-b + 32px
+    // `py-4` + a 32px `h-8` logo row) — see `[id].astro`'s own comment for
+    // why it, in turn, adds no extra vertical padding of its own at `lg:`.
+    // `lg:pr-16` reserves room for `EditorSideToolbar`'s `fixed right-3`
+    // icon rail so it never overlaps the canvas/properties column. Below
+    // `lg:` this is intentionally untouched — today's stacked, scrollable
+    // layout keeps working; a dedicated mobile layout comes later.
+    <div
+      data-testid="activity-editor-island"
+      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px)] lg:gap-2 lg:pr-16"
+    >
       {/* Compact top bar (owner request #1): just title + level. Everything
           else (preview, save, undo/redo, block navigation) lives in the
-          sticky side toolbar so this row stays a single, short line. */}
-      <div className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center">
+          sticky side toolbar so this row stays a single, short line — on
+          desktop, a fixed ~48px (`lg:h-12`) row (creator "one-screen" pass). */}
+      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:h-12 lg:flex-row lg:items-center lg:py-1.5">
         <label className="flex flex-1 flex-col gap-1 text-sm">
           <span className="sr-only">{t.titleLabel}</span>
           <input
@@ -434,23 +451,43 @@ export default function ActivityEditorIsland({
         </div>
       ) : (
         <>
-          <BlockList
-            lang={lang}
-            blocks={blocks}
-            expandedBlockIds={expandedBlockIds}
-            selectedZoneId={selectedZoneId}
-            resolveImageUrl={resolveImageUrl}
-            onToggleExpand={toggleBlockExpanded}
-            onSelectZone={setSelectedZoneId}
-            onBlocksChange={changeBlocks}
-          />
+          {/* `lg:min-h-0 lg:flex-1`: this row (not the whole island) is what
+              actually fills the remaining one-screen height — see
+              `BlockList.tsx`'s own header for how its ONE active/expanded
+              block then gets the flexible height inside it. */}
+          <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+            <BlockList
+              lang={lang}
+              blocks={blocks}
+              expandedBlockIds={expandedBlockIds}
+              selectedZoneId={selectedZoneId}
+              resolveImageUrl={resolveImageUrl}
+              onToggleExpand={toggleBlockExpanded}
+              onSelectZone={setSelectedZoneId}
+              onBlocksChange={changeBlocks}
+            />
+          </div>
 
+          {/* Desktop already has this same action in the sticky side
+              toolbar's icon (`toolbar-add-block`, always reachable without
+              scrolling); this text button stays for mobile/narrow layouts,
+              which don't have that fixed-height constraint to begin with. */}
           {!addingBlock && (
-            <Button type="button" variant="outline" data-testid="add-block-button" onClick={() => setAddingBlock(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="add-block-button"
+              onClick={() => setAddingBlock(true)}
+              className="lg:hidden"
+            >
               + {t.addBlock}
             </Button>
           )}
 
+          {/* The add-block flow (picker/uploader) is an occasional, one-off
+              action, not the steady "editing a block" state the one-screen
+              layout targets — on desktop it deliberately falls back to
+              normal page scrolling if it doesn't fit, same as "expand all". */}
           {addingBlock && !showUploader && (
             <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
           )}
