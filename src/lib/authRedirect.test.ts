@@ -133,6 +133,43 @@ describe('safeNextPath — encoded and control-character bypasses', () => {
   });
 });
 
+describe('safeNextPath — post-login destination must never be an auth page', () => {
+  it('rejects a next pointed at the sign-in page itself (entrar)', () => {
+    expect(safeNextPath('/es/auth/entrar')).toBe(FALLBACK);
+  });
+
+  it('rejects a next pointed at the sign-in page with its own query', () => {
+    expect(safeNextPath('/es/auth/entrar?next=%2Fes%2Flibros')).toBe(FALLBACK);
+  });
+
+  it('rejects a next pointed at nueva-clave by default', () => {
+    expect(safeNextPath('/en/auth/nueva-clave')).toBe(FALLBACK);
+  });
+
+  it('rejects any other locale-prefixed auth page', () => {
+    expect(safeNextPath('/es/auth/whatever-comes-next')).toBe(FALLBACK);
+  });
+
+  it('allows nueva-clave when the caller explicitly opts in (the password-reset flow)', () => {
+    expect(safeNextPath('/en/auth/nueva-clave', { allowAuthPages: true })).toBe(
+      '/en/auth/nueva-clave',
+    );
+  });
+
+  it('the escape hatch is a blanket option, not nueva-clave-specific', () => {
+    // `allowAuthPages` guards ANY auth page — only ONE caller ever passes
+    // it (`password.ts`'s `handleReset`, hardcoded to nueva-clave), so this
+    // pins the option's actual shape rather than implying a narrower one.
+    expect(safeNextPath('/es/auth/entrar', { allowAuthPages: true })).toBe(
+      '/es/auth/entrar',
+    );
+  });
+
+  it('leaves an ordinary same-site path untouched regardless of the option', () => {
+    expect(safeNextPath('/es/libros', { allowAuthPages: true })).toBe('/es/libros');
+  });
+});
+
 describe('safeNextPath — absent or empty input', () => {
   it('falls back when `next` is missing', () => {
     expect(safeNextPath(null)).toBe(FALLBACK);
