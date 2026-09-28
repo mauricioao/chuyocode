@@ -1,10 +1,60 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import EditorSideToolbar from './EditorSideToolbar';
 import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
+import { clampToolbarPosition, dockTargetPosition } from '@/lib/activities/toolbarPosition';
 
-afterEach(() => cleanup());
+const STORAGE_KEY = 'chuyocode:editor-side-toolbar';
+
+beforeEach(() => {
+  localStorage.clear();
+  Object.defineProperty(window, 'innerWidth', { value: 1000, configurable: true });
+  Object.defineProperty(window, 'innerHeight', { value: 700, configurable: true });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  localStorage.clear();
+});
+
+/** A DOMRect-shaped mock — same convention as `WorksheetZoneEditor.test.tsx`'s own `mockRect`. */
+function mockRect(el: Element, box: { left?: number; top?: number; width: number; height: number }) {
+  const left = box.left ?? 0;
+  const top = box.top ?? 0;
+  vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+    left,
+    top,
+    width: box.width,
+    height: box.height,
+    right: left + box.width,
+    bottom: top + box.height,
+    x: left,
+    y: top,
+    toJSON() {
+      return {};
+    },
+  });
+}
+
+/**
+ * jsdom has no real `PointerEvent` constructor — same posture (and same
+ * reasoning) as `WorksheetZoneEditor.test.tsx`'s own `firePointer`.
+ */
+function firePointer(
+  el: Element,
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture',
+  clientX: number,
+  clientY: number,
+  extra: Record<string, unknown> = {},
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, { clientX, clientY, pointerId: 1, button: 0, ...extra });
+  act(() => {
+    el.dispatchEvent(event);
+  });
+}
 
 function worksheetBlock(id: string, name?: string): WorksheetBlock {
   return {
@@ -142,5 +192,308 @@ describe('EditorSideToolbar — save', () => {
   it('disables the save button while saving', () => {
     renderToolbar({ saveDisabled: true, saveState: 'saving' });
     expect((screen.getByTestId('save-button') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+// Floating side toolbar pass. jsdom has no real layout (`getBoundingClientRect`
+// always returns zeros — same posture as `WorksheetZoneEditor.test.tsx`'s own
+// header), and this test harness never renders a real `<header>`/`<footer>`
+// (`EditorSideToolbar` renders standalone), so `measureBounds()` always falls
+// back to `{ left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight }`
+// here — `beforeEach` fixes those at 1000x700 for deterministic numbers.
+describe('EditorSideToolbar — floating: docked by default', () => {
+  it('renders the ORIGINAL fixed/centered classes, docked, no drag handle inline position', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    expect(rail.className).toContain('top-1/2');
+    expect(rail.className).toContain('right-3');
+    expect(rail.style.left).toBe('');
+    expect(rail.style.top).toBe('');
+    expect(screen.getByTestId('toolbar-drag-handle')).toBeTruthy();
+    expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
+  });
+});
+
+describe('EditorSideToolbar — floating: drag to undock/move', () => {
+  it('dragging the handle undocks the rail and moves it to the drop position', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+
+    // Undocks from its captured on-screen (900, 250) position by the drag
+    // delta (500-920, 150-300) = (-420, -150) -> (480, 100), well clear of
+    // the dock target so it does not snap back.
+    expect(rail.getAttribute('data-docked')).toBe('false');
+    expect(rail.style.left).toBe('480px');
+    expect(rail.style.top).toBe('100px');
+    expect(rail.className).not.toContain('top-1/2');
+    expect(screen.getByTestId('toolbar-dock-target')).toBeTruthy();
+  });
+
+  it('clamps a drag to stay within the visible header-to-footer/window area', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 5000, 5000); // way past every edge
+    firePointer(handle, 'pointerup', 5000, 5000);
+
+    // maxX = 1000 - 56 = 944; maxY = 700 - 300 = 400.
+    expect(rail.style.left).toBe('944px');
+    expect(rail.style.top).toBe('400px');
+  });
+
+  it('releasing within the snap distance of the dock target re-docks automatically', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    // dockTargetPosition({56,300}, {0,1000,0,700}) = (932, 200); a (32, -50)
+    // delta from the captured (900, 250) start lands EXACTLY there.
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 952, 250);
+    firePointer(handle, 'pointerup', 952, 250);
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    expect(rail.style.left).toBe('');
+    expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
+  });
+
+  it('a middle/right-click on the handle does not start a drag', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300, { button: 2 });
+    firePointer(handle, 'pointermove', 500, 150, { button: 2 });
+    firePointer(handle, 'pointerup', 500, 150, { button: 2 });
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+  });
+});
+
+describe('EditorSideToolbar — floating: re-docking', () => {
+  function undock(rail: HTMLElement, handle: HTMLElement) {
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+  }
+
+  it('clicking the ghost dock target re-docks', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    undock(rail, handle);
+    expect(rail.getAttribute('data-docked')).toBe('false');
+
+    fireEvent.click(screen.getByTestId('toolbar-dock-target'));
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
+  });
+
+  it('double-clicking the handle re-docks', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    undock(rail, handle);
+
+    fireEvent.doubleClick(handle);
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+  });
+
+  it('Home on the handle re-docks', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    undock(rail, handle);
+
+    fireEvent.keyDown(handle, { key: 'Home' });
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+  });
+});
+
+describe('EditorSideToolbar — floating: keyboard nudge', () => {
+  it('an arrow key undocks (from the dock target position) and moves by ARROW_KEY_STEP', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    const size = { width: 0, height: 0 }; // jsdom default (unmocked) rect
+    const bounds = { left: 0, right: 1000, top: 0, bottom: 700 };
+    const target = dockTargetPosition(size, bounds);
+
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+
+    expect(rail.getAttribute('data-docked')).toBe('false');
+    expect(rail.style.left).toBe(`${target.x - 16}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
+  });
+
+  it('Shift+arrow moves by the larger ARROW_KEY_STEP_SHIFT', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    const size = { width: 0, height: 0 };
+    const bounds = { left: 0, right: 1000, top: 0, bottom: 700 };
+    const target = dockTargetPosition(size, bounds);
+    const expected = clampToolbarPosition({ x: target.x + 64, y: target.y }, size, bounds);
+
+    fireEvent.keyDown(handle, { key: 'ArrowRight', shiftKey: true });
+
+    expect(rail.style.left).toBe(`${expected.x}px`);
+  });
+
+  it('ignores keys other than the arrows/Home', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    fireEvent.keyDown(handle, { key: 'a' });
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+  });
+});
+
+describe('EditorSideToolbar — floating: Escape cancels a drag', () => {
+  it('reverts to the DOCKED origin when the drag started from docked', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    expect(rail.getAttribute('data-docked')).toBe('false'); // undocked mid-drag
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    // The (now cancelled) gesture's own pointerup is a no-op.
+    firePointer(handle, 'pointerup', 500, 150);
+    expect(rail.getAttribute('data-docked')).toBe('true');
+  });
+
+  it('reverts to the PRIOR undocked position when dragging an already-floating rail', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    // First drag: undock to (480, 100) — see the "drag to undock" test above.
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+    expect(rail.style.left).toBe('480px');
+
+    // Second drag, from the now-undocked rail: move further, then cancel.
+    mockRect(rail, { left: 480, top: 100, width: 56, height: 300 });
+    firePointer(handle, 'pointerdown', 480, 100);
+    firePointer(handle, 'pointermove', 200, 50);
+    expect(rail.style.left).toBe('200px');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(rail.getAttribute('data-docked')).toBe('false'); // still undocked...
+    expect(rail.style.left).toBe('480px'); // ...back at the PRIOR position, not the docked origin.
+  });
+});
+
+describe('EditorSideToolbar — floating: persistence (localStorage)', () => {
+  it('persists { docked: false, x, y } after a drag', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')).toEqual({
+      docked: false,
+      x: 480,
+      y: 100,
+    });
+  });
+
+  it('persists { docked: true } after re-docking', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+
+    fireEvent.doubleClick(handle);
+
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null').docked).toBe(true);
+  });
+
+  it('restores an undocked position from localStorage on mount, re-clamped to the current bounds', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ docked: false, x: 5000, y: 5000 }));
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+
+    // Unmocked (0x0) rail size; bounds {0,1000,0,700} -> clamps to the
+    // bottom-right corner (1000, 700).
+    expect(rail.getAttribute('data-docked')).toBe('false');
+    expect(rail.style.left).toBe('1000px');
+    expect(rail.style.top).toBe('700px');
+  });
+
+  it('falls back to docked for corrupted/invalid JSON in localStorage', () => {
+    localStorage.setItem(STORAGE_KEY, '{not valid json');
+    renderToolbar();
+    expect(screen.getByTestId('editor-side-toolbar').getAttribute('data-docked')).toBe('true');
+  });
+
+  it('falls back to docked when localStorage.getItem throws (private window / blocked storage)', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(() => renderToolbar()).not.toThrow();
+    expect(screen.getByTestId('editor-side-toolbar').getAttribute('data-docked')).toBe('true');
+  });
+});
+
+describe('EditorSideToolbar — floating: re-clamp on resize', () => {
+  it('re-clamps the undocked position when the window shrinks', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+    expect(rail.style.left).toBe('480px');
+
+    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+    fireEvent(window, new Event('resize'));
+
+    // maxX = 400 - 56 = 344.
+    expect(rail.style.left).toBe('344px');
+  });
+
+  it('does not touch the position while docked', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+    fireEvent(window, new Event('resize'));
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    expect(rail.style.left).toBe('');
   });
 });
