@@ -27,14 +27,14 @@
  *     name length, rotation; see `blocks.ts`'s          enforces those same safety checks —
  *     own `BlocksParseMode` doc)                        defensive here regardless)
  * 11. zero blocks                                  -> 422 { error: 'no_blocks' }
- * 12. a block/zone that is structurally fine but   -> 422 { error: 'incomplete', blockId,
- *     still SUBMIT-incomplete (creator polish          zoneId, reason } — `zoneId` is `null`
- *     round 3: a worksheet with no zones, a zone       for a block-level gap (`reason:
- *     with no answers, a choice zone with < 2          'no_zones'`), otherwise one of
- *     options, or an answer not among its options)     'no_answers'/'too_few_options'/
- *     — see `findIncompleteBlock`'s own doc.            'answer_not_in_options'. Points the
- *                                                        editor straight at the exact gap
- *                                                        instead of a generic error.
+ * 12. a block/zone (or block/question) that is     -> 422 { error: 'incomplete', blockId,
+ *     structurally fine but still SUBMIT-incomplete    zoneId, reason } — `zoneId` is `null`
+ *     (creator polish round 3; PR C "Preguntas (quiz)  for a block-level gap (`reason:
+ *     block" extends this to quiz questions) — see     'no_zones'`/`'quiz_no_slots'`), otherwise
+ *     `findIncompleteBlock`'s own doc for every         the zone/slot id and one of its other
+ *     `reason` value.                                  reason codes. Points the editor straight
+ *                                                        at the exact gap instead of a generic
+ *                                                        error.
  * 13. mark the revision pending_review, stamp       -> UPDATE activity_revisions
  *     rights_accepted_at = now()
  * 14. activity.status is draft/rejected            -> UPDATE activities.status

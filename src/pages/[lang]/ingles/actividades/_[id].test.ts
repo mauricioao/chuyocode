@@ -99,7 +99,7 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     expect(html).toContain('href="/es/ingles/actividades"');
   });
 
-  it('renders a quiz block as a coming-soon placeholder', async () => {
+  it('renders a quiz block through the real quiz practice renderer', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -119,7 +119,7 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
-    expect(html).toContain('Próximamente');
+    expect(html).toContain('data-testid="quiz-practice-q1"');
   });
 
   it('returns 200 in English', async () => {

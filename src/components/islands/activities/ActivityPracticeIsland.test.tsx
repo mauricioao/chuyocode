@@ -32,7 +32,10 @@ const SECOND_WORKSHEET: WorksheetBlock = {
 const QUIZ: QuizBlock = {
   id: 'q1',
   type: 'quiz',
-  payload: { pools: { opts: [{ id: 'a', text: 'x' }] }, slots: [{ id: 's1', label: 'x', input: 'choice', pool: 'opts', answer: ['a'] }] },
+  payload: {
+    pools: {},
+    slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+  },
 };
 
 function renderIsland(blocks: Block[]) {
@@ -45,9 +48,10 @@ describe('ActivityPracticeIsland — rendering blocks in order', () => {
     expect(screen.getByTestId('worksheet-player')).toBeTruthy();
   });
 
-  it('renders a quiz block as a "coming soon" placeholder, not a functional player', () => {
+  it('renders a quiz block through the real quiz practice renderer, not a placeholder', () => {
     renderIsland([QUIZ]);
-    expect(screen.getByTestId('quiz-coming-soon-q1').textContent).toContain('Próximamente');
+    expect(screen.getByTestId('quiz-practice-q1')).toBeTruthy();
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
     expect(screen.queryByTestId('worksheet-player')).toBeNull();
   });
 
@@ -57,16 +61,27 @@ describe('ActivityPracticeIsland — rendering blocks in order', () => {
       el.getAttribute('data-testid'),
     );
     const worksheetIndex = testIds.indexOf('worksheet-player');
-    const quizIndex = testIds.indexOf('quiz-coming-soon-q1');
+    const quizIndex = testIds.indexOf('quiz-practice-q1');
     expect(worksheetIndex).toBeGreaterThanOrEqual(0);
     expect(quizIndex).toBeGreaterThan(worksheetIndex);
   });
 });
 
 describe('ActivityPracticeIsland — Comprobar/Reintentar', () => {
-  it('shows no controls when there is nothing gradable (quiz-only activity)', () => {
-    renderIsland([QUIZ]);
+  it('shows no controls when there is nothing gradable at all', () => {
+    const unavailableQuiz: QuizBlock = {
+      id: 'q2',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'hotspot', answer: ['x'] }] },
+    };
+    renderIsland([unavailableQuiz]);
     expect(screen.queryByTestId('practice-controls')).toBeNull();
+  });
+
+  it('shows Comprobar for a quiz-only activity — a quiz question alone is gradable content', () => {
+    renderIsland([QUIZ]);
+    expect(screen.getByTestId('practice-controls')).toBeTruthy();
+    expect(screen.getByTestId('practice-check-button')).toBeTruthy();
   });
 
   it('shows Comprobar before grading', () => {
@@ -124,5 +139,70 @@ describe('ActivityPracticeIsland — Comprobar/Reintentar', () => {
     expect(freshInput.value).toBe('');
     expect(freshInput.disabled).toBe(false);
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
+  });
+});
+
+describe('ActivityPracticeIsland — quiz questions grade into the combined score', () => {
+  it('grades a quiz-only activity and shows per-question feedback', () => {
+    renderIsland([QUIZ]);
+    const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'sits' } });
+
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    expect(screen.getByTestId('practice-score').textContent).toContain('1 / 1');
+    expect(screen.getByTestId('quiz-slot-result-s1').textContent).toBe('Correcto');
+  });
+
+  it('combines worksheet zones AND quiz questions into one score', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    const zoneInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(zoneInput, { target: { value: 'cat' } });
+    const zoneSelect = screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement;
+    fireEvent.change(zoneSelect, { target: { value: 'blue' } });
+    const quizInput = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(quizInput, { target: { value: 'wrong' } });
+
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    // 2 correct worksheet zones + 0 correct quiz question, out of 2 + 1 = 3.
+    expect(screen.getByTestId('practice-score').textContent).toContain('2 / 3');
+    expect(screen.getByTestId('quiz-slot-result-s1').textContent).toBe('Incorrecto');
+  });
+
+  it('a quiz slot with no shipped renderer is excluded from the denominator', () => {
+    const unavailableQuiz: QuizBlock = {
+      id: 'q2',
+      type: 'quiz',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'x', input: 'text', answer: ['cat'] },
+          { id: 's2', label: 'y', input: 'hotspot', answer: ['z'] },
+        ],
+      },
+    };
+    renderIsland([unavailableQuiz]);
+    const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'cat' } });
+
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    expect(screen.getByTestId('practice-score').textContent).toContain('1 / 1');
+    expect(screen.getByTestId('slot-unavailable-s2')).toBeTruthy();
+  });
+
+  it('Reintentar clears quiz answers and results too', () => {
+    renderIsland([QUIZ]);
+    const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'sits' } });
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    fireEvent.click(screen.getByTestId('practice-retry-button'));
+
+    expect(screen.queryByTestId('quiz-slot-result-s1')).toBeNull();
+    const freshInput = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    expect(freshInput.value).toBe('');
+    expect(freshInput.disabled).toBe(false);
   });
 });

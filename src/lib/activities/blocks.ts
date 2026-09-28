@@ -22,7 +22,7 @@
  * zone is graded geometry — a silently dropped zone is a silently ungradeable
  * region on an otherwise-intact image, which must never happen quietly.
  */
-import { parsePayload, type Payload } from '../exercisePayload';
+import { parsePayload, type Payload, type PoolItem } from '../exercisePayload';
 import { parseImagePath } from './paths';
 
 /** A worksheet's uploaded image and its natural pixel dimensions. */
@@ -271,13 +271,23 @@ function parseWorksheetBlock(
   return { id, type: 'worksheet', name, rotation, image, zones };
 }
 
-/** Parse a quiz block's own fields, or `null` if its payload cannot be parsed. */
+/**
+ * Parse a quiz block's own fields, or `null` if its payload cannot be
+ * parsed.
+ *
+ * `mode` is forwarded straight to `parsePayload` (`exercisePayload.ts`'s own
+ * `PayloadParseMode`, same two values as this module's `BlocksParseMode`): a
+ * `'draft'` quiz block may have zero questions, or a question with no answer
+ * yet, exactly like a `'draft'` worksheet zone — see
+ * {@link BlocksParseMode}'s own doc.
+ */
 function parseQuizBlock(
   id: string,
   name: string | undefined,
   value: Record<string, unknown>,
+  mode: BlocksParseMode,
 ): QuizBlock | null {
-  const payload = parsePayload(value.payload);
+  const payload = parsePayload(value.payload, mode);
   if (!payload) return null;
   return { id, type: 'quiz', name, payload };
 }
@@ -294,7 +304,7 @@ function parseBlock(value: unknown, mode: BlocksParseMode): Block | null {
     case 'worksheet':
       return parseWorksheetBlock(value.id, name, value, mode);
     case 'quiz':
-      return parseQuizBlock(value.id, name, value);
+      return parseQuizBlock(value.id, name, value, mode);
     default:
       return null;
   }
@@ -331,40 +341,93 @@ export function parseBlocks(value: unknown, mode: BlocksParseMode = 'submit'): B
 /** What's still missing before a `'draft'`-parsed block list would also pass `'submit'`. */
 export interface IncompleteBlockInfo {
   blockId: string;
-  /** `null` for a block-level gap (a worksheet with no zones at all). */
+  /**
+   * `null` for a block-level gap (a worksheet with no zones at all, or a
+   * quiz block with no questions at all). Otherwise the zone id, or — for a
+   * quiz block — the incomplete question's slot id.
+   */
   zoneId: string | null;
-  reason: 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options';
+  reason:
+    | 'no_zones'
+    | 'no_answers'
+    | 'too_few_options'
+    | 'answer_not_in_options'
+    | 'quiz_no_slots'
+    | 'quiz_no_answer'
+    | 'quiz_too_few_options'
+    | 'quiz_answer_not_in_pool';
+}
+
+/** Mechanics whose answer is one id drawn from a shared pool — same set `SlotAnswerEditor.tsx` authors against. */
+const POOLED_MECHANICS: ReadonlySet<string> = new Set(['choice', 'select', 'drop']);
+
+/**
+ * The first SUBMIT-incomplete question in one quiz block's payload, or
+ * `null` — the quiz counterpart of the worksheet zone loop below: a question
+ * with no answer yet, a pooled question (`choice`/`select`/`drop`) with < 2
+ * pool items, or a marked-correct answer id that names no pool item.
+ */
+function findIncompleteSlot(payload: Payload): { zoneId: string; reason: IncompleteBlockInfo['reason'] } | null {
+  for (const slot of payload.slots) {
+    if (slot.answer.length === 0) {
+      return { zoneId: slot.id, reason: 'quiz_no_answer' };
+    }
+    if (slot.pool !== undefined) {
+      const items: PoolItem[] = payload.pools[slot.pool] ?? [];
+      if (POOLED_MECHANICS.has(slot.input) && items.length < 2) {
+        return { zoneId: slot.id, reason: 'quiz_too_few_options' };
+      }
+      const ids = new Set(items.map((item) => item.id));
+      if (!slot.answer.every((answer) => ids.has(answer))) {
+        return { zoneId: slot.id, reason: 'quiz_answer_not_in_pool' };
+      }
+    }
+  }
+  return null;
 }
 
 /**
  * Find the first SUBMIT-incomplete spot in an already `'draft'`-parsed block
- * list — a worksheet with no zones yet, or a zone still missing what grading
- * needs (no answer, a `choice` zone with < 2 options, or an answer not among
- * its options). `null` means every block already satisfies `'submit'`'s
- * stricter rules too, i.e. nothing here blocks `enviar`.
+ * list — a worksheet with no zones yet (or a zone still missing what grading
+ * needs: no answer, a `choice` zone with < 2 options, or an answer not among
+ * its options), or a quiz block with no questions yet (or a question missing
+ * what grading needs — see {@link findIncompleteSlot}). `null` means every
+ * block already satisfies `'submit'`'s stricter rules too, i.e. nothing here
+ * blocks `enviar`.
  *
- * Used by `enviar.ts` to name the EXACT block/zone a rejected submit must
- * point the author back to, instead of a generic "something's wrong".
+ * Used by `enviar.ts` to name the EXACT block/zone (or block/question) a
+ * rejected submit must point the author back to, instead of a generic
+ * "something's wrong".
  */
 export function findIncompleteBlock(blocks: Block[]): IncompleteBlockInfo | null {
   for (const block of blocks) {
-    if (block.type !== 'worksheet') continue;
-    if (block.zones.length === 0) {
-      return { blockId: block.id, zoneId: null, reason: 'no_zones' };
+    if (block.type === 'worksheet') {
+      if (block.zones.length === 0) {
+        return { blockId: block.id, zoneId: null, reason: 'no_zones' };
+      }
+      for (const zone of block.zones) {
+        if (zone.answers.length === 0) {
+          return { blockId: block.id, zoneId: zone.id, reason: 'no_answers' };
+        }
+        if (zone.kind === 'choice') {
+          const options = zone.options ?? [];
+          if (options.length < 2) {
+            return { blockId: block.id, zoneId: zone.id, reason: 'too_few_options' };
+          }
+          if (!zone.answers.every((answer) => options.includes(answer))) {
+            return { blockId: block.id, zoneId: zone.id, reason: 'answer_not_in_options' };
+          }
+        }
+      }
+      continue;
     }
-    for (const zone of block.zones) {
-      if (zone.answers.length === 0) {
-        return { blockId: block.id, zoneId: zone.id, reason: 'no_answers' };
-      }
-      if (zone.kind === 'choice') {
-        const options = zone.options ?? [];
-        if (options.length < 2) {
-          return { blockId: block.id, zoneId: zone.id, reason: 'too_few_options' };
-        }
-        if (!zone.answers.every((answer) => options.includes(answer))) {
-          return { blockId: block.id, zoneId: zone.id, reason: 'answer_not_in_options' };
-        }
-      }
+
+    if (block.payload.slots.length === 0) {
+      return { blockId: block.id, zoneId: null, reason: 'quiz_no_slots' };
+    }
+    const incompleteSlot = findIncompleteSlot(block.payload);
+    if (incompleteSlot) {
+      return { blockId: block.id, zoneId: incompleteSlot.zoneId, reason: incompleteSlot.reason };
     }
   }
   return null;

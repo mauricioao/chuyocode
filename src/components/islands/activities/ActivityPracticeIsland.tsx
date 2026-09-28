@@ -1,28 +1,37 @@
 /**
  * ActivityPracticeIsland — the practice page's own interactive body
- * (`/[lang]/ingles/actividades/[id]`, PR D "Activities practice"). Renders
- * EVERY block in order: a `worksheet` block through `WorksheetPracticePlayer`
- * (zoom + gradable inputs); a `quiz` block as a "Próximamente"/"Coming soon"
- * placeholder — quiz players are PR C, not built here.
+ * (`/[lang]/ingles/actividades/[id]`, PR D "Activities practice"; quiz
+ * blocks ship in PR C "Preguntas (quiz) block"). Renders EVERY block in
+ * order: a `worksheet` block through `WorksheetPracticePlayer` (zoom +
+ * gradable inputs); a `quiz` block through {@link QuizBlockPractice} (every
+ * question visible at once, via the same mechanic renderers `ExerciseIsland`
+ * uses per step).
  *
  * ONE combined Comprobar/Reintentar pair for the WHOLE activity, not one per
- * worksheet block: the answer state (`values`) and the graded state
- * (`results`) both live here, flattened across every worksheet zone on the
- * page, so "7 / 10" is the score across every worksheet the activity has,
- * exactly as the task describes it ("grades every zone... shows the score").
+ * block: worksheet zones AND quiz questions grade together into a single
+ * score. `values`/`results` (worksheet zones) and `quizResponses`/
+ * `quizResults` (quiz questions, keyed by block id since two quiz blocks may
+ * mint the same slot id independently) all live here; `handleCheck` grades
+ * both and folds them into one "N / M".
  *
- * Answers are NEVER stored — `values`/`results` are plain component state,
- * gone the moment this island unmounts. Grading itself is delegated
- * entirely to the pure `src/lib/activities/grading.ts` (its own thorough
- * tests cover every comparison rule); this component only wires state to
- * it and back.
+ * Answers are NEVER stored — every piece of state above is plain component
+ * state, gone the moment this island unmounts. Grading itself is delegated
+ * entirely to the pure `src/lib/activities/grading.ts` (worksheet zones) and
+ * `src/lib/exerciseGrading.ts` (quiz slots, routed through
+ * `comparatorForRenderable` so a slot can only be graded by a mechanic that
+ * was actually drawn — same rule `ExerciseIsland` follows); this component
+ * only wires state to them and back.
  */
 import { useCallback, useMemo, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block } from '@/lib/activities/blocks';
+import type { Block, QuizBlock } from '@/lib/activities/blocks';
 import { gradeZones, type GradableZone } from '@/lib/activities/grading';
+import { check, type GradeResult } from '@/lib/exerciseGrading';
+import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
+import type { ExerciseResponse } from '@/lib/exercisePayload';
 import { Button } from '@/components/ui/button';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
+import QuizBlockPractice from './QuizBlockPractice';
 
 export interface ActivityPracticeIslandProps {
   lang: Lang;
@@ -36,9 +45,13 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, boolean> | undefined>(undefined);
+  const [quizResponses, setQuizResponses] = useState<Record<string, ExerciseResponse>>({});
+  const [quizResults, setQuizResults] = useState<Record<string, GradeResult> | undefined>(undefined);
 
-  // Every worksheet zone across every block, flattened — the grading unit
-  // for the page's single combined score.
+  const quizBlocks = useMemo(() => blocks.filter((b): b is QuizBlock => b.type === 'quiz'), [blocks]);
+
+  // Every worksheet zone across every block, flattened — one half of the
+  // grading unit for the page's single combined score.
   const allZones = useMemo<GradableZone[]>(
     () =>
       blocks.flatMap((block) =>
@@ -49,8 +62,30 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
     [blocks],
   );
 
+  // Every quiz slot whose mechanic actually has a shipped renderer — the
+  // other half. Static per block (independent of the learner's answers), so
+  // it is the denominator both before and after grading.
+  const quizGradableCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const block of quizBlocks) {
+      counts[block.id] = block.payload.slots.filter((slot) => comparatorForRenderable(slot.input) !== null).length;
+    }
+    return counts;
+  }, [quizBlocks]);
+  const quizGradableTotal = useMemo(
+    () => Object.values(quizGradableCounts).reduce((sum, n) => sum + n, 0),
+    [quizGradableCounts],
+  );
+
   const handleChange = useCallback((zoneId: string, value: string) => {
     setValues((prev) => ({ ...prev, [zoneId]: value }));
+  }, []);
+
+  const handleQuizChange = useCallback((blockId: string, slotId: string, value: string[]) => {
+    setQuizResponses((prev) => ({
+      ...prev,
+      [blockId]: { ...(prev[blockId] ?? {}), [slotId]: value },
+    }));
   }, []);
 
   const handleCheck = useCallback(() => {
@@ -58,16 +93,32 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
     const nextResults: Record<string, boolean> = {};
     for (const result of summary.results) nextResults[result.zoneId] = result.correct;
     setResults(nextResults);
-  }, [allZones, values]);
+
+    const nextQuizResults: Record<string, GradeResult> = {};
+    for (const block of quizBlocks) {
+      nextQuizResults[block.id] = check(block.payload, quizResponses[block.id] ?? {}, comparatorForRenderable);
+    }
+    setQuizResults(nextQuizResults);
+  }, [allZones, values, quizBlocks, quizResponses]);
 
   const handleRetry = useCallback(() => {
     setValues({});
     setResults(undefined);
+    setQuizResponses({});
+    setQuizResults(undefined);
   }, []);
 
   const graded = results !== undefined;
-  const correctCount = graded ? allZones.filter((zone) => results![zone.id]).length : 0;
-  const hasGradableContent = allZones.length > 0;
+  const worksheetCorrectCount = graded ? allZones.filter((zone) => results![zone.id]).length : 0;
+  const quizCorrectCount = quizResults
+    ? Object.values(quizResults).reduce(
+        (sum, result) => sum + Object.values(result.slots).filter((outcome) => outcome === 'correct').length,
+        0,
+      )
+    : 0;
+  const correctCount = worksheetCorrectCount + quizCorrectCount;
+  const totalCount = allZones.length + quizGradableTotal;
+  const hasGradableContent = totalCount > 0;
 
   return (
     <div className="flex flex-col gap-8">
@@ -82,14 +133,15 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
               practice={{ values, onChange: handleChange, results, disabled: graded }}
             />
           ) : (
-            <div
+            <QuizBlockPractice
               key={block.id}
-              data-testid={`quiz-coming-soon-${block.id}`}
-              className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-8 text-center"
-            >
-              <span className="text-lg font-semibold text-zinc-200">{t.quizComingSoonTitle}</span>
-              <p className="text-sm text-zinc-400">{t.quizComingSoonBody}</p>
-            </div>
+              lang={lang}
+              block={block}
+              response={quizResponses[block.id] ?? {}}
+              onChange={(slotId, value) => handleQuizChange(block.id, slotId, value)}
+              outcomes={quizResults?.[block.id]?.slots}
+              disabled={graded}
+            />
           ),
         )}
       </div>
@@ -110,7 +162,7 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
           )}
           {graded && (
             <p data-testid="practice-score" aria-live="polite" className="text-sm font-medium text-foreground">
-              {t.score}: {correctCount} / {allZones.length}
+              {t.score}: {correctCount} / {totalCount}
             </p>
           )}
         </div>

@@ -6,9 +6,10 @@
  *  - Top bar (always visible, minimal): title, level, preview toggle.
  *  - Center: the ordered block list ({@link BlockList}); below it,
  *    "+ Agregar bloque" opens the same two-card {@link BlockTypePicker}
- *    inline, and choosing Worksheet opens {@link WorksheetUploader} —
- *    each uploaded image becomes its own new worksheet block, appended in
- *    order, expanded.
+ *    inline. Worksheet opens {@link WorksheetUploader} — each uploaded image
+ *    becomes its own new worksheet block, appended in order, expanded.
+ *    Questions (PR C, "Preguntas (quiz) block") needs no upload step — one
+ *    empty quiz block is appended and expanded immediately.
  *  - Preview mode swaps the block list for {@link WorksheetPlayer} renders
  *    of every worksheet block, learner-view, not graded.
  *
@@ -33,7 +34,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
-import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
+import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
 import {
   initHistory,
   pushHistory,
@@ -134,7 +135,7 @@ export default function ActivityEditorIsland({
   const [incompleteTarget, setIncompleteTarget] = useState<{
     blockId: string;
     zoneId: string | null;
-    reason: 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options';
+    reason: IncompleteBlockInfo['reason'];
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -457,7 +458,7 @@ export default function ActivityEditorIsland({
           setIncompleteTarget({
             blockId,
             zoneId,
-            reason: reason as 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options',
+            reason: reason as IncompleteBlockInfo['reason'],
           });
           if (typeof document !== 'undefined') {
             const el = document.getElementById(`block-${blockId}`);
@@ -482,6 +483,21 @@ export default function ActivityEditorIsland({
   const handleWorksheetChosen = useCallback(() => {
     setShowUploader(true);
   }, []);
+
+  // Unlike Worksheet (which needs an upload step first, via `showUploader`),
+  // Questions has nothing to upload — the new block is appended immediately,
+  // empty, and becomes the sole active one, same accordion rule
+  // `handleUploadComplete` follows for its own last-uploaded block.
+  const handleQuestionsChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+    };
+    changeBlocks([...blocks, newBlock]);
+    setAddingBlock(false);
+    setExpandedBlockIds(new Set([newBlock.id]));
+  }, [blocks, changeBlocks]);
 
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
@@ -524,6 +540,10 @@ export default function ActivityEditorIsland({
     no_answers: 'incompleteNoAnswers',
     too_few_options: 'incompleteTooFewOptions',
     answer_not_in_options: 'incompleteAnswerNotInOptions',
+    quiz_no_slots: 'incompleteQuizNoSlots',
+    quiz_no_answer: 'incompleteQuizNoAnswer',
+    quiz_too_few_options: 'incompleteQuizTooFewOptions',
+    quiz_answer_not_in_pool: 'incompleteQuizAnswerNotInPool',
   } as const;
   const incompleteMessage = incompleteTarget ? t[INCOMPLETE_REASON_KEYS[incompleteTarget.reason]] : null;
 
@@ -692,7 +712,11 @@ export default function ActivityEditorIsland({
             )}
 
             {addingBlock && !showUploader && (
-              <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
+              <BlockTypePicker
+                lang={lang}
+                onSelectWorksheet={handleWorksheetChosen}
+                onSelectQuestions={handleQuestionsChosen}
+              />
             )}
 
             {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}

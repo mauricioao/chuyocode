@@ -7,7 +7,8 @@
  * `/[lang]/admin/ejercicios` (moderator-only) in this same PR — see that
  * route's header. This path is now open to any SIGNED-IN visitor: choosing
  * "Worksheet" here creates a brand-new activity and navigates to its editor
- * (`/[lang]/crear/[id]`); "Preguntas/Questions" is shown disabled (PR C).
+ * (`/[lang]/crear/[id]`); choosing "Preguntas/Questions" (PR C, "Preguntas
+ * (quiz) block") does the same, seeding one empty quiz block first.
  *
  * SSR-GATED ON `Astro.locals.user`, same pattern the old page documented:
  * anonymous visitors are redirected to sign-in, `next` pointing back here,
