@@ -54,9 +54,10 @@ const t = UI_LABELS[lang].english;
 // English in every locale: the focus is exercise data, not chrome
 // (docs/exercise-model.md, "Authoring rules").
 const focusName = FOCUS_LABELS[focus];
-// Back to the entry screen ON THE LEVEL THE USER CAME FROM. Dropping `?nivel=`
-// would silently return them to the default level and lose their place.
-const backHref = `/${lang}/ingles?nivel=${level}`;
+// Back to the curated-exercises picker ON THE LEVEL THE USER CAME FROM.
+// Dropping `?nivel=` would silently return them to the default level and
+// lose their place.
+const backHref = `/${lang}/ingles/propuestos?nivel=${level}`;
 ---
 
 <BaseLayout

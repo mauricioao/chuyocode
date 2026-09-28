@@ -111,6 +111,13 @@ export const UI_LABELS = {
       switchTo: 'Cambiar a',
     },
     footer: { terms: 'Términos y Condiciones', privacy: 'Privacidad' },
+    // Chrome shared by any page that mounts it (`BackButton`, `ScrollToTop`) —
+    // not tied to one section, unlike `english`/`activities`/`legal` below.
+    common: {
+      back: 'Volver',
+      backTooltip: 'Volver a la página anterior',
+      scrollToTop: 'Volver arriba',
+    },
     legal: {
       titles: { terms: 'Términos y condiciones', privacy: 'Política de privacidad' },
       pending: 'Contenido legal pendiente',
@@ -457,7 +464,22 @@ export const UI_LABELS = {
       },
     },
     english: {
-      // Copy for the section entry route `/[lang]/ingles` and the
+      // Copy for the HUB route `/[lang]/ingles` (two cards: curated exercises
+      // vs. community activities). Kept separate from `section` below, which
+      // is now the curated-exercises picker's OWN copy at `/[lang]/ingles/propuestos`.
+      hub: {
+        title: 'Ejercicios de inglés',
+        subtitle: 'Escoge qué quieres hacer hoy',
+        description:
+          'Elige entre ejercicios propuestos por nivel o actividades creadas por la comunidad.',
+        proposedTitle: 'Ejercicios propuestos',
+        proposedDescription: 'Ejercicios curados por nivel.',
+        // Reuses `activities.explore`'s established phrasing on purpose —
+        // same destination, same name for it everywhere it appears.
+        communityTitle: 'Actividades de la comunidad',
+        communityDescription: 'Actividades creadas por otros usuarios.',
+      },
+      // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
       // was removed when the section actually shipped.
       // REGISTER: neutral Spanish, impersonal. Instructions use the infinitive
@@ -587,6 +609,11 @@ export const UI_LABELS = {
       switchTo: 'Switch to',
     },
     footer: { terms: 'Terms & Conditions', privacy: 'Privacy' },
+    common: {
+      back: 'Back',
+      backTooltip: 'Back to the previous page',
+      scrollToTop: 'Back to top',
+    },
     legal: {
       titles: { terms: 'Terms and conditions', privacy: 'Privacy policy' },
       pending: 'Legal content pending',
@@ -868,6 +895,16 @@ export const UI_LABELS = {
       },
     },
     english: {
+      hub: {
+        title: 'English exercises',
+        subtitle: 'Choose what you want to do today',
+        description:
+          'Choose between curated exercises by level or activities created by the community.',
+        proposedTitle: 'Curated exercises',
+        proposedDescription: 'Exercises curated by level.',
+        communityTitle: 'Community activities',
+        communityDescription: 'Activities created by other users.',
+      },
       section: {
         // Matches the Spanish move: name the section, not its audience.
         title: 'English exercises',
