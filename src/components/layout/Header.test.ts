@@ -67,6 +67,28 @@ describe('Header.astro — nav', () => {
     expect(html).not.toContain('aria-disabled="true"');
     expect(html).not.toContain('cursor-not-allowed');
   });
+
+  /**
+   * LAYOUT: logo stays on the left; the nav moves to the right, grouped with
+   * the account area (`data-header-actions` marks that grouping wrapper).
+   */
+  it('keeps the logo on the left and moves the nav to the right, next to the account area', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+
+    const logoIdx = html.indexOf('src="/chuyocode.svg"');
+    const rightWrapIdx = html.indexOf('data-header-actions');
+    const navIdx = html.indexOf('aria-label="Primary"');
+    const islandIdx = html.indexOf('astro-island');
+
+    expect(logoIdx).toBeGreaterThan(-1);
+    expect(rightWrapIdx).toBeGreaterThan(logoIdx);
+    // Both the nav and the account island live inside the right-hand wrapper.
+    expect(navIdx).toBeGreaterThan(rightWrapIdx);
+    expect(islandIdx).toBeGreaterThan(rightWrapIdx);
+  });
 });
 
 // Login step 1b: `Header` now mounts `UserMenu` (`client:load`), the ONE
