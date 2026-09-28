@@ -196,6 +196,19 @@ describe('GET /api/auth/confirm — T2 credential stripping', () => {
   });
 });
 
+describe('GET /api/auth/confirm — the header default (home page, no next)', () => {
+  // Ties together the header's "Ingresar" link (no `next` on the home
+  // page — `UserMenu.tsx`) through `google.ts`'s fallback (`next=/es/`, see
+  // its own test) and this route's success redirect: the visitor ends up
+  // exactly at `/<lang>/?auth=signed-in`, never on a broken "already
+  // signed in" screen.
+  it('ends exactly at /<lang>/?auth=signed-in for the default locale home', async () => {
+    const res = await GET(ctx(`?code=${CODE}&next=%2Fes%2F`));
+
+    expect(location(res)).toBe(`/es/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`);
+  });
+});
+
 describe('GET /api/auth/confirm — verification', () => {
   it('verifies the token as an email OTP', async () => {
     await GET(ctx(`?token_hash=${TOKEN}&type=email`));

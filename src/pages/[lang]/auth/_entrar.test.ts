@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
+import { DEFAULT_LANG } from '@lib/i18n';
 import {
   AUTH_ERROR_PARAM,
   AUTH_ERROR_LINK_INVALID,
@@ -36,49 +37,121 @@ describe('GET /[lang]/auth/entrar — routing', () => {
 });
 
 describe('GET /[lang]/auth/entrar — response mechanics', () => {
-  it('is never publicly cacheable, anonymous or signed in', async () => {
-    // The signed-in branch mounts no PAGE-level island of its own (no
-    // AuthPanel), so it is the one this suite can render fully (see the
-    // describe block below) — `render()` registers the React renderer
-    // `Header`'s own `UserMenu` island needs regardless (Login step 1b).
+  it('is never publicly cacheable for an anonymous visitor', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+    });
+
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('is never publicly cacheable for the signed-in redirect either', async () => {
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
     });
 
+    expect(res.status).toBe(303);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 });
 
-/**
- * NOTE: `render()` now registers the `@astrojs/react` server renderer
- * (`createContainer`, added for Login step 1b's `UserMenu` island in
- * `Header`), so this skip is no longer about a missing renderer. It stays
- * `it.skip` because re-enabling a full anonymous-page render (markup + two
- * islands, `AuthPanel` and now `UserMenu`, hydrated together) is out of
- * scope for that unrelated slice and untried here. The islands are fully
- * covered at the unit level (`AuthPanel.test.tsx`, `PasswordAuthForm.test.tsx`,
- * `SignInForm.test.tsx`, `UserMenu.test.tsx`); the anonymous PAGE render is
- * covered by hand / left for a future Playwright pass — see the apply
- * report's "Manual verification needed" list.
- */
-describe('GET /[lang]/auth/entrar — the anonymous form (island)', () => {
-  it.skip('renders the sign-in form for an anonymous visitor', async () => {
+describe('GET /[lang]/auth/entrar — signed-in visitors are never shown this page', () => {
+  it('303s to /<lang>/ with the signed-in marker when no next was given', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      `/es/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
+  });
+
+  it('303s to the validated next, still carrying the signed-in marker', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?next=%2Fes%2Fmis-libros',
+      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+    );
+
+    expect(res.headers.get('location')).toBe(
+      `/es/mis-libros?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
+  });
+
+  it('neutralises a hostile next rather than redirecting to it', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?next=%2F%2Fevil.com',
+      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+    );
+
+    expect(res.headers.get('location')).toBe(
+      `/${DEFAULT_LANG}/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
+  });
+
+  it('never redirects a signed-in visitor back to this same page', async () => {
+    // `safeNextPath`'s auth-page guard closes this: a `next` that pointed
+    // back at `/auth/entrar` would otherwise be an infinite loop.
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?next=%2Fes%2Fauth%2Fentrar',
+      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+    );
+
+    expect(res.headers.get('location')).toBe(
+      `/${DEFAULT_LANG}/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
+  });
+
+  it('always carries a query string, defeating a query-less Location (Netlify)', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+
+    expect(res.headers.get('location')).toContain('?');
+  });
+
+  it('localizes the redirect target to the requested locale', async () => {
+    const res = await render('https://chuyocode.test/en/auth/entrar', {
+      params: { lang: 'en' },
+      locals: { user: { id: 'user-1' }, lang: 'en' },
+    });
+
+    expect(res.headers.get('location')).toBe(
+      `/en/?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
+    );
+  });
+});
+
+describe('GET /[lang]/auth/entrar — the anonymous form', () => {
+  it('renders the sign-in form for an anonymous visitor', async () => {
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },
     });
     const html = await res.text();
 
-    expect(html).toContain('data-testid="signin-form"');
-    expect(html).not.toContain('data-testid="auth-already-signed-in"');
+    expect(html).toContain('data-testid="password-auth-form"');
+    expect(html).toContain('data-testid="google-signin-form"');
+  });
+
+  it('never renders the magic-link form (hidden for now)', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    expect(html).not.toContain('data-testid="signin-form"');
+    expect(html).not.toContain('data-testid="auth-panel-toggle"');
   });
 });
 
-describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', () => {
+describe('GET /[lang]/auth/entrar — markers', () => {
   it('shows the rejected-link invitation for ?auth=link-invalid', async () => {
     const res = await render(
       `https://chuyocode.test/es/auth/entrar?${AUTH_ERROR_PARAM}=${AUTH_ERROR_LINK_INVALID}`,
-      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+      { params: { lang: 'es' } },
     );
     const html = await res.text();
 
@@ -89,7 +162,7 @@ describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', (
   it('optionally reflects ?auth=signed-in', async () => {
     const res = await render(
       `https://chuyocode.test/es/auth/entrar?${AUTH_ERROR_PARAM}=${AUTH_SIGNED_IN}`,
-      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+      { params: { lang: 'es' } },
     );
     const html = await res.text();
 
@@ -100,7 +173,7 @@ describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', (
   it('shows only the rejected-link marker when both params are smuggled in together', async () => {
     const res = await render(
       `https://chuyocode.test/es/auth/entrar?${AUTH_ERROR_PARAM}=${AUTH_ERROR_LINK_INVALID}`,
-      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+      { params: { lang: 'es' } },
     );
     const html = await res.text();
 
@@ -111,7 +184,7 @@ describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', (
   it('shows the Google-unavailable invitation for ?auth=google-unavailable', async () => {
     const res = await render(
       `https://chuyocode.test/es/auth/entrar?${AUTH_ERROR_PARAM}=${AUTH_ERROR_GOOGLE_UNAVAILABLE}`,
-      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+      { params: { lang: 'es' } },
     );
     const html = await res.text();
 
@@ -122,11 +195,6 @@ describe('GET /[lang]/auth/entrar — markers (no page-level island mounted)', (
 });
 
 describe('entrar.astro — ?mode=signup (header create-account button hint)', () => {
-  // The anonymous-form full render is `it.skip` above (out of scope,
-  // pre-existing); this pins the SOURCE contract at the same granularity as
-  // the plain-forms test below — `mode` is read and forwarded to
-  // `AuthPanel`, which is what makes the header's "Crear cuenta" button
-  // actually preselect sign-up.
   it('reads ?mode=signup and forwards it to AuthPanel as initialMode', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./entrar.astro', import.meta.url)),
@@ -144,7 +212,7 @@ describe('entrar.astro — plain forms bypass the ClientRouter', () => {
   // `fetch` cannot follow cross-origin, so the router fell back to a GET
   // navigation of the form action — a 404, because the endpoint is POST-only.
   // `data-astro-reload` makes the browser submit natively.
-  it('marks every plain <form> with data-astro-reload', () => {
+  it('marks the plain <form> with data-astro-reload', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./entrar.astro', import.meta.url)),
       'utf8',
@@ -152,59 +220,32 @@ describe('entrar.astro — plain forms bypass the ClientRouter', () => {
     // Only real tags carry an `action`; the doc comment mentions `<form …>` too.
     const forms = source.match(/<form\b[^>]*\baction=[^>]*>/g) ?? [];
 
-    expect(forms.length).toBe(2);
+    expect(forms.length).toBe(1);
     for (const form of forms) {
       expect(form).toContain('data-astro-reload');
     }
   });
 });
 
-describe('GET /[lang]/auth/entrar — already signed in', () => {
-  it('shows a sign-out form instead of the sign-in form', async () => {
-    const res = await render('https://chuyocode.test/es/auth/entrar', {
-      params: { lang: 'es' },
-      locals: { user: { id: 'user-1' } },
-    });
-    const html = await res.text();
-
-    expect(html).toContain('data-testid="auth-already-signed-in"');
-    expect(html).toContain('action="/api/auth/signout"');
-    expect(html).toContain('method="POST"');
-  });
-
-  it('carries a validated `next` through to the sign-out form', async () => {
-    const res = await render(
-      'https://chuyocode.test/es/auth/entrar?next=%2Fes%2Fmis-libros',
-      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+describe('entrar.astro — Google button', () => {
+  it('renders the official multicolor "G" mark, not a monochrome icon', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./entrar.astro', import.meta.url)),
+      'utf8',
     );
-    const html = await res.text();
 
-    expect(html).toContain('name="next"');
-    expect(html).toContain('value="/es/mis-libros"');
+    for (const color of ['#4285F4', '#34A853', '#FBBC05', '#EA4335']) {
+      expect(source).toContain(color);
+    }
   });
 
-  it('neutralises a hostile `next` rather than embedding it in the hidden field', async () => {
-    // `Astro.url.href` legitimately carries the hostile query string in the
-    // page's OWN og:url/canonical meta (it is the address bar's URL, not a
-    // redirect target), so the assertion is scoped to the hidden field this
-    // page actually builds from `next` — the one `safeNextPath` guards.
-    const res = await render(
-      'https://chuyocode.test/es/auth/entrar?next=%2F%2Fevil.com',
-      { params: { lang: 'es' }, locals: { user: { id: 'user-1' } } },
+  it('hides the logo from assistive tech, keeping the text label as the accessible name', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./entrar.astro', import.meta.url)),
+      'utf8',
     );
-    const html = await res.text();
+    const svgOpenTag = source.match(/<svg\b[^>]*>/)?.[0] ?? '';
 
-    expect(html).toContain('name="next" value="/es/"');
-    expect(html).not.toContain('value="//evil.com"');
-  });
-
-  it('localizes the already-signed-in copy', async () => {
-    const res = await render('https://chuyocode.test/en/auth/entrar', {
-      params: { lang: 'en' },
-      locals: { user: { id: 'user-1' }, lang: 'en' },
-    });
-    const html = await res.text();
-
-    expect(html).toContain('Sign out');
+    expect(svgOpenTag).toContain('aria-hidden="true"');
   });
 });

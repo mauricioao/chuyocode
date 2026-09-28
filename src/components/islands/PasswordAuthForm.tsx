@@ -52,7 +52,7 @@ export const COPY = {
     resetSent:
       'Se enviaron instrucciones para restablecer la contraseña a esa dirección, si corresponde a una cuenta. Revisar la bandeja de entrada y la carpeta de spam.',
     backToSignIn: 'Volver a entrar',
-    switchToSignUp: '¿No hay cuenta? Crear una',
+    switchToSignUp: '¿Aún no tienes una cuenta? ¿Qué esperas?',
     switchToSignIn: '¿Ya hay una cuenta? Entrar',
   },
   en: {
@@ -75,7 +75,7 @@ export const COPY = {
     resetSent:
       'Password reset instructions were sent to that address, if it has an account. Check your inbox and spam folder.',
     backToSignIn: 'Back to sign in',
-    switchToSignUp: 'No account? Create one',
+    switchToSignUp: "Don't have an account yet? What are you waiting for?",
     switchToSignIn: 'Already have an account? Sign in',
   },
 } as const;

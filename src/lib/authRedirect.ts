@@ -219,6 +219,37 @@ function isSafeNextPath(raw: string): boolean {
 }
 
 /**
+ * Matches this site's own `/<lang>/auth/...` pages (`entrar`, `nueva-clave`),
+ * any two-letter locale prefix.
+ *
+ * A post-login `next` that points BACK at an auth page is a loop, not a
+ * destination: landing a freshly authenticated visitor on `entrar` used to
+ * mean the page's own "already signed in" branch (removed — see
+ * `entrar.astro`'s signed-in redirect, which uses this same guard).
+ */
+const AUTH_PAGE_PATTERN = /^\/[a-z]{2}\/auth(?:\/|$)/;
+
+/** Is `pathname` one of this site's own `/auth/...` pages? See {@link AUTH_PAGE_PATTERN}. */
+function isAuthPagePath(pathname: string): boolean {
+  return AUTH_PAGE_PATTERN.test(pathname);
+}
+
+/** Options for {@link safeNextPath}. */
+export interface SafeNextPathOptions {
+  /**
+   * Allow the result to point at one of this site's own `/auth/...` pages.
+   *
+   * Defaults to `false` so an attacker-supplied (or merely stale) `next`
+   * can never bounce a freshly authenticated visitor back to `/auth/entrar`
+   * — or to `/auth/nueva-clave` out of context. The ONE legitimate exception
+   * is the password-reset flow itself (`password.ts`'s `handleReset`), which
+   * explicitly targets `/auth/nueva-clave` as the whole point of the reset
+   * link — that caller passes `allowAuthPages: true`.
+   */
+  allowAuthPages?: boolean;
+}
+
+/**
  * Resolve an attacker-supplied `next` into a path this site may redirect to.
  *
  * Returns `raw` UNCHANGED when it is a same-site path — the caller asked for a
@@ -230,16 +261,26 @@ function isSafeNextPath(raw: string): boolean {
  * on the home page costs them one click.
  *
  * @param raw - The `next` query parameter, already decoded once by `URLSearchParams`.
+ * @param options - See {@link SafeNextPathOptions}.
  * @returns A path that is guaranteed to stay on this origin.
  */
-export function safeNextPath(raw: string | null | undefined): string {
+export function safeNextPath(
+  raw: string | null | undefined,
+  { allowAuthPages = false }: SafeNextPathOptions = {},
+): string {
   const fallback = `/${DEFAULT_LANG}/`;
 
   if (typeof raw !== 'string') {
     return fallback;
   }
+  if (!isSafeNextPath(raw)) {
+    return fallback;
+  }
+  if (!allowAuthPages && isAuthPagePath(splitPath(raw).pathname)) {
+    return fallback;
+  }
 
-  return isSafeNextPath(raw) ? raw : fallback;
+  return raw;
 }
 
 /**

@@ -89,6 +89,17 @@ describe('POST /api/auth/google — happy path', () => {
     expect(target.searchParams.get('next')).toBe(`/${DEFAULT_LANG}/`);
   });
 
+  it('defaults next to the locale home when the header sent none (a home-page sign-in)', async () => {
+    // The header's "Ingresar" link carries no `next` at all when the
+    // visitor is already on the home page — see `UserMenu.tsx`. This is
+    // what `entrar.astro`'s Google form then submits.
+    await POST(ctx({ lang: 'es' }));
+
+    const call = signInWithOAuthMock.mock.calls.at(-1)?.[0];
+    const target = new URL(call.options.redirectTo);
+    expect(target.searchParams.get('next')).toBe('/es/');
+  });
+
   it('keeps the answer out of every cache', async () => {
     const res = await POST(ctx());
     expect(res.headers.get('cache-control')).toBe('private, no-store');

@@ -150,7 +150,10 @@ async function handleReset(
   lang: Lang,
 ): Promise<Response> {
   const session = newSession(request);
-  const next = safeNextPath(`/${lang}/auth/nueva-clave`);
+  // The one legitimate exception to `safeNextPath`'s default auth-page block
+  // (see its own header): the reset flow's whole point is to land back on
+  // `/auth/nueva-clave` after redemption.
+  const next = safeNextPath(`/${lang}/auth/nueva-clave`, { allowAuthPages: true });
 
   try {
     const { error } = await session.client.auth.resetPasswordForEmail(email, {
