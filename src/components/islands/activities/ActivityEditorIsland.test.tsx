@@ -251,6 +251,107 @@ describe('ActivityEditorIsland — undo/redo', () => {
   });
 });
 
+describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
+  it('does not show the modal for an internal link click when nothing is dirty', () => {
+    renderEditor();
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    fireEvent.click(link, { button: 0 });
+    expect(screen.queryByTestId('unsaved-changes-modal')).toBeFalsy();
+    link.remove();
+  });
+
+  it('intercepts an internal link click while dirty and shows the modal', () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    const event = fireEvent.click(link, { button: 0 });
+    expect(event).toBe(false); // preventDefault() was called
+    expect(screen.getByTestId('unsaved-changes-modal')).toBeTruthy();
+    link.remove();
+  });
+
+  it('"Cancelar" closes the modal without navigating', () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    fireEvent.click(link, { button: 0 });
+
+    fireEvent.click(screen.getByTestId('unsaved-modal-cancel'));
+    expect(screen.queryByTestId('unsaved-changes-modal')).toBeNull();
+    link.remove();
+  });
+
+  it('"Guardar y salir" saves, then navigates on success', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    fireEvent.click(link, { button: 0 });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('unsaved-modal-save-and-leave'));
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    link.remove();
+  });
+
+  it('shows an inline error and keeps the modal open when "Guardar y salir" fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    fireEvent.click(link, { button: 0 });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('unsaved-modal-save-and-leave'));
+    });
+
+    expect(screen.getByTestId('unsaved-modal-error')).toBeTruthy();
+    expect(screen.getByTestId('unsaved-changes-modal')).toBeTruthy();
+    link.remove();
+  });
+
+  it('ignores a modifier-clicked or middle-clicked link (browser default handles it)', () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    fireEvent.click(link, { button: 0, ctrlKey: true });
+    expect(screen.queryByTestId('unsaved-changes-modal')).toBeNull();
+    link.remove();
+  });
+
+  it('shows the modal on an astro:before-preparation navigation while dirty', () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const event = new Event('astro:before-preparation', { cancelable: true });
+    Object.assign(event, { to: new URL('https://example.test/es/libros') });
+    act(() => {
+      document.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(screen.getByTestId('unsaved-changes-modal')).toBeTruthy();
+  });
+});
+
 describe('ActivityEditorIsland — beforeunload guard', () => {
   it('prevents unload while there are unsaved changes', () => {
     renderEditor();

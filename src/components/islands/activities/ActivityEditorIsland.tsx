@@ -52,6 +52,7 @@ import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
 import BlockList, { type BlocksChangeOptions } from './BlockList';
 import WorksheetPlayer from './WorksheetPlayer';
 import EditorSideToolbar from './EditorSideToolbar';
+import UnsavedChangesModal from './UnsavedChangesModal';
 
 export interface ActivityEditorIslandProps {
   lang: Lang;
@@ -234,18 +235,108 @@ export default function ActivityEditorIsland({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleSaveNow, handleUndo, handleRedo]);
 
+  const isDirty = saveState === 'pending' || saveState === 'saving' || saveState === 'error';
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+  const docRef = useRef(doc);
+  docRef.current = doc;
+
   // Warn before a tab close/reload while anything is unsaved — the browser's
-  // own (unthemeable) confirmation dialog; see owner request #9 for the
-  // separate, custom in-app navigation modal.
+  // own (unthemeable) confirmation dialog. No browser lets a page customize
+  // that text any more, so this is the one case the custom modal below
+  // cannot replace.
   useEffect(() => {
-    const unsaved = saveState === 'pending' || saveState === 'saving' || saveState === 'error';
-    if (!unsaved) return undefined;
+    if (!isDirty) return undefined;
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
     }
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [saveState]);
+  }, [isDirty]);
+
+  // Owner request #9: for an IN-APP navigation (a link inside the site, or
+  // an Astro ClientRouter transition) while dirty, show our own modal
+  // instead of silently losing work. Two independent hooks into "the user
+  // is about to leave this page for another one":
+  //  - a capture-phase click listener on every `a[href]` (works whether or
+  //    not the ClientRouter is even active on this route);
+  //  - `astro:before-preparation`, the ClientRouter's own pre-navigation
+  //    event, cancelable via `preventDefault()` — belt and suspenders with
+  //    the click listener above; whichever fires first wins, the other is
+  //    a no-op (the modal is already open for the same href).
+  const [navGuard, setNavGuard] = useState<{ open: boolean; href: string | null; saving: boolean; error: boolean }>(
+    { open: false, href: null, saving: false, error: false },
+  );
+
+  const openNavGuard = useCallback((href: string | null) => {
+    setNavGuard({ open: true, href, saving: false, error: false });
+  }, []);
+
+  useEffect(() => {
+    function onDocumentClick(e: MouseEvent) {
+      if (!isDirtyRef.current) return;
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const target = e.target as Element | null;
+      const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== '_self') return;
+      if (anchor.hasAttribute('download')) return;
+      let url: URL;
+      try {
+        url = new URL(anchor.href, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+      // An in-page hash link (same path/query, different hash) never loses
+      // this editor's state — let it through.
+      if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openNavGuard(anchor.href);
+    }
+    document.addEventListener('click', onDocumentClick, true);
+    return () => document.removeEventListener('click', onDocumentClick, true);
+  }, [openNavGuard]);
+
+  useEffect(() => {
+    function onBeforePreparation(e: Event) {
+      if (!isDirtyRef.current) return;
+      e.preventDefault();
+      const to = (e as unknown as { to?: URL | string }).to;
+      openNavGuard(typeof to === 'string' ? to : (to?.href ?? null));
+    }
+    document.addEventListener('astro:before-preparation', onBeforePreparation);
+    return () => document.removeEventListener('astro:before-preparation', onBeforePreparation);
+  }, [openNavGuard]);
+
+  const closeNavGuard = useCallback(() => {
+    setNavGuard({ open: false, href: null, saving: false, error: false });
+  }, []);
+
+  const handleLeaveWithoutSaving = useCallback(() => {
+    const href = navGuard.href;
+    closeNavGuard();
+    if (href) window.location.href = href;
+  }, [navGuard.href, closeNavGuard]);
+
+  const handleSaveAndLeave = useCallback(async () => {
+    const href = navGuard.href;
+    setNavGuard((g) => ({ ...g, saving: true, error: false }));
+    try {
+      const value = docRef.current;
+      const res = await fetch(`/api/actividades/${activityId}/guardar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      setNavGuard({ open: false, href: null, saving: false, error: false });
+      if (href) window.location.href = href;
+    } catch {
+      setNavGuard((g) => ({ ...g, saving: false, error: true }));
+    }
+  }, [activityId, navGuard.href]);
 
   const handleWorksheetChosen = useCallback(() => {
     setShowUploader(true);
@@ -276,6 +367,17 @@ export default function ActivityEditorIsland({
 
   const saveLabels = useMemo(
     () => ({ saving: t.savingStatus, saved: t.savedStatus, error: t.errorStatus, unsaved: t.unsaved, retry: t.saveRetry }),
+    [t],
+  );
+
+  const navGuardLabels = useMemo(
+    () => ({
+      title: t.unsavedModalTitle,
+      saveAndLeave: t.unsavedModalSaveAndLeave,
+      leaveWithoutSaving: t.unsavedModalLeaveWithoutSaving,
+      cancel: t.unsavedModalCancel,
+      saveError: t.saveError,
+    }),
     [t],
   );
 
@@ -374,6 +476,16 @@ export default function ActivityEditorIsland({
         saveDisabled={saveState === 'saving'}
         saveState={saveState}
         saveLabels={saveLabels}
+      />
+
+      <UnsavedChangesModal
+        open={navGuard.open}
+        saving={navGuard.saving}
+        error={navGuard.error}
+        labels={navGuardLabels}
+        onSaveAndLeave={() => void handleSaveAndLeave()}
+        onLeaveWithoutSaving={handleLeaveWithoutSaving}
+        onCancel={closeNavGuard}
       />
     </div>
   );
