@@ -96,6 +96,11 @@
   --destructive: #ef4444;
   --destructive-foreground: #f4f4f5;
 
+  /* A light, characteristic emerald that reads well on the dark surfaces
+   * above — the activity editor's "saved" autosave status icon
+   * (`CheckCircle`, weight "fill") uses it directly as `text-success`. */
+  --success: #34d399;
+
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
@@ -118,6 +123,7 @@
   --accent-foreground: #f4f4f5;
   --destructive: #ef4444;
   --destructive-foreground: #f4f4f5;
+  --success: #34d399;
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
@@ -192,6 +198,7 @@
   --color-accent-role-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

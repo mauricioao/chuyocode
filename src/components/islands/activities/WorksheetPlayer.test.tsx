@@ -60,3 +60,25 @@ describe('WorksheetPlayer', () => {
     expect(input.value).toBe('');
   });
 });
+
+describe('WorksheetPlayer — rotation (creator polish round 2)', () => {
+  it('swaps the container aspect ratio for a 90deg rotation', () => {
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" rotation={90} />);
+    const container = screen.getByTestId('worksheet-player').querySelector('div.relative') as HTMLElement;
+    // IMAGE is 800x400 -> rotated 90deg the displayed size is 400x800.
+    expect(container.style.aspectRatio).toBe('400 / 800');
+  });
+
+  it('keeps the container aspect ratio unchanged for a 180deg rotation', () => {
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" rotation={180} />);
+    const container = screen.getByTestId('worksheet-player').querySelector('div.relative') as HTMLElement;
+    expect(container.style.aspectRatio).toBe('800 / 400');
+  });
+
+  it('positions a zone by the same fractional rect regardless of rotation (already in the rotated space)', () => {
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[TEXT_ZONE]} imageUrl="/img.webp" rotation={270} />);
+    const wrapper = screen.getByTestId('player-zone-z1');
+    expect(wrapper.style.left).toBe('10%');
+    expect(wrapper.style.top).toBe('20%');
+  });
+});

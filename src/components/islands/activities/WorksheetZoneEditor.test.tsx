@@ -364,11 +364,17 @@ describe('WorksheetZoneEditor — zoom controls', () => {
     expect(screen.getByTestId('zoom-level').textContent).toBe('400%');
   });
 
-  it('resets to 100% via the reset button', () => {
+  it('resets to 100% via the 100% preset button', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('zoom-in'));
-    fireEvent.click(screen.getByTestId('zoom-reset'));
+    fireEvent.click(screen.getByTestId('zoom-preset-100'));
     expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+  });
+
+  it.each([25, 50, 100, 125])('jumps straight to the %d%% preset', (preset) => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`zoom-preset-${preset}`));
+    expect(screen.getByTestId('zoom-level').textContent).toBe(`${preset}%`);
   });
 
   it('fits the whole image to the viewport via the fit button', () => {
@@ -411,6 +417,48 @@ describe('WorksheetZoneEditor — zoom controls', () => {
     fireEvent.keyDown(viewport, { key: '-' });
     fireEvent.keyDown(viewport, { key: '-' });
     expect(screen.getByTestId('zoom-level').textContent).toBe('75%');
+  });
+});
+
+describe('WorksheetZoneEditor — rotation (creator polish round 2)', () => {
+  it('fits using the ROTATED dimensions at 90deg (width/height swapped)', () => {
+    render(
+      <WorksheetZoneEditor
+        lang="es"
+        image={IMAGE}
+        imageUrl="/img.webp"
+        zones={[]}
+        selectedZoneId={null}
+        onZonesChange={() => {}}
+        onSelectZone={() => {}}
+        rotation={90}
+      />,
+    );
+    const viewport = screen.getByTestId('zone-viewport');
+    // IMAGE is 800x400. Rotated 90deg it is displayed as 400x800. A 400x400
+    // viewport fits it at width ratio 1, height ratio 0.5 -> 50%.
+    mockRect(viewport, { width: 400, height: 400 });
+    fireEvent.click(screen.getByTestId('zoom-fit'));
+    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+  });
+
+  it('renders a zone at the same fractional position regardless of rotation (already in the rotated space)', () => {
+    const zone: Zone = { id: 'z1', x: 0.25, y: 0.1, w: 0.2, h: 0.15, kind: 'text', answers: ['sat'] };
+    render(
+      <WorksheetZoneEditor
+        lang="es"
+        image={IMAGE}
+        imageUrl="/img.webp"
+        zones={[zone]}
+        selectedZoneId={null}
+        onZonesChange={() => {}}
+        onSelectZone={() => {}}
+        rotation={180}
+      />,
+    );
+    const el = screen.getByTestId('zone-z1');
+    expect(el.style.left).toBe('25%');
+    expect(el.style.top).toBe('10%');
   });
 });
 
