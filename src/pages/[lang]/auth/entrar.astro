@@ -57,6 +57,7 @@
  * left out of this slice rather than done unsafely.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
 import AuthPanel from '@components/islands/AuthPanel';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
@@ -131,9 +132,7 @@ const t = UI_LABELS[lang].auth;
 
 <BaseLayout lang={lang} title={t.title} description={t.description}>
   <section class="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-12 sm:py-16">
-    <h1 class="font-display text-3xl font-bold tracking-tight text-accent">
-      {t.title}
-    </h1>
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.title}</PageTitle>
 
     {
       linkInvalid && (

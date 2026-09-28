@@ -53,6 +53,8 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     expect(html).toContain('data-testid="activity-start-island"');
     expect(html).toContain('data-testid="picker-worksheet"');
     expect(html).toContain('data-testid="picker-questions"');
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es"');
   });
 
   it('is never publicly cacheable', async () => {

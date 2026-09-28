@@ -21,6 +21,7 @@ import ExerciseIsland, {
   type ExerciseBadge,
 } from '@components/islands/ExerciseIsland';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
+import BackButton from '@components/ui/BackButton.astro';
 import LikeButton from '@components/islands/LikeButton';
 import ShareDialog from '@components/islands/ShareDialog';
 import { hasDedupCookie, dedupCookieName } from '@lib/dedupCookie';
@@ -235,12 +236,7 @@ if (exercise.topic) {
           height overflows the reserve, which was already the documented limit of
           that mechanism. */}
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <a
-          href={`/${lang}/ingles/propuestos`}
-          class="inline-flex w-fit items-center text-sm font-semibold text-accent hover:text-accent-hover"
-        >
-          &larr; {t.back}
-        </a>
+        <BackButton lang={lang} href={`/${lang}/ingles/propuestos`} />
 
         {/* The two page-level actions, grouped so they stay together when the
             row wraps — a like that wrapped away from the share control would

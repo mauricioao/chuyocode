@@ -19,6 +19,7 @@
  * `imageUrl`. When both are absent the image slot is omitted.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getArticleBySlug, renderBody, type SectionInput } from '@lib/sanity';
 import { buildSections } from '@lib/sections';
@@ -84,9 +85,7 @@ function formatDate(iso: string): string {
       <time class="text-xs font-medium uppercase tracking-wide text-white/60">
         {formatDate(article.publishedAt)}
       </time>
-      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-        {article.title}
-      </h1>
+      <PageTitle lang={lang} backHref={`/${lang}/noticias`}>{article.title}</PageTitle>
     </header>
 
     {

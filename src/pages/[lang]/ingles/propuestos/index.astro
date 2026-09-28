@@ -27,6 +27,7 @@
  * be wrong belongs in a function, not in a template expression.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
 import SearchFilter from '@components/ui/SearchFilter.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
@@ -97,9 +98,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
 <BaseLayout lang={lang} title={t.section.title} description={t.section.description}>
   <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
-      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-        {t.section.title}
-      </h1>
+      <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.section.title}</PageTitle>
       <p class="max-w-2xl text-lg text-zinc-300">{t.section.intro}</p>
     </header>
 

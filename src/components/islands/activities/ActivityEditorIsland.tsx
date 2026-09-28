@@ -540,19 +540,22 @@ export default function ActivityEditorIsland({
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
     // (border, rounded, `bg-card`) with real vertical margins from the site
-    // header AND the footer — `[id].astro`'s `lg:py-6` section padding IS
-    // those margins, so `lg:h-[calc(100dvh-65px-3rem)]` here must change
+    // header AND the footer — `[id].astro`'s section padding (`lg:pt-6` on
+    // the back-button wrapper + `lg:pb-6` on the section, 3rem together) IS
+    // those margins, so `lg:h-[calc(100dvh-65px-6rem)]` here must change
     // together with it (65px = `Header.astro`'s own height, unchanged — its
-    // 1px border-b + 32px `py-4` + a 32px `h-8` logo row; 3rem = that
-    // section's `lg:py-6`, top + bottom). `lg:pr-16` reserves room for
-    // `EditorSideToolbar`'s `fixed right-3` icon rail — UNTOUCHED by this
-    // pass, per owner decision — so it never overlaps the canvas/properties
-    // column. Below `lg:` this is intentionally untouched — today's
-    // stacked, scrollable layout keeps working; a dedicated mobile layout
-    // comes later.
+    // 1px border-b + 32px `py-4` + a 32px `h-8` logo row; the first 3rem is
+    // that top+bottom padding; the SECOND 3rem is the `BackButton` row
+    // `[id].astro` renders above this section — `h-9` button + `mb-3` gap —
+    // added for site-wide back navigation, PR "Navigation + Inglés hub").
+    // `lg:pr-16` reserves room for `EditorSideToolbar`'s `fixed right-3` icon
+    // rail — UNTOUCHED by this pass, per owner decision — so it never
+    // overlaps the canvas/properties column. Below `lg:` this is
+    // intentionally untouched — today's stacked, scrollable layout keeps
+    // working; a dedicated mobile layout comes later.
     <div
       data-testid="activity-editor-island"
-      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px-3rem)] lg:gap-2 lg:pr-16"
+      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px-6rem)] lg:gap-2 lg:pr-16"
     >
       {/* THE card: everything below is inside it, one bordered/rounded
           surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays

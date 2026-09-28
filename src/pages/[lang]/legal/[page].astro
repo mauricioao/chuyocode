@@ -17,6 +17,7 @@
  * value falls back to a neutral label ("ChuyoCode") so the page never breaks.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
 import TermsContent from '@components/legal/TermsContent.astro';
 import PrivacyContent from '@components/legal/PrivacyContent.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
@@ -62,9 +63,7 @@ const updated = new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'es-PE',
 
 <BaseLayout lang={lang} title={title}>
   <section class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
-    <h1 class="font-display text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-      {title}
-    </h1>
+    <PageTitle lang={lang} backHref={`/${lang}`}>{title}</PageTitle>
 
     {
       legalPage === 'terms' ? (

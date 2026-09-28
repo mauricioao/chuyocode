@@ -89,12 +89,13 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     expect(html).toContain('Sin nivel');
   });
 
-  it('links back to the community feed', async () => {
+  it('links back to the community feed, via the back button beside the title', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
+    expect(html).toContain('data-back-button');
     expect(html).toContain('href="/es/ingles/actividades"');
   });
 

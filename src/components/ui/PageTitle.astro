@@ -1,0 +1,37 @@
+---
+/**
+ * PageTitle — the BackButton + `<h1>` row shared by every inner page (never
+ * the home page). Owns only that ONE row: a page with a subtitle/intro line
+ * keeps its own `<header>` around `<PageTitle>`, and a page whose title row
+ * also carries another control (the books/news catalog's `SearchFilter`)
+ * passes it through the `actions` slot so the row stays a single flex line
+ * instead of two competing `justify-between` wrappers.
+ *
+ * `h1` classes are the site's default title treatment
+ * (`text-3xl font-bold tracking-tight text-accent sm:text-4xl`); pages that
+ * used to add `font-display` explicitly (crear, mis-actividades, legal,
+ * auth) lose nothing — `global.css` already applies the display face to
+ * every `h1`/`h2`/`h3` unconditionally, so that class was redundant.
+ */
+import BackButton from '@components/ui/BackButton.astro';
+import type { Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  /** Parent route `BackButton` falls back to / real-navigates via `<a href>`. */
+  backHref: string;
+  class?: string;
+}
+
+const { lang, backHref, class: className } = Astro.props;
+---
+
+<div class:list={['flex items-center justify-between gap-4', className]}>
+  <div class="flex items-center gap-3">
+    <BackButton lang={lang} href={backHref} class="mr-1" />
+    <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+      <slot />
+    </h1>
+  </div>
+  <slot name="actions" />
+</div>

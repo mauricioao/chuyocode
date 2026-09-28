@@ -44,6 +44,16 @@ describe('GET /[lang]/ingles/actividades — routing', () => {
   });
 });
 
+describe('GET /[lang]/ingles/actividades — back button', () => {
+  it('renders a back button to the hub, beside the title', async () => {
+    pageResult.value = { activities: [], total: 0 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es/ingles"');
+  });
+});
+
 describe('GET /[lang]/ingles/actividades — empty states', () => {
   it('renders the generic empty message with no level filter', async () => {
     pageResult.value = { activities: [], total: 0 };

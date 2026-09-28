@@ -116,6 +116,7 @@ const faviconSvg =
         Transitions swap so `.reveal` elements on the incoming page animate. */}
     <script>
       import { initReveals } from '@lib/reveal';
+      import { initBackButtons } from '@lib/backNavigation';
 
       const run = () => initReveals();
 
@@ -127,6 +128,11 @@ const faviconSvg =
 
       // Re-run after client-side navigations (View Transitions safety).
       document.addEventListener('astro:after-swap', run);
+
+      // `BackButton`'s progressive enhancement: ONE delegated listener for
+      // the whole session — `document` survives View Transitions swaps, so
+      // (unlike reveals) this needs no re-init on `astro:after-swap`.
+      initBackButtons();
     </script>
   </body>
 </html>

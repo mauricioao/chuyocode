@@ -136,6 +136,16 @@ describe('GET /[lang]/auth/entrar — the anonymous form', () => {
     expect(html).toContain('data-testid="google-signin-form"');
   });
 
+  it('renders a back button to home', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es"');
+  });
+
   it('never renders the magic-link form (hidden for now)', async () => {
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },

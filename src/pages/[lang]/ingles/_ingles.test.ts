@@ -154,6 +154,14 @@ describe('ingles/index.astro (hub)', () => {
     expect(hubSection).not.toEqual('');
     expect(hubSection).not.toContain('astro-island');
   });
+
+  it('renders a back button to home, beside the title', async () => {
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es"');
+  });
 });
 
 describe('ingles/propuestos/index.astro (curated exercises)', () => {
@@ -317,6 +325,16 @@ describe('ingles/propuestos/index.astro (curated exercises)', () => {
 
     expect(html).not.toContain('href="/es/ingles/actividades"');
     expect(html).not.toContain('Actividades de la comunidad');
+  });
+
+  it('renders a back button to the hub, beside the title', async () => {
+    getExerciseFacetRows.mockResolvedValue([]);
+
+    const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es/ingles"');
   });
 
   // The magnifier filter over the language-point grid. It filters the cards
@@ -543,6 +561,16 @@ describe('ingles/[level]/[focus]/index.astro (listing)', () => {
     const html = await res.text();
 
     expect(html).toContain('Phrasal verbs');
+  });
+
+  it('renders a back button to the picker, on the same level the visitor came from', async () => {
+    getPublishedExercises.mockResolvedValue([publishedExercise('greetings')]);
+
+    const res = await renderPage(ListingPage, pair, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-back-button');
+    expect(html).toContain('href="/es/ingles/propuestos?nivel=B1"');
   });
 
   it('links each card into the (level, focus) deep link', async () => {

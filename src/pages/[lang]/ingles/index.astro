@@ -15,6 +15,7 @@
  * Zero JavaScript: two links, no query, no island.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
 import HubCard from '@components/ui/HubCard.astro';
 import { BooksIcon } from '@phosphor-icons/react/dist/ssr/Books';
 import { UsersThreeIcon } from '@phosphor-icons/react/dist/ssr/UsersThree';
@@ -36,9 +37,7 @@ const t = UI_LABELS[lang].english.hub;
 <BaseLayout lang={lang} title={t.title} description={t.description}>
   <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
-      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
-        {t.title}
-      </h1>
+      <PageTitle lang={lang} backHref={`/${lang}`}>{t.title}</PageTitle>
       <p class="max-w-2xl text-lg text-zinc-300">{t.subtitle}</p>
     </header>
 

@@ -1,0 +1,41 @@
+---
+/**
+ * BackButton — icon-only "go back" control, reused site-wide on inner pages
+ * (never on the home page).
+ *
+ * ALWAYS a real `<a href={href}>` first — it works with scripting disabled,
+ * and is what a middle-click / "open in a new tab" honours regardless. The
+ * `data-back-button` attribute opts it into `initBackButtons` (bound once,
+ * from `BaseLayout`'s own script — see `@lib/backNavigation`), which
+ * progressively enhances the click: when the previous page was same-origin
+ * and this tab actually has one, it calls `history.back()` instead of
+ * following `href`, so the visitor lands exactly where they came from
+ * (scroll position included) rather than at the top of a fresh render of the
+ * same parent.
+ */
+import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
+import { UI_LABELS, type Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  /** Parent route to navigate to when there is no same-origin previous page. */
+  href: string;
+  class?: string;
+}
+
+const { lang, href, class: className } = Astro.props;
+const t = UI_LABELS[lang].common;
+---
+
+<a
+  href={href}
+  data-back-button
+  aria-label={t.back}
+  title={t.backTooltip}
+  class:list={[
+    'inline-flex h-9 w-9 flex-none items-center justify-center rounded-full border border-border bg-base-soft text-zinc-300 transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+    className,
+  ]}
+>
+  <ArrowLeftIcon size={20} aria-hidden="true" />
+</a>
