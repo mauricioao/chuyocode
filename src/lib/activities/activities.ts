@@ -19,10 +19,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
 import { parseBlocks, type Block } from './blocks';
 import { isLevel, type Level } from '../exerciseTaxonomy';
+import {
+  normalizeSearchQuery,
+  buildTitleIlikePattern,
+  type SortOrder,
+  type BlockTypeFilter,
+} from './discoveryQuery';
 
 /** DB table names — must match `supabase/migrations/0011_activities.sql`. */
 export const ACTIVITIES_TABLE = 'activities';
 export const ACTIVITY_REVISIONS_TABLE = 'activity_revisions';
+/** `supabase/migrations/0012_activity_views.sql` — read here only for the `novistas` filter below. */
+export const ACTIVITY_VIEWS_TABLE = 'activity_views';
 
 /** Statuses excluded from an author's own edit surface — see file header. */
 const REMOVED_STATUS = 'removed';
@@ -318,6 +326,12 @@ export interface PublishedActivityCard {
    * already draw between content and storage I/O.
    */
   thumbnailPath: string | null;
+  /** Denormalized "gustadas" counter (`0014_activity_discovery.sql`). */
+  heartCount: number;
+  /** Denormalized "vistas" counter (`0014_activity_discovery.sql`). */
+  viewTotal: number;
+  /** Has the requesting viewer already opened this activity's practice page? `false` when there is no viewer. */
+  viewedByViewer: boolean;
 }
 
 export interface PublishedActivitiesPage {
@@ -328,9 +342,26 @@ export interface PublishedActivitiesPage {
 /** Cards per page — also the range width `getPublishedActivities` requests. */
 export const ACTIVITIES_PAGE_SIZE = 20;
 
+export interface GetPublishedActivitiesOptions {
+  level: Level | null;
+  page: number;
+  /** Raw `?q=` — normalized/escaped here, never trusted as-is. */
+  q?: string | null;
+  /** `?tipo=` — filters on `block_types` (the GIN index from 0011). */
+  tipo?: BlockTypeFilter | null;
+  /** `?orden=` — defaults to `recientes`. */
+  orden?: SortOrder;
+  /** `?novistas=1` — excludes activities `viewerId` has already opened. No-op without a `viewerId`. */
+  novistas?: boolean;
+  /** The signed-in caller, for `novistas` and each card's `viewedByViewer`. `null` for an anonymous read. */
+  viewerId?: string | null;
+}
+
 /**
  * Fetch one page of the public feed: `visible` (live) activities only,
- * newest `published_at` first, optionally narrowed to one CEFR `level`.
+ * narrowed by `level`/`tipo`/`q`/`novistas` and ordered by `orden`
+ * (`recientes`/`gustadas`/`vistas` — see `discoveryQuery.ts` and the
+ * matching partial indexes in `0014_activity_discovery.sql`).
  *
  * NO AUTHOR NAME on the card, deliberately: this codebase has no cheap way
  * to resolve an arbitrary author's display name (`src/lib/profile.ts`'s own
@@ -338,38 +369,82 @@ export const ACTIVITIES_PAGE_SIZE = 20;
  * task's own contract allows omitting it rather than adding an expensive
  * per-row lookup for a "nice to have".
  *
- * A SECOND, narrow read fetches the PUBLISHED revision's `blocks` for just
- * this page's rows (one `.in(...)`, not N+1) to find each card's thumbnail —
- * `block_types`/`block_count` are derived search columns (0011 migration),
- * not the blocks themselves, so there is no cheaper way to reach an actual
- * image path.
+ * `novistas` is applied IN SQL, not by fetching every activity and filtering
+ * in JavaScript: a first, narrow read gets the caller's own already-viewed
+ * activity ids (one indexed `activity_views` lookup, bounded by how many
+ * activities `viewerId` has actually opened), and the MAIN query then
+ * excludes exactly those ids with `not(id, in, …)` — the filtering itself
+ * still happens at the database, this only supplies the id list Postgrest
+ * cannot correlate as a subquery on its own.
+ *
+ * TWO MORE narrow reads, each `.in(...)` over just this page's rows (never
+ * N+1): the PUBLISHED revision's `blocks` for each card's thumbnail (same as
+ * before `discoveryQuery` existed), and — only when `viewerId` is set —
+ * whether the viewer has already seen each one, for the "Vista" badge.
  *
  * FAIL-SAFE: an empty page (`{ activities: [], total: 0 }`) on any failure,
  * same posture as every other read in this codebase — an outage must 404 or
  * render "nothing published", never 500 the page.
  */
-export async function getPublishedActivities(opts: {
-  level: Level | null;
-  page: number;
-}): Promise<PublishedActivitiesPage> {
+export async function getPublishedActivities(opts: GetPublishedActivitiesOptions): Promise<PublishedActivitiesPage> {
   const client = getClient();
   if (!client) return { activities: [], total: 0 };
 
   const page = Number.isFinite(opts.page) && opts.page >= 1 ? Math.floor(opts.page) : 1;
   const offset = (page - 1) * ACTIVITIES_PAGE_SIZE;
+  const orden: SortOrder = opts.orden ?? 'recientes';
+  const normalizedQuery = normalizeSearchQuery(opts.q ?? null);
 
   try {
+    let excludedIds: string[] = [];
+    if (opts.novistas && opts.viewerId) {
+      const { data: viewedData, error: viewedError } = await client
+        .from(ACTIVITY_VIEWS_TABLE)
+        .select('activity_id')
+        .eq('user_id', opts.viewerId);
+
+      if (viewedError) {
+        console.error('[activities] getPublishedActivities novistas lookup failed:', viewedError.message);
+        // Degrades to "no exclusion" rather than failing the whole page —
+        // same posture as the thumbnail/viewed-lookup failures below.
+      } else if (Array.isArray(viewedData)) {
+        excludedIds = viewedData.flatMap((raw): string[] => {
+          const id = (raw as unknown as Record<string, unknown>).activity_id;
+          return typeof id === 'string' ? [id] : [];
+        });
+      }
+    }
+
     let query = client
       .from(ACTIVITIES_TABLE)
-      .select('id, title, level, block_count, published_at, published_revision_id', { count: 'exact' })
+      .select('id, title, level, block_count, published_at, published_revision_id, heart_count, view_total', {
+        count: 'exact',
+      })
       .eq('visible', true);
     if (opts.level) {
       query = query.eq('level', opts.level);
     }
+    if (opts.tipo) {
+      query = query.contains('block_types', [opts.tipo]);
+    }
+    if (normalizedQuery) {
+      query = query.ilike('title', buildTitleIlikePattern(normalizedQuery));
+    }
+    if (excludedIds.length > 0) {
+      query = query.not('id', 'in', `(${excludedIds.join(',')})`);
+    }
+
+    if (orden === 'gustadas') {
+      query = query.order('heart_count', { ascending: false }).order('published_at', { ascending: false });
+    } else if (orden === 'vistas') {
+      query = query.order('view_total', { ascending: false }).order('published_at', { ascending: false });
+    } else {
+      query = query.order('published_at', { ascending: false });
+    }
+    // Total order in every case: `published_at` (or the sort column above)
+    // is unique-enough in practice, but `id` breaks a tie deterministically
+    // rather than leaving it to Postgres.
     const { data, error, count } = await query
-      // Total order: `published_at` is unique-enough in practice, but `id`
-      // breaks a tie deterministically rather than leaving it to Postgres.
-      .order('published_at', { ascending: false })
       .order('id', { ascending: true })
       .range(offset, offset + ACTIVITIES_PAGE_SIZE - 1);
 
@@ -386,6 +461,8 @@ export async function getPublishedActivities(opts: {
       blockCount: number;
       publishedAt: string | null;
       publishedRevisionId: string;
+      heartCount: number;
+      viewTotal: number;
     }> => {
       const row = raw as unknown as Record<string, unknown>;
       if (typeof row.id !== 'string' || row.id.length === 0) return [];
@@ -404,12 +481,36 @@ export async function getPublishedActivities(opts: {
           blockCount: typeof row.block_count === 'number' ? row.block_count : 0,
           publishedAt: typeof row.published_at === 'string' ? row.published_at : null,
           publishedRevisionId: row.published_revision_id,
+          heartCount: typeof row.heart_count === 'number' ? row.heart_count : 0,
+          viewTotal: typeof row.view_total === 'number' ? row.view_total : 0,
         },
       ];
     });
 
     const total = typeof count === 'number' ? count : rows.length;
     if (rows.length === 0) return { activities: [], total };
+
+    const viewedIds = new Set<string>();
+    if (opts.viewerId) {
+      const { data: pageViewsData, error: pageViewsError } = await client
+        .from(ACTIVITY_VIEWS_TABLE)
+        .select('activity_id')
+        .eq('user_id', opts.viewerId)
+        .in(
+          'activity_id',
+          rows.map((row) => row.id),
+        );
+
+      if (pageViewsError) {
+        console.error('[activities] getPublishedActivities viewed-lookup failed:', pageViewsError.message);
+        // Degrades to "no badge shown" — cosmetic, never worth failing the page.
+      } else if (Array.isArray(pageViewsData)) {
+        for (const raw of pageViewsData) {
+          const id = (raw as unknown as Record<string, unknown>).activity_id;
+          if (typeof id === 'string') viewedIds.add(id);
+        }
+      }
+    }
 
     const revisionIds = rows.map((row) => row.publishedRevisionId);
     const thumbnailByRevision = new Map<string, string | null>();
@@ -440,6 +541,9 @@ export async function getPublishedActivities(opts: {
       blockCount: row.blockCount,
       publishedAt: row.publishedAt,
       thumbnailPath: thumbnailByRevision.get(row.publishedRevisionId) ?? null,
+      heartCount: row.heartCount,
+      viewTotal: row.viewTotal,
+      viewedByViewer: viewedIds.has(row.id),
     }));
 
     return { activities, total };
@@ -462,6 +566,10 @@ export interface PublishedActivity {
    * header), this is only the UI-level courtesy of not offering it.
    */
   authorId: string;
+  /** Denormalized "gustadas" counter (`0014_activity_discovery.sql`). */
+  heartCount: number;
+  /** Denormalized "vistas" counter (`0014_activity_discovery.sql`). */
+  viewTotal: number;
 }
 
 /**
@@ -490,7 +598,9 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
   try {
     const { data, error } = await client
       .from(ACTIVITIES_TABLE)
-      .select('id, title, level, author_id, activity_revisions!activities_published_revision_id_fkey(blocks)')
+      .select(
+        'id, title, level, author_id, heart_count, view_total, activity_revisions!activities_published_revision_id_fkey(blocks)',
+      )
       .eq('id', id)
       .eq('visible', true)
       .maybeSingle();
@@ -524,6 +634,8 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
       level: isLevel(row.level) ? row.level : null,
       blocks,
       authorId: row.author_id,
+      heartCount: typeof row.heart_count === 'number' ? row.heart_count : 0,
+      viewTotal: typeof row.view_total === 'number' ? row.view_total : 0,
     };
   } catch (err) {
     console.error('[activities] getPublishedActivity threw:', err);

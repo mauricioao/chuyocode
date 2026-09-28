@@ -393,6 +393,14 @@ export const UI_LABELS = {
         viewedFirstTime: 'Primera vez',
         viewedBefore: 'Ya lo viste',
         viewedTimesMany: 'veces',
+        // "Corazón" toggle (Descubrir/discovery). Two names, one per
+        // direction — same reasoning as `LikeButton`'s own `COPY`: the
+        // action the press performs, not the current state (`aria-pressed`
+        // already carries that).
+        heartAdd: 'Dar corazón',
+        heartRemove: 'Quitar corazón',
+        heartsOne: 'corazón',
+        heartsMany: 'corazones',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -457,7 +465,8 @@ export const UI_LABELS = {
         cardTitle: 'Actividades de la comunidad',
         cardDescription: 'Practicar con hojas de trabajo y preguntas creadas por otros usuarios.',
         empty: 'Todavía no hay actividades publicadas.',
-        emptyLevel: 'Todavía no hay actividades publicadas para este nivel.',
+        emptyFiltered: 'No hay actividades que coincidan con estos filtros.',
+        clearFilters: 'Limpiar filtros',
         allLevels: 'Todos los niveles',
         noLevel: 'Sin nivel',
         blockCountOne: 'bloque',
@@ -467,6 +476,25 @@ export const UI_LABELS = {
         nextPage: 'Siguiente',
         pageLabel: 'Página',
         ofLabel: 'de',
+        // Filters bar (Descubrir/discovery): search + level + type + sort +
+        // "no las he visto", one GET form so the whole thing works without
+        // JavaScript (`[lang]/ingles/actividades/index.astro`'s own header).
+        searchLabel: 'Buscar actividades',
+        searchPlaceholder: 'Buscar por título…',
+        levelLabel: 'Nivel',
+        typeLabel: 'Tipo',
+        typeAll: 'Todos',
+        typeWorksheet: 'Hoja de trabajo',
+        typeQuiz: 'Preguntas',
+        sortLabel: 'Ordenar por',
+        sortRecientes: 'Más recientes',
+        sortGustadas: 'Más gustadas',
+        sortVistas: 'Más vistas',
+        novistasLabel: 'No las he visto',
+        filterSubmit: 'Filtrar',
+        // Card badges (heart/eye counters, "Vista" badge) and the daily pick.
+        viewedBadge: 'Vista',
+        dailyPickLabel: 'Actividad del día',
       },
       // Moderator queue (`/[lang]/admin/actividades`, PR E "Moderation").
       // `report.reasons` (above) is reused for the "Reportadas" tab's report
@@ -944,6 +972,10 @@ export const UI_LABELS = {
         viewedFirstTime: 'First time',
         viewedBefore: "You've seen this",
         viewedTimesMany: 'times',
+        heartAdd: 'Heart',
+        heartRemove: 'Remove heart',
+        heartsOne: 'heart',
+        heartsMany: 'hearts',
       },
       report: {
         button: 'Report',
@@ -995,7 +1027,8 @@ export const UI_LABELS = {
         cardTitle: 'Community activities',
         cardDescription: 'Practise with worksheets and questions created by other users.',
         empty: 'No activities published yet.',
-        emptyLevel: 'No activities published for this level yet.',
+        emptyFiltered: 'No activities match these filters.',
+        clearFilters: 'Clear filters',
         allLevels: 'All levels',
         noLevel: 'No level',
         blockCountOne: 'block',
@@ -1005,6 +1038,21 @@ export const UI_LABELS = {
         nextPage: 'Next',
         pageLabel: 'Page',
         ofLabel: 'of',
+        searchLabel: 'Search activities',
+        searchPlaceholder: 'Search by title…',
+        levelLabel: 'Level',
+        typeLabel: 'Type',
+        typeAll: 'All',
+        typeWorksheet: 'Worksheet',
+        typeQuiz: 'Questions',
+        sortLabel: 'Sort by',
+        sortRecientes: 'Most recent',
+        sortGustadas: 'Most liked',
+        sortVistas: 'Most viewed',
+        novistasLabel: "I haven't seen these",
+        filterSubmit: 'Filter',
+        viewedBadge: 'Seen',
+        dailyPickLabel: "Today's activity",
       },
       moderation: {
         pageTitle: 'Moderation',
