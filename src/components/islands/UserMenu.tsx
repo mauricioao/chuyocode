@@ -17,13 +17,12 @@
  *  - loading — a fixed-size placeholder (matching the signed-out layout, the
  *    common case for a fresh visit) so the header never jumps once the real
  *    answer (signed in or not) arrives.
- *  - signed out — the common SaaS pattern: a ghost/outline "Ingresar"/"Sign
- *    in" button and a primary (brand yellow) "Crear cuenta"/"Sign up"
- *    button, both to the sign-in page with `next` set to the current path.
- *    The create-account button also carries `mode=signup`, which
- *    `entrar.astro` reads to preselect `PasswordAuthForm`'s sign-up mode
- *    (see that page and `AuthPanel`). On narrow screens only "Ingresar"
- *    shows, to keep the header compact.
+ *  - signed out — a single primary (brand yellow) "Ingresar"/"Sign in"
+ *    button to the sign-in page, with `next` set to the current path (the
+ *    header never points `next` back at an auth page itself — see
+ *    `isAuthPagePath` below). The "Crear cuenta"/"Sign up" entry point is
+ *    hidden for now (kept commented below): users register from the sign-in
+ *    page's own "create one" toggle (`PasswordAuthForm`) instead.
  *  - signed in — an avatar button (photo, or initials in a colored circle)
  *    that opens an accessible dropdown: name, email, a free-plan badge, and
  *    sign-out.
@@ -40,7 +39,9 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { SignInIcon } from '@phosphor-icons/react/dist/ssr/SignIn';
-import { UserPlusIcon } from '@phosphor-icons/react/dist/ssr/UserPlus';
+// Sign-up entry hidden for now; users register from the sign-in page. Kept
+// commented, not deleted, so it can be restored with a one-line revert.
+// import { UserPlusIcon } from '@phosphor-icons/react/dist/ssr/UserPlus';
 import { UI_LABELS } from '@/lib/i18n';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -60,19 +61,30 @@ function copyFor(lang: string) {
   return lang === 'en' ? UI_LABELS.en.auth.userMenu : UI_LABELS.es.auth.userMenu;
 }
 
-/**
- * Responsive visibility for the "Crear cuenta"/"Sign up" button: hidden
- * below `sm`, shown at `sm:` and up. Shared between the real button and its
- * loading-state skeleton pill so the layout never shifts between them.
- */
-const SIGNUP_VISIBILITY = 'sm:inline-flex';
-
 /** Where the current tab is, for the sign-in page's `next` round trip. */
 function currentPath(): string {
   if (typeof window === 'undefined') {
     return '/';
   }
   return `${window.location.pathname}${window.location.search}`;
+}
+
+/** The current tab's bare pathname (no query/fragment), for {@link isAuthPagePath}. */
+function currentPathname(): string {
+  return typeof window === 'undefined' ? '/' : window.location.pathname;
+}
+
+/**
+ * True for this site's own `/<lang>/auth/...` pages (`entrar`, `nueva-clave`).
+ *
+ * The sign-in link must never carry `next` back to an auth page itself —
+ * that would round-trip a freshly authenticated visitor straight back to
+ * `entrar` (or another auth page) instead of somewhere useful. Mirrors the
+ * same-shaped guard in `@lib/authRedirect`'s `safeNextPath`, which closes the
+ * matching hole server-side for every OTHER source of `next`.
+ */
+function isAuthPagePath(pathname: string): boolean {
+  return /^\/[a-z]{2}\/auth(?:\/|$)/.test(pathname);
 }
 
 export default function UserMenu({ lang }: UserMenuProps) {
@@ -131,59 +143,49 @@ export default function UserMenu({ lang }: UserMenuProps) {
   }, [open, close]);
 
   if (state.status === 'loading') {
-    // Fixed size, matching the SIGNED-OUT layout below (the common case for
-    // a fresh visit) so nothing in the header shifts once the real state is
-    // known: one pill under `sm` (matching the compact "Ingresar"-only
-    // layout), two at `sm:` and up (matching "Ingresar" + "Crear cuenta").
+    // Fixed size, matching the single "Ingresar" button below (the only one
+    // rendered now, at every breakpoint) so nothing in the header shifts
+    // once the real state is known.
     return (
       <div data-testid="user-menu-loading" aria-hidden="true" className="flex items-center gap-2">
         <span data-loading-pill className="h-7 w-24 animate-pulse rounded-full bg-muted" />
-        {/* `sm:block`, not `sm:inline-flex` — this is an empty decorative
-            pill (no icon/text children to lay out with flex), and an empty
-            span whose class happens to contain "inline-flex" trips the
-            ingles listing's "no empty bordered pill" guard
-            (`_ingles.test.ts`). The real signup button below still uses
-            `SIGNUP_VISIBILITY` (`sm:inline-flex`), which is fine there — it
-            is never empty. */}
-        <span
-          data-loading-pill
-          className="hidden h-7 w-32 animate-pulse rounded-full bg-muted sm:block"
-        />
       </div>
     );
   }
 
   if (state.status === 'signed-out') {
-    const next = encodeURIComponent(currentPath());
-    const signInHref = `/${lang}/auth/entrar?next=${next}`;
+    const signInHref = isAuthPagePath(currentPathname())
+      ? `/${lang}/auth/entrar`
+      : `/${lang}/auth/entrar?next=${encodeURIComponent(currentPath())}`;
     return (
       <div className="flex items-center gap-2">
         <a
           href={signInHref}
           data-testid="user-menu-signin"
           className={cn(
-            buttonVariants({ variant: 'outline', size: 'sm' }),
+            buttonVariants({ variant: 'default', size: 'sm' }),
             'gap-1.5 rounded-full',
           )}
         >
           <SignInIcon aria-hidden="true" size={16} />
           <span>{t.signIn}</span>
         </a>
-        {/* Create-account: the primary (brand yellow) action, with a hint
-            (`mode=signup`) that `entrar.astro`/`AuthPanel` read to preselect
-            the sign-up mode. Hidden below `sm` to keep the header compact on
-            narrow screens — "Ingresar" alone is enough there. */}
+        {/* Create-account: sign-up entry hidden for now; users register from
+            the sign-in page (its own "¿Aún no tienes una cuenta?" toggle).
+            Kept commented, not deleted, so it can be restored with a
+            one-line revert.
         <a
           href={`${signInHref}&mode=signup`}
           data-testid="user-menu-signup"
           className={cn(
             buttonVariants({ variant: 'default', size: 'sm' }),
-            `hidden gap-1.5 rounded-full ${SIGNUP_VISIBILITY}`,
+            'gap-1.5 rounded-full',
           )}
         >
           <UserPlusIcon aria-hidden="true" size={16} />
           <span>{t.signUp}</span>
         </a>
+        */}
       </div>
     );
   }
