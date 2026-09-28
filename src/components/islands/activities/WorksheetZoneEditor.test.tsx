@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { useState } from 'react';
 import WorksheetZoneEditor from './WorksheetZoneEditor';
 import type { Zone } from '@/lib/activities/blocks';
+import { anchoredZoom, type Camera } from '@/lib/activities/canvasViewport';
 
 const IMAGE = { path: 'activity-uploads/u1/img.webp', width: 800, height: 400 };
 const SSR_ZONE: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
@@ -440,6 +441,109 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
   it('shows a crosshair cursor over the canvas in draw mode', () => {
     render(<Harness />);
     expect(screen.getByTestId('zone-canvas').className).toContain('cursor-crosshair');
+  });
+});
+
+describe('WorksheetZoneEditor — two-finger touch pinch/pan (mobile layout pass)', () => {
+  const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
+
+  it('`touch-action: none` lives on the viewport only, not the content layer', () => {
+    render(<Harness />);
+    expect(screen.getByTestId('zone-viewport').className).toContain('touch-none');
+    expect(screen.getByTestId('zone-canvas').className).not.toContain('touch-none');
+  });
+
+  it('a lone touch finger still draws a zone, unaffected (one finger === the existing mouse behavior)', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+    firePointer(canvas, 'pointerdown', 20, 10, { pointerId: 1, pointerType: 'touch' });
+    firePointer(canvas, 'pointerup', 60, 50, { pointerId: 1, pointerType: 'touch' });
+    expect(screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(1);
+  });
+
+  it('a second touch finger cancels an in-progress draw WITHOUT committing a zone (no history entry)', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+
+    firePointer(canvas, 'pointerdown', 20, 10, { pointerId: 1, pointerType: 'touch' });
+    firePointer(canvas, 'pointermove', 60, 50, { pointerId: 1, pointerType: 'touch' });
+    expect(screen.getByTestId('zone-draft')).toBeTruthy();
+
+    firePointer(canvas, 'pointerdown', 100, 10, { pointerId: 2, pointerType: 'touch' });
+    expect(screen.queryByTestId('zone-draft')).toBeNull();
+
+    firePointer(canvas, 'pointerup', 100, 10, { pointerId: 2, pointerType: 'touch' });
+    firePointer(canvas, 'pointerup', 60, 50, { pointerId: 1, pointerType: 'touch' });
+    expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
+  });
+
+  it('pinching with two touch fingers updates the camera transform via the exact `anchoredZoom` math', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+    const viewport = screen.getByTestId('zone-viewport');
+    // Mounted over an unmocked (0x0) viewport, so the mount-time fit camera
+    // falls back to the identity camera — see this file's own header on the
+    // "pointer draw (mocked layout)" describe block above. Mocked here
+    // (post-mount, like every other camera test in this file) only for
+    // `viewportSize()` reads made DURING the pinch itself.
+    mockRect(viewport, { width: 400, height: 400 });
+
+    firePointer(canvas, 'pointerdown', 100, 100, { pointerId: 1, pointerType: 'touch' });
+    firePointer(canvas, 'pointerdown', 200, 100, { pointerId: 2, pointerType: 'touch' }); // distance 100, midpoint (150,100)
+    firePointer(canvas, 'pointermove', 300, 100, { pointerId: 2, pointerType: 'touch' }); // distance doubles to 200, midpoint (200,100)
+
+    const expected = anchoredZoom(
+      IDENTITY_CAMERA,
+      2, // clampZoomInput(1 * 200/100)
+      { x: 150, y: 100 },
+      { x: 200, y: 100 },
+      { image: { width: 800, height: 400 }, viewport: { width: 400, height: 400 } },
+    );
+    expect(screen.getByTestId('zone-canvas').style.transform).toBe(
+      `translate(${expected.x}px, ${expected.y}px) scale(${expected.scale})`,
+    );
+  });
+
+  it('lifting to one finger does nothing — the remaining finger neither pans nor starts a new draw', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+
+    firePointer(canvas, 'pointerdown', 100, 100, { pointerId: 1, pointerType: 'touch' });
+    firePointer(canvas, 'pointerdown', 200, 100, { pointerId: 2, pointerType: 'touch' });
+    firePointer(canvas, 'pointerup', 200, 100, { pointerId: 2, pointerType: 'touch' });
+
+    const cameraBefore = screen.getByTestId('zone-canvas').style.transform;
+    firePointer(canvas, 'pointermove', 999, 999, { pointerId: 1, pointerType: 'touch' });
+    expect(screen.getByTestId('zone-canvas').style.transform).toBe(cameraBefore);
+    expect(screen.queryByTestId('zone-draft')).toBeNull();
+
+    firePointer(canvas, 'pointerup', 999, 999, { pointerId: 1, pointerType: 'touch' });
+    expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
+  });
+
+  it('once every finger is up, the next touch starts a genuinely new single-finger draw', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+
+    firePointer(canvas, 'pointerdown', 100, 100, { pointerId: 1, pointerType: 'touch' });
+    firePointer(canvas, 'pointerdown', 200, 100, { pointerId: 2, pointerType: 'touch' });
+    firePointer(canvas, 'pointerup', 200, 100, { pointerId: 2, pointerType: 'touch' });
+    firePointer(canvas, 'pointerup', 100, 100, { pointerId: 1, pointerType: 'touch' });
+
+    firePointer(canvas, 'pointerdown', 20, 10, { pointerId: 3, pointerType: 'touch' });
+    firePointer(canvas, 'pointerup', 60, 50, { pointerId: 3, pointerType: 'touch' });
+    expect(screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(1);
+  });
+
+  it('a second MOUSE pointer (not touch) never cancels or interferes with an in-progress draw', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+    firePointer(canvas, 'pointerdown', 20, 10, { pointerId: 1 }); // default pointerType is not 'touch'
+    firePointer(canvas, 'pointermove', 60, 50, { pointerId: 1 });
+    expect(screen.getByTestId('zone-draft')).toBeTruthy();
+
+    firePointer(canvas, 'pointerup', 60, 50, { pointerId: 1 });
+    expect(screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(1);
   });
 });
 

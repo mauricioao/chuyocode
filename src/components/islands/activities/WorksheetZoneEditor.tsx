@@ -107,6 +107,11 @@ import {
   type Camera,
   type Size,
 } from '@/lib/activities/canvasViewport';
+import {
+  reduceTouchGesture,
+  INITIAL_TOUCH_GESTURE_STATE,
+  type TouchGestureState,
+} from '@/lib/activities/touchGesture';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useHydrated } from '@/hooks/useHydrated';
 import { Button } from '@/components/ui/button';
@@ -160,7 +165,9 @@ type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
   | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect }
-  | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera };
+  | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera }
+  /** Mobile layout pass: a two-finger touch pinch/pan — see `touchGesture.ts`'s own header; all the actual math lives there, this is just the marker `handlePointerMove`/`handlePointerUp` branch on. */
+  | { kind: 'touch-pinch' };
 
 export default function WorksheetZoneEditor({
   lang,
@@ -179,6 +186,10 @@ export default function WorksheetZoneEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragMode | null>(null);
   const spaceHeldRef = useRef(false);
+  // Mobile layout pass: two-finger pinch/pan tracking, TOUCH pointers only
+  // (see `touchGesture.ts`'s own header — mouse/pen never reach it, so
+  // their behavior is completely unchanged).
+  const touchGestureRef = useRef<TouchGestureState>(INITIAL_TOUCH_GESTURE_STATE);
 
   const [camera, setCamera] = useState<Camera>(IDENTITY_CAMERA);
   const [fitMode, setFitMode] = useState(true);
@@ -440,6 +451,18 @@ export default function WorksheetZoneEditor({
     return screenToContentPoint(screenPoint, cameraRef.current);
   }, []);
 
+  /**
+   * The VIEWPORT-relative point (not `pointFromEvent`'s content-native
+   * space) — what `touchGesture.ts`'s pinch math (and the camera it wraps
+   * via `anchoredZoom`) expects, same convention `WorksheetPracticePlayerMobile.tsx`'s
+   * own pinch already uses.
+   */
+  const viewportPointFromEvent = useCallback((e: { clientX: number; clientY: number }) => {
+    const el = viewportRef.current;
+    const box = el?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
+  }, []);
+
   const updateZoneRect = useCallback(
     (zoneId: string, rect: Rect, opts?: ZonesChangeOptions) => {
       onZonesChange(
@@ -464,9 +487,83 @@ export default function WorksheetZoneEditor({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }, []);
 
+  // Ends whatever ONE-FINGER/mouse/pen gesture is currently in `dragRef`
+  // WITHOUT committing anything: a draw's draft is simply dropped, a
+  // move/resize's live (`commit: false`) edits stay wherever they last
+  // landed but no final `commit: true` step is pushed (`handlePointerUp` is
+  // what does that, on a NORMAL end), and an in-progress pan's last frame is
+  // still applied so the camera doesn't visually snap back. Used both by a
+  // genuine cancel (OS/browser pointercancel, losing capture) AND — mobile
+  // layout pass — by a second touch finger landing mid-gesture, which must
+  // cancel the first finger's action the exact same way (see
+  // `handleTouchGesturePointerDown` below and `touchGesture.ts`'s own
+  // header: "no history entry" for that case).
+  const endDrag = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDraftRect(null);
+    setIsPanning(false);
+    if (panFrameRef.current.id != null) {
+      cancelAnimationFrame(panFrameRef.current.id);
+      panFrameRef.current.id = null;
+    }
+    if (drag?.kind === 'pan') {
+      // Commit the FINAL camera synchronously, even if a batched frame was
+      // still pending — see the file header's Performance note.
+      const finalCamera = panFrameRef.current.target ?? drag.startCamera;
+      panFrameRef.current.target = null;
+      cameraRef.current = finalCamera;
+      setCamera(finalCamera);
+      // An actual pan (not just a middle-click with zero movement) exits fit
+      // mode too — otherwise the NEXT resize-driven re-fit would silently
+      // discard it (see the file header).
+      if (finalCamera.x !== drag.startCamera.x || finalCamera.y !== drag.startCamera.y) {
+        setFitMode(false);
+      }
+    }
+  }, []);
+
+  /**
+   * Mobile layout pass — the touch multi-pointer GATE every `onPointerDown`
+   * handler below calls FIRST. Feeds `touchGesture.ts`'s pure reducer a
+   * `pointerdown` and applies whatever it decides:
+   *  - a non-touch pointer (mouse/pen) is untouched — returns `false`
+   *    immediately, the caller proceeds exactly as before this pass.
+   *  - the FIRST touch finger: the reducer enters its `'single'` phase, this
+   *    returns `false` too — the caller starts its own normal draw/move/
+   *    resize/pan for that one finger, unchanged.
+   *  - a SECOND touch finger: the reducer emits `cancel-single` (the
+   *    caller's in-progress one-finger action is discarded via `endDrag()`,
+   *    never committed — no history entry) and enters `'pinch'`; this sets
+   *    `dragRef` to `{ kind: 'touch-pinch' }` and returns `true`, so the
+   *    caller returns immediately WITHOUT starting its own draw/move/resize
+   *    for this second finger.
+   */
+  const handleTouchGesturePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>): boolean => {
+      if (e.pointerType !== 'touch') return false;
+      const point = viewportPointFromEvent(e);
+      const { state, effect } = reduceTouchGesture(
+        touchGestureRef.current,
+        { type: 'pointerdown', id: e.pointerId, point, camera: cameraRef.current },
+        { image: displaySize, viewport: viewportSize() },
+      );
+      touchGestureRef.current = state;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      if (effect.type === 'cancel-single') endDrag();
+      if (state.phase === 'pinch') {
+        dragRef.current = { kind: 'touch-pinch' };
+        return true;
+      }
+      return false;
+    },
+    [viewportPointFromEvent, displaySize, viewportSize, endDrag],
+  );
+
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return; // a zone/handle handles its own pointer down
+      if (handleTouchGesturePointerDown(e)) return;
       if (e.button === 1) {
         startPan(e); // middle-button: always pans, in either tool
         return;
@@ -482,11 +579,12 @@ export default function WorksheetZoneEditor({
       setDraftRect(null);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
   );
 
   const handleZonePointerDown = useCallback(
     (zone: Zone) => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (handleTouchGesturePointerDown(e)) return;
       if (e.button === 1) {
         startPan(e); // middle-button on a zone still pans, not moves it
         return;
@@ -503,11 +601,12 @@ export default function WorksheetZoneEditor({
       dragRef.current = { kind: 'move', zoneId: zone.id, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
   );
 
   const handleHandlePointerDown = useCallback(
     (zone: Zone, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (handleTouchGesturePointerDown(e)) return;
       if (e.button === 1) {
         startPan(e);
         return;
@@ -522,12 +621,38 @@ export default function WorksheetZoneEditor({
       dragRef.current = { kind: 'resize', zoneId: zone.id, handle, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
+
+      // Mobile layout pass: every TOUCH move keeps `touchGesture.ts`'s own
+      // tracked point fresh — even during a one-finger draw/move/resize —
+      // so a SECOND finger landing later anchors its pinch to where the
+      // first finger actually is right now, not where it started.
+      if (e.pointerType === 'touch' && e.pointerId in touchGestureRef.current.pointers) {
+        const bounds = { image: displaySize, viewport: viewportSize() };
+        const { state, effect } = reduceTouchGesture(
+          touchGestureRef.current,
+          { type: 'pointermove', id: e.pointerId, point: viewportPointFromEvent(e) },
+          bounds,
+        );
+        touchGestureRef.current = state;
+        if (drag?.kind === 'touch-pinch' && effect.type === 'camera') {
+          cameraRef.current = effect.camera;
+          setCamera(effect.camera);
+          setFitMode(false);
+        }
+      }
+
+      // Every kind of pinch move is fully handled above; nothing below this
+      // applies to it (draw/move/resize/pan all belong to a ONE-finger — or
+      // mouse/pen — gesture only). Checked unconditionally (not nested under
+      // the touch branch above) so TypeScript can narrow `drag`'s type for
+      // the rest of this function too.
+      if (drag?.kind === 'touch-pinch') return;
       if (!drag) return;
 
       if (drag.kind === 'pan') {
@@ -573,37 +698,36 @@ export default function WorksheetZoneEditor({
         updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
       }
     },
-    [pointFromEvent, updateZoneRect, displaySize, viewportSize],
+    [pointFromEvent, updateZoneRect, displaySize, viewportSize, viewportPointFromEvent],
   );
-
-  const endDrag = useCallback(() => {
-    const drag = dragRef.current;
-    dragRef.current = null;
-    setDraftRect(null);
-    setIsPanning(false);
-    if (panFrameRef.current.id != null) {
-      cancelAnimationFrame(panFrameRef.current.id);
-      panFrameRef.current.id = null;
-    }
-    if (drag?.kind === 'pan') {
-      // Commit the FINAL camera synchronously, even if a batched frame was
-      // still pending — see the file header's Performance note.
-      const finalCamera = panFrameRef.current.target ?? drag.startCamera;
-      panFrameRef.current.target = null;
-      cameraRef.current = finalCamera;
-      setCamera(finalCamera);
-      // An actual pan (not just a middle-click with zero movement) exits fit
-      // mode too — otherwise the NEXT resize-driven re-fit would silently
-      // discard it (see the file header).
-      if (finalCamera.x !== drag.startCamera.x || finalCamera.y !== drag.startCamera.y) {
-        setFitMode(false);
-      }
-    }
-  }, []);
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
+
+      // Mobile layout pass: a touch finger lifting — feed it to
+      // `touchGesture.ts` first. While still `'touch-pinch'` (this WAS the
+      // active pinch and at least 2 fingers remain down), stay in pinch mode
+      // entirely: no `endDrag()`, no zone commit, just keep tracking. Once
+      // the reducer says the pinch itself has ended (dropped below 2
+      // fingers — `'suppressed'`/`'idle'`), fall through to `endDrag()`
+      // below to null `dragRef` out, then return before the move/resize/draw
+      // commit logic (none of which applies to a pinch).
+      if (e.pointerType === 'touch' && e.pointerId in touchGestureRef.current.pointers) {
+        const bounds = { image: displaySize, viewport: viewportSize() };
+        const { state } = reduceTouchGesture(
+          touchGestureRef.current,
+          { type: 'pointerup', id: e.pointerId },
+          bounds,
+        );
+        touchGestureRef.current = state;
+        if (drag?.kind === 'touch-pinch') {
+          if (state.phase === 'pinch') return; // still >= 2 fingers — keep pinching
+          endDrag();
+          return;
+        }
+      }
+
       endDrag();
       // Seal a move/resize gesture into exactly ONE undo step now that it is
       // done — every pointermove frame during it was a `commit: false`
@@ -633,14 +757,28 @@ export default function WorksheetZoneEditor({
       onZonesChange([...zones, zone]);
       onSelectZone(zone.id);
     },
-    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize],
+    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize, viewportSize],
   );
 
-  const handlePointerCancel = useCallback(() => {
-    // An OS/browser-cancelled gesture never commits — same "no flicker, no
-    // accidental zone" rule as a too-small drag in `handlePointerUp`.
-    endDrag();
-  }, [endDrag]);
+  const handlePointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (e.pointerType === 'touch' && e.pointerId in touchGestureRef.current.pointers) {
+        const bounds = { image: displaySize, viewport: viewportSize() };
+        const { state } = reduceTouchGesture(
+          touchGestureRef.current,
+          { type: 'pointercancel', id: e.pointerId },
+          bounds,
+        );
+        touchGestureRef.current = state;
+        if (drag?.kind === 'touch-pinch' && state.phase === 'pinch') return; // still >= 2 fingers
+      }
+      // An OS/browser-cancelled gesture never commits — same "no flicker, no
+      // accidental zone" rule as a too-small drag in `handlePointerUp`.
+      endDrag();
+    },
+    [endDrag, displaySize, viewportSize],
+  );
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedZoneId) return;
@@ -1001,7 +1139,13 @@ export default function WorksheetZoneEditor({
           // harness with no real layout). `overflow-hidden`, no native
           // scrollbars (canvas camera pass) — panning is entirely the
           // content layer's own CSS transform now, never native scroll.
-          className="relative min-h-80 flex-1 overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          // `touch-none` (mobile layout pass) lives HERE, on the viewport —
+          // not the content layer below, which can be smaller OR larger
+          // than the viewport at any given zoom — so the browser's own
+          // touch gestures (page scroll, pinch-zoom-the-page) never fire
+          // anywhere inside this bounded box, matching this component's own
+          // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
+          className="relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div
             ref={containerRef}
@@ -1016,7 +1160,7 @@ export default function WorksheetZoneEditor({
             // leaving the DOM, etc). Bubbles up from a zone/handle child the
             // same way `onPointerCancel` already does — see the file header.
             onLostPointerCapture={handlePointerCancel}
-            className={`absolute left-0 top-0 touch-none select-none ${canvasCursorClass}`}
+            className={`absolute left-0 top-0 select-none ${canvasCursorClass}`}
             style={{
               width: displaySize.width,
               height: displaySize.height,
