@@ -21,6 +21,9 @@
  *    (`AUTH_ERROR_GOOGLE_UNAVAILABLE`): Google is not configured on this
  *    Supabase project, or it was unreachable. Shown as an alert inviting the
  *    visitor to use email and password instead.
+ *  - `?mode=signup` — a hint from the header's "Crear cuenta"/"Sign up"
+ *    button (`UserMenu`): preselects `AuthPanel`/`PasswordAuthForm`'s
+ *    sign-up mode instead of the sign-in default.
  *
  * 🔴 THE GOOGLE BUTTON IS A PLAIN `<form method="POST">`, NOT AN ISLAND.
  * `signInWithOAuth` with `skipBrowserRedirect: true` returns a provider URL
@@ -84,6 +87,11 @@ const googleUnavailable = authParam === AUTH_ERROR_GOOGLE_UNAVAILABLE;
 // attacker-supplied string straight into a hidden form field.
 const rawNext = Astro.url.searchParams.get('next');
 const next = rawNext ? safeNextPath(rawNext) : undefined;
+
+// Hint from the header's "Crear cuenta"/"Sign up" button (`UserMenu`):
+// preselects `AuthPanel`/`PasswordAuthForm`'s sign-up mode.
+const initialMode: 'signin' | 'signup' | undefined =
+  Astro.url.searchParams.get('mode') === 'signup' ? 'signup' : undefined;
 
 const t = UI_LABELS[lang].auth;
 const user = Astro.locals.user;
@@ -167,7 +175,7 @@ const user = Astro.locals.user;
             <span class="h-px flex-1 bg-border"></span>
           </div>
 
-          <AuthPanel client:load lang={lang} next={next} />
+          <AuthPanel client:load lang={lang} next={next} initialMode={initialMode} />
         </div>
       )
     }

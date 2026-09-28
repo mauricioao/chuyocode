@@ -66,7 +66,7 @@ describe('UserMenu — loading', () => {
 });
 
 describe('UserMenu — signed out', () => {
-  it('shows a sign-in link to /<lang>/auth/entrar with next=<current path>', async () => {
+  it('shows a sign-in button to /<lang>/auth/entrar with next=<current path>', async () => {
     window.history.pushState({}, '', '/es/libros/clean-architecture');
     stubMe(null);
     render(<UserMenu lang="es" />);
@@ -78,19 +78,73 @@ describe('UserMenu — signed out', () => {
     );
   });
 
-  it('localizes the sign-in link to English', async () => {
+  it('shows a create-account button to the same page with mode=signup', async () => {
+    window.history.pushState({}, '', '/es/libros/clean-architecture');
+    stubMe(null);
+    render(<UserMenu lang="es" />);
+
+    const link = await screen.findByTestId('user-menu-signup');
+    expect(link.textContent).toBe(UI_LABELS.es.auth.userMenu.signUp);
+    expect(link.getAttribute('href')).toBe(
+      '/es/auth/entrar?next=%2Fes%2Flibros%2Fclean-architecture&mode=signup',
+    );
+  });
+
+  it('renders the sign-in button as ghost/outline and the create-account button as the primary (yellow) one', async () => {
+    stubMe(null);
+    render(<UserMenu lang="es" />);
+
+    const signIn = await screen.findByTestId('user-menu-signin');
+    const signUp = await screen.findByTestId('user-menu-signup');
+    expect(signIn.className).toContain('rounded-full');
+    // Ghost/outline: bordered, background-colored surface, no brand fill.
+    expect(signIn.className).toContain('border-border');
+    expect(signIn.className).not.toContain('bg-primary');
+    expect(signUp.className).toContain('rounded-full');
+    // Primary: the brand-yellow fill (shadcn's "default" button variant).
+    expect(signUp.className).toContain('bg-primary');
+  });
+
+  it('shows the create-account button on wide screens and hides it (icon+text sign-in only) on narrow ones', async () => {
+    stubMe(null);
+    render(<UserMenu lang="es" />);
+
+    const signUp = await screen.findByTestId('user-menu-signup');
+    // Hidden below `sm`, visible at `sm:` and up — CSS-only, no JS branch.
+    expect(signUp.className).toContain('hidden');
+    expect(signUp.className).toMatch(/\bsm:(inline-flex|flex)\b/);
+  });
+
+  it('localizes both buttons to English', async () => {
     window.history.pushState({}, '', '/en/libros');
     stubMe(null);
     render(<UserMenu lang="en" />);
 
-    const link = await screen.findByTestId('user-menu-signin');
-    expect(link.textContent).toBe(UI_LABELS.en.auth.userMenu.signIn);
+    expect((await screen.findByTestId('user-menu-signin')).textContent).toBe(
+      UI_LABELS.en.auth.userMenu.signIn,
+    );
+    expect(screen.getByTestId('user-menu-signup').textContent).toBe(
+      UI_LABELS.en.auth.userMenu.signUp,
+    );
   });
 
-  it('shows the sign-in link on a network failure too (never gets stuck loading)', async () => {
+  it('shows the sign-in button on a network failure too (never gets stuck loading)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     render(<UserMenu lang="es" />);
     await screen.findByTestId('user-menu-signin');
+  });
+});
+
+describe('UserMenu — loading placeholder width', () => {
+  it('reserves the same responsive layout (one pill under sm, two at sm+) as the signed-out buttons, so nothing jumps', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    render(<UserMenu lang="es" />);
+
+    const placeholder = screen.getByTestId('user-menu-loading');
+    const pills = placeholder.querySelectorAll('[data-loading-pill]');
+    expect(pills.length).toBe(2);
+    expect(pills[1]?.className).toMatch(/\bsm:(inline-flex|flex|block)\b/);
+    expect(pills[1]?.className).toContain('hidden');
   });
 });
 

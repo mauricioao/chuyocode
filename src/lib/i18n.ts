@@ -150,7 +150,8 @@ export const UI_LABELS = {
       // identity chip. Local to no island's own COPY map — see that
       // component's header for why this slice keeps it here instead.
       userMenu: {
-        signIn: 'Entrar',
+        signIn: 'Ingresar',
+        signUp: 'Crear cuenta',
         accountMenu: 'Cuenta',
         planFree: 'Free',
         planPremium: 'Premium',
@@ -470,6 +471,7 @@ export const UI_LABELS = {
       },
       userMenu: {
         signIn: 'Sign in',
+        signUp: 'Sign up',
         accountMenu: 'Account',
         planFree: 'Free',
         planPremium: 'Premium',
