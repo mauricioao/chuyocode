@@ -441,6 +441,58 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
   });
 });
 
+describe('WorksheetZoneEditor — camera coordinate conversion at scale != 1 with a non-zero offset (canvas camera pass regression check)', () => {
+  it('draws a zone at the correct fraction through a scaled, offset camera', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(viewport, { width: 300, height: 200 });
+
+    // Zoom in once: scale 1 -> 1.25, anchored at the (now-mocked) viewport's
+    // own center (150, 100). zoomAt keeps that content point fixed:
+    // contentX = (150-0)/1 = 150, contentY = 100; next.x = 150 - 150*1.25 =
+    // -37.5, next.y = 100 - 100*1.25 = -25. Both stay unclamped (content
+    // 1000x500 is bigger than the 300x200 viewport on both axes, range
+    // [-700, 0] / [-300, 0]).
+    fireEvent.click(screen.getByTestId('zoom-in'));
+    expect(zoomLevel()).toBe('125%');
+
+    // content = (screen - camera.xy) / scale:
+    // pointerdown (100,100) -> ((100+37.5)/1.25, (100+25)/1.25) = (110, 100).
+    // pointerup (350,350) -> ((350+37.5)/1.25, (350+25)/1.25) = (310, 300).
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointerup', 350, 350);
+
+    const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
+    expect(zones).toHaveLength(1);
+    // `toBeCloseTo` (not exact string equality): floating-point division
+    // through the camera (`/1.25`) can land a few ULPs off a clean decimal.
+    expect(parseFloat(zones[0].style.left)).toBeCloseTo(13.75); // 110 / 800
+    expect(parseFloat(zones[0].style.top)).toBeCloseTo(25); // 100 / 400
+    expect(parseFloat(zones[0].style.width)).toBeCloseTo(25); // (310 - 110) / 800
+    expect(parseFloat(zones[0].style.height)).toBeCloseTo(50); // (300 - 100) / 400
+  });
+
+  it('moves an existing zone by the correct fraction through the same scaled, offset camera', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} />);
+    const viewport = screen.getByTestId('zone-viewport');
+    mockRect(viewport, { width: 300, height: 200 });
+    fireEvent.click(screen.getByTestId('zoom-in')); // same camera as above: scale 1.25, offset (-37.5, -25)
+    expect(zoomLevel()).toBe('125%');
+
+    const zoneEl = screen.getByTestId('zone-z1');
+    // content start (100,100) -> (110, 100); content end (150,120) ->
+    // ((150+37.5)/1.25, (120+25)/1.25) = (150, 116).
+    // dx = (150-110)/800 = 0.05; dy = (116-100)/400 = 0.04.
+    firePointer(zoneEl, 'pointerdown', 100, 100);
+    firePointer(zoneEl, 'pointermove', 150, 120);
+
+    expect(parseFloat(zoneEl.style.left)).toBeCloseTo(15); // 0.1 + 0.05
+    expect(parseFloat(zoneEl.style.top)).toBeCloseTo(14); // 0.1 + 0.04
+  });
+});
+
 describe('WorksheetZoneEditor — zoom controls', () => {
   it('shows 100% by default when the viewport has no real layout (jsdom fallback)', () => {
     render(<Harness />);
