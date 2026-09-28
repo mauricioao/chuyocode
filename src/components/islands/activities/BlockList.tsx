@@ -74,8 +74,12 @@ function isWorksheet(block: Block): block is WorksheetBlock {
   return block.type === 'worksheet';
 }
 
-/** "Hoja 1"/"Sheet 1" etc. by position, or the author's own name if set. */
-function blockDisplayName(block: Block, index: number, defaultPrefix: string): string {
+/**
+ * "Hoja 1"/"Sheet 1" etc. by position, or the author's own name if set —
+ * exported so the sticky toolbar's block-index popover names blocks the
+ * same way this list does.
+ */
+export function blockDisplayName(block: Block, index: number, defaultPrefix: string): string {
   return block.name ?? `${defaultPrefix} ${index + 1}`;
 }
 

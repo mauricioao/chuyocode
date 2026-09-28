@@ -31,11 +31,6 @@
  * (Ctrl/⌘+S).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
-import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
-import { WarningCircleIcon } from '@phosphor-icons/react/dist/ssr/WarningCircle';
-import { ArrowUUpLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpLeft';
-import { ArrowUUpRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpRight';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
@@ -56,6 +51,7 @@ import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
 import BlockList, { type BlocksChangeOptions } from './BlockList';
 import WorksheetPlayer from './WorksheetPlayer';
+import EditorSideToolbar from './EditorSideToolbar';
 
 export interface ActivityEditorIslandProps {
   lang: Lang;
@@ -78,66 +74,6 @@ function resolveImageUrl(path: string): string {
 
 function isMac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');
-}
-
-/** Icon-only save status (owner request #8) — an accessible label/tooltip carries the meaning, never text in the UI. */
-function SaveStatusIndicator({
-  status,
-  onRetry,
-  labels,
-}: {
-  status: AutosaveStatus | 'idle';
-  onRetry: () => void;
-  labels: { saving: string; saved: string; error: string; unsaved: string; retry: string };
-}) {
-  const dataStatus = status === 'pending' ? 'unsaved' : status === 'idle' ? 'saved' : status;
-
-  if (status === 'error') {
-    return (
-      <span className="flex items-center gap-1" data-testid="save-status" data-status="error">
-        <span role="status" aria-label={labels.error} title={labels.error}>
-          <WarningCircleIcon aria-hidden="true" className="text-destructive" size={18} />
-        </span>
-        <Button type="button" size="xs" variant="ghost" data-testid="save-retry" onClick={onRetry}>
-          {labels.retry}
-        </Button>
-      </span>
-    );
-  }
-
-  if (status === 'saving') {
-    return (
-      <span
-        data-testid="save-status"
-        data-status="saving"
-        role="status"
-        aria-label={labels.saving}
-        title={labels.saving}
-      >
-        <CircleNotchIcon aria-hidden="true" className="animate-spin text-muted-foreground" size={18} />
-      </span>
-    );
-  }
-
-  if (status === 'pending') {
-    return (
-      <span
-        data-testid="save-status"
-        data-status="unsaved"
-        role="status"
-        aria-label={labels.unsaved}
-        title={labels.unsaved}
-      >
-        <CircleNotchIcon aria-hidden="true" className="text-muted-foreground" size={18} />
-      </span>
-    );
-  }
-
-  return (
-    <span data-testid="save-status" data-status={dataStatus} role="status" aria-label={labels.saved} title={labels.saved}>
-      <CheckCircleIcon aria-hidden="true" weight="fill" className="text-success" size={18} />
-    </span>
-  );
 }
 
 export default function ActivityEditorIsland({
@@ -204,6 +140,24 @@ export default function ActivityEditorIsland({
       else next.add(blockId);
       return next;
     });
+  }, []);
+
+  const collapseAllBlocks = useCallback(() => setExpandedBlockIds(new Set()), []);
+  const expandAllBlocks = useCallback(() => {
+    setExpandedBlockIds(new Set(blocks.map((b) => b.id)));
+  }, [blocks]);
+
+  // Block-index popover: expand the chosen block and scroll it into view —
+  // it may already be off-screen above/below the current scroll position.
+  const goToBlock = useCallback((blockId: string) => {
+    setExpandedBlockIds((prev) => new Set(prev).add(blockId));
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById(`block-${blockId}`);
+    // `scrollIntoView` does not exist in jsdom (and is not guaranteed on
+    // every real UA either) — feature-detect rather than assume it.
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }, []);
 
   const handleUndo = useCallback(() => setHistory(undo), []);
@@ -326,74 +280,39 @@ export default function ActivityEditorIsland({
   );
 
   return (
-    <div data-testid="activity-editor-island" className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="sr-only">{t.titleLabel}</span>
-            <input
-              type="text"
-              data-testid="activity-title-input"
-              aria-label={t.titleLabel}
-              value={title}
-              onChange={(e) => changeTitle(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="sr-only">{t.levelLabel}</span>
-            <select
-              data-testid="activity-level-select"
-              aria-label={t.levelLabel}
-              value={level ?? ''}
-              onChange={(e) => changeLevel(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2 text-foreground"
-            >
-              <option value="">{t.levelNone}</option>
-              {LEVELS.map((lvl) => (
-                <option key={lvl} value={lvl}>
-                  {levelLabels[lvl]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t.undo}
-            data-testid="undo-button"
-            disabled={!canUndo(history)}
-            onClick={handleUndo}
+    <div data-testid="activity-editor-island" className="flex flex-col gap-4">
+      {/* Compact top bar (owner request #1): just title + level. Everything
+          else (preview, save, undo/redo, block navigation) lives in the
+          sticky side toolbar so this row stays a single, short line. */}
+      <div className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center">
+        <label className="flex flex-1 flex-col gap-1 text-sm">
+          <span className="sr-only">{t.titleLabel}</span>
+          <input
+            type="text"
+            data-testid="activity-title-input"
+            aria-label={t.titleLabel}
+            value={title}
+            onChange={(e) => changeTitle(e.target.value)}
+            className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only">{t.levelLabel}</span>
+          <select
+            data-testid="activity-level-select"
+            aria-label={t.levelLabel}
+            value={level ?? ''}
+            onChange={(e) => changeLevel(e.target.value)}
+            className="h-9 rounded border border-border bg-background px-2 text-foreground"
           >
-            <ArrowUUpLeftIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t.redo}
-            data-testid="redo-button"
-            disabled={!canRedo(history)}
-            onClick={handleRedo}
-          >
-            <ArrowUUpRightIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            data-testid="preview-toggle"
-            onClick={() => setPreview((p) => !p)}
-          >
-            {preview ? t.previewOff : t.previewOn}
-          </Button>
-          <Button type="button" data-testid="save-button" onClick={handleSaveNow} disabled={saveState === 'saving'}>
-            {t.save}
-          </Button>
-          <SaveStatusIndicator status={saveState} onRetry={handleSaveNow} labels={saveLabels} />
-        </div>
+            <option value="">{t.levelNone}</option>
+            {LEVELS.map((lvl) => (
+              <option key={lvl} value={lvl}>
+                {levelLabels[lvl]}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {preview ? (
@@ -406,6 +325,7 @@ export default function ActivityEditorIsland({
                 lang={lang}
                 image={block.image}
                 zones={block.zones}
+                rotation={block.rotation}
                 imageUrl={resolveImageUrl(block.image.path)}
               />
             ))}
@@ -436,6 +356,25 @@ export default function ActivityEditorIsland({
           {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
         </>
       )}
+
+      <EditorSideToolbar
+        lang={lang}
+        blocks={blocks}
+        onCollapseAll={collapseAllBlocks}
+        onExpandAll={expandAllBlocks}
+        onGoToBlock={goToBlock}
+        onAddBlock={() => setAddingBlock(true)}
+        preview={preview}
+        onTogglePreview={() => setPreview((p) => !p)}
+        canUndo={canUndo(history)}
+        canRedo={canRedo(history)}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onSave={handleSaveNow}
+        saveDisabled={saveState === 'saving'}
+        saveState={saveState}
+        saveLabels={saveLabels}
+      />
     </div>
   );
 }

@@ -200,6 +200,26 @@ describe('ActivityEditorIsland — Escape deselects the current zone', () => {
   });
 });
 
+describe('ActivityEditorIsland — sticky toolbar wiring', () => {
+  it('expand-all/collapse-all in the toolbar affect every block', () => {
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+
+    fireEvent.click(screen.getByTestId('expand-all-button'));
+    expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(2);
+
+    fireEvent.click(screen.getByTestId('collapse-all-button'));
+    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+  });
+
+  it('the block index popover expands the chosen block', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    fireEvent.click(screen.getByTestId('block-index-trigger'));
+    fireEvent.click(screen.getByTestId('block-index-item-b1'));
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+  });
+});
+
 describe('ActivityEditorIsland — collapse/expand per block', () => {
   it('collapses a block again on a second header click', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
