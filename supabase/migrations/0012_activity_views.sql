@@ -83,6 +83,11 @@ end;
 $$;
 
 revoke all on function public.record_activity_view(uuid, uuid) from public;
+-- Supabase's default privileges grant EXECUTE on new public functions to
+-- anon and authenticated explicitly; revoking from PUBLIC does not remove
+-- those grants, and PostgREST would expose this as an RPC anyone could call
+-- with any user id.
+revoke all on function public.record_activity_view(uuid, uuid) from anon, authenticated;
 grant execute on function public.record_activity_view(uuid, uuid) to service_role;
 
 commit;

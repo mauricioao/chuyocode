@@ -103,6 +103,14 @@ describe('0012_activity_views.sql', () => {
       expect(sql).toMatch(/revoke all on function public\.record_activity_view\(uuid, uuid\) from public;/);
     });
 
+    it("revokes Supabase's default anon/authenticated execute grants explicitly", () => {
+      // Supabase grants EXECUTE on new public functions to anon and
+      // authenticated by default; `from public` alone leaves those in place.
+      expect(sql).toMatch(
+        /revoke all on function public\.record_activity_view\(uuid, uuid\) from anon, authenticated;/,
+      );
+    });
+
     it('never grants execute to anon or authenticated', () => {
       expect(sql).not.toMatch(/grant execute.*to anon/i);
       expect(sql).not.toMatch(/grant execute.*to authenticated/i);
