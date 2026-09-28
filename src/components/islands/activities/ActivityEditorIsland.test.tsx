@@ -315,11 +315,15 @@ describe('ActivityEditorIsland — adding a quiz block', () => {
 
 describe('ActivityEditorIsland — Escape deselects the current zone', () => {
   it('deselects the selected zone on Escape, without collapsing its block', () => {
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
     fireEvent.click(screen.getByTestId('block-header-b1'));
     expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId('add-zone'));
+    // Selects the existing zone (canvas tools pass: the accessible "+ Zona"
+    // button is gone — the Zona tool now owns zone creation via a pointer
+    // drag, a manual/Playwright check per `WorksheetZoneEditor.tsx`'s own
+    // header; picking an already-drawn zone needs no real layout at all).
+    fireEvent.pointerDown(screen.getByTestId('zone-z1'));
     expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
 
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -718,7 +722,10 @@ describe('ActivityEditorIsland — submit for review', () => {
     });
     expect(screen.getByTestId('worksheet-incomplete-message')).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId('add-zone'));
+    // Any block edit clears it (canvas tools pass: the removed "+ Zona"
+    // button is no longer the way to trigger one here) — rotating needs no
+    // real layout and needs the block neither expanded nor selected.
+    fireEvent.click(screen.getByTestId('rotate-right-b1'));
     expect(screen.queryByTestId('worksheet-incomplete-message')).toBeNull();
   });
 
@@ -732,5 +739,38 @@ describe('ActivityEditorIsland — submit for review', () => {
 
     expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('ActivityEditorIsland — scoped ScrollToTop wiring (nav buttons pass)', () => {
+  it('appears after scrolling the block list — the list is the ACTUAL scroll container, not its outer wrapper', () => {
+    // Regression test for the actual root cause: the scoped ScrollToTop
+    // used to track the outer wrapper div, which also carries
+    // `overflow-y-auto` but never actually overflows in ordinary use —
+    // `BlockList.tsx`'s own `<ul>` does (see `ActivityEditorIsland.tsx`'s
+    // `blockListRef` header). Scrolling that `<ul>` directly is exactly
+    // what would have stayed invisible under the old wiring.
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const list = screen.getByTestId('block-list');
+    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('true');
+
+    Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(list, 'scrollTop', { value: 500, configurable: true });
+    act(() => {
+      list.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('false');
+  });
+
+  it('scrolls the block list to the top (the first block) on click', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const list = screen.getByTestId('block-list') as HTMLUListElement;
+    const scrollTo = vi.fn();
+    list.scrollTo = scrollTo;
+
+    fireEvent.click(screen.getByTestId('scroll-to-top-scoped'));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
 });

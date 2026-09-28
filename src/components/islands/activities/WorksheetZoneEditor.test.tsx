@@ -10,7 +10,60 @@ const IMAGE = { path: 'activity-uploads/u1/img.webp', width: 800, height: 400 };
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Restores every `vi.spyOn` too — load-bearing for the
+  // `HTMLElement.prototype.getBoundingClientRect` PROTOTYPE-level spy one
+  // test below uses (it must run before `render()`, so it can't be scoped
+  // to one already-rendered element like `mockRect` below does): without
+  // this it would otherwise leak into every later test in this file, since
+  // `cleanup()` only unmounts components, it does not restore spies.
+  vi.restoreAllMocks();
 });
+
+/**
+ * The editable zoom % input's current value, formatted like the old
+ * read-only `zoom-level` span it replaced (canvas tools pass) — e.g.
+ * `"100%"` — so every existing assertion below keeps reading the same way.
+ */
+function zoomLevel(): string {
+  return `${(screen.getByTestId('zoom-input') as HTMLInputElement).value}%`;
+}
+
+/**
+ * Wheel-zoom is now batched behind ONE `requestAnimationFrame` per frame
+ * (canvas tools pass — see `WorksheetZoneEditor.tsx`'s own wheel effect):
+ * every wheel test needs this so its accumulated delta flushes
+ * synchronously instead of on a real animation frame `fireEvent` never waits
+ * for. `afterEach`'s `vi.unstubAllGlobals()` cleans it up automatically.
+ */
+function stubSyncRaf() {
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  });
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+}
+
+/**
+ * A `requestAnimationFrame` stub that QUEUES its callback instead of firing
+ * it immediately (unlike {@link stubSyncRaf}) — needed to actually observe
+ * batching: dispatch several wheel events while nothing has flushed yet,
+ * THEN call `flush()` once, so the assertion can tell "one accumulated
+ * delta applied once" apart from "N deltas each applied immediately".
+ */
+function stubQueuedRaf() {
+  const callbacks: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    callbacks.push(cb);
+    return callbacks.length;
+  });
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+  return {
+    flush() {
+      const pending = callbacks.splice(0, callbacks.length);
+      pending.forEach((cb) => cb(0));
+    },
+  };
+}
 
 /**
  * A controllable `ResizeObserver` stub (jsdom has none — see this file's own
@@ -121,9 +174,16 @@ describe('WorksheetZoneEditor — properties panel is always rendered (no layout
 });
 
 describe('WorksheetZoneEditor — add / select / delete', () => {
-  it('adds a default zone via the accessible button and selects it', () => {
+  it('draws a zone via a pointer drag with the Zona tool (default) and selects it', () => {
+    // Canvas tools pass: the old accessible "+ Zona" button is gone — the
+    // Zona tool (default) now owns zone creation, via a plain left-drag.
     render(<Harness />);
-    fireEvent.click(screen.getByTestId('add-zone'));
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(canvas, { width: 200, height: 100 });
+
+    firePointer(canvas, 'pointerdown', 20, 10);
+    firePointer(canvas, 'pointerup', 60, 50);
+
     const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
     expect(zones).toHaveLength(1);
     expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
@@ -270,7 +330,7 @@ describe('WorksheetZoneEditor — choice options', () => {
  */
 function firePointer(
   el: Element,
-  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture',
   clientX: number,
   clientY: number,
   extra: Record<string, unknown> = {},
@@ -366,41 +426,38 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
 describe('WorksheetZoneEditor — zoom controls', () => {
   it('shows 100% by default when the viewport has no real layout (jsdom fallback)', () => {
     render(<Harness />);
-    expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+    expect(zoomLevel()).toBe('100%');
   });
 
   it('zooms in and out via the toolbar buttons', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('zoom-in'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
+    expect(zoomLevel()).toBe('125%');
     fireEvent.click(screen.getByTestId('zoom-out'));
     fireEvent.click(screen.getByTestId('zoom-out'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('75%');
+    expect(zoomLevel()).toBe('75%');
   });
 
   it('clamps zoom-out at the 25% floor', () => {
     render(<Harness />);
     for (let i = 0; i < 10; i++) fireEvent.click(screen.getByTestId('zoom-out'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('25%');
+    expect(zoomLevel()).toBe('25%');
   });
 
   it('clamps zoom-in at the 400% ceiling', () => {
     render(<Harness />);
     for (let i = 0; i < 20; i++) fireEvent.click(screen.getByTestId('zoom-in'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('400%');
+    expect(zoomLevel()).toBe('400%');
   });
 
-  it('resets to 100% via the 100% preset button', () => {
+  it('does not render the old 25/50/100/125 preset buttons or the "+ Zona" button', () => {
+    // Canvas tools pass: both are REMOVED — the toolbar is now −/[%]/+ ·
+    // Ajustar · the Zona/Mano tool toggle.
     render(<Harness />);
-    fireEvent.click(screen.getByTestId('zoom-in'));
-    fireEvent.click(screen.getByTestId('zoom-preset-100'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
-  });
-
-  it.each([25, 50, 100, 125])('jumps straight to the %d%% preset', (preset) => {
-    render(<Harness />);
-    fireEvent.click(screen.getByTestId(`zoom-preset-${preset}`));
-    expect(screen.getByTestId('zoom-level').textContent).toBe(`${preset}%`);
+    for (const preset of [25, 50, 100, 125]) {
+      expect(screen.queryByTestId(`zoom-preset-${preset}`)).toBeNull();
+    }
+    expect(screen.queryByTestId('add-zone')).toBeNull();
   });
 
   it('fits the whole image to the viewport via the fit button', () => {
@@ -409,10 +466,56 @@ describe('WorksheetZoneEditor — zoom controls', () => {
     // Viewport 400x400, image 800x400 -> width ratio 0.5, height ratio 1 -> fit picks 0.5 (50%).
     mockRect(viewport, { width: 400, height: 400 });
     fireEvent.click(screen.getByTestId('zoom-fit'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+    expect(zoomLevel()).toBe('50%');
   });
 
-  it('zooms with Ctrl/Cmd + wheel, anchored at the pointer', () => {
+  it('fits synchronously on MOUNT, without needing a ResizeObserver callback or a manual click (fit bug fix)', () => {
+    // Regression test pinning down the ACTUAL root cause: the old code only
+    // computed fit INSIDE `ResizeObserver`'s own callback — and jsdom has no
+    // `ResizeObserver` at all (see this file's own `MockResizeObserver`
+    // elsewhere), so the old effect's guard bailed out immediately and fit
+    // was NEVER computed on mount here, regardless of the viewport's actual
+    // size — a fresh mount (`BlockList.tsx` mounts this component fresh
+    // every time its block opens) stayed stuck at the hardcoded 100%
+    // default. Stubbing every element's rect BEFORE mount (jsdom has no
+    // real layout, so this is the only way to give the viewport a non-zero
+    // size at mount time) and asserting the fit is already correct right
+    // after `render()` — no explicit observer fire, no click — is exactly
+    // what would have failed before the `useLayoutEffect` fix.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 400,
+      right: 400,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    });
+    render(<Harness />);
+    // Viewport 400x400, image 800x400 -> width ratio 0.5, height ratio 1 -> fit picks 0.5 (50%).
+    expect(zoomLevel()).toBe('50%');
+  });
+
+  it('zooms via a plain wheel over the canvas (owner-approved design: no Ctrl/⌘ required)', () => {
+    stubSyncRaf();
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    mockRect(viewport, { width: 400, height: 400 });
+    const event = new Event('wheel', { bubbles: true, cancelable: true });
+    Object.assign(event, { deltaY: -100, clientX: 10, clientY: 10 });
+    act(() => {
+      viewport.dispatchEvent(event);
+    });
+    // wheelZoom(1, -100) = 1 + clamp(100 * 0.0015 * 1, -0.5, 0.5) = 1.15.
+    expect(zoomLevel()).toBe('115%');
+  });
+
+  it('zooms with Ctrl/Cmd + wheel too (just another wheel event, no special-casing)', () => {
+    stubSyncRaf();
     render(<Harness />);
     const viewport = screen.getByTestId('zone-viewport');
     mockRect(viewport, { width: 400, height: 400 });
@@ -421,28 +524,191 @@ describe('WorksheetZoneEditor — zoom controls', () => {
     act(() => {
       viewport.dispatchEvent(event);
     });
-    expect(screen.getByTestId('zoom-level').textContent).toBe('110%');
+    expect(zoomLevel()).toBe('115%');
   });
 
-  it('ignores a plain wheel (no Ctrl/Cmd) — the page scrolls normally instead', () => {
+  it('prevents the default wheel action over the canvas (page/block-list must not also scroll)', () => {
+    stubSyncRaf();
     render(<Harness />);
     const viewport = screen.getByTestId('zone-viewport');
+    mockRect(viewport, { width: 400, height: 400 });
     const event = new Event('wheel', { bubbles: true, cancelable: true });
-    Object.assign(event, { ctrlKey: false, deltaY: -100, clientX: 10, clientY: 10 });
+    Object.assign(event, { deltaY: -100, clientX: 10, clientY: 10 });
     act(() => {
       viewport.dispatchEvent(event);
     });
-    expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('does NOT zoom or prevent default for a wheel outside the canvas viewport', () => {
+    stubSyncRaf();
+    render(<Harness />);
+    // Dispatched on `document` — never reaches the viewport's own listener,
+    // which is attached to that element specifically, not delegated.
+    const event = new Event('wheel', { bubbles: true, cancelable: true });
+    Object.assign(event, { deltaY: -100, clientX: 10, clientY: 10 });
+    act(() => {
+      document.dispatchEvent(event);
+    });
+    expect(zoomLevel()).toBe('100%');
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('batches several wheel events within the same frame into ONE zoom update', () => {
+    const raf = stubQueuedRaf();
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    mockRect(viewport, { width: 400, height: 400 });
+    const event1 = new Event('wheel', { bubbles: true, cancelable: true });
+    Object.assign(event1, { deltaY: -50, clientX: 10, clientY: 10 });
+    const event2 = new Event('wheel', { bubbles: true, cancelable: true });
+    Object.assign(event2, { deltaY: -50, clientX: 10, clientY: 10 });
+    act(() => {
+      viewport.dispatchEvent(event1);
+      viewport.dispatchEvent(event2);
+    });
+    // Neither event has been flushed to a zoom change yet — only ONE
+    // animation frame was scheduled for both (the second event's own
+    // `requestAnimationFrame` call is skipped, since one is already pending).
+    expect(zoomLevel()).toBe('100%');
+
+    act(() => {
+      raf.flush();
+    });
+    // The accumulated delta (-50 + -50 = -100) is applied ONCE, matching
+    // exactly what a single -100 event would give (the earlier "plain
+    // wheel" test) — not two sequential -50 steps compounding to something
+    // else.
+    expect(zoomLevel()).toBe('115%');
   });
 
   it('zooms in/out with +/- keys while the viewport is focused', () => {
     render(<Harness />);
     const viewport = screen.getByTestId('zone-viewport');
     fireEvent.keyDown(viewport, { key: '+' });
-    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
+    expect(zoomLevel()).toBe('125%');
     fireEvent.keyDown(viewport, { key: '-' });
     fireEvent.keyDown(viewport, { key: '-' });
-    expect(screen.getByTestId('zoom-level').textContent).toBe('75%');
+    expect(zoomLevel()).toBe('75%');
+  });
+
+  it('fits via the "0" key while the viewport is focused', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    mockRect(viewport, { width: 400, height: 400 });
+    fireEvent.click(screen.getByTestId('zoom-in')); // turn fit mode off first
+    expect(zoomLevel()).toBe('125%');
+    fireEvent.keyDown(viewport, { key: '0' });
+    // Viewport 400x400, image 800x400 -> fit picks 50%.
+    expect(zoomLevel()).toBe('50%');
+  });
+});
+
+describe('WorksheetZoneEditor — tool toggle (Zona/Mano)', () => {
+  it('defaults to the Zona tool, shown active (pressed)', () => {
+    render(<Harness />);
+    expect(screen.getByTestId('tool-zone').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('tool-hand').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-crosshair');
+  });
+
+  it('switches to the Mano tool via its toolbar button', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    expect(screen.getByTestId('tool-hand').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('tool-zone').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-grab');
+  });
+
+  it('switches tools with the V/H keyboard shortcuts while the viewport is focused', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    fireEvent.keyDown(viewport, { key: 'h' });
+    expect(screen.getByTestId('tool-hand').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.keyDown(viewport, { key: 'v' });
+    expect(screen.getByTestId('tool-zone').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps the selected zone and its properties panel unchanged across a tool switch', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('tool-zone'));
+    expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
+  });
+});
+
+describe('WorksheetZoneEditor — editable zoom % input', () => {
+  it('applies a typed value on Enter', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '80' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('80');
+    // Confirms the REAL zoom changed too, not just the displayed draft: the
+    // next zoom-in step is +25 percentage points from 80, not from 100.
+    fireEvent.click(screen.getByTestId('zoom-in'));
+    expect(zoomLevel()).toBe('105%');
+  });
+
+  it('accepts a trailing "%" sign', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '50%' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('50');
+  });
+
+  it('applies on blur too, not just Enter', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '60' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('60');
+  });
+
+  it('reverts on Escape without applying', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '999' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(input.value).toBe('100');
+    // The real zoom was never touched either.
+    fireEvent.click(screen.getByTestId('zoom-in'));
+    expect(zoomLevel()).toBe('125%');
+  });
+
+  it('reverts an unparseable value on blur', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'abc' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('100');
+  });
+
+  it('clamps below to the wider 10% input floor (below the toolbar\'s own 25% floor)', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '5' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('10');
+  });
+
+  it('clamps above at the 400% ceiling', () => {
+    render(<Harness />);
+    const input = screen.getByTestId('zoom-input') as HTMLInputElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '9999' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('400');
   });
 });
 
@@ -503,7 +769,7 @@ describe('WorksheetZoneEditor — rotation (creator polish round 2)', () => {
     // viewport fits it at width ratio 1, height ratio 0.5 -> 50%.
     mockRect(viewport, { width: 400, height: 400 });
     fireEvent.click(screen.getByTestId('zoom-fit'));
-    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+    expect(zoomLevel()).toBe('50%');
   });
 
   it('renders a zone at the same fractional position regardless of rotation (already in the rotated space)', () => {
@@ -560,6 +826,54 @@ describe('WorksheetZoneEditor — panning', () => {
     firePointer(canvas, 'pointerup', 60, 50, { button: 1 });
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
   });
+
+  it('a middle-button drag returns to the ACTIVE tool afterward (Zona, unaffected by the transient pan)', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(canvas, { width: 200, height: 100 });
+    expect(canvas.className).toContain('cursor-crosshair');
+
+    firePointer(canvas, 'pointerdown', 20, 10, { button: 1 });
+    firePointer(canvas, 'pointerup', 60, 50, { button: 1 });
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-crosshair');
+  });
+
+  it('hand drag pans (viewport scroll position changes) and does not draw a zone', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    const viewport = screen.getByTestId('zone-viewport');
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(canvas, { width: 200, height: 100 });
+    mockRect(viewport, { width: 800, height: 400 });
+
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointermove', 60, 70);
+    firePointer(canvas, 'pointerup', 60, 70);
+
+    // scrollLeft = 0 - (60 - 100) = 40; scrollTop = 0 - (70 - 100) = 30 —
+    // both well within the pan bounds for this viewport/content size.
+    expect(viewport.scrollLeft).toBe(40);
+    expect(viewport.scrollTop).toBe(30);
+    expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
+  });
+
+  it('hand tool: dragging an EXISTING zone pans the canvas instead of moving it', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} />);
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    const viewport = screen.getByTestId('zone-viewport');
+    mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
+    mockRect(viewport, { width: 800, height: 400 });
+    const zoneEl = screen.getByTestId('zone-z1');
+    const originalLeft = zoneEl.style.left;
+
+    firePointer(zoneEl, 'pointerdown', 100, 100);
+    firePointer(zoneEl, 'pointermove', 60, 70);
+    firePointer(zoneEl, 'pointerup', 60, 70);
+
+    expect(viewport.scrollLeft).toBe(40);
+    expect(screen.getByTestId('zone-z1').style.left).toBe(originalLeft);
+  });
 });
 
 describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-screen" pass)', () => {
@@ -576,7 +890,7 @@ describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-sc
     render(<Harness />);
     const viewport = screen.getByTestId('zone-viewport');
     // Default (fit) view falls back to 100% with jsdom's zero-sized rect.
-    expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+    expect(zoomLevel()).toBe('100%');
 
     // The viewport's flex-driven box "grows" (e.g. a sibling block
     // collapsed, or this one became the active/focus block) — simulated by
@@ -588,7 +902,7 @@ describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-sc
     });
 
     // IMAGE is 800x400: a 400x200 box fits it at 50% on both axes.
-    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+    expect(zoomLevel()).toBe('50%');
   });
 
   it('does not re-fit once an explicit zoom action has turned fit mode off', () => {
@@ -598,13 +912,53 @@ describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-sc
     const viewport = screen.getByTestId('zone-viewport');
 
     fireEvent.click(screen.getByTestId('zoom-in')); // turns fitMode off
-    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
+    expect(zoomLevel()).toBe('125%');
 
     mockRect(viewport, { width: 400, height: 200 });
     act(() => {
       MockResizeObserver.instances.at(-1)?.fire();
     });
 
-    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
+    expect(zoomLevel()).toBe('125%');
+  });
+});
+
+describe('WorksheetZoneEditor — state-leak cleanup (blur/pointercancel/lostpointercapture)', () => {
+  it('releases a Space-held temporary hand on window blur, even though its keyup never arrives', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    fireEvent.keyDown(viewport, { key: ' ' });
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-grab');
+
+    // No keyup at all — the window itself loses focus instead (alt-tab, a
+    // devtools panel, a native file picker).
+    fireEvent(window, new Event('blur'));
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-crosshair');
+  });
+
+  it('ends an in-progress pan on window blur — no pointerup ever arrives for it', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(canvas, { width: 200, height: 100 });
+
+    firePointer(canvas, 'pointerdown', 20, 10, { button: 1 });
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-grabbing');
+
+    fireEvent(window, new Event('blur'));
+    expect(screen.getByTestId('zone-canvas').className).toContain('cursor-crosshair');
+  });
+
+  it('discards an in-progress draw on `lostpointercapture`, same as `pointercancel`', () => {
+    render(<Harness />);
+    const canvas = screen.getByTestId('zone-canvas');
+    mockRect(canvas, { width: 200, height: 100 });
+
+    firePointer(canvas, 'pointerdown', 20, 10);
+    firePointer(canvas, 'pointermove', 60, 50);
+    expect(screen.getByTestId('zone-draft')).toBeTruthy();
+
+    firePointer(canvas, 'lostpointercapture', 60, 50);
+    expect(screen.queryByTestId('zone-draft')).toBeNull();
+    expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
   });
 });

@@ -44,6 +44,36 @@ export function clampZoom(zoom: number): number {
 }
 
 /**
+ * The WIDER floor the editable zoom % input accepts (owner-approved canvas
+ * tools design: "clamp 10–400"), intentionally lower than {@link MIN_ZOOM}.
+ * The −/+ toolbar buttons and every other caller of {@link clampZoom} keep
+ * their existing 25% floor unchanged — including `WorksheetPracticePlayer.tsx`,
+ * a different component that also imports `MIN_ZOOM`/`clampZoom` from here —
+ * this only widens what typing a number directly into the % field accepts.
+ */
+export const INPUT_MIN_ZOOM = 0.1;
+
+/** Clamp a zoom factor to `[INPUT_MIN_ZOOM, MAX_ZOOM]` for the editable % input. */
+export function clampZoomInput(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1;
+  return Math.min(MAX_ZOOM, Math.max(INPUT_MIN_ZOOM, zoom));
+}
+
+/**
+ * Parses a user-typed zoom percentage ("80", "80%", "  80 %  ") into a plain
+ * percentage number (`80`), or `null` when it isn't a usable number at all —
+ * the caller reverts to the last-applied value on `null` rather than
+ * guessing. Deliberately permissive about a trailing "%" and surrounding
+ * whitespace; anything else non-numeric (empty, "abc") is `null`.
+ */
+export function parseZoomPercentInput(raw: string): number | null {
+  const trimmed = raw.trim().replace(/%\s*$/, '');
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
  * The zoom that fits `content` entirely inside `viewport` on both axes
  * ("Ajustar"/"Fit", and the editor's default view). A non-positive
  * dimension on either side (not yet laid out — jsdom, or a not-yet-loaded
@@ -87,6 +117,58 @@ export function zoomAroundPoint(
   return {
     left: contentX * toZoom - pointer.x,
     top: contentY * toZoom - pointer.y,
+  };
+}
+
+/**
+ * Wheel-zoom tuning (canvas tools pass): the fraction of the CURRENT zoom
+ * applied per accumulated `deltaY` pixel, and the largest zoom-factor change
+ * one batched animation frame may apply. Proportional to the current zoom
+ * (not a flat step) so the same physical wheel motion feels equally fast at
+ * 25% and at 400%; the per-frame cap keeps a fast trackpad fling from
+ * jumping several zoom levels in a single frame.
+ */
+export const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+export const MAX_WHEEL_ZOOM_STEP = 0.5;
+
+/**
+ * The new zoom from an accumulated wheel `deltaY` (the caller batches every
+ * `wheel` event that lands within the same animation frame into one call
+ * here, instead of applying each event immediately — see
+ * `WorksheetZoneEditor.tsx`'s wheel listener) applied to `zoom`, clamped like
+ * every other zoom change in this module.
+ */
+export function wheelZoom(zoom: number, deltaY: number): number {
+  const rawStep = -deltaY * WHEEL_ZOOM_SENSITIVITY * zoom;
+  const step = Math.max(-MAX_WHEEL_ZOOM_STEP, Math.min(MAX_WHEEL_ZOOM_STEP, rawStep));
+  return clampZoom(zoom + step);
+}
+
+/**
+ * The valid scroll range on ONE axis while actively panning: the content box
+ * may be dragged until (at most) its far edge reaches the viewport's own
+ * center, never further — past that point the pan gesture stops moving the
+ * content rather than dragging it fully out of view. This is a DELIBERATELY
+ * wider allowance than the browser's own native scrollable range (which for
+ * content bigger than the viewport already prevents dragging it fully out —
+ * this clamp is then a harmless no-op, since the native range is always the
+ * tighter of the two); it only actually matters once the content is smaller
+ * than the viewport on that axis (zoomed out below 100%), where there is no
+ * native scrollable range at all and nothing would otherwise stop a pan
+ * gesture from pushing the whole image arbitrarily far off-screen.
+ */
+export function clampPanAxis(scroll: number, viewportLength: number, contentLength: number): number {
+  const center = viewportLength / 2;
+  const min = -center;
+  const max = contentLength - center;
+  return Math.min(max, Math.max(min, scroll));
+}
+
+/** {@link clampPanAxis}, applied to both axes of a scroll offset at once. */
+export function clampPanScroll(scroll: ScrollOffset, viewport: Size, content: Size): ScrollOffset {
+  return {
+    left: clampPanAxis(scroll.left, viewport.width, content.width),
+    top: clampPanAxis(scroll.top, viewport.height, content.height),
   };
 }
 

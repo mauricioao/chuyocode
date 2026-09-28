@@ -17,6 +17,23 @@
  *    ancestor — the editor card), and skips the footer/window logic
  *    entirely, since it never leaves that card.
  *
+ * BRAND YELLOW (nav buttons pass, owner feedback): filled with
+ * `bg-primary`/`text-primary-foreground`, both modes — same pairing
+ * `BackButton.astro` now uses, instead of the previous outlined/accent-icon
+ * treatment.
+ *
+ * SCOPED MODE'S "NEVER APPEARS" BUG, FIXED: the appear threshold used to be
+ * ONLY `container height * APPEAR_AFTER_VIEWPORTS` (a full container height
+ * of scroll). That is a reasonable page-level threshold, but the editor
+ * card's block-list container is comfortably taller than a phone screen and
+ * nowhere near a full page — requiring a FULL container height of scroll
+ * before showing it meant, in ordinary use, it essentially never appeared.
+ * `APPEAR_AFTER_MAX_PX` below caps the threshold at ~300px too (owner
+ * feedback: "~1 container height or 300px scrolled, whichever is smaller"),
+ * which is what actually makes it show up for a normally-sized block list.
+ * The OTHER half of "never appears" in the editor was a wrong `targetRef` —
+ * see `ActivityEditorIsland.tsx`'s own header for that half of the fix.
+ *
  * Motion: the appear/disappear transition is CSS (opacity + a small
  * translate, ~200ms), gated behind `motion-reduce:` — read at RENDER time
  * only through the CSS variant, never `window.matchMedia` during render
@@ -42,6 +59,18 @@ export interface ScrollToTopProps {
 
 /** How many container/viewport heights of scroll before the button appears. */
 const APPEAR_AFTER_VIEWPORTS = 1;
+
+/**
+ * The largest scroll-distance threshold before the button appears, in
+ * pixels (nav buttons pass, owner feedback: "use ~1 container height or
+ * 300px scrolled, whichever is smaller"). Load-bearing for the SCOPED mode:
+ * the editor card's block-list container is comfortably taller than 300px
+ * but nowhere near as tall as a full page, so requiring a full container
+ * height of scroll (`APPEAR_AFTER_VIEWPORTS` alone) before showing it meant
+ * it practically never appeared during ordinary use — this caps the
+ * threshold instead of only scaling it.
+ */
+const APPEAR_AFTER_MAX_PX = 300;
 
 /** Read only at CLICK time — see the file header for why never at render time. */
 function prefersReducedMotion(): boolean {
@@ -69,7 +98,8 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
     function measure() {
       const top = scrollEl ? scrollEl.scrollTop : window.scrollY;
       const viewport = scrollEl ? scrollEl.clientHeight : window.innerHeight;
-      setPastThreshold(top > viewport * APPEAR_AFTER_VIEWPORTS);
+      const threshold = Math.min(APPEAR_AFTER_MAX_PX, viewport * APPEAR_AFTER_VIEWPORTS);
+      setPastThreshold(top > threshold);
     }
 
     measure();
@@ -119,7 +149,7 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
       aria-hidden={!shown}
       tabIndex={shown ? 0 : -1}
       className={cn(
-        'z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-base-soft text-accent shadow-elevation-2 transition-all duration-200 ease-out hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none',
+        'z-40 inline-flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-all duration-200 ease-out hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none',
         scoped
           ? 'absolute right-4 bottom-4 hidden lg:inline-flex'
           : 'fixed right-4 bottom-6 lg:right-[max(1rem,calc((100vw-72rem)/2+1rem))]',
