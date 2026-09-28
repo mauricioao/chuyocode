@@ -47,10 +47,24 @@ export interface Zone {
   options?: string[];
 }
 
+/** A worksheet image's rotation, clockwise from its uploaded orientation. */
+export type Rotation = 0 | 90 | 180 | 270;
+
 /** An uploaded worksheet image with answer zones drawn on top. */
 export interface WorksheetBlock {
   id: string;
   type: 'worksheet';
+  /** Author-editable label (creator polish round 2). `undefined` = use the positional default ("Hoja N") in the UI. */
+  name?: string;
+  /**
+   * Clockwise rotation applied on top of the uploaded image, for a
+   * landscape worksheet authored/scanned sideways. Zones are stored in THIS
+   * rotated image's own coordinate space — i.e. exactly what the author sees
+   * on screen — so the player only ever needs to apply the same rotation to
+   * the image and render zones unchanged. Defaults to `0` for every
+   * worksheet saved before this field existed (backward compatible).
+   */
+  rotation: Rotation;
   image: ImageRef;
   zones: Zone[];
 }
@@ -59,6 +73,8 @@ export interface WorksheetBlock {
 export interface QuizBlock {
   id: string;
   type: 'quiz';
+  /** Author-editable label (creator polish round 2). `undefined` = use the positional default ("Hoja N") in the UI. */
+  name?: string;
   payload: Payload;
 }
 
@@ -70,7 +86,11 @@ export const MAX_BLOCKS = 20;
 /** A single worksheet block holds at most this many zones. */
 export const MAX_ZONES_PER_WORKSHEET = 60;
 
+/** A block's author-editable name may not exceed this many characters. */
+export const MAX_BLOCK_NAME_LENGTH = 60;
+
 const ZONE_KINDS: ReadonlySet<string> = new Set(['text', 'choice']);
+const ROTATIONS: ReadonlySet<number> = new Set([0, 90, 180, 270]);
 
 /** Narrow `unknown` to a plain object without trusting its keys. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -161,10 +181,46 @@ function parseZone(value: unknown): Zone | null {
   return zone;
 }
 
+/**
+ * Parse a block's optional `name`, or the sentinel `INVALID_NAME` if present
+ * but unusable (a non-string, or one that stays over the limit after
+ * trimming) — the caller fails the whole block on that sentinel, same
+ * all-or-nothing posture as every other field here. A missing name, or one
+ * that is blank after trimming, is NOT an error: both parse to `undefined`,
+ * meaning "no custom name — the UI derives a positional default".
+ */
+const INVALID_NAME = Symbol('invalid-name');
+
+function parseName(value: unknown): string | undefined | typeof INVALID_NAME {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return INVALID_NAME;
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_BLOCK_NAME_LENGTH) return INVALID_NAME;
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Parse a worksheet's `rotation`, or `null` if present but not one of the
+ * four right angles. Missing entirely defaults to `0` — every worksheet
+ * saved before this field existed.
+ */
+function parseRotation(value: unknown): Rotation | null {
+  if (value === undefined) return 0;
+  if (typeof value === 'number' && ROTATIONS.has(value)) return value as Rotation;
+  return null;
+}
+
 /** Parse a worksheet block's own fields, or `null` if any part is unusable. */
-function parseWorksheetBlock(id: string, value: Record<string, unknown>): WorksheetBlock | null {
+function parseWorksheetBlock(
+  id: string,
+  name: string | undefined,
+  value: Record<string, unknown>,
+): WorksheetBlock | null {
   const image = parseImageRef(value.image);
   if (!image) return null;
+
+  const rotation = parseRotation(value.rotation);
+  if (rotation === null) return null;
 
   // No minimum: a worksheet mid-authoring (image uploaded, no zone drawn
   // yet) is still a valid, saveable draft block — only the maximum is a hard
@@ -179,14 +235,18 @@ function parseWorksheetBlock(id: string, value: Record<string, unknown>): Worksh
     zones.push(zone);
   }
 
-  return { id, type: 'worksheet', image, zones };
+  return { id, type: 'worksheet', name, rotation, image, zones };
 }
 
 /** Parse a quiz block's own fields, or `null` if its payload cannot be parsed. */
-function parseQuizBlock(id: string, value: Record<string, unknown>): QuizBlock | null {
+function parseQuizBlock(
+  id: string,
+  name: string | undefined,
+  value: Record<string, unknown>,
+): QuizBlock | null {
   const payload = parsePayload(value.payload);
   if (!payload) return null;
-  return { id, type: 'quiz', payload };
+  return { id, type: 'quiz', name, payload };
 }
 
 /** Parse one block, or `null` if its own shape is unusable. */
@@ -194,11 +254,14 @@ function parseBlock(value: unknown): Block | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== 'string' || value.id.length === 0) return null;
 
+  const name = parseName(value.name);
+  if (name === INVALID_NAME) return null;
+
   switch (value.type) {
     case 'worksheet':
-      return parseWorksheetBlock(value.id, value);
+      return parseWorksheetBlock(value.id, name, value);
     case 'quiz':
-      return parseQuizBlock(value.id, value);
+      return parseQuizBlock(value.id, name, value);
     default:
       return null;
   }

@@ -172,3 +172,48 @@ export function nudgeRect(rect: Rect, direction: Direction, step: number = NUDGE
       return rect;
   }
 }
+
+/**
+ * Rotate a fractional rect 90° CLOCKWISE within its unit square (creator
+ * polish round 2 — worksheet rotation).
+ *
+ * `blocks.ts`'s `WorksheetBlock.rotation` stores zones in the ROTATED
+ * image's own coordinate space: rotating the image itself means every
+ * existing zone's rect must be re-expressed in the new orientation, or it
+ * would visually detach from the artwork underneath it.
+ *
+ * Derivation: rotating the IMAGE 90° clockwise sends a point at fractional
+ * `(x, y)` in the old image to `(1 - y, x)` in the new one (new width = old
+ * height, new height = old width). Applying that to a rect's two opposite
+ * corners and re-deriving a top-left/width/height box gives:
+ * `x' = 1 - y - h, y' = x, w' = h, h' = w`.
+ */
+export function rotateRectCW(rect: Rect): Rect {
+  return { x: 1 - rect.y - rect.h, y: rect.x, w: rect.h, h: rect.w };
+}
+
+/**
+ * Rotate a fractional rect 90° COUNTER-CLOCKWISE — the exact inverse of
+ * {@link rotateRectCW}: `x' = y, y' = 1 - x - w, w' = h, h' = w`.
+ */
+export function rotateRectCCW(rect: Rect): Rect {
+  return { x: rect.y, y: 1 - rect.x - rect.w, w: rect.h, h: rect.w };
+}
+
+/** One 90° turn, in either direction — what a "rotate left/right" control offers. */
+export type TurnDirection = 'cw' | 'ccw';
+
+/** Rotate every zone-shaped rect in `rects` one quarter turn, preserving every other field. */
+export function rotateRects<T extends Rect>(rects: T[], direction: TurnDirection): T[] {
+  const rotate = direction === 'cw' ? rotateRectCW : rotateRectCCW;
+  return rects.map((rect) => ({ ...rect, ...rotate(rect) }));
+}
+
+/** The next rotation after turning one quarter-turn `direction` from `rotation`, wrapping at the ends. */
+export function turnRotation(
+  rotation: 0 | 90 | 180 | 270,
+  direction: TurnDirection,
+): 0 | 90 | 180 | 270 {
+  const delta = direction === 'cw' ? 90 : -90;
+  return ((((rotation + delta) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
+}

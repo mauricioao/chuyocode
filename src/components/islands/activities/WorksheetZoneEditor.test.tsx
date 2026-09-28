@@ -7,7 +7,33 @@ import type { Zone } from '@/lib/activities/blocks';
 
 const IMAGE = { path: 'activity-uploads/u1/img.webp', width: 800, height: 400 };
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+/**
+ * A controllable `ResizeObserver` stub (jsdom has none — see this file's own
+ * header, and `WorksheetPlayer.tsx`'s identical guard/precedent): captures
+ * every constructed instance's callback so a test can invoke it directly,
+ * simulating the viewport's box actually changing size from flex layout
+ * alone (no window `resize` event involved at all).
+ */
+class MockResizeObserver {
+  static instances: MockResizeObserver[] = [];
+  callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    MockResizeObserver.instances.push(this);
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  /** Simulates the observed element's box changing size. */
+  fire() {
+    this.callback([], this as unknown as ResizeObserver);
+  }
+}
 
 /** Stateful wrapper so onZonesChange/onSelectZone actually drive re-renders, like the real editor. */
 function Harness({ initialZones = [] as Zone[], initialSelected = null as string | null }) {
@@ -364,11 +390,17 @@ describe('WorksheetZoneEditor — zoom controls', () => {
     expect(screen.getByTestId('zoom-level').textContent).toBe('400%');
   });
 
-  it('resets to 100% via the reset button', () => {
+  it('resets to 100% via the 100% preset button', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('zoom-in'));
-    fireEvent.click(screen.getByTestId('zoom-reset'));
+    fireEvent.click(screen.getByTestId('zoom-preset-100'));
     expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+  });
+
+  it.each([25, 50, 100, 125])('jumps straight to the %d%% preset', (preset) => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId(`zoom-preset-${preset}`));
+    expect(screen.getByTestId('zoom-level').textContent).toBe(`${preset}%`);
   });
 
   it('fits the whole image to the viewport via the fit button', () => {
@@ -414,6 +446,86 @@ describe('WorksheetZoneEditor — zoom controls', () => {
   });
 });
 
+describe('WorksheetZoneEditor — history commit flag (creator polish round 2)', () => {
+  it('marks every pointermove frame of a zone move as non-committing, then commits once on pointerup', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
+    const calls: Array<{ commit?: boolean }> = [];
+    function Wrapper() {
+      const [zones, setZones] = useState<Zone[]>([zone]);
+      return (
+        <WorksheetZoneEditor
+          lang="es"
+          image={IMAGE}
+          imageUrl="/img.webp"
+          zones={zones}
+          selectedZoneId="z1"
+          onZonesChange={(next, opts) => {
+            calls.push(opts ?? {});
+            setZones(next);
+          }}
+          onSelectZone={() => {}}
+        />
+      );
+    }
+    render(<Wrapper />);
+    const el = screen.getByTestId('zone-z1');
+    mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
+
+    firePointer(el, 'pointerdown', 20, 10);
+    firePointer(el, 'pointermove', 30, 10);
+    firePointer(el, 'pointermove', 40, 10);
+    firePointer(el, 'pointerup', 40, 10);
+
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    // Every pointermove frame is non-committing...
+    expect(calls.slice(0, -1).every((c) => c.commit === false)).toBe(true);
+    // ...and exactly the LAST call (pointerup) commits.
+    expect(calls.at(-1)).toEqual({ commit: true });
+  });
+});
+
+describe('WorksheetZoneEditor — rotation (creator polish round 2)', () => {
+  it('fits using the ROTATED dimensions at 90deg (width/height swapped)', () => {
+    render(
+      <WorksheetZoneEditor
+        lang="es"
+        image={IMAGE}
+        imageUrl="/img.webp"
+        zones={[]}
+        selectedZoneId={null}
+        onZonesChange={() => {}}
+        onSelectZone={() => {}}
+        rotation={90}
+      />,
+    );
+    const viewport = screen.getByTestId('zone-viewport');
+    // IMAGE is 800x400. Rotated 90deg it is displayed as 400x800. A 400x400
+    // viewport fits it at width ratio 1, height ratio 0.5 -> 50%.
+    mockRect(viewport, { width: 400, height: 400 });
+    fireEvent.click(screen.getByTestId('zoom-fit'));
+    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+  });
+
+  it('renders a zone at the same fractional position regardless of rotation (already in the rotated space)', () => {
+    const zone: Zone = { id: 'z1', x: 0.25, y: 0.1, w: 0.2, h: 0.15, kind: 'text', answers: ['sat'] };
+    render(
+      <WorksheetZoneEditor
+        lang="es"
+        image={IMAGE}
+        imageUrl="/img.webp"
+        zones={[zone]}
+        selectedZoneId={null}
+        onZonesChange={() => {}}
+        onSelectZone={() => {}}
+        rotation={180}
+      />,
+    );
+    const el = screen.getByTestId('zone-z1');
+    expect(el.style.left).toBe('25%');
+    expect(el.style.top).toBe('10%');
+  });
+});
+
 describe('WorksheetZoneEditor — panning', () => {
   it('shows a grab cursor while space is held over the viewport-focused canvas', () => {
     render(<Harness />);
@@ -447,5 +559,52 @@ describe('WorksheetZoneEditor — panning', () => {
     expect(screen.getByTestId('zone-canvas').className).toContain('cursor-grabbing');
     firePointer(canvas, 'pointerup', 60, 50, { button: 1 });
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
+  });
+});
+
+describe('WorksheetZoneEditor — layout-driven viewport height (creator "one-screen" pass)', () => {
+  it('never sets a fixed/clamped CSS height on the viewport — it fills its flex ancestors instead', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    expect(viewport.style.height).toBe('');
+    expect(viewport.className).toContain('flex-1');
+  });
+
+  it('re-fits in place when the viewport is still in fit mode and its OWN box resizes (mocked ResizeObserver, no window resize event)', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    // Default (fit) view falls back to 100% with jsdom's zero-sized rect.
+    expect(screen.getByTestId('zoom-level').textContent).toBe('100%');
+
+    // The viewport's flex-driven box "grows" (e.g. a sibling block
+    // collapsed, or this one became the active/focus block) — simulated by
+    // changing its measured rect and firing the observer callback, with NO
+    // window `resize` event at all.
+    mockRect(viewport, { width: 400, height: 200 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+
+    // IMAGE is 800x400: a 400x200 box fits it at 50% on both axes.
+    expect(screen.getByTestId('zoom-level').textContent).toBe('50%');
+  });
+
+  it('does not re-fit once an explicit zoom action has turned fit mode off', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+
+    fireEvent.click(screen.getByTestId('zoom-in')); // turns fitMode off
+    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
+
+    mockRect(viewport, { width: 400, height: 200 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+
+    expect(screen.getByTestId('zoom-level').textContent).toBe('125%');
   });
 });

@@ -8,6 +8,7 @@ import {
   stepZoom,
   zoomAroundPoint,
   contentSize,
+  rotatedSize,
 } from './canvasViewport';
 
 describe('clampZoom', () => {
@@ -99,5 +100,23 @@ describe('contentSize', () => {
   it('scales the image size by the zoom factor', () => {
     expect(contentSize({ width: 800, height: 400 }, 0.5)).toEqual({ width: 400, height: 200 });
     expect(contentSize({ width: 800, height: 400 }, 2)).toEqual({ width: 1600, height: 800 });
+  });
+});
+
+describe('rotatedSize (worksheet rotation)', () => {
+  it('leaves the size unchanged at 0deg', () => {
+    expect(rotatedSize({ width: 800, height: 400 }, 0)).toEqual({ width: 800, height: 400 });
+  });
+
+  it('leaves the size unchanged at 180deg (no axis swap)', () => {
+    expect(rotatedSize({ width: 800, height: 400 }, 180)).toEqual({ width: 800, height: 400 });
+  });
+
+  it('swaps width and height at 90deg', () => {
+    expect(rotatedSize({ width: 800, height: 400 }, 90)).toEqual({ width: 400, height: 800 });
+  });
+
+  it('swaps width and height at 270deg', () => {
+    expect(rotatedSize({ width: 800, height: 400 }, 270)).toEqual({ width: 400, height: 800 });
   });
 });

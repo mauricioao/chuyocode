@@ -11,8 +11,10 @@
  * `width`/`height`, so a zone always lines up with the artwork underneath it
  * regardless of how wide the container is actually rendered.
  */
+import { useEffect, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { ImageRef, Zone } from '@/lib/activities/blocks';
+import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
+import { rotatedSize } from '@/lib/activities/canvasViewport';
 
 export interface WorksheetPlayerProps {
   lang: Lang;
@@ -20,19 +22,69 @@ export interface WorksheetPlayerProps {
   zones: Zone[];
   /** Resolved, browser-loadable URL for `image.path` (caller resolves it). */
   imageUrl: string;
+  /** The worksheet's own rotation (creator polish round 2) — rendered here exactly like the editor. */
+  rotation?: Rotation;
 }
 
-export default function WorksheetPlayer({ lang, image, zones, imageUrl }: WorksheetPlayerProps) {
+export default function WorksheetPlayer({ lang, image, zones, imageUrl, rotation = 0 }: WorksheetPlayerProps) {
   const t = UI_LABELS[lang].activities.player;
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Only needed for a 90/270 rotation, where the pre-rotation image box must
+  // be TRANSPOSED relative to the (now-swapped) container — a relation plain
+  // CSS percentages cannot express in a fluid/responsive layout, so this is
+  // measured directly (mirroring the editor's own `getBoundingClientRect`-driven
+  // canvas sizing). A 0/180 rotation never swaps the aspect ratio, so it stays
+  // pure CSS (`inset-0 h-full w-full object-contain` + a same-size `rotate()`)
+  // and never depends on this measurement.
+  const [containerWidth, setContainerWidth] = useState(0);
+  const isQuarterTurn = rotation === 90 || rotation === 270;
+
+  useEffect(() => {
+    if (!isQuarterTurn) return undefined;
+    const el = containerRef.current;
+    if (!el) return undefined;
+    function measure() {
+      setContainerWidth(el!.getBoundingClientRect().width);
+    }
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isQuarterTurn]);
+
+  const displaySize = rotatedSize(image, rotation);
+  // Pre-rotation box: after rotating 90/270 its bounding box swaps back to
+  // exactly (containerWidth, containerHeight) IF its own aspect ratio is the
+  // image's natural one — see WorksheetZoneEditor's identical derivation.
+  const rotatedImageStyle = isQuarterTurn
+    ? {
+        position: 'absolute' as const,
+        top: '50%',
+        left: '50%',
+        height: containerWidth,
+        width: containerWidth * (image.width / image.height),
+        transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+        maxWidth: 'none',
+      }
+    : {
+        transform: `rotate(${rotation}deg)`,
+      };
 
   return (
     <div data-testid="worksheet-player" className="w-full">
       <p className="mb-2 text-xs text-muted-foreground">{t.notGraded}</p>
       <div
+        ref={containerRef}
         className="relative w-full overflow-hidden rounded-lg bg-muted"
-        style={{ aspectRatio: `${image.width} / ${image.height}` }}
+        style={{ aspectRatio: `${displaySize.width} / ${displaySize.height}` }}
       >
-        <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
+        <img
+          src={imageUrl}
+          alt=""
+          className={isQuarterTurn ? 'object-contain' : 'absolute inset-0 h-full w-full object-contain'}
+          style={rotatedImageStyle}
+        />
         {zones.map((zone) => {
           const style = {
             left: `${zone.x * 100}%`,

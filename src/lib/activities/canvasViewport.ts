@@ -94,3 +94,16 @@ export function zoomAroundPoint(
 export function contentSize(image: Size, zoom: number): Size {
   return { width: image.width * zoom, height: image.height * zoom };
 }
+
+/**
+ * The DISPLAYED size of an image once a worksheet's `rotation` (creator
+ * polish round 2) is applied: a quarter turn (90/270) swaps width and
+ * height, a half turn (180) or no turn (0) does not. Every caller that lays
+ * out the canvas — `fitZoom`, `contentSize` — must use THIS size, not the
+ * image's own raw `width`/`height`, once rotation is in play.
+ */
+export function rotatedSize(image: Size, rotation: 0 | 90 | 180 | 270): Size {
+  return rotation === 90 || rotation === 270
+    ? { width: image.height, height: image.width }
+    : { width: image.width, height: image.height };
+}

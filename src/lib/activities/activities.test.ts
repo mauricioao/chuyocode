@@ -65,6 +65,7 @@ const SOME_BLOCKS: Block[] = [
   {
     id: 'block-1',
     type: 'worksheet',
+    rotation: 0,
     image: {
       path: `activity-uploads/${AUTHOR_ID}/33333333-3333-3333-3333-333333333333.webp`,
       width: 800,

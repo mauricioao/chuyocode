@@ -38,8 +38,12 @@
  * the selected zone; Delete/Backspace removes it.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
+import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
+import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
+import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { ImageRef, Zone } from '@/lib/activities/blocks';
+import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
 import {
   rectFromDrag,
   moveRect,
@@ -56,8 +60,19 @@ import {
   stepZoom,
   zoomAroundPoint,
   contentSize,
+  rotatedSize,
 } from '@/lib/activities/canvasViewport';
 import { Button } from '@/components/ui/button';
+
+export interface ZonesChangeOptions {
+  /**
+   * `false` while a drag gesture (move/resize) is still in progress — the
+   * caller must NOT create an undo step for every pointermove frame.
+   * Omitted/`true` for a discrete change (add/delete/nudge/answers/options,
+   * or the final pointerup of a drag), which DOES create one.
+   */
+  commit?: boolean;
+}
 
 export interface WorksheetZoneEditorProps {
   lang: Lang;
@@ -65,9 +80,14 @@ export interface WorksheetZoneEditorProps {
   imageUrl: string;
   zones: Zone[];
   selectedZoneId: string | null;
-  onZonesChange: (zones: Zone[]) => void;
+  onZonesChange: (zones: Zone[], opts?: ZonesChangeOptions) => void;
   onSelectZone: (zoneId: string | null) => void;
+  /** The worksheet's own rotation (creator polish round 2). Defaults to `0` — every image saved before rotation existed. */
+  rotation?: Rotation;
 }
+
+/** The zoom levels behind the "25/50/100/125%" preset row. */
+const ZOOM_PRESETS = [25, 50, 100, 125] as const;
 
 const HANDLES: Handle[] = ['nw', 'ne', 'sw', 'se'];
 const HANDLE_CURSOR: Record<Handle, string> = {
@@ -76,15 +96,6 @@ const HANDLE_CURSOR: Record<Handle, string> = {
   ne: 'cursor-nesw-resize',
   sw: 'cursor-nesw-resize',
 };
-
-/**
- * Bounds the viewport height to what is actually visible: `100dvh` minus a
- * rough allowance for the page's own chrome above the editor (site header,
- * the editor's top bar and the zoom toolbar), with a floor so it never
- * collapses to something unusable on a short screen and a ceiling so it does
- * not grow absurdly tall on a huge one.
- */
-const VIEWPORT_HEIGHT = 'clamp(320px, calc(100dvh - 260px), 900px)';
 
 function defaultRect(): Rect {
   return { x: 0.3, y: 0.3, w: 0.2, h: 0.15 };
@@ -108,6 +119,7 @@ export default function WorksheetZoneEditor({
   selectedZoneId,
   onZonesChange,
   onSelectZone,
+  rotation = 0,
 }: WorksheetZoneEditorProps) {
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -123,31 +135,39 @@ export default function WorksheetZoneEditor({
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
 
+  // The DISPLAYED size, after rotation — every fit/content-box calculation
+  // below must use this, not `image.width`/`image.height` directly (a 90/270
+  // rotation swaps the two).
+  const displaySize = rotatedSize(image, rotation);
+
   const computeFitZoom = useCallback(() => {
     const el = viewportRef.current;
     if (!el) return 1;
     const box = el.getBoundingClientRect();
-    return fitZoom({ width: box.width, height: box.height }, { width: image.width, height: image.height });
-  }, [image.width, image.height]);
+    return fitZoom({ width: box.width, height: box.height }, displaySize);
+  }, [displaySize]);
 
   // Default view is fit-to-view (decision #5: the whole worksheet visible on
-  // load, however tall/portrait it is), computed once real layout exists.
+  // load, however tall/portrait it is). The viewport's own box is now
+  // layout-driven (creator "one-screen" pass: it grows to fill whatever
+  // height the active block's flex row gives it — see `BlockList.tsx` —
+  // instead of a fixed/clamped CSS height), so a plain mount effect + window
+  // `resize` listener is no longer enough: collapsing/expanding a SIBLING
+  // block, switching which block is active, or the properties panel
+  // reflowing all change this element's height with no window resize event
+  // at all. `ResizeObserver` is the correct primitive for that — it also
+  // fires once with the initial size right after `observe()`, which replaces
+  // the old separate "compute once on mount" effect for free. Guarded like
+  // `WorksheetPlayer.tsx`'s own resize watcher: jsdom has no `ResizeObserver`
+  // (see this file's own tests, which mock it where the behavior matters).
   useEffect(() => {
-    setZoom(computeFitZoom());
-    // Only on mount: a resize handler (below) keeps re-fitting afterwards
-    // while still in fit mode, and any explicit zoom action turns fit mode
-    // off — re-running this on every `computeFitZoom` identity change would
-    // fight both of those.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!fitMode) return undefined;
-    function onResize() {
-      setZoom(computeFitZoom());
-    }
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const el = viewportRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (fitMode) setZoom(computeFitZoom());
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [fitMode, computeFitZoom]);
 
   const applyZoom = useCallback((next: number, anchor?: { x: number; y: number }) => {
@@ -177,7 +197,6 @@ export default function WorksheetZoneEditor({
 
   const handleZoomIn = useCallback(() => applyZoom(stepZoom(zoom, 'in')), [applyZoom, zoom]);
   const handleZoomOut = useCallback(() => applyZoom(stepZoom(zoom, 'out')), [applyZoom, zoom]);
-  const handleZoomReset = useCallback(() => applyZoom(1), [applyZoom]);
   const handleZoomFit = useCallback(() => {
     setFitMode(true);
     setZoom(computeFitZoom());
@@ -240,8 +259,11 @@ export default function WorksheetZoneEditor({
   }, []);
 
   const updateZoneRect = useCallback(
-    (zoneId: string, rect: Rect) => {
-      onZonesChange(zones.map((z) => (z.id === zoneId ? { ...z, ...rect } : z)));
+    (zoneId: string, rect: Rect, opts?: ZonesChangeOptions) => {
+      onZonesChange(
+        zones.map((z) => (z.id === zoneId ? { ...z, ...rect } : z)),
+        opts,
+      );
     },
     [zones, onZonesChange],
   );
@@ -331,9 +353,10 @@ export default function WorksheetZoneEditor({
       const dy = (point.y - drag.start.y) / size.height;
 
       if (drag.kind === 'move') {
-        updateZoneRect(drag.zoneId, moveRect(drag.original, dx, dy));
+        // Live frame: no undo step per pixel — see `ZonesChangeOptions`.
+        updateZoneRect(drag.zoneId, moveRect(drag.original, dx, dy), { commit: false });
       } else if (drag.kind === 'resize') {
-        updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy));
+        updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
       }
     },
     [containerSize, pointFromEvent, updateZoneRect],
@@ -349,6 +372,14 @@ export default function WorksheetZoneEditor({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
       endDrag();
+      // Seal a move/resize gesture into exactly ONE undo step now that it is
+      // done — every pointermove frame during it was a `commit: false`
+      // live update (see `handlePointerMove`); `zones` here already holds
+      // the final position from the last of those.
+      if (drag && (drag.kind === 'move' || drag.kind === 'resize')) {
+        onZonesChange(zones, { commit: true });
+        return;
+      }
       if (!drag || drag.kind !== 'draw') return;
 
       const size = containerSize();
@@ -462,19 +493,24 @@ export default function WorksheetZoneEditor({
     [selectedZone, zones, onZonesChange],
   );
 
-  const canvasSize = contentSize(image, zoom);
+  const canvasSize = contentSize(displaySize, zoom);
+  // The <img> itself always renders at its OWN (unrotated) content size —
+  // rotation is a pure CSS transform around its center, and the OUTER
+  // canvas (sized to `canvasSize` above, using the ROTATED dimensions) is
+  // what the rotated image ends up filling exactly.
+  const imageContentSize = contentSize(image, zoom);
   const zoomPercent = Math.round(zoom * 100);
   const canvasCursorClass = isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-crosshair';
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row" data-testid="worksheet-zone-editor">
-      <div className="min-w-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row" data-testid="worksheet-zone-editor">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
-          className="mb-2 flex flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
+          className="mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
           data-testid="zoom-toolbar"
         >
           <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
-            −
+            <MinusIcon aria-hidden="true" />
           </Button>
           <span
             data-testid="zoom-level"
@@ -485,14 +521,30 @@ export default function WorksheetZoneEditor({
             {zoomPercent}%
           </span>
           <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomIn} data-testid="zoom-in" onClick={handleZoomIn}>
-            +
+            <PlusIcon aria-hidden="true" />
           </Button>
           <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+          {ZOOM_PRESETS.map((preset) => (
+            <Button
+              key={preset}
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid={`zoom-preset-${preset}`}
+              aria-pressed={zoomPercent === preset}
+              onClick={() => applyZoom(preset / 100)}
+            >
+              {preset}%
+            </Button>
+          ))}
           <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
+            <FrameCornersIcon aria-hidden="true" />
             {t.zoomFit}
           </Button>
-          <Button type="button" size="sm" variant="outline" data-testid="zoom-reset" onClick={handleZoomReset}>
-            {t.zoomReset}
+          <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+          <Button type="button" size="sm" variant="default" data-testid="add-zone" onClick={handleAddZone}>
+            <PlusIcon aria-hidden="true" />
+            {t.addZone}
           </Button>
         </div>
 
@@ -502,8 +554,14 @@ export default function WorksheetZoneEditor({
           tabIndex={0}
           onKeyDown={handleViewportKeyDown}
           onKeyUp={handleViewportKeyUp}
-          className="relative overflow-auto rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          style={{ height: VIEWPORT_HEIGHT }}
+          // Layout-driven height (creator "one-screen" pass): this viewport
+          // fills whatever height its flex ancestors give it (the active
+          // block's row in `BlockList.tsx`, ultimately the editor page's own
+          // `100dvh`-based column) instead of a fixed/clamped CSS height —
+          // `min-h-80` is only a FLOOR so it still renders usably outside
+          // that flex chain (narrow/stacked layout below `lg:`, or a test
+          // harness with no real layout).
+          className="relative min-h-80 flex-1 overflow-auto rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div
             ref={containerRef}
@@ -515,7 +573,23 @@ export default function WorksheetZoneEditor({
             className={`relative touch-none select-none ${canvasCursorClass}`}
             style={{ width: canvasSize.width, height: canvasSize.height }}
           >
-            <img src={imageUrl} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+            <img
+              src={imageUrl}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute object-contain"
+              style={{
+                top: '50%',
+                left: '50%',
+                width: imageContentSize.width,
+                height: imageContentSize.height,
+                // Rotation (creator polish round 2) is a pure CSS transform
+                // around the image's own center — the outer canvas above is
+                // already sized to the ROTATED dimensions, so the rotated
+                // image exactly fills it.
+                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+              }}
+            />
             {zones.map((zone) => {
               const selected = zone.id === selectedZoneId;
               const style = {
@@ -568,25 +642,31 @@ export default function WorksheetZoneEditor({
             )}
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button type="button" size="sm" variant="outline" data-testid="add-zone" onClick={handleAddZone}>
-            + {t.zoneKindText === 'Texto' ? 'Zona' : 'Zone'}
-          </Button>
-          {zones.length === 0 && <p className="text-xs text-muted-foreground">{t.noZonesYet}</p>}
+        {/* One compact line (creator "one-screen" pass: every extra row here
+            is height the canvas doesn't get) instead of two stacked hints. */}
+        <div className="mt-1 flex flex-none flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          {zones.length === 0 && <span>{t.noZonesYet}</span>}
+          <span>{t.addZoneHint}</span>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{t.addZoneHint}</p>
       </div>
 
-      {/* ALWAYS rendered, fixed width — see the file header. Hiding this
-          column when nothing is selected is exactly the bug that made the
-          canvas "zoom" on select/deselect. */}
-      <div className="w-full flex-none lg:w-72" data-testid="zone-properties-panel">
+      {/* ALWAYS rendered, fixed width (~280-300px) — see the file header.
+          Hiding this column when nothing is selected is exactly the bug that
+          made the canvas "zoom" on select/deselect. `overflow-y-auto` +
+          `min-h-0` (creator "one-screen" pass): once this row has a real,
+          bounded height (from the flex chain above), a long properties
+          panel scrolls WITHIN its own column instead of growing the row and
+          pushing the canvas off-screen. */}
+      <div
+        className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72"
+        data-testid="zone-properties-panel"
+      >
         {selectedZone ? (
           <div data-testid="zone-properties-content">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
               <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
-                ✕
+                <XIcon aria-hidden="true" />
               </Button>
             </div>
             <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
@@ -637,7 +717,7 @@ export default function WorksheetZoneEditor({
                       disabled={selectedZone.answers.length <= 1}
                       onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
                     >
-                      ✕
+                      <XIcon aria-hidden="true" />
                     </Button>
                   </div>
                 ))}
@@ -678,7 +758,7 @@ export default function WorksheetZoneEditor({
                       disabled={(selectedZone.options ?? []).length <= 2}
                       onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
                     >
-                      ✕
+                      <XIcon aria-hidden="true" />
                     </Button>
                   </div>
                 ))}
