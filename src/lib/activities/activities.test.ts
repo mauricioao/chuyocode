@@ -12,44 +12,61 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { clientState, maybeSingleMock, awaitResults, neqMock, orderMock, limitMock, inMock, insertMock, fromMock } =
-  vi.hoisted(() => {
-    const maybeSingleMock = vi.fn();
-    const awaitResults: unknown[] = [];
+const {
+  clientState,
+  maybeSingleMock,
+  awaitResults,
+  eqMock,
+  neqMock,
+  orderMock,
+  limitMock,
+  rangeMock,
+  inMock,
+  insertMock,
+  selectMock,
+  fromMock,
+} = vi.hoisted(() => {
+  const maybeSingleMock = vi.fn();
+  const awaitResults: unknown[] = [];
 
-    const builder: Record<string, unknown> = {
-      maybeSingle: maybeSingleMock,
-      then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
-        Promise.resolve(awaitResults.shift() ?? { error: null }).then(onFulfilled, onRejected),
-    };
-    const eqMock = vi.fn(() => builder);
-    const neqMock = vi.fn(() => builder);
-    const orderMock = vi.fn(() => builder);
-    const limitMock = vi.fn(() => builder);
-    const inMock = vi.fn(() => builder);
-    const selectMock = vi.fn(() => builder);
-    const insertMock = vi.fn((_payload: Record<string, unknown>) => builder);
-    builder.eq = eqMock;
-    builder.neq = neqMock;
-    builder.order = orderMock;
-    builder.limit = limitMock;
-    builder.in = inMock;
-    builder.select = selectMock;
-    builder.insert = insertMock;
+  const builder: Record<string, unknown> = {
+    maybeSingle: maybeSingleMock,
+    then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+      Promise.resolve(awaitResults.shift() ?? { error: null }).then(onFulfilled, onRejected),
+  };
+  const eqMock = vi.fn(() => builder);
+  const neqMock = vi.fn(() => builder);
+  const orderMock = vi.fn(() => builder);
+  const limitMock = vi.fn(() => builder);
+  const rangeMock = vi.fn(() => builder);
+  const inMock = vi.fn(() => builder);
+  const selectMock = vi.fn(() => builder);
+  const insertMock = vi.fn((_payload: Record<string, unknown>) => builder);
+  builder.eq = eqMock;
+  builder.neq = neqMock;
+  builder.order = orderMock;
+  builder.limit = limitMock;
+  builder.range = rangeMock;
+  builder.in = inMock;
+  builder.select = selectMock;
+  builder.insert = insertMock;
 
-    const fromMock = vi.fn(() => builder);
-    return {
-      clientState: { available: true },
-      maybeSingleMock,
-      awaitResults,
-      neqMock,
-      orderMock,
-      limitMock,
-      inMock,
-      insertMock,
-      fromMock,
-    };
-  });
+  const fromMock = vi.fn(() => builder);
+  return {
+    clientState: { available: true },
+    maybeSingleMock,
+    awaitResults,
+    eqMock,
+    neqMock,
+    orderMock,
+    limitMock,
+    rangeMock,
+    inMock,
+    insertMock,
+    selectMock,
+    fromMock,
+  };
+});
 
 vi.mock('../supabase', () => ({
   createServiceClient: () => {
@@ -60,7 +77,14 @@ vi.mock('../supabase', () => ({
   },
 }));
 
-import { createActivity, getActivityForEdit, getActivitiesByAuthor, clearActivitiesClient } from './activities';
+import {
+  createActivity,
+  getActivityForEdit,
+  getActivitiesByAuthor,
+  getPublishedActivities,
+  ACTIVITIES_PAGE_SIZE,
+  clearActivitiesClient,
+} from './activities';
 import type { Block } from './blocks';
 
 const AUTHOR_ID = '11111111-1111-1111-1111-111111111111';
@@ -402,5 +426,179 @@ describe('getActivitiesByAuthor', () => {
       throw new Error('network down');
     });
     expect(await getActivitiesByAuthor(AUTHOR_ID)).toEqual([]);
+  });
+});
+
+const PUBLISHED_REVISION_ID = '88888888-8888-8888-8888-888888888888';
+const OTHER_REVISION_ID = '99999999-9999-9999-9999-999999999999';
+
+const THUMBNAIL_IMAGE_PATH =
+  'activity-images/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.webp';
+
+function worksheetForThumbnail(path: string) {
+  return {
+    id: 'w1',
+    type: 'worksheet',
+    rotation: 0,
+    image: { path, width: 800, height: 600 },
+    zones: [],
+  };
+}
+
+describe('getPublishedActivities', () => {
+  it('returns an empty page when the service client is unavailable', async () => {
+    clientState.available = false;
+    expect(await getPublishedActivities({ level: null, page: 1 })).toEqual({ activities: [], total: 0 });
+  });
+
+  it('returns an empty page when the fetch errors', async () => {
+    awaitResults.push({ data: null, error: { message: 'down' }, count: null });
+    expect(await getPublishedActivities({ level: null, page: 1 })).toEqual({ activities: [], total: 0 });
+  });
+
+  it('only reads visible activities', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(selectMock).toHaveBeenCalledWith(
+      'id, title, level, block_count, published_at, published_revision_id',
+      { count: 'exact' },
+    );
+  });
+
+  it('always filters on visible=true, and does not filter by level when none is given', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
+    expect(eqMock).not.toHaveBeenCalledWith('level', expect.anything());
+  });
+
+  it('filters by level when one is given', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: 'B1', page: 1 });
+    expect(eqMock).toHaveBeenCalledWith('level', 'B1');
+  });
+
+  it('ranges the first page from 0..PAGE_SIZE-1', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(rangeMock).toHaveBeenCalledWith(0, ACTIVITIES_PAGE_SIZE - 1);
+  });
+
+  it('ranges page 2 from PAGE_SIZE..2*PAGE_SIZE-1', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 2 });
+    expect(rangeMock).toHaveBeenCalledWith(ACTIVITIES_PAGE_SIZE, 2 * ACTIVITIES_PAGE_SIZE - 1);
+  });
+
+  it('treats a non-positive page as page 1', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: -3 });
+    expect(rangeMock).toHaveBeenCalledWith(0, ACTIVITIES_PAGE_SIZE - 1);
+  });
+
+  it('skips a malformed row (missing published_revision_id) and keeps the rest', async () => {
+    awaitResults.push({
+      data: [
+        { id: 'a1', title: 'Sin revisión', level: null, block_count: 1, published_at: null, published_revision_id: null },
+        { id: 'a2', title: 'Buena', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID },
+      ],
+      error: null,
+      count: 2,
+    });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].id).toBe('a2');
+    expect(result.total).toBe(2);
+  });
+
+  it('normalizes an out-of-taxonomy level to null', async () => {
+    awaitResults.push({
+      data: [{ id: 'a1', title: 'x', level: 'zz', block_count: 0, published_at: null, published_revision_id: PUBLISHED_REVISION_ID }],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities[0].level).toBeNull();
+  });
+
+  it('never queries revisions when the page is empty', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(inMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves the thumbnail from the first worksheet block of the published revision', async () => {
+    awaitResults.push({
+      data: [{ id: 'a1', title: 'Con hoja', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID }],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({
+      data: [{ id: PUBLISHED_REVISION_ID, blocks: [worksheetForThumbnail(THUMBNAIL_IMAGE_PATH)] }],
+      error: null,
+    });
+
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(inMock).toHaveBeenCalledWith('id', [PUBLISHED_REVISION_ID]);
+    expect(result.activities[0].thumbnailPath).toBe(THUMBNAIL_IMAGE_PATH);
+  });
+
+  it('leaves thumbnailPath null when the published revision has no worksheet block', async () => {
+    awaitResults.push({
+      data: [{ id: 'a1', title: 'Sin hoja', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID }],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({
+      data: [{ id: PUBLISHED_REVISION_ID, blocks: [] }],
+      error: null,
+    });
+
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities[0].thumbnailPath).toBeNull();
+  });
+
+  it('matches each activity to its OWN revision, not a different one on the same page', async () => {
+    awaitResults.push({
+      data: [
+        { id: 'a1', title: 'Uno', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID },
+        { id: 'a2', title: 'Dos', level: null, block_count: 1, published_at: null, published_revision_id: OTHER_REVISION_ID },
+      ],
+      error: null,
+      count: 2,
+    });
+    awaitResults.push({
+      data: [
+        { id: PUBLISHED_REVISION_ID, blocks: [worksheetForThumbnail(THUMBNAIL_IMAGE_PATH)] },
+        { id: OTHER_REVISION_ID, blocks: [] },
+      ],
+      error: null,
+    });
+
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities.find((a) => a.id === 'a1')?.thumbnailPath).toBe(THUMBNAIL_IMAGE_PATH);
+    expect(result.activities.find((a) => a.id === 'a2')?.thumbnailPath).toBeNull();
+  });
+
+  it('degrades to unthumbnailed rows when the revisions read itself fails', async () => {
+    awaitResults.push({
+      data: [{ id: 'a1', title: 'x', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID }],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({ data: null, error: { message: 'down' } });
+
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].thumbnailPath).toBeNull();
+  });
+
+  it('returns an empty page when the query throws', async () => {
+    fromMock.mockImplementationOnce(() => {
+      throw new Error('network down');
+    });
+    expect(await getPublishedActivities({ level: null, page: 1 })).toEqual({ activities: [], total: 0 });
   });
 });

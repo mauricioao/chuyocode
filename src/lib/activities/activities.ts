@@ -296,3 +296,150 @@ export async function getActivitiesByAuthor(authorId: string): Promise<AuthoredA
     return [];
   }
 }
+
+/** One live activity as the public "Actividades de la comunidad" feed card needs it. */
+export interface PublishedActivityCard {
+  id: string;
+  title: string;
+  level: Level | null;
+  blockCount: number;
+  publishedAt: string | null;
+  /**
+   * The first worksheet block's stored image path (bucket-prefixed, always
+   * under the PUBLIC `activity-images` bucket for a published revision), or
+   * `null` when the published revision has no worksheet block. Callers
+   * resolve this to a URL with `publicImageUrl` (`@lib/activities/storage`)
+   * — kept as a bare path here, the same separation `blocks.ts`/`paths.ts`
+   * already draw between content and storage I/O.
+   */
+  thumbnailPath: string | null;
+}
+
+export interface PublishedActivitiesPage {
+  activities: PublishedActivityCard[];
+  total: number;
+}
+
+/** Cards per page — also the range width `getPublishedActivities` requests. */
+export const ACTIVITIES_PAGE_SIZE = 20;
+
+/**
+ * Fetch one page of the public feed: `visible` (live) activities only,
+ * newest `published_at` first, optionally narrowed to one CEFR `level`.
+ *
+ * NO AUTHOR NAME on the card, deliberately: this codebase has no cheap way
+ * to resolve an arbitrary author's display name (`src/lib/profile.ts`'s own
+ * lookup is scoped to the CALLER's session, not a stranger's id), and the
+ * task's own contract allows omitting it rather than adding an expensive
+ * per-row lookup for a "nice to have".
+ *
+ * A SECOND, narrow read fetches the PUBLISHED revision's `blocks` for just
+ * this page's rows (one `.in(...)`, not N+1) to find each card's thumbnail —
+ * `block_types`/`block_count` are derived search columns (0011 migration),
+ * not the blocks themselves, so there is no cheaper way to reach an actual
+ * image path.
+ *
+ * FAIL-SAFE: an empty page (`{ activities: [], total: 0 }`) on any failure,
+ * same posture as every other read in this codebase — an outage must 404 or
+ * render "nothing published", never 500 the page.
+ */
+export async function getPublishedActivities(opts: {
+  level: Level | null;
+  page: number;
+}): Promise<PublishedActivitiesPage> {
+  const client = getClient();
+  if (!client) return { activities: [], total: 0 };
+
+  const page = Number.isFinite(opts.page) && opts.page >= 1 ? Math.floor(opts.page) : 1;
+  const offset = (page - 1) * ACTIVITIES_PAGE_SIZE;
+
+  try {
+    let query = client
+      .from(ACTIVITIES_TABLE)
+      .select('id, title, level, block_count, published_at, published_revision_id', { count: 'exact' })
+      .eq('visible', true);
+    if (opts.level) {
+      query = query.eq('level', opts.level);
+    }
+    const { data, error, count } = await query
+      // Total order: `published_at` is unique-enough in practice, but `id`
+      // breaks a tie deterministically rather than leaving it to Postgres.
+      .order('published_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(offset, offset + ACTIVITIES_PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('[activities] getPublishedActivities failed:', error.message);
+      return { activities: [], total: 0 };
+    }
+    if (!Array.isArray(data)) return { activities: [], total: 0 };
+
+    const rows = data.flatMap((raw): Array<{
+      id: string;
+      title: string;
+      level: Level | null;
+      blockCount: number;
+      publishedAt: string | null;
+      publishedRevisionId: string;
+    }> => {
+      const row = raw as unknown as Record<string, unknown>;
+      if (typeof row.id !== 'string' || row.id.length === 0) return [];
+      if (typeof row.title !== 'string') return [];
+      // `activities_live_has_revision` guarantees a non-null revision id for
+      // any `visible` row — but this is still a boundary read, so it is
+      // checked rather than assumed.
+      if (typeof row.published_revision_id !== 'string' || row.published_revision_id.length === 0) {
+        return [];
+      }
+      return [
+        {
+          id: row.id,
+          title: row.title,
+          level: isLevel(row.level) ? row.level : null,
+          blockCount: typeof row.block_count === 'number' ? row.block_count : 0,
+          publishedAt: typeof row.published_at === 'string' ? row.published_at : null,
+          publishedRevisionId: row.published_revision_id,
+        },
+      ];
+    });
+
+    const total = typeof count === 'number' ? count : rows.length;
+    if (rows.length === 0) return { activities: [], total };
+
+    const revisionIds = rows.map((row) => row.publishedRevisionId);
+    const thumbnailByRevision = new Map<string, string | null>();
+
+    const { data: revisionsData, error: revisionsError } = await client
+      .from(ACTIVITY_REVISIONS_TABLE)
+      .select('id, blocks')
+      .in('id', revisionIds);
+
+    if (revisionsError) {
+      console.error('[activities] getPublishedActivities thumbnail read failed:', revisionsError.message);
+      // Cards without thumbnails still render fine — this is a degraded
+      // page, not a failed one.
+    } else if (Array.isArray(revisionsData)) {
+      for (const raw of revisionsData) {
+        const revisionRow = raw as unknown as Record<string, unknown>;
+        if (typeof revisionRow.id !== 'string') continue;
+        const blocks = parseBlocks(revisionRow.blocks);
+        const firstWorksheet = blocks?.find((block) => block.type === 'worksheet');
+        thumbnailByRevision.set(revisionRow.id, firstWorksheet ? firstWorksheet.image.path : null);
+      }
+    }
+
+    const activities: PublishedActivityCard[] = rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      level: row.level,
+      blockCount: row.blockCount,
+      publishedAt: row.publishedAt,
+      thumbnailPath: thumbnailByRevision.get(row.publishedRevisionId) ?? null,
+    }));
+
+    return { activities, total };
+  } catch (err) {
+    console.error('[activities] getPublishedActivities threw:', err);
+    return { activities: [], total: 0 };
+  }
+}

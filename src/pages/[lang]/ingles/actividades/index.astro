@@ -1,0 +1,161 @@
+---
+/**
+ * Public feed of community activities — `/[lang]/ingles/actividades` (SSR,
+ * PR D "Activities practice"). LIVE activities only (`visible`), newest
+ * `published_at` first, paginated 20/page, optionally narrowed by CEFR
+ * level (`?nivel=`).
+ *
+ * Under `ingles/**`, so this route is ALREADY gated and marked
+ * private/no-store by the middleware (`@lib/access`'s `GATED_SECTIONS`,
+ * `src/middleware.ts`'s own header comment) — no per-page gate or
+ * `markPrivate` call is needed here, unlike `/[lang]/crear` or
+ * `/[lang]/mis-actividades`, which sit OUTSIDE that section.
+ *
+ * Zero JavaScript framework, same posture as `/[lang]/ingles/index.astro`:
+ * the level filter and pagination are both plain links (`?nivel=`/`?page=`),
+ * so the screen stays deep-linkable, shareable, and works with scripting
+ * off.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import { badgeVariants } from '@components/ui/badge';
+import { buttonVariants } from '@components/ui/button';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { LEVELS, isLevel } from '@lib/exerciseTaxonomy';
+import { getPublishedActivities, ACTIVITIES_PAGE_SIZE } from '@lib/activities/activities';
+import { publicImageUrl } from '@lib/activities/storage';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].activities.explore;
+const levelLabels = UI_LABELS[lang].english.levels;
+
+// An invalid `?nivel=` is treated as "no filter" (show every level) rather
+// than 404ing — same lenient posture as the filter chips below, which are
+// plain links a visitor can always get back to.
+const nivelParam = Astro.url.searchParams.get('nivel');
+const activeLevel = isLevel(nivelParam) ? nivelParam : null;
+
+const pageParam = Number.parseInt(Astro.url.searchParams.get('page') ?? '1', 10);
+const requestedPage = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
+
+const { activities, total } = await getPublishedActivities({ level: activeLevel, page: requestedPage });
+const totalPages = Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE));
+// A page beyond the last one still renders (empty grid + pagination back to
+// the real range) rather than 404ing — the same "URL always answers" rule
+// `/[lang]/ingles/index.astro` follows for an empty level.
+const currentPage = Math.min(requestedPage, totalPages);
+
+function countLabel(count: number): string {
+  return `${count} ${count === 1 ? t.blockCountOne : t.blockCountMany}`;
+}
+
+/** Build `?nivel=…&page=…`, omitting either param when it is the default. */
+function pageHref(page: number, level: string | null): string {
+  const params = new URLSearchParams();
+  if (level) params.set('nivel', level);
+  if (page > 1) params.set('page', String(page));
+  const qs = params.toString();
+  return `/${lang}/ingles/actividades${qs ? `?${qs}` : ''}`;
+}
+
+function chipClass(isActive: boolean): string {
+  return [
+    badgeVariants({ variant: isActive ? 'default' : 'outline' }),
+    'h-auto gap-2 rounded-full px-4 py-2 text-sm',
+    isActive ? 'font-semibold shadow-elevation-1' : 'hover:border-accent hover:text-accent',
+  ].join(' ');
+}
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:py-12">
+    <header class="flex flex-col gap-3">
+      <h1 class="text-3xl font-bold tracking-tight text-accent sm:text-4xl">
+        {t.heading}
+      </h1>
+    </header>
+
+    <nav class="flex flex-wrap gap-3" aria-label={t.allLevels}>
+      <a href={pageHref(1, null)} class={chipClass(activeLevel === null)}>
+        {t.allLevels}
+      </a>
+      {
+        LEVELS.map((lvl) => (
+          <a href={pageHref(1, lvl)} class={chipClass(activeLevel === lvl)} aria-current={activeLevel === lvl ? 'true' : undefined}>
+            {`${lvl} · ${levelLabels[lvl]}`}
+          </a>
+        ))
+      }
+    </nav>
+
+    {
+      activities.length === 0 ? (
+        <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+          {activeLevel ? t.emptyLevel : t.empty}
+        </p>
+      ) : (
+        <>
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {activities.map((activity) => {
+              const thumbnailUrl = activity.thumbnailPath ? publicImageUrl(activity.thumbnailPath) : null;
+              return (
+                <li>
+                  <a
+                    href={`/${lang}/ingles/actividades/${activity.id}`}
+                    class="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-base-soft transition-colors hover:border-accent focus-visible:border-accent"
+                  >
+                    <div class="aspect-video w-full overflow-hidden bg-muted">
+                      {thumbnailUrl && (
+                        <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
+                      )}
+                    </div>
+                    <div class="flex flex-col gap-1 p-4">
+                      <span class="text-lg font-semibold text-zinc-100">{activity.title}</span>
+                      <span class="text-sm text-zinc-400">
+                        {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}
+                        {' · '}
+                        {countLabel(activity.blockCount)}
+                      </span>
+                    </div>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {totalPages > 1 && (
+            <nav class="flex items-center justify-between gap-4" aria-label={t.pagination}>
+              {currentPage > 1 ? (
+                <a href={pageHref(currentPage - 1, activeLevel)} class={buttonVariants({ variant: 'outline' })}>
+                  {t.prevPage}
+                </a>
+              ) : (
+                <span class={buttonVariants({ variant: 'outline' })} aria-disabled="true">
+                  {t.prevPage}
+                </span>
+              )}
+              <span class="text-sm text-zinc-400 tabular-nums">
+                {t.pageLabel} {currentPage} {t.ofLabel} {totalPages}
+              </span>
+              {currentPage < totalPages ? (
+                <a href={pageHref(currentPage + 1, activeLevel)} class={buttonVariants({ variant: 'outline' })}>
+                  {t.nextPage}
+                </a>
+              ) : (
+                <span class={buttonVariants({ variant: 'outline' })} aria-disabled="true">
+                  {t.nextPage}
+                </span>
+              )}
+            </nav>
+          )}
+        </>
+      )
+    }
+  </section>
+</BaseLayout>

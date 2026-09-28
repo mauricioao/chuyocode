@@ -380,6 +380,16 @@ describe('ingles/index.astro (section entry)', () => {
     expect(res.status).toBe(200);
   });
 
+  it('links to the community activities feed (PR D "Activities practice")', async () => {
+    getExerciseFacetRows.mockResolvedValue([]);
+
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('href="/es/ingles/actividades"');
+    expect(html).toContain('Actividades de la comunidad');
+  });
+
   it('returns 200 for a valid ?nivel= level that has no exercises', async () => {
     getExerciseFacetRows.mockResolvedValue([facetRow('B1', 'past-simple')]);
 

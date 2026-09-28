@@ -473,33 +473,15 @@ export default function ActivityEditorIsland({
       data-testid="activity-editor-island"
       className="flex flex-col gap-4 lg:h-[calc(100dvh-65px)] lg:gap-2 lg:pr-16"
     >
-      {/* Review-state row (PR D, "Activities practice"): the badge mirrors
-          `activities.status` exactly, and "Enviar a revisión" opens
-          `SubmitForReviewDialog`. Its own row, above the compact top bar, so
-          that row's fixed `lg:h-12` height stays untouched. */}
-      <div className="flex flex-none flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
-          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-              : t.statusDraft}
-          </span>
-          {status === 'rejected' && initialReviewNote && (
-            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-              {t.reviewNoteLabel}: {initialReviewNote}
-            </span>
-          )}
-        </div>
-        <Button type="button" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
-          {t.submitForReview}
-        </Button>
-      </div>
-
-      {/* Compact top bar (owner request #1): just title + level. Everything
-          else (preview, save, undo/redo, block navigation) lives in the
-          sticky side toolbar so this row stays a single, short line — on
-          desktop, a fixed ~48px (`lg:h-12`) row (creator "one-screen" pass). */}
-      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:h-12 lg:flex-row lg:items-center lg:py-1.5">
+      {/* Compact top bar (owner request #1): title + level, plus — PR D,
+          "Activities practice" — the review-state badge and "Enviar a
+          revisión" (placed HERE, next to the rest of the top bar's own
+          controls, not in the sticky side toolbar: the owner is removing
+          that side toolbar in the very next PR, so nothing new should be
+          added to it). `lg:min-h-12` (was a hard `lg:h-12`) lets this row
+          grow if the badge/note wrap onto a second line instead of clipping
+          — everything else about this row is unchanged from PR B/C. */}
+      <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center lg:min-h-12 lg:flex-row lg:items-center lg:py-1.5">
         <label className="flex flex-1 flex-col gap-1 text-sm">
           <span className="sr-only">{t.titleLabel}</span>
           <input
@@ -528,6 +510,21 @@ export default function ActivityEditorIsland({
             ))}
           </select>
         </label>
+        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+              : t.statusDraft}
+          </span>
+          {status === 'rejected' && initialReviewNote && (
+            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+              {t.reviewNoteLabel}: {initialReviewNote}
+            </span>
+          )}
+        </div>
+        <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
+          {t.submitForReview}
+        </Button>
       </div>
 
       {preview ? (

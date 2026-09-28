@@ -102,6 +102,21 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
       <p class="max-w-2xl text-lg text-zinc-300">{t.section.intro}</p>
     </header>
 
+    {/* PR D "Activities practice": a visible entry point into the public
+        community feed (`/[lang]/ingles/actividades`), alongside — not
+        instead of — the curated exercises below. */}
+    <a
+      href={`/${lang}/ingles/actividades`}
+      class="flex flex-col gap-1 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+    >
+      <span class="text-lg font-semibold text-zinc-100">
+        {UI_LABELS[lang].activities.explore.cardTitle}
+      </span>
+      <span class="text-sm text-zinc-400">
+        {UI_LABELS[lang].activities.explore.cardDescription}
+      </span>
+    </a>
+
     <nav class="flex flex-col gap-4" aria-label={t.section.chooseLevel}>
       <h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
         {t.section.chooseLevel}

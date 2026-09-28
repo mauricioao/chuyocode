@@ -356,6 +356,29 @@ export const UI_LABELS = {
         deleteConfirmAccept: 'Eliminar',
         deleteError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
       },
+      // Public feed (`/[lang]/ingles/actividades`, PR D "Activities
+      // practice") — live activities only, newest published first. Under
+      // `ingles/**`, so `@lib/access`'s section gate and the middleware's
+      // own `markPrivate` already cover it; nothing extra is needed here.
+      explore: {
+        pageTitle: 'Actividades de la comunidad',
+        pageDescription:
+          'Actividades creadas por otros usuarios de ChuyoCode: hojas de trabajo y preguntas para practicar.',
+        heading: 'Actividades de la comunidad',
+        cardTitle: 'Actividades de la comunidad',
+        cardDescription: 'Practicar con hojas de trabajo y preguntas creadas por otros usuarios.',
+        empty: 'Todavía no hay actividades publicadas.',
+        emptyLevel: 'Todavía no hay actividades publicadas para este nivel.',
+        allLevels: 'Todos los niveles',
+        noLevel: 'Sin nivel',
+        blockCountOne: 'bloque',
+        blockCountMany: 'bloques',
+        pagination: 'Paginación',
+        prevPage: 'Anterior',
+        nextPage: 'Siguiente',
+        pageLabel: 'Página',
+        ofLabel: 'de',
+      },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
     // whole page's Spanish out of reach of the neutral-Spanish guard — and that
@@ -740,6 +763,24 @@ export const UI_LABELS = {
         deleteConfirmCancel: 'Cancel',
         deleteConfirmAccept: 'Delete',
         deleteError: 'Could not delete the activity. Try again.',
+      },
+      explore: {
+        pageTitle: 'Community activities',
+        pageDescription: "Activities created by other ChuyoCode users: worksheets and questions to practise with.",
+        heading: 'Community activities',
+        cardTitle: 'Community activities',
+        cardDescription: 'Practise with worksheets and questions created by other users.',
+        empty: 'No activities published yet.',
+        emptyLevel: 'No activities published for this level yet.',
+        allLevels: 'All levels',
+        noLevel: 'No level',
+        blockCountOne: 'block',
+        blockCountMany: 'blocks',
+        pagination: 'Pagination',
+        prevPage: 'Previous',
+        nextPage: 'Next',
+        pageLabel: 'Page',
+        ofLabel: 'of',
       },
     },
     notFound: {
