@@ -6,9 +6,10 @@
  *  - Top bar (always visible, minimal): title, level, preview toggle.
  *  - Center: the ordered block list ({@link BlockList}); below it,
  *    "+ Agregar bloque" opens the same two-card {@link BlockTypePicker}
- *    inline, and choosing Worksheet opens {@link WorksheetUploader} —
- *    each uploaded image becomes its own new worksheet block, appended in
- *    order, expanded.
+ *    inline. Worksheet opens {@link WorksheetUploader} — each uploaded image
+ *    becomes its own new worksheet block, appended in order, expanded.
+ *    Questions (PR C, "Preguntas (quiz) block") needs no upload step — one
+ *    empty quiz block is appended and expanded immediately.
  *  - Preview mode swaps the block list for {@link WorksheetPlayer} renders
  *    of every worksheet block, learner-view, not graded.
  *
