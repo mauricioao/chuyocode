@@ -69,4 +69,47 @@ describe('ActivityStartIsland', () => {
 
     expect(await screen.findByTestId('start-error')).toBeTruthy();
   });
+
+  it('creates an activity, seeds one empty quiz block, and navigates when Questions is chosen', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'new-activity-2' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const navigate = vi.fn();
+
+    render(<ActivityStartIsland lang="es" navigate={navigate} />);
+    fireEvent.click(screen.getByTestId('picker-questions'));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-2'));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/actividades',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ lang: 'es', blocks: [] }) }),
+    );
+    const guardarCall = fetchMock.mock.calls.find(([url]) => url === '/api/actividades/new-activity-2/guardar');
+    expect(guardarCall).toBeTruthy();
+    const body = JSON.parse((guardarCall?.[1] as { body: string }).body);
+    expect(body.title).toBe('Sin título');
+    expect(body.level).toBeNull();
+    expect(body.blocks).toEqual([
+      expect.objectContaining({ type: 'quiz', payload: { pools: {}, slots: [] } }),
+    ]);
+  });
+
+  it('still navigates to the editor when the Questions seed save fails (best-effort)', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/actividades') {
+        return Promise.resolve({ ok: true, json: async () => ({ id: 'new-activity-3' }) });
+      }
+      return Promise.reject(new Error('offline'));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const navigate = vi.fn();
+
+    render(<ActivityStartIsland lang="es" navigate={navigate} />);
+    fireEvent.click(screen.getByTestId('picker-questions'));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-3'));
+  });
 });

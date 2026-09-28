@@ -483,6 +483,21 @@ export default function ActivityEditorIsland({
     setShowUploader(true);
   }, []);
 
+  // Unlike Worksheet (which needs an upload step first, via `showUploader`),
+  // Questions has nothing to upload — the new block is appended immediately,
+  // empty, and becomes the sole active one, same accordion rule
+  // `handleUploadComplete` follows for its own last-uploaded block.
+  const handleQuestionsChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+    };
+    changeBlocks([...blocks, newBlock]);
+    setAddingBlock(false);
+    setExpandedBlockIds(new Set([newBlock.id]));
+  }, [blocks, changeBlocks]);
+
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
       const newBlocks: WorksheetBlock[] = images.map((image) => ({
@@ -696,7 +711,11 @@ export default function ActivityEditorIsland({
             )}
 
             {addingBlock && !showUploader && (
-              <BlockTypePicker lang={lang} onSelectWorksheet={handleWorksheetChosen} />
+              <BlockTypePicker
+                lang={lang}
+                onSelectWorksheet={handleWorksheetChosen}
+                onSelectQuestions={handleQuestionsChosen}
+              />
             )}
 
             {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
