@@ -17,6 +17,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowButton } from '@/components/ui/ArrowButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import SpeakButton from '@/lib/speech/SpeakButton';
+import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import { blocksForStep } from '@/lib/exerciseBlocks';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
@@ -434,6 +436,7 @@ export default function ExerciseIsland({
    * answer we never let them give.
    */
   function grade() {
+    stopAllSpeech();
     setResult(check(payload, response, comparatorForRenderable));
   }
 
@@ -449,6 +452,8 @@ export default function ExerciseIsland({
    */
   function retry() {
     if (!result) return;
+
+    stopAllSpeech();
 
     if (result.correct) {
       setResponse({});
@@ -553,13 +558,15 @@ export default function ExerciseIsland({
                 no `blocks`, so this renders nothing extra for them. */}
             {stepBlocks.map((block) =>
               block.kind === 'prose' ? (
-                <p
-                  key={block.id}
-                  data-testid={`exercise-block-${block.id}`}
-                  className={`${PROMPT_MEASURE} font-sans text-base text-zinc-300`}
-                >
-                  {block.text}
-                </p>
+                <div key={block.id} className={`flex items-start justify-center gap-2 ${PROMPT_MEASURE}`}>
+                  <p
+                    data-testid={`exercise-block-${block.id}`}
+                    className="font-sans text-base text-zinc-300"
+                  >
+                    {block.text}
+                  </p>
+                  <SpeakButton text={block.text} lang={lang} compact />
+                </div>
               ) : (
                 <div
                   key={block.id}
@@ -581,6 +588,16 @@ export default function ExerciseIsland({
                 </div>
               ),
             )}
+
+            {/* D4 "Escuchar/Listen": one SpeakButton per step, reading the
+                current slot's own label aloud — `toSpeakableText` (inside
+                `useSpeech`) turns its `___` gap marker into "blank", same as
+                every other speakable text in the app. Shown even when the
+                mechanic itself is unavailable: hearing the question is still
+                useful when the answer control could not be drawn. */}
+            <div className="flex items-center justify-center">
+              <SpeakButton text={slot.label} lang={lang} />
+            </div>
 
             {Renderer ? (
               <Renderer

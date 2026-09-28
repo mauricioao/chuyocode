@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import ActivityPracticeIsland from './ActivityPracticeIsland';
 import type { Block, WorksheetBlock, QuizBlock } from '@/lib/activities/blocks';
@@ -211,5 +211,55 @@ describe('ActivityPracticeIsland — quiz questions grade into the combined scor
     const freshInput = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
     expect(freshInput.value).toBe('');
     expect(freshInput.disabled).toBe(false);
+  });
+});
+
+/** D4 "Escuchar/Listen" — Comprobar/Reintentar stop whichever question was being read aloud. */
+describe('ActivityPracticeIsland — speech (D4)', () => {
+  function installSynth() {
+    const synth = {
+      getVoices: () => [],
+      speak: vi.fn(),
+      cancel: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, writable: true, configurable: true });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      value: class {
+        constructor(public text: string) {}
+      },
+      writable: true,
+      configurable: true,
+    });
+    return synth;
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'speechSynthesis');
+    Reflect.deleteProperty(window, 'SpeechSynthesisUtterance');
+  });
+
+  it('stops speech when Comprobar is pressed', () => {
+    const synth = installSynth();
+    renderIsland([QUIZ]);
+
+    fireEvent.click(screen.getByTestId('speak-button'));
+    synth.cancel.mockClear();
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    expect(synth.cancel).toHaveBeenCalled();
+  });
+
+  it('stops speech when Reintentar is pressed', () => {
+    const synth = installSynth();
+    renderIsland([QUIZ]);
+
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    fireEvent.click(screen.getByTestId('speak-button'));
+    synth.cancel.mockClear();
+    fireEvent.click(screen.getByTestId('practice-retry-button'));
+
+    expect(synth.cancel).toHaveBeenCalled();
   });
 });

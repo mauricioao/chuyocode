@@ -24,6 +24,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import type { Block, QuizBlock } from '@/lib/activities/blocks';
 import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
@@ -89,6 +90,7 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
   }, []);
 
   const handleCheck = useCallback(() => {
+    stopAllSpeech();
     const summary = gradeZones(allZones, values);
     const nextResults: Record<string, boolean> = {};
     for (const result of summary.results) nextResults[result.zoneId] = result.correct;
@@ -102,6 +104,7 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
   }, [allZones, values, quizBlocks, quizResponses]);
 
   const handleRetry = useCallback(() => {
+    stopAllSpeech();
     setValues({});
     setResults(undefined);
     setQuizResponses({});
