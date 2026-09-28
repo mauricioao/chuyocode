@@ -20,6 +20,9 @@ import {
   panBy,
   screenToContentPoint,
   contentToScreenPoint,
+  distanceBetween,
+  midpoint,
+  anchoredZoom,
   type Camera,
 } from './canvasViewport';
 
@@ -376,5 +379,87 @@ describe('panBy (translate the camera, clamped like every other camera change)',
     expect(next).toEqual({ scale: 1, x: 0, y: 0 }); // already at the max-reachable corner
     const other = panBy(camera, -10_000, -10_000, bounds);
     expect(other).toEqual({ scale: 1, x: -600, y: -600 }); // content 1000 - viewport 400
+  });
+});
+
+describe('distanceBetween (pinch gesture primitive)', () => {
+  it('is the straight-line distance between two points', () => {
+    expect(distanceBetween({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+  });
+
+  it('is zero for two identical points', () => {
+    expect(distanceBetween({ x: 10, y: 10 }, { x: 10, y: 10 })).toBe(0);
+  });
+
+  it('does not depend on argument order', () => {
+    const a = { x: 12, y: 40 };
+    const b = { x: 100, y: 5 };
+    expect(distanceBetween(a, b)).toBe(distanceBetween(b, a));
+  });
+});
+
+describe('midpoint (pinch gesture primitive)', () => {
+  it('is the average of the two points', () => {
+    expect(midpoint({ x: 0, y: 0 }, { x: 10, y: 20 })).toEqual({ x: 5, y: 10 });
+  });
+
+  it('is the point itself when both fingers are at the same spot', () => {
+    expect(midpoint({ x: 7, y: 3 }, { x: 7, y: 3 })).toEqual({ x: 7, y: 3 });
+  });
+});
+
+describe('anchoredZoom (zoomAt generalized to a moving anchor — the pinch gesture primitive)', () => {
+  const bounds = { image: { width: 1000, height: 1000 }, viewport: { width: 400, height: 400 } };
+
+  it('matches zoomAt exactly when the anchor has not moved (anchorStart === anchorCurrent)', () => {
+    const camera: Camera = { scale: 1, x: -150, y: -80 };
+    const point = { x: 120, y: 90 };
+    expect(anchoredZoom(camera, 1.5, point, point, bounds)).toEqual(zoomAt(camera, 1.5, point, bounds));
+  });
+
+  it('fingers moving apart zooms in, keeping the gesture-start content pixel under the fingers throughout', () => {
+    const startCamera: Camera = { scale: 1, x: -200, y: -200 }; // centered 400x400 window over a 1000x1000 image
+    const startA = { x: 150, y: 200 };
+    const startB = { x: 250, y: 200 };
+    const startDist = distanceBetween(startA, startB); // 100
+    const startMid = midpoint(startA, startB); // { x: 200, y: 200 }
+
+    const currentA = { x: 100, y: 200 };
+    const currentB = { x: 300, y: 200 };
+    const currentDist = distanceBetween(currentA, currentB); // 200 -> 2x
+    const currentMid = midpoint(currentA, currentB); // still { x: 200, y: 200 } — a symmetric pinch, no pan
+
+    const nextScale = startCamera.scale * (currentDist / startDist);
+    const next = anchoredZoom(startCamera, nextScale, startMid, currentMid, bounds);
+
+    expect(next.scale).toBe(2);
+    // The content pixel that was under the fingers when the gesture STARTED
+    // must still be exactly there.
+    const contentAtStart = screenToContentPoint(startMid, startCamera);
+    expect(screenToContentPoint(currentMid, next)).toEqual(contentAtStart);
+  });
+
+  it('a pure two-finger pan (no distance change) translates by exactly the midpoint delta', () => {
+    const startCamera: Camera = { scale: 1, x: -200, y: -200 };
+    const startMid = { x: 200, y: 200 };
+    const currentMid = { x: 230, y: 210 }; // panned +30/+10, same distance apart -> scale unchanged
+
+    const next = anchoredZoom(startCamera, startCamera.scale, startMid, currentMid, bounds);
+
+    expect(next.scale).toBe(1);
+    expect(next.x).toBeCloseTo(startCamera.x + 30);
+    expect(next.y).toBeCloseTo(startCamera.y + 10);
+  });
+
+  it('a combined pinch-and-pan does both: zooms in AND tracks the moving midpoint', () => {
+    const startCamera: Camera = { scale: 1, x: -200, y: -200 };
+    const startMid = { x: 200, y: 200 };
+    const currentMid = { x: 250, y: 200 }; // panned +50 while also zooming below
+
+    const next = anchoredZoom(startCamera, 2, startMid, currentMid, bounds);
+
+    expect(next.scale).toBe(2);
+    const contentAtStart = screenToContentPoint(startMid, startCamera);
+    expect(screenToContentPoint(currentMid, next)).toEqual(contentAtStart);
   });
 });

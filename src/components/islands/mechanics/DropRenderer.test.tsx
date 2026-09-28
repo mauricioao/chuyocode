@@ -310,6 +310,65 @@ describe('DropRenderer announcements', () => {
   });
 });
 
+describe('DropRenderer — tap-to-place (mobile layout pass)', () => {
+  it('places the tile by tapping it, then tapping the empty box', () => {
+    const onChange = vi.fn();
+    render(<DropRenderer slot={slot} items={items} value={[]} onChange={onChange} lang="en" />);
+
+    fireEvent.click(tile('honey'));
+    expect(tile('honey').getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(screen.getByTestId(`drop-box-${slot.id}`).querySelector('button')!);
+
+    expect(onChange).toHaveBeenCalledWith(['i_honey']);
+  });
+
+  it('un-picks a tile by tapping it a second time, without placing anything', () => {
+    const onChange = vi.fn();
+    render(<DropRenderer slot={slot} items={items} value={[]} onChange={onChange} lang="en" />);
+
+    fireEvent.click(tile('honey'));
+    fireEvent.click(tile('honey'));
+    expect(tile('honey').getAttribute('aria-pressed')).toBe('false');
+
+    // The box button is disabled with nothing picked — nothing to place.
+    expect(
+      (screen.getByTestId(`drop-box-${slot.id}`).querySelector('button') as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('picking a different tile replaces which one is picked', () => {
+    const onChange = vi.fn();
+    render(<DropRenderer slot={slot} items={items} value={[]} onChange={onChange} lang="en" />);
+
+    fireEvent.click(tile('honey'));
+    fireEvent.click(tile('bread'));
+    expect(tile('honey').getAttribute('aria-pressed')).toBe('false');
+    expect(tile('bread').getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(screen.getByTestId(`drop-box-${slot.id}`).querySelector('button')!);
+    expect(onChange).toHaveBeenCalledWith(['i_bread']);
+  });
+
+  it('the empty box is disabled (nothing to place) while no tile is picked', () => {
+    render(<DropRenderer slot={slot} items={items} value={[]} onChange={vi.fn()} lang="en" />);
+    const boxButton = screen.getByTestId(`drop-box-${slot.id}`).querySelector('button') as HTMLButtonElement;
+    expect(boxButton.disabled).toBe(true);
+  });
+
+  it('does not offer tap-to-place once the exercise is disabled/graded', () => {
+    render(
+      <DropRenderer slot={slot} items={items} value={[]} onChange={vi.fn()} disabled lang="en" />,
+    );
+    const boxButton = screen.getByTestId(`drop-box-${slot.id}`).querySelector('button') as HTMLButtonElement;
+    expect(boxButton.disabled).toBe(true);
+    for (const button of Array.from(document.querySelectorAll('button'))) {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+});
+
 describe('DropRenderer wiring', () => {
   it('locks every control once the exercise has been graded', () => {
     render(

@@ -238,13 +238,40 @@ export function fitCamera(image: Size, viewport: Size): Camera {
  * leaving it pinned to a now-stale anchor.
  */
 export function zoomAt(camera: Camera, nextScale: number, point: Point, bounds: CameraBounds): Camera {
+  return anchoredZoom(camera, nextScale, point, point, bounds);
+}
+
+/**
+ * The general form of {@link zoomAt} (mobile layout pass, for the two-finger
+ * pinch gesture): zoom `camera` to `nextScale` while keeping the content
+ * pixel that was under `anchorStart` (read against `camera` AS IT IS NOW)
+ * displayed under `anchorCurrent` instead. `zoomAt` is the special case
+ * `anchorStart === anchorCurrent` — nothing has moved since the last camera
+ * change (a mouse wheel, a toolbar button, a typed %).
+ *
+ * A real pinch needs the general form: the gesture's own START midpoint is
+ * `anchorStart`, its CURRENT midpoint (itself panned since the gesture
+ * began, even on a pure two-finger pan with no scale change) is
+ * `anchorCurrent` — calling `zoomAt(camera, nextScale, currentMidpoint,
+ * bounds)` every move instead would silently drop the pan: `zoomAt` reads
+ * the anchor's content pixel from the point it is GIVEN, not from where the
+ * gesture actually started, so passing only the ever-moving current midpoint
+ * re-derives (and re-fixes) a DIFFERENT content pixel on every single move.
+ */
+export function anchoredZoom(
+  camera: Camera,
+  nextScale: number,
+  anchorStart: Point,
+  anchorCurrent: Point,
+  bounds: CameraBounds,
+): Camera {
   if (camera.scale <= 0) {
     return clampCamera({ ...camera, scale: nextScale }, bounds.image, bounds.viewport);
   }
-  const contentX = (point.x - camera.x) / camera.scale;
-  const contentY = (point.y - camera.y) / camera.scale;
+  const contentX = (anchorStart.x - camera.x) / camera.scale;
+  const contentY = (anchorStart.y - camera.y) / camera.scale;
   return clampCamera(
-    { scale: nextScale, x: point.x - contentX * nextScale, y: point.y - contentY * nextScale },
+    { scale: nextScale, x: anchorCurrent.x - contentX * nextScale, y: anchorCurrent.y - contentY * nextScale },
     bounds.image,
     bounds.viewport,
   );
@@ -284,6 +311,30 @@ export function contentToScreenPoint(point: Point, camera: Camera): Point {
     x: point.x * camera.scale + camera.x,
     y: point.y * camera.scale + camera.y,
   };
+}
+
+/**
+ * Pinch-gesture math (mobile layout pass), shared by the practice page's
+ * worksheet viewer and the editor's canvas — both real, two-finger pinch and
+ * two-finger pan. Two tiny primitives, not a "pinch camera" function of
+ * their own: a pinch/pan gesture is already exactly what {@link zoomAt}
+ * (scale about a point) and {@link panBy} (translate) already express, so
+ * the caller derives a scale factor from {@link distanceBetween} and an
+ * anchor from {@link midpoint}, then re-applies {@link zoomAt} from the
+ * gesture's OWN starting camera every move — which anchors the zoom AND
+ * tracks the two fingers' pan in one call, since `zoomAt` keeps whatever
+ * point it is given fixed in content space regardless of how far that point
+ * has itself moved since the gesture started.
+ */
+
+/** Straight-line distance between two viewport-relative points — the denominator of a pinch's scale factor. */
+export function distanceBetween(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+/** The point exactly between two viewport-relative points — the anchor a pinch zooms/pans around. */
+export function midpoint(a: Point, b: Point): Point {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
 /**

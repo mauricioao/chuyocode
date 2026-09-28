@@ -22,7 +22,25 @@
  * context, so a tile can never be dragged from one question's box into another's
  * — a gesture the model has no answer shape for. Cross-slot consistency is kept
  * by `claimed` instead, which the island derives from the WHOLE response.
+ *
+ * TAP-TO-PLACE (mobile layout pass): a real drag ALREADY works with a finger
+ * (dnd-kit's `PointerSensor` fires from touch pointers exactly like a mouse),
+ * but a short touch drag across a small box is unreliable in practice —
+ * exactly the "drag mechanic usable by tap ... if drag is unreliable on
+ * touch" case the mobile layout brief calls out. So every pool tile is ALSO a
+ * plain tap target: tapping one "picks it up" (`pickedId`, local state, a
+ * SEPARATE gesture from dnd-kit's own drag-in-flight state) and tapping an
+ * EMPTY box places it — the exact same `placeTile` pure function a drag or a
+ * keyboard placement already goes through, so grading never learns which
+ * gesture happened. Tapping the picked tile again un-picks it. This coexists
+ * with dragging for free: dnd-kit's `PointerSensor` has a 4px activation
+ * distance, so a tap that never moves that far still fires a normal `click`
+ * on the tile button, which a real drag (which DOES move past it) does not.
+ * Replacing an ALREADY-FILLED box by tap is intentionally out of scope here
+ * — remove it first (the existing keyboard-reachable remove button), then
+ * tap-place the new tile; a drag still replaces it directly, same as before.
  */
+import { useEffect, useState } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -273,11 +291,17 @@ interface DropBoxProps {
   disabled: boolean;
   onRemove: () => void;
   copy: DropCopy;
+  /** Tap-to-place (mobile layout pass): a tile is currently picked, waiting for a box to land in. */
+  canPlacePicked: boolean;
+  onPlacePicked: () => void;
 }
 
 /**
- * The target. A region, not a control — until it holds a tile, at which point
- * the tile itself becomes the button that empties it.
+ * The target. A region, not a control while empty and nothing is picked —
+ * once it holds a tile, the tile itself becomes the button that empties it;
+ * once a tile is TAP-PICKED elsewhere (mobile layout pass — see the file
+ * header), an empty box becomes a plain button too, so the second tap has
+ * somewhere to land.
  *
  * REMOVAL IS A CLICK ON THE PLACED TILE, and the placed tile is deliberately NOT
  * draggable. Making it draggable would put dnd-kit's keyboard activator
@@ -288,7 +312,7 @@ interface DropBoxProps {
  * Nothing is lost by that: there is exactly one box per DndContext here, so
  * "drag the placed tile to another box" is not a gesture this mechanic has.
  */
-function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
+function DropBox({ id, slotId, tile, disabled, onRemove, copy, canPlacePicked, onPlacePicked }: DropBoxProps) {
   const { isOver, setNodeRef } = useDroppable({ id, disabled });
 
   return (
@@ -301,7 +325,12 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
       // border-COLOUR, and plain concatenation leaves the winner to stylesheet
       // order rather than to the order written here. tailwind-merge makes the
       // last one win, so hovering a FILLED box really does show the ring.
-      className={cn(BOX_BASE, tile ? BOX_FILLED : BOX_EMPTY, isOver && 'border-ring bg-accent/30')}
+      className={cn(
+        BOX_BASE,
+        tile ? BOX_FILLED : BOX_EMPTY,
+        isOver && 'border-ring bg-accent/30',
+        !tile && canPlacePicked && 'border-ring bg-accent/20',
+      )}
     >
       {tile ? (
         <button
@@ -319,16 +348,28 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy }: DropBoxProps) {
           <TileFace item={tile} />
         </button>
       ) : (
-        // Deliberately NOT at tile scale. This is a hint about an empty target,
-        // not content: at `1em` inside a display-size sentence it would read as
-        // an answer already sitting in the box.
-        //
-        // `font-sans` for the SAME reason, one level up: the hint is chrome the
-        // app speaks, and the Spanish copy is "Casilla vacía". ChunkFive has no
-        // accented glyphs, so inheriting the display face would render `í` — and
-        // only `í` — in Raleway, in the middle of the word. Per-character
-        // fallback is invisible to CSS and impossible to catch in review.
-        <span className="font-sans px-3 text-sm text-muted-foreground">{copy.empty}</span>
+        // A plain BUTTON always (not just once a tile is picked): the empty
+        // box needs to be the SAME element whether or not a tap-to-place
+        // gesture is in flight, so `useDroppable`'s `setNodeRef` above (which
+        // dnd-kit's collision detection measures) never swaps identity mid
+        // drag. It only DOES anything on click once `canPlacePicked`.
+        <button
+          type="button"
+          onClick={onPlacePicked}
+          disabled={disabled || !canPlacePicked}
+          className="flex h-full w-full items-center justify-center bg-transparent p-0"
+        >
+          {/* Deliberately NOT at tile scale. This is a hint about an empty target,
+              not content: at `1em` inside a display-size sentence it would read as
+              an answer already sitting in the box.
+
+              `font-sans` for the SAME reason, one level up: the hint is chrome the
+              app speaks, and the Spanish copy is "Casilla vacía". ChunkFive has no
+              accented glyphs, so inheriting the display face would render `í` — and
+              only `í` — in Raleway, in the middle of the word. Per-character
+              fallback is invisible to CSS and impossible to catch in review. */}
+          <span className="font-sans px-3 text-sm text-muted-foreground">{copy.empty}</span>
+        </button>
       )}
     </span>
   );
@@ -339,10 +380,19 @@ interface PoolTileProps {
   disabled: boolean;
   /** Wired only on the FIRST tile — the mechanic's focus entry point. */
   focusRef?: (node: HTMLElement | null) => void;
+  /** Tap-to-place (mobile layout pass): is THIS tile the one currently picked? */
+  picked: boolean;
+  onTogglePick: () => void;
 }
 
-/** A draggable tile in the pool. A real `<button>`, so the keyboard can reach it. */
-function PoolTile({ item, disabled, focusRef }: PoolTileProps) {
+/**
+ * A draggable tile in the pool. A real `<button>`, so the keyboard can reach
+ * it — and, since it is a real button, a plain TAP (no movement past
+ * dnd-kit's 4px activation distance) fires this `onClick` instead of
+ * starting a drag, which is what tap-to-place rides on (see the file
+ * header).
+ */
+function PoolTile({ item, disabled, focusRef, picked, onTogglePick }: PoolTileProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
     disabled,
@@ -357,6 +407,7 @@ function PoolTile({ item, disabled, focusRef }: PoolTileProps) {
       }}
       disabled={disabled}
       aria-label={tileLabel(item)}
+      onClick={onTogglePick}
       // Built by hand rather than with `@dnd-kit/utilities`' `CSS.Translate`:
       // that is a separate package, and one template string is not worth a second
       // direct dependency.
@@ -367,7 +418,14 @@ function PoolTile({ item, disabled, focusRef }: PoolTileProps) {
       }
       {...attributes}
       {...listeners}
-      className={`${TILE_BASE} ${isDragging ? 'opacity-50' : ''} touch-none`}
+      // AFTER the spreads, deliberately: dnd-kit's own `attributes` already
+      // sets `aria-pressed` (true only while a REAL drag is in flight,
+      // `undefined` otherwise), which would silently erase ours if it came
+      // first. Tap-picked and mid-drag are the same ARIA concept from a
+      // screen reader's point of view — "this tile is currently held" — so
+      // this merges both rather than picking one.
+      aria-pressed={picked || isDragging}
+      className={cn(TILE_BASE, isDragging && 'opacity-50', picked && 'ring-2 ring-ring', 'touch-none')}
     >
       <TileFace item={item} />
     </button>
@@ -396,6 +454,18 @@ export default function DropRenderer({
   // in sync, and therefore no way for the two to disagree (see exerciseDrop.ts).
   const available = availableTiles(items, value, claimed);
   const placed = placedTile(items, value);
+
+  // Tap-to-place (mobile layout pass — see the file header): the currently
+  // "picked up" tile id, a SEPARATE gesture from dnd-kit's own in-flight
+  // drag state. Cleared once it is placed, toggled off by a second tap, and
+  // defensively cleared if it stops being available at all (displaced by
+  // another slot claiming it, or the exercise getting disabled mid-pick).
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (pickedId && (disabled || !available.some((item) => item.id === pickedId))) {
+      setPickedId(null);
+    }
+  }, [pickedId, disabled, available]);
 
   // Scoped by slot id: several drop slots may share one page and one pool.
   const boxId = `${slot.id}-box`;
@@ -459,6 +529,17 @@ export default function DropRenderer({
     onChange(placeTile(value, String(active.id)).value);
   }
 
+  /** Tap-to-place: place the currently picked tile, same pure `placeTile` a drag or the keyboard uses. */
+  function handlePlacePicked() {
+    if (!pickedId) return;
+    onChange(placeTile(value, pickedId).value);
+    setPickedId(null);
+  }
+
+  function handleTogglePick(itemId: string) {
+    setPickedId((current) => (current === itemId ? null : itemId));
+  }
+
   // `null` means the author wrote no gap — a real style, not a broken label.
   const parts = splitLabelAtBlank(slot.label);
 
@@ -470,6 +551,8 @@ export default function DropRenderer({
       disabled={disabled}
       onRemove={() => onChange(clearTile())}
       copy={copy}
+      canPlacePicked={pickedId !== null}
+      onPlacePicked={handlePlacePicked}
     />
   );
 
@@ -508,6 +591,8 @@ export default function DropRenderer({
             // claimed there is nothing to focus, and the island's effect falls
             // through harmlessly.
             focusRef={index === 0 ? focusRef : undefined}
+            picked={pickedId === item.id}
+            onTogglePick={() => handleTogglePick(item.id)}
           />
         </li>
       ))}

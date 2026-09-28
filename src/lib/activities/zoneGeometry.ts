@@ -217,3 +217,43 @@ export function turnRotation(
   const delta = direction === 'cw' ? 90 : -90;
   return ((((rotation + delta) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
 }
+
+/**
+ * How close two zones' TOPS must be (as a fraction of the image) to count as
+ * the "same row" for {@link orderZonesForReading} — a worksheet is rarely
+ * drawn on a perfect grid, so a strict `y` sort alone would read two zones
+ * scribbled a few pixels apart vertically as two separate rows instead of
+ * left-to-right neighbors. Wide enough to absorb ordinary hand-drawn drift,
+ * narrow enough that two zones stacked in an actual column still sort top
+ * first.
+ */
+const ROW_TOLERANCE = 0.03;
+
+/**
+ * Sort zones into READING order — top-to-bottom, left-to-right — for the
+ * practice page's mobile per-zone bottom sheet (mobile layout pass): its
+ * "Anterior"/"Siguiente" buttons step through zones in this order, not
+ * whatever order they happen to appear in the block's own array (creation
+ * order, which can be anything).
+ *
+ * A stable sort by `y` alone would put two zones that are merely NEAR the
+ * same row (see {@link ROW_TOLERANCE}) in an order that depends on tiny,
+ * accidental vertical drift rather than their actual left-to-right reading
+ * position. Grouping into rows first (any two zones within `ROW_TOLERANCE`
+ * of each other's top chain into the same row, transitively) and sorting
+ * each row by `x` fixes that, while a genuinely new row (top far enough
+ * below the current row's own top) still starts a new group.
+ */
+export function orderZonesForReading<T extends Rect>(zones: T[]): T[] {
+  const byTop = [...zones].sort((a, b) => a.y - b.y);
+  const rows: T[][] = [];
+  for (const zone of byTop) {
+    const row = rows.at(-1);
+    if (row && zone.y - row[0].y <= ROW_TOLERANCE) {
+      row.push(zone);
+    } else {
+      rows.push([zone]);
+    }
+  }
+  return rows.flatMap((row) => [...row].sort((a, b) => a.x - b.x));
+}
