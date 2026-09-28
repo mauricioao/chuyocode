@@ -3,10 +3,16 @@ import {
   MIN_ZOOM,
   MAX_ZOOM,
   ZOOM_STEP,
+  INPUT_MIN_ZOOM,
   clampZoom,
+  clampZoomInput,
+  parseZoomPercentInput,
   fitZoom,
   stepZoom,
   zoomAroundPoint,
+  wheelZoom,
+  clampPanAxis,
+  clampPanScroll,
   contentSize,
   rotatedSize,
 } from './canvasViewport';
@@ -50,6 +56,24 @@ describe('fitZoom', () => {
   it('returns 100% for a not-yet-laid-out viewport or image (jsdom, zero rect)', () => {
     expect(fitZoom({ width: 0, height: 0 }, { width: 800, height: 400 })).toBe(1);
     expect(fitZoom({ width: 800, height: 400 }, { width: 0, height: 0 })).toBe(1);
+  });
+
+  // Regression coverage (canvas tools pass, "Ajustar is broken"): the pure
+  // fit math itself was already correct for these shapes even before that
+  // fix — the real defect was the COMPONENT never computing a fit zoom
+  // synchronously on mount (see `WorksheetZoneEditor.tsx`'s `useLayoutEffect`
+  // and its own header comment). These two cases pin the pure math down
+  // explicitly so a future regression in either shows up here first.
+  it('fits a LANDSCAPE image into a short, wide viewport by the height ratio', () => {
+    // viewport 1200x300 (short, wide); image 1600x800 (2:1 landscape).
+    // width ratio 1200/1600 = 0.75, height ratio 300/800 = 0.375 -> 0.375.
+    expect(fitZoom({ width: 1200, height: 300 }, { width: 1600, height: 800 })).toBe(0.375);
+  });
+
+  it('fits a PORTRAIT image into the same short, wide viewport, clamped at the MIN_ZOOM floor', () => {
+    // viewport 1200x300; image 600x1200 (1:2 portrait).
+    // width ratio 1200/600 = 2, height ratio 300/1200 = 0.25 -> 0.25 (== MIN_ZOOM).
+    expect(fitZoom({ width: 1200, height: 300 }, { width: 600, height: 1200 })).toBe(MIN_ZOOM);
   });
 });
 
@@ -118,5 +142,107 @@ describe('rotatedSize (worksheet rotation)', () => {
 
   it('swaps width and height at 270deg', () => {
     expect(rotatedSize({ width: 800, height: 400 }, 270)).toEqual({ width: 400, height: 800 });
+  });
+});
+
+describe('clampZoomInput (editable % field — wider floor than the toolbar)', () => {
+  it('keeps an in-range value unchanged', () => {
+    expect(clampZoomInput(1)).toBe(1);
+  });
+
+  it('floors below INPUT_MIN_ZOOM (10%), below the toolbar-wide MIN_ZOOM (25%)', () => {
+    expect(clampZoomInput(0.05)).toBe(INPUT_MIN_ZOOM);
+    expect(clampZoomInput(0.15)).toBe(0.15); // 15% is invalid for clampZoom but valid here
+  });
+
+  it('caps above MAX_ZOOM, same ceiling as the toolbar', () => {
+    expect(clampZoomInput(10)).toBe(MAX_ZOOM);
+  });
+
+  it('defaults a non-finite value to 100%', () => {
+    expect(clampZoomInput(NaN)).toBe(1);
+  });
+});
+
+describe('parseZoomPercentInput', () => {
+  it('parses a plain number', () => {
+    expect(parseZoomPercentInput('80')).toBe(80);
+  });
+
+  it('parses a trailing % sign, with or without a space before it', () => {
+    expect(parseZoomPercentInput('80%')).toBe(80);
+    expect(parseZoomPercentInput('80 %')).toBe(80);
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(parseZoomPercentInput('  80  ')).toBe(80);
+  });
+
+  it('returns null for empty or non-numeric input', () => {
+    expect(parseZoomPercentInput('')).toBeNull();
+    expect(parseZoomPercentInput('   ')).toBeNull();
+    expect(parseZoomPercentInput('abc')).toBeNull();
+    expect(parseZoomPercentInput('%')).toBeNull();
+  });
+});
+
+describe('wheelZoom (batched, proportional wheel zoom)', () => {
+  it('zooms in on a negative deltaY (wheel up / pinch out)', () => {
+    expect(wheelZoom(1, -100)).toBeGreaterThan(1);
+  });
+
+  it('zooms out on a positive deltaY (wheel down / pinch in)', () => {
+    expect(wheelZoom(1, 100)).toBeLessThan(1);
+  });
+
+  it('is a no-op for a zero delta', () => {
+    expect(wheelZoom(1, 0)).toBe(1);
+  });
+
+  it('clamps a huge accumulated delta to at most MAX_WHEEL_ZOOM_STEP of change in one call', () => {
+    const next = wheelZoom(1, -1_000_000);
+    expect(next).toBeLessThanOrEqual(1.5); // MAX_WHEEL_ZOOM_STEP is 0.5
+    expect(next).toBeLessThanOrEqual(MAX_ZOOM);
+  });
+
+  it('never zooms out below MIN_ZOOM even with a huge positive delta', () => {
+    expect(wheelZoom(MIN_ZOOM, 1_000_000)).toBe(MIN_ZOOM);
+  });
+
+  it('scales the step with the CURRENT zoom (proportional, not flat)', () => {
+    const stepAtLowZoom = wheelZoom(0.5, -100) - 0.5;
+    const stepAtHighZoom = wheelZoom(2, -100) - 2;
+    expect(stepAtHighZoom).toBeGreaterThan(stepAtLowZoom);
+  });
+});
+
+describe('clampPanAxis / clampPanScroll (pan bounds)', () => {
+  it('is a no-op within the native scrollable range for content bigger than the viewport', () => {
+    // viewport 400, content 1000 -> center 200, allowed [-200, 800]; a normal
+    // native-range scroll (0..600) is untouched.
+    expect(clampPanAxis(300, 400, 1000)).toBe(300);
+  });
+
+  it('stops a pan before the content is dragged fully out of view when it is SMALLER than the viewport', () => {
+    // viewport 800, content 100 -> center 400; range is [-400, -300].
+    // Panning far in one direction (very negative scroll) clamps at the
+    // MIN bound (-400): the content's left edge stops exactly at the
+    // viewport's center, never past it.
+    expect(clampPanAxis(-10_000, 800, 100)).toBe(-400);
+  });
+
+  it('stops a pan the other direction at the MAX bound', () => {
+    // Same range [-400, -300]; a huge positive scroll clamps at -300: the
+    // content's right edge stops exactly at the viewport's center instead.
+    expect(clampPanAxis(10_000, 800, 100)).toBe(-300);
+  });
+
+  it('the min bound is -viewportLength/2 for a viewport-filling axis', () => {
+    expect(clampPanAxis(-10_000, 1000, 1000)).toBe(-500);
+  });
+
+  it('applies both axes at once via clampPanScroll', () => {
+    const result = clampPanScroll({ left: -10_000, top: 10_000 }, { width: 800, height: 800 }, { width: 100, height: 100 });
+    expect(result).toEqual({ left: -400, top: -300 });
   });
 });

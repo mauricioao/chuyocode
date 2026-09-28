@@ -25,23 +25,36 @@
  * grow to fill the freed width, which "zoomed" the image in and out every
  * time a zone was selected/deselected (the bug this fixes).
  *
- * ACCESSIBLE FALLBACK, DELIBERATE: pointer dragging on a live image is a
- * manual/Playwright check (jsdom has no real layout — `getBoundingClientRect`
- * always returns zeros — matching this codebase's own precedent for
- * `imagePipeline.ts`'s canvas functions). The "Agregar zona" button adds a
- * zone at a sensible default rect with NO drag required at all, which is
- * both the automated tests' way in and the keyboard-only/accessible path a
- * pointer-only canvas would otherwise lack entirely.
+ * POINTER-ONLY ZONE CREATION (canvas tools pass, owner-approved design):
+ * drawing a zone is a left-drag with the Zona tool active — there is no
+ * button-based fallback any more (the previous "+ Zona" text button is
+ * REMOVED; the Zona tool replaces it, per the owner's own instruction). This
+ * is a real, accepted accessibility gap for a keyboard-only user — arrow
+ * keys/Delete still work on an ALREADY-selected zone (see
+ * `handleZoneKeyDown`), but nothing here can DRAW a first zone without a
+ * pointer. jsdom has no real layout (`getBoundingClientRect` always returns
+ * zeros — matching this codebase's own precedent for `imagePipeline.ts`'s
+ * canvas functions), so every draw/move/resize/pan test below mocks it
+ * explicitly; true pointer physics stay a manual/Playwright check.
+ *
+ * TWO TOOLS, `'zone' | 'hand'` (default `'zone'`): the toolbar's Zona/Mano
+ * toggle (and the `V`/`H` shortcuts) pick which one a plain left-drag means;
+ * a middle-button drag always pans regardless of tool, and holding Space
+ * temporarily forces the hand tool (see `effectiveTool` below) — releasing
+ * it restores whichever tool was actually selected. Switching tools never
+ * touches `selectedZoneId` or the properties panel.
  *
  * Selecting a zone opens its properties panel (kind, answers, options) —
  * this component's analogue of the editor's "right panel". Arrow keys nudge
  * the selected zone; Delete/Backspace removes it.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
+import { BoundingBoxIcon } from '@phosphor-icons/react/dist/ssr/BoundingBox';
+import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
 import {
@@ -56,9 +69,13 @@ import {
 } from '@/lib/activities/zoneGeometry';
 import {
   clampZoom,
+  clampZoomInput,
+  parseZoomPercentInput,
   fitZoom,
   stepZoom,
   zoomAroundPoint,
+  wheelZoom,
+  clampPanScroll,
   contentSize,
   rotatedSize,
 } from '@/lib/activities/canvasViewport';
@@ -95,8 +112,8 @@ export interface WorksheetZoneEditorProps {
   incompleteMessage?: string | null;
 }
 
-/** The zoom levels behind the "25/50/100/125%" preset row. */
-const ZOOM_PRESETS = [25, 50, 100, 125] as const;
+/** The two canvas tools (owner-approved design) — see the file header. */
+type Tool = 'zone' | 'hand';
 
 const HANDLES: Handle[] = ['nw', 'ne', 'sw', 'se'];
 const HANDLE_CURSOR: Record<Handle, string> = {
@@ -105,14 +122,6 @@ const HANDLE_CURSOR: Record<Handle, string> = {
   ne: 'cursor-nesw-resize',
   sw: 'cursor-nesw-resize',
 };
-
-function defaultRect(): Rect {
-  return { x: 0.3, y: 0.3, w: 0.2, h: 0.15 };
-}
-
-function newZone(): Zone {
-  return { id: crypto.randomUUID(), ...defaultRect(), kind: 'text', answers: [''] };
-}
 
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
@@ -143,6 +152,19 @@ export default function WorksheetZoneEditor({
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
+  const [tool, setTool] = useState<Tool>('zone');
+
+  // Kept in sync every render (not just on change) so the wheel listener
+  // below — attached once, never re-attached per zoom change, to avoid
+  // fighting its own in-flight `requestAnimationFrame` batching — can always
+  // read the CURRENT zoom without going stale inside its closure.
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  // Space temporarily forces the hand tool regardless of the selected one —
+  // see the file header. Every pointer handler below branches on THIS, never
+  // on `tool` directly.
+  const effectiveTool: Tool = spaceHeld ? 'hand' : tool;
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
 
@@ -159,21 +181,37 @@ export default function WorksheetZoneEditor({
   }, [displaySize]);
 
   // Default view is fit-to-view (decision #5: the whole worksheet visible on
-  // load, however tall/portrait it is). The viewport's own box is now
-  // layout-driven (creator "one-screen" pass: it grows to fill whatever
-  // height the active block's flex row gives it — see `BlockList.tsx` —
-  // instead of a fixed/clamped CSS height), so a plain mount effect + window
-  // `resize` listener is no longer enough: collapsing/expanding a SIBLING
-  // block, switching which block is active, or the properties panel
-  // reflowing all change this element's height with no window resize event
-  // at all. `ResizeObserver` is the correct primitive for that — it also
-  // fires once with the initial size right after `observe()`, which replaces
-  // the old separate "compute once on mount" effect for free. Guarded like
-  // `WorksheetPlayer.tsx`'s own resize watcher: jsdom has no `ResizeObserver`
-  // (see this file's own tests, which mock it where the behavior matters).
-  useEffect(() => {
+  // load, however tall/portrait it is — and again on the block re-opening,
+  // since `BlockList.tsx` only renders this component while its block is
+  // expanded, so every open is a fresh mount with `fitMode` back at its
+  // default `true`). The viewport's own box is layout-driven (creator
+  // "one-screen" pass: it grows to fill whatever height the active block's
+  // flex row gives it — see `BlockList.tsx` — instead of a fixed/clamped CSS
+  // height), so a plain mount effect + window `resize` listener is not
+  // enough: collapsing/expanding a SIBLING block, switching which block is
+  // active, or the properties panel reflowing all change this element's
+  // height with no window resize event at all.
+  //
+  // FIT BUG FIX (canvas tools pass): this used to be a plain `useEffect`
+  // that only (re)computed fit INSIDE the `ResizeObserver`'s own callback —
+  // relying entirely on the observer firing once, asynchronously, right
+  // after `observe()`. That is correct per spec, but it raced the very
+  // first paint: `zoom` started at the hardcoded 100% (see its `useState`
+  // above) and stayed there — a real, wrong-looking "fit is broken, shows
+  // 100% instead" — until that async callback eventually landed. Computing
+  // the fit SYNCHRONOUSLY here, in a `useLayoutEffect` (runs after the DOM
+  // is committed but before the browser paints), removes that race
+  // entirely: the very first paint already shows the correct fit zoom. The
+  // observer below still exists, unchanged, to re-fit on LATER resizes
+  // (sibling block collapsing, properties panel reflowing, etc.) — jsdom has
+  // no `ResizeObserver` (see this file's own tests, which mock it where the
+  // behavior matters), guarded the same way `WorksheetPlayer.tsx`'s own
+  // resize watcher is.
+  useLayoutEffect(() => {
     const el = viewportRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    if (!el) return undefined;
+    if (fitMode) setZoom(computeFitZoom());
+    if (typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(() => {
       if (fitMode) setZoom(computeFitZoom());
     });
@@ -213,26 +251,59 @@ export default function WorksheetZoneEditor({
     setZoom(computeFitZoom());
   }, [computeFitZoom]);
 
-  // Ctrl/⌘ + wheel zooms around the pointer. A native, non-passive listener:
-  // React's synthetic wheel handler is attached passively, so `preventDefault`
-  // on it cannot reliably stop the page from also scrolling/zooming.
+  // Wheel over the canvas viewport zooms, in EITHER tool (owner-approved
+  // design — no Ctrl/⌘ required any more; Ctrl/⌘+wheel still zooms the same
+  // way, since it is just another wheel event with modifier keys nobody here
+  // reads). `preventDefault` stops the page/block-list from also scrolling —
+  // a native, non-passive listener, since React's synthetic wheel handler is
+  // attached passively and cannot reliably prevent that. Wheel events over
+  // anything OUTSIDE this viewport (e.g. the toolbar's own % input) never
+  // reach this listener at all — it is not a sibling in the DOM, not a
+  // Ctrl-key check — so the page/block-list scrolls normally there.
+  //
+  // BATCHED PER ANIMATION FRAME: a trackpad/high-resolution wheel can fire
+  // many `wheel` events within a single frame; applying each one immediately
+  // (the previous behavior) meant a zoom + scroll-compensation DOM write per
+  // event, which was visibly janky. Every event in the same frame instead
+  // only accumulates `deltaY` and remembers the latest pointer anchor; ONE
+  // `requestAnimationFrame` flushes the accumulated delta through
+  // `wheelZoom` (proportional to the current zoom, clamped per frame — see
+  // `canvasViewport.ts`) right before the next paint.
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return undefined;
+    let accumulatedDelta = 0;
+    let anchor: { x: number; y: number } | null = null;
+    let rafId: number | null = null;
+
+    function flush() {
+      rafId = null;
+      const delta = accumulatedDelta;
+      accumulatedDelta = 0;
+      if (delta === 0 || !anchor) return;
+      applyZoom(wheelZoom(zoomRef.current, delta), anchor);
+    }
+
     function onWheel(e: WheelEvent) {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const rect = viewport!.getBoundingClientRect();
-      const anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      const direction = e.deltaY < 0 ? 'in' : 'out';
-      applyZoom(stepZoom(zoom, direction, 0.1), anchor);
+      anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      accumulatedDelta += e.deltaY;
+      if (rafId == null) rafId = requestAnimationFrame(flush);
     }
-    viewport.addEventListener('wheel', onWheel, { passive: false });
-    return () => viewport.removeEventListener('wheel', onWheel);
-  }, [applyZoom, zoom]);
 
-  // +/- zoom keys while the canvas viewport is focused; space toggles pan
-  // mode (grab cursor) for a space+drag pan over the canvas' empty area.
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', onWheel);
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
+  }, [applyZoom]);
+
+  // V/H switch tools, 0 fits, +/- zoom, Space temporarily forces the hand
+  // tool — all while the canvas viewport itself is focused (never global:
+  // typing "v"/"h" in the title/block-name fields elsewhere in the editor
+  // must never be caught by this, and it structurally can't be — those
+  // inputs are outside this component's own subtree entirely).
   const handleViewportKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (e.key === '+' || e.key === '=') {
@@ -241,19 +312,54 @@ export default function WorksheetZoneEditor({
       } else if (e.key === '-' || e.key === '_') {
         e.preventDefault();
         handleZoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        handleZoomFit();
+      } else if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setTool('zone');
+      } else if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setTool('hand');
       } else if (e.key === ' ' && !spaceHeldRef.current) {
+        e.preventDefault();
         spaceHeldRef.current = true;
         setSpaceHeld(true);
       }
     },
-    [handleZoomIn, handleZoomOut],
+    [handleZoomIn, handleZoomOut, handleZoomFit],
   );
 
-  const handleViewportKeyUp = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === ' ') {
+  // Space's "temporary hand" and any drag/pan in flight MUST release even
+  // when the keyup lands somewhere else (focus moved mid-hold) or never
+  // arrives at all (the window lost focus entirely — alt-tab, a devtools
+  // panel, a native file picker). A React `onKeyUp` bound only to the
+  // viewport misses both cases; this listens on `window` instead. `blur`
+  // additionally ends any in-progress drag/pan — no `pointerup` will ever
+  // arrive for a gesture that was mid-flight when focus left the window.
+  useEffect(() => {
+    function releaseSpace() {
+      if (!spaceHeldRef.current) return;
       spaceHeldRef.current = false;
       setSpaceHeld(false);
     }
+    function onWindowKeyUp(e: KeyboardEvent) {
+      if (e.key === ' ') releaseSpace();
+    }
+    function onWindowBlur() {
+      releaseSpace();
+      if (dragRef.current) {
+        dragRef.current = null;
+        setDraftRect(null);
+        setIsPanning(false);
+      }
+    }
+    window.addEventListener('keyup', onWindowKeyUp);
+    window.addEventListener('blur', onWindowBlur);
+    return () => {
+      window.removeEventListener('keyup', onWindowKeyUp);
+      window.removeEventListener('blur', onWindowBlur);
+    };
   }, []);
 
   const containerSize = useCallback(() => {
@@ -279,6 +385,8 @@ export default function WorksheetZoneEditor({
     [zones, onZonesChange],
   );
 
+  // Middle-button drag pans regardless of tool; browsers open their own
+  // autoscroll UI on a middle-button press unless it's prevented.
   const startPan = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const viewport = viewportRef.current;
@@ -296,8 +404,13 @@ export default function WorksheetZoneEditor({
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return; // a zone/handle handles its own pointer down
-      if (e.button === 1 || spaceHeldRef.current) {
-        startPan(e);
+      if (e.button === 1) {
+        startPan(e); // middle-button: always pans, in either tool
+        return;
+      }
+      if (e.button !== 0) return; // ignore right-click etc.
+      if (effectiveTool === 'hand') {
+        startPan(e); // Mano tool (or a temporary Space-hand): left-drag pans
         return;
       }
       onSelectZone(null);
@@ -306,31 +419,47 @@ export default function WorksheetZoneEditor({
       setDraftRect(null);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [onSelectZone, pointFromEvent, startPan],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan],
   );
 
   const handleZonePointerDown = useCallback(
     (zone: Zone) => (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button === 1) return; // let it bubble to the canvas' middle-drag pan
+      if (e.button === 1) {
+        startPan(e); // middle-button on a zone still pans, not moves it
+        return;
+      }
+      if (effectiveTool === 'hand') {
+        // Mano tool: zones are NOT selectable/movable — dragging one pans
+        // the canvas instead, same as dragging empty space.
+        startPan(e);
+        return;
+      }
       e.stopPropagation();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'move', zoneId: zone.id, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [onSelectZone, pointFromEvent],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan],
   );
 
   const handleHandlePointerDown = useCallback(
     (zone: Zone, handle: Handle) => (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button === 1) return;
+      if (e.button === 1) {
+        startPan(e);
+        return;
+      }
+      if (effectiveTool === 'hand') {
+        startPan(e);
+        return;
+      }
       e.stopPropagation();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'resize', zoneId: zone.id, handle, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [onSelectZone, pointFromEvent],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan],
   );
 
   const handlePointerMove = useCallback(
@@ -341,8 +470,26 @@ export default function WorksheetZoneEditor({
       if (drag.kind === 'pan') {
         const viewport = viewportRef.current;
         if (viewport) {
-          viewport.scrollLeft = drag.startScrollLeft - (e.clientX - drag.startClientX);
-          viewport.scrollTop = drag.startScrollTop - (e.clientY - drag.startClientY);
+          const proposed = {
+            left: drag.startScrollLeft - (e.clientX - drag.startClientX),
+            top: drag.startScrollTop - (e.clientY - drag.startClientY),
+          };
+          // Pan bounds (canvas tools pass): the content box may be dragged
+          // until (at most) its far edge reaches the viewport's own center —
+          // see `clampPanScroll`'s own header. A no-op once content is
+          // bigger than the viewport (the browser's own native scroll
+          // clamping is already tighter there); it only actually matters
+          // once zoomed out below the viewport's own size, where there is no
+          // native scrollable range at all.
+          const viewportBox = viewport.getBoundingClientRect();
+          const content = contentSize(displaySize, zoom);
+          const clamped = clampPanScroll(
+            proposed,
+            { width: viewportBox.width, height: viewportBox.height },
+            content,
+          );
+          viewport.scrollLeft = clamped.left;
+          viewport.scrollTop = clamped.top;
         }
         return;
       }
@@ -370,7 +517,7 @@ export default function WorksheetZoneEditor({
         updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
       }
     },
-    [containerSize, pointFromEvent, updateZoneRect],
+    [containerSize, pointFromEvent, updateZoneRect, displaySize, zoom],
   );
 
   const endDrag = useCallback(() => {
@@ -420,12 +567,6 @@ export default function WorksheetZoneEditor({
     // accidental zone" rule as a too-small drag in `handlePointerUp`.
     endDrag();
   }, [endDrag]);
-
-  const handleAddZone = useCallback(() => {
-    const zone = newZone();
-    onZonesChange([...zones, zone]);
-    onSelectZone(zone.id);
-  }, [zones, onZonesChange, onSelectZone]);
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedZoneId) return;
@@ -504,14 +645,66 @@ export default function WorksheetZoneEditor({
     [selectedZone, zones, onZonesChange],
   );
 
+  // Editable zoom % field (owner-approved design): a local "draft" string,
+  // kept in sync with the actual `zoom` whenever the input is NOT focused (a
+  // toolbar zoom, Ajustar, a wheel, or a resize-driven re-fit must all still
+  // update the displayed number), left alone while the author is actively
+  // typing so their keystrokes are never clobbered mid-edit.
+  const zoomInputFocusedRef = useRef(false);
+  const [zoomDraft, setZoomDraft] = useState('100');
+  useEffect(() => {
+    if (!zoomInputFocusedRef.current) setZoomDraft(String(Math.round(zoom * 100)));
+  }, [zoom]);
+
+  const handleZoomInputFocus = useCallback(() => {
+    zoomInputFocusedRef.current = true;
+  }, []);
+
+  // Enter or blur applies; accepts "80" or "80%"; an unparseable value
+  // reverts to the last-applied zoom instead of guessing. Wider clamp than
+  // the toolbar buttons (10%–400% — see `clampZoomInput`'s own header).
+  const commitZoomDraft = useCallback(() => {
+    zoomInputFocusedRef.current = false;
+    const parsed = parseZoomPercentInput(zoomDraft);
+    if (parsed === null) {
+      setZoomDraft(String(Math.round(zoom * 100)));
+      return;
+    }
+    const clamped = clampZoomInput(parsed / 100);
+    setFitMode(false);
+    setZoom(clamped);
+    setZoomDraft(String(Math.round(clamped * 100)));
+  }, [zoomDraft, zoom]);
+
+  const handleZoomInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitZoomDraft();
+        e.currentTarget.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        zoomInputFocusedRef.current = false;
+        setZoomDraft(String(Math.round(zoom * 100))); // revert, discard the draft
+        e.currentTarget.blur();
+      }
+    },
+    [commitZoomDraft, zoom],
+  );
+
   const canvasSize = contentSize(displaySize, zoom);
   // The <img> itself always renders at its OWN (unrotated) content size —
   // rotation is a pure CSS transform around its center, and the OUTER
   // canvas (sized to `canvasSize` above, using the ROTATED dimensions) is
   // what the rotated image ends up filling exactly.
   const imageContentSize = contentSize(image, zoom);
-  const zoomPercent = Math.round(zoom * 100);
-  const canvasCursorClass = isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-crosshair';
+  // Cursor reflects the EFFECTIVE tool (Space's temporary hand included),
+  // not the persisted `tool` — see the file header.
+  const canvasCursorClass = isPanning
+    ? 'cursor-grabbing'
+    : effectiveTool === 'hand'
+      ? 'cursor-grab'
+      : 'cursor-crosshair';
 
   return (
     <div
@@ -526,39 +719,58 @@ export default function WorksheetZoneEditor({
           <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
             <MinusIcon aria-hidden="true" />
           </Button>
-          <span
-            data-testid="zoom-level"
-            role="status"
-            aria-label={t.zoomLevel}
-            className="min-w-12 text-center text-xs tabular-nums text-muted-foreground"
-          >
-            {zoomPercent}%
-          </span>
+          {/* Editable zoom % (owner-approved design, replacing the old
+              read-only span): Enter/blur applies, Escape reverts, accepts
+              "80" or "80%", clamped 10%-400%. Wheel over this input does NOT
+              zoom — it is outside `viewportRef`'s own subtree entirely, so
+              the wheel listener attached there never sees it. */}
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="zoom-input"
+            aria-label={t.zoomInputLabel}
+            value={zoomDraft}
+            onChange={(e) => setZoomDraft(e.target.value)}
+            onFocus={handleZoomInputFocus}
+            onBlur={commitZoomDraft}
+            onKeyDown={handleZoomInputKeyDown}
+            className="h-7 w-12 rounded border border-border bg-background text-center text-xs tabular-nums text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
           <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomIn} data-testid="zoom-in" onClick={handleZoomIn}>
             <PlusIcon aria-hidden="true" />
           </Button>
           <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-          {ZOOM_PRESETS.map((preset) => (
-            <Button
-              key={preset}
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid={`zoom-preset-${preset}`}
-              aria-pressed={zoomPercent === preset}
-              onClick={() => applyZoom(preset / 100)}
-            >
-              {preset}%
-            </Button>
-          ))}
           <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
             <FrameCornersIcon aria-hidden="true" />
             {t.zoomFit}
           </Button>
           <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-          <Button type="button" size="sm" variant="default" data-testid="add-zone" onClick={handleAddZone}>
-            <PlusIcon aria-hidden="true" />
-            {t.addZone}
+          {/* Tool toggle (owner-approved design): icon-only, active tool in
+              brand yellow (`variant="default"`) — replaces the old
+              25/50/100/125 preset row and the "+ Zona" button entirely. */}
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={tool === 'zone' ? 'default' : 'ghost'}
+            aria-label={t.toolZone}
+            aria-pressed={tool === 'zone'}
+            title={t.toolZoneTooltip}
+            data-testid="tool-zone"
+            onClick={() => setTool('zone')}
+          >
+            <BoundingBoxIcon aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={tool === 'hand' ? 'default' : 'ghost'}
+            aria-label={t.toolHand}
+            aria-pressed={tool === 'hand'}
+            title={t.toolHandTooltip}
+            data-testid="tool-hand"
+            onClick={() => setTool('hand')}
+          >
+            <HandIcon aria-hidden="true" />
           </Button>
         </div>
 
@@ -567,7 +779,6 @@ export default function WorksheetZoneEditor({
           data-testid="zone-viewport"
           tabIndex={0}
           onKeyDown={handleViewportKeyDown}
-          onKeyUp={handleViewportKeyUp}
           // Layout-driven height (creator "one-screen" pass): this viewport
           // fills whatever height its flex ancestors give it (the active
           // block's row in `BlockList.tsx`, ultimately the editor page's own
@@ -584,6 +795,12 @@ export default function WorksheetZoneEditor({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
+            // A safety net for state leaks (canvas tools pass): capture can
+            // be released for reasons other than a cancel/up event too (the
+            // OS/browser deciding to reclaim it, the element momentarily
+            // leaving the DOM, etc). Bubbles up from a zone/handle child the
+            // same way `onPointerCancel` already does — see the file header.
+            onLostPointerCapture={handlePointerCancel}
             className={`relative touch-none select-none ${canvasCursorClass}`}
             style={{ width: canvasSize.width, height: canvasSize.height }}
           >
@@ -622,7 +839,13 @@ export default function WorksheetZoneEditor({
                   aria-pressed={selected}
                   onPointerDown={handleZonePointerDown(zone)}
                   onKeyDown={handleZoneKeyDown(zone)}
-                  className={`absolute cursor-move rounded border-2 ${
+                  // In the Mano tool (or a temporary Space-hand), a zone is
+                  // not movable — it shows the same grab/grabbing cursor as
+                  // empty canvas instead of the Zona tool's "move" cursor,
+                  // since dragging it now pans (see `handleZonePointerDown`).
+                  className={`absolute rounded border-2 ${
+                    effectiveTool === 'hand' ? canvasCursorClass : 'cursor-move'
+                  } ${
                     selected ? 'border-primary bg-primary/20' : 'border-accent/70 bg-accent/10'
                   } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
                   style={style}
@@ -633,9 +856,11 @@ export default function WorksheetZoneEditor({
                         key={handle}
                         data-testid={`handle-${zone.id}-${handle}`}
                         onPointerDown={handleHandlePointerDown(zone, handle)}
-                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary ${HANDLE_CURSOR[handle]} ${
-                          handle.includes('n') ? '-top-1.5' : '-bottom-1.5'
-                        } ${handle.includes('w') ? '-left-1.5' : '-right-1.5'}`}
+                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary ${
+                          effectiveTool === 'hand' ? canvasCursorClass : HANDLE_CURSOR[handle]
+                        } ${handle.includes('n') ? '-top-1.5' : '-bottom-1.5'} ${
+                          handle.includes('w') ? '-left-1.5' : '-right-1.5'
+                        }`}
                       />
                     ))}
                 </div>
