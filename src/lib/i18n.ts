@@ -502,6 +502,11 @@ export const UI_LABELS = {
         sortVistas: 'Más vistas',
         novistasLabel: 'No las he visto',
         filterSubmit: 'Filtrar',
+        // Mobile layout pass: the `<summary>` of the `<details>` collapsing
+        // level/sort/type/novistas/submit into a "Filtros" disclosure below
+        // `lg:` (search stays always visible) — distinct from `filterSubmit`
+        // above, which stays the actual submit button INSIDE it.
+        filtersToggle: 'Filtros',
         // Card badges (heart/eye counters, "Vista" badge) and the daily pick.
         viewedBadge: 'Vista',
         dailyPickLabel: 'Actividad del día',
@@ -1067,6 +1072,7 @@ export const UI_LABELS = {
         sortVistas: 'Most viewed',
         novistasLabel: "I haven't seen these",
         filterSubmit: 'Filter',
+        filtersToggle: 'Filters',
         viewedBadge: 'Seen',
         dailyPickLabel: "Today's activity",
       },

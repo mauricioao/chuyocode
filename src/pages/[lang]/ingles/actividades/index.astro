@@ -135,70 +135,105 @@ function chipLabelClass(active: boolean): string {
     </header>
 
     <form method="get" action={`/${lang}/ingles/actividades`} class="flex flex-col gap-4 rounded-lg border border-border bg-base-soft p-4">
-      <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
-        <label class="flex flex-1 min-w-48 flex-col gap-1 text-sm text-zinc-300">
-          <span class="sr-only">{t.searchLabel}</span>
-          <span class="relative">
-            <MagnifyingGlassIcon aria-hidden="true" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="search"
-              name="q"
-              value={activeQuery ?? ''}
-              placeholder={t.searchPlaceholder}
-              aria-label={t.searchLabel}
-              maxlength="80"
-              class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:border-accent focus-visible:outline-none"
-            />
-          </span>
-        </label>
+      {/* Search stays always visible, at every width — it is the primary
+          way to narrow a long feed, unlike the rest below. */}
+      <label class="flex flex-1 min-w-48 flex-col gap-1 text-sm text-zinc-300">
+        <span class="sr-only">{t.searchLabel}</span>
+        <span class="relative">
+          <MagnifyingGlassIcon aria-hidden="true" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="search"
+            name="q"
+            value={activeQuery ?? ''}
+            placeholder={t.searchPlaceholder}
+            aria-label={t.searchLabel}
+            maxlength="80"
+            class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:border-accent focus-visible:outline-none"
+          />
+        </span>
+      </label>
 
-        <label class="flex flex-col gap-1 text-sm text-zinc-300">
-          <span>{t.levelLabel}</span>
-          <select
-            name="nivel"
-            class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
-          >
-            <option value="" selected={activeLevel === null}>{t.allLevels}</option>
-            {LEVELS.map((lvl) => (
-              <option value={lvl} selected={activeLevel === lvl}>{`${lvl} · ${levelLabels[lvl]}`}</option>
-            ))}
-          </select>
-        </label>
+      {/* Mobile layout pass: level/sort/type/"no las he visto"/submit
+          collapse into a "Filtros" disclosure below `lg:` — a native
+          `<details>`, zero JavaScript (this page's own "works with
+          scripting off" rule, file header), so there is exactly ONE set of
+          these named form fields in the DOM at every width rather than a
+          duplicate that would double-submit them. `open` by default when a
+          filter is already active (so a visitor who followed a filtered
+          link sees what's filtering the feed, not a mystery collapsed
+          panel) — see the scoped `<style>` below for how `lg:` forces it
+          permanently open/unwrapped regardless of this attribute. */}
+      <details open={anyFilterActive} class="filters-details rounded-lg border border-border bg-background lg:border-0 lg:bg-transparent">
+        <summary class="filters-summary cursor-pointer select-none rounded-lg px-3 py-2 text-sm font-medium text-zinc-100 marker:text-accent lg:hidden">
+          {t.filtersToggle}
+        </summary>
+        <div class="filters-body flex flex-col gap-4 border-t border-border p-3 lg:border-0 lg:p-0">
+          <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <label class="flex flex-col gap-1 text-sm text-zinc-300">
+              <span>{t.levelLabel}</span>
+              <select
+                name="nivel"
+                class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
+              >
+                <option value="" selected={activeLevel === null}>{t.allLevels}</option>
+                {LEVELS.map((lvl) => (
+                  <option value={lvl} selected={activeLevel === lvl}>{`${lvl} · ${levelLabels[lvl]}`}</option>
+                ))}
+              </select>
+            </label>
 
-        <label class="flex flex-col gap-1 text-sm text-zinc-300">
-          <span>{t.sortLabel}</span>
-          <select
-            name="orden"
-            class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
-          >
-            <option value="recientes" selected={orden === 'recientes'}>{t.sortRecientes}</option>
-            <option value="gustadas" selected={orden === 'gustadas'}>{t.sortGustadas}</option>
-            <option value="vistas" selected={orden === 'vistas'}>{t.sortVistas}</option>
-          </select>
-        </label>
+            <label class="flex flex-col gap-1 text-sm text-zinc-300">
+              <span>{t.sortLabel}</span>
+              <select
+                name="orden"
+                class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
+              >
+                <option value="recientes" selected={orden === 'recientes'}>{t.sortRecientes}</option>
+                <option value="gustadas" selected={orden === 'gustadas'}>{t.sortGustadas}</option>
+                <option value="vistas" selected={orden === 'vistas'}>{t.sortVistas}</option>
+              </select>
+            </label>
 
-        <button type="submit" class={buttonVariants({ variant: 'default' })}>{t.filterSubmit}</button>
-      </div>
+            <button type="submit" class={buttonVariants({ variant: 'default' })}>{t.filterSubmit}</button>
+          </div>
 
-      <div class="flex flex-wrap items-center gap-4">
-        <fieldset class="flex flex-wrap gap-2">
-          <legend class="sr-only">{t.typeLabel}</legend>
-          {
-            TYPE_OPTIONS.map((opt) => (
-              <label class={chipLabelClass(activeTipo === (opt.value || null))}>
-                <input type="radio" name="tipo" value={opt.value} checked={activeTipo === (opt.value || null)} class="sr-only" />
-                {opt.label}
-              </label>
-            ))
-          }
-        </fieldset>
+          <div class="flex flex-wrap items-center gap-4">
+            <fieldset class="flex flex-wrap gap-2">
+              <legend class="sr-only">{t.typeLabel}</legend>
+              {
+                TYPE_OPTIONS.map((opt) => (
+                  <label class={chipLabelClass(activeTipo === (opt.value || null))}>
+                    <input type="radio" name="tipo" value={opt.value} checked={activeTipo === (opt.value || null)} class="sr-only" />
+                    {opt.label}
+                  </label>
+                ))
+              }
+            </fieldset>
 
-        <label class="flex items-center gap-2 text-sm text-zinc-300">
-          <input type="checkbox" name="novistas" value="1" checked={novistas} class="h-4 w-4 rounded border-border accent-accent" />
-          {t.novistasLabel}
-        </label>
-      </div>
+            <label class="flex items-center gap-2 text-sm text-zinc-300">
+              <input type="checkbox" name="novistas" value="1" checked={novistas} class="h-4 w-4 rounded border-border accent-accent" />
+              {t.novistasLabel}
+            </label>
+          </div>
+        </div>
+      </details>
     </form>
+
+    <style>
+      /* Below `lg:`, `filters-body` follows the native `<details>` `open`
+         state as usual (collapsed unless toggled/pre-opened). At `lg:` it
+         is ALWAYS shown and the `<summary>` toggle is hidden (`lg:hidden`
+         above) — this override is what makes that true even while the
+         attribute itself is absent (a visitor who loaded the page on a
+         phone with no active filter, then widened the window/rotated a
+         tablet, must still see every filter at `lg:`, not a collapsed
+         panel with no way to reach it once its own toggle is hidden). */
+      @media (min-width: 1024px) {
+        .filters-body {
+          display: flex !important;
+        }
+      }
+    </style>
 
     {
       showDailyPick && dailyPick && (

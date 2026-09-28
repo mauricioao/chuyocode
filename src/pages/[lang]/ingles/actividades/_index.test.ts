@@ -224,6 +224,46 @@ describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL
   });
 });
 
+/** Matches the page's own `TYPE_OPTIONS` (All / Worksheet / Quiz) — one radio per option, none doubled. */
+const TYPE_OPTIONS_COUNT = 3;
+
+describe('GET /[lang]/ingles/actividades — mobile filters disclosure (mobile layout pass)', () => {
+  it('collapses into a single native <details> "Filtros" toggle, closed with no active filter', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('Filtros');
+    expect(html).toMatch(/<details[^>]*class="filters-details[^>]*>/);
+    expect(html).not.toMatch(/<details[^>]* open[^>]*>/);
+  });
+
+  it('opens by default once a filter is already active, so the visitor sees what is filtering the feed', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toMatch(/<details[^>]* open[^>]*>/);
+  });
+
+  it('never duplicates a named filter field — exactly one of each, so submitting never sends two values', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    for (const name of ['nivel', 'orden', 'novistas']) {
+      const count = (html.match(new RegExp(`name="${name}"`, 'g')) ?? []).length;
+      expect(count).toBe(1);
+    }
+    // `tipo` is a radio GROUP — one per option is correct, never doubled per option.
+    const tipoCount = (html.match(/name="tipo"/g) ?? []).length;
+    expect(tipoCount).toBe(TYPE_OPTIONS_COUNT);
+  });
+
+  it('keeps the search field OUTSIDE the collapsible disclosure — always visible', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    const detailsStart = html.indexOf('<details');
+    const searchInputIndex = html.indexOf('name="q"');
+    expect(searchInputIndex).toBeGreaterThan(-1);
+    expect(searchInputIndex).toBeLessThan(detailsStart);
+  });
+});
+
 describe('GET /[lang]/ingles/actividades — pagination preserves filters', () => {
   it('shows no pagination nav for a single page', async () => {
     pageResult.value = { activities: [card()], total: 1 };
