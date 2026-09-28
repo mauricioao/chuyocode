@@ -22,6 +22,9 @@ const {
   limitMock,
   rangeMock,
   inMock,
+  containsMock,
+  ilikeMock,
+  notMock,
   insertMock,
   selectMock,
   fromMock,
@@ -40,6 +43,9 @@ const {
   const limitMock = vi.fn(() => builder);
   const rangeMock = vi.fn(() => builder);
   const inMock = vi.fn(() => builder);
+  const containsMock = vi.fn(() => builder);
+  const ilikeMock = vi.fn(() => builder);
+  const notMock = vi.fn(() => builder);
   const selectMock = vi.fn(() => builder);
   const insertMock = vi.fn((_payload: Record<string, unknown>) => builder);
   builder.eq = eqMock;
@@ -48,6 +54,9 @@ const {
   builder.limit = limitMock;
   builder.range = rangeMock;
   builder.in = inMock;
+  builder.contains = containsMock;
+  builder.ilike = ilikeMock;
+  builder.not = notMock;
   builder.select = selectMock;
   builder.insert = insertMock;
 
@@ -62,6 +71,9 @@ const {
     limitMock,
     rangeMock,
     inMock,
+    containsMock,
+    ilikeMock,
+    notMock,
     insertMock,
     selectMock,
     fromMock,
@@ -486,7 +498,7 @@ describe('getPublishedActivities', () => {
     awaitResults.push({ data: [], error: null, count: 0 });
     await getPublishedActivities({ level: null, page: 1 });
     expect(selectMock).toHaveBeenCalledWith(
-      'id, title, level, block_count, published_at, published_revision_id',
+      'id, title, level, block_count, published_at, published_revision_id, heart_count, view_total',
       { count: 'exact' },
     );
   });
@@ -520,6 +532,142 @@ describe('getPublishedActivities', () => {
     awaitResults.push({ data: [], error: null, count: 0 });
     await getPublishedActivities({ level: null, page: -3 });
     expect(rangeMock).toHaveBeenCalledWith(0, ACTIVITIES_PAGE_SIZE - 1);
+  });
+
+  it('filters by tipo via contains on block_types', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, tipo: 'worksheet' });
+    expect(containsMock).toHaveBeenCalledWith('block_types', ['worksheet']);
+  });
+
+  it('does not filter by tipo when none is given', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(containsMock).not.toHaveBeenCalled();
+  });
+
+  it('searches by title via ilike with an escaped, wrapped pattern', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, q: '50%_off' });
+    expect(ilikeMock).toHaveBeenCalledWith('title', '%50\\%\\_off%');
+  });
+
+  it('ignores a blank q', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, q: '   ' });
+    expect(ilikeMock).not.toHaveBeenCalled();
+  });
+
+  it('sorts by published_at desc by default (recientes)', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(orderMock).toHaveBeenCalledWith('published_at', { ascending: false });
+    expect(orderMock).not.toHaveBeenCalledWith('heart_count', expect.anything());
+    expect(orderMock).not.toHaveBeenCalledWith('view_total', expect.anything());
+  });
+
+  it('sorts by heart_count desc, then published_at desc, for orden=gustadas', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, orden: 'gustadas' });
+    expect(orderMock).toHaveBeenCalledWith('heart_count', { ascending: false });
+    expect(orderMock).toHaveBeenCalledWith('published_at', { ascending: false });
+  });
+
+  it('sorts by view_total desc, then published_at desc, for orden=vistas', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, orden: 'vistas' });
+    expect(orderMock).toHaveBeenCalledWith('view_total', { ascending: false });
+    expect(orderMock).toHaveBeenCalledWith('published_at', { ascending: false });
+  });
+
+  it('excludes already-viewed activities in SQL when novistas is set', async () => {
+    awaitResults.push({ data: [{ activity_id: 'seen-1' }, { activity_id: 'seen-2' }], error: null });
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, novistas: true, viewerId: 'viewer-1' });
+    expect(notMock).toHaveBeenCalledWith('id', 'in', '(seen-1,seen-2)');
+  });
+
+  it('is a no-op when novistas is set without a viewerId (an anonymous read)', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, novistas: true });
+    expect(notMock).not.toHaveBeenCalled();
+  });
+
+  it('applies no exclusion when the caller has viewed nothing yet', async () => {
+    awaitResults.push({ data: [], error: null });
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, novistas: true, viewerId: 'viewer-1' });
+    expect(notMock).not.toHaveBeenCalled();
+  });
+
+  it('degrades to no exclusion when the novistas lookup itself fails', async () => {
+    awaitResults.push({ data: null, error: { message: 'down' } });
+    awaitResults.push({ data: [], error: null, count: 0 });
+    const result = await getPublishedActivities({ level: null, page: 1, novistas: true, viewerId: 'viewer-1' });
+    expect(notMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ activities: [], total: 0 });
+  });
+
+  it('maps heart_count and view_total onto each card, defaulting to 0 when missing', async () => {
+    awaitResults.push({
+      data: [
+        {
+          id: 'a1',
+          title: 'x',
+          level: null,
+          block_count: 1,
+          published_at: null,
+          published_revision_id: PUBLISHED_REVISION_ID,
+          heart_count: 9,
+          view_total: 33,
+        },
+      ],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities[0].heartCount).toBe(9);
+    expect(result.activities[0].viewTotal).toBe(33);
+  });
+
+  it('marks viewedByViewer for activities the caller has already opened', async () => {
+    awaitResults.push({
+      data: [
+        { id: 'a1', title: 'x', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID },
+        { id: 'a2', title: 'y', level: null, block_count: 1, published_at: null, published_revision_id: OTHER_REVISION_ID },
+      ],
+      error: null,
+      count: 2,
+    });
+    awaitResults.push({ data: [{ activity_id: 'a1' }], error: null });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1, viewerId: 'viewer-1' });
+    expect(result.activities.find((a) => a.id === 'a1')?.viewedByViewer).toBe(true);
+    expect(result.activities.find((a) => a.id === 'a2')?.viewedByViewer).toBe(false);
+  });
+
+  it('defaults viewedByViewer to false without a viewerId, and skips the lookup entirely', async () => {
+    awaitResults.push({
+      data: [{ id: 'a1', title: 'x', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID }],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities[0].viewedByViewer).toBe(false);
+  });
+
+  it('degrades to no badges when the per-page viewed-lookup fails', async () => {
+    awaitResults.push({
+      data: [{ id: 'a1', title: 'x', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID }],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({ data: null, error: { message: 'down' } });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1, viewerId: 'viewer-1' });
+    expect(result.activities[0].viewedByViewer).toBe(false);
   });
 
   it('skips a malformed row (missing published_revision_id) and keeps the rest', async () => {

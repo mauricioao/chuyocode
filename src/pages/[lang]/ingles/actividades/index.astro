@@ -1,29 +1,41 @@
 ---
 /**
  * Public feed of community activities — `/[lang]/ingles/actividades` (SSR,
- * PR D "Activities practice"). LIVE activities only (`visible`), newest
- * `published_at` first, paginated 20/page, optionally narrowed by CEFR
- * level (`?nivel=`).
+ * "Descubrir"/discovery). LIVE activities only (`visible`), filterable by
+ * search (`?q=`), CEFR level (`?nivel=`), block type (`?tipo=`), and whether
+ * the viewer has already seen them (`?novistas=1`), sortable by recency,
+ * hearts, or views (`?orden=`), paginated 20/page.
  *
  * Under `ingles/**`, so this route is ALREADY gated and marked
  * private/no-store by the middleware (`@lib/access`'s `GATED_SECTIONS`,
  * `src/middleware.ts`'s own header comment) — no per-page gate or
  * `markPrivate` call is needed here, unlike `/[lang]/crear` or
- * `/[lang]/mis-actividades`, which sit OUTSIDE that section.
+ * `/[lang]/mis-actividades`, which sit OUTSIDE that section. `Astro.locals.user`
+ * is therefore expected non-null (checked defensively anyway, same posture
+ * as `[id].astro`'s own `canReport`/`canHeart`).
  *
- * Zero JavaScript framework, same posture as `/[lang]/ingles/index.astro`:
- * the level filter and pagination are both plain links (`?nivel=`/`?page=`),
- * so the screen stays deep-linkable, shareable, and works with scripting
- * off.
+ * ALL FILTERS LIVE IN THE URL, as one GET form (search, level, type, sort,
+ * "no las he visto") plus plain links (pagination, "Limpiar filtros") — the
+ * whole page works with scripting off, stays deep-linkable, and survives a
+ * back-button press. The actual query building (search escaping, sort
+ * columns, the `novistas` exclusion) lives in `getPublishedActivities`
+ * (`@lib/activities/activities`) and `discoveryQuery.ts`, never here.
+ *
+ * "Actividad del día": only on page 1 with NO filters active, a highlighted
+ * card picked deterministically for the calendar day
+ * (`pickDailyActivity`, `@lib/activities/dailyPick`) among the top 20 live
+ * activities by heart count. Hidden entirely when there are no candidates.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
-import { badgeVariants } from '@components/ui/badge';
+import ActivityCard from '@components/ui/ActivityCard.astro';
 import { buttonVariants } from '@components/ui/button';
+import { MagnifyingGlassIcon } from '@phosphor-icons/react/dist/ssr/MagnifyingGlass';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { LEVELS, isLevel } from '@lib/exerciseTaxonomy';
-import { getPublishedActivities, ACTIVITIES_PAGE_SIZE } from '@lib/activities/activities';
-import { publicImageUrl } from '@lib/activities/storage';
+import { getPublishedActivities, ACTIVITIES_PAGE_SIZE, type PublishedActivityCard } from '@lib/activities/activities';
+import { isBlockTypeFilter, isSortOrder, type BlockTypeFilter, type SortOrder } from '@lib/activities/discoveryQuery';
+import { pickDailyActivity } from '@lib/activities/dailyPick';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -35,41 +47,83 @@ if (!lang) {
 
 const t = UI_LABELS[lang].activities.explore;
 const levelLabels = UI_LABELS[lang].english.levels;
+const viewerId = Astro.locals.user?.id ?? null;
 
-// An invalid `?nivel=` is treated as "no filter" (show every level) rather
-// than 404ing — same lenient posture as the filter chips below, which are
-// plain links a visitor can always get back to.
+// Every filter defaults to "off"/"none" for an invalid or absent value — the
+// same lenient posture the level filter already had: a bad URL shows the
+// unfiltered feed rather than 404ing, because every one of these params is a
+// plain link/form field a visitor can always get back to.
 const nivelParam = Astro.url.searchParams.get('nivel');
 const activeLevel = isLevel(nivelParam) ? nivelParam : null;
+
+const tipoParam = Astro.url.searchParams.get('tipo');
+const activeTipo: BlockTypeFilter | null = isBlockTypeFilter(tipoParam) ? tipoParam : null;
+
+const ordenParam = Astro.url.searchParams.get('orden');
+const orden: SortOrder = isSortOrder(ordenParam) ? ordenParam : 'recientes';
+
+const rawQuery = Astro.url.searchParams.get('q');
+const activeQuery = rawQuery && rawQuery.trim().length > 0 ? rawQuery.trim() : null;
+
+const novistas = Astro.url.searchParams.get('novistas') === '1';
 
 const pageParam = Number.parseInt(Astro.url.searchParams.get('page') ?? '1', 10);
 const requestedPage = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
 
-const { activities, total } = await getPublishedActivities({ level: activeLevel, page: requestedPage });
+const anyFilterActive = activeLevel !== null || activeTipo !== null || activeQuery !== null || novistas;
+
+const { activities, total } = await getPublishedActivities({
+  level: activeLevel,
+  page: requestedPage,
+  q: activeQuery,
+  tipo: activeTipo,
+  orden,
+  novistas,
+  viewerId,
+});
 const totalPages = Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE));
 // A page beyond the last one still renders (empty grid + pagination back to
 // the real range) rather than 404ing — the same "URL always answers" rule
 // `/[lang]/ingles/index.astro` follows for an empty level.
 const currentPage = Math.min(requestedPage, totalPages);
 
-function countLabel(count: number): string {
-  return `${count} ${count === 1 ? t.blockCountOne : t.blockCountMany}`;
+// "Actividad del día" candidates: the top 20 live activities by heart count
+// — exactly `getPublishedActivities`' own page size under `orden=gustadas`,
+// so no separate query shape is needed for it. Fetched (and shown) only on
+// page 1 with nothing else filtering the feed.
+const showDailyPick = currentPage === 1 && !anyFilterActive;
+let dailyPick: PublishedActivityCard | null = null;
+if (showDailyPick) {
+  const candidates = await getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId });
+  dailyPick = pickDailyActivity(candidates.activities, new Date());
 }
 
-/** Build `?nivel=…&page=…`, omitting either param when it is the default. */
-function pageHref(page: number, level: string | null): string {
+/** Build `/[lang]/ingles/actividades` with the CURRENT filters plus `overrides`, omitting any param at its default. */
+function buildHref(overrides: { page?: number } = {}): string {
   const params = new URLSearchParams();
-  if (level) params.set('nivel', level);
+  if (activeLevel) params.set('nivel', activeLevel);
+  if (activeQuery) params.set('q', activeQuery);
+  if (activeTipo) params.set('tipo', activeTipo);
+  if (orden !== 'recientes') params.set('orden', orden);
+  if (novistas) params.set('novistas', '1');
+  const page = overrides.page ?? currentPage;
   if (page > 1) params.set('page', String(page));
   const qs = params.toString();
   return `/${lang}/ingles/actividades${qs ? `?${qs}` : ''}`;
 }
 
-function chipClass(isActive: boolean): string {
+const TYPE_OPTIONS: Array<{ value: BlockTypeFilter | ''; label: string }> = [
+  { value: '', label: t.typeAll },
+  { value: 'worksheet', label: t.typeWorksheet },
+  { value: 'quiz', label: t.typeQuiz },
+];
+
+function chipLabelClass(active: boolean): string {
   return [
-    badgeVariants({ variant: isActive ? 'default' : 'outline' }),
-    'h-auto gap-2 rounded-full px-4 py-2 text-sm',
-    isActive ? 'font-semibold shadow-elevation-1' : 'hover:border-accent hover:text-accent',
+    'cursor-pointer rounded-full border px-3 py-1.5 text-sm transition-colors',
+    active
+      ? 'border-accent bg-accent font-semibold text-background'
+      : 'border-border bg-background text-zinc-300 hover:border-accent hover:text-accent',
   ].join(' ');
 }
 ---
@@ -80,58 +134,120 @@ function chipClass(isActive: boolean): string {
       <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.heading}</PageTitle>
     </header>
 
-    <nav class="flex flex-wrap gap-3" aria-label={t.allLevels}>
-      <a href={pageHref(1, null)} class={chipClass(activeLevel === null)}>
-        {t.allLevels}
-      </a>
-      {
-        LEVELS.map((lvl) => (
-          <a href={pageHref(1, lvl)} class={chipClass(activeLevel === lvl)} aria-current={activeLevel === lvl ? 'true' : undefined}>
-            {`${lvl} · ${levelLabels[lvl]}`}
-          </a>
-        ))
-      }
-    </nav>
+    <form method="get" action={`/${lang}/ingles/actividades`} class="flex flex-col gap-4 rounded-lg border border-border bg-base-soft p-4">
+      <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <label class="flex flex-1 min-w-48 flex-col gap-1 text-sm text-zinc-300">
+          <span class="sr-only">{t.searchLabel}</span>
+          <span class="relative">
+            <MagnifyingGlassIcon aria-hidden="true" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="search"
+              name="q"
+              value={activeQuery ?? ''}
+              placeholder={t.searchPlaceholder}
+              aria-label={t.searchLabel}
+              maxlength="80"
+              class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:border-accent focus-visible:outline-none"
+            />
+          </span>
+        </label>
+
+        <label class="flex flex-col gap-1 text-sm text-zinc-300">
+          <span>{t.levelLabel}</span>
+          <select
+            name="nivel"
+            class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
+          >
+            <option value="" selected={activeLevel === null}>{t.allLevels}</option>
+            {LEVELS.map((lvl) => (
+              <option value={lvl} selected={activeLevel === lvl}>{`${lvl} · ${levelLabels[lvl]}`}</option>
+            ))}
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1 text-sm text-zinc-300">
+          <span>{t.sortLabel}</span>
+          <select
+            name="orden"
+            class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
+          >
+            <option value="recientes" selected={orden === 'recientes'}>{t.sortRecientes}</option>
+            <option value="gustadas" selected={orden === 'gustadas'}>{t.sortGustadas}</option>
+            <option value="vistas" selected={orden === 'vistas'}>{t.sortVistas}</option>
+          </select>
+        </label>
+
+        <button type="submit" class={buttonVariants({ variant: 'default' })}>{t.filterSubmit}</button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4">
+        <fieldset class="flex flex-wrap gap-2">
+          <legend class="sr-only">{t.typeLabel}</legend>
+          {
+            TYPE_OPTIONS.map((opt) => (
+              <label class={chipLabelClass(activeTipo === (opt.value || null))}>
+                <input type="radio" name="tipo" value={opt.value} checked={activeTipo === (opt.value || null)} class="sr-only" />
+                {opt.label}
+              </label>
+            ))
+          }
+        </fieldset>
+
+        <label class="flex items-center gap-2 text-sm text-zinc-300">
+          <input type="checkbox" name="novistas" value="1" checked={novistas} class="h-4 w-4 rounded border-border accent-accent" />
+          {t.novistasLabel}
+        </label>
+      </div>
+    </form>
+
+    {
+      showDailyPick && dailyPick && (
+        <ActivityCard
+          lang={lang}
+          activity={dailyPick}
+          levelLabels={levelLabels}
+          noLevel={t.noLevel}
+          blockCountOne={t.blockCountOne}
+          blockCountMany={t.blockCountMany}
+          viewedLabel={t.viewedBadge}
+          highlighted
+          highlightLabel={t.dailyPickLabel}
+        />
+      )
+    }
 
     {
       activities.length === 0 ? (
-        <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
-          {activeLevel ? t.emptyLevel : t.empty}
-        </p>
+        <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+          <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
+          {anyFilterActive && (
+            <a href={`/${lang}/ingles/actividades`} class="text-sm font-medium text-accent hover:underline">
+              {t.clearFilters}
+            </a>
+          )}
+        </div>
       ) : (
         <>
           <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {activities.map((activity) => {
-              const thumbnailUrl = activity.thumbnailPath ? publicImageUrl(activity.thumbnailPath) : null;
-              return (
-                <li>
-                  <a
-                    href={`/${lang}/ingles/actividades/${activity.id}`}
-                    class="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-base-soft transition-colors hover:border-accent focus-visible:border-accent"
-                  >
-                    <div class="aspect-video w-full overflow-hidden bg-muted">
-                      {thumbnailUrl && (
-                        <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
-                      )}
-                    </div>
-                    <div class="flex flex-col gap-1 p-4">
-                      <span class="text-lg font-semibold text-zinc-100">{activity.title}</span>
-                      <span class="text-sm text-zinc-400">
-                        {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}
-                        {' · '}
-                        {countLabel(activity.blockCount)}
-                      </span>
-                    </div>
-                  </a>
-                </li>
-              );
-            })}
+            {activities.map((activity) => (
+              <li>
+                <ActivityCard
+                  lang={lang}
+                  activity={activity}
+                  levelLabels={levelLabels}
+                  noLevel={t.noLevel}
+                  blockCountOne={t.blockCountOne}
+                  blockCountMany={t.blockCountMany}
+                  viewedLabel={t.viewedBadge}
+                />
+              </li>
+            ))}
           </ul>
 
           {totalPages > 1 && (
             <nav class="flex items-center justify-between gap-4" aria-label={t.pagination}>
               {currentPage > 1 ? (
-                <a href={pageHref(currentPage - 1, activeLevel)} class={buttonVariants({ variant: 'outline' })}>
+                <a href={buildHref({ page: currentPage - 1 })} class={buttonVariants({ variant: 'outline' })}>
                   {t.prevPage}
                 </a>
               ) : (
@@ -143,7 +259,7 @@ function chipClass(isActive: boolean): string {
                 {t.pageLabel} {currentPage} {t.ofLabel} {totalPages}
               </span>
               {currentPage < totalPages ? (
-                <a href={pageHref(currentPage + 1, activeLevel)} class={buttonVariants({ variant: 'outline' })}>
+                <a href={buildHref({ page: currentPage + 1 })} class={buttonVariants({ variant: 'outline' })}>
                   {t.nextPage}
                 </a>
               ) : (

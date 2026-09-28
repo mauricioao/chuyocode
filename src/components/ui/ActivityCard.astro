@@ -1,0 +1,101 @@
+---
+/**
+ * ActivityCard — one community activity in the discovery grid
+ * (`/[lang]/ingles/actividades`), and the highlighted "Actividad del día"
+ * slot above it. Same card content either way (title, level, block count,
+ * thumbnail, heart count, view total, "Vista" badge) — `highlighted` only
+ * changes the outer border/background so the daily pick reads as its own
+ * thing without duplicating the card's markup.
+ *
+ * Icons are `@phosphor-icons/react/dist/ssr/*`, rendered server-side with no
+ * `client:*` directive — same zero-JS posture as the rest of this page (see
+ * `[lang]/ingles/index.astro`'s own `BooksIcon`/`UsersThreeIcon` usage).
+ */
+import { HeartIcon } from '@phosphor-icons/react/dist/ssr/Heart';
+import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
+import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { publicImageUrl } from '@lib/activities/storage';
+import type { PublishedActivityCard } from '@lib/activities/activities';
+import type { Level } from '@lib/exerciseTaxonomy';
+
+interface Props {
+  lang: string;
+  activity: PublishedActivityCard;
+  levelLabels: Record<Level, string>;
+  noLevel: string;
+  blockCountOne: string;
+  blockCountMany: string;
+  viewedLabel: string;
+  highlighted?: boolean;
+  highlightLabel?: string;
+}
+
+const {
+  lang,
+  activity,
+  levelLabels,
+  noLevel,
+  blockCountOne,
+  blockCountMany,
+  viewedLabel,
+  highlighted = false,
+  highlightLabel,
+} = Astro.props;
+
+const thumbnailUrl = activity.thumbnailPath ? publicImageUrl(activity.thumbnailPath) : null;
+
+function countLabel(count: number): string {
+  return `${count} ${count === 1 ? blockCountOne : blockCountMany}`;
+}
+---
+
+<a
+  href={`/${lang}/ingles/actividades/${activity.id}`}
+  data-testid="activity-card"
+  class:list={[
+    'flex h-full flex-col overflow-hidden rounded-lg border transition-colors',
+    highlighted
+      ? 'border-accent bg-base-soft shadow-elevation-1 hover:border-accent-hover'
+      : 'border-border bg-base-soft hover:border-accent focus-visible:border-accent',
+  ]}
+>
+  <div class="relative aspect-video w-full overflow-hidden bg-muted">
+    {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
+    {
+      highlighted && highlightLabel && (
+        <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-background shadow-elevation-1">
+          {highlightLabel}
+        </span>
+      )
+    }
+  </div>
+  <div class="flex flex-1 flex-col gap-2 p-4">
+    <span class="text-lg font-semibold text-zinc-100">{activity.title}</span>
+    <span class="text-sm text-zinc-400">
+      {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : noLevel}
+      {' · '}
+      {countLabel(activity.blockCount)}
+    </span>
+    <div class="mt-auto flex flex-wrap items-center gap-3 pt-1 text-sm text-zinc-400">
+      <span class="inline-flex items-center gap-1" data-testid="activity-card-hearts">
+        <HeartIcon aria-hidden="true" size={16} />
+        <span class="tabular-nums">{activity.heartCount}</span>
+      </span>
+      <span class="inline-flex items-center gap-1" data-testid="activity-card-views">
+        <EyeIcon aria-hidden="true" size={16} />
+        <span class="tabular-nums">{activity.viewTotal}</span>
+      </span>
+      {
+        activity.viewedByViewer && (
+          <span
+            class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-zinc-300"
+            data-testid="activity-card-viewed-badge"
+          >
+            <CheckCircleIcon aria-hidden="true" size={14} weight="fill" />
+            {viewedLabel}
+          </span>
+        )
+      }
+    </div>
+  </div>
+</a>

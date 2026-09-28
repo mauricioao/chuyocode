@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
-const { pageResult, publishedMock } = vi.hoisted(() => ({
-  pageResult: { value: { activities: [] as unknown[], total: 0 } },
-  publishedMock: vi.fn(async () => pageResult.value),
-}));
+const { pageResult, dailyCandidatesResult, publishedMock } = vi.hoisted(() => {
+  const empty = { activities: [] as unknown[], total: 0 };
+  return {
+    pageResult: { value: empty },
+    dailyCandidatesResult: { value: empty },
+    publishedMock: vi.fn(async (opts: { orden?: string }) =>
+      opts.orden === 'gustadas' ? dailyCandidatesResult.value : pageResult.value,
+    ),
+  };
+});
 
 vi.mock('@lib/activities/activities', () => ({
   getPublishedActivities: publishedMock,
@@ -29,9 +35,25 @@ async function render(
   });
 }
 
+function card(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'act-1',
+    title: 'Mi actividad',
+    level: 'B1',
+    blockCount: 3,
+    publishedAt: '2026-01-01T00:00:00Z',
+    thumbnailPath: null,
+    heartCount: 0,
+    viewTotal: 0,
+    viewedByViewer: false,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   pageResult.value = { activities: [], total: 0 };
+  dailyCandidatesResult.value = { activities: [], total: 0 };
 });
 
 describe('GET /[lang]/ingles/actividades — routing', () => {
@@ -46,7 +68,6 @@ describe('GET /[lang]/ingles/actividades — routing', () => {
 
 describe('GET /[lang]/ingles/actividades — back button', () => {
   it('renders a back button to the hub, beside the title', async () => {
-    pageResult.value = { activities: [], total: 0 };
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
     expect(html).toContain('data-back-button');
@@ -55,40 +76,40 @@ describe('GET /[lang]/ingles/actividades — back button', () => {
 });
 
 describe('GET /[lang]/ingles/actividades — empty states', () => {
-  it('renders the generic empty message with no level filter', async () => {
-    pageResult.value = { activities: [], total: 0 };
+  it('renders the generic empty message with no filters active', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
     expect(html).toContain('Todavía no hay actividades publicadas.');
+    expect(html).not.toContain('Limpiar filtros');
   });
 
-  it('renders the level-specific empty message with a level filter', async () => {
-    pageResult.value = { activities: [], total: 0 };
+  it('renders the filtered empty message with a "Limpiar filtros" link when a level filter is active', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
     const html = await res.text();
-    expect(html).toContain('Todavía no hay actividades publicadas para este nivel.');
+    expect(html).toContain('No hay actividades que coincidan con estos filtros.');
+    expect(html).toContain('Limpiar filtros');
+    expect(html).toContain('href="/es/ingles/actividades"');
+  });
+
+  it('shows "Limpiar filtros" for a search query with no results', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?q=zzz', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('Limpiar filtros');
   });
 
   it('treats an invalid nivel as no filter, without 404ing', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=zz', { params: { lang: 'es' } });
     expect(res.status).toBe(200);
-    expect(publishedMock).toHaveBeenCalledWith({ level: null, page: 1 });
+    expect(publishedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ level: null, page: 1 }),
+    );
   });
 });
 
 describe('GET /[lang]/ingles/actividades — listing', () => {
-  it('renders each card with title, level, block count, and a thumbnail image when one exists', async () => {
+  it('renders each card with title, level, block count, thumbnail, hearts, views', async () => {
     pageResult.value = {
-      activities: [
-        {
-          id: 'act-1',
-          title: 'Mi actividad',
-          level: 'B1',
-          blockCount: 3,
-          publishedAt: '2026-01-01T00:00:00Z',
-          thumbnailPath: 'activity-images/aaaa/bbbb.webp',
-        },
-      ],
+      activities: [card({ thumbnailPath: 'activity-images/aaaa/bbbb.webp', heartCount: 7, viewTotal: 42 })],
       total: 1,
     };
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
@@ -97,54 +118,178 @@ describe('GET /[lang]/ingles/actividades — listing', () => {
     expect(html).toContain('href="/es/ingles/actividades/act-1"');
     expect(html).toContain('https://public.example/activity-images/aaaa/bbbb.webp?redirect=1');
     expect(html).toContain('3 bloques');
+    expect(html).toContain('data-testid="activity-card-hearts"');
+    expect(html).toMatch(/data-testid="activity-card-hearts"[\s\S]*?7/);
+    expect(html).toMatch(/data-testid="activity-card-views"[\s\S]*?42/);
+  });
+
+  it('shows the "Vista" badge only when the card is viewedByViewer', async () => {
+    pageResult.value = {
+      activities: [
+        card({ id: 'seen', viewedByViewer: true }),
+        card({ id: 'unseen', viewedByViewer: false }),
+      ],
+      total: 2,
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    const badgeCount = html.match(/data-testid="activity-card-viewed-badge"/g)?.length ?? 0;
+    expect(badgeCount).toBe(1);
   });
 
   it('renders a card with no thumbnail image tag when thumbnailPath is null', async () => {
-    pageResult.value = {
-      activities: [
-        { id: 'act-1', title: 'Sin hoja', level: null, blockCount: 1, publishedAt: null, thumbnailPath: null },
-      ],
-      total: 1,
-    };
+    pageResult.value = { activities: [card({ level: null, thumbnailPath: null })], total: 1 };
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
     expect(html).not.toContain('public.example');
     expect(html).toContain('Sin nivel');
   });
 
-  it('passes the requested page and level through to getPublishedActivities', async () => {
-    await render('https://chuyocode.test/es/ingles/actividades?nivel=A2&page=3', { params: { lang: 'es' } });
-    expect(publishedMock).toHaveBeenCalledWith({ level: 'A2', page: 3 });
-  });
-
   it('defaults to page 1 for a non-numeric or non-positive page param', async () => {
     await render('https://chuyocode.test/es/ingles/actividades?page=-5', { params: { lang: 'es' } });
-    expect(publishedMock).toHaveBeenCalledWith({ level: null, page: 1 });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ level: null, page: 1 }));
   });
 });
 
-describe('GET /[lang]/ingles/actividades — pagination', () => {
+describe('GET /[lang]/ingles/actividades — filters passed through to the query', () => {
+  it('passes q, nivel, tipo, orden, novistas, and viewerId through', async () => {
+    await render(
+      'https://chuyocode.test/es/ingles/actividades?q=present&nivel=A2&tipo=worksheet&orden=gustadas&novistas=1',
+      { params: { lang: 'es' } },
+    );
+    expect(publishedMock).toHaveBeenCalledWith({
+      level: 'A2',
+      page: 1,
+      q: 'present',
+      tipo: 'worksheet',
+      orden: 'gustadas',
+      novistas: true,
+      viewerId: 'user-1',
+    });
+  });
+
+  it('treats an invalid tipo as no filter', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades?tipo=video', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: null }));
+  });
+
+  it('treats an invalid orden as recientes', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades?orden=populares', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ orden: 'recientes' }));
+  });
+
+  it('trims a q value and treats a blank q as no search', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades?q=%20%20%20', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ q: null }));
+  });
+
+  it('passes a null viewerId for an anonymous request', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades', {
+      params: { lang: 'es' },
+      locals: { user: null },
+    });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ viewerId: null }));
+  });
+});
+
+describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL', () => {
+  it('preserves the typed search value in the input', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?q=present+simple', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('value="present simple"');
+  });
+
+  it('marks the active level option selected', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toMatch(/<option value="B1" selected/);
+  });
+
+  it('marks the active sort option selected', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?orden=vistas', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toMatch(/<option value="vistas" selected/);
+  });
+
+  it('checks the novistas checkbox when active', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?novistas=1', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toMatch(/name="novistas"[^>]*checked/);
+  });
+
+  it('checks the active type radio', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=quiz', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toMatch(/name="tipo" value="quiz"[^>]*checked/);
+  });
+});
+
+describe('GET /[lang]/ingles/actividades — pagination preserves filters', () => {
   it('shows no pagination nav for a single page', async () => {
-    pageResult.value = {
-      activities: [{ id: 'a', title: 'x', level: null, blockCount: 1, publishedAt: null, thumbnailPath: null }],
-      total: 1,
-    };
+    pageResult.value = { activities: [card()], total: 1 };
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
     expect(html).not.toContain('Anterior');
   });
 
-  it('shows Anterior/Siguiente and the current page across several pages', async () => {
-    pageResult.value = {
-      activities: [{ id: 'a', title: 'x', level: null, blockCount: 1, publishedAt: null, thumbnailPath: null }],
-      total: 45, // 3 pages at 20/page
-    };
+  it('carries q/nivel/tipo/orden/novistas into the next-page link', async () => {
+    pageResult.value = { activities: [card()], total: 45 }; // 3 pages at 20/page
+    const res = await render(
+      'https://chuyocode.test/es/ingles/actividades?q=abc&nivel=B2&tipo=quiz&orden=vistas&novistas=1',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+    expect(html).toMatch(/href="\/es\/ingles\/actividades\?[^"]*page=2[^"]*"/);
+    const hrefMatch = html.match(/href="(\/es\/ingles\/actividades\?[^"]*page=2[^"]*)"/);
+    expect(hrefMatch).not.toBeNull();
+    const href = hrefMatch![1];
+    expect(href).toContain('q=abc');
+    expect(href).toContain('nivel=B2');
+    expect(href).toContain('tipo=quiz');
+    expect(href).toContain('orden=vistas');
+    expect(href).toContain('novistas=1');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades — actividad del día', () => {
+  it('shows the highlighted card on page 1 with no filters, when a candidate exists', async () => {
+    dailyCandidatesResult.value = { activities: [card({ id: 'daily-1', title: 'La actividad del día' })], total: 1 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('La actividad del día');
+    expect(html).toContain('Actividad del día');
+  });
+
+  it('fetches candidates sorted by gustadas', async () => {
+    dailyCandidatesResult.value = { activities: [card()], total: 1 };
+    await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ level: null, page: 1, orden: 'gustadas' }),
+    );
+  });
+
+  it('hides the card when there are no candidates', async () => {
+    dailyCandidatesResult.value = { activities: [], total: 0 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).not.toContain('Actividad del día');
+  });
+
+  it('is hidden on page 2', async () => {
+    pageResult.value = { activities: [card()], total: 45 };
+    dailyCandidatesResult.value = { activities: [card({ id: 'daily-1', title: 'La actividad del día' })], total: 1 };
     const res = await render('https://chuyocode.test/es/ingles/actividades?page=2', { params: { lang: 'es' } });
     const html = await res.text();
-    expect(html).toContain('Anterior');
-    expect(html).toContain('Siguiente');
-    expect(html).toContain('Página');
-    expect(html).toContain('2');
-    expect(html).toContain('3');
+    expect(html).not.toContain('Actividad del día');
+    // The candidates fetch itself is skipped entirely on a filtered/paged view.
+    expect(publishedMock).not.toHaveBeenCalledWith(expect.objectContaining({ orden: 'gustadas' }));
+  });
+
+  it('is hidden when any filter is active', async () => {
+    dailyCandidatesResult.value = { activities: [card({ id: 'daily-1', title: 'La actividad del día' })], total: 1 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).not.toContain('Actividad del día');
+    expect(publishedMock).not.toHaveBeenCalledWith(expect.objectContaining({ orden: 'gustadas' }));
   });
 });
