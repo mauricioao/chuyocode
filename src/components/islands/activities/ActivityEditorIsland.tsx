@@ -183,7 +183,7 @@ export default function ActivityEditorIsland({
               aria-label={t.titleLabel}
               value={title}
               onChange={(e) => changeTitle(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2 text-base font-medium"
+              className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -193,7 +193,7 @@ export default function ActivityEditorIsland({
               aria-label={t.levelLabel}
               value={level ?? ''}
               onChange={(e) => changeLevel(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2"
+              className="h-9 rounded border border-border bg-background px-2 text-foreground"
             >
               <option value="">{t.levelNone}</option>
               {LEVELS.map((lvl) => (

@@ -167,7 +167,7 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
             onChange={(e) => setPagesInput(e.target.value)}
             placeholder="1, 2, 3"
             maxLength={MAX_PDF_PAGES * 4}
-            className="h-9 rounded border border-border bg-background px-2"
+            className="h-9 rounded border border-border bg-background px-2 text-foreground"
           />
         </label>
         <Button type="button" data-testid="pdf-pages-confirm" onClick={() => void handlePdfPagesConfirm(status.file)}>
