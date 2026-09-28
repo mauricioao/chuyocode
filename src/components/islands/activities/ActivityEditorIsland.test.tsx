@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
 import type { WorksheetBlock } from '@/lib/activities/blocks';
+import { UI_LABELS } from '@/lib/i18n';
 
 const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
@@ -118,7 +119,10 @@ describe('ActivityEditorIsland — one framed card (creator polish round 3)', ()
     expect(card.contains(screen.getByTestId('block-list'))).toBe(true);
     // The header row no longer carries its own separate box at `lg:` —
     // only a bottom border, since the card itself supplies the frame.
-    const header = screen.getByTestId('activity-title-input').closest('label')?.parentElement;
+    // Mobile layout pass: the title `<label>` now sits one level deeper,
+    // inside the inline-back-button wrapper (`.parentElement` twice) —
+    // see `ActivityEditorIsland.tsx`'s own header on that title row.
+    const header = screen.getByTestId('activity-title-input').closest('label')?.parentElement?.parentElement;
     expect(header?.className).toContain('lg:border-b');
     expect(header?.className).toContain('lg:rounded-none');
   });
@@ -136,6 +140,33 @@ describe('ActivityEditorIsland — one framed card (creator polish round 3)', ()
     const toolbar = screen.getByTestId('editor-side-toolbar');
     expect(card.contains(toolbar)).toBe(false);
     expect(toolbar.className).toContain('fixed');
+  });
+});
+
+describe('ActivityEditorIsland — inline mobile back button (mobile layout pass)', () => {
+  it('renders inline, immediately left of the title, hidden at lg (desktop keeps its own floating gutter button instead)', () => {
+    renderEditor();
+    const titleInput = screen.getByTestId('activity-title-input');
+    const back = titleInput.closest('label')?.parentElement?.querySelector('a[data-back-button]');
+    expect(back).toBeTruthy();
+    expect(back?.className).toContain('lg:hidden');
+    // Immediately before the title's own <label> in the same row — "inline
+    // left of the title", not a separate row above it.
+    expect(back?.nextElementSibling).toBe(titleInput.closest('label'));
+  });
+
+  it('links to /mis-actividades, lang-prefixed, with the same history.back() progressive enhancement every other BackButton uses', () => {
+    renderEditor({ lang: 'es' });
+    const back = screen.getByTestId('activity-title-input').closest('label')?.parentElement?.querySelector('a[data-back-button]');
+    expect(back?.getAttribute('href')).toBe('/es/mis-actividades');
+    expect(back?.hasAttribute('data-back-button')).toBe(true);
+  });
+
+  it('localizes its accessible label to English', () => {
+    renderEditor({ lang: 'en', activityId: 'act-1' });
+    const back = screen.getByTestId('activity-title-input').closest('label')?.parentElement?.querySelector('a[data-back-button]');
+    expect(back?.getAttribute('aria-label')).toBe(UI_LABELS.en.common.back);
+    expect(back?.getAttribute('href')).toBe('/en/mis-actividades');
   });
 });
 

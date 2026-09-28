@@ -32,6 +32,7 @@
  * (Ctrl/⌘+S).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -108,6 +109,9 @@ export default function ActivityEditorIsland({
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
+  // Mobile layout pass: the inline back button's own labels — same source
+  // `BackButton.astro` itself reads.
+  const tCommon = UI_LABELS[lang].common;
 
   const [history, setHistory] = useState<HistoryState<ActivityDoc>>(() =>
     initHistory({ title: initialTitle, level: initialLevel, blocks: initialBlocks }),
@@ -632,17 +636,38 @@ export default function ActivityEditorIsland({
             own header (`border-b`, not a separate boxed element) — no other
             action row lives here. */}
         <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="sr-only">{t.titleLabel}</span>
-            <input
-              type="text"
-              data-testid="activity-title-input"
-              aria-label={t.titleLabel}
-              value={title}
-              onChange={(e) => changeTitle(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
-            />
-          </label>
+          <div className="flex flex-1 items-center gap-3">
+            {/* Mobile layout pass (owner request): below `lg:`, the back
+                button sits INLINE left of the title — the same "icon then
+                heading" row `PageTitle.astro` uses everywhere else — instead
+                of its own dedicated row above the card. `[id].astro` keeps
+                the ORIGINAL floating-gutter `BackButton` for `lg:` and up,
+                unchanged: this is a second, mobile-ONLY (`lg:hidden`) copy
+                with the exact same markup/behavior (`data-back-button` opts
+                it into the same site-wide `initBackButtons` history.back()
+                enhancement — see `BackButton.astro`'s own header), just
+                inline instead of floating. */}
+            <a
+              href={`/${lang}/mis-actividades`}
+              data-back-button
+              aria-label={tCommon.back}
+              title={tCommon.backTooltip}
+              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+            >
+              <ArrowLeftIcon size={20} aria-hidden="true" />
+            </a>
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+              <span className="sr-only">{t.titleLabel}</span>
+              <input
+                type="text"
+                data-testid="activity-title-input"
+                aria-label={t.titleLabel}
+                value={title}
+                onChange={(e) => changeTitle(e.target.value)}
+                className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
+              />
+            </label>
+          </div>
           {/* Mobile layout pass: title stays alone on its own line above
               (the label right before this); level + status + "Enviar a
               revisión" group onto the line below it, wrapping together if

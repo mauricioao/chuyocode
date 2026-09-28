@@ -66,16 +66,12 @@ const t = UI_LABELS[lang].activities.editor;
     button itself went floating/sticky — see `BackButton.astro`'s own
     header — so it is gone at `lg:`; only the editor's OWN interior areas
     (block list, properties panel) scroll, via `<BaseLayout fullHeight>`
-    above). Below `lg:` this whole page is untouched: the back button keeps
-    its own row here, and the page scrolls normally with everything in it —
-    narrow screens never got the dedicated-row treatment in the first place.
+    above). Below `lg:`, the dedicated back-button row above this section is
+    ALSO gone now (mobile layout pass, owner request): `ActivityEditorIsland`
+    renders its own `lg:hidden` copy of this SAME back button INLINE, left of
+    the title, instead — see that component's own header on its title row.
   */}
-  <div class="mx-auto flex w-full max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12 lg:hidden">
-    <div class="mb-3 flex">
-      <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
-    </div>
-  </div>
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-8 sm:px-6 sm:pb-12 lg:h-full lg:min-h-0 lg:flex-row lg:items-start lg:gap-0 lg:px-8 lg:py-6">
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-8 pb-8 sm:px-6 sm:pt-12 sm:pb-12 lg:h-full lg:min-h-0 lg:flex-row lg:items-start lg:gap-0 lg:px-8 lg:py-6">
     {/* `lg:`-only: the SAME `BackButton`, floating sticky in the left
         gutter (see its own header) — the first item of this row, so its
         normal-flow starting position lines up with the card's own top edge
