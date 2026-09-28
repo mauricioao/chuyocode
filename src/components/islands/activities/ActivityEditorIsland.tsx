@@ -582,22 +582,29 @@ export default function ActivityEditorIsland({
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
     // (border, rounded, `bg-card`) with real vertical margins from the site
-    // header AND the footer — `[id].astro`'s section padding (`lg:pt-6` on
-    // the back-button wrapper + `lg:pb-6` on the section, 3rem together) IS
-    // those margins, so `lg:h-[calc(100dvh-65px-6rem)]` here must change
-    // together with it (65px = `Header.astro`'s own height, unchanged — its
-    // 1px border-b + 32px `py-4` + a 32px `h-8` logo row; the first 3rem is
-    // that top+bottom padding; the SECOND 3rem is the `BackButton` row
-    // `[id].astro` renders above this section — `h-9` button + `mb-3` gap —
-    // added for site-wide back navigation, PR "Navigation + Inglés hub").
-    // `lg:pr-16` reserves room for `EditorSideToolbar`'s `fixed right-3` icon
-    // rail — UNTOUCHED by this pass, per owner decision — so it never
-    // overlaps the canvas/properties column. Below `lg:` this is
+    // header AND the footer.
+    //
+    // SIZED VIA THE REAL FLEX CHAIN, NOT A HARDCODED CALC (floating side
+    // toolbar pass, owner request — "no page-level scroll, remove the empty
+    // back-button row"): `[id].astro` now renders `<BaseLayout fullHeight>`,
+    // whose `<main>` is a real, bounded `flex-1 min-h-0` at `lg:` (see that
+    // layout's own header) — this root is `lg:flex-1 lg:min-h-0` inside the
+    // ROW `[id].astro`'s section lays out (this island beside the floating
+    // `BackButton`, both `items-start` so they share the row's own top edge
+    // — no separate `BackButton` row above it any more, and no pixel-perfect
+    // header-height math to keep in sync here). `astro-island` (this
+    // component's own wrapper tag) renders as `display: contents`, so the
+    // flex chain passes straight through it. `lg:pr-16` reserves room for
+    // `EditorSideToolbar`'s `fixed right-3` icon rail (docked position) so
+    // it never overlaps the canvas/properties column — unchanged by the
+    // toolbar's own floating pass: that reserved space stays put regardless
+    // of whether the toolbar is currently docked or floating elsewhere, so
+    // undocking it never shifts this layout. Below `lg:` this is
     // intentionally untouched — today's stacked, scrollable layout keeps
     // working; a dedicated mobile layout comes later.
     <div
       data-testid="activity-editor-island"
-      className="flex flex-col gap-4 lg:h-[calc(100dvh-65px-6rem)] lg:gap-2 lg:pr-16"
+      className="flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-2 lg:pr-16"
     >
       {/* THE card: everything below is inside it, one bordered/rounded
           surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays

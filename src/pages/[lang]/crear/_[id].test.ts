@@ -102,6 +102,34 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('href="/es/mis-actividades"');
   });
 
+  // Floating side toolbar pass, owner request: no page-level scroll on the
+  // editor, and no dead empty row above the card where the back button used
+  // to reserve its own space — see `BaseLayout.astro`'s `fullHeight` mode
+  // and `ActivityEditorIsland.tsx`'s own root, now sized by that real flex
+  // chain instead of a hardcoded calc tied to the site header's pixel height.
+  it('sizes the editor via the real flex chain (BaseLayout fullHeight), not a hardcoded header-height calc', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('65px');
+    expect(html).not.toContain('calc(100dvh');
+    // BaseLayout's opt-in non-scrolling mode is actually engaged for this page.
+    expect(html).toContain('lg:h-dvh');
+    expect(html).toContain('lg:overflow-hidden');
+  });
+
   it('seeds the review-state badge from the stored activity status and note', async () => {
     editableActivity.value = {
       id: 'abc',
