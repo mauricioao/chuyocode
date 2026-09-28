@@ -497,3 +497,71 @@ describe('EditorSideToolbar — floating: re-clamp on resize', () => {
     expect(rail.style.left).toBe('');
   });
 });
+
+/** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport. */
+function stubMobileViewport() {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+
+describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', () => {
+  it('renders the compact bottom bar instead of the floating rail', () => {
+    stubMobileViewport();
+    renderToolbar();
+    expect(screen.getByTestId('editor-side-toolbar-mobile')).toBeTruthy();
+    expect(screen.queryByTestId('editor-side-toolbar')).toBeNull();
+  });
+
+  it('has no drag handle and no ghost dock target — undocking is desktop-only', () => {
+    stubMobileViewport();
+    renderToolbar();
+    expect(screen.queryByTestId('toolbar-drag-handle')).toBeNull();
+    expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
+  });
+
+  it('offers every action the desktop rail offers', () => {
+    stubMobileViewport();
+    renderToolbar({ canUndo: true, canRedo: true });
+    for (const testId of [
+      'collapse-all-button',
+      'expand-all-button',
+      'block-index-trigger',
+      'toolbar-add-block',
+      'preview-toggle',
+      'undo-button',
+      'redo-button',
+      'shortcuts-trigger',
+      'save-button',
+    ]) {
+      expect(screen.getByTestId(testId)).toBeTruthy();
+    }
+  });
+
+  it('wires the same callbacks as the desktop rail', () => {
+    stubMobileViewport();
+    const onCollapseAll = vi.fn();
+    const onSave = vi.fn();
+    renderToolbar({ onCollapseAll, onSave });
+    fireEvent.click(screen.getByTestId('collapse-all-button'));
+    fireEvent.click(screen.getByTestId('save-button'));
+    expect(onCollapseAll).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the block index popover UPWARD, not sideways', () => {
+    stubMobileViewport();
+    renderToolbar({ blocks: [worksheetBlock('b1')] });
+    fireEvent.click(screen.getByTestId('block-index-trigger'));
+    expect(screen.getByTestId('block-index-popover').className).toContain('bottom-full');
+  });
+
+  it('respects the safe-area inset at the bottom of the screen', () => {
+    stubMobileViewport();
+    renderToolbar();
+    expect(screen.getByTestId('editor-side-toolbar-mobile').className).toContain('env(safe-area-inset-bottom)');
+  });
+});

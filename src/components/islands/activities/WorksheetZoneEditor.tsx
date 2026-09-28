@@ -107,7 +107,9 @@ import {
   type Camera,
   type Size,
 } from '@/lib/activities/canvasViewport';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { Button } from '@/components/ui/button';
+import BottomSheet from '@/components/ui/BottomSheet';
 
 export interface ZonesChangeOptions {
   /**
@@ -183,6 +185,17 @@ export default function WorksheetZoneEditor({
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // Mobile layout pass: below `lg`, the properties column becomes a
+  // BottomSheet instead — see the render below and its own comment.
+  // `mobilePanelExpanded` starts (and resets to) collapsed/peek on every
+  // NEW selection, so tapping a zone always shows the compact peek first,
+  // never jumping straight to the full form.
+  const isDesktop = useIsDesktop();
+  const [mobilePanelExpanded, setMobilePanelExpanded] = useState(false);
+  useEffect(() => {
+    setMobilePanelExpanded(false);
+  }, [selectedZoneId]);
 
   // Kept in sync every render (not just on change) so the wheel listener and
   // the pan pointer-move handler below — both read this inside a
@@ -760,6 +773,145 @@ export default function WorksheetZoneEditor({
       ? 'cursor-grab'
       : 'cursor-crosshair';
 
+  // The selected zone's short kind label ("Texto"/"Opción") — the mobile
+  // properties sheet's peek bar and title (see below); `null` with nothing
+  // selected, which is also what makes that sheet disappear entirely.
+  const selectedZoneKindLabel = selectedZone
+    ? selectedZone.kind === 'text'
+      ? t.zoneKindText
+      : t.zoneKindChoice
+    : null;
+
+  // The properties FORM itself — identical markup for the desktop column
+  // and the mobile bottom sheet (mobile layout pass), computed once here
+  // instead of duplicated in both render branches below. `null` with
+  // nothing selected; the desktop branch falls back to its own empty-state
+  // card, the mobile sheet simply renders nothing (see the file header).
+  const zonePropertiesContent = selectedZone ? (
+    <div data-testid="zone-properties-content">
+      {/* Zone-level incomplete pointer (creator polish round 3, owner
+          feedback #1) — only shown while THIS zone is the one
+          `enviar.ts` pointed back at. */}
+      {incompleteMessage && incompleteZoneId === selectedZone.id && (
+        <p
+          data-testid="zone-incomplete-message"
+          className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+        >
+          {incompleteMessage}
+        </p>
+      )}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
+        <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
+          <XIcon aria-hidden="true" />
+        </Button>
+      </div>
+      <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
+        <Button
+          type="button"
+          size="sm"
+          variant={selectedZone.kind === 'text' ? 'default' : 'outline'}
+          role="radio"
+          aria-checked={selectedZone.kind === 'text'}
+          onClick={() => setKind('text')}
+        >
+          {t.zoneKindText}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={selectedZone.kind === 'choice' ? 'default' : 'outline'}
+          role="radio"
+          aria-checked={selectedZone.kind === 'choice'}
+          onClick={() => setKind('choice')}
+        >
+          {t.zoneKindChoice}
+        </Button>
+      </div>
+
+      {selectedZone.kind === 'text' && (
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
+          {selectedZone.answers.map((answer, i) => (
+            <div key={i} className="flex gap-1">
+              <input
+                type="text"
+                value={answer}
+                placeholder={t.zoneAnswerPlaceholder}
+                aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
+                onChange={(e) => {
+                  const next = [...selectedZone.answers];
+                  next[i] = e.target.value;
+                  setAnswers(next);
+                }}
+                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+              />
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t.zoneAnswerRemove}
+                disabled={selectedZone.answers.length <= 1}
+                onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
+              >
+                <XIcon aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="outline" onClick={() => setAnswers([...selectedZone.answers, ''])}>
+            + {t.zoneAnswerAdd}
+          </Button>
+        </div>
+      )}
+
+      {selectedZone.kind === 'choice' && (
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
+          {(selectedZone.options ?? []).map((option, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                aria-label={t.zoneOptionCorrect}
+                checked={selectedZone.answers.includes(option)}
+                onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
+              />
+              <input
+                type="text"
+                value={option}
+                placeholder={t.zoneOptionPlaceholder}
+                aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
+                onChange={(e) => {
+                  const options = [...(selectedZone.options ?? [])];
+                  options[i] = e.target.value;
+                  setOptions(options);
+                }}
+                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+              />
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t.zoneOptionRemove}
+                disabled={(selectedZone.options ?? []).length <= 2}
+                onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
+              >
+                <XIcon aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setOptions([...(selectedZone.options ?? []), ''])}
+          >
+            + {t.zoneOptionAdd}
+          </Button>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row"
@@ -925,7 +1077,14 @@ export default function WorksheetZoneEditor({
                         key={handle}
                         data-testid={`handle-${zone.id}-${handle}`}
                         onPointerDown={handleHandlePointerDown(zone, handle)}
-                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary ${
+                        // `before:` grows the TOUCH hit area to >= 32px
+                        // (mobile layout pass) without touching the dot's
+                        // own visual size: a transparent `::before` box,
+                        // 10px past each edge of the 12px (`h-3 w-3`) dot on
+                        // every side, still resolves a tap anywhere inside
+                        // it to THIS element (a pseudo-element is never
+                        // itself an event target).
+                        className={`absolute h-3 w-3 rounded-full border border-primary-foreground bg-primary before:absolute before:-inset-2.5 before:content-[''] ${
                           effectiveTool === 'hand' ? canvasCursorClass : HANDLE_CURSOR[handle]
                         } ${handle.includes('n') ? '-top-1.5' : '-bottom-1.5'} ${
                           handle.includes('w') ? '-left-1.5' : '-right-1.5'
@@ -970,147 +1129,37 @@ export default function WorksheetZoneEditor({
         )}
       </div>
 
-      {/* ALWAYS rendered, fixed width (~280-300px) — see the file header.
-          Hiding this column when nothing is selected is exactly the bug that
-          made the canvas "zoom" on select/deselect. `overflow-y-auto` +
-          `min-h-0` (creator "one-screen" pass): once this row has a real,
-          bounded height (from the flex chain above), a long properties
-          panel scrolls WITHIN its own column instead of growing the row and
-          pushing the canvas off-screen. */}
-      <div
-        className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72"
-        data-testid="zone-properties-panel"
-      >
-        {selectedZone ? (
-          <div data-testid="zone-properties-content">
-            {/* Zone-level incomplete pointer (creator polish round 3, owner
-                feedback #1) — only shown while THIS zone is the one
-                `enviar.ts` pointed back at. */}
-            {incompleteMessage && incompleteZoneId === selectedZone.id && (
-              <p
-                data-testid="zone-incomplete-message"
-                className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
-              >
-                {incompleteMessage}
-              </p>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">{t.zoneKindLabel}</span>
-              <Button type="button" size="icon-sm" variant="ghost" data-testid="delete-zone" aria-label={t.zoneDelete} onClick={handleDeleteSelected}>
-                <XIcon aria-hidden="true" />
-              </Button>
+      {/* Desktop ALWAYS renders this column, fixed width (~280-300px) — see
+          the file header. Hiding it when nothing is selected is exactly the
+          bug that made the canvas "zoom" on select/deselect. Below `lg`
+          (mobile layout pass) this becomes a `BottomSheet` instead: a
+          collapsed PEEK bar (the selected zone's own kind label) while
+          `mobilePanelExpanded` is false, tap it to expand to the full
+          properties form, and it disappears ENTIRELY on deselect (no
+          "select a zone" empty-state card floating at the bottom of a
+          phone — that hint is what `addZoneHint` below the canvas already
+          says). `zonePropertiesContent` is the exact same JSX either way,
+          computed once. */}
+      {isDesktop ? (
+        <div className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72" data-testid="zone-properties-panel">
+          {zonePropertiesContent ?? (
+            <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
+              <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
             </div>
-            <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t.zoneKindLabel}>
-              <Button
-                type="button"
-                size="sm"
-                variant={selectedZone.kind === 'text' ? 'default' : 'outline'}
-                role="radio"
-                aria-checked={selectedZone.kind === 'text'}
-                onClick={() => setKind('text')}
-              >
-                {t.zoneKindText}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={selectedZone.kind === 'choice' ? 'default' : 'outline'}
-                role="radio"
-                aria-checked={selectedZone.kind === 'choice'}
-                onClick={() => setKind('choice')}
-              >
-                {t.zoneKindChoice}
-              </Button>
-            </div>
-
-            {selectedZone.kind === 'text' && (
-              <div className="mt-4 flex flex-col gap-2">
-                <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
-                {selectedZone.answers.map((answer, i) => (
-                  <div key={i} className="flex gap-1">
-                    <input
-                      type="text"
-                      value={answer}
-                      placeholder={t.zoneAnswerPlaceholder}
-                      aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
-                      onChange={(e) => {
-                        const next = [...selectedZone.answers];
-                        next[i] = e.target.value;
-                        setAnswers(next);
-                      }}
-                      className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
-                    />
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={t.zoneAnswerRemove}
-                      disabled={selectedZone.answers.length <= 1}
-                      onClick={() => setAnswers(selectedZone.answers.filter((_, j) => j !== i))}
-                    >
-                      <XIcon aria-hidden="true" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" size="sm" variant="outline" onClick={() => setAnswers([...selectedZone.answers, ''])}>
-                  + {t.zoneAnswerAdd}
-                </Button>
-              </div>
-            )}
-
-            {selectedZone.kind === 'choice' && (
-              <div className="mt-4 flex flex-col gap-2">
-                <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
-                {(selectedZone.options ?? []).map((option, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      aria-label={t.zoneOptionCorrect}
-                      checked={selectedZone.answers.includes(option)}
-                      onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
-                    />
-                    <input
-                      type="text"
-                      value={option}
-                      placeholder={t.zoneOptionPlaceholder}
-                      aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
-                      onChange={(e) => {
-                        const options = [...(selectedZone.options ?? [])];
-                        options[i] = e.target.value;
-                        setOptions(options);
-                      }}
-                      className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
-                    />
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={t.zoneOptionRemove}
-                      disabled={(selectedZone.options ?? []).length <= 2}
-                      onClick={() => setOptions((selectedZone.options ?? []).filter((_, j) => j !== i))}
-                    >
-                      <XIcon aria-hidden="true" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setOptions([...(selectedZone.options ?? []), ''])}
-                >
-                  + {t.zoneOptionAdd}
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
-            <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        <BottomSheet
+          open={mobilePanelExpanded && selectedZone !== null}
+          onOpenChange={setMobilePanelExpanded}
+          title={selectedZoneKindLabel ?? t.zoneKindLabel}
+          testId="zone-properties-sheet"
+          peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
+        >
+          {zonePropertiesContent}
+        </BottomSheet>
+      )}
     </div>
   );
 }

@@ -123,6 +123,13 @@ describe('ActivityEditorIsland — one framed card (creator polish round 3)', ()
     expect(header?.className).toContain('lg:rounded-none');
   });
 
+  it('reserves safe-area-aware bottom room for the mobile bottom action bar, cleared at lg', () => {
+    renderEditor();
+    const root = screen.getByTestId('activity-editor-island');
+    expect(root.className).toContain('env(safe-area-inset-bottom)');
+    expect(root.className).toContain('lg:pb-0');
+  });
+
   it('keeps the sticky side toolbar exactly outside/unaffected by the card', () => {
     renderEditor();
     const card = screen.getByTestId('activity-editor-card');

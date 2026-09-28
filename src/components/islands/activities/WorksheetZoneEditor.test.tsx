@@ -1066,3 +1066,111 @@ describe('WorksheetZoneEditor — state-leak cleanup (blur/pointercancel/lostpoi
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
   });
 });
+
+/** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport — same pattern `useIsDesktop.test.ts` itself uses. */
+function stubMobileViewport() {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+
+describe('WorksheetZoneEditor — mobile properties bottom sheet (mobile layout pass)', () => {
+  const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+
+  it('renders neither a peek bar nor the sheet with nothing selected', () => {
+    stubMobileViewport();
+    render(<Harness initialZones={[zone]} />);
+    expect(screen.queryByTestId('zone-properties-sheet-peek')).toBeNull();
+    expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
+    // The always-rendered desktop column is gone too — no empty-state card floating on a phone.
+    expect(screen.queryByTestId('zone-properties-panel')).toBeNull();
+  });
+
+  it('selecting a zone shows the collapsed peek bar, not the full sheet', () => {
+    stubMobileViewport();
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    expect(screen.getByTestId('zone-properties-sheet-peek').textContent).toContain('Texto');
+    expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
+  });
+
+  it('tapping the peek bar expands the full properties form', () => {
+    stubMobileViewport();
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    fireEvent.click(screen.getByTestId('zone-properties-sheet-peek'));
+    expect(screen.getByTestId('zone-properties-sheet')).toBeTruthy();
+    expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
+  });
+
+  it('closing the expanded sheet returns to the collapsed peek (still selected), not fully hidden', () => {
+    stubMobileViewport();
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    fireEvent.click(screen.getByTestId('zone-properties-sheet-peek'));
+    fireEvent.keyDown(screen.getByTestId('zone-properties-sheet'), { key: 'Escape' });
+    expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
+    expect(screen.getByTestId('zone-properties-sheet-peek')).toBeTruthy();
+  });
+
+  it('deselecting closes the sheet entirely, even while it was expanded', () => {
+    stubMobileViewport();
+    function DeselectHarness() {
+      const [selected, setSelected] = useState<string | null>('z1');
+      return (
+        <>
+          <button type="button" data-testid="deselect" onClick={() => setSelected(null)}>
+            deselect
+          </button>
+          <WorksheetZoneEditor
+            lang="es"
+            image={IMAGE}
+            imageUrl="/img.webp"
+            zones={[zone]}
+            selectedZoneId={selected}
+            onZonesChange={() => {}}
+            onSelectZone={setSelected}
+          />
+        </>
+      );
+    }
+    render(<DeselectHarness />);
+    fireEvent.click(screen.getByTestId('zone-properties-sheet-peek'));
+    expect(screen.getByTestId('zone-properties-sheet')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('deselect'));
+    expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
+    expect(screen.queryByTestId('zone-properties-sheet-peek')).toBeNull();
+  });
+
+  it('selecting a DIFFERENT zone resets the sheet back to collapsed peek', () => {
+    stubMobileViewport();
+    const zone2: Zone = { id: 'z2', x: 0.5, y: 0.5, w: 0.1, h: 0.1, kind: 'choice', answers: ['b'], options: ['a', 'b'] };
+    function SwitchHarness() {
+      const [selected, setSelected] = useState<string | null>('z1');
+      return (
+        <>
+          <button type="button" data-testid="select-z2" onClick={() => setSelected('z2')}>
+            select z2
+          </button>
+          <WorksheetZoneEditor
+            lang="es"
+            image={IMAGE}
+            imageUrl="/img.webp"
+            zones={[zone, zone2]}
+            selectedZoneId={selected}
+            onZonesChange={() => {}}
+            onSelectZone={setSelected}
+          />
+        </>
+      );
+    }
+    render(<SwitchHarness />);
+    fireEvent.click(screen.getByTestId('zone-properties-sheet-peek'));
+    expect(screen.getByTestId('zone-properties-sheet')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('select-z2'));
+    expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
+    expect(screen.getByTestId('zone-properties-sheet-peek').textContent).toContain('Opción');
+  });
+});
