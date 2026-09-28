@@ -173,6 +173,60 @@ describe('createAutosaveScheduler — flushNow (manual save)', () => {
   });
 });
 
+describe('createAutosaveScheduler — saveNow (manual save always forces a real save)', () => {
+  it('saves even when the value equals what is already saved', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { onStatusChange } = statusRecorder();
+    const scheduler = createAutosaveScheduler({ save, onStatusChange, isEqual: (a, b) => a === b });
+
+    scheduler.notifyChange('a');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(save).toHaveBeenCalledTimes(1);
+
+    scheduler.saveNow('a'); // nothing changed, but this is a manual save
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+  });
+
+  it('saves immediately without waiting for the debounce', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { onStatusChange } = statusRecorder();
+    const scheduler = createAutosaveScheduler({ save, onStatusChange });
+    scheduler.saveNow('a');
+    await vi.waitFor(() => expect(save).toHaveBeenCalledWith('a'));
+  });
+
+  it('is single-flight: a saveNow while already saving is queued, not overlapped', async () => {
+    let resolveFirst: () => void = () => {};
+    const save = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValue(undefined);
+    const { onStatusChange } = statusRecorder();
+    const scheduler = createAutosaveScheduler({ save, onStatusChange });
+
+    scheduler.saveNow('a');
+    expect(save).toHaveBeenCalledTimes(1);
+    scheduler.saveNow('b');
+    expect(save).toHaveBeenCalledTimes(1); // still just the first — 'b' is queued
+
+    resolveFirst();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save).toHaveBeenLastCalledWith('b');
+  });
+
+  it('retries an errored save via saveNow', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValue(undefined);
+    const { statuses, onStatusChange } = statusRecorder();
+    const scheduler = createAutosaveScheduler({ save, onStatusChange });
+
+    scheduler.saveNow('a');
+    await vi.waitFor(() => expect(statuses.at(-1)).toBe('error'));
+
+    scheduler.saveNow('a');
+    await vi.waitFor(() => expect(statuses.at(-1)).toBe('saved'));
+  });
+});
+
 describe('createAutosaveScheduler — dispose', () => {
   it('stops a pending debounce from ever firing', async () => {
     const save = vi.fn().mockResolvedValue(undefined);

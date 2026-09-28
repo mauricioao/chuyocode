@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
 import type { WorksheetBlock } from '@/lib/activities/blocks';
@@ -53,6 +53,49 @@ describe('ActivityEditorIsland — initial render', () => {
     renderEditor();
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();
     expect(screen.getByTestId('add-block-button')).toBeTruthy();
+  });
+});
+
+describe('ActivityEditorIsland — autosave', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('saves automatically ~3s after the last change, with no manual save click', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Autoguardado' } });
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
+  });
+
+  it('shows a retry action on autosave failure, which retries the save', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('error');
+    expect(screen.getByTestId('save-retry')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('save-retry'));
+    });
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -141,14 +184,50 @@ describe('ActivityEditorIsland — adding a worksheet block', () => {
   });
 });
 
-describe('ActivityEditorIsland — Escape deselects', () => {
-  it('deselects the currently selected block on Escape', () => {
+describe('ActivityEditorIsland — Escape deselects the current zone', () => {
+  it('deselects the selected zone on Escape, without collapsing its block', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     fireEvent.click(screen.getByTestId('block-header-b1'));
     expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
 
+    fireEvent.click(screen.getByTestId('add-zone'));
+    expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
+
     fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('zone-properties-content')).toBeNull();
+    // The block itself stays expanded — collapse is independent (owner request #6).
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+  });
+});
+
+describe('ActivityEditorIsland — collapse/expand per block', () => {
+  it('collapses a block again on a second header click', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    fireEvent.click(screen.getByTestId('block-header-b1'));
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('block-header-b1'));
     expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+  });
+});
+
+describe('ActivityEditorIsland — undo/redo', () => {
+  it('undoes a title change and redoes it', () => {
+    renderEditor();
+    const input = screen.getByTestId('activity-title-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Nuevo título' } });
+    expect(input.value).toBe('Nuevo título');
+
+    fireEvent.click(screen.getByTestId('undo-button'));
+    expect(input.value).toBe('Sin título');
+
+    fireEvent.click(screen.getByTestId('redo-button'));
+    expect(input.value).toBe('Nuevo título');
+  });
+
+  it('starts with undo/redo both disabled', () => {
+    renderEditor();
+    expect((screen.getByTestId('undo-button') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('redo-button') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

@@ -420,6 +420,44 @@ describe('WorksheetZoneEditor — zoom controls', () => {
   });
 });
 
+describe('WorksheetZoneEditor — history commit flag (creator polish round 2)', () => {
+  it('marks every pointermove frame of a zone move as non-committing, then commits once on pointerup', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
+    const calls: Array<{ commit?: boolean }> = [];
+    function Wrapper() {
+      const [zones, setZones] = useState<Zone[]>([zone]);
+      return (
+        <WorksheetZoneEditor
+          lang="es"
+          image={IMAGE}
+          imageUrl="/img.webp"
+          zones={zones}
+          selectedZoneId="z1"
+          onZonesChange={(next, opts) => {
+            calls.push(opts ?? {});
+            setZones(next);
+          }}
+          onSelectZone={() => {}}
+        />
+      );
+    }
+    render(<Wrapper />);
+    const el = screen.getByTestId('zone-z1');
+    mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
+
+    firePointer(el, 'pointerdown', 20, 10);
+    firePointer(el, 'pointermove', 30, 10);
+    firePointer(el, 'pointermove', 40, 10);
+    firePointer(el, 'pointerup', 40, 10);
+
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    // Every pointermove frame is non-committing...
+    expect(calls.slice(0, -1).every((c) => c.commit === false)).toBe(true);
+    // ...and exactly the LAST call (pointerup) commits.
+    expect(calls.at(-1)).toEqual({ commit: true });
+  });
+});
+
 describe('WorksheetZoneEditor — rotation (creator polish round 2)', () => {
   it('fits using the ROTATED dimensions at 90deg (width/height swapped)', () => {
     render(

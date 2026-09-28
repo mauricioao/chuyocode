@@ -32,6 +32,15 @@ export interface AutosaveScheduler<T> {
   notifyChange(value: T): void;
   /** Save now: flushes a pending debounce, or retries after an error. No-op if there is nothing to save. */
   flushNow(): void;
+  /**
+   * Force-save `value` right now, regardless of whether it differs from
+   * what's already saved — a manual save action (the save button, Ctrl/⌘+S,
+   * or "Reintentar") always attempts a real round trip, unlike the
+   * skip-if-unchanged rule `notifyChange` applies for AUTOsaves. Still
+   * single-flight: an already-in-flight save is not overlapped, this is
+   * queued to run immediately after it.
+   */
+  saveNow(value: T): void;
   /** Stop the scheduler — no further timers fire and no in-flight result is reported. Call on unmount. */
   dispose(): void;
 }
@@ -122,6 +131,14 @@ export function createAutosaveScheduler<T>(
     flushNow() {
       if (disposed || !hasPendingValue) return;
       clearTimer();
+      runSave();
+    },
+
+    saveNow(value: T) {
+      if (disposed) return;
+      clearTimer();
+      latestValue = value;
+      hasPendingValue = true;
       runSave();
     },
 

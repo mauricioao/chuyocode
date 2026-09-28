@@ -64,13 +64,23 @@ import {
 } from '@/lib/activities/canvasViewport';
 import { Button } from '@/components/ui/button';
 
+export interface ZonesChangeOptions {
+  /**
+   * `false` while a drag gesture (move/resize) is still in progress — the
+   * caller must NOT create an undo step for every pointermove frame.
+   * Omitted/`true` for a discrete change (add/delete/nudge/answers/options,
+   * or the final pointerup of a drag), which DOES create one.
+   */
+  commit?: boolean;
+}
+
 export interface WorksheetZoneEditorProps {
   lang: Lang;
   image: ImageRef;
   imageUrl: string;
   zones: Zone[];
   selectedZoneId: string | null;
-  onZonesChange: (zones: Zone[]) => void;
+  onZonesChange: (zones: Zone[], opts?: ZonesChangeOptions) => void;
   onSelectZone: (zoneId: string | null) => void;
   /** The worksheet's own rotation (creator polish round 2). Defaults to `0` — every image saved before rotation existed. */
   rotation?: Rotation;
@@ -255,8 +265,11 @@ export default function WorksheetZoneEditor({
   }, []);
 
   const updateZoneRect = useCallback(
-    (zoneId: string, rect: Rect) => {
-      onZonesChange(zones.map((z) => (z.id === zoneId ? { ...z, ...rect } : z)));
+    (zoneId: string, rect: Rect, opts?: ZonesChangeOptions) => {
+      onZonesChange(
+        zones.map((z) => (z.id === zoneId ? { ...z, ...rect } : z)),
+        opts,
+      );
     },
     [zones, onZonesChange],
   );
@@ -346,9 +359,10 @@ export default function WorksheetZoneEditor({
       const dy = (point.y - drag.start.y) / size.height;
 
       if (drag.kind === 'move') {
-        updateZoneRect(drag.zoneId, moveRect(drag.original, dx, dy));
+        // Live frame: no undo step per pixel — see `ZonesChangeOptions`.
+        updateZoneRect(drag.zoneId, moveRect(drag.original, dx, dy), { commit: false });
       } else if (drag.kind === 'resize') {
-        updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy));
+        updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
       }
     },
     [containerSize, pointFromEvent, updateZoneRect],
@@ -364,6 +378,14 @@ export default function WorksheetZoneEditor({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
       endDrag();
+      // Seal a move/resize gesture into exactly ONE undo step now that it is
+      // done — every pointermove frame during it was a `commit: false`
+      // live update (see `handlePointerMove`); `zones` here already holds
+      // the final position from the last of those.
+      if (drag && (drag.kind === 'move' || drag.kind === 'resize')) {
+        onZonesChange(zones, { commit: true });
+        return;
+      }
       if (!drag || drag.kind !== 'draw') return;
 
       const size = containerSize();

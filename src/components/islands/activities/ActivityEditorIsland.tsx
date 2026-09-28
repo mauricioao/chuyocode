@@ -1,29 +1,60 @@
 /**
  * ActivityEditorIsland — the `/[lang]/crear/[id]` editor shell (PR B,
- * "Activities creator"). Progressive disclosure, top to bottom:
+ * "Activities creator"; reworked in "creator polish round 2"). Progressive
+ * disclosure, top to bottom:
  *
- *  - Top bar (always visible, minimal): title, level, preview toggle, save
- *    with a clear saved/unsaved/saving/error state, and a `beforeunload`
- *    warning while there is anything unsaved.
+ *  - Top bar (always visible, minimal): title, level, preview toggle.
  *  - Center: the ordered block list ({@link BlockList}); below it,
  *    "+ Agregar bloque" opens the same two-card {@link BlockTypePicker}
  *    inline, and choosing Worksheet opens {@link WorksheetUploader} —
  *    each uploaded image becomes its own new worksheet block, appended in
- *    order, with the first one selected.
+ *    order, expanded.
  *  - Preview mode swaps the block list for {@link WorksheetPlayer} renders
  *    of every worksheet block, learner-view, not graded.
  *
- * Escape deselects (zone first, then block) — the editor's only global
- * keyboard shortcut, since nothing else here needs one.
+ * STATE = ONE UNDO/REDO HISTORY (`src/lib/activities/history.ts`) over a
+ * single `{ title, level, blocks }` document — `history.present` IS the
+ * document; every discrete change (title/level edit, add/delete/reorder/
+ * rotate block, zone edit) is one `pushHistory` step, while a zone drag's
+ * many pointermove frames collapse into ONE step via `replacePresent` +
+ * `commitTransaction` (see `updateDoc` below and `WorksheetZoneEditor`'s
+ * `commit` option).
+ *
+ * AUTOSAVE (`src/lib/activities/autosave.ts`) watches `history.present` and
+ * saves ~3s after the last change, single-flight, skipping a no-op save.
+ * The save-status indicator is ICON-ONLY (no "Cambios sin guardar" text) —
+ * see `SaveStatusIndicator`. Manual save (button + Ctrl/⌘+S) and the error
+ * "Reintentar" action both force an immediate real save via `saveNow`.
+ *
+ * Escape deselects the current zone — the editor's other global keyboard
+ * shortcuts are undo (Ctrl/⌘+Z), redo (Ctrl/⌘+Shift+Z or Ctrl+Y) and save
+ * (Ctrl/⌘+S).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
+import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { WarningCircleIcon } from '@phosphor-icons/react/dist/ssr/WarningCircle';
+import { ArrowUUpLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpLeft';
+import { ArrowUUpRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpRight';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
+import {
+  initHistory,
+  pushHistory,
+  replacePresent,
+  commitTransaction,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+  type HistoryState,
+} from '@/lib/activities/history';
+import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
-import BlockList from './BlockList';
+import BlockList, { type BlocksChangeOptions } from './BlockList';
 import WorksheetPlayer from './WorksheetPlayer';
 
 export interface ActivityEditorIslandProps {
@@ -34,10 +65,79 @@ export interface ActivityEditorIslandProps {
   initialBlocks: Block[];
 }
 
-type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'error';
+/** The editor's whole undo/redo-able document. */
+interface ActivityDoc {
+  title: string;
+  level: Level | null;
+  blocks: Block[];
+}
 
 function resolveImageUrl(path: string): string {
   return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
+}
+
+function isMac(): boolean {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');
+}
+
+/** Icon-only save status (owner request #8) — an accessible label/tooltip carries the meaning, never text in the UI. */
+function SaveStatusIndicator({
+  status,
+  onRetry,
+  labels,
+}: {
+  status: AutosaveStatus | 'idle';
+  onRetry: () => void;
+  labels: { saving: string; saved: string; error: string; unsaved: string; retry: string };
+}) {
+  const dataStatus = status === 'pending' ? 'unsaved' : status === 'idle' ? 'saved' : status;
+
+  if (status === 'error') {
+    return (
+      <span className="flex items-center gap-1" data-testid="save-status" data-status="error">
+        <span role="status" aria-label={labels.error} title={labels.error}>
+          <WarningCircleIcon aria-hidden="true" className="text-destructive" size={18} />
+        </span>
+        <Button type="button" size="xs" variant="ghost" data-testid="save-retry" onClick={onRetry}>
+          {labels.retry}
+        </Button>
+      </span>
+    );
+  }
+
+  if (status === 'saving') {
+    return (
+      <span
+        data-testid="save-status"
+        data-status="saving"
+        role="status"
+        aria-label={labels.saving}
+        title={labels.saving}
+      >
+        <CircleNotchIcon aria-hidden="true" className="animate-spin text-muted-foreground" size={18} />
+      </span>
+    );
+  }
+
+  if (status === 'pending') {
+    return (
+      <span
+        data-testid="save-status"
+        data-status="unsaved"
+        role="status"
+        aria-label={labels.unsaved}
+        title={labels.unsaved}
+      >
+        <CircleNotchIcon aria-hidden="true" className="text-muted-foreground" size={18} />
+      </span>
+    );
+  }
+
+  return (
+    <span data-testid="save-status" data-status={dataStatus} role="status" aria-label={labels.saved} title={labels.saved}>
+      <CheckCircleIcon aria-hidden="true" weight="fill" className="text-success" size={18} />
+    </span>
+  );
 }
 
 export default function ActivityEditorIsland({
@@ -50,93 +150,148 @@ export default function ActivityEditorIsland({
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
 
-  const [title, setTitle] = useState(initialTitle);
-  const [level, setLevel] = useState<Level | null>(initialLevel);
-  const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [history, setHistory] = useState<HistoryState<ActivityDoc>>(() =>
+    initHistory({ title: initialTitle, level: initialLevel, blocks: initialBlocks }),
+  );
+  const doc = history.present;
+  const { title, level, blocks } = doc;
+
+  const [saveState, setSaveState] = useState<AutosaveStatus | 'idle'>('idle');
   const [preview, setPreview] = useState(false);
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [addingBlock, setAddingBlock] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
 
-  const markDirty = useCallback(() => {
-    setSaveStatus((prev) => (prev === 'saving' ? prev : 'unsaved'));
+  // Baseline captured at the start of an in-progress (non-committing)
+  // transaction, e.g. a zone drag — see `updateDoc`.
+  const transactionBaselineRef = useRef<ActivityDoc | null>(null);
+
+  const updateDoc = useCallback((next: ActivityDoc, opts?: BlocksChangeOptions) => {
+    setHistory((h) => {
+      if (opts?.commit === false) {
+        if (transactionBaselineRef.current === null) transactionBaselineRef.current = h.present;
+        return replacePresent(h, next);
+      }
+      if (transactionBaselineRef.current !== null) {
+        const baseline = transactionBaselineRef.current;
+        transactionBaselineRef.current = null;
+        return commitTransaction(replacePresent(h, next), baseline);
+      }
+      return pushHistory(h, next);
+    });
   }, []);
 
   const changeTitle = useCallback(
-    (value: string) => {
-      setTitle(value);
-      markDirty();
-    },
-    [markDirty],
+    (value: string) => updateDoc({ ...doc, title: value }),
+    [doc, updateDoc],
   );
 
   const changeLevel = useCallback(
-    (value: string) => {
-      setLevel(isLevel(value) ? value : null);
-      markDirty();
-    },
-    [markDirty],
+    (value: string) => updateDoc({ ...doc, level: isLevel(value) ? value : null }),
+    [doc, updateDoc],
   );
 
   const changeBlocks = useCallback(
-    (next: Block[]) => {
-      setBlocks(next);
-      markDirty();
-    },
-    [markDirty],
+    (next: Block[], opts?: BlocksChangeOptions) => updateDoc({ ...doc, blocks: next }, opts),
+    [doc, updateDoc],
   );
 
-  const selectBlock = useCallback((blockId: string | null) => {
-    setSelectedBlockId(blockId);
-    setSelectedZoneId(null);
+  const toggleBlockExpanded = useCallback((blockId: string) => {
+    setExpandedBlockIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(blockId)) next.delete(blockId);
+      else next.add(blockId);
+      return next;
+    });
   }, []);
 
-  // Escape deselects — zone first, then block. The editor's one global
-  // keyboard shortcut.
+  const handleUndo = useCallback(() => setHistory(undo), []);
+  const handleRedo = useCallback(() => setHistory(redo), []);
+
+  // Escape deselects the current zone — the editor's one selection-related
+  // global keyboard shortcut (undo/redo/save are handled below).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
-      if (selectedZoneId) {
-        setSelectedZoneId(null);
-      } else if (selectedBlockId) {
-        setSelectedBlockId(null);
+      if (selectedZoneId) setSelectedZoneId(null);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedZoneId]);
+
+  // Autosave: watches `doc`, saves ~3s after the last change, single-flight,
+  // skips a no-op save. Created once per `activityId`.
+  const schedulerRef = useRef<AutosaveScheduler<ActivityDoc> | null>(null);
+  useEffect(() => {
+    const scheduler = createAutosaveScheduler<ActivityDoc>({
+      save: async (value) => {
+        const res = await fetch(`/api/actividades/${activityId}/guardar`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
+        });
+        if (!res.ok) throw new Error('save failed');
+      },
+      onStatusChange: setSaveState,
+    });
+    schedulerRef.current = scheduler;
+    return () => {
+      scheduler.dispose();
+      schedulerRef.current = null;
+    };
+  }, [activityId]);
+
+  // Skip the very first run (mount) — nothing changed yet, so nothing to autosave.
+  const skippedFirstNotifyRef = useRef(false);
+  useEffect(() => {
+    if (!skippedFirstNotifyRef.current) {
+      skippedFirstNotifyRef.current = true;
+      return;
+    }
+    schedulerRef.current?.notifyChange(doc);
+  }, [doc]);
+
+  const handleSaveNow = useCallback(() => {
+    schedulerRef.current?.saveNow(doc);
+  }, [doc]);
+
+  // Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z or Ctrl+Y redo, Ctrl/⌘+S save.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const mod = isMac() ? e.metaKey : e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 's') {
+        e.preventDefault();
+        handleSaveNow();
+      } else if (key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
+      } else if (key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (key === 'y') {
+        e.preventDefault();
+        handleRedo();
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedZoneId, selectedBlockId]);
+  }, [handleSaveNow, handleUndo, handleRedo]);
 
-  // Warn before an unsaved close/reload — never while a save is in flight or
-  // already clean (the browser's own confirmation dialog is enough; no
-  // custom copy is shown by any browser for `beforeunload` any more, but the
-  // localized string still documents the intent for any legacy UA that does).
+  // Warn before a tab close/reload while anything is unsaved — the browser's
+  // own (unthemeable) confirmation dialog; see owner request #9 for the
+  // separate, custom in-app navigation modal.
   useEffect(() => {
-    if (saveStatus !== 'unsaved') return undefined;
+    const unsaved = saveState === 'pending' || saveState === 'saving' || saveState === 'error';
+    if (!unsaved) return undefined;
     function onBeforeUnload(e: BeforeUnloadEvent) {
-      // `preventDefault()` alone is the modern, standards-track way to
-      // trigger the browser's own (unthemeable) confirmation dialog; no
-      // browser has shown a custom `returnValue` string in years.
       e.preventDefault();
     }
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [saveStatus]);
-
-  const handleSave = useCallback(async () => {
-    setSaveStatus('saving');
-    try {
-      const res = await fetch(`/api/actividades/${activityId}/guardar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, level, blocks }),
-      });
-      setSaveStatus(res.ok ? 'saved' : 'error');
-    } catch {
-      setSaveStatus('error');
-    }
-  }, [activityId, title, level, blocks]);
+  }, [saveState]);
 
   const handleWorksheetChosen = useCallback(() => {
     setShowUploader(true);
@@ -154,23 +309,21 @@ export default function ActivityEditorIsland({
       changeBlocks([...blocks, ...newBlocks]);
       setAddingBlock(false);
       setShowUploader(false);
-      if (newBlocks.length > 0) selectBlock(newBlocks[0].id);
+      if (newBlocks.length > 0) {
+        setExpandedBlockIds((prev) => {
+          const next = new Set(prev);
+          for (const b of newBlocks) next.add(b.id);
+          return next;
+        });
+      }
     },
-    [blocks, changeBlocks, selectBlock],
+    [blocks, changeBlocks],
   );
 
-  const saveLabel = useMemo(() => {
-    switch (saveStatus) {
-      case 'saving':
-        return t.saving;
-      case 'error':
-        return t.saveError;
-      case 'unsaved':
-        return t.unsaved;
-      default:
-        return t.saved;
-    }
-  }, [saveStatus, t]);
+  const saveLabels = useMemo(
+    () => ({ saving: t.savingStatus, saved: t.savedStatus, error: t.errorStatus, unsaved: t.unsaved, retry: t.saveRetry }),
+    [t],
+  );
 
   return (
     <div data-testid="activity-editor-island" className="flex flex-col gap-6">
@@ -208,23 +361,38 @@ export default function ActivityEditorIsland({
         <div className="flex items-center gap-2">
           <Button
             type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t.undo}
+            data-testid="undo-button"
+            disabled={!canUndo(history)}
+            onClick={handleUndo}
+          >
+            <ArrowUUpLeftIcon aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t.redo}
+            data-testid="redo-button"
+            disabled={!canRedo(history)}
+            onClick={handleRedo}
+          >
+            <ArrowUUpRightIcon aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
             variant="outline"
             data-testid="preview-toggle"
             onClick={() => setPreview((p) => !p)}
           >
             {preview ? t.previewOff : t.previewOn}
           </Button>
-          <Button type="button" data-testid="save-button" onClick={() => void handleSave()} disabled={saveStatus === 'saving'}>
+          <Button type="button" data-testid="save-button" onClick={handleSaveNow} disabled={saveState === 'saving'}>
             {t.save}
           </Button>
-          <span
-            data-testid="save-status"
-            data-status={saveStatus}
-            role="status"
-            className={`text-xs ${saveStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}
-          >
-            {saveLabel}
-          </span>
+          <SaveStatusIndicator status={saveState} onRetry={handleSaveNow} labels={saveLabels} />
         </div>
       </div>
 
@@ -247,10 +415,10 @@ export default function ActivityEditorIsland({
           <BlockList
             lang={lang}
             blocks={blocks}
-            selectedBlockId={selectedBlockId}
+            expandedBlockIds={expandedBlockIds}
             selectedZoneId={selectedZoneId}
             resolveImageUrl={resolveImageUrl}
-            onSelectBlock={selectBlock}
+            onToggleExpand={toggleBlockExpanded}
             onSelectZone={setSelectedZoneId}
             onBlocksChange={changeBlocks}
           />
