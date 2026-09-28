@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
 import BlockList from './BlockList';
-import type { Block, WorksheetBlock, Zone } from '@/lib/activities/blocks';
+import type { Block, QuizBlock, WorksheetBlock, Zone } from '@/lib/activities/blocks';
 
 afterEach(() => cleanup());
 
@@ -14,6 +14,15 @@ function worksheetBlock(id: string, overrides: Partial<WorksheetBlock> = {}): Wo
     rotation: 0,
     image: { path: `activity-uploads/u1/${id}.webp`, width: 800, height: 600 },
     zones: [],
+    ...overrides,
+  };
+}
+
+function quizBlock(id: string, overrides: Partial<QuizBlock> = {}): QuizBlock {
+  return {
+    id,
+    type: 'quiz',
+    payload: { pools: {}, slots: [] },
     ...overrides,
   };
 }
@@ -116,6 +125,33 @@ describe('BlockList — rendering, naming, and expand/collapse', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1', { zones: [zone] })]} />);
     expect(screen.getByTestId('block-b1').textContent).toContain('1');
     expect(screen.getByTestId('block-b1').textContent).toContain('zona');
+  });
+});
+
+describe('BlockList — quiz blocks', () => {
+  it('expands a quiz block into its own editor, not the worksheet zone editor', () => {
+    render(<Harness initialBlocks={[quizBlock('b1')]} />);
+    fireEvent.click(screen.getByTestId('block-header-b1'));
+    expect(screen.getByTestId('quiz-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+  });
+
+  it('shows a question count badge for a quiz block', () => {
+    const payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'L', input: 'text' as const, answer: ['x'] }],
+    };
+    render(<Harness initialBlocks={[quizBlock('b1', { payload })]} />);
+    expect(screen.getByTestId('block-b1').textContent).toContain('1');
+    expect(screen.getByTestId('block-b1').textContent).toContain('pregunta');
+  });
+
+  it('adding a question through the quiz editor updates the block list via onBlocksChange', () => {
+    render(<Harness initialBlocks={[quizBlock('b1')]} />);
+    fireEvent.click(screen.getByTestId('block-header-b1'));
+    fireEvent.click(screen.getByTestId('add-question-b1'));
+    expect(screen.getByTestId('block-b1').textContent).toContain('pregunta');
+    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
   });
 });
 

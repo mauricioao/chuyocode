@@ -12,9 +12,9 @@
  * editor render below the header — collapsed and expanded are independent
  * PER BLOCK (owner request #6), not tied to which one is "selected".
  *
- * Only `worksheet` blocks are editable in this PR (`quiz` ships in PR C's
- * question type; none can be authored here, so that branch is defensive,
- * not a real path).
+ * `worksheet` blocks expand into {@link WorksheetZoneEditor}; `quiz` blocks
+ * (PR C, "Preguntas (quiz) block") expand into {@link QuizBlockEditor} —
+ * same header chrome either way, only the expanded editor differs.
  *
  * DESKTOP "FOCUS" LAYOUT (creator "one-screen" pass): `expandedBlockIds`
  * still means exactly what it always has (owner request #6, above) — this
@@ -55,10 +55,12 @@ import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowCounterClockwise';
 import { ArrowClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowClockwise';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block, WorksheetBlock, Zone } from '@/lib/activities/blocks';
+import type { Block, QuizBlock, WorksheetBlock, Zone } from '@/lib/activities/blocks';
+import type { Payload } from '@/lib/exercisePayload';
 import { rotateRects, turnRotation, type TurnDirection } from '@/lib/activities/zoneGeometry';
 import { Button } from '@/components/ui/button';
 import WorksheetZoneEditor from './WorksheetZoneEditor';
+import QuizBlockEditor from './QuizBlockEditor';
 
 export interface BlocksChangeOptions {
   /**
@@ -93,6 +95,10 @@ export interface BlockListProps {
 
 function isWorksheet(block: Block): block is WorksheetBlock {
   return block.type === 'worksheet';
+}
+
+function isQuiz(block: Block): block is QuizBlock {
+  return block.type === 'quiz';
 }
 
 /**
@@ -254,6 +260,10 @@ export default function BlockList({
     );
   };
 
+  const updateQuizPayload = (blockId: string, payload: Payload) => {
+    onBlocksChange(blocks.map((b) => (b.id === blockId && isQuiz(b) ? { ...b, payload } : b)));
+  };
+
   const rotateBlock = (blockId: string, direction: TurnDirection) => {
     onBlocksChange(
       blocks.map((b) =>
@@ -294,8 +304,10 @@ export default function BlockList({
           {blocks.map((block, index) => {
             const expanded = expandedBlockIds.has(block.id);
             const worksheet = isWorksheet(block) ? block : null;
+            const quiz = isQuiz(block) ? block : null;
             const name = blockDisplayName(block, index, t.blockDefaultNamePrefix);
             const zoneCount = worksheet?.zones.length ?? 0;
+            const questionCount = quiz?.payload.slots.length ?? 0;
 
             return (
               <SortableBlockItem
@@ -338,6 +350,12 @@ export default function BlockList({
                     {worksheet && (
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {zoneCount} {zoneCount === 1 ? t.zoneCountOne : t.zoneCountMany}
+                      </span>
+                    )}
+
+                    {quiz && (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {questionCount} {questionCount === 1 ? t.questionCountOne : t.questionCountMany}
                       </span>
                     )}
 
@@ -393,6 +411,21 @@ export default function BlockList({
                         onZonesChange={(zones, opts) => updateZones(block.id, zones, opts)}
                         onSelectZone={onSelectZone}
                         incompleteZoneId={block.id === incompleteBlockId ? incompleteZoneId : undefined}
+                        incompleteMessage={block.id === incompleteBlockId ? incompleteMessage : null}
+                      />
+                    </div>
+                  )}
+
+                  {expanded && quiz && (
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border px-2 pb-2 pt-1">
+                      <QuizBlockEditor
+                        blockId={block.id}
+                        lang={lang}
+                        payload={quiz.payload}
+                        selectedSlotId={selectedZoneId}
+                        onSelectSlot={onSelectZone}
+                        onPayloadChange={(payload) => updateQuizPayload(block.id, payload)}
+                        incompleteSlotId={block.id === incompleteBlockId ? incompleteZoneId : undefined}
                         incompleteMessage={block.id === incompleteBlockId ? incompleteMessage : null}
                       />
                     </div>

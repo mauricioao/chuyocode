@@ -298,6 +298,21 @@ describe('ActivityEditorIsland — adding a worksheet block', () => {
   });
 });
 
+describe('ActivityEditorIsland — adding a quiz block', () => {
+  it('opens the picker and appends an empty, expanded quiz block immediately — no upload step', () => {
+    renderEditor();
+    fireEvent.click(screen.getByTestId('add-block-button'));
+    expect(screen.getByTestId('block-type-picker')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('picker-questions'));
+
+    expect(screen.queryByTestId('block-type-picker')).toBeNull();
+    expect(screen.getByTestId('block-list')).toBeTruthy();
+    // The new block is selected: its quiz editor is already expanded.
+    expect(screen.getByTestId(/^quiz-editor-/)).toBeTruthy();
+  });
+});
+
 describe('ActivityEditorIsland — Escape deselects the current zone', () => {
   it('deselects the selected zone on Escape, without collapsing its block', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
