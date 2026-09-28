@@ -251,6 +251,90 @@ describe('approveRevision', () => {
     copySpy.mockRestore();
   });
 
+  it('approves a quiz-only activity — no worksheet image, so no storage copy, and block_types/count are correct', async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            payload: {
+              pools: {},
+              slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const copySpy = vi.spyOn(storageModule, 'copyToImagesBucket');
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    expect(copySpy).not.toHaveBeenCalled();
+    expect(state.rpcCalls).toHaveLength(1);
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_block_types).toEqual(['quiz']);
+    expect(args.p_block_count).toBe(1);
+
+    copySpy.mockRestore();
+  });
+
+  it('approves a mixed worksheet+quiz activity: copies only the worksheet image, leaves the quiz\'s allow-listed media URL untouched, and reports both block types', async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          ...worksheetBlocks(`${UPLOADS_BUCKET}/${AUTHOR}/${IMAGE_ID}.webp`),
+          {
+            id: 'q1',
+            type: 'quiz',
+            payload: {
+              pools: {},
+              slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }],
+              blocks: [
+                { kind: 'media', id: 'm1', image: 'https://cdn.sanity.io/images/foo/bar.webp' },
+                { kind: 'row', id: 'row-s1', slotId: 's1' },
+              ],
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const copySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    expect(copySpy).toHaveBeenCalledTimes(1);
+    expect(copySpy).toHaveBeenCalledWith(
+      `${UPLOADS_BUCKET}/${AUTHOR}/${IMAGE_ID}.webp`,
+      `activity-images/${ACTIVITY}/${IMAGE_ID}.webp`,
+    );
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_block_types).toEqual(['worksheet', 'quiz']);
+    expect(args.p_block_count).toBe(2);
+    const blocks = args.p_blocks as Block[];
+    const quizBlock = blocks[1] as { payload: { blocks?: { kind: string; image?: string }[] } };
+    // The quiz block's own media block is untouched — only worksheet.image.path is ever rewritten.
+    expect(quizBlock.payload.blocks?.find((b) => b.kind === 'media')?.image).toBe(
+      'https://cdn.sanity.io/images/foo/bar.webp',
+    );
+
+    copySpy.mockRestore();
+  });
+
   it('returns copy_failed when the storage copy fails, never calling the RPC', async () => {
     push('activity_revisions', {
       data: {
