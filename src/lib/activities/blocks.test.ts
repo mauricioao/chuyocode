@@ -388,6 +388,26 @@ describe("parseBlocks — 'draft' mode (creator polish round 3, owner feedback #
     expect(parseBlocks([worksheetBlock({ zones: [] })], 'draft')).not.toBeNull();
   });
 
+  it('accepts a quiz block with zero questions, unlike submit mode', () => {
+    const raw = quizBlock({ payload: { pools: {}, slots: [] } });
+    expect(parseBlocks([raw])).toBeNull();
+    const result = parseBlocks([raw], 'draft');
+    expect(result).toEqual([expect.objectContaining({ payload: { pools: {}, slots: [] } })]);
+  });
+
+  it('accepts a quiz question with no answer yet, unlike submit mode', () => {
+    const raw = quizBlock({
+      payload: { pools: {}, slots: [{ id: 's1', label: 'L', input: 'text', answer: [] }] },
+    });
+    expect(parseBlocks([raw])).toBeNull();
+    const result = parseBlocks([raw], 'draft');
+    expect(result).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ slots: [expect.objectContaining({ answer: [] })] }),
+      }),
+    ]);
+  });
+
   it('still rejects a malformed image path (a bare URL, traversal, or an unknown bucket)', () => {
     expect(
       parseBlocks(
@@ -481,8 +501,90 @@ describe('findIncompleteBlock', () => {
     });
   });
 
-  it('ignores quiz blocks (nothing to complete there)', () => {
+  it('returns null for an already submit-complete quiz block', () => {
     const blocks = parseBlocks([quizBlock()], 'draft') as Block[];
+    expect(findIncompleteBlock(blocks)).toBeNull();
+  });
+
+  it('reports a quiz block with no questions (zoneId null)', () => {
+    const blocks = parseBlocks(
+      [quizBlock({ payload: { pools: {}, slots: [] } })],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({ blockId: 'b1', zoneId: null, reason: 'quiz_no_slots' });
+  });
+
+  it('reports a quiz question with no answer yet', () => {
+    const blocks = parseBlocks(
+      [
+        quizBlock({
+          payload: { pools: {}, slots: [{ id: 's1', label: 'L', input: 'text', answer: [] }] },
+        }),
+      ],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({
+      blockId: 'b1',
+      zoneId: 's1',
+      reason: 'quiz_no_answer',
+    });
+  });
+
+  it('reports a pooled quiz question with fewer than 2 pool items', () => {
+    const blocks = parseBlocks(
+      [
+        quizBlock({
+          payload: {
+            pools: { opts: [{ id: 'a', text: 'cat' }] },
+            slots: [{ id: 's1', label: 'L', input: 'choice', pool: 'opts', answer: ['a'] }],
+          },
+        }),
+      ],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({
+      blockId: 'b1',
+      zoneId: 's1',
+      reason: 'quiz_too_few_options',
+    });
+  });
+
+  it('reports a pooled quiz question whose marked answer names no pool item', () => {
+    const blocks = parseBlocks(
+      [
+        quizBlock({
+          payload: {
+            pools: {
+              opts: [
+                { id: 'a', text: 'cat' },
+                { id: 'b', text: 'dog' },
+              ],
+            },
+            slots: [{ id: 's1', label: 'L', input: 'choice', pool: 'opts', answer: ['missing'] }],
+          },
+        }),
+      ],
+      'draft',
+    ) as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({
+      blockId: 'b1',
+      zoneId: 's1',
+      reason: 'quiz_answer_not_in_pool',
+    });
+  });
+
+  it('a text (poolless) quiz question with too few pool items is not flagged — it has no pool', () => {
+    const blocks = parseBlocks(
+      [
+        quizBlock({
+          payload: {
+            pools: {},
+            slots: [{ id: 's1', label: 'L', input: 'text', answer: ['cat'] }],
+          },
+        }),
+      ],
+      'draft',
+    ) as Block[];
     expect(findIncompleteBlock(blocks)).toBeNull();
   });
 });

@@ -33,7 +33,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
-import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
+import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
 import {
   initHistory,
   pushHistory,
@@ -134,7 +134,7 @@ export default function ActivityEditorIsland({
   const [incompleteTarget, setIncompleteTarget] = useState<{
     blockId: string;
     zoneId: string | null;
-    reason: 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options';
+    reason: IncompleteBlockInfo['reason'];
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -457,7 +457,7 @@ export default function ActivityEditorIsland({
           setIncompleteTarget({
             blockId,
             zoneId,
-            reason: reason as 'no_zones' | 'no_answers' | 'too_few_options' | 'answer_not_in_options',
+            reason: reason as IncompleteBlockInfo['reason'],
           });
           if (typeof document !== 'undefined') {
             const el = document.getElementById(`block-${blockId}`);
@@ -524,6 +524,10 @@ export default function ActivityEditorIsland({
     no_answers: 'incompleteNoAnswers',
     too_few_options: 'incompleteTooFewOptions',
     answer_not_in_options: 'incompleteAnswerNotInOptions',
+    quiz_no_slots: 'incompleteQuizNoSlots',
+    quiz_no_answer: 'incompleteQuizNoAnswer',
+    quiz_too_few_options: 'incompleteQuizTooFewOptions',
+    quiz_answer_not_in_pool: 'incompleteQuizAnswerNotInPool',
   } as const;
   const incompleteMessage = incompleteTarget ? t[INCOMPLETE_REASON_KEYS[incompleteTarget.reason]] : null;
 

@@ -241,13 +241,37 @@ function parseLayout(value: unknown): Layout | null {
 }
 
 /**
- * Parse a slot, or `null` if it could never be graded.
+ * `parsePayload`'s two validation postures — mirrors `activities/blocks.ts`'s
+ * own `BlocksParseMode`, added so a `QuizBlock` (an activity block whose
+ * payload is exactly this module's `Payload`) can be autosaved mid-drafting
+ * without first being gradeable:
+ *
+ *  - `'submit'` (the default, unchanged from before this mode existed): a
+ *    slot must carry at least one accepted answer, or the WHOLE payload is
+ *    unusable — an ungradeable exercise. Used by the curated `/ejercicios`
+ *    authoring flow (which has never needed a draft posture) and by every
+ *    other existing caller, so every caller written before this mode existed
+ *    keeps behaving exactly as before.
+ *  - `'draft'`: a slot with no answer YET is a normal mid-drafting state, not
+ *    a malformed payload — it degrades the payload's completeness, not its
+ *    validity. A payload with ZERO slots is likewise a valid, saveable draft
+ *    (a freshly added quiz block with no question yet). Every other rule —
+ *    ids, `input` non-empty, pools/layout/blocks parsing — is unchanged.
+ */
+export type PayloadParseMode = 'draft' | 'submit';
+
+/**
+ * Parse a slot, or `null` if it is structurally unusable.
  *
  * An UNKNOWN `input` is deliberately accepted: content and code deploy through
  * different pipelines and will drift, so an exercise authored for a renderer
  * that has not shipped yet must degrade at dispatch — not be rejected here.
+ *
+ * `mode === 'submit'` additionally requires at least one accepted answer — a
+ * slot with none is ungradeable. `mode === 'draft'` skips that one check; see
+ * {@link PayloadParseMode}.
  */
-function parseSlot(value: unknown): Slot | null {
+function parseSlot(value: unknown, mode: PayloadParseMode): Slot | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== 'string' || value.id.length === 0) return null;
   if (typeof value.input !== 'string' || value.input.length === 0) return null;
@@ -255,8 +279,9 @@ function parseSlot(value: unknown): Slot | null {
   const answer = Array.isArray(value.answer)
     ? value.answer.filter((a): a is string => typeof a === 'string')
     : [];
-  // A slot with no accepted answer is an ungradeable exercise, not a valid one.
-  if (answer.length === 0) return null;
+  // A slot with no accepted answer is an ungradeable exercise — a hard
+  // failure in 'submit' mode, a normal mid-drafting state in 'draft' mode.
+  if (mode === 'submit' && answer.length === 0) return null;
 
   const slot: Slot = {
     id: value.id,
@@ -345,14 +370,21 @@ function parseBlocks(value: unknown, slots: Slot[]): Block[] | undefined {
  * FAIL-SAFE by design: the caller turns `null` into a 404. Every rejection here
  * is a payload no renderer could have drawn and no comparator could have
  * graded, so failing at the boundary beats failing mid-render.
+ *
+ * `mode` defaults to `'submit'` — every caller written before
+ * {@link PayloadParseMode} existed keeps its exact prior behavior, including
+ * rejecting a `slots` array with zero entries. `'draft'` additionally allows
+ * an empty `slots` array and relaxes {@link parseSlot}'s own answer check —
+ * see that type's own doc.
  */
-export function parsePayload(value: unknown): Payload | null {
+export function parsePayload(value: unknown, mode: PayloadParseMode = 'submit'): Payload | null {
   if (!isRecord(value)) return null;
-  if (!Array.isArray(value.slots) || value.slots.length === 0) return null;
+  if (!Array.isArray(value.slots)) return null;
+  if (mode === 'submit' && value.slots.length === 0) return null;
 
   const slots: Slot[] = [];
   for (const raw of value.slots) {
-    const slot = parseSlot(raw);
+    const slot = parseSlot(raw, mode);
     if (!slot) return null;
     slots.push(slot);
   }

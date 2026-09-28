@@ -132,6 +132,37 @@ describe('parsePayload', () => {
 });
 
 /**
+ * `'draft'` mode (activities' `QuizBlock` authoring): a mid-drafting quiz
+ * question must autosave without being gradeable yet — see
+ * {@link PayloadParseMode}'s own doc. `'submit'` (the default, exercised
+ * above) is untouched by these cases.
+ */
+describe('parsePayload — draft mode', () => {
+  it('accepts an empty slots array, unlike submit mode', () => {
+    expect(parsePayload({ pools: {}, slots: [] })).toBeNull();
+    const payload = parsePayload({ pools: {}, slots: [] }, 'draft');
+    expect(payload?.slots).toEqual([]);
+  });
+
+  it('accepts a slot with no answer yet, unlike submit mode', () => {
+    const raw = { pools: {}, slots: [{ id: 's1', label: 'L', input: 'text', answer: [] }] };
+    expect(parsePayload(raw)).toBeNull();
+    const payload = parsePayload(raw, 'draft');
+    expect(payload?.slots[0]).toMatchObject({ id: 's1', answer: [] });
+  });
+
+  it('still rejects a slot with no id', () => {
+    expect(
+      parsePayload({ pools: {}, slots: [{ label: 'L', input: 'text', answer: [] }] }, 'draft'),
+    ).toBeNull();
+  });
+
+  it('still rejects a non-array slots value', () => {
+    expect(parsePayload({ pools: {}, slots: 'nope' }, 'draft')).toBeNull();
+  });
+});
+
+/**
  * THE RETIRED `timer` FIELD.
  *
  * `timer` was an authored countdown that graded the exercise when it hit zero.
