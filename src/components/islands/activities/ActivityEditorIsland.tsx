@@ -47,6 +47,7 @@ import {
 } from '@/lib/activities/history';
 import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
+import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
 import BlockList, { type BlocksChangeOptions } from './BlockList';
@@ -537,6 +538,12 @@ export default function ActivityEditorIsland({
     [t],
   );
 
+  // Points at whichever of the two scroll containers below is currently
+  // mounted (block list or preview — the two branches are mutually
+  // exclusive), so the scoped `ScrollToTop` always tracks the right one
+  // without needing to know which mode is active.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
     // (border, rounded, `bg-card`) with real vertical margins from the site
@@ -565,7 +572,7 @@ export default function ActivityEditorIsland({
           grow past the height the root above gives it. */}
       <div
         data-testid="activity-editor-card"
-        className="flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:bg-card"
+        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:bg-card"
       >
         {/* Compact header row (owner request #1, creator polish round 2):
             title + level, plus — PR D, "Activities practice" — the
@@ -625,6 +632,7 @@ export default function ActivityEditorIsland({
 
         {preview ? (
           <div
+            ref={scrollContainerRef}
             data-testid="activity-preview"
             className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:p-3"
           >
@@ -649,7 +657,10 @@ export default function ActivityEditorIsland({
           // flexible height inside it. The add-block flow (picker/uploader)
           // scrolls into view here too, inside the same card, instead of
           // growing the page past it.
-          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3">
+          <div
+            ref={scrollContainerRef}
+            className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3"
+          >
             <BlockList
               lang={lang}
               blocks={blocks}
@@ -687,6 +698,13 @@ export default function ActivityEditorIsland({
             {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
           </div>
         )}
+
+        {/* Scoped "back to top" for the card's own scroll container (block
+            list or preview, whichever is mounted) — reuses the same island
+            `BaseLayout` mounts globally, targeted at `scrollContainerRef`
+            instead of the window. Positioned inside THIS card (the
+            `relative` ancestor above), never the page. */}
+        <ScrollToTop lang={lang} targetRef={scrollContainerRef} />
       </div>
 
       <EditorSideToolbar
