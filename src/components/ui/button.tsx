@@ -5,9 +5,21 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:cursor-default disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
+      // `press` is its own axis (not folded into `variant`) so ANY variant —
+      // outline, ghost, whatever an arrow control uses — can opt out of the
+      // press affordance. "none" is a hard removal of the utility from the
+      // class string, not a later override: a caller that centers itself
+      // with its own `translate-y-*` (a shared CSS custom property) would
+      // otherwise have that transform silently replaced by this one on
+      // `:active`. See `button.test.tsx` and `carousel.tsx`'s CarouselPrevious/
+      // CarouselNext.
+      press: {
+        default: "active:not-aria-[haspopup]:translate-y-px",
+        none: "",
+      },
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
@@ -37,6 +49,7 @@ const buttonVariants = cva(
     defaultVariants: {
       variant: "default",
       size: "default",
+      press: "default",
     },
   }
 )
@@ -45,6 +58,7 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  press = "default",
   asChild = false,
   ...props
 }: React.ComponentProps<"button"> &
@@ -58,7 +72,7 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size, press, className }))}
       {...props}
     />
   )

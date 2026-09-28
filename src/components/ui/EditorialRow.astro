@@ -140,7 +140,12 @@ const ARROW_SCRIPT = `
           type="button"
           class={buttonVariants({
             ...ARROW_BUTTON_VARIANT,
-            className: `editorial-arrow editorial-arrow-prev absolute left-3 top-1/2 z-20 hidden -translate-y-1/2 ${ARROW_BUTTON_SHAPE} border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur transition-opacity duration-200 hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent sm:inline-flex`,
+            // Centered with `inset-y-0 my-auto`, NOT a `-translate-y-1/2`
+            // transform (matches the shadcn Carousel's own prev/next): see
+            // `arrowControl.ts`'s `ARROW_BUTTON_VARIANT` doc comment for why a
+            // transform-centered arrow collided with the button press
+            // affordance and visibly dodged on click.
+            className: `editorial-arrow editorial-arrow-prev absolute inset-y-0 left-3 z-20 hidden my-auto ${ARROW_BUTTON_SHAPE} border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur transition-opacity duration-200 hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent sm:inline-flex`,
           })}
           data-editorial-prev
           aria-label="Scroll left"
@@ -162,7 +167,7 @@ const ARROW_SCRIPT = `
           type="button"
           class={buttonVariants({
             ...ARROW_BUTTON_VARIANT,
-            className: `editorial-arrow-next absolute right-3 top-1/2 z-20 -translate-y-1/2 ${ARROW_BUTTON_SHAPE} border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent`,
+            className: `editorial-arrow-next absolute inset-y-0 right-3 z-20 my-auto ${ARROW_BUTTON_SHAPE} border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent`,
           })}
           data-editorial-next
           aria-label="Scroll right"

@@ -75,6 +75,51 @@ describe('EditorialRow.astro', () => {
     expect(html).not.toContain("addEventListener('mousedown'");
   });
 
+  /**
+   * THE ARROW-DODGE REGRESSION GUARD.
+   *
+   * These arrows used to be vertically centered with a `-translate-y-1/2`
+   * transform. `buttonVariants`' base classes give every button
+   * `active:not-aria-[haspopup]:translate-y-px` for a tactile "press"
+   * affordance, and Tailwind's `translate-y-*` utilities all write the same
+   * underlying transform slot — so on `:active` that utility REPLACED the
+   * centering offset instead of composing with it, and the button visibly
+   * jumped toward the top of the row on click. Fixed by centering with
+   * `inset-y-0 my-auto` instead (never a transform, matching the shadcn
+   * Carousel's own prev/next — see `carousel.test.tsx`) and by opting the
+   * shared `ARROW_BUTTON_VARIANT` out of the press affordance entirely
+   * (`press: 'none'`, see `arrowControl.ts`).
+   */
+  it('centers the prev/next arrows with inset-y-0/my-auto, never a transform', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    const prevIdx = html.indexOf('data-editorial-prev');
+    const prevStart = html.lastIndexOf('<button', prevIdx);
+    const prevButton = html.slice(prevStart, prevIdx);
+    expect(prevButton).toContain('inset-y-0');
+    expect(prevButton).toContain('my-auto');
+    expect(prevButton).not.toMatch(/-?translate-y-1\/2/);
+
+    const nextIdx = html.indexOf('data-editorial-next');
+    const nextStart = html.lastIndexOf('<button', nextIdx);
+    const nextButton = html.slice(nextStart, nextIdx);
+    expect(nextButton).toContain('inset-y-0');
+    expect(nextButton).toContain('my-auto');
+    expect(nextButton).not.toMatch(/-?translate-y-1\/2/);
+  });
+
+  it('never gives the arrows the active-press translate utility', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    const prevIdx = html.indexOf('data-editorial-prev');
+    const prevStart = html.lastIndexOf('<button', prevIdx);
+    expect(html.slice(prevStart, prevIdx)).not.toMatch(/translate-y-px/);
+
+    const nextIdx = html.indexOf('data-editorial-next');
+    const nextStart = html.lastIndexOf('<button', nextIdx);
+    expect(html.slice(nextStart, nextIdx)).not.toMatch(/translate-y-px/);
+  });
+
   it('draws both chevrons from the shared arrow-control geometry', async () => {
     const html = await render({ title: 'Row', items: [item(1), item(2)] });
 
