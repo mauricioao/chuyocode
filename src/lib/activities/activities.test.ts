@@ -180,14 +180,20 @@ describe('getActivityForEdit', () => {
 
   it('returns null when the latest revision has malformed blocks', async () => {
     maybeSingleMock
-      .mockResolvedValueOnce({ data: { id: ACTIVITY_ID, title: 'Sin título', level: null }, error: null })
+      .mockResolvedValueOnce({
+        data: { id: ACTIVITY_ID, title: 'Sin título', level: null, status: 'draft', review_note: null },
+        error: null,
+      })
       .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: 'not-an-array', status: 'draft' }, error: null });
     expect(await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID)).toBeNull();
   });
 
   it('returns the activity + its latest revision blocks on success', async () => {
     maybeSingleMock
-      .mockResolvedValueOnce({ data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1' }, error: null })
+      .mockResolvedValueOnce({
+        data: { id: ACTIVITY_ID, title: 'Mi actividad', level: 'B1', status: 'draft', review_note: null },
+        error: null,
+      })
       .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: SOME_BLOCKS, status: 'draft' }, error: null });
 
     const result = await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);
@@ -199,12 +205,36 @@ describe('getActivityForEdit', () => {
       blocks: SOME_BLOCKS,
       revisionId: 'rev-1',
       revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
     });
+  });
+
+  it('surfaces the activity status and reviewer note (rejected)', async () => {
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: {
+          id: ACTIVITY_ID,
+          title: 'Mi actividad',
+          level: null,
+          status: 'rejected',
+          review_note: 'Falta una zona en la hoja 2.',
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: [], status: 'rejected' }, error: null });
+
+    const result = await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);
+    expect(result?.status).toBe('rejected');
+    expect(result?.reviewNote).toBe('Falta una zona en la hoja 2.');
   });
 
   it('normalizes an out-of-taxonomy level to null', async () => {
     maybeSingleMock
-      .mockResolvedValueOnce({ data: { id: ACTIVITY_ID, title: 'x', level: 'not-a-level' }, error: null })
+      .mockResolvedValueOnce({
+        data: { id: ACTIVITY_ID, title: 'x', level: 'not-a-level', status: 'draft', review_note: null },
+        error: null,
+      })
       .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: [], status: 'draft' }, error: null });
 
     const result = await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);
@@ -213,7 +243,10 @@ describe('getActivityForEdit', () => {
 
   it('orders by created_at desc and limits to 1 so the LATEST revision is read', async () => {
     maybeSingleMock
-      .mockResolvedValueOnce({ data: { id: ACTIVITY_ID, title: 'x', level: null }, error: null })
+      .mockResolvedValueOnce({
+        data: { id: ACTIVITY_ID, title: 'x', level: null, status: 'draft', review_note: null },
+        error: null,
+      })
       .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: [], status: 'draft' }, error: null });
 
     await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);

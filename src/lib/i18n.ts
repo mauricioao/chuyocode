@@ -251,6 +251,33 @@ export const UI_LABELS = {
         unsavedModalSaveAndLeave: 'Guardar y salir',
         unsavedModalLeaveWithoutSaving: 'Salir sin guardar',
         unsavedModalCancel: 'Cancelar',
+        // Review-state badge (PR D, "Activities practice") — mirrors
+        // `activities.status` exactly (draft/pending_review/live/rejected);
+        // `removed` never reaches the editor (excluded from the author's own
+        // edit surface, `getActivityForEdit`'s header).
+        statusDraft: 'Borrador',
+        statusPendingReview: 'En revisión',
+        statusLive: 'Publicada',
+        statusRejected: 'Rechazada',
+        reviewNoteLabel: 'Nota del revisor',
+        // Submit-for-review dialog.
+        submitForReview: 'Enviar a revisión',
+        submitDialogTitle: 'Enviar esta actividad a revisión',
+        submitDialogNote: 'La actividad va a ser revisada por un moderador antes de publicarse.',
+        submitRightsLabel: 'Confirmo que tengo el derecho de usar este material.',
+        submitConfirm: 'Enviar',
+        submitCancel: 'Cancelar',
+        submitting: 'Enviando…',
+        // Keyed by the endpoint's own reason codes (`enviar.ts`'s header).
+        submitErrors: {
+          rights_required: 'Hace falta confirmar el derecho de uso del material.',
+          invalid_title: 'Poner un título antes de enviar la actividad.',
+          no_blocks: 'Agregar al menos un bloque antes de enviar la actividad.',
+          missing_zones: 'Cada hoja de trabajo necesita al menos una zona de respuesta.',
+          invalid_blocks: 'El contenido de la actividad no es válido.',
+          no_draft: 'No hay cambios nuevos para enviar a revisión.',
+          submit_failed: 'No se pudo enviar la actividad. Intentar de nuevo.',
+        },
       },
       worksheet: {
         uploadTitle: 'Subir una imagen o un PDF',
@@ -596,6 +623,27 @@ export const UI_LABELS = {
         unsavedModalSaveAndLeave: 'Save and leave',
         unsavedModalLeaveWithoutSaving: 'Leave without saving',
         unsavedModalCancel: 'Cancel',
+        statusDraft: 'Draft',
+        statusPendingReview: 'In review',
+        statusLive: 'Published',
+        statusRejected: 'Rejected',
+        reviewNoteLabel: "Reviewer's note",
+        submitForReview: 'Submit for review',
+        submitDialogTitle: 'Submit this activity for review',
+        submitDialogNote: 'A moderator will review your activity before it is published.',
+        submitRightsLabel: 'I confirm I have the right to use this material.',
+        submitConfirm: 'Submit',
+        submitCancel: 'Cancel',
+        submitting: 'Submitting…',
+        submitErrors: {
+          rights_required: 'Confirming the right to use this material is required.',
+          invalid_title: 'Add a title before submitting this activity.',
+          no_blocks: 'Add at least one block before submitting this activity.',
+          missing_zones: 'Every worksheet needs at least one answer zone.',
+          invalid_blocks: "This activity's content is not valid.",
+          no_draft: 'There are no new changes to submit for review.',
+          submit_failed: 'Could not submit the activity. Try again.',
+        },
       },
       worksheet: {
         uploadTitle: 'Upload an image or a PDF',

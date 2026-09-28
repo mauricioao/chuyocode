@@ -116,6 +116,10 @@ export interface EditableActivity {
   revisionId: string;
   /** `activity_revisions.status` — the save endpoint reads this to decide update-vs-insert. */
   revisionStatus: string;
+  /** `activities.status` — the editor's own review-state badge (PR D, "Activities practice"). */
+  status: string;
+  /** `activities.review_note` — shown alongside the badge when `status === 'rejected'`. */
+  reviewNote: string | null;
 }
 
 /**
@@ -135,7 +139,7 @@ export async function getActivityForEdit(
   try {
     const { data: activityData, error: activityError } = await client
       .from(ACTIVITIES_TABLE)
-      .select('id, title, level')
+      .select('id, title, level, status, review_note')
       .eq('id', id)
       .eq('author_id', authorId)
       .neq('status', REMOVED_STATUS)
@@ -165,6 +169,7 @@ export async function getActivityForEdit(
     const revisionRow = revisionData as unknown as Record<string, unknown>;
 
     if (typeof activityRow.title !== 'string') return null;
+    if (typeof activityRow.status !== 'string') return null;
     if (typeof revisionRow.id !== 'string' || revisionRow.id.length === 0) return null;
     if (typeof revisionRow.status !== 'string') return null;
 
@@ -181,6 +186,8 @@ export async function getActivityForEdit(
       blocks,
       revisionId: revisionRow.id,
       revisionStatus: revisionRow.status,
+      status: activityRow.status,
+      reviewNote: typeof activityRow.review_note === 'string' ? activityRow.review_note : null,
     };
   } catch (err) {
     console.error('[activities] getActivityForEdit threw:', err);
