@@ -376,6 +376,12 @@ export const UI_LABELS = {
         // machine-readable text otherwise.
         zoneSpeakLabel: 'Texto para escuchar',
         zoneSpeakPlaceholder: 'Texto que se va a leer en voz alta',
+        // "¿Por qué?" explicación (D5): un campo opcional por zona, que se
+        // muestra al alumno solo después de comprobar, y solo si esa zona
+        // quedó incorrecta.
+        zoneExplanationLabel: '¿Por qué? (explicación)',
+        zoneExplanationPlaceholder: 'Explicación opcional',
+        zoneExplanationHint: 'Se muestra al alumno si se equivoca',
         zoneDelete: 'Eliminar zona',
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
@@ -1043,6 +1049,9 @@ export const UI_LABELS = {
         zoneOptionCorrect: 'Correct',
         zoneSpeakLabel: 'Text to listen to',
         zoneSpeakPlaceholder: 'Text to read aloud',
+        zoneExplanationLabel: 'Why? (explanation)',
+        zoneExplanationPlaceholder: 'Optional explanation',
+        zoneExplanationHint: 'Shown to the learner if they get it wrong',
         zoneDelete: 'Delete zone',
         zoneMinOptions: 'At least 2 options are needed.',
         zoneAnswerNotInOptions: 'Every answer must also be one of the options.',

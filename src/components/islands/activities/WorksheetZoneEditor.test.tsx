@@ -337,6 +337,74 @@ describe('WorksheetZoneEditor — speak text (D4)', () => {
   });
 });
 
+/** D5 "¿Por qué?" — the optional per-zone explanation field, under the answers. */
+describe('WorksheetZoneEditor — explanation text (D5)', () => {
+  it('starts empty for a zone with no explanation', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-explanation-input') as HTMLTextAreaElement;
+    expect(input.value).toBe('');
+  });
+
+  it('shows an already-authored explanation', () => {
+    const zone: Zone = {
+      id: 'z1',
+      x: 0.1,
+      y: 0.1,
+      w: 0.2,
+      h: 0.1,
+      kind: 'text',
+      answers: ['x'],
+      explanation: 'Because "cat" is the animal.',
+    };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-explanation-input') as HTMLTextAreaElement;
+    expect(input.value).toBe('Because "cat" is the animal.');
+  });
+
+  it('types an explanation and keeps it on the zone', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-explanation-input') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'Because "cat" is the animal.' } });
+    expect(input.value).toBe('Because "cat" is the animal.');
+  });
+
+  it('clearing the field back to blank drops the explanation entirely', () => {
+    const zone: Zone = {
+      id: 'z1',
+      x: 0.1,
+      y: 0.1,
+      w: 0.2,
+      h: 0.1,
+      kind: 'text',
+      answers: ['x'],
+      explanation: 'Because "cat" is the animal.',
+    };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-explanation-input') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect(input.value).toBe('');
+  });
+
+  it('renders the field under the answers section for a choice zone too', () => {
+    const zone: Zone = {
+      id: 'z1',
+      x: 0.1,
+      y: 0.1,
+      w: 0.2,
+      h: 0.1,
+      kind: 'choice',
+      answers: ['a'],
+      options: ['a', 'b'],
+      explanation: 'Because "a" is correct.',
+    };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const input = screen.getByTestId('zone-properties-explanation-input') as HTMLTextAreaElement;
+    expect(input.value).toBe('Because "a" is correct.');
+  });
+});
+
 describe('WorksheetZoneEditor — text answers', () => {
   it('adds and edits an answer', () => {
     const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['sat'] };
