@@ -1841,3 +1841,107 @@ describe('ExerciseIsland — localization', () => {
     expect(screen.getByTestId('exercise-submit').textContent).toBe('Check');
   });
 });
+
+/**
+ * D4 "Escuchar/Listen" — SpeakButton next to the current step's slot label,
+ * and next to any authored prose block; Comprobar/Reintentar stop any
+ * speech in flight.
+ *
+ * jsdom ships no `speechSynthesis`, so these tests install a minimal stand-in
+ * (same shape `src/lib/speech/*.test.ts` already uses) rather than mocking
+ * `useSpeech` itself — proving the REAL hook is wired up, not a fake.
+ */
+describe('ExerciseIsland — speech (D4)', () => {
+  class FakeUtterance {
+    text: string;
+    lang = '';
+    rate = 1;
+    voice: unknown = null;
+    onend: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor(text: string) {
+      this.text = text;
+    }
+  }
+
+  function installSynth() {
+    const synth = {
+      getVoices: vi.fn(() => []),
+      speak: vi.fn(),
+      cancel: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, writable: true, configurable: true });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      value: FakeUtterance,
+      writable: true,
+      configurable: true,
+    });
+    return synth;
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'speechSynthesis');
+    Reflect.deleteProperty(window, 'SpeechSynthesisUtterance');
+  });
+
+  it('renders no speak button at all when speechSynthesis is unsupported (jsdom default)', () => {
+    render(<ExerciseIsland lang="en" payload={single} />);
+    expect(screen.queryByTestId('speak-button')).toBeNull();
+  });
+
+  it('renders a speak button for the current slot label, reading its ___ blank as "blank"', () => {
+    const synth = installSynth();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    fireEvent.click(screen.getByTestId('speak-button'));
+    expect(synth.speak).toHaveBeenCalledTimes(1);
+    const utterance = synth.speak.mock.calls[0][0] as FakeUtterance;
+    expect(utterance.text).toBe('The cat blank');
+  });
+
+  it('renders a speak button next to an authored prose block', () => {
+    installSynth();
+    const withBlocks: Payload = {
+      ...pair,
+      blocks: [
+        { kind: 'prose', id: 'p1', text: 'Leading context.' },
+        { kind: 'row', id: 'r1', slotId: 's1' },
+      ],
+    };
+    render(<ExerciseIsland lang="en" payload={withBlocks} />);
+
+    // The prose text itself is unaffected by the speak button beside it.
+    expect(screen.getByTestId('exercise-block-p1').textContent).toBe('Leading context.');
+    // Two speak buttons on screen: one for the prose block, one for the slot label.
+    expect(screen.getAllByTestId('speak-button')).toHaveLength(2);
+  });
+
+  it('stops speech in flight when Comprobar is pressed', () => {
+    const synth = installSynth();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    fireEvent.click(screen.getByTestId('speak-button'));
+    synth.cancel.mockClear();
+
+    choose('sits');
+    submit();
+
+    expect(synth.cancel).toHaveBeenCalled();
+  });
+
+  it('stops speech in flight when Reintentar/Fix is pressed', () => {
+    const synth = installSynth();
+    render(<ExerciseIsland lang="en" payload={single} />);
+
+    choose('sit'); // wrong
+    submit();
+    fireEvent.click(screen.getByTestId('speak-button'));
+    synth.cancel.mockClear();
+
+    fireEvent.click(screen.getByTestId('exercise-retry'));
+
+    expect(synth.cancel).toHaveBeenCalled();
+  });
+});

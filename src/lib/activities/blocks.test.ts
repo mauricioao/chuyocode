@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { parseBlocks, findIncompleteBlock, MAX_BLOCKS, MAX_ZONES_PER_WORKSHEET, type Block } from './blocks';
+import {
+  parseBlocks,
+  findIncompleteBlock,
+  MAX_BLOCKS,
+  MAX_ZONES_PER_WORKSHEET,
+  MAX_ZONE_SPEAK_LENGTH,
+  type Block,
+  type WorksheetBlock,
+} from './blocks';
 import { uploadPath } from './paths';
 
 const USER = 'a1b2c3d4-0000-4000-8000-000000000001';
@@ -307,6 +315,50 @@ describe('parseBlocks — choice zones', () => {
           { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['cat'] },
         ],
       }),
+    ]);
+  });
+});
+
+describe('parseBlocks — zone speak text (D4, "Escuchar/Listen")', () => {
+  it('accepts a zone with no speak text at all', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone()] })]);
+    expect(result).toEqual([expect.objectContaining({ zones: [expect.objectContaining({ id: 'z1' })] })]);
+    expect((result as Block[])[0]).toMatchObject({ zones: [{ id: 'z1' }] });
+    expect(((result as Block[])[0] as WorksheetBlock).zones[0]).not.toHaveProperty('speak');
+  });
+
+  it('accepts and trims a valid speak text', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ speak: '  The cat sits.  ' })] })]);
+    expect(result).toEqual([
+      expect.objectContaining({ zones: [expect.objectContaining({ speak: 'The cat sits.' })] }),
+    ]);
+  });
+
+  it('treats a blank-after-trim speak text as absent, not an error', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ speak: '   ' })] })]);
+    expect(result).not.toBeNull();
+    expect(((result as Block[])[0] as WorksheetBlock).zones[0]).not.toHaveProperty('speak');
+  });
+
+  it('accepts a speak text at exactly MAX_ZONE_SPEAK_LENGTH characters', () => {
+    const speak = 'a'.repeat(MAX_ZONE_SPEAK_LENGTH);
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ speak })] })]);
+    expect(result).not.toBeNull();
+  });
+
+  it('rejects a speak text over MAX_ZONE_SPEAK_LENGTH characters', () => {
+    const speak = 'a'.repeat(MAX_ZONE_SPEAK_LENGTH + 1);
+    expect(parseBlocks([worksheetBlock({ zones: [textZone({ speak })] })])).toBeNull();
+  });
+
+  it('rejects a non-string speak value', () => {
+    expect(parseBlocks([worksheetBlock({ zones: [textZone({ speak: 42 })] })])).toBeNull();
+  });
+
+  it('works the same in draft mode', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ speak: 'Hi', answers: [] })] })], 'draft');
+    expect(result).toEqual([
+      expect.objectContaining({ zones: [expect.objectContaining({ speak: 'Hi', answers: [] })] }),
     ]);
   });
 });

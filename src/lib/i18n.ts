@@ -348,6 +348,11 @@ export const UI_LABELS = {
         zoneOptionAdd: 'Agregar opción',
         zoneOptionRemove: 'Quitar opción',
         zoneOptionCorrect: 'Correcta',
+        // "Escuchar/Listen" affordance (D4): an optional author field per
+        // zone, since a worksheet is an uploaded image with no
+        // machine-readable text otherwise.
+        zoneSpeakLabel: 'Texto para escuchar',
+        zoneSpeakPlaceholder: 'Texto que se va a leer en voz alta',
         zoneDelete: 'Eliminar zona',
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
@@ -951,6 +956,8 @@ export const UI_LABELS = {
         zoneOptionAdd: 'Add option',
         zoneOptionRemove: 'Remove option',
         zoneOptionCorrect: 'Correct',
+        zoneSpeakLabel: 'Text to listen to',
+        zoneSpeakPlaceholder: 'Text to read aloud',
         zoneDelete: 'Delete zone',
         zoneMinOptions: 'At least 2 options are needed.',
         zoneAnswerNotInOptions: 'Every answer must also be one of the options.',

@@ -21,6 +21,7 @@
  * header states; `response` is that component's plain, ephemeral state.
  */
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import SpeakButton from '@/lib/speech/SpeakButton';
 import type { QuizBlock } from '@/lib/activities/blocks';
 import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
@@ -62,9 +63,10 @@ export default function QuizBlockPractice({ lang, block, response, onChange, out
             {contextBlocks.map((contextBlock) => {
               if (contextBlock.kind === 'prose') {
                 return (
-                  <p key={contextBlock.id} className="text-sm text-zinc-300">
-                    {contextBlock.text}
-                  </p>
+                  <div key={contextBlock.id} className="flex items-start gap-2">
+                    <p className="text-sm text-zinc-300">{contextBlock.text}</p>
+                    <SpeakButton text={contextBlock.text} lang={lang} compact />
+                  </div>
                 );
               }
               if (contextBlock.kind === 'media') {
@@ -83,6 +85,10 @@ export default function QuizBlockPractice({ lang, block, response, onChange, out
               }
               return null;
             })}
+
+            {/* D4 "Escuchar/Listen": one SpeakButton per question, same
+                placement rule as `ExerciseIsland`'s own per-step one. */}
+            <SpeakButton text={slot.label} lang={lang} />
 
             {Renderer ? (
               <Renderer

@@ -313,3 +313,81 @@ describe('WorksheetPlayer — onZoneTap (mobile per-zone bottom sheet)', () => {
     expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
   });
 });
+
+/**
+ * D4 "Escuchar/Listen" — a small speaker affordance for a zone the author
+ * gave text to, in both the desktop inline player (this describe block) and
+ * the editor's own preview mode (which mounts this exact same component
+ * with `practice` omitted). The mobile tap-target (`onZoneTap`) never shows
+ * this badge — the mobile sheet gets its own SpeakButton instead, tested in
+ * `WorksheetPracticePlayerMobile.test.tsx`.
+ */
+describe('WorksheetPlayer — speak affordance (D4)', () => {
+  function installSynth() {
+    Object.defineProperty(window, 'speechSynthesis', {
+      value: { getVoices: () => [], speak: vi.fn(), cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      value: class {
+        constructor(public text: string) {}
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  function uninstallSynth() {
+    Reflect.deleteProperty(window, 'speechSynthesis');
+    Reflect.deleteProperty(window, 'SpeechSynthesisUtterance');
+  }
+
+  it('shows no speak affordance for a zone with no speak text', () => {
+    installSynth();
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[TEXT_ZONE]} imageUrl="/img.webp" />);
+    expect(screen.queryByTestId('player-zone-speak-z1')).toBeNull();
+    uninstallSynth();
+  });
+
+  it('shows a speak affordance for a zone with speak text, in creator preview mode', () => {
+    installSynth();
+    const zone: Zone = { ...TEXT_ZONE, speak: 'The cat sat on the mat.' };
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[zone]} imageUrl="/img.webp" />);
+    expect(screen.getByTestId('player-zone-speak-z1')).toBeTruthy();
+    uninstallSynth();
+  });
+
+  it('shows a speak affordance for a zone with speak text, in the real practice player', () => {
+    installSynth();
+    const zone: Zone = { ...TEXT_ZONE, speak: 'The cat sat on the mat.' };
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[zone]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-speak-z1')).toBeTruthy();
+    uninstallSynth();
+  });
+
+  it('never shows the corner badge for the mobile tap-target rendering', () => {
+    installSynth();
+    const zone: Zone = { ...TEXT_ZONE, speak: 'The cat sat on the mat.' };
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[zone]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-speak-z1')).toBeNull();
+    uninstallSynth();
+  });
+});

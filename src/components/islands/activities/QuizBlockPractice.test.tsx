@@ -91,3 +91,36 @@ describe('QuizBlockPractice — per-slot feedback', () => {
     expect(screen.queryByTestId('quiz-slot-result-s1')).toBeNull();
   });
 });
+
+/** D4 "Escuchar/Listen" — SpeakButton next to each question's own label. jsdom has no speechSynthesis by default. */
+describe('QuizBlockPractice — speech (D4)', () => {
+  it('renders no speak button when speechSynthesis is unsupported (jsdom default)', () => {
+    render(
+      <QuizBlockPractice lang="es" block={TEXT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />,
+    );
+    expect(screen.queryByTestId('speak-button')).toBeNull();
+  });
+
+  it('renders a speak button for the question label when supported', () => {
+    Object.defineProperty(window, 'speechSynthesis', {
+      value: { getVoices: () => [], speak: vi.fn(), cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      value: class {
+        constructor(public text: string) {}
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    render(
+      <QuizBlockPractice lang="es" block={TEXT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />,
+    );
+    expect(screen.getByTestId('speak-button')).toBeTruthy();
+
+    Reflect.deleteProperty(window, 'speechSynthesis');
+    Reflect.deleteProperty(window, 'SpeechSynthesisUtterance');
+  });
+});
