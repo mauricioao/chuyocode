@@ -236,23 +236,7 @@ function chipLabelClass(active: boolean): string {
     </style>
 
     {
-      showDailyPick && dailyPick && (
-        <ActivityCard
-          lang={lang}
-          activity={dailyPick}
-          levelLabels={levelLabels}
-          noLevel={t.noLevel}
-          blockCountOne={t.blockCountOne}
-          blockCountMany={t.blockCountMany}
-          viewedLabel={t.viewedBadge}
-          highlighted
-          highlightLabel={t.dailyPickLabel}
-        />
-      )
-    }
-
-    {
-      activities.length === 0 ? (
+      activities.length === 0 && !(showDailyPick && dailyPick) ? (
         <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
           <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
           {anyFilterActive && (
@@ -264,7 +248,25 @@ function chipLabelClass(active: boolean): string {
       ) : (
         <>
           <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {activities.map((activity) => (
+            {/* The daily pick is the grid's first card, same size as the rest
+                (a full-width banner took too much room), and is not repeated
+                further down the list. */}
+            {showDailyPick && dailyPick && (
+              <li>
+                <ActivityCard
+                  lang={lang}
+                  activity={dailyPick}
+                  levelLabels={levelLabels}
+                  noLevel={t.noLevel}
+                  blockCountOne={t.blockCountOne}
+                  blockCountMany={t.blockCountMany}
+                  viewedLabel={t.viewedBadge}
+                  highlighted
+                  highlightLabel={t.dailyPickLabel}
+                />
+              </li>
+            )}
+            {activities.filter((activity) => !(showDailyPick && dailyPick && activity.id === dailyPick.id)).map((activity) => (
               <li>
                 <ActivityCard
                   lang={lang}
