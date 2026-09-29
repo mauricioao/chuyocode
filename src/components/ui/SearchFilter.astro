@@ -1,6 +1,7 @@
 ---
 /**
- * SearchFilter — client-side instant filter with an animated magnifier input.
+ * SearchFilter — the animated magnifier input, in TWO modes sharing one
+ * component (never fork this file — see each mode's own section below).
  *
  * VISUAL: a high-contrast amber magnifier icon that "unfolds" into a search bar
  * on focus/typing. The shape + stroke-dash animation is adapted from the
@@ -8,26 +9,56 @@
  * morphs the lens+handle into a horizontal bar). Retuned to the ChuyoCode brand
  * (amber stroke on the dark theme) instead of the original white-on-pink.
  *
- * BEHAVIOR (Astro-first, zero React): a small vanilla client-side script filters the
- * items ALREADY rendered on the page — no server round-trip, no Sanity call. It
- * matches the typed query (accent-insensitive, case-insensitive) against each
- * item's 'data-search' haystack and toggles a 'hidden' attribute. When nothing
- * matches, a localized "no results" message is revealed.
+ * MODE "client" (default, UNCHANGED — Libros/Noticias): a small vanilla
+ * client-side script filters the items ALREADY rendered on the page — no
+ * server round-trip, no Sanity call. It matches the typed query
+ * (accent-insensitive, case-insensitive) against each item's 'data-search'
+ * haystack and toggles a 'hidden' attribute. When nothing matches, a
+ * localized "no results" message is revealed.
  *
- * SCOPE: filters only the items present in the DOM. For Libros that is the whole
- * catalog (getBooks loads all). For paginated Noticias it filters the CURRENT
- * page only — this is intentional and documented at the call site.
- *
- * WIRING (call site contract):
+ *   WIRING (call site contract):
  *   - Give the SearchFilter a 'targetSelector' matching each filterable item
  *     wrapper, and each wrapper must carry a 'data-search="<haystack>"'.
  *   - Give the empty-state element the id passed as 'emptyId'; keep it hidden
  *     initially (the script shows it only when the query hides everything).
  *
- * A11y: the input has an 'aria-label'; results filtering is announced via an
- * 'aria-live="polite"' region tied to the empty-state message.
+ * MODE "server" (new — community activities `?q=`): the SAME magnifier/bar
+ * renders inside a real `method="get"` `<form>` targeting `action`, an
+ * `<input name="q">` (or `name`) prefilled with `value`. It starts EXPANDED
+ * server-side whenever `value` is non-empty — the animation-driven `is-open`
+ * class client mode relies on is a pure CSS state here, so it needs no JS to
+ * render correctly on first paint. No client-side DOM filtering happens in
+ * this mode: submitting is a real navigation. `preserve` (name -> value) is
+ * rendered as hidden inputs so the OTHER active filters on the page survive a
+ * new search — 'page' is deliberately never carried over (a new search always
+ * resets to page 1), so this component drops it defensively even if a caller
+ * passes it. A small `x` clear link appears once `value` is non-empty; it is
+ * a plain `<a href>` to `action` + `preserve` (no `q`), so clearing needs no
+ * JS either.
+ *
+ *   NO-JS REACH: the lens is a real `type="submit"` button (Enter in the
+ *   input submits natively, same as clicking it), and `.chu-search:focus-within`
+ *   expands the bar via pure CSS — so a keyboard user reaches and submits the
+ *   input with zero JS. A mouse-only zero-JS visitor can still submit an EMPTY
+ *   search by clicking the collapsed lens (a no-op back to the unfiltered
+ *   page) exactly like every plain link on this site; typing a NEW query
+ *   without JS needs the keyboard-focus path above. With JS, clicking the
+ *   lens while collapsed only opens the bar (script below), and clicking it
+ *   again while open submits — so the click behaves the same as client mode's
+ *   toggle, plus a real submit once open.
+ *
+ * SCOPE (client mode only): filters only the items present in the DOM. For
+ * Libros that is the whole catalog (getBooks loads all). For paginated
+ * Noticias it filters the CURRENT page only — this is intentional and
+ * documented at the call site.
+ *
+ * A11y: the input has an 'aria-label'; server mode's `<form>` carries
+ * `role="search"`; client mode's results filtering is announced via an
+ * 'aria-live="polite"' region tied to the empty-state message (owned by the
+ * call site, not this component).
  */
-interface Props {
+interface ClientModeProps {
+  mode?: 'client';
   /** CSS selector for each filterable item wrapper (must carry 'data-search'). */
   targetSelector: string;
   /** id of the "no results" element this filter toggles. */
@@ -38,43 +69,120 @@ interface Props {
   class?: string;
 }
 
-const { targetSelector, emptyId, label, class: className } = Astro.props;
+interface ServerModeProps {
+  mode: 'server';
+  /** The GET form's `action` — the current page's own path. */
+  action: string;
+  /** Current value of the search param, prefilled into the input. */
+  value: string;
+  /** The search param's name (default 'q'). */
+  name?: string;
+  /** Other active query params to preserve as hidden inputs. 'page' is always dropped. */
+  preserve?: Record<string, string>;
+  /** Accessible label / placeholder-intent for the input. */
+  label: string;
+  /** Optional extra classes on the outer wrapper. */
+  class?: string;
+}
+
+type Props = ClientModeProps | ServerModeProps;
+
+const props = Astro.props;
+const isServer = props.mode === 'server';
+const { label, class: className } = props;
+
+const targetSelector = !isServer ? props.targetSelector : undefined;
+const emptyId = !isServer ? props.emptyId : undefined;
+
+const action = isServer ? props.action : undefined;
+const value = isServer ? props.value : '';
+const name = isServer ? (props.name ?? 'q') : 'q';
+// 'page' never survives a new search — dropped here too, defensively, even
+// if a caller passed it by mistake.
+const preserveEntries = isServer
+  ? Object.entries(props.preserve ?? {}).filter(([key]) => key !== 'page')
+  : [];
+
+const startOpen = isServer && value.trim().length > 0;
+
+function clearHref(): string {
+  const params = new URLSearchParams();
+  for (const [key, val] of preserveEntries) {
+    if (val) params.set(key, val);
+  }
+  const qs = params.toString();
+  return `${action}${qs ? `?${qs}` : ''}`;
+}
 ---
 
-<div
-  class:list={['chu-search', className]}
-  data-target={targetSelector}
-  data-empty={emptyId}
->
-  {/* Expanding bar: 0 width at rest, unfolds leftward from the lens. It holds
-      the input and a bottom rule so it reads as a real bar with body (not a
-      thin dashed stroke). */}
-  <div class="chu-search-bar">
-    <input
-      type="text"
-      placeholder=" "
-      aria-label={label}
-      autocomplete="off"
-      spellcheck="false"
-    />
-  </div>
+{
+  isServer ? (
+    <form
+      method="get"
+      action={action}
+      role="search"
+      class:list={['chu-search', className, { 'is-open': startOpen }]}
+      data-mode="server"
+    >
+      <div class="chu-search-bar">
+        <input
+          type="text"
+          name={name}
+          value={value}
+          placeholder=" "
+          aria-label={label}
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      {preserveEntries.map(([key, val]) => (
+        <input type="hidden" name={key} value={val} />
+      ))}
+      <button type="submit" class="chu-search-lens" aria-label={label}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <line x1="15.5" y1="15.5" x2="21" y2="21" />
+        </svg>
+      </button>
+      {value.trim() && (
+        <a href={clearHref()} class="chu-search-clear" aria-label={label}>
+          &times;
+        </a>
+      )}
+    </form>
+  ) : (
+    <div
+      class:list={['chu-search', className]}
+      data-target={targetSelector}
+      data-empty={emptyId}
+      data-mode="client"
+    >
+      {/* Expanding bar: 0 width at rest, unfolds leftward from the lens. It holds
+          the input and a bottom rule so it reads as a real bar with body (not a
+          thin dashed stroke). */}
+      <div class="chu-search-bar">
+        <input
+          type="text"
+          placeholder=" "
+          aria-label={label}
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
 
-  {/* Real magnifier: a thick-stroked circle (the lens the user asked to make
-      more noticeable) plus a short handle, as its own SVG element with genuine
-      stroke width — not a dash-morph trick. It doubles as the toggle button:
-      clicking it focuses the input so the bar expands. */}
-  <button
-    type="button"
-    class="chu-search-lens"
-    aria-label={label}
-    tabindex="-1"
-  >
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="10.5" cy="10.5" r="6.5"></circle>
-      <line x1="15.5" y1="15.5" x2="21" y2="21"></line>
-    </svg>
-  </button>
-</div>
+      {/* Real magnifier: a thick-stroked circle (the lens the user asked to make
+          more noticeable) plus a short handle, as its own SVG element with genuine
+          stroke width — not a dash-morph trick. It doubles as the toggle button:
+          clicking it focuses the input so the bar expands. */}
+      <button type="button" class="chu-search-lens" aria-label={label} tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <line x1="15.5" y1="15.5" x2="21" y2="21" />
+        </svg>
+      </button>
+    </div>
+  )
+}
 
 <style>
   /* Magnifier that unfolds into a real bar. Two independent parts:
@@ -92,10 +200,11 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
     height: 36px;
   }
 
-  /* The open/close state is driven by an '.is-open' class toggled in JS — NOT
-   * by :focus-within — so the growth ANIMATION runs first and focus is applied
-   * only after it finishes (see the 'transitionend' handler). This is what makes
-   * the bar visibly grow right-to-left before the caret appears. */
+  /* The open/close state is driven by an '.is-open' class — set server-side in
+   * "server" mode when a value is already present, and/or toggled in JS — NOT
+   * by ':focus-within' alone, so the growth ANIMATION runs first and focus is
+   * applied only after it finishes (see the 'transitionend' handler). A
+   * ':focus-within' fallback below covers keyboard reach with zero JS. */
   .chu-search-bar {
     display: flex;
     align-items: flex-end;
@@ -110,7 +219,8 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
     /* Sit flush to the lens so the rule visually continues into the handle. */
     margin-right: 6px;
   }
-  .chu-search.is-open .chu-search-bar {
+  .chu-search.is-open .chu-search-bar,
+  .chu-search:not(.is-open):focus-within .chu-search-bar {
     /* Roughly one card wide. */
     width: 220px;
     border-bottom-color: var(--color-accent, #facc15);
@@ -157,6 +267,26 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
     border-radius: 8px;
   }
 
+  /* Server mode's clear (x) button — plain link, no JS required. */
+  .chu-search-clear {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 2px;
+    border-radius: 999px;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--color-zinc-400, #a1a1aa);
+    text-decoration: none;
+  }
+  .chu-search-clear:hover,
+  .chu-search-clear:focus-visible {
+    color: var(--color-accent, #facc15);
+    outline: none;
+  }
+
   /* NOTE: this expansion is intentionally NOT gated behind
    * 'prefers-reduced-motion: reduce'. It is a short, user-initiated (click) grow
    * — not autoplaying/looping motion — so it stays on for everyone, matching the
@@ -172,22 +302,27 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
     return s
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .trim();
   }
 
   function wireSearch(root: HTMLElement): void {
-    const input = root.querySelector<HTMLInputElement>('input');
+    const input = root.querySelector<HTMLInputElement>('input[type="text"]');
     const bar = root.querySelector<HTMLElement>('.chu-search-bar');
     const lens = root.querySelector<HTMLElement>('.chu-search-lens');
+    const isServer = root.dataset.mode === 'server';
     const targetSelector = root.dataset.target;
     const emptyId = root.dataset.empty;
-    if (!input || !bar || !targetSelector) return;
+    if (!input || !bar || !lens) return;
+    if (!isServer && !targetSelector) return;
 
-    const items = Array.from(document.querySelectorAll<HTMLElement>(targetSelector));
-    const empty = emptyId ? document.getElementById(emptyId) : null;
+    const items = !isServer && targetSelector
+      ? Array.from(document.querySelectorAll<HTMLElement>(targetSelector))
+      : [];
+    const empty = !isServer && emptyId ? document.getElementById(emptyId) : null;
 
     const apply = (): void => {
+      if (isServer) return;
       const q = normalize(input.value);
       let visible = 0;
       for (const item of items) {
@@ -241,7 +376,17 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
       root.classList.remove('is-open');
     };
 
-    lens?.addEventListener('click', (): void => {
+    lens.addEventListener('click', (e: MouseEvent): void => {
+      if (isServer) {
+        // Collapsed: the click only opens the bar (same as client mode) so
+        // there is something to type into. Already open: let the native
+        // 'submit' behavior of this button run the search.
+        if (!root.classList.contains('is-open')) {
+          e.preventDefault();
+          open();
+        }
+        return;
+      }
       if (root.classList.contains('is-open')) close();
       else open();
     });
@@ -251,9 +396,11 @@ const { targetSelector, emptyId, label, class: className } = Astro.props;
       if (e.key === 'Escape') close();
     });
 
-    input.addEventListener('input', apply);
-    // Re-apply after client-side (View Transitions) navigation restores state.
-    apply();
+    if (!isServer) {
+      input.addEventListener('input', apply);
+      // Re-apply after client-side (View Transitions) navigation restores state.
+      apply();
+    }
   }
 
   function init(): void {
