@@ -49,6 +49,11 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
                       {t.optionsLabel}: {zoneOptionsSummary(zone) || t.noAnswersYet}
                     </p>
                   )}
+                  {zone.explanation && (
+                    <p>
+                      {t.explanationLabel}: {zone.explanation}
+                    </p>
+                  )}
                 </div>
               ) : null}
             </li>
@@ -65,9 +70,16 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
           <li key={slot.id} data-testid={`moderation-slot-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
             <span className="font-medium text-foreground">{slot.label}</span>
             {showAnswers && (
-              <p className="mt-1 text-muted-foreground">
-                {t.quizAnswerLabel}: {quizSlotAnswerSummary(block.payload, slot)}
-              </p>
+              <div className="mt-1 text-muted-foreground">
+                <p>
+                  {t.quizAnswerLabel}: {quizSlotAnswerSummary(block.payload, slot)}
+                </p>
+                {slot.explanation && (
+                  <p>
+                    {t.explanationLabel}: {slot.explanation}
+                  </p>
+                )}
+              </div>
             )}
           </li>
         ))}

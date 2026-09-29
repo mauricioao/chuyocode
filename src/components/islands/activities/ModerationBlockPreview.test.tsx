@@ -47,6 +47,62 @@ describe('ModerationBlockPreview — worksheet', () => {
   });
 });
 
+describe('ModerationBlockPreview — explanation (D5, "¿Por qué?")', () => {
+  const WORKSHEET_WITH_EXPLANATION: Block = {
+    ...(WORKSHEET as Extract<Block, { type: 'worksheet' }>),
+    zones: [
+      { ...(WORKSHEET as Extract<Block, { type: 'worksheet' }>).zones[0], explanation: 'Because it is the animal.' },
+      (WORKSHEET as Extract<Block, { type: 'worksheet' }>).zones[1],
+    ],
+  };
+
+  const QUIZ_WITH_EXPLANATION: Block = {
+    ...(QUIZ as Extract<Block, { type: 'quiz' }>),
+    payload: {
+      ...(QUIZ as Extract<Block, { type: 'quiz' }>).payload,
+      slots: [
+        {
+          ...(QUIZ as Extract<Block, { type: 'quiz' }>).payload.slots[0],
+          explanation: 'A "perro" is a dog.',
+        },
+      ],
+    },
+  };
+
+  it('hides a zone explanation when showAnswers is false', () => {
+    render(
+      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers={false} />,
+    );
+    expect(screen.getByTestId('moderation-zone-z1').textContent).not.toContain('Because it is the animal.');
+  });
+
+  it('shows a zone explanation alongside the answers when showAnswers is true', () => {
+    render(
+      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers />,
+    );
+    expect(screen.getByTestId('moderation-zone-z1').textContent).toContain('Because it is the animal.');
+  });
+
+  it('shows nothing extra for a zone with no explanation', () => {
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-zone-z2').textContent).not.toContain('undefined');
+  });
+
+  it('hides a quiz slot explanation when showAnswers is false', () => {
+    render(
+      <ModerationBlockPreview lang="es" block={QUIZ_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers={false} />,
+    );
+    expect(screen.getByTestId('moderation-slot-s1').textContent).not.toContain('A "perro" is a dog.');
+  });
+
+  it('shows a quiz slot explanation alongside the answer when showAnswers is true', () => {
+    render(
+      <ModerationBlockPreview lang="es" block={QUIZ_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers />,
+    );
+    expect(screen.getByTestId('moderation-slot-s1').textContent).toContain('A "perro" is a dog.');
+  });
+});
+
 describe('ModerationBlockPreview — quiz', () => {
   it('lists every slot label', () => {
     render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} showAnswers={false} />);

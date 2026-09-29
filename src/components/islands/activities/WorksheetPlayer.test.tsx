@@ -361,7 +361,7 @@ describe('WorksheetPlayer — onZoneTap (mobile per-zone bottom sheet)', () => {
     expect(screen.getByTestId('player-zone-tap-z2').getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('disables every tap target once graded (locked, same as the inline inputs)', () => {
+  it('keeps every tap target reachable once graded, so the learner can still open it to review (D5, "¿Por qué?" needs the sheet reachable post-grading; the sheet\'s own input is what actually locks)', () => {
     render(
       <WorksheetPlayer
         lang="es"
@@ -372,7 +372,7 @@ describe('WorksheetPlayer — onZoneTap (mobile per-zone bottom sheet)', () => {
         onZoneTap={() => {}}
       />,
     );
-    expect((screen.getByTestId('player-zone-tap-z1') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('player-zone-tap-z1') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('still exposes the graded result for a screen reader', () => {
@@ -465,5 +465,119 @@ describe('WorksheetPlayer — speak affordance (D4)', () => {
     );
     expect(screen.queryByTestId('player-zone-speak-z1')).toBeNull();
     uninstallSynth();
+  });
+});
+
+/**
+ * D5 "¿Por qué?" — the explanation affordance for an INCORRECT graded zone
+ * that has one, desktop inline player only (the mobile tap-target renders
+ * its own explanation inside the bottom sheet instead, tested in
+ * `WorksheetPracticePlayerMobile.test.tsx`).
+ */
+describe('WorksheetPlayer — explanation affordance (D5)', () => {
+  const EXPLAINED_ZONE: Zone = { ...TEXT_ZONE, explanation: 'Because "sat" is past tense.' };
+
+  it('shows no explanation button before grading, even with an explanation authored', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[EXPLAINED_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-explanation-z1')).toBeNull();
+  });
+
+  it('shows no explanation button for a CORRECT zone', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[EXPLAINED_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } }}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-explanation-z1')).toBeNull();
+  });
+
+  it('shows no explanation button for an incorrect zone with no explanation authored', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-explanation-z1')).toBeNull();
+  });
+
+  it('shows the explanation button for an INCORRECT zone that has one', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[EXPLAINED_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    expect(screen.getByTestId('player-zone-explanation-z1')).toBeTruthy();
+  });
+
+  it('the popover is hidden until hovered/focused/clicked, and is properly described via aria-describedby', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[EXPLAINED_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    const button = screen.getByTestId('player-zone-explanation-button-z1');
+    const popover = screen.getByTestId('player-zone-explanation-popover-z1');
+    expect(popover.className).toContain('opacity-0');
+    expect(popover.className).toContain('group-hover:opacity-100');
+    expect(popover.className).toContain('group-focus-within:opacity-100');
+    expect(button.getAttribute('aria-describedby')).toBe(popover.id);
+    expect(popover.textContent).toBe('Because "sat" is past tense.');
+  });
+
+  it('clicking the lightbulb opens the popover (aria-expanded true, opacity-100 class)', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[EXPLAINED_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    const button = screen.getByTestId('player-zone-explanation-button-z1');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByTestId('player-zone-explanation-popover-z1').className).toContain('opacity-100');
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('never shows the explanation button for the mobile tap-target rendering', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[EXPLAINED_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+        onZoneTap={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('player-zone-explanation-z1')).toBeNull();
   });
 });

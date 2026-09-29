@@ -92,6 +92,69 @@ describe('QuizBlockPractice — per-slot feedback', () => {
   });
 });
 
+/** D5 "¿Por qué?" — the explanation, inline under the question, only once graded and only while incorrect. */
+describe('QuizBlockPractice — explanation (D5)', () => {
+  const EXPLAINED_BLOCK: QuizBlock = {
+    id: 'q1',
+    type: 'quiz',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'], explanation: 'Third person -s.' },
+      ],
+    },
+  };
+
+  it('shows nothing before grading (outcomes absent)', () => {
+    render(
+      <QuizBlockPractice lang="es" block={EXPLAINED_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />,
+    );
+    expect(screen.queryByTestId('quiz-slot-explanation-s1')).toBeNull();
+  });
+
+  it('shows nothing for a correct answer', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={EXPLAINED_BLOCK}
+        response={{ s1: ['sits'] }}
+        onChange={vi.fn()}
+        outcomes={{ s1: 'correct' }}
+        disabled
+      />,
+    );
+    expect(screen.queryByTestId('quiz-slot-explanation-s1')).toBeNull();
+  });
+
+  it('shows the explanation inline under the question for an incorrect answer', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={EXPLAINED_BLOCK}
+        response={{ s1: ['wrong'] }}
+        onChange={vi.fn()}
+        outcomes={{ s1: 'incorrect' }}
+        disabled
+      />,
+    );
+    expect(screen.getByTestId('quiz-slot-explanation-s1').textContent).toContain('Third person -s.');
+  });
+
+  it('shows nothing for an incorrect answer with no explanation authored', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={TEXT_BLOCK}
+        response={{ s1: ['wrong'] }}
+        onChange={vi.fn()}
+        outcomes={{ s1: 'incorrect' }}
+        disabled
+      />,
+    );
+    expect(screen.queryByTestId('quiz-slot-explanation-s1')).toBeNull();
+  });
+});
+
 /** D4 "Escuchar/Listen" — SpeakButton next to each question's own label. jsdom has no speechSynthesis by default. */
 describe('QuizBlockPractice — speech (D4)', () => {
   it('renders no speak button when speechSynthesis is unsupported (jsdom default)', () => {

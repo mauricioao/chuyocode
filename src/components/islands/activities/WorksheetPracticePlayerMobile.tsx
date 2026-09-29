@@ -35,6 +35,7 @@
  * gesture (pan AND pinch) to this component's own pointer handlers instead.
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { WorksheetBlock, Zone } from '@/lib/activities/blocks';
@@ -305,6 +306,24 @@ export default function WorksheetPracticePlayerMobile({
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* D5 "¿Por qué?": only once graded AND only while THIS zone
+                is incorrect — same gate as the desktop popover
+                (`WorksheetPlayer.tsx`), shown here as a plain visible block
+                under the input instead, since the sheet already IS the
+                focused surface for this one zone. */}
+            {activeZone.explanation && practice.results?.[activeZone.id] === false && (
+              <div
+                data-testid="zone-sheet-explanation"
+                className="rounded-md border border-border bg-muted/40 p-3 text-sm text-foreground"
+              >
+                <div className="mb-1 flex items-center gap-1.5 font-medium text-amber-400">
+                  <LightbulbIcon aria-hidden="true" weight="fill" />
+                  <span>{t.explanationHeading}</span>
+                </div>
+                <p>{activeZone.explanation}</p>
               </div>
             )}
 

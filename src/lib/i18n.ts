@@ -427,6 +427,10 @@ export const UI_LABELS = {
         zoneNext: 'Siguiente',
         zoneDone: 'Listo',
         zoneOf: 'Zona',
+        // "¿Por qué?" explicación (D5) — el botón que abre el popover con la
+        // explicación, mostrado solo para una zona incorrecta que tiene una.
+        explanationButtonLabel: 'Ver explicación',
+        explanationHeading: '¿Por qué?',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -618,6 +622,7 @@ export const UI_LABELS = {
         noAnswersYet: 'Todavía sin respuestas',
         zoneLabel: 'Zona',
         quizAnswerLabel: 'Respuesta correcta',
+        explanationLabel: 'Explicación',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
@@ -1084,6 +1089,8 @@ export const UI_LABELS = {
         zoneNext: 'Next',
         zoneDone: 'Done',
         zoneOf: 'Zone',
+        explanationButtonLabel: 'See explanation',
+        explanationHeading: 'Why?',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -1225,6 +1232,7 @@ export const UI_LABELS = {
         noAnswersYet: 'No answers yet',
         zoneLabel: 'Zone',
         quizAnswerLabel: 'Correct answer',
+        explanationLabel: 'Explanation',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
         approveConfirmBody: 'It will be published immediately.',
