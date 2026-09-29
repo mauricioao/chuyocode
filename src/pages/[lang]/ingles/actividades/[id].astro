@@ -32,11 +32,14 @@ import ActivityPracticeIsland from '@components/islands/activities/ActivityPract
 import ActivityViewBadge from '@components/islands/activities/ActivityViewBadge';
 import ReportActivityButton from '@components/islands/activities/ReportActivityButton';
 import HeartButton from '@components/islands/activities/HeartButton';
+import DuplicateActivityButton from '@components/islands/activities/DuplicateActivityButton';
+import ShareDialog from '@components/islands/ShareDialog';
 import { HeartIcon } from '@phosphor-icons/react/dist/ssr/Heart';
 import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
 import { hasHeartedActivity } from '@lib/activities/hearts';
+import { qrSvg, shareUrl } from '@lib/qr';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -76,9 +79,36 @@ const canHeart = user !== null && user.id !== activity.authorId;
 // own header.
 const hearted = canHeart ? await hasHeartedActivity(activity.id, user!.id) : false;
 
+// "Duplicar y adaptar" (D7): every signed-in visitor, author included — see
+// `DuplicateActivityButton`'s own header for why this gate differs from
+// `canHeart`/`canReport` above.
+const canDuplicate = user !== null;
+
 function heartsLabel(count: number): string {
   return `${count} ${count === 1 ? t.heartsOne : t.heartsMany}`;
 }
+
+/**
+ * "Compartir" (D8): built on the server exactly like the curated exercise
+ * page (`[slug].astro`'s own header) — `Astro.url` follows whatever host
+ * actually served the page (production, a branch deploy, a Netlify
+ * preview), and generating the QR here means the dialog needs no network at
+ * all once it opens, and no third party ever learns which activities get
+ * shared.
+ */
+const shareLink = shareUrl(Astro.url);
+const shareQr = qrSvg(shareLink);
+const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`${activity.title} ${shareLink}`)}`;
+
+/**
+ * The duplicate's own credit line (D7): "Basado en «original»", linking to
+ * the source ONLY while it is still live — a source later unpublished or
+ * removed keeps the title (honest about provenance) but stops being a dead
+ * link. The ORIGINAL's own practice page shows nothing extra (task's own
+ * "keep it simple" instruction) — this activity's `source` is `null` unless
+ * IT is the duplicate.
+ */
+const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null;
 ---
 
 <BaseLayout lang={lang} title={activity.title} description={t.pageDescription} fullHeight>
@@ -122,6 +152,20 @@ function heartsLabel(count: number): string {
             <span>{activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}</span>
             <ActivityViewBadge client:load lang={lang} activityId={activity.id} />
           </p>
+          {/* "Duplicar y adaptar" credit line (D7) — only the DUPLICATE's own
+              practice page shows this, once published; the original shows
+              nothing extra. */}
+          {activity.source && (
+            <p class="text-xs text-zinc-400" data-testid="activity-based-on">
+              {sourceHref ? (
+                <>
+                  {t.basedOnPrefix}<a href={sourceHref} class="text-accent hover:underline">{activity.source.title}</a>{t.basedOnSuffix}
+                </>
+              ) : (
+                <>{t.basedOnPrefix}{activity.source.title}{t.basedOnSuffix}</>
+              )}
+            </p>
+          )}
         </div>
         <div class="flex flex-none items-center gap-3">
           {canHeart ? (
@@ -133,6 +177,31 @@ function heartsLabel(count: number): string {
               <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
             </span>
           )}
+          {
+            shareQr && (
+              <ShareDialog
+                client:idle
+                url={shareLink}
+                qr={shareQr}
+                whatsappHref={whatsappHref}
+                downloadFileName={`${activity.id}.svg`}
+                labels={{
+                  trigger: t.share,
+                  title: t.shareTitle,
+                  hint: t.shareHint,
+                  link: t.shareLink,
+                  copy: t.shareCopy,
+                  copied: t.shareCopied,
+                  qrAlt: t.shareQrAlt,
+                  whatsapp: t.shareWhatsapp,
+                  downloadQr: t.shareDownloadQr,
+                  native: t.shareNative,
+                  note: t.shareSignInNote,
+                }}
+              />
+            )
+          }
+          {canDuplicate && <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />}
           {canReport && <ReportActivityButton client:load lang={lang} activityId={activity.id} />}
         </div>
       </div>

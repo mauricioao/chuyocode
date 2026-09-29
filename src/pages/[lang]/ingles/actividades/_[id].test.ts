@@ -237,3 +237,101 @@ describe('GET /[lang]/ingles/actividades/[id] — heart control (Descubrir)', ()
     expect(html).not.toContain('data-testid="activity-heart-button"');
   });
 });
+
+describe('GET /[lang]/ingles/actividades/[id] — "Duplicar" (D7)', () => {
+  it('renders it for any signed-in visitor, INCLUDING the activity\'s own author', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'user-1' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="duplicate-activity-button"');
+  });
+
+  it('hides it from an anonymous visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="duplicate-activity-button"');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id] — "Compartir" (D8)', () => {
+  it('renders the share trigger with a WhatsApp link encoding the title and the page URL', async () => {
+    activityResult.value = { id: 'abc', title: 'Present simple', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="exercise-share"');
+    const expectedHref = `https://wa.me/?text=${encodeURIComponent(
+      'Present simple https://chuyocode.test/es/ingles/actividades/abc',
+    )}`;
+    expect(html).toContain(expectedHref.replace(/&/g, '&amp;'));
+  });
+
+  it('notes that the recipient needs to sign in', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('iniciar sesión');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id] — "Basado en" credit line (D7)', () => {
+  it('shows nothing extra when the activity has no source', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else', source: null };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="activity-based-on"');
+  });
+
+  it('shows a link to the source when it is still live', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'Copia',
+      level: null,
+      blocks: [],
+      authorId: 'someone-else',
+      source: { id: 'orig-1', title: 'Original', visible: true },
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-based-on"');
+    expect(html).toContain('Original');
+    expect(html).toContain('href="/es/ingles/actividades/orig-1"');
+  });
+
+  it('shows the title with no link once the source is no longer live', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'Copia',
+      level: null,
+      blocks: [],
+      authorId: 'someone-else',
+      source: { id: 'orig-1', title: 'Original', visible: false },
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-based-on"');
+    expect(html).toContain('Original');
+    expect(html).not.toContain('href="/es/ingles/actividades/orig-1"');
+  });
+});

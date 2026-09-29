@@ -8,12 +8,23 @@
  * `UnsavedChangesModal`. A successful delete removes the row from local
  * state; the server round trip is the source of truth, this is just so the
  * page does not need a full reload to reflect it.
+ *
+ * "Compartir" per row (D8), LIVE activities only: nests the SAME
+ * `ShareDialog` island the practice page uses, as an ordinary (non-`client:`)
+ * child component — this whole list is already one hydrated island, so
+ * `ShareDialog` needs no directive of its own here, the same way
+ * `UnsavedChangesModal`/`Dialog` are plain children rather than nested
+ * islands. `url`/`qr`/`whatsappHref` are pre-computed SERVER-SIDE per
+ * activity (`mis-actividades/index.astro`'s own loader) — same posture as
+ * the practice page's own share dialog: no third party ever learns which
+ * activity got shared, and the dialog needs no network once it opens.
  */
 import { useCallback, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Level } from '@/lib/exerciseTaxonomy';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ShareDialog from '@/components/islands/ShareDialog';
 
 export interface MisActividadesActivity {
   id: string;
@@ -23,6 +34,8 @@ export interface MisActividadesActivity {
   blockCount: number;
   reviewNote: string | null;
   hasPendingRevision: boolean;
+  /** LIVE activities only — server-computed share link + QR + WhatsApp href, or `null` for anything not live. */
+  share: { url: string; qr: string; whatsappHref: string } | null;
 }
 
 export interface MisActividadesIslandProps {
@@ -42,6 +55,10 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
   const t = UI_LABELS[lang].activities.myActivities;
   const editorT = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
+  // The nested `ShareDialog`'s own vocabulary — reused verbatim from the
+  // practice page's copy rather than duplicated here (same taxonomy, same
+  // screen family, see `report.reasons`'s own reuse precedent).
+  const practiceT = UI_LABELS[lang].activities.practice;
 
   const [activities, setActivities] = useState(initialActivities);
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -148,6 +165,34 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
               >
                 {t.view}
               </a>
+            )}
+            {activity.status === 'live' && activity.share && (
+              // Wrapped so each row's dialog has its OWN unique test id to
+              // scope against — `ShareDialog`'s internal testids
+              // (`exercise-share`, etc.) are fixed, since it was built for a
+              // page with exactly one instance; this list renders one per
+              // LIVE row.
+              <div data-testid={`activity-share-${activity.id}`}>
+                <ShareDialog
+                  url={activity.share.url}
+                  qr={activity.share.qr}
+                  whatsappHref={activity.share.whatsappHref}
+                  downloadFileName={`${activity.id}.svg`}
+                  labels={{
+                    trigger: t.share,
+                    title: practiceT.shareTitle,
+                    hint: practiceT.shareHint,
+                    link: practiceT.shareLink,
+                    copy: practiceT.shareCopy,
+                    copied: practiceT.shareCopied,
+                    qrAlt: practiceT.shareQrAlt,
+                    whatsapp: practiceT.shareWhatsapp,
+                    downloadQr: practiceT.shareDownloadQr,
+                    native: practiceT.shareNative,
+                    note: practiceT.shareSignInNote,
+                  }}
+                />
+              </div>
             )}
             <Button
               type="button"

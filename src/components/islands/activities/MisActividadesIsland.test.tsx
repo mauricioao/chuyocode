@@ -8,6 +8,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const QR = '<svg data-testid="qr-svg" viewBox="0 0 45 45"><path d="M4,4h1v1h-1z"/></svg>';
+
 const DRAFT: MisActividadesActivity = {
   id: 'act-draft',
   title: 'Mi borrador',
@@ -16,6 +18,7 @@ const DRAFT: MisActividadesActivity = {
   blockCount: 2,
   reviewNote: null,
   hasPendingRevision: false,
+  share: null,
 };
 
 const LIVE_WITH_PENDING: MisActividadesActivity = {
@@ -26,6 +29,11 @@ const LIVE_WITH_PENDING: MisActividadesActivity = {
   blockCount: 3,
   reviewNote: null,
   hasPendingRevision: true,
+  share: {
+    url: 'https://chuyocode.test/es/ingles/actividades/act-live',
+    qr: QR,
+    whatsappHref: 'https://wa.me/?text=Publicada%20https%3A%2F%2Fchuyocode.test%2Fes%2Fingles%2Factividades%2Fact-live',
+  },
 };
 
 const REJECTED: MisActividadesActivity = {
@@ -36,6 +44,7 @@ const REJECTED: MisActividadesActivity = {
   blockCount: 1,
   reviewNote: 'Falta una zona en la hoja 2.',
   hasPendingRevision: false,
+  share: null,
 };
 
 describe('MisActividadesIsland — empty state', () => {
@@ -84,6 +93,36 @@ describe('MisActividadesIsland — listing', () => {
     expect(screen.getByTestId(`activity-view-${LIVE_WITH_PENDING.id}`).getAttribute('href')).toBe(
       `/es/ingles/actividades/${LIVE_WITH_PENDING.id}`,
     );
+  });
+});
+
+describe('MisActividadesIsland — share (D8)', () => {
+  it('renders "Compartir" only for a live activity with share data', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT, LIVE_WITH_PENDING]} />);
+    expect(screen.queryByTestId(`activity-share-${DRAFT.id}`)).toBeNull();
+    expect(screen.getByTestId(`activity-share-${LIVE_WITH_PENDING.id}`)).toBeTruthy();
+  });
+
+  it('opens the dialog with the server-computed url, QR and WhatsApp link', async () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[LIVE_WITH_PENDING]} />);
+    const wrapper = screen.getByTestId(`activity-share-${LIVE_WITH_PENDING.id}`);
+    fireEvent.click(wrapper.querySelector('[data-testid="exercise-share"]') as HTMLElement);
+
+    // The dialog content portals to `document.body` (Radix Dialog), so it is
+    // queried via `screen`, not scoped to `wrapper` — `wrapper` only holds
+    // the trigger.
+    expect(await screen.findByTestId('qr-svg')).toBeTruthy();
+    expect(screen.getByText(LIVE_WITH_PENDING.share!.url)).toBeTruthy();
+    const whatsapp = screen.getByTestId('exercise-share-whatsapp');
+    expect(whatsapp.getAttribute('href')).toBe(LIVE_WITH_PENDING.share!.whatsappHref);
+  });
+
+  it('notes that the recipient needs to sign in', async () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[LIVE_WITH_PENDING]} />);
+    const wrapper = screen.getByTestId(`activity-share-${LIVE_WITH_PENDING.id}`);
+    fireEvent.click(wrapper.querySelector('[data-testid="exercise-share"]') as HTMLElement);
+    const note = await screen.findByTestId('exercise-share-note');
+    expect(note.textContent).toContain('iniciar sesión');
   });
 });
 

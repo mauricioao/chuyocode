@@ -443,6 +443,40 @@ export const UI_LABELS = {
         heartRemove: 'Quitar corazón',
         heartsOne: 'corazón',
         heartsMany: 'corazones',
+        // "Duplicar y adaptar" (D7): any signed-in visitor, author included.
+        duplicate: 'Duplicar',
+        duplicating: 'Duplicando…',
+        // Keyed by the endpoint's own reason codes (`duplicar.ts`'s header).
+        duplicateErrors: {
+          not_found: 'Esta actividad ya no está disponible.',
+          daily_limit: 'Se alcanzó el límite diario de duplicados. Intentar mañana.',
+          upload_limit: 'No hay espacio para copiar las imágenes de esta actividad. Liberar espacio antes de duplicar.',
+          copy_failed: 'No se pudo duplicar la actividad. Intentar de nuevo.',
+          create_failed: 'No se pudo duplicar la actividad. Intentar de nuevo.',
+        },
+        // Credit line (D7): shown once a duplicate gets approved and
+        // published, on ITS OWN practice page — the original's page shows
+        // nothing extra. Same composition as `editor.basedOnPrefix/Suffix`.
+        basedOnPrefix: 'Basado en «',
+        basedOnSuffix: '» de la comunidad',
+        // "Compartir" dialog (D8): extends the shared `ShareDialog`
+        // (`@components/islands/ShareDialog`, first built for curated
+        // exercises) with a WhatsApp link, a QR download and the native
+        // share sheet.
+        share: 'Compartir',
+        shareTitle: 'Compartir esta actividad',
+        shareHint: 'Escanear el código para abrir la actividad en otro dispositivo.',
+        shareLink: 'Enlace',
+        shareCopy: 'Copiar',
+        shareCopied: 'Copiado',
+        shareQrAlt: 'Código QR con el enlace a esta actividad',
+        shareWhatsapp: 'WhatsApp',
+        shareDownloadQr: 'Descargar QR',
+        shareNative: 'Compartir con el dispositivo',
+        // The Inglés section requires sign-in (this whole route is already
+        // gated) — a short muted note so the dialog does not promise a link
+        // that opens for an anonymous visitor.
+        shareSignInNote: 'Quien reciba el enlace va a necesitar iniciar sesión para abrirlo.',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -488,6 +522,11 @@ export const UI_LABELS = {
         pendingChangesNote: 'Cambios en revisión',
         edit: 'Editar',
         view: 'Ver',
+        // "Compartir" per row (D8), LIVE activities only — reuses the
+        // practice page's own `practice.share*` copy for the nested dialog
+        // (trigger label composed here since this list is a different
+        // vocabulary group, see `MisActividadesIsland.tsx`'s own header).
+        share: 'Compartir',
         delete: 'Eliminar',
         deleteConfirmTitle: '¿Eliminar esta actividad?',
         deleteConfirmBody: 'Esta acción no se puede deshacer.',
@@ -1051,6 +1090,28 @@ export const UI_LABELS = {
         heartRemove: 'Remove heart',
         heartsOne: 'heart',
         heartsMany: 'hearts',
+        duplicate: 'Duplicate',
+        duplicating: 'Duplicating…',
+        duplicateErrors: {
+          not_found: 'This activity is no longer available.',
+          daily_limit: 'The daily duplicate limit was reached. Try again tomorrow.',
+          upload_limit: "There isn't enough room to copy this activity's images. Free up some space before duplicating.",
+          copy_failed: 'Could not duplicate the activity. Try again.',
+          create_failed: 'Could not duplicate the activity. Try again.',
+        },
+        basedOnPrefix: 'Based on "',
+        basedOnSuffix: '" from the community',
+        share: 'Share',
+        shareTitle: 'Share this activity',
+        shareHint: 'Scan the code to open this activity on another device.',
+        shareLink: 'Link',
+        shareCopy: 'Copy',
+        shareCopied: 'Copied',
+        shareQrAlt: 'QR code linking to this activity',
+        shareWhatsapp: 'WhatsApp',
+        shareDownloadQr: 'Download QR',
+        shareNative: 'Share with device',
+        shareSignInNote: 'Whoever opens the link will need to sign in first.',
       },
       report: {
         button: 'Report',
@@ -1088,6 +1149,7 @@ export const UI_LABELS = {
         pendingChangesNote: 'Changes in review',
         edit: 'Edit',
         view: 'View',
+        share: 'Share',
         delete: 'Delete',
         deleteConfirmTitle: 'Delete this activity?',
         deleteConfirmBody: 'This cannot be undone.',

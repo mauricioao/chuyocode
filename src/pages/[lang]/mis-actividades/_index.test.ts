@@ -103,3 +103,48 @@ describe('GET /[lang]/mis-actividades — signed-in visitor', () => {
     expect(html).toContain('href="/es"');
   });
 });
+
+describe('GET /[lang]/mis-actividades — "Compartir" per row (D8)', () => {
+  it('gives a LIVE activity a share block computed from the request origin', async () => {
+    activitiesResult.value = [
+      {
+        id: 'act-live',
+        title: 'Publicada',
+        level: 'B1',
+        status: 'live',
+        blockCount: 2,
+        reviewNote: null,
+        hasPendingRevision: false,
+      },
+    ];
+    const res = await render('https://chuyocode.test/es/mis-actividades', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-share-act-live"');
+    const expectedUrl = 'https://chuyocode.test/es/ingles/actividades/act-live';
+    const expectedWhatsapp = `https://wa.me/?text=${encodeURIComponent(`Publicada ${expectedUrl}`)}`;
+    expect(html).toContain(expectedWhatsapp.replace(/&/g, '&amp;'));
+  });
+
+  it('never gives a non-live activity a share block', async () => {
+    activitiesResult.value = [
+      {
+        id: 'act-draft',
+        title: 'Borrador',
+        level: null,
+        status: 'draft',
+        blockCount: 0,
+        reviewNote: null,
+        hasPendingRevision: false,
+      },
+    ];
+    const res = await render('https://chuyocode.test/es/mis-actividades', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="activity-share-act-draft"');
+  });
+});

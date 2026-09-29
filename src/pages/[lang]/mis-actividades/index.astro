@@ -15,10 +15,11 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
-import MisActividadesIsland from '@components/islands/activities/MisActividadesIsland';
+import MisActividadesIsland, { type MisActividadesActivity } from '@components/islands/activities/MisActividadesIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getActivitiesByAuthor } from '@lib/activities/activities';
+import { qrSvg } from '@lib/qr';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -44,7 +45,30 @@ if (!user) {
 }
 
 const t = UI_LABELS[lang].activities.myActivities;
-const activities = await getActivitiesByAuthor(user.id);
+const rawActivities = await getActivitiesByAuthor(user.id);
+
+/**
+ * "Compartir" per row (D8), LIVE activities only — built the SAME way the
+ * practice page's own share dialog is (`[id].astro` under
+ * `ingles/actividades`, see its header): `Astro.url.origin` follows whatever
+ * host actually served THIS page, so the link is correct on a Netlify
+ * preview too, and the QR/WhatsApp href are computed here so no third party
+ * ever learns which activity got shared.
+ */
+const activities: MisActividadesActivity[] = rawActivities.map((activity) => {
+  if (activity.status !== 'live') {
+    return { ...activity, share: null };
+  }
+  const url = `${Astro.url.origin}/${lang}/ingles/actividades/${activity.id}`;
+  const qr = qrSvg(url);
+  if (!qr) {
+    return { ...activity, share: null };
+  }
+  return {
+    ...activity,
+    share: { url, qr, whatsappHref: `https://wa.me/?text=${encodeURIComponent(`${activity.title} ${url}`)}` },
+  };
+});
 ---
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
