@@ -87,7 +87,7 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
     return (
       <div
         data-testid="mis-actividades-empty"
-        className="flex flex-col items-start gap-4 rounded-lg border border-border bg-base-soft p-6 text-zinc-300"
+        className="flex flex-col items-start gap-4 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300"
       >
         <p>{t.empty}</p>
         <a href={`/${lang}/crear`} className={buttonVariants({ variant: 'default' })}>

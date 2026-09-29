@@ -84,7 +84,7 @@ const t = COPY[lang];
 
     <article class="flex w-full flex-col gap-8 md:flex-row md:gap-10">
     <div class="w-full max-w-xs shrink-0">
-      <div class="aspect-[3/4] overflow-hidden rounded-lg border border-base-muted bg-base-muted">
+      <div class="aspect-[3/4] overflow-hidden rounded-lg border border-surface-muted bg-surface-muted">
         <img
           src={book.coverUrl}
           alt={`Portada de ${book.title}`}
@@ -129,7 +129,7 @@ const t = COPY[lang];
             {t.download}
           </a>
         ) : hasPass && !hasPdf ? (
-          <div class="mt-4 rounded-lg border border-base-muted bg-base-muted/40 p-4 text-center text-sm font-medium text-zinc-400">
+          <div class="mt-4 rounded-lg border border-surface-muted bg-surface-muted/40 p-4 text-center text-sm font-medium text-zinc-400">
             {t.noPdf}
           </div>
         ) : (

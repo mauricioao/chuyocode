@@ -134,7 +134,7 @@ function chipLabelClass(active: boolean): string {
       <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.heading}</PageTitle>
     </header>
 
-    <form method="get" action={`/${lang}/ingles/actividades`} class="flex flex-col gap-4 rounded-lg border border-border bg-base-soft p-4">
+    <form method="get" action={`/${lang}/ingles/actividades`} class="flex flex-col gap-4 rounded-lg border border-border bg-surface-soft p-4">
       {/* Search stays always visible, at every width — it is the primary
           way to narrow a long feed, unlike the rest below. */}
       <label class="flex flex-1 min-w-48 flex-col gap-1 text-sm text-zinc-300">
@@ -253,7 +253,7 @@ function chipLabelClass(active: boolean): string {
 
     {
       activities.length === 0 ? (
-        <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+        <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
           <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
           {anyFilterActive && (
             <a href={`/${lang}/ingles/actividades`} class="text-sm font-medium text-accent hover:underline">

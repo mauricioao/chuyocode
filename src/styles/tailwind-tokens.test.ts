@@ -23,6 +23,18 @@ describe('tailwind theme tokens (CSS-first @theme)', () => {
     expect(css).toContain('@custom-variant dark');
   });
 
+  it('never names a color after a font-size step (text-* would become a color)', () => {
+    // Tailwind 4 resolves `text-<name>` to a color when `--color-<name>` exists,
+    // so a `--color-base` turned every `text-base` (font size) into black text.
+    const fontSizeSteps = new Set([
+      'xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl', '8xl', '9xl',
+    ]);
+    const colorNames = [...css.matchAll(/--color-([a-z0-9-]+)\s*:/g)].map((m) => m[1]);
+
+    expect(colorNames.length).toBeGreaterThan(0);
+    expect(colorNames.filter((name) => fontSizeSteps.has(name))).toEqual([]);
+  });
+
   it('preserves the accent scale with the yellow streaming values', () => {
     expect(token('--color-accent')?.toLowerCase()).toBe('#facc15');
     expect(token('--color-accent-hover')?.toLowerCase()).toBe('#eab308');
@@ -30,9 +42,9 @@ describe('tailwind theme tokens (CSS-first @theme)', () => {
   });
 
   it('keeps the base surface scale', () => {
-    expect(token('--color-base')?.toLowerCase()).toBe('#000000');
-    expect(token('--color-base-soft')?.toLowerCase()).toBe('#18181b');
-    expect(token('--color-base-muted')?.toLowerCase()).toBe('#27272a');
+    expect(token('--color-surface')?.toLowerCase()).toBe('#000000');
+    expect(token('--color-surface-soft')?.toLowerCase()).toBe('#18181b');
+    expect(token('--color-surface-muted')?.toLowerCase()).toBe('#27272a');
   });
 
   it.each(['terracotta', 'ocre', 'amaranto'])(
