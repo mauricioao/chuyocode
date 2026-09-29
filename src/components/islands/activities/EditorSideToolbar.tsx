@@ -252,6 +252,7 @@ function ShortcutsDialog({ lang }: { lang: Lang }) {
     [t.shortcutEscape, 'Esc'],
     [t.shortcutZoomIn, '+'],
     [t.shortcutZoomOut, '-'],
+    [t.shortcutNewZone, 'Enter / N'],
   ];
 
   return (

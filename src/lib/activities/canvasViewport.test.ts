@@ -23,6 +23,7 @@ import {
   distanceBetween,
   midpoint,
   anchoredZoom,
+  visibleImageRect,
   type Camera,
 } from './canvasViewport';
 
@@ -461,5 +462,44 @@ describe('anchoredZoom (zoomAt generalized to a moving anchor — the pinch gest
     expect(next.scale).toBe(2);
     const contentAtStart = screenToContentPoint(startMid, startCamera);
     expect(screenToContentPoint(currentMid, next)).toEqual(contentAtStart);
+  });
+});
+
+describe('visibleImageRect (keyboard zone creation anchor)', () => {
+  it('returns the full [0, 1] square when the whole image fits inside the viewport', () => {
+    const camera = fitCamera({ width: 800, height: 400 }, { width: 400, height: 400 });
+    const rect = visibleImageRect(camera, { width: 800, height: 400 }, { width: 400, height: 400 });
+    expect(rect).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+  });
+
+  it('returns a smaller, centered rect when zoomed in past 100% with a centered camera', () => {
+    // 800x400 image, 100% zoom, camera centered (x/y both 0) -> viewport shows
+    // exactly its own 400x400 box, which is half the image's width and the
+    // full height.
+    const camera: Camera = { scale: 1, x: 0, y: 0 };
+    const rect = visibleImageRect(camera, { width: 800, height: 400 }, { width: 400, height: 400 });
+    expect(rect.w).toBeCloseTo(0.5);
+    expect(rect.h).toBeCloseTo(1);
+    expect(rect.x).toBeCloseTo(0);
+    expect(rect.y).toBeCloseTo(0);
+  });
+
+  it('clamps to the image bounds when the camera is panned so part of the viewport shows empty margin', () => {
+    // Panned camera.x = 100 shows the viewport starting BEFORE the image's
+    // left edge (content x = -100..300); clamped to [0, image.width].
+    const camera: Camera = { scale: 1, x: 100, y: 0 };
+    const rect = visibleImageRect(camera, { width: 800, height: 400 }, { width: 400, height: 400 });
+    expect(rect.x).toBe(0);
+    expect(rect.w).toBeCloseTo(300 / 800);
+  });
+
+  it('returns the full square for a non-positive image dimension', () => {
+    const camera: Camera = { scale: 1, x: 0, y: 0 };
+    expect(visibleImageRect(camera, { width: 0, height: 0 }, { width: 400, height: 400 })).toEqual({
+      x: 0,
+      y: 0,
+      w: 1,
+      h: 1,
+    });
   });
 });

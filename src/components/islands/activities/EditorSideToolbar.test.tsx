@@ -181,6 +181,14 @@ describe('EditorSideToolbar — keyboard shortcuts dialog', () => {
     const dialog = screen.getByTestId('shortcuts-dialog');
     expect(dialog.textContent).toContain('Z'); // undo/redo keys shown
   });
+
+  it('lists the keyboard zone-creation shortcut (accessibility)', () => {
+    renderToolbar();
+    fireEvent.click(screen.getByTestId('shortcuts-trigger'));
+    const dialog = screen.getByTestId('shortcuts-dialog');
+    expect(dialog.textContent).toContain('Nueva zona');
+    expect(dialog.textContent).toContain('Enter / N');
+  });
 });
 
 describe('EditorSideToolbar — save', () => {

@@ -88,6 +88,7 @@ import {
   moveRect,
   resizeRect,
   nudgeRect,
+  centeredZoneRect,
   MIN_ZONE_SIZE,
   type Handle,
   type Direction,
@@ -104,6 +105,7 @@ import {
   panBy,
   screenToContentPoint,
   rotatedSize,
+  visibleImageRect,
   type Camera,
   type Size,
 } from '@/lib/activities/canvasViewport';
@@ -198,6 +200,16 @@ export default function WorksheetZoneEditor({
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
 
+  // Keyboard zone creation (accessibility, Enter/N — see the file header):
+  // an `aria-live` announcement, and the pending focus handoff into the
+  // newly-created zone's first answer field. `pendingFocusZoneIdRef` is set
+  // right before selecting the new zone and cleared once the focus effect
+  // below actually moves focus (or on a later mount that never matches, e.g.
+  // the panel wasn't rendered at all).
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
+  const pendingFocusZoneIdRef = useRef<string | null>(null);
+  const firstAnswerInputRef = useRef<HTMLInputElement | null>(null);
+
   // Mobile layout pass: below `lg`, the properties column becomes a
   // BottomSheet instead — see the render below and its own comment.
   // `mobilePanelExpanded` starts (and resets to) collapsed/peek on every
@@ -209,6 +221,20 @@ export default function WorksheetZoneEditor({
   useEffect(() => {
     setMobilePanelExpanded(false);
   }, [selectedZoneId]);
+
+  // Keyboard zone creation's focus handoff (see `handleCreateZoneAtCenter`
+  // above): once `selectedZoneId` actually matches the zone that requested
+  // focus, the properties panel has re-rendered with that zone's own first
+  // answer field mounted (desktop panel — always rendered; the mobile
+  // BottomSheet stays collapsed on a new selection like any other zone
+  // creation, same as a pointer-drawn zone, so this only fires there). Runs
+  // AFTER that render is committed, so the ref is populated by then.
+  useEffect(() => {
+    if (pendingFocusZoneIdRef.current && pendingFocusZoneIdRef.current === selectedZoneId) {
+      firstAnswerInputRef.current?.focus();
+      pendingFocusZoneIdRef.current = null;
+    }
+  }, [selectedZoneId, zones]);
 
   // Kept in sync every render (not just on change) so the wheel listener and
   // the pan pointer-move handler below — both read this inside a
@@ -381,6 +407,28 @@ export default function WorksheetZoneEditor({
   // typing "v"/"h" in the title/block-name fields elsewhere in the editor
   // must never be caught by this, and it structurally can't be — those
   // inputs are outside this component's own subtree entirely).
+  // Keyboard zone creation (accessibility): `Enter`/`N` with the Zona tool
+  // active and the canvas focused creates a new zone centered in the
+  // currently VISIBLE part of the image — `visibleImageRect` (camera-aware,
+  // works at any pan/zoom) feeds `centeredZoneRect`'s own default ~20%x6%
+  // size, already clamped inside the image. One history entry, same shape as
+  // a pointer-drawn zone (`handlePointerUp`'s own draw branch): a single
+  // `onZonesChange` call (default `commit: true`) plus `onSelectZone`.
+  // `pendingFocusZoneIdRef` hands the new zone's id to the focus effect
+  // below, which moves focus into its first answer field once the
+  // properties panel actually renders it; `liveAnnouncement` drives the
+  // `aria-live` region in the render below.
+  const handleCreateZoneAtCenter = useCallback(() => {
+    const vp = viewportSize();
+    const visible = visibleImageRect(cameraRef.current, displaySize, vp);
+    const rect = centeredZoneRect(visible);
+    const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
+    pendingFocusZoneIdRef.current = zone.id;
+    onZonesChange([...zones, zone]);
+    onSelectZone(zone.id);
+    setLiveAnnouncement(t.zoneCreatedAnnouncement);
+  }, [zones, onZonesChange, onSelectZone, viewportSize, displaySize, t.zoneCreatedAnnouncement]);
+
   const handleViewportKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (e.key === '+' || e.key === '=') {
@@ -398,13 +446,22 @@ export default function WorksheetZoneEditor({
       } else if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         setTool('hand');
+      } else if (
+        (e.key === 'Enter' || e.key === 'n' || e.key === 'N') &&
+        effectiveTool === 'zone' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        handleCreateZoneAtCenter();
       } else if (e.key === ' ' && !spaceHeldRef.current) {
         e.preventDefault();
         spaceHeldRef.current = true;
         setSpaceHeld(true);
       }
     },
-    [handleZoomIn, handleZoomOut, handleZoomFit],
+    [handleZoomIn, handleZoomOut, handleZoomFit, effectiveTool, handleCreateZoneAtCenter],
   );
 
   // Space's "temporary hand" and any drag/pan in flight MUST release even
@@ -1021,6 +1078,12 @@ export default function WorksheetZoneEditor({
             <div key={i} className="flex gap-1">
               <input
                 type="text"
+                // Keyboard zone creation's focus target (see
+                // `handleCreateZoneAtCenter`'s own header): the FIRST answer
+                // field of whichever zone is currently selected — every
+                // selection change re-renders this from scratch, so this
+                // ref always points at the right zone's own first field.
+                ref={i === 0 ? firstAnswerInputRef : undefined}
                 value={answer}
                 placeholder={t.zoneAnswerPlaceholder}
                 aria-label={`${t.zoneAnswersLabel} ${i + 1}`}
@@ -1102,6 +1165,13 @@ export default function WorksheetZoneEditor({
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row"
       data-testid="worksheet-zone-editor"
     >
+      {/* Keyboard zone creation's announcement (accessibility) — visually
+          hidden, `aria-live="polite"` so a screen reader announces "Zona
+          creada" without stealing focus from wherever it just landed (the
+          new zone's first answer field, via the focus effect above). */}
+      <div aria-live="polite" role="status" className="sr-only" data-testid="worksheet-live-region">
+        {liveAnnouncement}
+      </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div
           className="mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"

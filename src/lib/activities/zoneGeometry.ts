@@ -152,6 +152,32 @@ export function resizeRect(rect: Rect, handle: Handle, dx: number, dy: number): 
   };
 }
 
+/**
+ * The default size (as a fraction of the image) a keyboard-created zone
+ * gets — see {@link centeredZoneRect}. ~20% wide x 6% tall reads as a
+ * reasonable single-answer text box on most worksheets, without the author
+ * needing to resize it before typing an answer.
+ */
+export const KEYBOARD_ZONE_SIZE = { w: 0.2, h: 0.06 };
+
+/**
+ * A zone rect of `size` (default {@link KEYBOARD_ZONE_SIZE}), centered
+ * inside `visible` (a fractional rect — `WorksheetZoneEditor.tsx`'s
+ * `Enter`/`N` shortcut passes the currently VISIBLE part of the image, so a
+ * keyboard-only author always gets a zone they can actually see, at any
+ * pan/zoom) — the accessible alternative to the pointer-drag draw gesture.
+ *
+ * Always run through {@link clampRect}: a `visible` rect near an edge (or
+ * smaller than `size`) would otherwise center the new zone partly or
+ * entirely outside `[0, 1]`, or below {@link MIN_ZONE_SIZE} — `clampRect`
+ * slides it back fully inside the image instead.
+ */
+export function centeredZoneRect(visible: Rect, size: { w: number; h: number } = KEYBOARD_ZONE_SIZE): Rect {
+  const cx = visible.x + visible.w / 2;
+  const cy = visible.y + visible.h / 2;
+  return clampRect({ x: cx - size.w / 2, y: cy - size.h / 2, w: size.w, h: size.h });
+}
+
 /** A single arrow-key nudge step, as a fraction of the image. */
 export const NUDGE_STEP = 0.01;
 

@@ -261,6 +261,9 @@ export const UI_LABELS = {
         shortcutEscape: 'Deseleccionar',
         shortcutZoomIn: 'Acercar',
         shortcutZoomOut: 'Alejar',
+        // Keyboard zone creation (accessibility): Enter/N with the Zona
+        // tool active and the canvas focused.
+        shortcutNewZone: 'Nueva zona',
         // Floating side toolbar pass: the drag handle, and the ghost "dock"
         // target shown while undocked.
         moveToolbar: 'Mover barra',
@@ -359,7 +362,7 @@ export const UI_LABELS = {
         noZonesYet: 'Todavía no hay zonas dibujadas sobre esta imagen.',
         panelEmpty: 'Dibujar un recuadro sobre la hoja o seleccionar uno para editarlo.',
         panelEmptyHint:
-          'Atajos: V para la herramienta Zona, H para Mano, flechas para mover una zona seleccionada, Suprimir para eliminarla, rueda o los botones de abajo para hacer zoom.',
+          'Atajos: V para la herramienta Zona, H para Mano, Enter o N para crear una zona centrada en lo visible, flechas para mover una zona seleccionada, Suprimir para eliminarla, rueda o los botones de abajo para hacer zoom.',
         zoomOut: 'Alejar',
         zoomIn: 'Acercar',
         zoomFit: 'Ajustar',
@@ -370,6 +373,10 @@ export const UI_LABELS = {
         toolZoneTooltip: 'Zona (V)',
         toolHand: 'Mano',
         toolHandTooltip: 'Mano (H)',
+        // Keyboard zone creation (accessibility): Enter/N with the Zona
+        // tool active and the canvas focused — announced via an aria-live
+        // region, see `WorksheetZoneEditor.tsx`'s own header.
+        zoneCreatedAnnouncement: 'Zona creada',
       },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
@@ -889,6 +896,7 @@ export const UI_LABELS = {
         shortcutEscape: 'Deselect',
         shortcutZoomIn: 'Zoom in',
         shortcutZoomOut: 'Zoom out',
+        shortcutNewZone: 'New zone',
         moveToolbar: 'Move toolbar',
         dockToolbar: 'Dock',
         savingStatus: 'Saving changes',
@@ -970,7 +978,7 @@ export const UI_LABELS = {
         noZonesYet: 'No zones drawn on this image yet.',
         panelEmpty: 'Draw a box on the sheet or select one to edit it.',
         panelEmptyHint:
-          'Shortcuts: V for the Zone tool, H for Hand, arrow keys move a selected zone, Delete removes it, wheel or the buttons below zoom.',
+          'Shortcuts: V for the Zone tool, H for Hand, Enter or N to create a zone centered in what is visible, arrow keys move a selected zone, Delete removes it, wheel or the buttons below zoom.',
         zoomOut: 'Zoom out',
         zoomIn: 'Zoom in',
         zoomFit: 'Fit',
@@ -981,6 +989,7 @@ export const UI_LABELS = {
         toolZoneTooltip: 'Zone (V)',
         toolHand: 'Hand',
         toolHandTooltip: 'Hand (H)',
+        zoneCreatedAnnouncement: 'Zone created',
       },
       player: {
         notGraded: 'Preview: this view does not grade answers.',
