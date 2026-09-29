@@ -10,6 +10,7 @@ const pipelineMocks = vi.hoisted(() => ({
   convertImageToWebp: vi.fn(),
   validatePageSelection: vi.fn(),
   convertPdfPagesToWebp: vi.fn(),
+  renderPdfThumbnails: vi.fn(),
 }));
 vi.mock('@/lib/activities/imagePipeline', async () => {
   const actual = await vi.importActual<typeof import('@/lib/activities/imagePipeline')>(
@@ -21,6 +22,7 @@ vi.mock('@/lib/activities/imagePipeline', async () => {
     convertImageToWebp: pipelineMocks.convertImageToWebp,
     validatePageSelection: pipelineMocks.validatePageSelection,
     convertPdfPagesToWebp: pipelineMocks.convertPdfPagesToWebp,
+    renderPdfThumbnails: pipelineMocks.renderPdfThumbnails,
   };
 });
 
@@ -450,6 +452,10 @@ describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pa
     // `WorksheetUploader.tsx`'s `handlePdfPagesConfirm` (a plain image
     // upload only ever produces one).
     pipelineMocks.routeFileType.mockReturnValue('pdf');
+    // The thumbnail grid is a separate concern (`WorksheetUploader.test.tsx`
+    // owns it) — this test only cares about the multi-block fan-out, so it
+    // takes the text-field fallback path by having thumbnail rendering fail.
+    pipelineMocks.renderPdfThumbnails.mockRejectedValue(new Error('pdf_failed'));
     pipelineMocks.validatePageSelection.mockReturnValue([1, 2]);
     pipelineMocks.convertPdfPagesToWebp.mockResolvedValue([new Blob(['p1']), new Blob(['p2'])]);
     vi.stubGlobal(
