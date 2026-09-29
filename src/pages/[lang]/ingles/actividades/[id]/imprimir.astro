@@ -1,0 +1,290 @@
+---
+/**
+ * Print page — `/[lang]/ingles/actividades/[id]/imprimir` (SSR, D6
+ * "Imprimir"). Same access rules as the practice page (`[id].astro`, one
+ * level up): `getPublishedActivity` 404s for anything not `visible`,
+ * including the author's own non-live activity — this route is the public
+ * player's print view, not a preview. Under `ingles/**`, so the middleware
+ * already gates it (sign-in required) — `markPrivate` is called here anyway,
+ * explicitly, because this page also builds several early-return
+ * `Response`s of its own (invalid lang, missing id, not found) that bypass
+ * `Astro.response.headers` entirely and need their own header.
+ *
+ * A DELIBERATELY BARE page — no `BaseLayout`: the task is "light theme for
+ * paper, no site header/footer/nav", which is the opposite of what
+ * `BaseLayout` gives (dark-only, site chrome always on). `@styles/global.css`
+ * is still imported directly (this project's ONLY Tailwind entry point —
+ * see that file's own header), but literal color utilities (`bg-white`,
+ * `text-black`) are used throughout rather than the semantic
+ * `bg-background`/`text-foreground` tokens: `:root` carries this site's DARK
+ * values (`--background: #000000`), so a semantic token here would print
+ * black paper with near-white ink.
+ *
+ * Every block renders in order: a worksheet's image at full width
+ * (`break-inside: avoid` plus `break-before: page`, so each worksheet starts
+ * its own page and is never split across two), a quiz block as a numbered
+ * list (a blank marker becomes "________"; a pool-backed question's options
+ * become "a) b) c)…", via {@link getSlotItems} — the exact renderer-free
+ * summary `ModerationBlockPreview`'s own helpers already established).
+ * `?respuestas=1` (a plain "Incluir respuestas" link, not a client toggle —
+ * this page ships no interactive JS beyond the print button) appends an
+ * answer key: each worksheet's zones in READING order
+ * (`orderZonesForReading`, same helper the mobile per-zone sheet uses) with
+ * their accepted answers, each quiz question's resolved answer, and every
+ * explanation (D5) that was authored, reusing `zoneAnswerSummary`/
+ * `quizSlotAnswerSummary` from `moderationPreview.ts` verbatim rather than
+ * re-deriving them.
+ */
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getPublishedActivity } from '@lib/activities/activities';
+import { imagePreviewUrl } from '@lib/activities/paths';
+import { rotatedSize } from '@lib/activities/canvasViewport';
+import { orderZonesForReading } from '@lib/activities/zoneGeometry';
+import { zoneAnswerSummary, quizSlotAnswerSummary } from '@lib/activities/moderationPreview';
+import { splitLabelAtBlank, getSlotItems, type Slot } from '@lib/exercisePayload';
+import type { Block } from '@lib/activities/blocks';
+import '@styles/global.css';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+// Session-dependent on every exit path from here (the activity lookup below
+// reads `getPublishedActivity`, which is visibility-gated the same way as
+// the practice page) — see this file's own header for why this is explicit
+// here despite `ingles/**` already being covered by the middleware.
+markPrivate(Astro.response.headers);
+
+const { id } = Astro.params;
+if (!id) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const activity = await getPublishedActivity(id);
+if (!activity) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].activities.print;
+const levelLabels = UI_LABELS[lang].english.levels;
+
+const showAnswers = Astro.url.searchParams.get('respuestas') === '1';
+const answersHref = `${Astro.url.pathname}?respuestas=1`;
+
+/** This block's own label — the author's own `block.name`, or a positional/type default. Same rule `ActivityPracticeIsland`'s own `tabLabel` uses for the practice tabs. */
+function blockLabel(block: Block, worksheetPosition: number): string {
+  if (block.name) return block.name;
+  return block.type === 'worksheet' ? `${t.worksheetLabel} ${worksheetPosition + 1}` : t.quizLabel;
+}
+
+interface LabeledBlock {
+  block: Block;
+  label: string;
+}
+
+// Computed once, shared by the main content AND the answer key below, so
+// "Hoja 1"/"Hoja 2" numbering can never drift between the two sections.
+const labeledBlocks: LabeledBlock[] = (() => {
+  let worksheetPosition = -1;
+  return activity.blocks.map((block) => {
+    if (block.type === 'worksheet') worksheetPosition += 1;
+    return { block, label: blockLabel(block, worksheetPosition) };
+  });
+})();
+
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+
+/** A quiz question's printed prompt: its blank marker (if any) becomes "________". */
+function questionText(slot: Slot): string {
+  const parts = splitLabelAtBlank(slot.label);
+  if (parts) return `${parts.before}________${parts.after}`;
+  return slot.label.length > 0 ? `${slot.label} ________` : '________';
+}
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content={t.pageDescription} />
+    <title>{activity.title} — {t.print}</title>
+    <style is:global>
+      /* Print layout (D6). Scoped to this page only — it is never shared via
+         a layout, so nothing here can leak onto another route. */
+      .print-worksheet {
+        break-inside: avoid;
+        break-before: page;
+      }
+      .print-quiz {
+        break-inside: avoid;
+      }
+      .print-answer-key {
+        break-before: page;
+      }
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        /* No backgrounds on paper — ink only. */
+        * {
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        /* Links without URLs: no author CSS anywhere on this page appends
+           one, but this makes that explicit rather than incidental. */
+        a[href]::after {
+          content: '' !important;
+        }
+      }
+      @page {
+        /* A4/Letter-friendly margin — printers default the sheet size
+           itself; this only sets the margin, which both share safely. */
+        margin: 1.5cm;
+      }
+    </style>
+  </head>
+  <body class="bg-white text-black">
+    <div class="mx-auto max-w-3xl px-6 py-8 print:px-0 print:py-0">
+      <div data-testid="print-toolbar" class="no-print mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-black/20 pb-4">
+        <a href={`/${lang}/ingles/actividades/${activity.id}`} data-testid="print-back-link" class="text-sm text-black underline">
+          {UI_LABELS[lang].activities.practice.back}
+        </a>
+        <div class="flex items-center gap-4">
+          {!showAnswers && (
+            <a href={answersHref} data-testid="print-include-answers" class="text-sm text-black underline">
+              {t.includeAnswers}
+            </a>
+          )}
+          <button type="button" id="print-button" data-testid="print-button" class="rounded-md border border-black px-3 py-1.5 text-sm font-medium text-black">
+            {t.print}
+          </button>
+        </div>
+      </div>
+
+      <header data-testid="print-header" class="mb-8">
+        <h1 class="text-2xl font-bold text-black">{activity.title}</h1>
+        <p class="text-sm text-black/70">
+          {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}
+        </p>
+      </header>
+
+      <div class="flex flex-col gap-10">
+        {labeledBlocks.map(({ block, label }) => {
+          if (block.type === 'worksheet') {
+            const rotation = block.rotation ?? 0;
+            const isQuarterTurn = rotation === 90 || rotation === 270;
+            const displaySize = rotatedSize(block.image, rotation);
+            return (
+              <section data-testid={`print-block-${block.id}`} class="print-worksheet">
+                <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+                <div
+                  class="relative w-full overflow-hidden"
+                  style={`aspect-ratio: ${displaySize.width} / ${displaySize.height}`}
+                >
+                  <img
+                    src={imagePreviewUrl(block.image.path)}
+                    alt=""
+                    class={isQuarterTurn ? undefined : 'absolute inset-0 h-full w-full object-contain'}
+                    style={
+                      isQuarterTurn
+                        ? `position: absolute; top: 50%; left: 50%; height: ${(block.image.height / block.image.width) * 100}%; width: auto; max-width: none; transform: translate(-50%, -50%) rotate(${rotation}deg);`
+                        : `transform: rotate(${rotation}deg);`
+                    }
+                  />
+                </div>
+              </section>
+            );
+          }
+
+          return (
+            <section data-testid={`print-block-${block.id}`} class="print-quiz">
+              <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+              <ol class="flex flex-col gap-3 text-black">
+                {block.payload.slots.map((slot, i) => {
+                  const items = getSlotItems(block.payload, slot);
+                  return (
+                    <li data-testid={`print-question-${slot.id}`}>
+                      <p>{i + 1}. {questionText(slot)}</p>
+                      {items.length > 0 && (
+                        <p class="ml-5 text-sm">
+                          {items
+                            .map((item, j) => `${LETTERS[j] ?? j}) ${item.text ?? item.media ?? item.id}`)
+                            .join('   ')}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          );
+        })}
+      </div>
+
+      {showAnswers && (
+        <section data-testid="print-answer-key" class="print-answer-key mt-10 border-t border-black pt-6">
+          <h2 class="mb-4 text-xl font-bold text-black">{t.answersHeading}</h2>
+          <div class="flex flex-col gap-6">
+            {labeledBlocks.map(({ block, label }) => (
+              <div data-testid={`print-answers-${block.id}`}>
+                <h3 class="mb-1 font-semibold text-black">{label}</h3>
+                {block.type === 'worksheet' ? (
+                  <ol class="flex flex-col gap-1 text-sm text-black">
+                    {orderZonesForReading(block.zones).map((zone, i) => (
+                      <li data-testid={`print-answer-zone-${zone.id}`}>
+                        {i + 1}. {zoneAnswerSummary(zone)}
+                        {zone.explanation && (
+                          <span>
+                            {' '}
+                            — {t.explanationLabel}: {zone.explanation}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <ol class="flex flex-col gap-1 text-sm text-black">
+                    {block.payload.slots.map((slot, i) => (
+                      <li data-testid={`print-answer-question-${slot.id}`}>
+                        {i + 1}. {quizSlotAnswerSummary(block.payload, slot)}
+                        {slot.explanation && (
+                          <span>
+                            {' '}
+                            — {t.explanationLabel}: {slot.explanation}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+
+    <script is:inline>
+      document.getElementById('print-button')?.addEventListener('click', () => window.print());
+    </script>
+  </body>
+</html>

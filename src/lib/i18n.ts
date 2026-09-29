@@ -439,6 +439,8 @@ export const UI_LABELS = {
         pageDescription: 'Practicar esta actividad de inglés: hojas de trabajo y preguntas con corrección al instante.',
         back: 'Volver a actividades',
         noLevel: 'Sin nivel',
+        // "Imprimir" (D6): links to the print-optimized page.
+        print: 'Imprimir',
         check: 'Comprobar',
         retry: 'Reintentar',
         score: 'Puntaje',
@@ -656,6 +658,21 @@ export const UI_LABELS = {
         removeError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
         confirmCancel: 'Cancelar',
         confirmAccept: 'Confirmar',
+      },
+      // Print page (`/[lang]/ingles/actividades/[id]/imprimir`, D6). A
+      // separate, minimal-layout page — no site header/footer/nav, light
+      // theme for paper — so its copy stays a sibling of `practice` rather
+      // than reusing that section's own vocabulary.
+      print: {
+        pageDescription: 'Versión para imprimir de esta actividad de inglés.',
+        noLevel: 'Sin nivel',
+        print: 'Imprimir',
+        includeAnswers: 'Incluir respuestas',
+        choicesLabel: 'Opciones',
+        answersHeading: 'Clave de respuestas',
+        explanationLabel: 'Por qué',
+        worksheetLabel: 'Hoja',
+        quizLabel: 'Preguntas',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1096,6 +1113,7 @@ export const UI_LABELS = {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
         back: 'Back to activities',
         noLevel: 'No level',
+        print: 'Print',
         check: 'Check',
         retry: 'Try again',
         score: 'Score',
@@ -1266,6 +1284,17 @@ export const UI_LABELS = {
         removeError: 'Could not remove the activity. Try again.',
         confirmCancel: 'Cancel',
         confirmAccept: 'Confirm',
+      },
+      print: {
+        pageDescription: 'Print-friendly version of this English activity.',
+        noLevel: 'No level',
+        print: 'Print',
+        includeAnswers: 'Include answers',
+        choicesLabel: 'Options',
+        answersHeading: 'Answer key',
+        explanationLabel: 'Why',
+        worksheetLabel: 'Sheet',
+        quizLabel: 'Questions',
       },
     },
     notFound: {

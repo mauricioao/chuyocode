@@ -286,6 +286,19 @@ describe('GET /[lang]/ingles/actividades/[id] — "Compartir" (D8)', () => {
   });
 });
 
+describe('GET /[lang]/ingles/actividades/[id] — "Imprimir" (D6)', () => {
+  it('links to the print-optimized page for this activity', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-print-link"');
+    expect(html).toContain('href="/es/ingles/actividades/abc/imprimir"');
+  });
+});
+
 describe('GET /[lang]/ingles/actividades/[id] — "Basado en" credit line (D7)', () => {
   it('shows nothing extra when the activity has no source', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else', source: null };
