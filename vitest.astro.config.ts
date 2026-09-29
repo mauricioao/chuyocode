@@ -11,5 +11,11 @@ export default getViteConfig({
     globals: true,
     environment: 'node',
     include: splitTestFiles(process.cwd()).astro,
+    // Threads spin up cheaper than forked processes on Windows. Keeps default
+    // isolation (unlike the node/jsdom projects): rendering `.astro` files
+    // through the Container API is more likely to touch Astro-internal
+    // module-level state, and this project is only 24 files.
+    pool: 'threads',
+    poolOptions: { threads: { maxThreads: 5, minThreads: 1 } },
   },
 });
