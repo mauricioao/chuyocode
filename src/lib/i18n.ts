@@ -512,6 +512,12 @@ export const UI_LABELS = {
         // `lg:` (search stays always visible) — distinct from `filterSubmit`
         // above, which stays the actual submit button INSIDE it.
         filtersToggle: 'Filtros',
+        // Filters popover (unified search header pass): "Aplicar"/"Limpiar"
+        // inside the compact panel opened by the funnel button, and the
+        // short label used by each removable filter chip under the title.
+        applyFilters: 'Aplicar',
+        panelClear: 'Limpiar',
+        novistasChip: 'No vistas',
         // Card badges (heart/eye counters, "Vista" badge) and the daily pick.
         viewedBadge: 'Vista',
         dailyPickLabel: 'Actividad del día',
@@ -1080,6 +1086,9 @@ export const UI_LABELS = {
         novistasLabel: "I haven't seen these",
         filterSubmit: 'Filter',
         filtersToggle: 'Filters',
+        applyFilters: 'Apply',
+        panelClear: 'Clear',
+        novistasChip: 'Unseen',
         viewedBadge: 'Seen',
         dailyPickLabel: "Today's activity",
       },

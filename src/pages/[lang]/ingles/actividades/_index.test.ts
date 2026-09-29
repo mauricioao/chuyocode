@@ -217,50 +217,135 @@ describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL
     expect(html).toMatch(/name="novistas"[^>]*checked/);
   });
 
-  it('checks the active type radio', async () => {
+  it('marks the active type option selected', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=quiz', { params: { lang: 'es' } });
     const html = await res.text();
-    expect(html).toMatch(/name="tipo" value="quiz"[^>]*checked/);
+    expect(html).toMatch(/<option value="quiz" selected/);
   });
 });
 
-/** Matches the page's own `TYPE_OPTIONS` (All / Worksheet / Quiz) — one radio per option, none doubled. */
-const TYPE_OPTIONS_COUNT = 3;
-
-describe('GET /[lang]/ingles/actividades — mobile filters disclosure (mobile layout pass)', () => {
-  it('collapses into a single native <details> "Filtros" toggle, closed with no active filter', async () => {
+describe('GET /[lang]/ingles/actividades — unified search header (community-search-unify)', () => {
+  it('renders the search as a real GET form targeting this page, in the title actions row', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
-    expect(html).toContain('Filtros');
-    expect(html).toMatch(/<details[^>]*class="filters-details[^>]*>/);
-    expect(html).not.toMatch(/<details[^>]* open[^>]*>/);
+    expect(html).toMatch(/<form[^>]*method="get"[^>]*action="\/es\/ingles\/actividades"[^>]*role="search"/);
   });
 
-  it('opens by default once a filter is already active, so the visitor sees what is filtering the feed', async () => {
-    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
+  it('removes the old always-visible filter bar and its mobile <details> disclosure', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
-    expect(html).toMatch(/<details[^>]* open[^>]*>/);
+    expect(html).not.toContain('filters-details');
+    expect(html).not.toContain('filters-summary');
+    expect(html).not.toContain('filterSubmit');
   });
 
-  it('never duplicates a named filter field — exactly one of each, so submitting never sends two values', async () => {
+  it('renders the funnel filters trigger next to the search, with no active-count badge when nothing is filtering', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('data-testid="filters-trigger"');
+    expect(html).not.toContain('data-testid="filters-badge"');
+  });
+
+  it('shows a badge with the number of active filters among nivel/tipo/orden/novistas', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/ingles/actividades?nivel=A2&tipo=quiz&orden=gustadas&novistas=1',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+    const badgeMatch = html.match(/data-testid="filters-badge"[^>]*>([^<]*)</);
+    expect(badgeMatch?.[1].trim()).toBe('4');
+  });
+
+  it('does not count an active search (`q`) toward the filters badge', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?q=present', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="filters-badge"');
+  });
+
+  it('never duplicates a named filter field across the search form and the filters panel', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
     for (const name of ['nivel', 'orden', 'novistas']) {
       const count = (html.match(new RegExp(`name="${name}"`, 'g')) ?? []).length;
       expect(count).toBe(1);
     }
-    // `tipo` is a radio GROUP — one per option is correct, never doubled per option.
+    // `tipo` is now a <select> — one `name="tipo"` on the element itself.
     const tipoCount = (html.match(/name="tipo"/g) ?? []).length;
-    expect(tipoCount).toBe(TYPE_OPTIONS_COUNT);
+    expect(tipoCount).toBe(1);
   });
 
-  it('keeps the search field OUTSIDE the collapsible disclosure — always visible', async () => {
+  it('preserves the active search as a hidden `q` in the filters panel form, so Aplicar never drops it', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?q=present+simple&nivel=A2', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/<input type="hidden" name="q" value="present simple"/);
+  });
+
+  it('preserves the active filters as hidden inputs on the search form, so a new search never drops them', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=A2&tipo=quiz', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/<input type="hidden" name="nivel" value="A2"/);
+    expect(html).toMatch(/<input type="hidden" name="tipo" value="quiz"/);
+  });
+
+  it('hides the "no las he visto" toggle for an anonymous visitor', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', {
+      params: { lang: 'es' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toMatch(/name="novistas"/);
+  });
+});
+
+describe('GET /[lang]/ingles/actividades — active filter chips', () => {
+  it('renders no chips row when no filter is active', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
     const html = await res.text();
-    const detailsStart = html.indexOf('<details');
-    const searchInputIndex = html.indexOf('name="q"');
-    expect(searchInputIndex).toBeGreaterThan(-1);
-    expect(searchInputIndex).toBeLessThan(detailsStart);
+    expect(html).not.toContain('data-testid="active-filter-chips"');
+  });
+
+  it('does not render a chip for an active search alone', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?q=present', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="active-filter-chips"');
+  });
+
+  it('renders one chip per active filter, each dropping only its own param', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/ingles/actividades?q=present&nivel=A2&tipo=quiz&orden=gustadas&novistas=1',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+    expect(html).toContain('data-testid="active-filter-chips"');
+
+    const nivelHref = html.match(/data-testid="filter-chip-nivel"[^>]*href="([^"]*)"/)?.[1]
+      ?? html.match(/href="([^"]*)"[^>]*data-testid="filter-chip-nivel"/)?.[1];
+    expect(nivelHref).toBeDefined();
+    expect(nivelHref).not.toContain('nivel=');
+    expect(nivelHref).toContain('q=present');
+    expect(nivelHref).toContain('tipo=quiz');
+    expect(nivelHref).toContain('orden=gustadas');
+    expect(nivelHref).toContain('novistas=1');
+
+    const tipoHref = html.match(/data-testid="filter-chip-tipo"[^>]*href="([^"]*)"/)?.[1]
+      ?? html.match(/href="([^"]*)"[^>]*data-testid="filter-chip-tipo"/)?.[1];
+    expect(tipoHref).toBeDefined();
+    expect(tipoHref).not.toContain('tipo=');
+    expect(tipoHref).toContain('nivel=A2');
+
+    const ordenHref = html.match(/data-testid="filter-chip-orden"[^>]*href="([^"]*)"/)?.[1]
+      ?? html.match(/href="([^"]*)"[^>]*data-testid="filter-chip-orden"/)?.[1];
+    expect(ordenHref).toBeDefined();
+    expect(ordenHref).not.toContain('orden=');
+
+    const novistasHref = html.match(/data-testid="filter-chip-novistas"[^>]*href="([^"]*)"/)?.[1]
+      ?? html.match(/href="([^"]*)"[^>]*data-testid="filter-chip-novistas"/)?.[1];
+    expect(novistasHref).toBeDefined();
+    expect(novistasHref).not.toContain('novistas=');
   });
 });
 
