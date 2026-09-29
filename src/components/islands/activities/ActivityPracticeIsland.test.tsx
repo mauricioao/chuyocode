@@ -414,6 +414,15 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     expect(inputAgain.value).toBe('sits');
   });
 
+  it('also shows the Comprobar hint in Parejas mode, and preserves the underlying quiz block', () => {
+    renderIsland([THREE_QUESTION_QUIZ]);
+    fireEvent.click(screen.getByTestId('quiz-game-mode-match'));
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
+      'Comprobar corrige el modo "Preguntas".',
+    );
+  });
+
   it('remembers the chosen mode across a tab switch away and back', () => {
     renderIsland([WORKSHEET, THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('practice-tab-q1'));

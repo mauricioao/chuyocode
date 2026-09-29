@@ -214,10 +214,28 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(screen.getByTestId('quiz-game-mode-cards')).toBeTruthy();
   });
 
-  it('shows the switcher with quiz + cards for a block with several items', () => {
+  it('shows the switcher with quiz + cards + match for a block with 3+ items and unique answers', () => {
     render(<QuizBlockPractice lang="es" block={THREE_SLOT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
     expect(screen.getByTestId('quiz-game-mode-quiz')).toBeTruthy();
     expect(screen.getByTestId('quiz-game-mode-cards')).toBeTruthy();
+    expect(screen.getByTestId('quiz-game-mode-match')).toBeTruthy();
+  });
+
+  it('withholds match from a two-item block, keeping quiz + cards', () => {
+    const TWO_SLOT_BLOCK: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'x ___', input: 'text', answer: ['a'] },
+          { id: 's2', label: 'y ___', input: 'text', answer: ['b'] },
+        ],
+      },
+    };
+    render(<QuizBlockPractice lang="es" block={TWO_SLOT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('quiz-game-mode-cards')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-game-mode-match')).toBeNull();
   });
 
   it('renders the quiz slots by default', () => {
@@ -239,6 +257,22 @@ describe('QuizBlockPractice — game modes (D1)', () => {
       />,
     );
     expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('renders Parejas when mode="match"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="match"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
     expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
