@@ -1,11 +1,35 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import type { WorksheetBlock } from '@/lib/activities/blocks';
 
-afterEach(() => cleanup());
+/**
+ * jsdom has NO real `PointerEvent` constructor, so `fireEvent.pointerDown/Move/Up`
+ * silently drop `clientX`/`clientY`/`button` — same guard/precedent as
+ * `WorksheetZoneEditor.test.tsx`'s own `firePointer` helper. Dispatching a
+ * hand-built native event with those fields assigned directly is the
+ * accurate way to drive a drag in jsdom.
+ */
+function firePointer(
+  el: Element,
+  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  clientX: number,
+  clientY: number,
+  extra: Record<string, unknown> = {},
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, { clientX, clientY, pointerId: 1, button: 0, ...extra });
+  act(() => {
+    el.dispatchEvent(event);
+  });
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const BLOCK: WorksheetBlock = {
   id: 'b1',
@@ -15,66 +39,55 @@ const BLOCK: WorksheetBlock = {
   zones: [{ id: 'z1', x: 0.1, y: 0.2, w: 0.3, h: 0.1, kind: 'text', answers: ['sat'] }],
 };
 
+/** A 1000x500 viewport for every rect this suite reads — fit at that size is exactly 1.25x (both axes). */
+function mockViewportRect() {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    width: 1000,
+    height: 500,
+    top: 0,
+    left: 0,
+    right: 1000,
+    bottom: 500,
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  });
+}
+
+function content(): HTMLElement {
+  return screen.getByTestId('practice-camera-content');
+}
+
+function scaleOf(el: HTMLElement): number {
+  const match = el.style.transform.match(/scale\(([\d.]+)\)/);
+  return match ? Number(match[1]) : NaN;
+}
+
 function renderPlayer(overrides: Partial<Parameters<typeof WorksheetPracticePlayer>[0]> = {}) {
-  return render(
+  const toolbarSlot = document.createElement('div');
+  document.body.appendChild(toolbarSlot);
+  const utils = render(
     <WorksheetPracticePlayer
       lang="es"
       block={BLOCK}
       imageUrl="/img.webp"
       practice={{ values: {}, onChange: () => {} }}
+      toolbarSlot={toolbarSlot}
       {...overrides}
     />,
   );
+  return { ...utils, toolbarSlot };
 }
 
 describe('WorksheetPracticePlayer', () => {
   it('renders the underlying WorksheetPlayer in practice mode (no "not graded" notice)', () => {
+    mockViewportRect();
     renderPlayer();
     expect(screen.getByTestId('worksheet-player').textContent).not.toContain('no corrige');
   });
 
-  it('starts at 100% width ("Ajustar"/Fit)', () => {
-    renderPlayer();
-    expect(screen.getByTestId('practice-zoom-content').style.width).toBe('100%');
-  });
-
-  it('zooms in by one step on click', () => {
-    renderPlayer();
-    fireEvent.click(screen.getByTestId('practice-zoom-in'));
-    expect(screen.getByTestId('practice-zoom-content').style.width).toBe('125%');
-  });
-
-  it('zooms out by one step on click', () => {
-    renderPlayer();
-    fireEvent.click(screen.getByTestId('practice-zoom-out'));
-    expect(screen.getByTestId('practice-zoom-content').style.width).toBe('75%');
-  });
-
-  it('resets to 100% via the Fit button after zooming', () => {
-    renderPlayer();
-    fireEvent.click(screen.getByTestId('practice-zoom-in'));
-    fireEvent.click(screen.getByTestId('practice-zoom-in'));
-    fireEvent.click(screen.getByTestId('practice-zoom-fit'));
-    expect(screen.getByTestId('practice-zoom-content').style.width).toBe('100%');
-  });
-
-  it('never zooms below the 25% floor', () => {
-    renderPlayer();
-    for (let i = 0; i < 10; i += 1) {
-      fireEvent.click(screen.getByTestId('practice-zoom-out'));
-    }
-    expect(screen.getByTestId('practice-zoom-content').style.width).toBe('25%');
-  });
-
-  it('never zooms above the 400% ceiling', () => {
-    renderPlayer();
-    for (let i = 0; i < 20; i += 1) {
-      fireEvent.click(screen.getByTestId('practice-zoom-in'));
-    }
-    expect(screen.getByTestId('practice-zoom-content').style.width).toBe('400%');
-  });
-
   it('forwards value changes to the caller through practice.onChange', () => {
+    mockViewportRect();
     const onChange = vi.fn();
     renderPlayer({ practice: { values: {}, onChange } });
     const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
@@ -83,35 +96,187 @@ describe('WorksheetPracticePlayer', () => {
   });
 
   it('shows grading feedback once practice.results is provided', () => {
+    mockViewportRect();
     renderPlayer({ practice: { values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } } });
     expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
   });
 });
 
+describe('WorksheetPracticePlayer — camera (practice player redesign)', () => {
+  it('starts FIT-scaled to the viewport on mount', () => {
+    mockViewportRect();
+    renderPlayer();
+    // fitZoom(1000x500, 800x400) = min(1000/800, 500/400) = 1.25.
+    expect(scaleOf(content())).toBeCloseTo(1.25);
+  });
+
+  it('renders no zoom toolbar when no toolbarSlot is given yet', () => {
+    mockViewportRect();
+    renderPlayer({ toolbarSlot: null });
+    expect(screen.queryByTestId('practice-zoom-in')).toBeNull();
+  });
+
+  it('portals its zoom controls into the given toolbarSlot', () => {
+    mockViewportRect();
+    const { toolbarSlot } = renderPlayer();
+    expect(toolbarSlot.querySelector('[data-testid="practice-zoom-in"]')).toBeTruthy();
+  });
+
+  it('zooms in by one step on click', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    expect(scaleOf(content())).toBeCloseTo(1.5);
+  });
+
+  it('zooms out by one step on click', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-out'));
+    expect(scaleOf(content())).toBeCloseTo(1.0);
+  });
+
+  it('resets to fit via the Ajustar button after zooming', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    fireEvent.click(screen.getByTestId('practice-zoom-fit'));
+    expect(scaleOf(content())).toBeCloseTo(1.25);
+  });
+
+  it('never zooms below the shared camera floor (10%)', () => {
+    mockViewportRect();
+    renderPlayer();
+    for (let i = 0; i < 20; i += 1) fireEvent.click(screen.getByTestId('practice-zoom-out'));
+    expect(scaleOf(content())).toBeCloseTo(0.1);
+  });
+
+  it('never zooms above the shared camera ceiling (400%)', () => {
+    mockViewportRect();
+    renderPlayer();
+    for (let i = 0; i < 30; i += 1) fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    expect(scaleOf(content())).toBeCloseTo(4);
+  });
+
+  it('zooms via a plain wheel over the canvas, anchored at the pointer', () => {
+    mockViewportRect();
+    renderPlayer();
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    const before = scaleOf(content());
+    const event = new Event('wheel', { bubbles: true, cancelable: true }) as WheelEvent;
+    Object.assign(event, { deltaY: -100, clientX: 500, clientY: 250 });
+    act(() => {
+      viewport.dispatchEvent(event);
+    });
+    expect(scaleOf(content())).toBeGreaterThan(before);
+  });
+
+  it('prevents the default wheel action (the page must not also scroll)', () => {
+    mockViewportRect();
+    renderPlayer();
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    const event = new Event('wheel', { bubbles: true, cancelable: true }) as WheelEvent;
+    Object.assign(event, { deltaY: -100, clientX: 500, clientY: 250 });
+    act(() => {
+      viewport.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+  });
+});
+
+describe('WorksheetPracticePlayer — pan (Mano tool / Space / middle-drag)', () => {
+  it('does not pan a plain left-drag while the Mano tool is off', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in')); // zoom past fit so there is room to pan
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    const before = content().style.transform;
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(viewport, 'pointermove', 400, 200, { button: 0 });
+    firePointer(viewport, 'pointerup', 400, 200, { button: 0 });
+    expect(content().style.transform).toBe(before);
+  });
+
+  it('pans on left-drag once the Mano tool is active', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    fireEvent.click(screen.getByTestId('practice-tool-hand'));
+    expect(screen.getByTestId('practice-tool-hand').getAttribute('aria-pressed')).toBe('true');
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    const before = content().style.transform;
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(viewport, 'pointermove', 400, 200, { button: 0 });
+    firePointer(viewport, 'pointerup', 400, 200, { button: 0 });
+    expect(content().style.transform).not.toBe(before);
+  });
+
+  it('pans on a middle-button drag regardless of tool', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    const before = content().style.transform;
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 1 });
+    firePointer(viewport, 'pointermove', 420, 260, { button: 1 });
+    firePointer(viewport, 'pointerup', 420, 260, { button: 1 });
+    expect(content().style.transform).not.toBe(before);
+  });
+
+  it('pans on left-drag while Space is held, even with the Mano tool off', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    fireEvent.keyDown(viewport, { key: ' ' });
+    const before = content().style.transform;
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(viewport, 'pointermove', 460, 240, { button: 0 });
+    firePointer(viewport, 'pointerup', 460, 240, { button: 0 });
+    expect(content().style.transform).not.toBe(before);
+  });
+
+  it('releases Space on keyup, even if it landed on the window', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-zoom-in'));
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    fireEvent.keyDown(viewport, { key: ' ' });
+    fireEvent.keyUp(window, { key: ' ' });
+    const before = content().style.transform;
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(viewport, 'pointermove', 400, 200, { button: 0 });
+    firePointer(viewport, 'pointerup', 400, 200, { button: 0 });
+    expect(content().style.transform).toBe(before);
+  });
+});
+
 describe('WorksheetPracticePlayer — no layout flash on the server render (mobile layout pass, priority fix)', () => {
-  it('renders BOTH the desktop zoom toolbar and the mobile pinch viewport on the server, gated by CSS `lg:` classes only', () => {
-    // Same "no real matchMedia" shape as a true server render — see
-    // `useIsDesktop.test.ts`'s own "defaults to true" test.
+  it('renders BOTH the desktop camera and the mobile pinch viewport on the server, gated by CSS `lg:` classes only', () => {
     window.matchMedia = undefined as unknown as typeof window.matchMedia;
     const html = renderToStaticMarkup(
       <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
     );
-    // The desktop toolbar+scroll wrapper is hidden by default, shown only at
-    // `lg:` — never visible-by-default DOM/structure for a small screen.
     expect(html).toContain('class="hidden lg:contents"');
-    expect(html).toContain('practice-zoom-content');
-    // The mobile camera viewport's own wrapper is visible by default, hidden
-    // only at `lg:`, and marked `inert` (matches the SSR-safe desktop-first
-    // default `useIsDesktop` documents).
+    expect(html).toContain('practice-camera-viewport');
     expect(html).toMatch(/class="contents lg:hidden" inert(="")?[^>]*>/);
     expect(html).toContain('practice-mobile-viewport');
   });
 
-  it('does not mark the desktop toolbar `inert` on the server', () => {
+  it('does not mark the desktop camera `inert` on the server', () => {
     window.matchMedia = undefined as unknown as typeof window.matchMedia;
     const html = renderToStaticMarkup(
       <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
     );
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);
+  });
+
+  it('never renders a zoom toolbar on the server (no toolbarSlot to portal into yet)', () => {
+    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    const html = renderToStaticMarkup(
+      <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
+    );
+    expect(html).not.toContain('practice-zoom-in');
   });
 });
