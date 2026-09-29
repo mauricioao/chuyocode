@@ -56,6 +56,16 @@ if (!activity) {
 }
 
 const t = UI_LABELS[lang].activities.editor;
+
+// "Duplicar y adaptar" credit line (D7) — `null` for an ordinary activity.
+// `href` is `null` once the source is no longer live, same rule as the
+// practice page's own credit line (`[id].astro` under `ingles/actividades`).
+const sourceActivity = activity.source
+  ? {
+      title: activity.source.title,
+      href: activity.source.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null,
+    }
+  : null;
 ---
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} fullHeight>
@@ -90,6 +100,7 @@ const t = UI_LABELS[lang].activities.editor;
       initialBlocks={activity.blocks}
       initialStatus={activity.status}
       initialReviewNote={activity.reviewNote}
+      sourceActivity={sourceActivity}
     />
   </section>
 </BaseLayout>

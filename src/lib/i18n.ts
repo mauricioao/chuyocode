@@ -299,6 +299,12 @@ export const UI_LABELS = {
         statusLive: 'Publicada',
         statusRejected: 'Rechazada',
         reviewNoteLabel: 'Nota del revisor',
+        // "Duplicar y adaptar" credit line (D7): shown in the editor header
+        // when this activity was created from another one, composed at the
+        // call site as `${basedOnPrefix}${originalTitle}${basedOnSuffix}` —
+        // same composition pattern as `practice.heartsLabel`'s own callers.
+        basedOnPrefix: 'Basado en «',
+        basedOnSuffix: '» de la comunidad',
         // Submit-for-review dialog.
         submitForReview: 'Enviar a revisión',
         submitDialogTitle: 'Enviar esta actividad a revisión',
@@ -934,6 +940,8 @@ export const UI_LABELS = {
         statusLive: 'Published',
         statusRejected: 'Rejected',
         reviewNoteLabel: "Reviewer's note",
+        basedOnPrefix: 'Based on "',
+        basedOnSuffix: '" from the community',
         submitForReview: 'Submit for review',
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',

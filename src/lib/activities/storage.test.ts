@@ -49,6 +49,7 @@ import {
   uploadToUploadsBucket,
   countUserUploads,
   copyToImagesBucket,
+  copyToUploadsBucket,
   clearStorageClient,
   MAX_UPLOADS_PER_USER,
   UPLOADS_BUCKET,
@@ -228,5 +229,47 @@ describe('copyToImagesBucket', () => {
   it('returns false when the service-role key is unconfigured', async () => {
     clientState.available = false;
     expect(await copyToImagesBucket(from, to)).toBe(false);
+  });
+});
+
+describe('copyToUploadsBucket', () => {
+  const activityId = 'b2c3d4e5-0000-4000-8000-000000000002';
+  const otherUser = 'c3d4e5f6-0000-4000-8000-000000000003';
+  const newObject = 'a9b8c7d6-0000-4000-8000-0000000000aa';
+  const from = approvedImagePath(activityId, OBJECT);
+  const to = uploadPath(otherUser, newObject);
+
+  it('copies from the images bucket to the uploads bucket, destination-bucket only', async () => {
+    const ok = await copyToUploadsBucket(from, to);
+    expect(ok).toBe(true);
+    expect(fromMock).toHaveBeenCalledWith(IMAGES_BUCKET);
+    expect(fromMock.copy).toHaveBeenCalledWith(`${activityId}/${OBJECT}.webp`, `${otherUser}/${newObject}.webp`, {
+      destinationBucket: UPLOADS_BUCKET,
+    });
+  });
+
+  it('never checks for an existing object at the destination (always a fresh id)', async () => {
+    await copyToUploadsBucket(from, to);
+    expect(fromMock.list).not.toHaveBeenCalled();
+  });
+
+  it('returns false when fromPath is not an images-bucket path', async () => {
+    expect(await copyToUploadsBucket(to, to)).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false when toPath is not an uploads-bucket path', async () => {
+    expect(await copyToUploadsBucket(from, from)).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false when the copy fails', async () => {
+    results.copy = { data: null, error: { message: 'denied' } };
+    expect(await copyToUploadsBucket(from, to)).toBe(false);
+  });
+
+  it('returns false when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await copyToUploadsBucket(from, to)).toBe(false);
   });
 });

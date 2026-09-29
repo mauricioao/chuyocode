@@ -148,12 +148,33 @@ describe('createActivity', () => {
       author_id: AUTHOR_ID,
       title: 'Sin título',
       level: null,
+      source_activity_id: null,
     });
     expect(insertMock).toHaveBeenNthCalledWith(2, {
       activity_id: ACTIVITY_ID,
       blocks: SOME_BLOCKS,
       created_by: AUTHOR_ID,
       status: 'draft',
+    });
+  });
+
+  it('records the source activity id when duplicating ("Duplicar y adaptar" D7)', async () => {
+    const SOURCE_ID = '99999999-9999-9999-9999-999999999999';
+    maybeSingleMock.mockResolvedValueOnce({ data: { id: ACTIVITY_ID }, error: null });
+    awaitResults.push({ error: null });
+
+    await createActivity(AUTHOR_ID, {
+      title: 'Sin título (copia)',
+      level: null,
+      blocks: SOME_BLOCKS,
+      sourceActivityId: SOURCE_ID,
+    });
+
+    expect(insertMock).toHaveBeenNthCalledWith(1, {
+      author_id: AUTHOR_ID,
+      title: 'Sin título (copia)',
+      level: null,
+      source_activity_id: SOURCE_ID,
     });
   });
 
@@ -274,7 +295,50 @@ describe('getActivityForEdit', () => {
       revisionStatus: 'draft',
       status: 'draft',
       reviewNote: null,
+      source: null,
     });
+  });
+
+  it('resolves the source activity for the credit line when source_activity_id is set ("Duplicar y adaptar" D7)', async () => {
+    const SOURCE_ID = '99999999-9999-9999-9999-999999999999';
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: {
+          id: ACTIVITY_ID,
+          title: 'Copia',
+          level: 'B1',
+          status: 'draft',
+          review_note: null,
+          source_activity_id: SOURCE_ID,
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: SOME_BLOCKS, status: 'draft' }, error: null })
+      .mockResolvedValueOnce({ data: { id: SOURCE_ID, title: 'Original', visible: true }, error: null });
+
+    const result = await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);
+    expect(result?.source).toEqual({ id: SOURCE_ID, title: 'Original', visible: true });
+  });
+
+  it('drops the credit line (source: null) when the source lookup fails, without failing the whole read', async () => {
+    const SOURCE_ID = '99999999-9999-9999-9999-999999999999';
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: {
+          id: ACTIVITY_ID,
+          title: 'Copia',
+          level: 'B1',
+          status: 'draft',
+          review_note: null,
+          source_activity_id: SOURCE_ID,
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: 'rev-1', blocks: SOME_BLOCKS, status: 'draft' }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+
+    const result = await getActivityForEdit(ACTIVITY_ID, AUTHOR_ID);
+    expect(result?.source).toBeNull();
   });
 
   it('surfaces the activity status and reviewer note (rejected)', async () => {
@@ -815,7 +879,7 @@ describe('getPublishedActivity', () => {
     maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
     await getPublishedActivity(ACTIVITY_ID);
     expect(selectMock).toHaveBeenCalledWith(
-      'id, title, level, author_id, heart_count, view_total, activity_revisions!activities_published_revision_id_fkey(blocks)',
+      'id, title, level, author_id, heart_count, view_total, source_activity_id, activity_revisions!activities_published_revision_id_fkey(blocks)',
     );
   });
 
@@ -865,7 +929,28 @@ describe('getPublishedActivity', () => {
       authorId: AUTHOR_ID,
       heartCount: 5,
       viewTotal: 42,
+      source: null,
     });
+  });
+
+  it('resolves the source activity for the published credit line when source_activity_id is set ("Duplicar y adaptar" D7)', async () => {
+    const SOURCE_ID = '99999999-9999-9999-9999-999999999999';
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: {
+          id: ACTIVITY_ID,
+          title: 'Copia',
+          level: 'B1',
+          author_id: AUTHOR_ID,
+          activity_revisions: { blocks: SOME_BLOCKS },
+          source_activity_id: SOURCE_ID,
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: SOURCE_ID, title: 'Original', visible: false }, error: null });
+
+    const result = await getPublishedActivity(ACTIVITY_ID);
+    expect(result?.source).toEqual({ id: SOURCE_ID, title: 'Original', visible: false });
   });
 
   it('defaults heartCount and viewTotal to 0 when missing from the row', async () => {

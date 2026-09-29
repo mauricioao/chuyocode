@@ -654,6 +654,28 @@ describe('ActivityEditorIsland — review-state badge', () => {
   });
 });
 
+describe('ActivityEditorIsland — "Duplicar y adaptar" credit line (D7)', () => {
+  it('shows nothing when the activity has no source', () => {
+    renderEditor();
+    expect(screen.queryByTestId('activity-based-on')).toBeNull();
+  });
+
+  it('links to the source when it is still live', () => {
+    renderEditor({ sourceActivity: { title: 'Original', href: '/es/ingles/actividades/orig-1' } });
+    const line = screen.getByTestId('activity-based-on');
+    expect(line.textContent).toContain('Original');
+    const link = line.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('/es/ingles/actividades/orig-1');
+  });
+
+  it('shows the title with no link once the source is no longer live', () => {
+    renderEditor({ sourceActivity: { title: 'Original', href: null } });
+    const line = screen.getByTestId('activity-based-on');
+    expect(line.textContent).toContain('Original');
+    expect(line.querySelector('a')).toBeNull();
+  });
+});
+
 describe('ActivityEditorIsland — submit for review', () => {
   it('opens the submit dialog from the top bar button', () => {
     renderEditor();

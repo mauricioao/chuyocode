@@ -58,6 +58,14 @@ export interface NewActivityInput {
   title: string;
   level: Level | null;
   blocks: Block[];
+  /**
+   * `activities.source_activity_id` (0016 migration, "Duplicar y adaptar"
+   * D7): the activity this one was duplicated from, or `undefined`/`null`
+   * for an ordinary brand-new activity. Never trusted from client input —
+   * only `duplicateActivity` (`@lib/activities/duplicate`) ever passes it,
+   * after loading the source itself via {@link getPublishedActivity}.
+   */
+  sourceActivityId?: string | null;
 }
 
 /**
@@ -83,7 +91,12 @@ export async function createActivity(
   try {
     const { data, error } = await client
       .from(ACTIVITIES_TABLE)
-      .insert({ author_id: authorId, title: input.title, level: input.level })
+      .insert({
+        author_id: authorId,
+        title: input.title,
+        level: input.level,
+        source_activity_id: input.sourceActivityId ?? null,
+      })
       .select('id')
       .maybeSingle();
 
@@ -115,6 +128,51 @@ export async function createActivity(
   }
 }
 
+/**
+ * The activity a duplicate was copied from ("Duplicar y adaptar" D7), as the
+ * editor/practice page's own credit line ("Basado en «…»") needs it — just
+ * enough to render a title and, only while the source is STILL live, a link
+ * to it. `visible` decides that link: a source later unpublished or removed
+ * still shows its title (the credit line stays honest about where the
+ * content came from) but stops being clickable.
+ */
+export interface ActivitySource {
+  id: string;
+  title: string;
+  visible: boolean;
+}
+
+/**
+ * Fetch a duplicate's source activity for the credit line, or `null` when
+ * `sourceActivityId` is `null` or the row could not be read (FAIL-SAFE, same
+ * posture as every other read here — a broken lookup drops the credit line
+ * rather than failing the whole page).
+ */
+async function loadSource(client: SupabaseClient, sourceActivityId: string | null): Promise<ActivitySource | null> {
+  if (!sourceActivityId) return null;
+
+  try {
+    const { data, error } = await client
+      .from(ACTIVITIES_TABLE)
+      .select('id, title, visible')
+      .eq('id', sourceActivityId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[activities] loadSource failed:', error.message);
+      return null;
+    }
+    if (!data) return null;
+
+    const row = data as unknown as Record<string, unknown>;
+    if (typeof row.id !== 'string' || typeof row.title !== 'string') return null;
+    return { id: row.id, title: row.title, visible: row.visible === true };
+  } catch (err) {
+    console.error('[activities] loadSource threw:', err);
+    return null;
+  }
+}
+
 /** One activity + its latest revision, as the editor needs them. */
 export interface EditableActivity {
   id: string;
@@ -128,6 +186,8 @@ export interface EditableActivity {
   status: string;
   /** `activities.review_note` — shown alongside the badge when `status === 'rejected'`. */
   reviewNote: string | null;
+  /** The activity this one was duplicated from ("Duplicar y adaptar" D7), or `null` for an ordinary activity. */
+  source: ActivitySource | null;
 }
 
 /**
@@ -147,7 +207,7 @@ export async function getActivityForEdit(
   try {
     const { data: activityData, error: activityError } = await client
       .from(ACTIVITIES_TABLE)
-      .select('id, title, level, status, review_note')
+      .select('id, title, level, status, review_note, source_activity_id')
       .eq('id', id)
       .eq('author_id', authorId)
       .neq('status', REMOVED_STATUS)
@@ -192,6 +252,9 @@ export async function getActivityForEdit(
       return null;
     }
 
+    const sourceActivityId = typeof activityRow.source_activity_id === 'string' ? activityRow.source_activity_id : null;
+    const source = await loadSource(client, sourceActivityId);
+
     return {
       id,
       title: activityRow.title,
@@ -201,6 +264,7 @@ export async function getActivityForEdit(
       revisionStatus: revisionRow.status,
       status: activityRow.status,
       reviewNote: typeof activityRow.review_note === 'string' ? activityRow.review_note : null,
+      source,
     };
   } catch (err) {
     console.error('[activities] getActivityForEdit threw:', err);
@@ -575,6 +639,8 @@ export interface PublishedActivity {
   heartCount: number;
   /** Denormalized "vistas" counter (`0014_activity_discovery.sql`). */
   viewTotal: number;
+  /** The activity this one was duplicated from ("Duplicar y adaptar" D7), or `null` for an ordinary activity. */
+  source: ActivitySource | null;
 }
 
 /**
@@ -604,7 +670,7 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
     const { data, error } = await client
       .from(ACTIVITIES_TABLE)
       .select(
-        'id, title, level, author_id, heart_count, view_total, activity_revisions!activities_published_revision_id_fkey(blocks)',
+        'id, title, level, author_id, heart_count, view_total, source_activity_id, activity_revisions!activities_published_revision_id_fkey(blocks)',
       )
       .eq('id', id)
       .eq('visible', true)
@@ -633,6 +699,9 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
       return null;
     }
 
+    const sourceActivityId = typeof row.source_activity_id === 'string' ? row.source_activity_id : null;
+    const source = await loadSource(client, sourceActivityId);
+
     return {
       id,
       title: row.title,
@@ -641,6 +710,7 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
       authorId: row.author_id,
       heartCount: typeof row.heart_count === 'number' ? row.heart_count : 0,
       viewTotal: typeof row.view_total === 'number' ? row.view_total : 0,
+      source,
     };
   } catch (err) {
     console.error('[activities] getPublishedActivity threw:', err);
