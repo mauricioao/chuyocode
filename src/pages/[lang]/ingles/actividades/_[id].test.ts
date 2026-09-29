@@ -109,6 +109,32 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     expect(html).toContain('href="/es/ingles/actividades"');
   });
 
+  it('renders one framed card (practice player redesign — fullHeight layout, no page-level scroll at lg)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="practice-card"');
+    // `fullHeight` (BaseLayout's own prop) is what turns off page scroll at `lg:`.
+    expect(html).toContain('lg:h-dvh');
+  });
+
+  it('keeps the level text inside the same header row as the back button and title', async () => {
+    activityResult.value = { id: 'abc', title: 'Present simple', level: 'A2', blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    const html = await res.text();
+    const cardStart = html.indexOf('data-testid="practice-card"');
+    const backButton = html.indexOf('data-back-button', cardStart);
+    const title = html.indexOf('Present simple', backButton);
+    const level = html.indexOf('A2', title);
+    expect(backButton).toBeGreaterThan(cardStart);
+    expect(title).toBeGreaterThan(backButton);
+    expect(level).toBeGreaterThan(title);
+  });
+
   it('renders a quiz block through the real quiz practice renderer', async () => {
     activityResult.value = {
       id: 'abc',

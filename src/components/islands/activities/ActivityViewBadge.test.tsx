@@ -29,7 +29,7 @@ describe('ActivityViewBadge', () => {
     );
     render(<ActivityViewBadge lang="es" activityId="act-1" />);
     await waitFor(() => expect(screen.getByTestId('activity-view-badge')).toBeTruthy());
-    expect(screen.getByTestId('activity-view-badge').textContent).toBe('Primera vez');
+    expect(screen.getByTestId('activity-view-badge').textContent).toBe('· Primera vez');
   });
 
   it('shows "Ya lo viste · N veces" for a returning view', async () => {
@@ -39,7 +39,7 @@ describe('ActivityViewBadge', () => {
     );
     render(<ActivityViewBadge lang="es" activityId="act-1" />);
     await waitFor(() => expect(screen.getByTestId('activity-view-badge')).toBeTruthy());
-    expect(screen.getByTestId('activity-view-badge').textContent).toBe('Ya lo viste · 4 veces');
+    expect(screen.getByTestId('activity-view-badge').textContent).toBe('· Ya lo viste · 4 veces');
   });
 
   it('renders nothing when the request fails', async () => {
