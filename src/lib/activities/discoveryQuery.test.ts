@@ -4,6 +4,7 @@ import {
   isBlockTypeFilter,
   normalizeSearchQuery,
   escapeIlikePattern,
+  normalizeAccents,
   buildTitleIlikePattern,
   SEARCH_QUERY_MAX_LENGTH,
 } from './discoveryQuery';
@@ -87,6 +88,25 @@ describe('escapeIlikePattern', () => {
   });
 });
 
+describe('normalizeAccents', () => {
+  it('strips acute accents', () => {
+    expect(normalizeAccents('canción')).toBe('cancion');
+    expect(normalizeAccents('inglés técnico')).toBe('ingles tecnico');
+  });
+
+  it('folds ñ to n (NFD decomposes it to n + combining tilde)', () => {
+    expect(normalizeAccents('año')).toBe('ano');
+  });
+
+  it('leaves plain ASCII untouched', () => {
+    expect(normalizeAccents('present simple')).toBe('present simple');
+  });
+
+  it('handles every Spanish vowel accent', () => {
+    expect(normalizeAccents('áéíóú')).toBe('aeiou');
+  });
+});
+
 describe('buildTitleIlikePattern', () => {
   it('wraps the escaped query in wildcards', () => {
     expect(buildTitleIlikePattern('present')).toBe('%present%');
@@ -94,5 +114,18 @@ describe('buildTitleIlikePattern', () => {
 
   it('escapes special characters before wrapping', () => {
     expect(buildTitleIlikePattern('50%_off')).toBe('%50\\%\\_off%');
+  });
+
+  it('lowercases the query', () => {
+    expect(buildTitleIlikePattern('PRESENT Simple')).toBe('%present simple%');
+  });
+
+  it('strips accents, so "cancion" and "canción" build the same pattern', () => {
+    expect(buildTitleIlikePattern('canción')).toBe('%cancion%');
+    expect(buildTitleIlikePattern('cancion')).toBe('%cancion%');
+  });
+
+  it('folds case AND accents together', () => {
+    expect(buildTitleIlikePattern('CANCIÓN')).toBe('%cancion%');
   });
 });

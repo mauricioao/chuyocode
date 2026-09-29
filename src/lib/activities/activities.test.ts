@@ -546,10 +546,16 @@ describe('getPublishedActivities', () => {
     expect(containsMock).not.toHaveBeenCalled();
   });
 
-  it('searches by title via ilike with an escaped, wrapped pattern', async () => {
+  it('searches by title_search via ilike with a lowercased, escaped, wrapped pattern', async () => {
     awaitResults.push({ data: [], error: null, count: 0 });
-    await getPublishedActivities({ level: null, page: 1, q: '50%_off' });
-    expect(ilikeMock).toHaveBeenCalledWith('title', '%50\\%\\_off%');
+    await getPublishedActivities({ level: null, page: 1, q: '50%_OFF' });
+    expect(ilikeMock).toHaveBeenCalledWith('title_search', '%50\\%\\_off%');
+  });
+
+  it('folds accents in the search query, matching the title_search generated column', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, q: 'Canción' });
+    expect(ilikeMock).toHaveBeenCalledWith('title_search', '%cancion%');
   });
 
   it('ignores a blank q', async () => {
