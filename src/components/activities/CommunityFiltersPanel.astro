@@ -1,0 +1,327 @@
+---
+/**
+ * CommunityFiltersPanel — the funnel trigger + compact filters panel for
+ * `/[lang]/ingles/actividades` (unified search header pass). Sits in
+ * `PageTitle`'s `actions` slot right next to `SearchFilter` (server mode),
+ * same visual weight/size as its magnifier (36x36, round, amber).
+ *
+ * DELIBERATELY NOT a React island: the panel (level/type/sort selects, the
+ * "no las he visto" toggle, Aplicar/Limpiar) is a plain `method="get"` form —
+ * every field already works with scripting off. The open/close affordance
+ * itself is a native `<details>`/`<summary>` (zero JS to toggle, native
+ * expanded/collapsed semantics for AT for free), styled with CSS to read as
+ * an anchored popover at `lg:` and a bottom sheet below it — no
+ * `BottomSheet`/Radix `Popover` needed for a disclosure this simple, so no
+ * hydration cost. A tiny enhancement script (outside-click / Escape to
+ * close) is pure progressive icing, never required for the form to work.
+ *
+ * "Aplicar" submits this form's own fields plus a preserved `q` (hidden,
+ * from `query`) so applying filters never drops an active search. "Limpiar"
+ * is a plain `<a href={clearHref}>` — computed by the caller, same pattern
+ * as `SearchFilter`'s own clear link — that keeps `q` and drops the rest, no
+ * JS required either.
+ */
+import type { Lang } from '@lib/i18n';
+
+interface SelectOption {
+  value: string;
+  label: string;
+  selected: boolean;
+}
+
+interface Props {
+  lang: Lang;
+  action: string;
+  /** Accessible label AND title/tooltip for the trigger ("Filtros"/"Filters"). */
+  triggerLabel: string;
+  /** Number of active filters among nivel/tipo/orden!=default/novistas. */
+  activeCount: number;
+  applyLabel: string;
+  clearLabel: string;
+  clearHref: string;
+  levelSelectLabel: string;
+  levelOptions: SelectOption[];
+  typeSelectLabel: string;
+  typeOptions: SelectOption[];
+  sortSelectLabel: string;
+  sortOptions: SelectOption[];
+  showNovistas: boolean;
+  novistasChecked: boolean;
+  novistasLabel: string;
+  /** Preserved as a hidden `q` input so applying filters never drops the active search. */
+  query: string;
+  class?: string;
+}
+
+const {
+  action,
+  triggerLabel,
+  activeCount,
+  applyLabel,
+  clearLabel,
+  clearHref,
+  levelSelectLabel,
+  levelOptions,
+  typeSelectLabel,
+  typeOptions,
+  sortSelectLabel,
+  sortOptions,
+  showNovistas,
+  novistasChecked,
+  novistasLabel,
+  query,
+  class: className,
+} = Astro.props;
+---
+
+<details class:list={['filters-popover', className]} data-testid="filters-popover">
+  <summary
+    class="filters-trigger"
+    aria-label={activeCount > 0 ? `${triggerLabel} (${activeCount})` : triggerLabel}
+    title={triggerLabel}
+    data-testid="filters-trigger"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true" class="filters-trigger-icon">
+      <path
+        d="M3 4h18l-7 8.5V19l-4 2v-8.5L3 4Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+    {
+      activeCount > 0 && (
+        <span class="filters-badge" data-testid="filters-badge">
+          {activeCount}
+        </span>
+      )
+    }
+  </summary>
+
+  <form method="get" action={action} class="filters-panel">
+    <input type="hidden" name="q" value={query} />
+
+    <label class="filters-field">
+      <span>{levelSelectLabel}</span>
+      <select name="nivel">
+        {levelOptions.map((opt) => (
+          <option value={opt.value} selected={opt.selected}>{opt.label}</option>
+        ))}
+      </select>
+    </label>
+
+    <label class="filters-field">
+      <span>{typeSelectLabel}</span>
+      <select name="tipo">
+        {typeOptions.map((opt) => (
+          <option value={opt.value} selected={opt.selected}>{opt.label}</option>
+        ))}
+      </select>
+    </label>
+
+    <label class="filters-field">
+      <span>{sortSelectLabel}</span>
+      <select name="orden">
+        {sortOptions.map((opt) => (
+          <option value={opt.value} selected={opt.selected}>{opt.label}</option>
+        ))}
+      </select>
+    </label>
+
+    {
+      showNovistas && (
+        <label class="filters-checkbox">
+          <input type="checkbox" name="novistas" value="1" checked={novistasChecked} />
+          {novistasLabel}
+        </label>
+      )
+    }
+
+    <div class="filters-actions">
+      <a href={clearHref} class="filters-clear" data-testid="filters-clear">{clearLabel}</a>
+      <button type="submit" class="filters-apply" data-testid="filters-apply">{applyLabel}</button>
+    </div>
+  </form>
+</details>
+
+<style>
+  .filters-popover {
+    position: relative;
+    display: inline-flex;
+  }
+  .filters-popover > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .filters-popover > summary::-webkit-details-marker {
+    display: none;
+  }
+  .filters-popover > summary::marker {
+    content: '';
+  }
+
+  .filters-trigger {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: none;
+    border: none;
+    color: var(--color-accent, #facc15);
+  }
+  .filters-trigger:focus-visible {
+    outline: 2px solid var(--color-accent, #facc15);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+  .filters-trigger-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .filters-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--color-accent, #facc15);
+    color: var(--color-surface, #000);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  /* Anchored, right-aligned popover at `lg:` — the `<details>`'s own native
+     open/close already shows/hides this, no extra CSS needed for that part. */
+  .filters-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 30;
+    display: flex;
+    width: 17.5rem;
+    max-height: 70dvh;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-soft);
+    padding: 1rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Below `lg:`, the same panel becomes a bottom sheet instead of an anchored
+     dropdown — a fixed slab pinned to the viewport bottom, full width. */
+  @media (max-width: 1023px) {
+    .filters-panel {
+      position: fixed;
+      inset-inline: 0;
+      top: auto;
+      right: auto;
+      bottom: 0;
+      z-index: 50;
+      width: auto;
+      max-height: 80dvh;
+      border-radius: 1rem 1rem 0 0;
+      padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  .filters-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--color-zinc-300, #d4d4d8);
+  }
+  .filters-field select {
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface, #000);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-zinc-100, #f4f4f5);
+  }
+
+  .filters-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--color-zinc-300, #d4d4d8);
+  }
+  .filters-checkbox input {
+    height: 1rem;
+    width: 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border);
+    accent-color: var(--color-accent, #facc15);
+  }
+
+  .filters-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-top: 0.25rem;
+  }
+  .filters-clear {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-zinc-300, #d4d4d8);
+    text-decoration: none;
+  }
+  .filters-clear:hover,
+  .filters-clear:focus-visible {
+    color: var(--color-accent, #facc15);
+  }
+  .filters-apply {
+    border-radius: 0.5rem;
+    background: var(--color-accent, #facc15);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-surface, #000);
+    border: none;
+    cursor: pointer;
+  }
+  .filters-apply:hover {
+    background: var(--color-accent-hover, #eab308);
+  }
+</style>
+
+<script>
+  // Purely additive polish: close the panel on an outside click or Escape.
+  // The <details>/<summary> disclosure already works fully without this.
+  function initFiltersPopovers(): void {
+    document.querySelectorAll<HTMLDetailsElement>('.filters-popover').forEach((el) => {
+      if (el.dataset.chuWired === '1') return;
+      el.dataset.chuWired = '1';
+
+      document.addEventListener('click', (e: MouseEvent) => {
+        if (!el.open) return;
+        if (el.contains(e.target as Node)) return;
+        el.open = false;
+      });
+
+      el.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key !== 'Escape' || !el.open) return;
+        el.open = false;
+        el.querySelector('summary')?.focus();
+      });
+    });
+  }
+
+  initFiltersPopovers();
+  document.addEventListener('astro:page-load', initFiltersPopovers);
+  document.addEventListener('DOMContentLoaded', initFiltersPopovers);
+</script>

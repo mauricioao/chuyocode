@@ -14,12 +14,22 @@
  * is therefore expected non-null (checked defensively anyway, same posture
  * as `[id].astro`'s own `canReport`/`canHeart`).
  *
- * ALL FILTERS LIVE IN THE URL, as one GET form (search, level, type, sort,
- * "no las he visto") plus plain links (pagination, "Limpiar filtros") — the
- * whole page works with scripting off, stays deep-linkable, and survives a
- * back-button press. The actual query building (search escaping, sort
- * columns, the `novistas` exclusion) lives in `getPublishedActivities`
- * (`@lib/activities/activities`) and `discoveryQuery.ts`, never here.
+ * UNIFIED SEARCH HEADER (community-search-unify pass): search now sits in
+ * `PageTitle`'s `actions` slot, same spot/visual weight as Libros/Noticias'
+ * own `SearchFilter` — the community list is a bigger, gated catalog with
+ * MORE facets (level/type/sort/"no las he visto"), so it also gets a compact
+ * `CommunityFiltersPanel` (funnel button + popover/sheet) right next to it,
+ * instead of the old always-visible filter bar. ALL FILTERS STILL LIVE IN
+ * THE URL, as plain GET forms plus plain links (pagination, chips, "Limpiar
+ * filtros") — the whole page still works with scripting off, stays
+ * deep-linkable, and survives a back-button press. The actual query building
+ * (search escaping, sort columns, the `novistas` exclusion) lives in
+ * `getPublishedActivities` (`@lib/activities/activities`) and
+ * `discoveryQuery.ts`, never here.
+ *
+ * Active filters (nivel/tipo/orden!=default/novistas) are visible without
+ * opening the panel: a row of small removable chips under the title, each a
+ * plain link dropping just that one param.
  *
  * "Actividad del día": only on page 1 with NO filters active, a highlighted
  * card picked deterministically for the calendar day
@@ -29,8 +39,9 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import ActivityCard from '@components/ui/ActivityCard.astro';
+import SearchFilter from '@components/ui/SearchFilter.astro';
+import CommunityFiltersPanel from '@components/activities/CommunityFiltersPanel.astro';
 import { buttonVariants } from '@components/ui/button';
-import { MagnifyingGlassIcon } from '@phosphor-icons/react/dist/ssr/MagnifyingGlass';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { LEVELS, isLevel } from '@lib/exerciseTaxonomy';
 import { getPublishedActivities, ACTIVITIES_PAGE_SIZE, type PublishedActivityCard } from '@lib/activities/activities';
@@ -98,6 +109,8 @@ if (showDailyPick) {
   dailyPick = pickDailyActivity(candidates.activities, new Date());
 }
 
+const basePath = `/${lang}/ingles/actividades`;
+
 /** Build `/[lang]/ingles/actividades` with the CURRENT filters plus `overrides`, omitting any param at its default. */
 function buildHref(overrides: { page?: number } = {}): string {
   const params = new URLSearchParams();
@@ -109,8 +122,37 @@ function buildHref(overrides: { page?: number } = {}): string {
   const page = overrides.page ?? currentPage;
   if (page > 1) params.set('page', String(page));
   const qs = params.toString();
-  return `/${lang}/ingles/actividades${qs ? `?${qs}` : ''}`;
+  return `${basePath}${qs ? `?${qs}` : ''}`;
 }
+
+/** nivel/tipo/orden(!=default)/novistas only — never q, never page. Shared by
+ * SearchFilter's `preserve` prop, the filters panel's active count, and the
+ * chip row's "drop just this one" hrefs. */
+const activeFilterParams: Record<string, string> = {};
+if (activeLevel) activeFilterParams.nivel = activeLevel;
+if (activeTipo) activeFilterParams.tipo = activeTipo;
+if (orden !== 'recientes') activeFilterParams.orden = orden;
+if (novistas) activeFilterParams.novistas = '1';
+
+/** `basePath` with the current `q` plus every active filter EXCEPT `omit` — one chip's own "remove me" link. */
+function hrefWithoutFilter(omit: keyof typeof activeFilterParams): string {
+  const params = new URLSearchParams();
+  if (activeQuery) params.set('q', activeQuery);
+  for (const [key, value] of Object.entries(activeFilterParams)) {
+    if (key === omit) continue;
+    params.set(key, value);
+  }
+  const qs = params.toString();
+  return `${basePath}${qs ? `?${qs}` : ''}`;
+}
+
+// The panel's own "Limpiar": keeps `q`, drops every filter — plain link, no JS.
+const panelClearHref = (() => {
+  const params = new URLSearchParams();
+  if (activeQuery) params.set('q', activeQuery);
+  const qs = params.toString();
+  return `${basePath}${qs ? `?${qs}` : ''}`;
+})();
 
 const TYPE_OPTIONS: Array<{ value: BlockTypeFilter | ''; label: string }> = [
   { value: '', label: t.typeAll },
@@ -118,129 +160,109 @@ const TYPE_OPTIONS: Array<{ value: BlockTypeFilter | ''; label: string }> = [
   { value: 'quiz', label: t.typeQuiz },
 ];
 
-function chipLabelClass(active: boolean): string {
-  return [
-    'cursor-pointer rounded-full border px-3 py-1.5 text-sm transition-colors',
-    active
-      ? 'border-accent bg-accent font-semibold text-background'
-      : 'border-border bg-background text-zinc-300 hover:border-accent hover:text-accent',
-  ].join(' ');
+const levelOptions = [
+  { value: '', label: t.allLevels, selected: activeLevel === null },
+  ...LEVELS.map((lvl) => ({
+    value: lvl,
+    label: `${lvl} · ${levelLabels[lvl]}`,
+    selected: activeLevel === lvl,
+  })),
+];
+
+const typeOptions = TYPE_OPTIONS.map((opt) => ({
+  value: opt.value,
+  label: opt.label,
+  selected: activeTipo === (opt.value || null),
+}));
+
+const sortOptions = [
+  { value: 'recientes', label: t.sortRecientes, selected: orden === 'recientes' },
+  { value: 'gustadas', label: t.sortGustadas, selected: orden === 'gustadas' },
+  { value: 'vistas', label: t.sortVistas, selected: orden === 'vistas' },
+];
+
+/** One removable chip per active filter, in a fixed order. */
+const chips: Array<{ key: keyof typeof activeFilterParams; label: string; href: string }> = [];
+if (activeLevel) chips.push({ key: 'nivel', label: activeLevel, href: hrefWithoutFilter('nivel') });
+if (activeTipo) {
+  chips.push({
+    key: 'tipo',
+    label: activeTipo === 'worksheet' ? t.typeWorksheet : t.typeQuiz,
+    href: hrefWithoutFilter('tipo'),
+  });
 }
+if (orden !== 'recientes') {
+  chips.push({
+    key: 'orden',
+    label: orden === 'gustadas' ? t.sortGustadas : t.sortVistas,
+    href: hrefWithoutFilter('orden'),
+  });
+}
+if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWithoutFilter('novistas') });
 ---
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
   <section class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
-      <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.heading}</PageTitle>
-    </header>
-
-    <form method="get" action={`/${lang}/ingles/actividades`} class="flex flex-col gap-4 rounded-lg border border-border bg-surface-soft p-4">
-      {/* Search stays always visible, at every width — it is the primary
-          way to narrow a long feed, unlike the rest below. */}
-      <label class="flex flex-1 min-w-48 flex-col gap-1 text-sm text-zinc-300">
-        <span class="sr-only">{t.searchLabel}</span>
-        <span class="relative">
-          <MagnifyingGlassIcon aria-hidden="true" size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500" />
-          <input
-            type="search"
-            name="q"
-            value={activeQuery ?? ''}
-            placeholder={t.searchPlaceholder}
-            aria-label={t.searchLabel}
-            maxlength="80"
-            class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:border-accent focus-visible:outline-none"
-          />
-        </span>
-      </label>
-
-      {/* Mobile layout pass: level/sort/type/"no las he visto"/submit
-          collapse into a "Filtros" disclosure below `lg:` — a native
-          `<details>`, zero JavaScript (this page's own "works with
-          scripting off" rule, file header), so there is exactly ONE set of
-          these named form fields in the DOM at every width rather than a
-          duplicate that would double-submit them. `open` by default when a
-          filter is already active (so a visitor who followed a filtered
-          link sees what's filtering the feed, not a mystery collapsed
-          panel) — see the scoped `<style>` below for how `lg:` forces it
-          permanently open/unwrapped regardless of this attribute. */}
-      <details open={anyFilterActive} class="filters-details rounded-lg border border-border bg-background lg:border-0 lg:bg-transparent">
-        <summary class="filters-summary cursor-pointer select-none rounded-lg px-3 py-2 text-sm font-medium text-zinc-100 marker:text-accent lg:hidden">
-          {t.filtersToggle}
-        </summary>
-        <div class="filters-body flex flex-col gap-4 border-t border-border p-3 lg:border-0 lg:p-0">
-          <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
-            <label class="flex flex-col gap-1 text-sm text-zinc-300">
-              <span>{t.levelLabel}</span>
-              <select
-                name="nivel"
-                class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
-              >
-                <option value="" selected={activeLevel === null}>{t.allLevels}</option>
-                {LEVELS.map((lvl) => (
-                  <option value={lvl} selected={activeLevel === lvl}>{`${lvl} · ${levelLabels[lvl]}`}</option>
-                ))}
-              </select>
-            </label>
-
-            <label class="flex flex-col gap-1 text-sm text-zinc-300">
-              <span>{t.sortLabel}</span>
-              <select
-                name="orden"
-                class="rounded-lg border border-border bg-background px-3 py-2 text-sm text-zinc-100 focus-visible:border-accent focus-visible:outline-none"
-              >
-                <option value="recientes" selected={orden === 'recientes'}>{t.sortRecientes}</option>
-                <option value="gustadas" selected={orden === 'gustadas'}>{t.sortGustadas}</option>
-                <option value="vistas" selected={orden === 'vistas'}>{t.sortVistas}</option>
-              </select>
-            </label>
-
-            <button type="submit" class={buttonVariants({ variant: 'default' })}>{t.filterSubmit}</button>
+      <PageTitle lang={lang} backHref={`/${lang}/ingles`}>
+        {t.heading}
+        <Fragment slot="actions">
+          <div class="flex items-center gap-1">
+            <SearchFilter
+              mode="server"
+              action={basePath}
+              value={activeQuery ?? ''}
+              label={t.searchLabel}
+              preserve={activeFilterParams}
+            />
+            <CommunityFiltersPanel
+              lang={lang}
+              action={basePath}
+              triggerLabel={t.filtersToggle}
+              activeCount={chips.length}
+              applyLabel={t.applyFilters}
+              clearLabel={t.panelClear}
+              clearHref={panelClearHref}
+              levelSelectLabel={t.levelLabel}
+              levelOptions={levelOptions}
+              typeSelectLabel={t.typeLabel}
+              typeOptions={typeOptions}
+              sortSelectLabel={t.sortLabel}
+              sortOptions={sortOptions}
+              showNovistas={viewerId !== null}
+              novistasChecked={novistas}
+              novistasLabel={t.novistasLabel}
+              query={activeQuery ?? ''}
+            />
           </div>
+        </Fragment>
+      </PageTitle>
 
-          <div class="flex flex-wrap items-center gap-4">
-            <fieldset class="flex flex-wrap gap-2">
-              <legend class="sr-only">{t.typeLabel}</legend>
-              {
-                TYPE_OPTIONS.map((opt) => (
-                  <label class={chipLabelClass(activeTipo === (opt.value || null))}>
-                    <input type="radio" name="tipo" value={opt.value} checked={activeTipo === (opt.value || null)} class="sr-only" />
-                    {opt.label}
-                  </label>
-                ))
-              }
-            </fieldset>
-
-            <label class="flex items-center gap-2 text-sm text-zinc-300">
-              <input type="checkbox" name="novistas" value="1" checked={novistas} class="h-4 w-4 rounded border-border accent-accent" />
-              {t.novistasLabel}
-            </label>
-          </div>
-        </div>
-      </details>
-    </form>
-
-    <style>
-      /* Below `lg:`, `filters-body` follows the native `<details>` `open`
-         state as usual (collapsed unless toggled/pre-opened). At `lg:` it
-         is ALWAYS shown and the `<summary>` toggle is hidden (`lg:hidden`
-         above) — this override is what makes that true even while the
-         attribute itself is absent (a visitor who loaded the page on a
-         phone with no active filter, then widened the window/rotated a
-         tablet, must still see every filter at `lg:`, not a collapsed
-         panel with no way to reach it once its own toggle is hidden). */
-      @media (min-width: 1024px) {
-        .filters-body {
-          display: flex !important;
-        }
+      {
+        chips.length > 0 && (
+          <ul class="flex flex-wrap gap-2" data-testid="active-filter-chips">
+            {chips.map((chip) => (
+              <li>
+                <a
+                  href={chip.href}
+                  data-testid={`filter-chip-${chip.key}`}
+                  class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-zinc-300 hover:border-accent hover:text-accent"
+                >
+                  {chip.label} <span aria-hidden="true">&times;</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
       }
-    </style>
+    </header>
 
     {
       activities.length === 0 && !(showDailyPick && dailyPick) ? (
         <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
           <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
           {anyFilterActive && (
-            <a href={`/${lang}/ingles/actividades`} class="text-sm font-medium text-accent hover:underline">
+            <a href={basePath} class="text-sm font-medium text-accent hover:underline">
               {t.clearFilters}
             </a>
           )}
