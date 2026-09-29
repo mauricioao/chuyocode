@@ -167,11 +167,11 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
              2. this level has no language points yet, but other levels do
              3. handled by the listing route: a real pair with nothing in it */
         totalPublished === 0 ? (
-          <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+          <p class="rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
             {t.section.empty}
           </p>
         ) : focuses.length === 0 ? (
-          <p class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300">
+          <p class="rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
             {t.section.emptyLevel}
           </p>
         ) : (
@@ -186,7 +186,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
               id="focuses-no-results"
               hidden
               aria-live="polite"
-              class="rounded-lg border border-border bg-base-soft p-6 text-zinc-300"
+              class="rounded-lg border border-border bg-surface-soft p-6 text-zinc-300"
             >
               {t.section.focusesNoResults}
             </p>
@@ -204,7 +204,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
                 >
                   <a
                     href={`/${lang}/ingles/${activeLevel}/${entry.focus}`}
-                    class="flex h-full flex-col gap-2 rounded-lg border border-border bg-base-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+                    class="flex h-full flex-col gap-2 rounded-lg border border-border bg-surface-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
                   >
                     {/* English in every locale: the focus is exercise data, not
                         chrome (docs/exercise-model.md, "Authoring rules"). */}

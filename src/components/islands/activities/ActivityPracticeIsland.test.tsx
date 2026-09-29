@@ -6,10 +6,6 @@ import type { Block, WorksheetBlock, QuizBlock } from '@/lib/activities/blocks';
 
 afterEach(() => cleanup());
 
-function resolveImageUrl(path: string): string {
-  return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
-}
-
 const WORKSHEET: WorksheetBlock = {
   id: 'w1',
   type: 'worksheet',
@@ -39,7 +35,7 @@ const QUIZ: QuizBlock = {
 };
 
 function renderIsland(blocks: Block[]) {
-  return render(<ActivityPracticeIsland lang="es" blocks={blocks} resolveImageUrl={resolveImageUrl} />);
+  return render(<ActivityPracticeIsland lang="es" blocks={blocks} />);
 }
 
 describe('ActivityPracticeIsland — rendering blocks in order', () => {

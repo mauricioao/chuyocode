@@ -36,6 +36,7 @@ import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
+import { imagePreviewUrl } from '@/lib/activities/paths';
 import {
   initHistory,
   pushHistory,
@@ -77,9 +78,7 @@ interface ActivityDoc {
   blocks: Block[];
 }
 
-function resolveImageUrl(path: string): string {
-  return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
-}
+const resolveImageUrl = imagePreviewUrl;
 
 function isMac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');

@@ -5,7 +5,7 @@
  * utilities (replacing the old `@astrojs/tailwind` injection), and the theme
  * lives in the `@theme` block below instead of `tailwind.config.cjs`. Token
  * NAMES are preserved (base/accent/display/elevation/theme) so every existing
- * `bg-base-*`, `text-accent`, `font-display`, `shadow-elevation-*`, and
+ * `bg-surface-*`, `text-accent`, `font-display`, `shadow-elevation-*`, and
  * `*-theme` call site keeps working unchanged.
  *
  * Then, on top of Tailwind:
@@ -33,9 +33,9 @@
    *   Shadow Grey  #27272A  borders / muted -> base-muted
    *   Platinum     #F4F4F5  light text / foreground
    *   Bright Amber #FACC15  brand accent / primary */
-  --color-base: #000000;
-  --color-base-soft: #18181b;
-  --color-base-muted: #27272a;
+  --color-surface: #000000;
+  --color-surface-soft: #18181b;
+  --color-surface-muted: #27272a;
   --color-platinum: #f4f4f5;
 
   /* Brand accent: Bright Amber. DEFAULT/hover/soft keep the 20+ existing

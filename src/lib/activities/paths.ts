@@ -81,6 +81,16 @@ export function isOwnUploadPath(path: string, userId: string): boolean {
   );
 }
 
+/**
+ * Browser-loadable URL for a stored `image.path`, via the preview endpoint
+ * (which redirects to the public URL or a short-lived signed one). Pure, so
+ * islands compute it themselves — a function can't be passed to a hydrated
+ * island as a prop (see `src/astroIslandProps.test.ts`).
+ */
+export function imagePreviewUrl(path: string): string {
+  return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
+}
+
 /** Is `path` a well-formed path under the public, already-approved images bucket? */
 export function isPublicImagePath(path: string): boolean {
   const parsed = parseImagePath(path);

@@ -300,6 +300,20 @@ describe('GET /[lang]/ingles/actividades — actividad del día', () => {
     expect(html).toContain('Actividad del día');
   });
 
+  it('renders the daily pick as the first card of the grid, not as a separate banner, and does not repeat it', async () => {
+    pageResult.value = { activities: [card({ id: 'daily-1', title: 'La actividad del día' }), card({ id: 'other-1', title: 'Otra' })], total: 2 };
+    dailyCandidatesResult.value = { activities: [card({ id: 'daily-1', title: 'La actividad del día' })], total: 1 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+
+    const grid = html.slice(html.indexOf('<ul class="grid'));
+    const firstItem = grid.slice(0, grid.indexOf('</li>'));
+    expect(firstItem).toContain('Actividad del día');
+    expect(firstItem).toContain('La actividad del día');
+    expect(html.split('La actividad del día').length - 1).toBe(1);
+    expect(html.indexOf('Actividad del día')).toBeGreaterThan(html.indexOf('<ul class="grid'));
+  });
+
   it('fetches candidates sorted by gustadas', async () => {
     dailyCandidatesResult.value = { activities: [card()], total: 1 };
     await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });

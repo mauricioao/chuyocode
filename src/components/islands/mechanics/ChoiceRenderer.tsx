@@ -42,7 +42,7 @@ import type { MechanicRendererProps } from './types';
  * clause-long one sit on the same grid row and must not be two different sizes.
  */
 const TILE =
-  'flex min-h-20 items-center gap-4 rounded-lg border-2 border-border bg-base-soft p-4 transition-colors sm:p-5 ' +
+  'flex min-h-20 items-center gap-4 rounded-lg border-2 border-border bg-surface-soft p-4 transition-colors sm:p-5 ' +
   'has-data-[state=checked]:border-accent has-data-[state=checked]:bg-accent/10 ' +
   'has-[:focus-visible]:border-accent';
 
