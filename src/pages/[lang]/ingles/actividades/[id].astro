@@ -68,10 +68,6 @@ const canHeart = user !== null && user.id !== activity.authorId;
 // own header.
 const hearted = canHeart ? await hasHeartedActivity(activity.id, user!.id) : false;
 
-function resolveImageUrl(path: string): string {
-  return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
-}
-
 function heartsLabel(count: number): string {
   return `${count} ${count === 1 ? t.heartsOne : t.heartsMany}`;
 }
@@ -101,11 +97,6 @@ function heartsLabel(count: number): string {
       <ActivityViewBadge client:load lang={lang} activityId={activity.id} />
     </header>
 
-    <ActivityPracticeIsland
-      client:load
-      lang={lang}
-      blocks={activity.blocks}
-      resolveImageUrl={resolveImageUrl}
-    />
+    <ActivityPracticeIsland client:load lang={lang} blocks={activity.blocks} />
   </section>
 </BaseLayout>

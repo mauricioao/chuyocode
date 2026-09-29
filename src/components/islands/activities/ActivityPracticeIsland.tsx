@@ -26,6 +26,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import type { Block, QuizBlock } from '@/lib/activities/blocks';
+import { imagePreviewUrl } from '@/lib/activities/paths';
 import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
@@ -37,11 +38,9 @@ import QuizBlockPractice from './QuizBlockPractice';
 export interface ActivityPracticeIslandProps {
   lang: Lang;
   blocks: Block[];
-  /** Resolves a stored `image.path` to a browser-loadable URL — same contract as the editor's own `resolveImageUrl`. */
-  resolveImageUrl: (path: string) => string;
 }
 
-export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }: ActivityPracticeIslandProps) {
+export default function ActivityPracticeIsland({ lang, blocks }: ActivityPracticeIslandProps) {
   const t = UI_LABELS[lang].activities.practice;
 
   const [values, setValues] = useState<Record<string, string>>({});
@@ -132,7 +131,7 @@ export default function ActivityPracticeIsland({ lang, blocks, resolveImageUrl }
               key={block.id}
               lang={lang}
               block={block}
-              imageUrl={resolveImageUrl(block.image.path)}
+              imageUrl={imagePreviewUrl(block.image.path)}
               practice={{ values, onChange: handleChange, results, disabled: graded }}
             />
           ) : (
