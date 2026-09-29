@@ -432,6 +432,32 @@ export const UI_LABELS = {
         explanationButtonLabel: 'Ver explicación',
         explanationHeading: '¿Por qué?',
       },
+      // Quiz block game modes (D1, "Una actividad, muchos juegos"): the
+      // switcher between "Preguntas"/"Tarjetas"/"Parejas" plus the copy for
+      // the two alternate games themselves.
+      gameModes: {
+        modeQuiz: 'Preguntas',
+        modeCards: 'Tarjetas',
+        modeMatch: 'Parejas',
+        // Footer hint (practice player redesign's Comprobar/Reintentar row):
+        // shown only while a quiz tab sits in Tarjetas/Parejas, since
+        // Comprobar keeps grading the Preguntas-mode answers only.
+        gradesQuizModeHint: 'Comprobar corrige el modo "Preguntas".',
+        // Tarjetas (flashcards).
+        cardFlipHint: 'Tocar o pulsar Espacio para dar vuelta',
+        cardPrev: 'Anterior',
+        cardNext: 'Siguiente',
+        cardShuffle: 'Barajar',
+        cardKnewIt: 'La sabía',
+        cardReviewIt: 'Repasar',
+        cardReviewPileTitle: 'Para repasar',
+        cardReplayReview: 'Repasar de nuevo',
+        cardsDone: '¡Listo! Repasaste todas las tarjetas.',
+        // Parejas (matching).
+        matchPairs: 'Parejas',
+        matchReset: 'Reiniciar',
+        matchCompletedPrefix: '¡Completado en',
+      },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
       // per-zone inputs; this block is the page's chrome around it.
@@ -1108,6 +1134,24 @@ export const UI_LABELS = {
         zoneOf: 'Zone',
         explanationButtonLabel: 'See explanation',
         explanationHeading: 'Why?',
+      },
+      gameModes: {
+        modeQuiz: 'Questions',
+        modeCards: 'Cards',
+        modeMatch: 'Match',
+        gradesQuizModeHint: 'Check grades the "Questions" mode.',
+        cardFlipHint: 'Tap or press Space to flip',
+        cardPrev: 'Previous',
+        cardNext: 'Next',
+        cardShuffle: 'Shuffle',
+        cardKnewIt: 'I knew it',
+        cardReviewIt: 'Review',
+        cardReviewPileTitle: 'To review',
+        cardReplayReview: 'Review again',
+        cardsDone: 'Done! You reviewed every card.',
+        matchPairs: 'Pairs',
+        matchReset: 'Reset',
+        matchCompletedPrefix: 'Completed in',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',

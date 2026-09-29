@@ -187,3 +187,103 @@ describe('QuizBlockPractice — speech (D4)', () => {
     Reflect.deleteProperty(window, 'SpeechSynthesisUtterance');
   });
 });
+
+/** D1 "Una actividad, muchos juegos" — the game-mode switcher + Tarjetas (cards). */
+describe('QuizBlockPractice — game modes (D1)', () => {
+  const THREE_SLOT_BLOCK: QuizBlock = {
+    id: 'q1',
+    type: 'quiz',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] },
+        { id: 's2', label: 'What color is the sky?', input: 'text', answer: ['blue'] },
+        { id: 's3', label: 'How many days in a week?', input: 'text', answer: ['seven'] },
+      ],
+    },
+  };
+
+  it('shows no switcher for a block with no answerable slots yet (only quiz is available)', () => {
+    const EMPTY_BLOCK: QuizBlock = { id: 'q1', type: 'quiz', payload: { pools: {}, slots: [] } };
+    render(<QuizBlockPractice lang="es" block={EMPTY_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.queryByTestId('quiz-game-mode-switcher')).toBeNull();
+  });
+
+  it('offers Tarjetas even for a single-question block', () => {
+    render(<QuizBlockPractice lang="es" block={TEXT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('quiz-game-mode-cards')).toBeTruthy();
+  });
+
+  it('shows the switcher with quiz + cards for a block with several items', () => {
+    render(<QuizBlockPractice lang="es" block={THREE_SLOT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('quiz-game-mode-quiz')).toBeTruthy();
+    expect(screen.getByTestId('quiz-game-mode-cards')).toBeTruthy();
+  });
+
+  it('renders the quiz slots by default', () => {
+    render(<QuizBlockPractice lang="es" block={THREE_SLOT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-flashcards')).toBeNull();
+  });
+
+  it('renders Tarjetas when mode="cards"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="cards"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('reports a mode change through onModeChange', () => {
+    const onModeChange = vi.fn();
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        onModeChange={onModeChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    expect(onModeChange).toHaveBeenCalledWith('cards');
+  });
+
+  it('preserves quiz-mode answers when the response prop is unchanged across a mode switch', () => {
+    const { rerender } = render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{ s1: ['sits'] }}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="cards"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+
+    rerender(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{ s1: ['sits'] }}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="quiz"
+        onModeChange={vi.fn()}
+      />,
+    );
+    const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    expect(input.value).toBe('sits');
+  });
+});

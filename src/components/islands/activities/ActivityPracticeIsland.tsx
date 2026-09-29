@@ -52,6 +52,7 @@ import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
 import type { ExerciseResponse } from '@/lib/exercisePayload';
+import type { GameMode } from '@/lib/activities/gameModes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
@@ -80,11 +81,18 @@ interface TabResult {
 export default function ActivityPracticeIsland({ lang, blocks }: ActivityPracticeIslandProps) {
   const t = UI_LABELS[lang].activities.practice;
   const tEditor = UI_LABELS[lang].activities.editor;
+  const tGameModes = UI_LABELS[lang].activities.gameModes;
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, boolean> | undefined>(undefined);
   const [quizResponses, setQuizResponses] = useState<Record<string, ExerciseResponse>>({});
   const [quizResults, setQuizResults] = useState<Record<string, GradeResult> | undefined>(undefined);
+  // D1 "Una actividad, muchos juegos": each quiz block's own active game mode
+  // (Preguntas/Tarjetas/Parejas), remembered per block id while this island
+  // stays mounted — never persisted, and never reset by Reintentar (a mode
+  // choice is not an answer). Missing entry = `'quiz'`, same default
+  // `QuizBlockPractice`'s own `mode` prop already falls back to.
+  const [quizModes, setQuizModes] = useState<Record<string, GameMode>>({});
   const [activeTab, setActiveTab] = useState<string>(() => blocks[0]?.id ?? '');
   const [zoomSlot, setZoomSlot] = useState<HTMLDivElement | null>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -127,6 +135,10 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
       ...prev,
       [blockId]: { ...(prev[blockId] ?? {}), [slotId]: value },
     }));
+  }, []);
+
+  const handleQuizModeChange = useCallback((blockId: string, mode: GameMode) => {
+    setQuizModes((prev) => ({ ...prev, [blockId]: mode }));
   }, []);
 
   const handleCheck = useCallback(() => {
@@ -183,6 +195,12 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const activeBlock = blocks.find((b) => b.id === activeTab) ?? blocks[0];
   const showTabs = blocks.length > 1;
   const showControlRow = showTabs || activeBlock?.type === 'worksheet';
+  // D1: while the active tab's quiz block sits in Tarjetas/Parejas, Comprobar
+  // still only grades that block's Preguntas-mode answers — the footer says
+  // so rather than leaving the learner to guess why an ungraded game did
+  // nothing when they pressed it.
+  const activeQuizModeHint =
+    activeBlock?.type === 'quiz' && (quizModes[activeBlock.id] ?? 'quiz') !== 'quiz';
 
   const activateByIndex = useCallback(
     (index: number) => {
@@ -305,6 +323,8 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 onChange={(slotId, value) => handleQuizChange(activeBlock.id, slotId, value)}
                 outcomes={quizResults?.[activeBlock.id]?.slots}
                 disabled={graded}
+                mode={quizModes[activeBlock.id] ?? 'quiz'}
+                onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
               />
             </div>
           )}
@@ -319,6 +339,10 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
           {graded ? (
             <p data-testid="practice-score" aria-live="polite" className="text-sm font-medium text-foreground">
               {t.score}: {correctCount} / {totalCount}
+            </p>
+          ) : activeQuizModeHint ? (
+            <p data-testid="practice-quiz-mode-hint" className="text-sm text-muted-foreground">
+              {tGameModes.gradesQuizModeHint}
             </p>
           ) : (
             <span />
