@@ -5,6 +5,7 @@ import {
   MAX_BLOCKS,
   MAX_ZONES_PER_WORKSHEET,
   MAX_ZONE_SPEAK_LENGTH,
+  MAX_ZONE_EXPLANATION_LENGTH,
   type Block,
   type WorksheetBlock,
 } from './blocks';
@@ -359,6 +360,54 @@ describe('parseBlocks — zone speak text (D4, "Escuchar/Listen")', () => {
     const result = parseBlocks([worksheetBlock({ zones: [textZone({ speak: 'Hi', answers: [] })] })], 'draft');
     expect(result).toEqual([
       expect.objectContaining({ zones: [expect.objectContaining({ speak: 'Hi', answers: [] })] }),
+    ]);
+  });
+});
+
+describe('parseBlocks — zone explanation (D5, "¿Por qué?")', () => {
+  it('accepts a zone with no explanation at all', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone()] })]);
+    expect((result as Block[])[0]).toMatchObject({ zones: [{ id: 'z1' }] });
+    expect(((result as Block[])[0] as WorksheetBlock).zones[0]).not.toHaveProperty('explanation');
+  });
+
+  it('accepts and trims a valid explanation', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ explanation: '  Because "cat" is the pet.  ' })] })]);
+    expect(result).toEqual([
+      expect.objectContaining({
+        zones: [expect.objectContaining({ explanation: 'Because "cat" is the pet.' })],
+      }),
+    ]);
+  });
+
+  it('treats a blank-after-trim explanation as absent, not an error', () => {
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ explanation: '   ' })] })]);
+    expect(result).not.toBeNull();
+    expect(((result as Block[])[0] as WorksheetBlock).zones[0]).not.toHaveProperty('explanation');
+  });
+
+  it('accepts an explanation at exactly MAX_ZONE_EXPLANATION_LENGTH characters', () => {
+    const explanation = 'a'.repeat(MAX_ZONE_EXPLANATION_LENGTH);
+    const result = parseBlocks([worksheetBlock({ zones: [textZone({ explanation })] })]);
+    expect(result).not.toBeNull();
+  });
+
+  it('rejects an explanation over MAX_ZONE_EXPLANATION_LENGTH characters', () => {
+    const explanation = 'a'.repeat(MAX_ZONE_EXPLANATION_LENGTH + 1);
+    expect(parseBlocks([worksheetBlock({ zones: [textZone({ explanation })] })])).toBeNull();
+  });
+
+  it('rejects a non-string explanation value', () => {
+    expect(parseBlocks([worksheetBlock({ zones: [textZone({ explanation: 42 })] })])).toBeNull();
+  });
+
+  it('works the same in draft mode', () => {
+    const result = parseBlocks(
+      [worksheetBlock({ zones: [textZone({ explanation: 'Because', answers: [] })] })],
+      'draft',
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ zones: [expect.objectContaining({ explanation: 'Because', answers: [] })] }),
     ]);
   });
 });

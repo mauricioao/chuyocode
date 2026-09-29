@@ -26,6 +26,7 @@ import {
   setPoolItemText,
   setRowLabel,
   setSlotAnswer,
+  setSlotExplanation,
   setSlotInput,
   setSlotPool,
   type Draft,
@@ -259,6 +260,30 @@ describe('setSlotAnswer', () => {
   it('never mutates the input draft', () => {
     const before = JSON.parse(JSON.stringify(TWO_ROW_DRAFT));
     setSlotAnswer(TWO_ROW_DRAFT, 's1', ['new']);
+    expect(TWO_ROW_DRAFT).toEqual(before);
+  });
+});
+
+describe('setSlotExplanation', () => {
+  it('sets the raw explanation for one slot (not trimmed while still typing)', () => {
+    const next = setSlotExplanation(TWO_ROW_DRAFT, 's1', 'Because it is present tense. ');
+    expect(next.slots.find((s) => s.id === 's1')?.explanation).toBe('Because it is present tense. ');
+  });
+
+  it('clears a blank-after-trim explanation to undefined, not an empty string', () => {
+    const withExplanation = setSlotExplanation(TWO_ROW_DRAFT, 's1', 'Because');
+    const cleared = setSlotExplanation(withExplanation, 's1', '   ');
+    expect(cleared.slots.find((s) => s.id === 's1')?.explanation).toBeUndefined();
+  });
+
+  it('leaves every other slot untouched', () => {
+    const next = setSlotExplanation(TWO_ROW_DRAFT, 's1', 'Because');
+    expect(next.slots.find((s) => s.id === 's2')).toEqual(TWO_ROW_DRAFT.slots[1]);
+  });
+
+  it('never mutates the input draft', () => {
+    const before = JSON.parse(JSON.stringify(TWO_ROW_DRAFT));
+    setSlotExplanation(TWO_ROW_DRAFT, 's1', 'Because');
     expect(TWO_ROW_DRAFT).toEqual(before);
   });
 });
