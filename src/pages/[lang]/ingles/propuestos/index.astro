@@ -29,6 +29,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import SearchFilter from '@components/ui/SearchFilter.astro';
+import SectionHeading from '@components/ui/SectionHeading.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { FOCUS_LABELS } from '@lib/exerciseTaxonomy';
@@ -96,16 +97,14 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
 ---
 
 <BaseLayout lang={lang} title={t.section.title} description={t.section.description}>
-  <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 sm:py-12">
+  <section class="reveal mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
       <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.section.title}</PageTitle>
       <p class="max-w-2xl text-lg text-zinc-300">{t.section.intro}</p>
     </header>
 
-    <nav class="flex flex-col gap-4" aria-label={t.section.chooseLevel}>
-      <h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
-        {t.section.chooseLevel}
-      </h2>
+    <nav aria-label={t.section.chooseLevel}>
+      <SectionHeading title={t.section.chooseLevel} />
       <ul class="flex flex-wrap gap-3">
         {
           facets.map((facet) => {
@@ -140,7 +139,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
       </ul>
     </nav>
 
-    <section class="flex flex-col gap-4">
+    <section class="mt-10 flex flex-col gap-4">
       <div class="flex items-center justify-between gap-4">
         <h2 class="text-xl font-semibold text-zinc-100">{t.section.focusesTitle}</h2>
         {

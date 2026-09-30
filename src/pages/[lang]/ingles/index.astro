@@ -31,6 +31,7 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import HubCard from '@components/ui/HubCard.astro';
 import ActivityCard from '@components/ui/ActivityCard.astro';
+import SectionHeading from '@components/ui/SectionHeading.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { BooksIcon } from '@phosphor-icons/react/dist/ssr/Books';
 import { UsersThreeIcon } from '@phosphor-icons/react/dist/ssr/UsersThree';
@@ -85,13 +86,13 @@ const weeklyPick = topActivityOfWeek(
 ---
 
 <BaseLayout lang={lang} title={t.title} description={t.description}>
-  <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-8 sm:py-12">
+  <section class="reveal mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
       <PageTitle lang={lang} backHref={`/${lang}`}>{t.title}</PageTitle>
       <p class="max-w-2xl text-lg text-zinc-300">{t.subtitle}</p>
     </header>
 
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
       <HubCard
         href={`/${lang}/ingles/propuestos`}
         title={t.proposedTitle}
@@ -114,10 +115,8 @@ const weeklyPick = topActivityOfWeek(
 
     {
       (dailyPick || weeklyPick) && (
-        <section class="flex flex-col gap-4" aria-labelledby="hub-today-heading">
-          <h2 id="hub-today-heading" class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
-            {t.todayTitle}
-          </h2>
+        <section aria-labelledby="hub-today-heading">
+          <SectionHeading id="hub-today-heading" title={t.todayTitle} />
           <div class="grid gap-4 sm:grid-cols-2">
             {dailyPick && (
               <ActivityCard
@@ -150,10 +149,8 @@ const weeklyPick = topActivityOfWeek(
       )
     }
 
-    <nav class="flex flex-col gap-3" aria-label={t.levelShortcutTitle}>
-      <h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
-        {t.levelShortcutTitle}
-      </h2>
+    <nav aria-label={t.levelShortcutTitle}>
+      <SectionHeading title={t.levelShortcutTitle} />
       <ul class="flex gap-2 overflow-x-auto pb-1">
         {
           LEVELS.map((level) => (
