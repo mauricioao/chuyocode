@@ -1005,6 +1005,13 @@ export const UI_LABELS = {
         exerciseCountMany: 'ejercicios',
         activityCountOne: 'actividad',
         activityCountMany: 'actividades',
+        // "Para ti hoy" strip: the daily activity (its own highlight label
+        // lives on `activities.explore.dailyPickLabel`, reused as-is) plus
+        // the most-hearted activity published in the last 7 days.
+        todayTitle: 'Para ti hoy',
+        weeklyPickLabel: 'Lo más querido de la semana',
+        // Heading over the CEFR quick-jump row.
+        levelShortcutTitle: 'Ir directo a tu nivel',
       },
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
@@ -1839,6 +1846,9 @@ export const UI_LABELS = {
         exerciseCountMany: 'exercises',
         activityCountOne: 'activity',
         activityCountMany: 'activities',
+        todayTitle: 'For you today',
+        weeklyPickLabel: 'Most loved this week',
+        levelShortcutTitle: 'Jump to your level',
       },
       section: {
         // Matches the Spanish move: name the section, not its audience.
