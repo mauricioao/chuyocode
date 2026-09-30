@@ -50,9 +50,15 @@ describe('QuizGameModeSwitcher', () => {
     expect(screen.getByText('Cartas')).toBeTruthy();
   });
 
-  it('renders no control for a mode with no icon/label wired in yet', () => {
+  it('renders "Ruleta" for the wheel mode', () => {
     render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'wheel']} active="quiz" onChange={vi.fn()} />);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getByText('Ruleta')).toBeTruthy();
+  });
+
+  it('renders no control for a mode with no icon/label wired in yet', () => {
+    render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'anagram']} active="quiz" onChange={vi.fn()} />);
     expect(screen.getAllByRole('radio')).toHaveLength(1);
-    expect(screen.queryByTestId('quiz-game-mode-wheel')).toBeNull();
+    expect(screen.queryByTestId('quiz-game-mode-anagram')).toBeNull();
   });
 });

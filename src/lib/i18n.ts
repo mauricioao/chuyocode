@@ -610,6 +610,14 @@ export const UI_LABELS = {
         speakCounterPrefix: 'Carta',
         speakCounterOf: 'de',
         speakReshuffle: 'Barajar de nuevo',
+        // Ruleta (Wordwall "Spin the wheel").
+        modeWheel: 'Ruleta',
+        wheelSpin: 'Girar',
+        wheelSpinning: 'Girando…',
+        wheelReveal: 'Ver respuesta',
+        wheelRemoveOnExit: 'Eliminar al salir',
+        wheelExhausted: 'No quedan elementos en la ruleta.',
+        wheelLandedPrefix: 'La ruleta se detuvo en:',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1476,6 +1484,13 @@ export const UI_LABELS = {
         speakCounterPrefix: 'Card',
         speakCounterOf: 'of',
         speakReshuffle: 'Shuffle again',
+        modeWheel: 'Wheel',
+        wheelSpin: 'Spin',
+        wheelSpinning: 'Spinning…',
+        wheelReveal: 'Show answer',
+        wheelRemoveOnExit: 'Remove on landing',
+        wheelExhausted: 'No items left on the wheel.',
+        wheelLandedPrefix: 'The wheel landed on:',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',

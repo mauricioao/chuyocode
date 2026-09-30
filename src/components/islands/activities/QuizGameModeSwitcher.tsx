@@ -20,6 +20,7 @@ import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { CardsIcon } from '@phosphor-icons/react/dist/ssr/Cards';
 import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRight';
 import { CardsThreeIcon } from '@phosphor-icons/react/dist/ssr/CardsThree';
+import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import type { GameMode } from '@/lib/activities/gameModes';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ const ICONS: Partial<Record<GameMode, typeof ListChecksIcon>> = {
   cards: CardsIcon,
   match: ArrowsLeftRightIcon,
   speak: CardsThreeIcon,
+  wheel: CircleNotchIcon,
 };
 
 export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: QuizGameModeSwitcherProps) {
@@ -51,6 +53,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
     cards: t.modeCards,
     match: t.modeMatch,
     speak: t.modeSpeak,
+    wheel: t.modeWheel,
   };
 
   return (

@@ -46,6 +46,7 @@ import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
 import QuizSpeakingCards from './QuizSpeakingCards';
+import QuizWheel from './QuizWheel';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -63,7 +64,7 @@ export interface QuizBlockPracticeProps {
 }
 
 /** Modes this component can actually render. */
-const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak'];
+const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak', 'wheel'];
 
 export default function QuizBlockPractice({
   lang,
@@ -88,7 +89,7 @@ export default function QuizBlockPractice({
   // falls back to `quiz` rather than rendering nothing.
   const effectiveMode = modes.includes(mode) ? mode : 'quiz';
 
-  if (effectiveMode === 'cards' || effectiveMode === 'match' || effectiveMode === 'speak') {
+  if (effectiveMode === 'cards' || effectiveMode === 'match' || effectiveMode === 'speak' || effectiveMode === 'wheel') {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
         {modes.length > 1 && (
@@ -97,6 +98,7 @@ export default function QuizBlockPractice({
         {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'match' && <QuizMatching lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
       </div>
     );
   }
