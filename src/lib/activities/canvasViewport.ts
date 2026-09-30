@@ -345,6 +345,57 @@ export function midpoint(a: Point, b: Point): Point {
 }
 
 /**
+ * A fractional rect (`[0, 1]` on both axes, same shape as `zoneGeometry.ts`'s
+ * `Rect`) — kept as a local, structurally-compatible type rather than an
+ * import so this module stays dependency-free, matching its own header.
+ */
+export interface FractionalRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The portion of `image` (already the rotated display size — see {@link
+ * rotatedSize}) currently VISIBLE inside `viewport`, as a fractional rect —
+ * keyboard zone creation's own anchor (`WorksheetZoneEditor.tsx`'s `Enter`/`N`
+ * shortcut centers a new zone inside exactly this, so it always lands
+ * somewhere the author can actually see, at any pan/zoom).
+ *
+ * The viewport's two corners (`(0, 0)` and its own width/height, in
+ * VIEWPORT-relative pixels — the same space {@link screenToContentPoint}
+ * expects) are converted into the content layer's native pixel space, then
+ * clamped to `[0, image.width] x [0, image.height]` before being expressed as
+ * fractions: at 100%+ zoom the whole viewport may sit inside the image (a
+ * rect smaller than the full `[0, 1]` square), while at a zoom that fits the
+ * whole image inside the viewport, the visible rect clamps back to the full
+ * `[0, 1]` square (the image itself, not the empty margin around it).
+ *
+ * A non-positive image dimension (not yet laid out) returns the full `[0, 1]`
+ * square rather than a `NaN`/`Infinity` rect.
+ */
+export function visibleImageRect(camera: Camera, image: Size, viewport: Size): FractionalRect {
+  if (image.width <= 0 || image.height <= 0) {
+    return { x: 0, y: 0, w: 1, h: 1 };
+  }
+  const topLeft = screenToContentPoint({ x: 0, y: 0 }, camera);
+  const bottomRight = screenToContentPoint({ x: viewport.width, y: viewport.height }, camera);
+
+  const x0 = Math.min(Math.max(topLeft.x, 0), image.width);
+  const y0 = Math.min(Math.max(topLeft.y, 0), image.height);
+  const x1 = Math.min(Math.max(bottomRight.x, 0), image.width);
+  const y1 = Math.min(Math.max(bottomRight.y, 0), image.height);
+
+  return {
+    x: x0 / image.width,
+    y: y0 / image.height,
+    w: Math.max(0, x1 - x0) / image.width,
+    h: Math.max(0, y1 - y0) / image.height,
+  };
+}
+
+/**
  * The DISPLAYED size of an image once a worksheet's `rotation` (creator
  * polish round 2) is applied: a quarter turn (90/270) swaps width and
  * height, a half turn (180) or no turn (0) does not. Every caller that lays

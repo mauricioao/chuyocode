@@ -48,7 +48,30 @@ export function escapeIlikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-/** Build the full `ilike` pattern for a normalized search query: escape, then wrap in `%…%`. */
+/**
+ * Strip combining diacritical marks (accents) from `value` — "canción" ->
+ * "cancion" — via the standard NFD-decompose-then-strip trick: `normalize('NFD')`
+ * splits each accented character into its base letter plus a separate
+ * combining-mark codepoint, and `\p{Diacritic}` removes exactly those marks,
+ * leaving the base letters untouched (including ones the mark-removal alone
+ * wouldn't otherwise round-trip cleanly, e.g. "ñ" — NFD-decomposed to "n" +
+ * combining tilde, so it folds to "n" here too, matching Postgres'
+ * `unaccent()` behavior the {@link buildTitleIlikePattern} pattern below is
+ * matched against — see `supabase/migrations/0015_activity_search_unaccent.sql`).
+ */
+export function normalizeAccents(value: string): string {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+}
+
+/**
+ * Build the full `ilike` pattern for a normalized search query against
+ * `activities.title_search` (the generated, lowercased-and-unaccented
+ * column — see the 0015 migration): lowercase, strip accents (mirroring the
+ * column's own `lower(immutable_unaccent(title))` expression so "cancion"
+ * and "canción" both match a title of "Canción"), escape, then wrap in
+ * `%…%`.
+ */
 export function buildTitleIlikePattern(normalizedQuery: string): string {
-  return `%${escapeIlikePattern(normalizedQuery)}%`;
+  const folded = normalizeAccents(normalizedQuery.toLowerCase());
+  return `%${escapeIlikePattern(folded)}%`;
 }

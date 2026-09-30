@@ -995,6 +995,102 @@ describe('WorksheetZoneEditor — history commit flag (creator polish round 2)',
   });
 });
 
+describe('WorksheetZoneEditor — keyboard zone creation (accessibility)', () => {
+  function mockFittedViewport() {
+    // Viewport matches the image's own 800x400 aspect ratio exactly, so
+    // `fitCamera` picks 100% with a centered (0, 0) offset — the whole image
+    // is the "visible" rect, same as the pure `visibleImageRect` test.
+    mockRect(screen.getByTestId('zone-viewport'), { width: 800, height: 400 });
+  }
+
+  it('creates a zone centered in the visible image on Enter, with the Zona tool active', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    const viewport = screen.getByTestId('zone-viewport');
+
+    fireEvent.keyDown(viewport, { key: 'Enter' });
+
+    const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
+    expect(zones).toHaveLength(1);
+    expect(zones[0].style.left).toBe('40%'); // 0.5 - 0.2/2
+    expect(zones[0].style.top).toBe('47%'); // 0.5 - 0.06/2
+    expect(zones[0].style.width).toBe('20%');
+    expect(zones[0].style.height).toBe('6%');
+  });
+
+  it('also creates a zone on the N shortcut', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'N' });
+    expect(screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(1);
+  });
+
+  it('selects the newly-created zone and opens its properties panel', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'Enter' });
+    expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
+  });
+
+  it('moves focus to the new zone\'s first answer field', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'Enter' });
+    const firstAnswer = screen.getByLabelText('Respuestas aceptadas 1') as HTMLInputElement;
+    expect(document.activeElement).toBe(firstAnswer);
+  });
+
+  it('announces the creation via an aria-live region', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'Enter' });
+    const live = screen.getByTestId('worksheet-live-region');
+    expect(live.getAttribute('aria-live')).toBe('polite');
+    expect(live.textContent).toBe('Zona creada');
+  });
+
+  it('creates exactly one history entry (a single committing onZonesChange call)', () => {
+    const calls: Array<{ commit?: boolean } | undefined> = [];
+    function Wrapper() {
+      const [zones, setZones] = useState<Zone[]>([]);
+      const [selected, setSelected] = useState<string | null>(null);
+      return (
+        <WorksheetZoneEditor
+          lang="es"
+          image={IMAGE}
+          imageUrl="/img.webp"
+          zones={zones}
+          selectedZoneId={selected}
+          onZonesChange={(next, opts) => {
+            calls.push(opts);
+            setZones(next);
+          }}
+          onSelectZone={setSelected}
+        />
+      );
+    }
+    render(<Wrapper />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'Enter' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.commit).not.toBe(false); // committing (default/true), not a live drag frame
+  });
+
+  it('does nothing while the Mano tool is active', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    const viewport = screen.getByTestId('zone-viewport');
+    fireEvent.keyDown(viewport, { key: 'h' }); // switch to Mano
+    fireEvent.keyDown(viewport, { key: 'Enter' });
+    expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
+  });
+
+  it('is added to the shortcuts help hint text below the canvas', () => {
+    render(<Harness />);
+    expect(screen.getByText(/N para/)).toBeTruthy();
+  });
+});
+
 describe('WorksheetZoneEditor — rotation (creator polish round 2)', () => {
   it('fits using the ROTATED dimensions at 90deg (width/height swapped)', () => {
     render(

@@ -3,8 +3,10 @@ import {
   routeFileType,
   computeScaledSize,
   validatePageSelection,
+  pdfThumbnailPageNumbers,
   MAX_LONG_SIDE_PX,
   MAX_PDF_PAGES,
+  MAX_PDF_THUMBNAIL_PAGES,
 } from './imagePipeline';
 
 /**
@@ -130,5 +132,31 @@ describe('validatePageSelection', () => {
   it('honors a custom maxPages', () => {
     expect(validatePageSelection([1, 2, 3], 2)).toBeNull();
     expect(validatePageSelection([1, 2], 2)).toEqual([1, 2]);
+  });
+});
+
+describe('pdfThumbnailPageNumbers', () => {
+  it('returns every page 1..numPages when under the cap', () => {
+    expect(pdfThumbnailPageNumbers(5)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('caps at MAX_PDF_THUMBNAIL_PAGES by default', () => {
+    const result = pdfThumbnailPageNumbers(MAX_PDF_THUMBNAIL_PAGES + 10);
+    expect(result).toHaveLength(MAX_PDF_THUMBNAIL_PAGES);
+    expect(result[0]).toBe(1);
+    expect(result.at(-1)).toBe(MAX_PDF_THUMBNAIL_PAGES);
+  });
+
+  it('honors a custom maxPages', () => {
+    expect(pdfThumbnailPageNumbers(10, 3)).toEqual([1, 2, 3]);
+  });
+
+  it('returns exactly numPages when it equals the cap', () => {
+    expect(pdfThumbnailPageNumbers(4, 4)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('returns an empty array for a zero or negative page count', () => {
+    expect(pdfThumbnailPageNumbers(0)).toEqual([]);
+    expect(pdfThumbnailPageNumbers(-1)).toEqual([]);
   });
 });

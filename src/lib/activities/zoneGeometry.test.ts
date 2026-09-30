@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   MIN_ZONE_SIZE,
   NUDGE_STEP,
+  KEYBOARD_ZONE_SIZE,
   clampRect,
   rectFromDrag,
   moveRect,
   resizeRect,
   nudgeRect,
+  centeredZoneRect,
   rotateRectCW,
   rotateRectCCW,
   rotateRects,
@@ -283,6 +285,47 @@ describe('turnRotation', () => {
     expect(turnRotation(90, 'ccw')).toBe(0);
     expect(turnRotation(180, 'ccw')).toBe(90);
     expect(turnRotation(270, 'ccw')).toBe(180);
+  });
+});
+
+describe('centeredZoneRect (keyboard zone creation)', () => {
+  it('centers a default-size rect inside the visible rect', () => {
+    const visible: Rect = { x: 0, y: 0, w: 1, h: 1 };
+    const rect = centeredZoneRect(visible);
+    expect(rect.w).toBeCloseTo(KEYBOARD_ZONE_SIZE.w);
+    expect(rect.h).toBeCloseTo(KEYBOARD_ZONE_SIZE.h);
+    expect(rect.x).toBeCloseTo(0.5 - KEYBOARD_ZONE_SIZE.w / 2);
+    expect(rect.y).toBeCloseTo(0.5 - KEYBOARD_ZONE_SIZE.h / 2);
+  });
+
+  it('centers inside an off-center, partial visible rect (zoomed/panned view)', () => {
+    const visible: Rect = { x: 0.4, y: 0.2, w: 0.3, h: 0.2 };
+    const rect = centeredZoneRect(visible);
+    expect(rect.x).toBeCloseTo(0.4 + 0.15 - KEYBOARD_ZONE_SIZE.w / 2);
+    expect(rect.y).toBeCloseTo(0.2 + 0.1 - KEYBOARD_ZONE_SIZE.h / 2);
+  });
+
+  it('accepts a custom size', () => {
+    const visible: Rect = { x: 0, y: 0, w: 1, h: 1 };
+    const rect = centeredZoneRect(visible, { w: 0.1, h: 0.1 });
+    expect(rect.w).toBeCloseTo(0.1);
+    expect(rect.h).toBeCloseTo(0.1);
+  });
+
+  it('clamps inside [0, 1] when the visible rect sits at an edge', () => {
+    const visible: Rect = { x: 0, y: 0, w: 0.05, h: 0.05 };
+    const rect = centeredZoneRect(visible);
+    expect(rect.x).toBeGreaterThanOrEqual(0);
+    expect(rect.y).toBeGreaterThanOrEqual(0);
+    expect(rect.x + rect.w).toBeLessThanOrEqual(1);
+    expect(rect.y + rect.h).toBeLessThanOrEqual(1);
+  });
+
+  it('never produces a rect smaller than MIN_ZONE_SIZE, even with a tiny custom size', () => {
+    const visible: Rect = { x: 0, y: 0, w: 1, h: 1 };
+    const rect = centeredZoneRect(visible, { w: 0.001, h: 0.001 });
+    expect(rect.w).toBeGreaterThanOrEqual(MIN_ZONE_SIZE);
+    expect(rect.h).toBeGreaterThanOrEqual(MIN_ZONE_SIZE);
   });
 });
 

@@ -428,7 +428,12 @@ export async function getPublishedActivities(opts: GetPublishedActivitiesOptions
       query = query.contains('block_types', [opts.tipo]);
     }
     if (normalizedQuery) {
-      query = query.ilike('title', buildTitleIlikePattern(normalizedQuery));
+      // `title_search` (0015 migration) is a generated, lowercased +
+      // unaccented column — `buildTitleIlikePattern` folds the query the
+      // same way, so "cancion"/"CANCIÓN"/"canción" all match a title of
+      // "Canción" (`ilike` alone was already case-insensitive; it was never
+      // accent-insensitive).
+      query = query.ilike('title_search', buildTitleIlikePattern(normalizedQuery));
     }
     if (excludedIds.length > 0) {
       query = query.not('id', 'in', `(${excludedIds.join(',')})`);

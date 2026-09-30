@@ -19,11 +19,26 @@
  * imported LAZILY (dynamic import) so it never weighs on a page that never
  * touches this function.
  *
- * TESTING: `routeFileType`, `computeScaledSize` and `validatePageSelection`
- * are pure and unit-tested below their definitions. `convertImageToWebp`
- * and `convertPdfPagesToWebp` drive real `<canvas>`/`Image`/`pdfjs-dist`
- * decoding that jsdom cannot provide meaningfully — they are a MANUAL check
- * only (see this PR's report).
+ * PDF THUMBNAILS: `renderPdfThumbnails` renders small preview images of a
+ * PDF's pages (`WorksheetUploader.tsx`'s page picker, replacing a blind
+ * page-number text field with a checkbox grid) — same lazy `pdfjs-dist`
+ * import, same render-to-`<canvas>`-then-WebP path as `convertPdfPagesToWebp`,
+ * just at a much smaller target width and over every page up to {@link
+ * MAX_PDF_THUMBNAIL_PAGES} rather than a caller-chosen subset: the whole
+ * point is to show the author what's on each page BEFORE they pick, so it
+ * can't start from a selection the way the full-resolution conversion does.
+ * A PDF longer than that cap still renders its first {@link
+ * MAX_PDF_THUMBNAIL_PAGES} pages (`truncated: true` tells the caller to show
+ * a note) — the text-field fallback has no such cap, since it never renders
+ * anything, only validates page NUMBERS.
+ *
+ * TESTING: `routeFileType`, `computeScaledSize`, `validatePageSelection`, and
+ * `pdfThumbnailPageNumbers` are pure and unit-tested below their
+ * definitions. `convertImageToWebp`, `convertPdfPagesToWebp`, and
+ * `renderPdfThumbnails` drive real `<canvas>`/`Image`/`pdfjs-dist` decoding
+ * that jsdom cannot provide meaningfully — they are a MANUAL check only (see
+ * this PR's report); `WorksheetUploader.tsx`'s own tests mock
+ * `renderPdfThumbnails` instead of exercising it for real.
  */
 
 /** Longer side an output image is scaled to, in pixels. Never upscaled past this. */
@@ -34,6 +49,17 @@ export const WEBP_QUALITY = 0.8;
 
 /** At most this many PDF pages may be selected in one call. */
 export const MAX_PDF_PAGES = 10;
+
+/**
+ * At most this many of a PDF's pages get a rendered thumbnail — see
+ * {@link renderPdfThumbnails}'s own header. A longer PDF still ONLY shows
+ * previews for its first this-many pages; the text-field fallback
+ * (`WorksheetUploader.tsx`) has no such cap since it never renders anything.
+ */
+export const MAX_PDF_THUMBNAIL_PAGES = 40;
+
+/** The rendered thumbnail's target width, in CSS pixels — height follows the page's own aspect ratio. */
+export const PDF_THUMBNAIL_WIDTH = 120;
 
 const SUPPORTED_IMAGE_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
@@ -169,6 +195,80 @@ async function loadPdfjs() {
     import.meta.url,
   ).href;
   return pdfjs;
+}
+
+/**
+ * The 1-based page numbers {@link renderPdfThumbnails} renders a thumbnail
+ * for: `1..min(numPages, maxPages)`, in order. Pure — split out from
+ * `renderPdfThumbnails` itself so the CAPPING rule (the actual point of this
+ * function) is unit-testable without any real PDF decoding.
+ */
+export function pdfThumbnailPageNumbers(numPages: number, maxPages: number = MAX_PDF_THUMBNAIL_PAGES): number[] {
+  const count = Math.max(0, Math.min(numPages, maxPages));
+  return Array.from({ length: count }, (_, i) => i + 1);
+}
+
+export interface PdfPageThumbnail {
+  pageNumber: number;
+  blob: Blob;
+  width: number;
+  height: number;
+}
+
+export interface RenderPdfThumbnailsOptions {
+  /** Caps how many of the PDF's pages get a thumbnail — default {@link MAX_PDF_THUMBNAIL_PAGES}. */
+  maxPages?: number;
+  /** The rendered thumbnail's target width in CSS pixels — default {@link PDF_THUMBNAIL_WIDTH}. */
+  width?: number;
+}
+
+export interface PdfThumbnailsResult {
+  thumbnails: PdfPageThumbnail[];
+  /** The PDF's actual total page count — may be larger than `thumbnails.length` when `truncated`. */
+  totalPages: number;
+  /** `true` when the PDF has more pages than `maxPages` — the caller shows a note (`WorksheetUploader.tsx`). */
+  truncated: boolean;
+}
+
+/**
+ * Render small preview thumbnails of `file`'s (a PDF) pages, up to {@link
+ * MAX_PDF_THUMBNAIL_PAGES} of them — `WorksheetUploader.tsx`'s page picker
+ * grid. Each thumbnail is its own small WebP `Blob`, same encode path as
+ * {@link convertPdfPagesToWebp} (`<canvas>` render -> WebP), just scaled to
+ * `width` instead of {@link MAX_LONG_SIDE_PX}. The PDF itself is never
+ * uploaded. BROWSER ONLY — see file header.
+ */
+export async function renderPdfThumbnails(
+  file: File,
+  options: RenderPdfThumbnailsOptions = {},
+): Promise<PdfThumbnailsResult> {
+  const maxPages = options.maxPages ?? MAX_PDF_THUMBNAIL_PAGES;
+  const width = options.width ?? PDF_THUMBNAIL_WIDTH;
+
+  const pdfjs = await loadPdfjs();
+  const loadingTask = pdfjs.getDocument({ data: await file.arrayBuffer() });
+  const doc = await loadingTask.promise;
+
+  try {
+    const pageNumbers = pdfThumbnailPageNumbers(doc.numPages, maxPages);
+    const thumbnails: PdfPageThumbnail[] = [];
+    for (const pageNumber of pageNumbers) {
+      const page = await doc.getPage(pageNumber);
+      const unscaledViewport = page.getViewport({ scale: 1 });
+      const scale = width / unscaledViewport.width;
+      const viewport = page.getViewport({ scale });
+      const thumbWidth = Math.max(1, Math.round(viewport.width));
+      const thumbHeight = Math.max(1, Math.round(viewport.height));
+
+      const { canvas } = create2dContext(thumbWidth, thumbHeight);
+      await page.render({ canvas, viewport }).promise;
+      const blob = await canvasToWebpBlob(canvas);
+      thumbnails.push({ pageNumber, blob, width: thumbWidth, height: thumbHeight });
+    }
+    return { thumbnails, totalPages: doc.numPages, truncated: doc.numPages > maxPages };
+  } finally {
+    await loadingTask.destroy();
+  }
 }
 
 /**

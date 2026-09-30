@@ -261,6 +261,9 @@ export const UI_LABELS = {
         shortcutEscape: 'Deseleccionar',
         shortcutZoomIn: 'Acercar',
         shortcutZoomOut: 'Alejar',
+        // Keyboard zone creation (accessibility): Enter/N with the Zona
+        // tool active and the canvas focused.
+        shortcutNewZone: 'Nueva zona',
         // Floating side toolbar pass: the drag handle, and the ghost "dock"
         // target shown while undocked.
         moveToolbar: 'Mover barra',
@@ -325,6 +328,20 @@ export const UI_LABELS = {
         pdfPagesHint: 'Hasta 10 páginas. Cada página elegida se agrega como un bloque propio.',
         pdfPageLabel: 'Página',
         pdfConfirm: 'Agregar páginas',
+        // PDF page thumbnails (replaces the blind page-number field as the
+        // FIRST option — the text field above stays as a fallback, both when
+        // rendering thumbnails fails and as a manual "type a page number"
+        // escape hatch, e.g. past the 40-page thumbnail cap).
+        pdfThumbnailsLoading: 'Generando miniaturas…',
+        pdfThumbnailsHint: 'Elegir hasta 10 páginas para agregar como bloques.',
+        pdfSelectAll: 'Seleccionar todas',
+        pdfSelectedCountLabel: 'seleccionadas',
+        pdfAddPagesPrefix: 'Agregar',
+        pdfPageCountOne: 'página',
+        pdfPageCountMany: 'páginas',
+        pdfThumbnailsTruncated:
+          'Este PDF tiene más de 40 páginas: se muestran las primeras 40. Para elegir otra página, usar el número de página.',
+        pdfThumbnailsSwitchToText: 'Elegir por número de página',
         errors: {
           unsupported_media_type: 'Ese tipo de archivo no está admitido.',
           empty_body: 'El archivo está vacío.',
@@ -359,7 +376,7 @@ export const UI_LABELS = {
         noZonesYet: 'Todavía no hay zonas dibujadas sobre esta imagen.',
         panelEmpty: 'Dibujar un recuadro sobre la hoja o seleccionar uno para editarlo.',
         panelEmptyHint:
-          'Atajos: V para la herramienta Zona, H para Mano, flechas para mover una zona seleccionada, Suprimir para eliminarla, rueda o los botones de abajo para hacer zoom.',
+          'Atajos: V para la herramienta Zona, H para Mano, Enter o N para crear una zona centrada en lo visible, flechas para mover una zona seleccionada, Suprimir para eliminarla, rueda o los botones de abajo para hacer zoom.',
         zoomOut: 'Alejar',
         zoomIn: 'Acercar',
         zoomFit: 'Ajustar',
@@ -370,6 +387,10 @@ export const UI_LABELS = {
         toolZoneTooltip: 'Zona (V)',
         toolHand: 'Mano',
         toolHandTooltip: 'Mano (H)',
+        // Keyboard zone creation (accessibility): Enter/N with the Zona
+        // tool active and the canvas focused — announced via an aria-live
+        // region, see `WorksheetZoneEditor.tsx`'s own header.
+        zoneCreatedAnnouncement: 'Zona creada',
       },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
@@ -889,6 +910,7 @@ export const UI_LABELS = {
         shortcutEscape: 'Deselect',
         shortcutZoomIn: 'Zoom in',
         shortcutZoomOut: 'Zoom out',
+        shortcutNewZone: 'New zone',
         moveToolbar: 'Move toolbar',
         dockToolbar: 'Dock',
         savingStatus: 'Saving changes',
@@ -939,6 +961,16 @@ export const UI_LABELS = {
         pdfPagesHint: 'Up to 10 pages. Each chosen page is added as its own block.',
         pdfPageLabel: 'Page',
         pdfConfirm: 'Add pages',
+        pdfThumbnailsLoading: 'Generating thumbnails…',
+        pdfThumbnailsHint: 'Choose up to 10 pages to add as blocks.',
+        pdfSelectAll: 'Select all',
+        pdfSelectedCountLabel: 'selected',
+        pdfAddPagesPrefix: 'Add',
+        pdfPageCountOne: 'page',
+        pdfPageCountMany: 'pages',
+        pdfThumbnailsTruncated:
+          'This PDF has more than 40 pages: showing the first 40. To pick another page, use the page number field.',
+        pdfThumbnailsSwitchToText: 'Choose by page number',
         errors: {
           unsupported_media_type: 'That file type is not supported.',
           empty_body: 'The file is empty.',
@@ -970,7 +1002,7 @@ export const UI_LABELS = {
         noZonesYet: 'No zones drawn on this image yet.',
         panelEmpty: 'Draw a box on the sheet or select one to edit it.',
         panelEmptyHint:
-          'Shortcuts: V for the Zone tool, H for Hand, arrow keys move a selected zone, Delete removes it, wheel or the buttons below zoom.',
+          'Shortcuts: V for the Zone tool, H for Hand, Enter or N to create a zone centered in what is visible, arrow keys move a selected zone, Delete removes it, wheel or the buttons below zoom.',
         zoomOut: 'Zoom out',
         zoomIn: 'Zoom in',
         zoomFit: 'Fit',
@@ -981,6 +1013,7 @@ export const UI_LABELS = {
         toolZoneTooltip: 'Zone (V)',
         toolHand: 'Hand',
         toolHandTooltip: 'Hand (H)',
+        zoneCreatedAnnouncement: 'Zone created',
       },
       player: {
         notGraded: 'Preview: this view does not grade answers.',
