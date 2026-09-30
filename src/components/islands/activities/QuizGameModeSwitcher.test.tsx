@@ -43,4 +43,16 @@ describe('QuizGameModeSwitcher', () => {
     expect(screen.getByText('Cards')).toBeTruthy();
     expect(screen.getByText('Match')).toBeTruthy();
   });
+
+  it('renders "Cartas" for the speak mode', () => {
+    render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'speak']} active="quiz" onChange={vi.fn()} />);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getByText('Cartas')).toBeTruthy();
+  });
+
+  it('renders no control for a mode with no icon/label wired in yet', () => {
+    render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'wheel']} active="quiz" onChange={vi.fn()} />);
+    expect(screen.getAllByRole('radio')).toHaveLength(1);
+    expect(screen.queryByTestId('quiz-game-mode-wheel')).toBeNull();
+  });
 });

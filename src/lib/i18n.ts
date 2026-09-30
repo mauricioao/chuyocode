@@ -601,6 +601,15 @@ export const UI_LABELS = {
         matchPairs: 'Parejas',
         matchReset: 'Reiniciar',
         matchCompletedPrefix: '¡Completado en',
+        // Cartas (Wordwall "Speaking cards"): a shuffled deck dealt one card
+        // at a time, each with a question to answer out loud.
+        modeSpeak: 'Cartas',
+        speakDeal: 'Repartir',
+        speakNext: 'Siguiente carta',
+        speakReveal: 'Ver respuesta',
+        speakCounterPrefix: 'Carta',
+        speakCounterOf: 'de',
+        speakReshuffle: 'Barajar de nuevo',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1460,6 +1469,13 @@ export const UI_LABELS = {
         matchPairs: 'Pairs',
         matchReset: 'Reset',
         matchCompletedPrefix: 'Completed in',
+        modeSpeak: 'Speaking cards',
+        speakDeal: 'Deal',
+        speakNext: 'Next card',
+        speakReveal: 'Show answer',
+        speakCounterPrefix: 'Card',
+        speakCounterOf: 'of',
+        speakReshuffle: 'Shuffle again',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
