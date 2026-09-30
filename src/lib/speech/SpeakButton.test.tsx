@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
 import SpeakButton, { COPY, SLOW_RATE } from './SpeakButton';
+import { NORMAL_RATE } from './useSpeech';
 
 /** A minimal stand-in for `SpeechSynthesisUtterance` — jsdom ships neither it nor `speechSynthesis`. */
 class FakeUtterance {
   text: string;
   lang = '';
   rate = 1;
+  pitch = 1;
   voice: unknown = null;
   onend: (() => void) | null = null;
   onerror: (() => void) | null = null;
@@ -89,7 +91,7 @@ describe('SpeakButton', () => {
     expect(synth.speak).toHaveBeenCalledTimes(1);
     const utterance = synth.speak.mock.calls[0][0] as FakeUtterance;
     expect(utterance.text).toBe('The cat sits.');
-    expect(utterance.rate).toBe(1);
+    expect(utterance.rate).toBe(NORMAL_RATE);
   });
 
   it('speaks at the slow rate when the slow button is pressed', () => {
@@ -130,5 +132,25 @@ describe('SpeakButton', () => {
     // Triangulation: proves the detector this file imports actually fires,
     // so the guard above is not vacuously green.
     expect(voseoWords('Escuchá esta oración.')).toEqual(['Escuchá']);
+  });
+
+  describe('showSettings', () => {
+    it('does not render the voice settings trigger by default', () => {
+      installSynth();
+      render(<SpeakButton text="The cat sits." lang="en" />);
+      expect(screen.queryByTestId('voice-settings-trigger')).toBeNull();
+    });
+
+    it('renders the voice settings trigger when showSettings is true', () => {
+      installSynth();
+      render(<SpeakButton text="The cat sits." lang="en" showSettings />);
+      expect(screen.getByTestId('voice-settings-trigger')).not.toBeNull();
+    });
+
+    it('never renders the voice settings trigger in compact mode, even with showSettings', () => {
+      installSynth();
+      render(<SpeakButton text="The cat sits." lang="en" compact showSettings />);
+      expect(screen.queryByTestId('voice-settings-trigger')).toBeNull();
+    });
   });
 });

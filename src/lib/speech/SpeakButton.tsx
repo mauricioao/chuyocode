@@ -20,6 +20,12 @@
  *
  * Never auto-plays: only `onClick` ever calls `speak()`.
  *
+ * `showSettings` additionally mounts `VoiceSettingsButton` (the accent/voice
+ * picker popover) right after the speak controls — opt-in and off by
+ * default, and never shown alongside `compact` (there is no room for it, and
+ * a compact spot only ever sits beside plenty of OTHER SpeakButtons that
+ * already honour whatever the popover's ONE shared choice ends up being).
+ *
  * Copy is a LOCAL map, not `UI_LABELS`: this component is mounted from BOTH
  * the `ExerciseIsland`/mechanics tree (which deliberately keeps the
  * Astro-side i18n module out of its bundle — see that file's own header)
@@ -30,9 +36,10 @@ import { useEffect, useState } from 'react';
 import { SpeakerHighIcon } from '@phosphor-icons/react/dist/ssr/SpeakerHigh';
 import { PersonSimpleWalkIcon } from '@phosphor-icons/react/dist/ssr/PersonSimpleWalk';
 import { cn } from '@/lib/utils';
-import { useSpeech } from './useSpeech';
+import { useSpeech, NORMAL_RATE } from './useSpeech';
+import VoiceSettingsButton from './VoiceSettingsButton';
 
-/** The "slow" button's rate, `speechSynthesis` scale (`1` = normal). */
+/** The "slow" button's rate, `speechSynthesis` scale (`1` = the browser's own native default). */
 export const SLOW_RATE = 0.7;
 
 interface Copy {
@@ -66,6 +73,8 @@ export interface SpeakButtonProps {
    * Defaults to `false` (the full two-button form).
    */
   compact?: boolean;
+  /** Also mounts the accent/voice settings popover next to the speak controls. Ignored when `compact`. Defaults to `false`. */
+  showSettings?: boolean;
   className?: string;
 }
 
@@ -80,7 +89,7 @@ const COMPACT_SIZE = 'h-6 w-6';
 /** Subtle "currently speaking" animation on the pressed icon; reduced motion drops it entirely. */
 const SPEAKING_ICON = 'animate-pulse motion-reduce:animate-none';
 
-export default function SpeakButton({ text, lang, compact = false, className }: SpeakButtonProps) {
+export default function SpeakButton({ text, lang, compact = false, showSettings = false, className }: SpeakButtonProps) {
   const { supported, speaking, speak } = useSpeech();
   // Which of THIS button's two controls started the utterance currently
   // playing, if any — `useSpeech`'s own `speaking` is one boolean shared by
@@ -112,7 +121,7 @@ export default function SpeakButton({ text, lang, compact = false, className }: 
         data-testid="speak-button"
         aria-label={t.speak}
         aria-pressed={active === 'normal'}
-        onClick={() => press(1, 'normal')}
+        onClick={() => press(NORMAL_RATE, 'normal')}
         className={cn(ICON_BUTTON, size)}
       >
         <SpeakerHighIcon aria-hidden="true" className={cn(active === 'normal' && SPEAKING_ICON)} />
@@ -130,6 +139,8 @@ export default function SpeakButton({ text, lang, compact = false, className }: 
           <PersonSimpleWalkIcon aria-hidden="true" className={cn(active === 'slow' && SPEAKING_ICON)} />
         </button>
       )}
+
+      {showSettings && !compact && <VoiceSettingsButton lang={lang} className="ml-0.5" />}
     </span>
   );
 }
