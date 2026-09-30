@@ -7,9 +7,9 @@
  * (`POST .../acceso/otorgar` / `POST .../acceso/[userId]/revocar`).
  *
  * Only serializable props cross the `client:load` boundary (`initialCourse`,
- * `initialOwners`) — no function props, same rule every other island here
- * follows. Module/lesson authoring (add/rename/reorder/delete) is NOT part
- * of this panel yet — see the feature's own tracking notes.
+ * `initialOwners`, `initialModules`) — no function props, same rule every
+ * other island here follows. Module/lesson authoring itself lives in
+ * `ModuleManager` (a plain child component, not its own island).
  */
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
+import ModuleManager, { type ModuleRecord } from './ModuleManager';
 
 export type CourseStatus = 'draft' | 'published' | 'archived';
 
@@ -47,11 +48,12 @@ export interface CourseEditPanelProps {
   lang: Lang;
   initialCourse: EditableCourse;
   initialOwners: CourseOwner[];
+  initialModules: ModuleRecord[];
 }
 
 const LEVELS = ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 
-export default function CourseEditPanel({ lang, initialCourse, initialOwners }: CourseEditPanelProps) {
+export default function CourseEditPanel({ lang, initialCourse, initialOwners, initialModules }: CourseEditPanelProps) {
   const t = UI_LABELS[lang].admin.cursos;
   const errors = t.errors as Record<string, string>;
   const errorMessage = (key: string | null) => (key ? (errors[key] ?? errors.db_error) : null);
@@ -273,6 +275,8 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners }: 
           </Button>
         </div>
       </form>
+
+      <ModuleManager lang={lang} courseId={course.id} initialModules={initialModules} />
 
       <section className="flex flex-col gap-4" data-testid="course-access-panel">
         <div>
