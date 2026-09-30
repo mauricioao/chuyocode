@@ -24,6 +24,7 @@ import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { PuzzlePieceIcon } from '@phosphor-icons/react/dist/ssr/PuzzlePiece';
 import { KeyboardIcon } from '@phosphor-icons/react/dist/ssr/Keyboard';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { PackageIcon } from '@phosphor-icons/react/dist/ssr/Package';
 import type { GameMode } from '@/lib/activities/gameModes';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,7 @@ const ICONS: Partial<Record<GameMode, typeof ListChecksIcon>> = {
   anagram: PuzzlePieceIcon,
   hangman: KeyboardIcon,
   truefalse: CheckCircleIcon,
+  openbox: PackageIcon,
 };
 
 export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: QuizGameModeSwitcherProps) {
@@ -63,6 +65,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
     anagram: t.modeAnagram,
     hangman: t.modeHangman,
     truefalse: t.modeTrueFalse,
+    openbox: t.modeOpenBox,
   };
 
   return (

@@ -367,6 +367,22 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
+  it('renders Abre la caja when mode="openbox"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="openbox"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-openbox')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
   it('reports a mode change through onModeChange', () => {
     const onModeChange = vi.fn();
     render(

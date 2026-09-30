@@ -652,6 +652,14 @@ export const UI_LABELS = {
         tfWrong: 'Incorrecto',
         tfScorePrefix: 'Puntaje',
         tfPlayAgain: 'Jugar de nuevo',
+        // Abre la caja (Wordwall "Open the box"): a grid of numbered boxes,
+        // each hiding one question.
+        modeOpenBox: 'Abre la caja',
+        openboxHint: 'Toca una caja para abrirla.',
+        openboxReveal: 'Ver respuesta',
+        openboxBoxAriaPrefix: 'Caja',
+        openboxOpenedSuffix: 'abierta',
+        openboxClosedSuffix: 'cerrada',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1552,6 +1560,12 @@ export const UI_LABELS = {
         tfWrong: 'Incorrect',
         tfScorePrefix: 'Score',
         tfPlayAgain: 'Play again',
+        modeOpenBox: 'Open the box',
+        openboxHint: 'Tap a box to open it.',
+        openboxReveal: 'Show answer',
+        openboxBoxAriaPrefix: 'Box',
+        openboxOpenedSuffix: 'opened',
+        openboxClosedSuffix: 'closed',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',

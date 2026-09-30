@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { GameMode } from '@/lib/activities/gameModes';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 
 afterEach(cleanup);
@@ -74,9 +75,15 @@ describe('QuizGameModeSwitcher', () => {
     expect(screen.getByText('Verdadero o falso')).toBeTruthy();
   });
 
-  it('renders no control for a mode with no icon/label wired in yet', () => {
+  it('renders "Abre la caja" for the openbox mode', () => {
     render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'openbox']} active="quiz" onChange={vi.fn()} />);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getByText('Abre la caja')).toBeTruthy();
+  });
+
+  it('renders no control for a mode with no icon/label wired in yet', () => {
+    const futureMode = 'future-mode' as GameMode;
+    render(<QuizGameModeSwitcher lang="es" modes={['quiz', futureMode]} active="quiz" onChange={vi.fn()} />);
     expect(screen.getAllByRole('radio')).toHaveLength(1);
-    expect(screen.queryByTestId('quiz-game-mode-openbox')).toBeNull();
   });
 });
