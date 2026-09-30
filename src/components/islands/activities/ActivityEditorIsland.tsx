@@ -153,7 +153,26 @@ export default function ActivityEditorIsland({
     reason: IncompleteBlockInfo['reason'];
   } | null>(null);
   const [preview, setPreview] = useState(false);
-  const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => new Set());
+  // "Open the first block on entry" (creator polish round 4, owner
+  // feedback #1): a brand-new editor used to land with EVERY block
+  // collapsed — a lost, huge-empty-card first impression. On first mount,
+  // expand the FIRST block (the desktop "focus" layout `BlockList.tsx`
+  // already derives from a one-element `expandedBlockIds`) instead, UNLESS
+  // the URL's own hash already targets a different one — `goToBlock`'s own
+  // `#block-<id>` convention (the block-index popover's deep link), read
+  // straight out of `window.location.hash` since this island is client-only
+  // (no SSR value to agree with). A brand-new, zero-block activity has
+  // nothing to expand — its empty state (the type picker/uploader) is
+  // already unconditionally open via `showAddFlow` below. "Collapse all"
+  // (`collapseAllBlocks`) keeps working exactly as before: this only seeds
+  // the INITIAL state, nothing pins it open afterward.
+  const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => {
+    if (initialBlocks.length === 0) return new Set();
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const hashBlockId = hash.startsWith('#block-') ? hash.slice('#block-'.length) : null;
+    const targeted = hashBlockId && initialBlocks.some((b) => b.id === hashBlockId) ? hashBlockId : null;
+    return new Set([targeted ?? initialBlocks[0].id]);
+  });
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [addingBlock, setAddingBlock] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
