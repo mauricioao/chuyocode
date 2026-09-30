@@ -340,6 +340,33 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
+  it('renders Verdadero o falso when mode="truefalse", for a block with pool-backed eligible slots', () => {
+    const TRUEFALSE_BLOCK: QuizBlock = {
+      id: 'q-tf',
+      type: 'quiz',
+      payload: {
+        pools: { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+        slots: [
+          { id: 's1', label: 'The animal is a ___.', input: 'choice', pool: 'p1', answer: ['cat'] },
+          { id: 's2', label: 'The pet is a ___.', input: 'choice', pool: 'p1', answer: ['dog'] },
+        ],
+      },
+    };
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={TRUEFALSE_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="truefalse"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-truefalse')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
   it('reports a mode change through onModeChange', () => {
     const onModeChange = vi.fn();
     render(

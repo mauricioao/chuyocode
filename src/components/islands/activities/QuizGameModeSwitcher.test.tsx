@@ -68,9 +68,15 @@ describe('QuizGameModeSwitcher', () => {
     expect(screen.getByText('Ahorcado')).toBeTruthy();
   });
 
-  it('renders no control for a mode with no icon/label wired in yet', () => {
+  it('renders "Verdadero o falso" for the truefalse mode', () => {
     render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'truefalse']} active="quiz" onChange={vi.fn()} />);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getByText('Verdadero o falso')).toBeTruthy();
+  });
+
+  it('renders no control for a mode with no icon/label wired in yet', () => {
+    render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'openbox']} active="quiz" onChange={vi.fn()} />);
     expect(screen.getAllByRole('radio')).toHaveLength(1);
-    expect(screen.queryByTestId('quiz-game-mode-truefalse')).toBeNull();
+    expect(screen.queryByTestId('quiz-game-mode-openbox')).toBeNull();
   });
 });

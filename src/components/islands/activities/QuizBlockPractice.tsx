@@ -44,6 +44,8 @@ import {
   availableGameModes,
   anagramEligible,
   hangmanEligible,
+  deriveTrueFalseItems,
+  seedFromString,
   type GameMode,
 } from '@/lib/activities/gameModes';
 import { rendererFor } from '@/components/islands/mechanics/registry';
@@ -55,6 +57,7 @@ import QuizSpeakingCards from './QuizSpeakingCards';
 import QuizWheel from './QuizWheel';
 import QuizAnagram from './QuizAnagram';
 import QuizHangman from './QuizHangman';
+import QuizTrueFalse from './QuizTrueFalse';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -72,7 +75,16 @@ export interface QuizBlockPracticeProps {
 }
 
 /** Modes this component can actually render. */
-const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak', 'wheel', 'anagram', 'hangman'];
+const SUPPORTED_MODES: readonly GameMode[] = [
+  'quiz',
+  'cards',
+  'match',
+  'speak',
+  'wheel',
+  'anagram',
+  'hangman',
+  'truefalse',
+];
 
 export default function QuizBlockPractice({
   lang,
@@ -90,8 +102,8 @@ export default function QuizBlockPractice({
 
   const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
   const modes = useMemo(
-    () => availableGameModes(gameItems).filter((m) => SUPPORTED_MODES.includes(m)),
-    [gameItems],
+    () => availableGameModes(gameItems, payload).filter((m) => SUPPORTED_MODES.includes(m)),
+    [gameItems, payload],
   );
   // A mode this block no longer offers (edited down since it was chosen)
   // falls back to `quiz` rather than rendering nothing.
@@ -103,7 +115,8 @@ export default function QuizBlockPractice({
     effectiveMode === 'speak' ||
     effectiveMode === 'wheel' ||
     effectiveMode === 'anagram' ||
-    effectiveMode === 'hangman'
+    effectiveMode === 'hangman' ||
+    effectiveMode === 'truefalse'
   ) {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
@@ -118,6 +131,9 @@ export default function QuizBlockPractice({
           <QuizAnagram lang={lang} items={anagramEligible(gameItems)} seed={block.id} />
         )}
         {effectiveMode === 'hangman' && <QuizHangman lang={lang} items={hangmanEligible(gameItems)} />}
+        {effectiveMode === 'truefalse' && (
+          <QuizTrueFalse lang={lang} items={deriveTrueFalseItems(payload, seedFromString(block.id))} />
+        )}
       </div>
     );
   }

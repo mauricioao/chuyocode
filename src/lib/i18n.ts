@@ -641,6 +641,17 @@ export const UI_LABELS = {
         hangmanNext: 'Siguiente palabra',
         hangmanDone: '¡Listo! Jugaste todas las palabras.',
         hangmanPlayAgain: 'Jugar de nuevo',
+        // Verdadero o falso (Wordwall "True or false"): the question's gap
+        // filled with either its correct answer or a wrong pool option.
+        modeTrueFalse: 'Verdadero o falso',
+        tfTrue: 'Verdadero',
+        tfFalse: 'Falso',
+        tfCounterPrefix: 'Afirmación',
+        tfCounterOf: 'de',
+        tfCorrect: 'Correcto',
+        tfWrong: 'Incorrecto',
+        tfScorePrefix: 'Puntaje',
+        tfPlayAgain: 'Jugar de nuevo',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1532,6 +1543,15 @@ export const UI_LABELS = {
         hangmanNext: 'Next word',
         hangmanDone: 'Done! You played every word.',
         hangmanPlayAgain: 'Play again',
+        modeTrueFalse: 'True or false',
+        tfTrue: 'True',
+        tfFalse: 'False',
+        tfCounterPrefix: 'Statement',
+        tfCounterOf: 'of',
+        tfCorrect: 'Correct',
+        tfWrong: 'Incorrect',
+        tfScorePrefix: 'Score',
+        tfPlayAgain: 'Play again',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
