@@ -1,0 +1,68 @@
+---
+/**
+ * CourseCtaButtons — the one CTA decision, shared verbatim by the course
+ * landing page (`/[lang]/cursos/[slug]`) and the lesson player's lock
+ * screen (`/[lang]/cursos/[slug]/[lessonId]`), so the two can never drift
+ * into different copy or a different disabled/enabled split.
+ *
+ * `access` is `courseAccess`'s own result (`@lib/courses/access`):
+ *   - `'owned'`   -> a real link, `ctaContinueLabel`, into `href`.
+ *   - `'premium'` -> a real link, `ctaStartLabel`, into `href`.
+ *   - `'preview-only'` -> "Hazte Premium" + (if `priceCents` is set)
+ *     "Comprar de por vida <price>", both DISABLED — payments do not exist
+ *     yet — with a muted "Pagos próximamente" note.
+ * `href`/`ctaContinueLabel`/`ctaStartLabel` are omitted together (no lesson
+ * to link to yet, e.g. a course with no lessons at all): the owned/premium
+ * branches then render nothing rather than a dead link.
+ */
+import { UI_LABELS, type Lang } from '@lib/i18n';
+import { formatPrice } from '@lib/courses/price';
+import type { CourseAccessLevel } from '@lib/courses/access';
+
+interface Props {
+  lang: Lang;
+  access: CourseAccessLevel;
+  href?: string | null;
+  priceCents: number | null;
+  currency: string;
+}
+
+const { lang, access, href, priceCents, currency } = Astro.props;
+const t = UI_LABELS[lang].courses.landing;
+---
+
+{
+  (access === 'owned' || access === 'premium') && href ? (
+    <a
+      href={href}
+      data-testid={access === 'owned' ? 'cta-continue' : 'cta-start'}
+      class="inline-flex w-fit items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+    >
+      {access === 'owned' ? t.ctaContinue : t.ctaStart}
+    </a>
+  ) : (
+    <>
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled
+          data-testid="cta-premium"
+          class="cursor-not-allowed rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground opacity-60"
+        >
+          {t.ctaPremium}
+        </button>
+        {priceCents != null && (
+          <button
+            type="button"
+            disabled
+            data-testid="cta-buy-lifetime"
+            class="cursor-not-allowed rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground opacity-60"
+          >
+            {t.ctaBuyLifetime} {formatPrice(priceCents, currency, lang)}
+          </button>
+        )}
+      </div>
+      <p class="text-xs text-muted-foreground">{t.paymentsSoon}</p>
+    </>
+  )
+}

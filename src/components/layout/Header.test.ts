@@ -18,8 +18,16 @@ describe('Header.astro — nav', () => {
     });
     expect(html).toContain(UI_LABELS.es.nav.books);
     expect(html).toContain(UI_LABELS.es.nav.news);
-    expect(html).toContain(UI_LABELS.es.nav.courses);
     expect(html).toContain(UI_LABELS.es.nav.englishLink);
+  });
+
+  it('never links to Cursos — the feature stays hidden until it launches (see navCoursesGuard.test.ts)', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    expect(html).not.toContain('href="/es/cursos"');
+    expect(html).not.toContain(`>${UI_LABELS.es.nav.courses}<`);
   });
 
   it('drops the Inicio (home) nav link', async () => {
@@ -31,12 +39,11 @@ describe('Header.astro — nav', () => {
     expect(html).not.toContain(`>${UI_LABELS.es.nav.home}<`);
   });
 
-  it('links Cursos and Inglés to their (future) localized routes', async () => {
+  it('links Inglés to its localized route', async () => {
     const container = await createContainer();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
-    expect(html).toContain('href="/es/cursos"');
     expect(html).toContain('href="/es/ingles"');
   });
 

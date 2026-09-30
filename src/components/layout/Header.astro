@@ -56,10 +56,14 @@ const { lang = DEFAULT_LANG } = Astro.props;
 const labels = UI_LABELS[lang].nav;
 const base = `/${lang}`;
 
+// "Cursos" is deliberately NOT in this list yet: the paid Courses feature
+// (see `0017_courses.sql`) is being built base-first and stays HIDDEN — no
+// nav/hub/menu entry anywhere — until payments actually exist and the
+// feature is ready to announce. `src/navCoursesGuard.test.ts` guards this
+// repo-wide, not just here.
 const navLinks = [
   { href: `${base}/libros`, label: labels.books },
   { href: `${base}/noticias`, label: labels.news },
-  { href: `${base}/cursos`, label: labels.courses },
   { href: `${base}/ingles`, label: labels.englishLink },
 ];
 ---
