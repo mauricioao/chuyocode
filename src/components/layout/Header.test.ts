@@ -128,6 +128,27 @@ describe('Header.astro — UserMenu island (Login step 1b)', () => {
   });
 });
 
+// Navigation-without-flicker PR: the header must persist across client-side
+// navigations (no double-header cross-fade, no UserMenu remount/flash).
+describe('Header.astro — persists across navigations (navigation-without-flicker PR)', () => {
+  it('marks the header root transition:persist', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('data-astro-transition-persist');
+  });
+
+  it('opts the header out of the page fade animation', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    const headerOpenTag = html.slice(html.indexOf('<header'), html.indexOf('>', html.indexOf('<header')) + 1);
+    expect(headerOpenTag).toContain('data-astro-transition-scope');
+  });
+});
+
 // Mobile layout pass: the hamburger panel's own account-entries slot —
 // UserMenu (already mounted above) portals into it client-side once it
 // knows who is signed in. The slot itself must stay EMPTY server-side (see

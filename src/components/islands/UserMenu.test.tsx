@@ -14,6 +14,7 @@ import { findVoseo } from '@/lib/neutralSpanish';
 import { UI_LABELS } from '@/lib/i18n';
 import UserMenu, { MOBILE_MENU_ACCOUNT_SLOT_ID } from './UserMenu';
 import type { Profile } from '@/lib/profile';
+import { readMeCache, writeMeCache } from '@/lib/meCache';
 
 const GOOGLE_PROFILE: Profile = {
   name: 'Juan Perez',
@@ -70,6 +71,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   document.getElementById(MOBILE_MENU_ACCOUNT_SLOT_ID)?.remove();
+  sessionStorage.clear();
+  window.history.pushState({}, '', '/');
 });
 
 /**
@@ -154,15 +157,92 @@ describe('UserMenu — signed out', () => {
   });
 });
 
-describe('UserMenu — loading placeholder width', () => {
-  it('reserves the same layout as the single signed-out "Ingresar" button, so nothing jumps', () => {
+describe('UserMenu — loading placeholder shape', () => {
+  it('renders a neutral circle the size of the avatar, never the "Ingresar" pill shape', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
     render(<UserMenu lang="es" />);
 
     const placeholder = screen.getByTestId('user-menu-loading');
     const pills = placeholder.querySelectorAll('[data-loading-pill]');
     expect(pills.length).toBe(1);
-    expect(pills[0]?.className).toContain('w-24');
+    // Matches the signed-in avatar trigger's own `h-9 w-9 rounded-full`.
+    expect(pills[0]?.className).toContain('h-9');
+    expect(pills[0]?.className).toContain('w-9');
+    expect(pills[0]?.className).toContain('rounded-full');
+    expect(pills[0]?.className).not.toContain('w-24');
+  });
+});
+
+describe('UserMenu — cached /api/me (instant account state, navigation-without-flicker PR)', () => {
+  it('renders the avatar immediately from a cached signed-in profile, with no loading placeholder', () => {
+    writeMeCache({ profile: PASSWORD_PROFILE });
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    render(<UserMenu lang="es" />);
+
+    expect(screen.getByTestId('user-menu-trigger')).toBeTruthy();
+    expect(screen.queryByTestId('user-menu-loading')).toBeNull();
+  });
+
+  it('renders "Ingresar" immediately from a cached signed-out result, with no loading placeholder', () => {
+    writeMeCache({ profile: null });
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    render(<UserMenu lang="es" />);
+
+    expect(screen.getByTestId('user-menu-signin')).toBeTruthy();
+    expect(screen.queryByTestId('user-menu-loading')).toBeNull();
+  });
+
+  it('still revalidates in the background and updates the cache once the fetch resolves', async () => {
+    writeMeCache({ profile: null });
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+
+    expect(screen.getByTestId('user-menu-signin')).toBeTruthy();
+    await screen.findByTestId('user-menu-trigger');
+    expect(readMeCache()).toEqual({ profile: PASSWORD_PROFILE });
+  });
+
+  it('invalidates the cache right after a sign-in redirect (?auth=signed-in), even if a stale answer is cached', () => {
+    writeMeCache({ profile: null });
+    window.history.pushState({}, '', '/es/?auth=signed-in');
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    render(<UserMenu lang="es" />);
+
+    expect(screen.getByTestId('user-menu-loading')).toBeTruthy();
+    expect(readMeCache()).toBeUndefined();
+  });
+
+  it('invalidates the cache right after a sign-out redirect (?auth=signed-out), even if a stale answer is cached', () => {
+    writeMeCache({ profile: PASSWORD_PROFILE });
+    window.history.pushState({}, '', '/es/?auth=signed-out');
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    render(<UserMenu lang="es" />);
+
+    expect(screen.getByTestId('user-menu-loading')).toBeTruthy();
+    expect(readMeCache()).toBeUndefined();
+  });
+
+  it('invalidates the cache on a 401 from the background refresh', async () => {
+    writeMeCache({ profile: PASSWORD_PROFILE });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ status: 401, ok: false, json: async () => ({ profile: null }) }),
+    );
+    render(<UserMenu lang="es" />);
+
+    await screen.findByTestId('user-menu-signin');
+    expect(readMeCache()).toBeUndefined();
+  });
+
+  it('invalidates the cache when the sign-out form is submitted', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const form = screen.getByTestId('user-menu-dropdown').querySelector('form');
+    expect(readMeCache()).toEqual({ profile: PASSWORD_PROFILE });
+    fireEvent.submit(form!);
+    expect(readMeCache()).toBeUndefined();
   });
 });
 
