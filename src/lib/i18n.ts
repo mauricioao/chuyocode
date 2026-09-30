@@ -240,6 +240,11 @@ export const UI_LABELS = {
         saveRetry: 'Reintentar',
         unloadWarning: 'Hay cambios sin guardar. Van a perderse si se cierra la página.',
         blocksEmpty: 'Todavía no hay bloques. Agregar el primero para empezar.',
+        // Empty block list (creator polish round 4, owner feedback #3): the
+        // list itself always shows the picker right below this line — no
+        // separate "+" click needed first (unlike `blocksEmpty` above, which
+        // is `EditorSideToolbar`'s own "no blocks to jump to" popover text).
+        blocksEmptyChooseNext: 'Elige con qué seguir',
         addBlock: 'Agregar bloque',
         moveUp: 'Subir bloque',
         moveDown: 'Bajar bloque',
@@ -295,6 +300,7 @@ export const UI_LABELS = {
         // Inline messages next to the exact block/zone `enviar.ts` points
         // back to on a rejected submit (creator polish round 3, `t.submitErrors`'s
         // sibling, keyed by `findIncompleteBlock`'s own reason codes).
+        incompleteNoImage: 'Esta hoja de trabajo todavía no tiene una imagen. Subir un archivo antes de enviarla.',
         incompleteNoZones: 'Esta hoja de trabajo necesita al menos una zona de respuesta.',
         incompleteNoAnswers: 'Esta zona todavía no tiene una respuesta.',
         incompleteTooFewOptions: 'Esta zona de opción múltiple necesita al menos dos opciones.',
@@ -342,8 +348,11 @@ export const UI_LABELS = {
         },
       },
       worksheet: {
-        uploadTitle: 'Subir una imagen o un PDF',
-        uploadHint: 'Arrastrar un archivo hasta aquí, o elegirlo desde el dispositivo.',
+        // Empty worksheet block's drop zone (creator polish round 4, owner
+        // feedback #2): `uploadTitle` is the big centered call to action,
+        // `uploadHint` names the accepted formats/size underneath the button.
+        uploadTitle: 'Arrastra tu hoja de trabajo o PDF aquí',
+        uploadHint: 'JPG, PNG, WEBP o PDF. Tamaño máximo: 2 MB por imagen.',
         uploadButton: 'Elegir archivo',
         uploadDragActive: 'Soltar el archivo aquí',
         uploadProgress: 'Subiendo…',
@@ -1000,6 +1009,7 @@ export const UI_LABELS = {
         saveRetry: 'Retry',
         unloadWarning: 'There are unsaved changes. They will be lost if this page is closed.',
         blocksEmpty: 'No blocks yet. Add the first one to get started.',
+        blocksEmptyChooseNext: 'Choose what to continue with',
         addBlock: 'Add block',
         moveUp: 'Move block up',
         moveDown: 'Move block down',
@@ -1045,6 +1055,7 @@ export const UI_LABELS = {
         savedStatus: 'Changes saved',
         errorStatus: 'Could not save',
         saveErrorRetry: "Couldn't save, retry",
+        incompleteNoImage: "This worksheet doesn't have an image yet. Upload a file before submitting it.",
         incompleteNoZones: 'This worksheet needs at least one answer zone.',
         incompleteNoAnswers: "This zone doesn't have an answer yet.",
         incompleteQuizNoSlots: 'This questions block needs at least one question.',
@@ -1082,8 +1093,8 @@ export const UI_LABELS = {
         },
       },
       worksheet: {
-        uploadTitle: 'Upload an image or a PDF',
-        uploadHint: 'Drop a file here, or pick one from this device.',
+        uploadTitle: 'Drag your worksheet or PDF here',
+        uploadHint: 'JPG, PNG, WEBP or PDF. Maximum size: 2 MB per image.',
         uploadButton: 'Choose file',
         uploadDragActive: 'Drop the file here',
         uploadProgress: 'Uploading…',

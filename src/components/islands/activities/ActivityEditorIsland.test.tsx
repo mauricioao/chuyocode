@@ -103,10 +103,15 @@ describe('ActivityEditorIsland — initial render', () => {
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
   });
 
-  it('shows the empty-blocks state and the add-block button', () => {
+  // Empty activity (creator polish round 4, owner feedback #3): the two
+  // type cards render immediately, no "+" click needed first — the
+  // mobile-only text button is hidden in that state instead (`ActivityEditorIsland.tsx`'s
+  // own `showAddFlow`).
+  it('shows the empty-blocks state and the type picker immediately, with no add-block button', () => {
     renderEditor();
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();
-    expect(screen.getByTestId('add-block-button')).toBeTruthy();
+    expect(screen.getByTestId('block-type-picker')).toBeTruthy();
+    expect(screen.queryByTestId('add-block-button')).toBeNull();
   });
 });
 
@@ -320,7 +325,7 @@ describe('ActivityEditorIsland — adding a worksheet block', () => {
     );
 
     renderEditor();
-    fireEvent.click(screen.getByTestId('add-block-button'));
+    // Empty activity: the picker is already open, no "+" click needed first.
     expect(screen.getByTestId('block-type-picker')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('picker-worksheet'));
@@ -341,7 +346,7 @@ describe('ActivityEditorIsland — adding a worksheet block', () => {
 describe('ActivityEditorIsland — adding a quiz block', () => {
   it('opens the picker and appends an empty, expanded quiz block immediately — no upload step', () => {
     renderEditor();
-    fireEvent.click(screen.getByTestId('add-block-button'));
+    // Empty activity: the picker is already open, no "+" click needed first.
     expect(screen.getByTestId('block-type-picker')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('picker-questions'));
@@ -467,7 +472,7 @@ describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pa
     );
 
     renderEditor();
-    fireEvent.click(screen.getByTestId('add-block-button'));
+    // Empty activity: the picker is already open, no "+" click needed first.
     fireEvent.click(screen.getByTestId('picker-worksheet'));
 
     const input = screen.getByTestId('worksheet-file-input') as HTMLInputElement;

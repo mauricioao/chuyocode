@@ -1,11 +1,39 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import { useState } from 'react';
 import BlockList from './BlockList';
 import type { Block, QuizBlock, WorksheetBlock, Zone } from '@/lib/activities/blocks';
 
-afterEach(() => cleanup());
+// The empty worksheet block's own empty state (creator polish round 4,
+// owner feedback #2) renders `WorksheetUploader` inline — same pipeline
+// mocking pattern as `WorksheetUploader.test.tsx`/`ActivityEditorIsland.test.tsx`.
+const pipelineMocks = vi.hoisted(() => ({
+  routeFileType: vi.fn(),
+  convertImageToWebp: vi.fn(),
+  validatePageSelection: vi.fn(),
+  convertPdfPagesToWebp: vi.fn(),
+  renderPdfThumbnails: vi.fn(),
+}));
+vi.mock('@/lib/activities/imagePipeline', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/activities/imagePipeline')>(
+    '@/lib/activities/imagePipeline',
+  );
+  return {
+    ...actual,
+    routeFileType: pipelineMocks.routeFileType,
+    convertImageToWebp: pipelineMocks.convertImageToWebp,
+    validatePageSelection: pipelineMocks.validatePageSelection,
+    convertPdfPagesToWebp: pipelineMocks.convertPdfPagesToWebp,
+    renderPdfThumbnails: pipelineMocks.renderPdfThumbnails,
+  };
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function worksheetBlock(id: string, overrides: Partial<WorksheetBlock> = {}): WorksheetBlock {
   return {
@@ -152,6 +180,70 @@ describe('BlockList — quiz blocks', () => {
     fireEvent.click(screen.getByTestId('add-question-b1'));
     expect(screen.getByTestId('block-b1').textContent).toContain('pregunta');
     expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
+  });
+});
+
+describe('BlockList — empty worksheet block (creator polish round 4, owner feedback #2)', () => {
+  it('shows the upload drop zone instead of the canvas when a worksheet block has no image yet', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} initialExpanded={['b1']} />);
+    expect(screen.getByTestId('worksheet-uploader')).toBeTruthy();
+    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+  });
+
+  it('fills the block with the uploaded image and switches to the zone editor', async () => {
+    pipelineMocks.routeFileType.mockReturnValue('image');
+    pipelineMocks.convertImageToWebp.mockResolvedValue(new Blob(['x']));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ path: 'p.webp', width: 400, height: 300 }) }),
+    );
+
+    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} initialExpanded={['b1']} />);
+    const input = screen.getByTestId('worksheet-file-input') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] } });
+    });
+
+    await waitFor(() => expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy());
+    expect(screen.queryByTestId('worksheet-uploader')).toBeNull();
+  });
+
+  it('a multi-page PDF fills this block with the first page and appends the rest as new blocks', async () => {
+    pipelineMocks.routeFileType.mockReturnValue('pdf');
+    // Same "text-field fallback" path `ActivityEditorIsland.test.tsx`'s own
+    // multi-page test uses — thumbnail rendering is a separate concern
+    // (`WorksheetUploader.test.tsx` owns it).
+    pipelineMocks.renderPdfThumbnails.mockRejectedValue(new Error('pdf_failed'));
+    pipelineMocks.validatePageSelection.mockReturnValue([1, 2]);
+    pipelineMocks.convertPdfPagesToWebp.mockResolvedValue([new Blob(['p1']), new Blob(['p2'])]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ path: 'p1.webp', width: 400, height: 300 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ path: 'p2.webp', width: 400, height: 300 }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} initialExpanded={['b1']} />);
+    const input = screen.getByTestId('worksheet-file-input') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [new File(['x'], 'a.pdf', { type: 'application/pdf' })] } });
+    });
+    await waitFor(() => expect(screen.getByTestId('pdf-pages-input')).toBeTruthy());
+    fireEvent.change(screen.getByTestId('pdf-pages-input'), { target: { value: '1, 2' } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('pdf-pages-confirm'));
+    });
+
+    await waitFor(() => expect(screen.getAllByTestId(/^block-handle-/)).toHaveLength(2));
+    // The originally-empty block b1 is filled (its own canvas is expanded);
+    // the SECOND page landed in a brand-new sibling block, still collapsed.
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+  });
+});
+
+describe('BlockList — empty block list (creator polish round 4, owner feedback #3)', () => {
+  it('shows the "choose what to continue with" heading, not the older generic empty text', () => {
+    render(<Harness initialBlocks={[]} />);
+    expect(screen.getByTestId('blocks-empty').textContent).toBe('Elige con qué seguir');
   });
 });
 

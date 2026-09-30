@@ -25,14 +25,20 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
   const t = UI_LABELS[lang].activities.moderation;
 
   if (block.type === 'worksheet') {
+    // A pending-review/live worksheet always has an image by the time it
+    // reaches moderation — `enviar.ts`'s own `findIncompleteBlock` gate
+    // (`no_image`) blocks submitting an imageless one — this guard only
+    // keeps the type honest.
     return (
       <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-3">
-        <img
-          src={resolveImageUrl(block.image.path)}
-          alt=""
-          data-testid="moderation-block-image"
-          className="max-h-96 w-full rounded-md border border-border object-contain"
-        />
+        {block.image && (
+          <img
+            src={resolveImageUrl(block.image.path)}
+            alt=""
+            data-testid="moderation-block-image"
+            className="max-h-96 w-full rounded-md border border-border object-contain"
+          />
+        )}
         <ul className="flex flex-col gap-2">
           {block.zones.map((zone, index) => (
             <li key={zone.id} data-testid={`moderation-zone-${zone.id}`} className="rounded-md border border-border p-2 text-sm">

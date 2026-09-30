@@ -89,7 +89,10 @@ function isAllowedImagePath(path: string, userId: string, activityId: string): b
 
 function everyImageAllowed(blocks: Block[], userId: string, activityId: string): boolean {
   return blocks.every((block) => {
-    if (block.type !== 'worksheet') return true;
+    // A block with no image yet (the editor's own empty-state block —
+    // `blocks.ts`'s `parseWorksheetBlock`, `'draft'` mode only) has nothing
+    // to check.
+    if (block.type !== 'worksheet' || !block.image) return true;
     return isAllowedImagePath(block.image.path, userId, activityId);
   });
 }

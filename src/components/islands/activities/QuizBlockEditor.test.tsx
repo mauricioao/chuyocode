@@ -30,10 +30,14 @@ function Harness({ initialPayload }: { initialPayload: Payload }) {
 }
 
 describe('QuizBlockEditor — empty state', () => {
-  it('shows the empty-questions message and no question list', () => {
+  it('shows the empty-questions message, a primary add button, and no question list', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
-    expect(screen.getByTestId('quiz-empty-b1')).toBeTruthy();
+    const empty = screen.getByTestId('quiz-empty-b1');
+    expect(empty.textContent).toContain('Agrega tu primera pregunta');
     expect(screen.queryByTestId('quiz-question-list-b1')).toBeNull();
+    const addButton = screen.getByTestId('add-question-b1');
+    expect(empty.contains(addButton)).toBe(true);
+    expect(addButton.getAttribute('data-variant')).toBe('primary');
   });
 });
 

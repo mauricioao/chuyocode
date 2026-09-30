@@ -179,7 +179,7 @@ describe('duplicateActivity', () => {
     await duplicateActivity(ORIGINAL_ID, CALLER_ID);
     const newBlocks = createActivityMock.mock.calls[0][1].blocks as Block[];
     const worksheet = newBlocks[0] as Extract<Block, { type: 'worksheet' }>;
-    expect(worksheet.image.path.startsWith(`activity-uploads/${CALLER_ID}/`)).toBe(true);
+    expect(worksheet.image?.path.startsWith(`activity-uploads/${CALLER_ID}/`)).toBe(true);
   });
 
   it('assigns fresh ids to every block and zone', async () => {

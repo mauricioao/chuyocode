@@ -14,7 +14,12 @@ afterEach(() => {
 });
 
 describe('ActivityStartIsland', () => {
-  it('creates an activity and navigates to its editor when Worksheet is chosen', async () => {
+  // "First block visible" (creator polish round 4, owner feedback #2): the
+  // activity is created with one EMPTY worksheet block already in it — no
+  // image yet, rendered as the block's own drop-zone empty state once the
+  // editor opens — in the SAME `POST /api/actividades` call, not a second
+  // best-effort save.
+  it('creates an activity with one empty worksheet block already in it, and navigates to its editor', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: 'new-activity-1' }),
@@ -27,13 +32,15 @@ describe('ActivityStartIsland', () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-1'));
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/actividades',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ lang: 'es', blocks: [] }),
-      }),
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(url).toBe('/api/actividades');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body.lang).toBe('es');
+    expect(body.blocks).toEqual([
+      expect.objectContaining({ type: 'worksheet', rotation: 0, zones: [] }),
+    ]);
   });
 
   it('marks the worksheet card busy (aria-busy) while the request is in flight, with no inline "creating" text', async () => {
@@ -80,7 +87,7 @@ describe('ActivityStartIsland', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
   });
 
-  it('creates an activity, seeds one empty quiz block, and navigates when Questions is chosen', async () => {
+  it('creates an activity with one empty quiz block already in it, and navigates to its editor', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: 'new-activity-2' }),
@@ -93,15 +100,12 @@ describe('ActivityStartIsland', () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-2'));
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/actividades',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ lang: 'es', blocks: [] }) }),
-    );
-    const guardarCall = fetchMock.mock.calls.find(([url]) => url === '/api/actividades/new-activity-2/guardar');
-    expect(guardarCall).toBeTruthy();
-    const body = JSON.parse((guardarCall?.[1] as { body: string }).body);
-    expect(body.title).toBe('Sin título');
-    expect(body.level).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(url).toBe('/api/actividades');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body.lang).toBe('es');
     expect(body.blocks).toEqual([
       expect.objectContaining({ type: 'quiz', payload: { pools: {}, slots: [] } }),
     ]);
@@ -124,21 +128,5 @@ describe('ActivityStartIsland', () => {
     expect((screen.getByTestId('picker-worksheet') as HTMLButtonElement).disabled).toBe(true);
 
     resolveFetch({ ok: true, json: async () => ({ id: 'x' }) });
-  });
-
-  it('still navigates to the editor when the Questions seed save fails (best-effort)', async () => {
-    const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url === '/api/actividades') {
-        return Promise.resolve({ ok: true, json: async () => ({ id: 'new-activity-3' }) });
-      }
-      return Promise.reject(new Error('offline'));
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const navigate = vi.fn();
-
-    render(<ActivityStartIsland lang="es" navigate={navigate} />);
-    fireEvent.click(screen.getByTestId('picker-questions'));
-
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-3'));
   });
 });

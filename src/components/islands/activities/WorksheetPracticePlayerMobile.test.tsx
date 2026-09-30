@@ -13,14 +13,14 @@ import { act, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import WorksheetPracticePlayerMobile from './WorksheetPracticePlayerMobile';
-import type { WorksheetBlock } from '@/lib/activities/blocks';
+import type { ImageRef, WorksheetBlock } from '@/lib/activities/blocks';
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
-const BLOCK: WorksheetBlock = {
+const BLOCK: WorksheetBlock & { image: ImageRef } = {
   id: 'b1',
   type: 'worksheet',
   rotation: 0,
@@ -175,7 +175,7 @@ describe('WorksheetPracticePlayerMobile — per-zone bottom sheet', () => {
 
 /** D4 "Escuchar/Listen": the sheet's own SpeakButton, next to the input. */
 describe('WorksheetPracticePlayerMobile — speak affordance (D4)', () => {
-  const BLOCK_WITH_SPEAK: WorksheetBlock = {
+  const BLOCK_WITH_SPEAK: WorksheetBlock & { image: ImageRef } = {
     ...BLOCK,
     zones: BLOCK.zones.map((z) => (z.id === 'top-left' ? { ...z, speak: 'The cat sat.' } : z)),
   };
@@ -235,7 +235,7 @@ describe('WorksheetPracticePlayerMobile — speak affordance (D4)', () => {
 
 /** D5 "¿Por qué?": the sheet shows the explanation under the input, only once graded and only while incorrect. */
 describe('WorksheetPracticePlayerMobile — explanation (D5)', () => {
-  const BLOCK_WITH_EXPLANATION: WorksheetBlock = {
+  const BLOCK_WITH_EXPLANATION: WorksheetBlock & { image: ImageRef } = {
     ...BLOCK,
     zones: BLOCK.zones.map((z) => (z.id === 'top-left' ? { ...z, explanation: 'Because it is "a".' } : z)),
   };

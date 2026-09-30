@@ -157,6 +157,12 @@ export default function ActivityEditorIsland({
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [addingBlock, setAddingBlock] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
+  // Empty activity (creator polish round 4, owner feedback #3): the add-flow
+  // (picker, then the worksheet uploader) is ALWAYS open while there are
+  // zero blocks — no separate "+" click needed first, matching
+  // `BlockList.tsx`'s own "Elige con qué seguir" empty-state heading right
+  // above it in the same scroll column.
+  const showAddFlow = addingBlock || blocks.length === 0;
 
   // Baseline captured at the start of an in-progress (non-committing)
   // transaction, e.g. a zone drag — see `updateDoc`.
@@ -562,6 +568,7 @@ export default function ActivityEditorIsland({
   // Maps `findIncompleteBlock`'s own reason codes (`blocks.ts`) onto their
   // inline message — see `incompleteTarget`'s own comment above.
   const INCOMPLETE_REASON_KEYS = {
+    no_image: 'incompleteNoImage',
     no_zones: 'incompleteNoZones',
     no_answers: 'incompleteNoAnswers',
     too_few_options: 'incompleteTooFewOptions',
@@ -781,7 +788,13 @@ export default function ActivityEditorIsland({
             className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-3 lg:py-3"
           >
             {blocks
-              .filter((b): b is WorksheetBlock => b.type === 'worksheet')
+              // A brand-new worksheet block with no image yet (creator
+              // polish round 4, owner feedback #2) has nothing to preview —
+              // skipped here entirely rather than crashing `WorksheetPlayer`,
+              // which requires a real `image`.
+              .filter((b): b is WorksheetBlock & { image: NonNullable<WorksheetBlock['image']> } =>
+                b.type === 'worksheet' && b.image !== undefined,
+              )
               .map((block) => (
                 <WorksheetPlayer
                   key={block.id}
@@ -821,7 +834,7 @@ export default function ActivityEditorIsland({
                 toolbar's icon (`toolbar-add-block`, always reachable
                 without scrolling); this text button stays for
                 mobile/narrow layouts. */}
-            {!addingBlock && (
+            {!showAddFlow && (
               <Button
                 type="button"
                 variant="outline"
@@ -833,7 +846,7 @@ export default function ActivityEditorIsland({
               </Button>
             )}
 
-            {addingBlock && !showUploader && (
+            {showAddFlow && !showUploader && (
               <BlockTypePicker
                 lang={lang}
                 onSelectWorksheet={handleWorksheetChosen}
@@ -841,7 +854,7 @@ export default function ActivityEditorIsland({
               />
             )}
 
-            {addingBlock && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
+            {showAddFlow && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
           </div>
         )}
 

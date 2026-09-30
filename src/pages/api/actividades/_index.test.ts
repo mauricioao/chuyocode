@@ -81,6 +81,36 @@ describe('POST /api/actividades — blocks validation', () => {
     const res = await POST(ctx({ body: { lang: 'es', blocks: [] } }));
     expect(res.status).toBe(200);
   });
+
+  // "First block visible" (creator polish round 4, owner feedback #2): the
+  // start screen now seeds the chosen type's first block in THIS call —
+  // `'draft'` mode tolerates a worksheet with no image yet (the editor's own
+  // empty-state block) and a quiz block with no questions yet.
+  it('accepts a worksheet block with no image yet (draft-tolerant, the empty-state block)', async () => {
+    const res = await POST(
+      ctx({ body: { lang: 'es', blocks: [{ id: 'b1', type: 'worksheet', rotation: 0, zones: [] }] } }),
+    );
+    expect(res.status).toBe(200);
+    expect(createActivityMock).toHaveBeenCalledWith(
+      USER.id,
+      expect.objectContaining({
+        blocks: [expect.objectContaining({ type: 'worksheet', zones: [] })],
+      }),
+    );
+  });
+
+  it('accepts an empty quiz block (no questions yet)', async () => {
+    const res = await POST(
+      ctx({ body: { lang: 'es', blocks: [{ id: 'b1', type: 'quiz', payload: { pools: {}, slots: [] } }] } }),
+    );
+    expect(res.status).toBe(200);
+    expect(createActivityMock).toHaveBeenCalledWith(
+      USER.id,
+      expect.objectContaining({
+        blocks: [expect.objectContaining({ type: 'quiz', payload: { pools: {}, slots: [] } })],
+      }),
+    );
+  });
 });
 
 describe('POST /api/actividades — image ownership', () => {

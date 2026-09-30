@@ -38,7 +38,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
-import type { WorksheetBlock, Zone } from '@/lib/activities/blocks';
+import type { ImageRef, WorksheetBlock, Zone } from '@/lib/activities/blocks';
 import {
   fitCamera,
   clampCamera,
@@ -61,9 +61,12 @@ import WorksheetPlayer, { type WorksheetPracticeState } from './WorksheetPlayer'
 
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
+/** Same "always has a real image at practice time" narrowing as `WorksheetPracticePlayer.tsx`'s own `SubmittedWorksheetBlock` — see that file's header. */
+type SubmittedWorksheetBlock = WorksheetBlock & { image: ImageRef };
+
 export interface WorksheetPracticePlayerMobileProps {
   lang: Lang;
-  block: WorksheetBlock;
+  block: SubmittedWorksheetBlock;
   imageUrl: string;
   practice: WorksheetPracticeState;
 }

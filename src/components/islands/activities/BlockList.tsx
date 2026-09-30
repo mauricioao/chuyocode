@@ -64,6 +64,7 @@ import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
 import WorksheetZoneEditor from './WorksheetZoneEditor';
 import QuizBlockEditor from './QuizBlockEditor';
+import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
 
 export interface BlocksChangeOptions {
   /**
@@ -279,6 +280,29 @@ export default function BlockList({
     onBlocksChange(blocks.map((b) => (b.id === blockId && isQuiz(b) ? { ...b, payload } : b)));
   };
 
+  // Fills a brand-new, imageless worksheet block's own empty state
+  // (creator polish round 4, owner feedback #2) — `WorksheetUploader`
+  // supports uploading several images at once (a multi-page PDF); the
+  // FIRST becomes THIS block's own image, and any REST become their own new
+  // worksheet blocks appended right after it, same shape
+  // `ActivityEditorIsland.handleUploadComplete` already uses for the
+  // "+ Agregar bloque" flow. Those extras are not auto-expanded here (no
+  // expand-state prop reaches this deep) — the author can still open them
+  // from the list right below.
+  const fillWorksheetImage = (blockId: string, images: UploadedImage[]) => {
+    const [first, ...rest] = images;
+    if (!first) return;
+    const filled = blocks.map((b) => (b.id === blockId && isWorksheet(b) ? { ...b, image: first, zones: [] } : b));
+    const extras: WorksheetBlock[] = rest.map((image) => ({
+      id: crypto.randomUUID(),
+      type: 'worksheet',
+      rotation: 0,
+      image,
+      zones: [],
+    }));
+    onBlocksChange(extras.length > 0 ? [...filled, ...extras] : filled);
+  };
+
   const rotateBlock = (blockId: string, direction: TurnDirection) => {
     onBlocksChange(
       blocks.map((b) =>
@@ -290,9 +314,16 @@ export default function BlockList({
   };
 
   if (blocks.length === 0) {
+    // Empty activity (creator polish round 4, owner feedback #3): instead of
+    // a lone "+" the author has to click first, the two type cards render
+    // right here, right away — `ActivityEditorIsland`'s own add-flow below
+    // this list (`addingBlock`/`showUploader`/`BlockTypePicker`/
+    // `WorksheetUploader`) is unconditionally open whenever there are zero
+    // blocks (see that file's `showAddFlow`), so this heading and that
+    // picker land immediately adjacent, inside the same scroll column.
     return (
       <p data-testid="blocks-empty" className="text-sm text-muted-foreground">
-        {t.blocksEmpty}
+        {t.blocksEmptyChooseNext}
       </p>
     );
   }
@@ -435,18 +466,33 @@ export default function BlockList({
                     // zoom toolbar) rather than one padded content area —
                     // every pixel here is height the canvas doesn't get.
                     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
-                      <WorksheetZoneEditor
-                        lang={lang}
-                        image={worksheet.image}
-                        imageUrl={resolveImageUrl(worksheet.image.path)}
-                        zones={worksheet.zones}
-                        rotation={worksheet.rotation}
-                        selectedZoneId={selectedZoneId}
-                        onZonesChange={(zones, opts) => updateZones(block.id, zones, opts)}
-                        onSelectZone={onSelectZone}
-                        incompleteZoneId={block.id === incompleteBlockId ? incompleteZoneId : undefined}
-                        incompleteMessage={block.id === incompleteBlockId ? incompleteMessage : null}
-                      />
+                      {worksheet.image ? (
+                        <WorksheetZoneEditor
+                          lang={lang}
+                          image={worksheet.image}
+                          imageUrl={resolveImageUrl(worksheet.image.path)}
+                          zones={worksheet.zones}
+                          rotation={worksheet.rotation}
+                          selectedZoneId={selectedZoneId}
+                          onZonesChange={(zones, opts) => updateZones(block.id, zones, opts)}
+                          onSelectZone={onSelectZone}
+                          incompleteZoneId={block.id === incompleteBlockId ? incompleteZoneId : undefined}
+                          incompleteMessage={block.id === incompleteBlockId ? incompleteMessage : null}
+                        />
+                      ) : (
+                        // Brand-new worksheet block, nothing uploaded yet
+                        // (creator polish round 4, owner feedback #2, "first
+                        // block visible") — the canvas area's own empty
+                        // state: the exact same drop zone as "+ Agregar
+                        // bloque"'s uploader, filling THIS block instead of
+                        // appending a new one.
+                        <div className="flex min-h-0 flex-1 items-center justify-center">
+                          <WorksheetUploader
+                            lang={lang}
+                            onComplete={(images) => fillWorksheetImage(block.id, images)}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 

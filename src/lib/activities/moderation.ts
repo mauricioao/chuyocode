@@ -343,9 +343,14 @@ export type ApproveError =
 
 export type ApproveResult = { ok: true } | { ok: false; error: ApproveError };
 
-/** Every worksheet image in `blocks`, in order. */
+/**
+ * Every worksheet image in `blocks`, in order. `parseBlocks(..., 'submit')`
+ * (this module's own approve-path parse, above) never lets a worksheet
+ * without an image reach here — the `block.image` guard is only a
+ * type-level one.
+ */
 function worksheetImagePaths(blocks: Block[]): string[] {
-  return blocks.flatMap((block) => (block.type === 'worksheet' ? [block.image.path] : []));
+  return blocks.flatMap((block) => (block.type === 'worksheet' && block.image ? [block.image.path] : []));
 }
 
 /**
@@ -355,7 +360,7 @@ function worksheetImagePaths(blocks: Block[]): string[] {
  */
 function rewriteImagePaths(blocks: Block[], mapping: ReadonlyMap<string, string>): Block[] {
   return blocks.map((block) => {
-    if (block.type !== 'worksheet') return block;
+    if (block.type !== 'worksheet' || !block.image) return block;
     const newPath = mapping.get(block.image.path) ?? block.image.path;
     return { ...block, image: { ...block.image, path: newPath } };
   });
