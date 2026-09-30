@@ -888,6 +888,33 @@ export const UI_LABELS = {
           'Estamos preparando cursos prácticos de programación. Muy pronto van a estar disponibles para aprender paso a paso.',
         imageAlt: 'Vista previa de los próximos cursos de programación',
       },
+      // The hidden Courses feature itself — catalog (`/[lang]/cursos`) and
+      // landing (`/[lang]/cursos/[slug]`). `teaser` above is unrelated
+      // marketing copy for a "coming soon" card; this is the real, currently
+      // unlinked feature.
+      catalog: {
+        pageTitle: 'Cursos',
+        pageDescription: 'Catálogo de cursos de programación.',
+        empty: 'Todavía no hay cursos publicados.',
+        premiumBadge: 'Incluido en Premium',
+        lifetimeBadge: 'de por vida',
+        lessonSingular: 'lección',
+        lessonsPlural: 'lecciones',
+      },
+      landing: {
+        levelLabel: 'Nivel',
+        syllabusTitle: 'Contenido del curso',
+        lessonKind: { text: 'Texto', video: 'Video', activity: 'Actividad' },
+        previewTag: 'Vista previa',
+        lockedLabel: 'Bloqueada',
+        durationSuffix: 'min',
+        ctaContinue: 'Continuar',
+        ctaStart: 'Empezar',
+        ctaPremium: 'Hazte Premium',
+        ctaBuyLifetime: 'Comprar de por vida',
+        paymentsSoon: 'Pagos próximamente',
+        moderatorPreviewNotice: 'Vista de moderador: este curso no está publicado.',
+      },
     },
     english: {
       // Copy for the HUB route `/[lang]/ingles` (two cards: curated exercises
@@ -1644,6 +1671,29 @@ export const UI_LABELS = {
         description:
           'We are building hands-on programming courses. Very soon you will be able to learn step by step with us.',
         imageAlt: 'Preview of the upcoming programming courses',
+      },
+      catalog: {
+        pageTitle: 'Courses',
+        pageDescription: 'Programming courses catalog.',
+        empty: 'No published courses yet.',
+        premiumBadge: 'Included in Premium',
+        lifetimeBadge: 'lifetime',
+        lessonSingular: 'lesson',
+        lessonsPlural: 'lessons',
+      },
+      landing: {
+        levelLabel: 'Level',
+        syllabusTitle: 'Course content',
+        lessonKind: { text: 'Text', video: 'Video', activity: 'Activity' },
+        previewTag: 'Preview',
+        lockedLabel: 'Locked',
+        durationSuffix: 'min',
+        ctaContinue: 'Continue',
+        ctaStart: 'Start',
+        ctaPremium: 'Go Premium',
+        ctaBuyLifetime: 'Buy for life',
+        paymentsSoon: 'Payments coming soon',
+        moderatorPreviewNotice: 'Moderator preview: this course is not published.',
       },
     },
     english: {

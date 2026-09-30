@@ -1,0 +1,84 @@
+---
+/**
+ * Course catalog — `/[lang]/cursos` (still HIDDEN: no nav/hub/menu entry,
+ * reachable only by URL). Signed-in-only via `src/middleware.ts`'s own
+ * `requiresLogin`/`hasAccess` gate (`cursos` is a `GATED_SECTIONS` entry),
+ * which also marks every response on this path `private, no-store` — this
+ * page does not need to repeat that itself, same posture `/[lang]/ingles`
+ * already takes.
+ *
+ * Lists every `published` course (`listPublishedCourses`,
+ * `@lib/courses/catalog`) — drafts/archived never appear here regardless of
+ * role; a moderator previews an unpublished course by its own URL
+ * (`/[lang]/cursos/[slug]`), not from this listing.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { listPublishedCourses } from '@lib/courses/catalog';
+import { formatPrice } from '@lib/courses/price';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].courses.catalog;
+const courses = await listPublishedCourses();
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+
+    {
+      courses.length === 0 ? (
+        <p data-testid="catalog-empty" class="text-sm text-muted-foreground">
+          {t.empty}
+        </p>
+      ) : (
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="catalog-grid">
+          {courses.map((course) => (
+            <a
+              href={`/${lang}/cursos/${course.slug}`}
+              data-testid={`catalog-card-${course.slug}`}
+              class="flex h-full flex-col gap-3 rounded-lg border border-border bg-surface-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+            >
+              {course.coverPath && (
+                <img
+                  src={course.coverPath}
+                  alt=""
+                  class="aspect-video w-full rounded-md object-cover"
+                  loading="lazy"
+                />
+              )}
+              <span class="font-display text-lg font-semibold text-foreground">{course.title}</span>
+              {course.subtitle && <span class="text-sm text-muted-foreground">{course.subtitle}</span>}
+              <div class="mt-auto flex flex-wrap items-center gap-2 text-xs">
+                {course.level && (
+                  <span class="rounded-full bg-muted px-2 py-1 text-muted-foreground">{course.level}</span>
+                )}
+                <span class="rounded-full bg-muted px-2 py-1 text-muted-foreground">
+                  {course.lessonCount} {course.lessonCount === 1 ? t.lessonSingular : t.lessonsPlural}
+                </span>
+                {course.includedInPremium && (
+                  <span class="rounded-full bg-primary/10 px-2 py-1 text-primary" data-testid={`catalog-premium-${course.slug}`}>
+                    {t.premiumBadge}
+                  </span>
+                )}
+                {course.priceCents != null && (
+                  <span class="rounded-full bg-primary/10 px-2 py-1 text-primary" data-testid={`catalog-price-${course.slug}`}>
+                    {formatPrice(course.priceCents, course.currency, lang)} {t.lifetimeBadge}
+                  </span>
+                )}
+              </div>
+            </a>
+          ))}
+        </div>
+      )
+    }
+  </section>
+</BaseLayout>

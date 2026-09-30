@@ -1,0 +1,184 @@
+---
+/**
+ * Course landing page — `/[lang]/cursos/[slug]` (still HIDDEN — see
+ * `index.astro`'s header one level up). Signed-in-only via the middleware
+ * gate; this page adds the PER-COURSE rule on top: a `draft`/`archived`
+ * course 404s for anyone who is not a moderator (`courseVisible`,
+ * `@lib/courses/access`) — a moderator previewing an unpublished course
+ * sees a small notice instead of a 404, same "don't confirm existence to
+ * the wrong caller" posture the rest of this codebase uses, inverted for
+ * the one role allowed to know.
+ *
+ * Payments do not exist yet: the CTA area always renders "Hazte Premium"
+ * and "Comprar de por vida <price>" DISABLED with a muted "Pagos
+ * próximamente" note whenever the visitor does not already have access —
+ * owning the course (or an active Premium plan covering it) instead shows
+ * a real "Continuar"/"Empezar" link into the first lesson.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+import { getPlan } from '@lib/access';
+import { courseVisible, courseAccess, canViewLesson, ownsCourse } from '@lib/courses/access';
+import { getCourseDetailBySlug } from '@lib/courses/catalog';
+import { formatPrice } from '@lib/courses/price';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const { slug } = Astro.params;
+if (!slug) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Middleware already redirected an anonymous visitor away from this gated
+// path — `user` is guaranteed non-null here.
+const user = Astro.locals.user!;
+
+const course = await getCourseDetailBySlug(slug);
+if (!course) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const moderator = await requireRole(user, 'moderator');
+const isModerator = moderator !== null;
+
+if (!courseVisible({ status: course.status }, isModerator)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const plan = await getPlan(user);
+const owns = await ownsCourse(user, course.id);
+const access = courseAccess({
+  course: { included_in_premium: course.includedInPremium },
+  plan,
+  owns,
+  isModerator,
+});
+
+const firstLesson = course.modules.find((m) => m.lessons.length > 0)?.lessons[0] ?? null;
+
+const t = UI_LABELS[lang].courses.landing;
+const kindLabels = t.lessonKind as Record<string, string>;
+---
+
+<BaseLayout lang={lang} title={course.title} description={course.subtitle ?? course.description ?? undefined}>
+  <section class="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}/cursos`}>{course.title}</PageTitle>
+
+    {
+      isModerator && course.status !== 'published' && (
+        <p data-testid="moderator-preview-notice" class="rounded-md bg-muted px-4 py-2 text-sm text-muted-foreground">
+          {t.moderatorPreviewNotice}
+        </p>
+      )
+    }
+
+    <header class="flex flex-col gap-3">
+      {course.coverPath && (
+        <img src={course.coverPath} alt="" class="aspect-video w-full rounded-lg object-cover" />
+      )}
+      {course.subtitle && <p class="text-lg text-muted-foreground">{course.subtitle}</p>}
+      {course.level && (
+        <span class="w-fit rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+          {t.levelLabel}: {course.level}
+        </span>
+      )}
+      {course.description && <p class="text-foreground">{course.description}</p>}
+    </header>
+
+    <div class="flex flex-col gap-3 rounded-(--radius-card) bg-card p-6 ring-1 ring-foreground/10" data-testid="course-cta">
+      {
+        access === 'owned' && firstLesson ? (
+          <a
+            href={`/${lang}/cursos/${course.slug}/${firstLesson.id}`}
+            data-testid="cta-continue"
+            class="inline-flex w-fit items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            {t.ctaContinue}
+          </a>
+        ) : access === 'premium' && firstLesson ? (
+          <a
+            href={`/${lang}/cursos/${course.slug}/${firstLesson.id}`}
+            data-testid="cta-start"
+            class="inline-flex w-fit items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            {t.ctaStart}
+          </a>
+        ) : (
+          <>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled
+                data-testid="cta-premium"
+                class="cursor-not-allowed rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground opacity-60"
+              >
+                {t.ctaPremium}
+              </button>
+              {course.priceCents != null && (
+                <button
+                  type="button"
+                  disabled
+                  data-testid="cta-buy-lifetime"
+                  class="cursor-not-allowed rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground opacity-60"
+                >
+                  {t.ctaBuyLifetime} {formatPrice(course.priceCents, course.currency, lang)}
+                </button>
+              )}
+            </div>
+            <p class="text-xs text-muted-foreground">{t.paymentsSoon}</p>
+          </>
+        )
+      }
+    </div>
+
+    <div class="flex flex-col gap-4">
+      <h2 class="text-xl font-semibold text-foreground">{t.syllabusTitle}</h2>
+      {
+        course.modules.map((mod) => (
+          <div class="flex flex-col gap-2">
+            <h3 class="font-medium text-foreground">{mod.title}</h3>
+            <ul class="flex flex-col gap-1">
+              {mod.lessons.map((lesson) => {
+                const viewable = canViewLesson({
+                  lesson: { is_preview: lesson.is_preview },
+                  course: { included_in_premium: course.includedInPremium },
+                  plan,
+                  owns,
+                  isModerator,
+                });
+                return (
+                  <li
+                    data-testid={`syllabus-lesson-${lesson.id}`}
+                    class="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2 text-sm"
+                  >
+                    <span class="flex items-center gap-2">
+                      {!viewable && <span aria-hidden="true">🔒</span>}
+                      <span>{lesson.title}</span>
+                      <span class="text-xs text-muted-foreground">({kindLabels[lesson.kind] ?? lesson.kind})</span>
+                      {lesson.is_preview && (
+                        <span class="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">{t.previewTag}</span>
+                      )}
+                    </span>
+                    {lesson.duration_min != null && (
+                      <span class="text-xs text-muted-foreground">
+                        {lesson.duration_min} {t.durationSuffix}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>
