@@ -106,7 +106,7 @@ import {
   stepZoomInput,
   wheelZoomInput,
   fitCamera,
-  clampCamera,
+  clampCameraLoose,
   zoomAt,
   panBy,
   screenToContentPoint,
@@ -313,13 +313,17 @@ export default function WorksheetZoneEditor({
   // `ResizeObserver` callback alone would have. The observer below re-runs
   // this on LATER resizes; while NOT in fit mode, a resize RE-CLAMPS the
   // user's own camera instead (see the file header) rather than leaving it
-  // referencing a viewport size that no longer exists.
+  // referencing a viewport size that no longer exists — through the SAME
+  // loose bound (`clampCameraLoose`, canvas UX follow-up) every other
+  // non-fit camera change in this editor now uses (see `applyCameraZoom`/
+  // the pan branch of `handlePointerMove` below), so a resize never snaps a
+  // free-panned camera back into the practice player's strict bound.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
     const reconcile = () => {
       const vp = viewportSize();
-      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCamera(prev, displaySize, vp)));
+      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
     };
     reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -340,7 +344,12 @@ export default function WorksheetZoneEditor({
       setCamera((prev) => {
         const vp = viewportSize();
         const point = anchor ?? { x: vp.width / 2, y: vp.height / 2 };
-        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp });
+        // Loose bound (canvas UX follow-up, owner feedback) — see
+        // `clampCameraLoose`'s own header and this file's header's Camera
+        // note: every explicit camera change the EDITOR itself makes (zoom
+        // in/out, the typed %, wheel, pan) uses this, never the practice
+        // player's strict `clampCamera`.
+        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp }, clampCameraLoose);
       });
     },
     [displaySize, viewportSize],
@@ -728,7 +737,12 @@ export default function WorksheetZoneEditor({
         // `requestAnimationFrame` is ever in flight for this drag.
         const dx = e.clientX - drag.startClientX;
         const dy = e.clientY - drag.startClientY;
-        const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() });
+        // Loose bound (canvas UX follow-up) — covers every pan entry point
+        // that reaches this ONE branch: the Mano tool, a middle-button drag,
+        // and a Space-held drag all set `dragRef.current = { kind: 'pan', ... }`
+        // the same way (see `startPan`'s own callers) and are handled right
+        // here, uniformly.
+        const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() }, clampCameraLoose);
         panFrameRef.current.target = next;
         if (panFrameRef.current.id == null) {
           panFrameRef.current.id = requestAnimationFrame(() => {

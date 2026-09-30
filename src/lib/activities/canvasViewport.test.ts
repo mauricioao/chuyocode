@@ -16,6 +16,7 @@ import {
   rotatedSize,
   fitCamera,
   clampCamera,
+  clampCameraLoose,
   zoomAt,
   panBy,
   screenToContentPoint,
@@ -284,6 +285,108 @@ describe('clampCamera (bounded worksheet camera)', () => {
     // y-axis larger (clamped to [-800, 0]).
     const result = clampCamera({ scale: 1, x: 0, y: 0 }, { width: 400, height: 1000 }, { width: 800, height: 200 });
     expect(result).toEqual({ scale: 1, x: 200, y: 0 });
+  });
+});
+
+describe('clampCameraLoose (the EDITOR\'s own free-panning camera bound)', () => {
+  it('does NOT force-center a smaller-than-viewport axis — free panning even at "fit" (the bug this fixes)', () => {
+    // viewport 800x800, content 100x100 at scale 1 — `clampCamera` would
+    // force this to the centered (350, 350) regardless of the proposed
+    // offset; the loose bound leaves an UNCLAMPED offset alone.
+    const result = clampCameraLoose({ scale: 1, x: 0, y: 0 }, { width: 100, height: 100 }, { width: 800, height: 800 });
+    expect(result).toEqual({ scale: 1, x: 0, y: 0 });
+  });
+
+  it('bounds a smaller-than-viewport axis so >= max(20%, 80px) of the content stays visible, not centering it', () => {
+    // content 100x100: minVisiblePx (80) wins over 20% (20) -> visibleMin 80.
+    // range = [80 - 100, 800 - 80] = [-20, 720].
+    const min = clampCameraLoose({ scale: 1, x: -9999, y: -9999 }, { width: 100, height: 100 }, { width: 800, height: 800 });
+    expect(min).toEqual({ scale: 1, x: -20, y: -20 });
+    const max = clampCameraLoose({ scale: 1, x: 9999, y: 9999 }, { width: 100, height: 100 }, { width: 800, height: 800 });
+    expect(max).toEqual({ scale: 1, x: 720, y: 720 });
+    // An offset already inside the range is untouched.
+    const inRange = clampCameraLoose({ scale: 1, x: 400, y: -10 }, { width: 100, height: 100 }, { width: 800, height: 800 });
+    expect(inRange).toEqual({ scale: 1, x: 400, y: -10 });
+  });
+
+  it('bounds an oversized axis MORE LOOSELY than the strict clamp — past either edge, at least the minimum stays visible', () => {
+    // image 2000x2000, viewport 800x800: content-length 2000 -> 20% = 400
+    // (wins over the 80px floor) -> range = [400 - 2000, 800 - 400] = [-1600, 400].
+    // The strict clamp's own range here is only [-1200, 0] (see `clampCamera`'s
+    // own "LARGER-than-viewport axis" test above with the same numbers) —
+    // this reaches well past it in both directions.
+    const min = clampCameraLoose({ scale: 1, x: -9999, y: -9999 }, { width: 2000, height: 2000 }, { width: 800, height: 800 });
+    expect(min).toEqual({ scale: 1, x: -1600, y: -1600 });
+    const max = clampCameraLoose({ scale: 1, x: 9999, y: 9999 }, { width: 2000, height: 2000 }, { width: 800, height: 800 });
+    expect(max).toEqual({ scale: 1, x: 400, y: 400 });
+    // An offset the STRICT clamp would already reject (-1500, past its own
+    // -1200 floor) stays put here — genuinely freer panning, not just a
+    // wider centered band.
+    const pastStrictFloor = clampCameraLoose(
+      { scale: 1, x: -1500, y: 0 },
+      { width: 2000, height: 2000 },
+      { width: 800, height: 800 },
+    );
+    expect(pastStrictFloor.x).toBe(-1500);
+  });
+
+  it('keeps AT LEAST minVisiblePx of the image inside the viewport at the extremes — it can never be fully lost', () => {
+    const image = { width: 2000, height: 2000 };
+    const viewport = { width: 800, height: 800 };
+    const min = clampCameraLoose({ scale: 1, x: -9999, y: 0 }, image, viewport);
+    // The image's right edge (x + width) must still be >= minVisiblePx (80) pixels into the viewport.
+    expect(min.x + image.width).toBeGreaterThanOrEqual(80);
+    const max = clampCameraLoose({ scale: 1, x: 9999, y: 0 }, image, viewport);
+    // The image's left edge (x) must still be <= viewport.width - minVisiblePx.
+    expect(max.x).toBeLessThanOrEqual(viewport.width - 80);
+  });
+
+  it('never demands more of a TINY image be visible than it actually has', () => {
+    // content 10x10, well under the 80px floor and under 20% of itself too
+    // (2px) — visibleMin caps at the content's own size (10), so the WHOLE
+    // image must stay visible, never less, never "more than exists".
+    const result = clampCameraLoose({ scale: 1, x: -9999, y: -9999 }, { width: 10, height: 10 }, { width: 800, height: 800 });
+    expect(result.x).toBe(10 - 10); // = 0: the right edge exactly at the origin, all 10px visible
+    const max = clampCameraLoose({ scale: 1, x: 9999, y: 9999 }, { width: 10, height: 10 }, { width: 800, height: 800 });
+    expect(max.x).toBe(800 - 10); // left edge exactly at the viewport's own far edge, all 10px visible
+  });
+
+  it('never produces an inverted (min > max) range even for a viewport SMALLER than the visibility floor', () => {
+    // content 2000, viewport only 50 (smaller than the 80px floor itself) —
+    // `visibleMin` caps at the viewport's own length too, so the range never
+    // inverts (see the function's own header for the proof).
+    const result = clampCameraLoose({ scale: 1, x: 12345, y: -12345 }, { width: 2000, height: 2000 }, { width: 50, height: 50 });
+    expect(Number.isFinite(result.x)).toBe(true);
+    expect(Number.isFinite(result.y)).toBe(true);
+  });
+
+  it('accepts custom minVisibleFraction/minVisiblePx options', () => {
+    // content 1000, viewport 800: 50% of 1000 = 500 (wins over a 10px floor) -> range = [500-1000, 800-500] = [-500, 300].
+    const result = clampCameraLoose(
+      { scale: 1, x: -9999, y: 0 },
+      { width: 1000, height: 1000 },
+      { width: 800, height: 800 },
+      { minVisibleFraction: 0.5, minVisiblePx: 10 },
+    );
+    expect(result.x).toBe(-500);
+  });
+
+  it('clamps scale to the same shared 10%-400% camera range as clampCamera', () => {
+    const tooSmall = clampCameraLoose({ scale: 0.01, x: 0, y: 0 }, { width: 100, height: 100 }, { width: 100, height: 100 });
+    expect(tooSmall.scale).toBe(INPUT_MIN_ZOOM);
+    const tooBig = clampCameraLoose({ scale: 100, x: 0, y: 0 }, { width: 100, height: 100 }, { width: 100, height: 100 });
+    expect(tooBig.scale).toBe(MAX_ZOOM);
+  });
+
+  it('independently clamps each axis', () => {
+    // x-axis: content 100 in viewport 800 -> visibleMin 80, range [-20, 720].
+    // y-axis: content 2000 in viewport 800 -> visibleMin 400, range [-1600, 400].
+    const result = clampCameraLoose(
+      { scale: 1, x: 9999, y: -9999 },
+      { width: 100, height: 2000 },
+      { width: 800, height: 800 },
+    );
+    expect(result).toEqual({ scale: 1, x: 720, y: -1600 });
   });
 });
 
