@@ -12,6 +12,7 @@
  * bundle.
  */
 import type { ProseBlock } from '@/lib/exercisePayload';
+import { Textarea } from '@/components/ui/textarea';
 
 export const COPY = {
   es: { label: 'Texto de contexto', remove: 'Quitar este bloque de texto' },
@@ -38,7 +39,7 @@ export default function ProseBlockEditor({ block, lang, onChange, onRemove }: Pr
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={fieldId} className="text-sm font-medium text-zinc-100">
+        <label htmlFor={fieldId} className="text-sm font-semibold text-foreground">
           {t.label}
         </label>
         <button
@@ -51,13 +52,12 @@ export default function ProseBlockEditor({ block, lang, onChange, onRemove }: Pr
           &times;
         </button>
       </div>
-      <textarea
+      <Textarea
         id={fieldId}
         data-testid={`prose-text-${block.id}`}
         value={block.text}
         onChange={(event) => onChange(event.target.value)}
         rows={2}
-        className="w-full rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       />
     </div>
   );

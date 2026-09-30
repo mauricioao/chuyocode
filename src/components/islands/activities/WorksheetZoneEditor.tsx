@@ -127,6 +127,7 @@ import BottomSheet from '@/components/ui/BottomSheet';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { fieldClasses } from '@/lib/ui/field';
 
 export interface ZonesChangeOptions {
   /**
@@ -1244,7 +1245,14 @@ export default function WorksheetZoneEditor({
             onFocus={handleZoomInputFocus}
             onBlur={commitZoomDraft}
             onKeyDown={handleZoomInputKeyDown}
-            className="h-7 w-12 rounded border border-border bg-background text-center text-xs tabular-nums text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            // Too small/dynamic a control for the shared `Input` component's
+            // fixed control heights (fills a 28px-tall toolbar chip, not a
+            // 36-44px field row) — `fieldClasses()` directly, so it still
+            // gets the system's own border/surface/focus-ring tokens, with
+            // just its own compact size layered on top.
+            className={fieldClasses({
+              className: 'h-7 w-12 rounded-(--radius-field) px-1 py-0 text-center text-xs tabular-nums',
+            })}
           />
           <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomIn} data-testid="zoom-in" onClick={handleZoomIn}>
             <PlusIcon aria-hidden="true" />

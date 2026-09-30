@@ -19,6 +19,8 @@
  */
 import { useState } from 'react';
 import type { PoolItem, Slot } from '@/lib/exercisePayload';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 
 /** The four shipped mechanics (`mechanics/registry.ts`'s own list). Kept
  * here rather than imported: the registry exports resolvers, not a list of
@@ -107,16 +109,16 @@ export default function SlotAnswerEditor({
   return (
     <div className="flex flex-col gap-3" data-testid={`slot-answer-editor-${slot.id}`}>
       <div className="flex flex-col gap-1">
-        <label htmlFor={mechanicFieldId} className="text-sm font-medium text-zinc-100">
+        <label htmlFor={mechanicFieldId} className="text-sm font-semibold text-foreground">
           {t.mechanicLabel}
         </label>
-        <select
+        <Select
           id={mechanicFieldId}
           data-testid={`mechanic-select-${slot.id}`}
+          fieldSize="sm"
           value={slot.input}
           onChange={(event) => onMechanicChange(event.target.value)}
-          style={{ colorScheme: 'dark' }}
-          className="w-full max-w-xs rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          wrapperClassName="w-full max-w-xs"
         >
           {MECHANICS.map((mechanic) => (
             <option key={mechanic} value={mechanic}>
@@ -126,16 +128,17 @@ export default function SlotAnswerEditor({
           {!MECHANICS.includes(slot.input as (typeof MECHANICS)[number]) && (
             <option value={slot.input}>{slot.input}</option>
           )}
-        </select>
+        </Select>
       </div>
 
       {slot.input === 'text' && (
         <div className="flex flex-col gap-2" data-testid={`text-answers-${slot.id}`}>
-          <span className="text-sm font-medium text-zinc-100">{t.textAnswerLabel}</span>
+          <span className="text-sm font-semibold text-foreground">{t.textAnswerLabel}</span>
           {slot.answer.map((value, index) => (
             <div key={index} className="flex items-center gap-2">
-              <input
+              <Input
                 type="text"
+                fieldSize="sm"
                 data-testid={`text-answer-${slot.id}-${index}`}
                 value={value}
                 onChange={(event) => {
@@ -143,7 +146,7 @@ export default function SlotAnswerEditor({
                   next[index] = event.target.value;
                   onAnswerChange(next);
                 }}
-                className="w-full max-w-sm rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="w-full max-w-sm"
               />
               <button
                 type="button"
@@ -169,17 +172,18 @@ export default function SlotAnswerEditor({
       {pooled && (
         <div className="flex flex-col gap-2" data-testid={`pool-editor-${slot.id}`}>
           <div className="flex flex-col gap-1">
-            <label htmlFor={poolNameFieldId} className="text-sm font-medium text-zinc-100">
+            <label htmlFor={poolNameFieldId} className="text-sm font-semibold text-foreground">
               {t.poolNameLabel}
             </label>
-            <input
+            <Input
               id={poolNameFieldId}
               type="text"
+              fieldSize="sm"
               list={poolListId}
               data-testid={`pool-name-${slot.id}`}
               value={poolNameText}
               onChange={(event) => handlePoolNameChange(event.target.value)}
-              className="w-full max-w-sm rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="w-full max-w-sm"
             />
             <datalist id={poolListId}>
               {poolNames.map((name) => (
@@ -194,6 +198,12 @@ export default function SlotAnswerEditor({
             <div className="flex flex-col gap-2" data-testid={`pool-items-${slot.id}`}>
               {poolItems.map((item) => (
                 <div key={item.id} className="flex flex-wrap items-center gap-2">
+                  {/* No Radio primitive exists in the field system yet (only
+                      Input/Textarea/Select/Checkbox/Field shipped) — a native
+                      radio, lightly tinted to the brand accent, stays here
+                      rather than reaching for the older, un-migrated
+                      `radio-group.tsx` (still `border-input`/`bg-input/30`,
+                      its own inconsistency this pass does not extend). */}
                   <label className="flex items-center gap-1">
                     <input
                       type="radio"
@@ -202,18 +212,20 @@ export default function SlotAnswerEditor({
                       data-testid={`pool-item-correct-${slot.id}-${item.id}`}
                       checked={slot.answer[0] === item.id}
                       onChange={() => onAnswerChange([item.id])}
+                      className="accent-primary"
                     />
                   </label>
-                  <input
+                  <Input
                     type="text"
+                    fieldSize="sm"
                     aria-label={t.poolItemText}
                     data-testid={`pool-item-text-${slot.id}-${item.id}`}
                     value={item.text ?? ''}
                     onChange={(event) => onSetPoolItemText(item.id, event.target.value)}
-                    className="rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   />
-                  <input
+                  <Input
                     type="text"
+                    fieldSize="sm"
                     placeholder={t.poolItemMedia}
                     aria-label={t.poolItemMedia}
                     data-testid={`pool-item-media-${slot.id}-${item.id}`}
@@ -224,7 +236,6 @@ export default function SlotAnswerEditor({
                         event.target.value === '' ? undefined : event.target.value,
                       )
                     }
-                    className="rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   />
                   <button
                     type="button"

@@ -46,6 +46,7 @@ import {
   PDF_THUMBNAIL_WIDTH,
 } from '@/lib/activities/imagePipeline';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export interface UploadedImage {
   path: string;
@@ -352,16 +353,16 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
       <div data-testid="worksheet-uploader-pages" className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-4">
         <p className="text-sm font-medium text-foreground">{t.pdfPagesTitle}</p>
         <p className="text-xs text-muted-foreground">{t.pdfPagesHint}</p>
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-foreground">
           {t.pdfPageLabel}
-          <input
+          <Input
             type="text"
+            fieldSize="sm"
             data-testid="pdf-pages-input"
             value={pagesInput}
             onChange={(e) => setPagesInput(e.target.value)}
             placeholder="1, 2, 3"
             maxLength={MAX_PDF_PAGES * 4}
-            className="h-9 rounded border border-border bg-background px-2 text-foreground"
           />
         </label>
         <Button

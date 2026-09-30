@@ -31,8 +31,8 @@ describe('SubmitForReviewDialog', () => {
         onCancel={() => {}}
       />,
     );
-    const checkbox = screen.getByTestId('submit-rights-checkbox') as HTMLInputElement;
-    expect(checkbox.checked).toBe(false);
+    const checkbox = screen.getByTestId('submit-rights-checkbox');
+    expect(checkbox.getAttribute('aria-checked')).toBe('false');
     expect((screen.getByTestId('submit-dialog-confirm') as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -67,7 +67,7 @@ describe('SubmitForReviewDialog', () => {
       />,
     );
     fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
-    expect((screen.getByTestId('submit-rights-checkbox') as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId('submit-rights-checkbox').getAttribute('aria-checked')).toBe('true');
 
     rerender(
       <SubmitForReviewDialog
@@ -89,7 +89,7 @@ describe('SubmitForReviewDialog', () => {
         onCancel={() => {}}
       />,
     );
-    expect((screen.getByTestId('submit-rights-checkbox') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByTestId('submit-rights-checkbox').getAttribute('aria-checked')).toBe('false');
   });
 
   it('shows the submitting label and disables both buttons while submitting', () => {

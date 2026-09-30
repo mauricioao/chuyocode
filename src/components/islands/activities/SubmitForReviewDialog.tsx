@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export interface SubmitForReviewDialogProps {
   lang: Lang;
@@ -46,11 +47,10 @@ export default function SubmitForReviewDialog({
         </DialogHeader>
         <p className="text-sm text-muted-foreground">{t.submitDialogNote}</p>
         <label className="flex items-start gap-2 text-sm text-foreground">
-          <input
-            type="checkbox"
+          <Checkbox
             data-testid="submit-rights-checkbox"
             checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
+            onCheckedChange={(checked) => setAccepted(checked === true)}
             className="mt-0.5"
           />
           <span>{t.submitRightsLabel}</span>
