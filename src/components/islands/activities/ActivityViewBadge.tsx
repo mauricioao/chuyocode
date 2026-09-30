@@ -15,6 +15,14 @@
  * A failed request also renders nothing: the practice page itself works
  * either way, and a missing view badge is a strictly smaller problem than an
  * error message over someone's practice session.
+ *
+ * INLINE, FOLDED INTO THE HEADER'S META LINE (practice player redesign,
+ * "compact header row"): `[id].astro` renders this right after the level
+ * text on the SAME line ("A2 · Básico · Ya lo viste · 4 veces") instead of
+ * its own paragraph — a `<span>` with its own leading "· " separator baked
+ * in, so the separator only ever appears together with real text (nothing
+ * renders while the count is still in flight, matching the no-flash rule
+ * above) and the caller never has to guess whether to render one itself.
  */
 import { useEffect, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
@@ -47,8 +55,8 @@ export default function ActivityViewBadge({ lang, activityId }: ActivityViewBadg
   if (viewCount === null) return null;
 
   return (
-    <p data-testid="activity-view-badge" className="text-sm text-zinc-400">
-      {viewCount <= 1 ? t.viewedFirstTime : `${t.viewedBefore} · ${viewCount} ${t.viewedTimesMany}`}
-    </p>
+    <span data-testid="activity-view-badge">
+      · {viewCount <= 1 ? t.viewedFirstTime : `${t.viewedBefore} · ${viewCount} ${t.viewedTimesMany}`}
+    </span>
   );
 }

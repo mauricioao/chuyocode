@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import WorksheetPlayer from './WorksheetPlayer';
 import type { Zone } from '@/lib/activities/blocks';
@@ -206,6 +206,82 @@ describe('WorksheetPlayer — practice mode (PR D, "Activities practice")', () =
     );
     expect(screen.queryByTestId('player-zone-result-z1')).toBeNull();
     expect((screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement).disabled).toBe(false);
+  });
+});
+
+/**
+ * Clean zones (practice player redesign): the inline input's font size and
+ * placeholder visibility are driven by the ZONE'S OWN RENDERED PIXEL BOX
+ * (container measurement * the zone's fractional `w`/`h`), not by a fixed
+ * `text-xs`/always-on placeholder. jsdom lays out nothing for real, so every
+ * test here mocks `getBoundingClientRect` on the measured container
+ * explicitly (same precedent as `WorksheetZoneEditor.test.tsx`'s own guard).
+ */
+describe('WorksheetPlayer — clean zones (practice player redesign)', () => {
+  function mockContainerRect(width: number, height: number) {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width,
+      height,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: height,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows placeholder copy for a wide-enough zone', () => {
+    mockContainerRect(1000, 500);
+    const wideZone: Zone = { ...TEXT_ZONE, w: 0.3 }; // 300px wide at this container size
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[wideZone]} imageUrl="/img.webp" />);
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(input.placeholder).toBe('Escribir la respuesta');
+  });
+
+  it('hides placeholder copy for a narrow zone (< ~120px rendered width)', () => {
+    mockContainerRect(1000, 500);
+    const narrowZone: Zone = { ...TEXT_ZONE, w: 0.05 }; // 50px wide at this container size
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[narrowZone]} imageUrl="/img.webp" />);
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(input.placeholder).toBe('');
+  });
+
+  it('still exposes the field purpose via aria-label when the placeholder is hidden', () => {
+    mockContainerRect(1000, 500);
+    const narrowZone: Zone = { ...TEXT_ZONE, w: 0.05 };
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[narrowZone]} imageUrl="/img.webp" />);
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(input.getAttribute('aria-label')).toBe('Escribir la respuesta');
+  });
+
+  it("scales the input's font size with the zone's rendered height, within the 11-20px range", () => {
+    mockContainerRect(1000, 100); // TEXT_ZONE.h = 0.1 -> 10px, floors at 11px
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[TEXT_ZONE]} imageUrl="/img.webp" />);
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(input.style.fontSize).toBe('11px');
+  });
+
+  it('caps the font size at 20px for a very tall zone', () => {
+    mockContainerRect(1000, 1000); // TEXT_ZONE.h = 0.1 -> 100px, capped at 20px
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[TEXT_ZONE]} imageUrl="/img.webp" />);
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(input.style.fontSize).toBe('20px');
+  });
+
+  it('hides the speaker corner badge until the zone is hovered or focused (opacity-0, shown via group-hover/group-focus-within)', () => {
+    mockContainerRect(1000, 500);
+    const zone: Zone = { ...TEXT_ZONE, speak: 'The cat sat on the mat.' };
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[zone]} imageUrl="/img.webp" />);
+    const badge = screen.getByTestId('player-zone-speak-z1');
+    expect(badge.className).toContain('opacity-0');
+    expect(badge.className).toContain('group-hover:opacity-100');
+    expect(badge.className).toContain('group-focus-within:opacity-100');
   });
 });
 

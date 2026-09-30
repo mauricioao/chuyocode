@@ -9,9 +9,16 @@
  *
  * Two families of exports live here:
  *  - Plain ZOOM helpers (`clampZoom`, `fitZoom`, `stepZoom`, `wheelZoom`,
- *    `contentSize`, `rotatedSize`, …) — a single number, reused as-is by
- *    `WorksheetPracticePlayer.tsx`'s own, deliberately simpler zoom model
- *    (see that component's own header).
+ *    `contentSize`, `rotatedSize`, …) — a single number. `fitZoom`/`clampZoom`
+ *    stay load-bearing (the narrower floor `fitCamera`/`clampCamera` clamp
+ *    through — see their own headers) and `rotatedSize` is used everywhere a
+ *    rotation exists; `stepZoom`/`wheelZoom` themselves are UNUSED outside
+ *    their own tests as of the practice player redesign (`WorksheetPracticePlayer.tsx`'s
+ *    desktop view was its last caller — rebuilt on the CAMERA family below,
+ *    via `stepZoomInput`/`wheelZoomInput`, same as the editor's own toolbar).
+ *    Kept rather than deleted: small, independently pure, already
+ *    unit-tested, and cheap to keep in case a future non-camera zoom UI wants
+ *    them again.
  *  - The worksheet CREATOR canvas' own bounded CAMERA (`Camera`,
  *    `fitCamera`, `zoomAt`, `panBy`, `clampCamera`, `screenToContentPoint`) —
  *    `{ scale, x, y }` applied as a CSS `transform` on the content layer,

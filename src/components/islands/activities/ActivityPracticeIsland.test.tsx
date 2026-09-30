@@ -38,10 +38,11 @@ function renderIsland(blocks: Block[]) {
   return render(<ActivityPracticeIsland lang="es" blocks={blocks} />);
 }
 
-describe('ActivityPracticeIsland — rendering blocks in order', () => {
-  it('renders a worksheet block through the practice player', () => {
+describe('ActivityPracticeIsland — rendering blocks (one at a time)', () => {
+  it('renders the only block directly, through the practice player, with no tab bar', () => {
     renderIsland([WORKSHEET]);
     expect(screen.getByTestId('worksheet-player')).toBeTruthy();
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 
   it('renders a quiz block through the real quiz practice renderer, not a placeholder', () => {
@@ -51,40 +52,143 @@ describe('ActivityPracticeIsland — rendering blocks in order', () => {
     expect(screen.queryByTestId('worksheet-player')).toBeNull();
   });
 
-  it('renders mixed blocks in the given order', () => {
-    const { container } = renderIsland([WORKSHEET, QUIZ]);
-    const testIds = Array.from(container.querySelectorAll('[data-testid]')).map((el) =>
-      el.getAttribute('data-testid'),
-    );
-    const worksheetIndex = testIds.indexOf('worksheet-player');
-    const quizIndex = testIds.indexOf('quiz-practice-q1');
-    expect(worksheetIndex).toBeGreaterThanOrEqual(0);
-    expect(quizIndex).toBeGreaterThan(worksheetIndex);
+  it('mounts only the ACTIVE block — the other tab is not in the DOM at all', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    expect(screen.getByTestId('worksheet-player')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-practice-q1')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+
+    expect(screen.queryByTestId('worksheet-player')).toBeNull();
+    expect(screen.getByTestId('quiz-practice-q1')).toBeTruthy();
   });
 });
 
-describe('ActivityPracticeIsland — Comprobar/Reintentar', () => {
-  it('shows no controls when there is nothing gradable at all', () => {
+describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => {
+  it('hides the tab bar entirely with a single block', () => {
+    renderIsland([WORKSHEET]);
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByTestId('practice-tab-w1')).toBeNull();
+  });
+
+  it('shows a role="tablist" with a tab per block once there are 2+', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    expect(screen.getByRole('tablist')).toBeTruthy();
+    expect(screen.getByTestId('practice-tab-w1').textContent).toContain('Hoja 1');
+    expect(screen.getByTestId('practice-tab-q1').textContent).toContain('Preguntas');
+  });
+
+  it('uses the block\'s own name over the positional default', () => {
+    renderIsland([{ ...WORKSHEET, name: 'Mi hoja' }, QUIZ]);
+    expect(screen.getByTestId('practice-tab-w1').textContent).toContain('Mi hoja');
+  });
+
+  it('marks the active tab with aria-selected', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    expect(screen.getByTestId('practice-tab-w1').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('practice-tab-q1').getAttribute('aria-selected')).toBe('false');
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    expect(screen.getByTestId('practice-tab-w1').getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByTestId('practice-tab-q1').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('moves focus and selection with ArrowRight/ArrowLeft, wrapping at the ends', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    const w1 = screen.getByTestId('practice-tab-w1');
+    const q1 = screen.getByTestId('practice-tab-q1');
+
+    fireEvent.keyDown(w1, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(q1);
+    expect(q1.getAttribute('aria-selected')).toBe('true');
+
+    fireEvent.keyDown(q1, { key: 'ArrowRight' }); // wraps past the last tab
+    expect(document.activeElement).toBe(w1);
+
+    fireEvent.keyDown(w1, { key: 'ArrowLeft' }); // wraps before the first tab
+    expect(document.activeElement).toBe(q1);
+  });
+
+  it('Home/End jump to the first/last tab', () => {
+    renderIsland([WORKSHEET, SECOND_WORKSHEET, QUIZ]);
+    const w1 = screen.getByTestId('practice-tab-w1');
+    fireEvent.keyDown(w1, { key: 'End' });
+    expect(document.activeElement).toBe(screen.getByTestId('practice-tab-q1'));
+    fireEvent.keyDown(screen.getByTestId('practice-tab-q1'), { key: 'Home' });
+    expect(document.activeElement).toBe(w1);
+  });
+
+  it('only a roving tabIndex=0 tab is in the natural tab order', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    expect(screen.getByTestId('practice-tab-w1').tabIndex).toBe(0);
+    expect(screen.getByTestId('practice-tab-q1').tabIndex).toBe(-1);
+  });
+
+  it('preserves answers in a tab across switching away and back', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'cat' } });
+
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    fireEvent.click(screen.getByTestId('practice-tab-w1'));
+
+    const inputAgain = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    expect(inputAgain.value).toBe('cat');
+  });
+
+  it('shows the worksheet zoom slot only while a worksheet tab is active', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    expect(screen.getByTestId('worksheet-zoom-slot')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    expect(screen.queryByTestId('worksheet-zoom-slot')).toBeNull();
+  });
+
+  it('shows each tab its own result once graded, with a green check when every gradable item in it is correct', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    const textInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(textInput, { target: { value: 'cat' } });
+    const select = screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'blue' } });
+
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    const quizInput = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(quizInput, { target: { value: 'wrong' } });
+
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    expect(screen.getByTestId('practice-tab-result-w1').textContent).toContain('2/2');
+    expect(screen.getByTestId('practice-tab-result-w1').className).toContain('text-emerald-400');
+    expect(screen.getByTestId('practice-tab-result-q1').textContent).toContain('0/1');
+    expect(screen.getByTestId('practice-tab-result-q1').className).not.toContain('text-emerald-400');
+  });
+
+  it('shows no tab result before Comprobar has run', () => {
+    renderIsland([WORKSHEET, QUIZ]);
+    expect(screen.queryByTestId('practice-tab-result-w1')).toBeNull();
+    expect(screen.queryByTestId('practice-tab-result-q1')).toBeNull();
+  });
+});
+
+describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar)', () => {
+  it('shows no footer when there is nothing gradable at all', () => {
     const unavailableQuiz: QuizBlock = {
       id: 'q2',
       type: 'quiz',
       payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'hotspot', answer: ['x'] }] },
     };
     renderIsland([unavailableQuiz]);
-    expect(screen.queryByTestId('practice-controls')).toBeNull();
+    expect(screen.queryByTestId('practice-footer')).toBeNull();
   });
 
   it('shows Comprobar for a quiz-only activity — a quiz question alone is gradable content', () => {
     renderIsland([QUIZ]);
-    expect(screen.getByTestId('practice-controls')).toBeTruthy();
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
   });
 
-  it('respects the safe-area inset and clears the floating scroll-to-top button on mobile, while keeping the original desktop position', () => {
+  it('is a plain static row, never a sticky/floating bar', () => {
     renderIsland([QUIZ]);
-    const className = screen.getByTestId('practice-controls').className;
-    expect(className).toContain('env(safe-area-inset-bottom)');
-    expect(className).toContain('lg:bottom-4');
+    expect(screen.getByTestId('practice-footer').className).not.toContain('sticky');
+    expect(screen.getByTestId('practice-footer').className).not.toContain('fixed');
   });
 
   it('shows Comprobar before grading', () => {
@@ -107,7 +211,7 @@ describe('ActivityPracticeIsland — Comprobar/Reintentar', () => {
     expect(screen.getByTestId('player-zone-result-z2').textContent).toBe('Correcto');
   });
 
-  it('combines zones across MULTIPLE worksheet blocks into one score', () => {
+  it('combines zones across MULTIPLE worksheet blocks into one score, from the footer regardless of the active tab', () => {
     renderIsland([WORKSHEET, SECOND_WORKSHEET]);
     fireEvent.click(screen.getByTestId('practice-check-button'));
     // Nothing filled in: 0 correct out of 3 total zones (z1, z2, z3).
@@ -157,12 +261,14 @@ describe('ActivityPracticeIsland — quiz questions grade into the combined scor
     expect(screen.getByTestId('quiz-slot-result-s1').textContent).toBe('Correcto');
   });
 
-  it('combines worksheet zones AND quiz questions into one score', () => {
+  it('combines worksheet zones AND quiz questions into one score, across tabs', () => {
     renderIsland([WORKSHEET, QUIZ]);
     const zoneInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
     fireEvent.change(zoneInput, { target: { value: 'cat' } });
     const zoneSelect = screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement;
     fireEvent.change(zoneSelect, { target: { value: 'blue' } });
+
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
     const quizInput = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
     fireEvent.change(quizInput, { target: { value: 'wrong' } });
 

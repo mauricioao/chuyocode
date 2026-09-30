@@ -23,13 +23,27 @@
  * inside a container whose aspect ratio is pinned to the image's own
  * `width`/`height`, so a zone always lines up with the artwork underneath it
  * regardless of how wide the container is actually rendered.
+ *
+ * CLEAN ZONES (practice player redesign): the container's own rendered pixel
+ * box is measured unconditionally (not just for a 90/270 rotation — see
+ * `containerSize` below), so each zone's inline input can size its own font
+ * to the zone's ACTUAL rendered height (`zoneInputFontSizePx`) and hide its
+ * placeholder copy entirely once the zone is too narrow to show it without
+ * clipping (`shouldShowZonePlaceholder`) — both pure helpers in
+ * `zoneAnswerDisplay.ts`. The speaker corner badge (D4) is hidden by default
+ * and shown only on hover/focus of the zone (`group`/`group-focus-within`),
+ * or whenever the zone's own input/select is itself focused.
  */
 import { useEffect, useRef, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
-import { zoneAnswerFontSize } from '@/lib/activities/zoneAnswerDisplay';
+import {
+  zoneAnswerFontSize,
+  zoneInputFontSizePx,
+  shouldShowZonePlaceholder,
+} from '@/lib/activities/zoneAnswerDisplay';
 import { cn } from '@/lib/utils';
 
 /** PR D, "Activities practice" — turns the creator preview into a gradable, controlled player. See file header. */
@@ -88,21 +102,27 @@ export default function WorksheetPlayer({
   // pure CSS (`inset-0 h-full w-full object-contain` + a same-size `rotate()`)
   // and never depends on this measurement.
   const [containerWidth, setContainerWidth] = useState(0);
+  // Clean zones (practice player redesign): the container's rendered
+  // HEIGHT, measured unconditionally (not just for a quarter-turn rotation —
+  // see the file header) so each zone's own pixel height can be derived
+  // below regardless of rotation.
+  const [containerHeight, setContainerHeight] = useState(0);
   const isQuarterTurn = rotation === 90 || rotation === 270;
 
   useEffect(() => {
-    if (!isQuarterTurn) return undefined;
     const el = containerRef.current;
     if (!el) return undefined;
     function measure() {
-      setContainerWidth(el!.getBoundingClientRect().width);
+      const box = el!.getBoundingClientRect();
+      setContainerWidth(box.width);
+      setContainerHeight(box.height);
     }
     measure();
     if (typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [isQuarterTurn]);
+  }, []);
 
   const displaySize = rotatedSize(image, rotation);
   // Pre-rotation box: after rotating 90/270 its bounding box swaps back to
@@ -155,8 +175,22 @@ export default function WorksheetPlayer({
               ? 'border-emerald-500 ring-2 ring-emerald-500/50'
               : 'border-destructive ring-2 ring-destructive/50'
             : 'border-border';
-          const fieldClassName = `h-full w-full rounded border bg-background/95 px-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${gradedClassName}`;
           const statusLabel = isGraded ? (isCorrect ? t.correct : t.incorrect) : undefined;
+
+          // Clean zones (practice player redesign): the zone's own rendered
+          // pixel box (from the container's measured size — see the file
+          // header) drives the inline input's font size and whether it shows
+          // placeholder copy at all, instead of a fixed `text-xs` and an
+          // always-on placeholder that can overflow/clip a small zone.
+          const zoneWidthPx = zone.w * containerWidth;
+          const zoneHeightPx = zone.h * containerHeight;
+          const showPlaceholder = shouldShowZonePlaceholder(zoneWidthPx);
+          const inputFontSize = zoneInputFontSizePx(zoneHeightPx);
+          const fieldClassName = cn(
+            'h-full w-full rounded border bg-background/95 px-1 text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            gradedClassName,
+            !showPlaceholder && 'border-dashed',
+          );
 
           // Mobile layout pass: a tap target instead of an inline input —
           // see `onZoneTap`'s own doc on `WorksheetPlayerProps`.
@@ -196,13 +230,22 @@ export default function WorksheetPlayer({
           }
 
           return (
-            <div key={zone.id} data-testid={`player-zone-${zone.id}`} className="absolute" style={style}>
+            <div
+              key={zone.id}
+              data-testid={`player-zone-${zone.id}`}
+              // `group`/`focus-within`: the speaker corner badge below stays
+              // hidden until this zone is hovered OR its own input/select is
+              // focused — see the file header's "Clean zones".
+              className="group absolute"
+              style={style}
+            >
               {zone.kind === 'text' ? (
                 <input
                   type="text"
                   aria-label={statusLabel ? `${t.textPlaceholder} — ${statusLabel}` : t.textPlaceholder}
-                  placeholder={t.textPlaceholder}
+                  placeholder={showPlaceholder ? t.textPlaceholder : undefined}
                   className={fieldClassName}
+                  style={{ fontSize: `${inputFontSize}px` }}
                   {...(practice
                     ? {
                         value: practice.values[zone.id] ?? '',
@@ -216,6 +259,7 @@ export default function WorksheetPlayer({
                 <select
                   aria-label={statusLabel ? `${t.choicePlaceholder} — ${statusLabel}` : t.choicePlaceholder}
                   className={fieldClassName}
+                  style={{ fontSize: `${inputFontSize}px` }}
                   {...(practice
                     ? {
                         value: practice.values[zone.id] ?? '',
@@ -246,11 +290,16 @@ export default function WorksheetPlayer({
                   editor's own preview mode (`practice` omitted) and the real
                   practice player. A corner badge rather than inline: the
                   zone box is sized to the drawn rectangle, often far too
-                  small to fit a button beside its input. */}
+                  small to fit a button beside its input.
+                  CLEAN ZONES: a ~18px visual badge with a larger 32px hit
+                  area (`h-8 w-8`), hidden by default and shown only on
+                  hover/focus of the zone (`group-hover`/`group-focus-within`
+                  — the wrapper above carries `group`), rather than always-on
+                  clutter over the artwork. */}
               {zone.speak && (
                 <div
                   data-testid={`player-zone-speak-${zone.id}`}
-                  className="absolute -right-2 -top-2 z-10 rounded-full bg-card shadow-sm"
+                  className="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                 >
                   <SpeakButton text={zone.speak} lang={lang} compact />
                 </div>
