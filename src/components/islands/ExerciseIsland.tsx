@@ -594,9 +594,16 @@ export default function ExerciseIsland({
                 `useSpeech`) turns its `___` gap marker into "blank", same as
                 every other speakable text in the app. Shown even when the
                 mechanic itself is unavailable: hearing the question is still
-                useful when the answer control could not be drawn. */}
+                useful when the answer control could not be drawn.
+
+                `showSettings`: this is the one non-compact SpeakButton every
+                exercise step always renders, so it is where the accent/voice
+                popover lives — its choice is a single shared preference
+                (`voicePreferenceStore`), so every OTHER SpeakButton on the
+                page (prose blocks, worksheet zones, quiz mechanics) already
+                honours it without needing a gear icon of its own. */}
             <div className="flex items-center justify-center">
-              <SpeakButton text={slot.label} lang={lang} />
+              <SpeakButton text={slot.label} lang={lang} showSettings />
             </div>
 
             {Renderer ? (
