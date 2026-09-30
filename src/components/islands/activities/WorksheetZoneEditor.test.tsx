@@ -151,6 +151,17 @@ describe('WorksheetZoneEditor — rendering', () => {
     expect(el.style.left).toBe('25%');
     expect(el.style.top).toBe('10%');
   });
+
+  // "Fill the empty space" pass (owner feedback #2): the "Dibujar un
+  // recuadro…"/no-zones hint used to be its own extra row UNDER the canvas —
+  // real height the canvas `flex-1` viewport never got back. It now lives
+  // INSIDE the zoom toolbar's own row instead, adding no height of its own.
+  it('folds the canvas hint into the zoom toolbar row instead of its own row under the canvas', () => {
+    render(<Harness />);
+    const toolbar = screen.getByTestId('zoom-toolbar');
+    const hint = screen.getByTestId('worksheet-canvas-hint');
+    expect(toolbar.contains(hint)).toBe(true);
+  });
 });
 
 describe('WorksheetZoneEditor — properties panel is always rendered (no layout jump)', () => {

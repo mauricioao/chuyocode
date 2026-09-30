@@ -1295,6 +1295,20 @@ export default function WorksheetZoneEditor({
           >
             <HandIcon aria-hidden="true" />
           </Button>
+          {/* "Fill the empty space" pass (owner feedback #2): this hint used
+              to be its own `flex-none` row UNDER the canvas — real height the
+              canvas viewport's own `flex-1` never got back, on top of the
+              zoom toolbar directly above it. Folded into the SAME row as the
+              zoom/tool controls instead (this toolbar already wraps via its
+              own `flex-wrap` — see `zoom-toolbar` above), a thin line that
+              adds no height of its own rather than a whole extra row. */}
+          <div
+            data-testid="worksheet-canvas-hint"
+            className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
+          >
+            {zones.length === 0 && <span>{t.noZonesYet}</span>}
+            <span>{t.addZoneHint}</span>
+          </div>
         </div>
 
         <div
@@ -1426,12 +1440,6 @@ export default function WorksheetZoneEditor({
               />
             )}
           </div>
-        </div>
-        {/* One compact line (creator "one-screen" pass: every extra row here
-            is height the canvas doesn't get) instead of two stacked hints. */}
-        <div className="mt-1 flex flex-none flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          {zones.length === 0 && <span>{t.noZonesYet}</span>}
-          <span>{t.addZoneHint}</span>
         </div>
         {/* Block-level incomplete pointer (creator polish round 3, owner
             feedback #1): `incompleteZoneId === null` means the gap is
