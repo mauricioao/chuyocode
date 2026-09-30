@@ -1,11 +1,21 @@
 ---
 /**
- * ActivityCard — one community activity in the discovery grid
- * (`/[lang]/ingles/actividades`), and the highlighted "Actividad del día"
- * slot above it. Same card content either way (title, level, block count,
- * thumbnail, heart count, view total, "Vista" badge) — `highlighted` only
- * changes the outer border/background so the daily pick reads as its own
- * thing without duplicating the card's markup.
+ * ActivityCard — one community activity, in two sizes.
+ *
+ * `variant="default"` (unchanged): the big card used by the discovery grid
+ * (`/[lang]/ingles/actividades`) and its highlighted "Actividad del día"
+ * slot — thumbnail on top (16:9), title/level/counts stacked below, the
+ * highlight label as an overlay chip on the thumbnail.
+ *
+ * `variant="compact"` (new — owner feedback: the "Para ti hoy" strip on the
+ * Inglés hub reused the full-size card at the same size as the main hub
+ * cards, which read as too heavy for a secondary strip): a HORIZONTAL row,
+ * ~96px tall — small square thumbnail on the left (flush to the card's
+ * edges, so the thumbnail's own height sets the row height instead of
+ * padding stacking on top of it), then title (1 line, truncated), the level
+ * line, and the hearts/views counts + highlight badge on a bottom row.
+ * Still ONE link (`data-testid="activity-card"` on both variants), so a
+ * caller's existing card-count assertions keep working unchanged.
  *
  * Icons are `@phosphor-icons/react/dist/ssr/*`, rendered server-side with no
  * `client:*` directive — same zero-JS posture as the rest of this page (see
@@ -28,6 +38,9 @@ interface Props {
   viewedLabel: string;
   highlighted?: boolean;
   highlightLabel?: string;
+  /** `default` (full card, unchanged) or `compact` (small horizontal row —
+   * see the file header for where each is used). */
+  variant?: 'default' | 'compact';
 }
 
 const {
@@ -40,62 +53,118 @@ const {
   viewedLabel,
   highlighted = false,
   highlightLabel,
+  variant = 'default',
 } = Astro.props;
 
+const compact = variant === 'compact';
 const thumbnailUrl = activity.thumbnailPath ? publicImageUrl(activity.thumbnailPath) : null;
+const levelLine = activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : noLevel;
 
 function countLabel(count: number): string {
   return `${count} ${count === 1 ? blockCountOne : blockCountMany}`;
 }
 ---
 
-<a
-  href={`/${lang}/ingles/actividades/${activity.id}`}
-  data-testid="activity-card"
-  class:list={[
-    'flex h-full flex-col overflow-hidden rounded-lg border transition-colors',
-    highlighted
-      ? 'border-accent bg-surface-soft shadow-elevation-1 hover:border-accent-hover'
-      : 'border-border bg-surface-soft hover:border-accent focus-visible:border-accent',
-  ]}
->
-  <div class="relative aspect-video w-full overflow-hidden bg-muted">
-    {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
-    {
-      highlighted && highlightLabel && (
-        <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-background shadow-elevation-1">
-          {highlightLabel}
-        </span>
-      )
-    }
-  </div>
-  <div class="flex flex-1 flex-col gap-2 p-4">
-    <span class="text-lg font-semibold text-zinc-100">{activity.title}</span>
-    <span class="text-sm text-zinc-400">
-      {activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : noLevel}
-      {' · '}
-      {countLabel(activity.blockCount)}
-    </span>
-    <div class="mt-auto flex flex-wrap items-center gap-3 pt-1 text-sm text-zinc-400">
-      <span class="inline-flex items-center gap-1" data-testid="activity-card-hearts">
-        <HeartIcon aria-hidden="true" size={16} />
-        <span class="tabular-nums">{activity.heartCount}</span>
-      </span>
-      <span class="inline-flex items-center gap-1" data-testid="activity-card-views">
-        <EyeIcon aria-hidden="true" size={16} />
-        <span class="tabular-nums">{activity.viewTotal}</span>
-      </span>
-      {
-        activity.viewedByViewer && (
-          <span
-            class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-zinc-300"
-            data-testid="activity-card-viewed-badge"
-          >
-            <CheckCircleIcon aria-hidden="true" size={14} weight="fill" />
-            {viewedLabel}
+{
+  compact ? (
+    <a
+      href={`/${lang}/ingles/actividades/${activity.id}`}
+      data-testid="activity-card"
+      data-variant="compact"
+      class:list={[
+        'flex h-24 items-stretch overflow-hidden rounded-lg border transition-colors',
+        highlighted
+          ? 'border-accent bg-surface-soft shadow-elevation-1 hover:border-accent-hover'
+          : 'border-border bg-surface-soft hover:border-accent focus-visible:border-accent',
+      ]}
+    >
+      <div class="relative aspect-square h-full w-24 shrink-0 overflow-hidden bg-muted">
+        {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
+      </div>
+      <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-2">
+        <span class="truncate text-sm font-semibold text-zinc-100">{activity.title}</span>
+        <span class="truncate text-xs text-zinc-400">{levelLine}</span>
+        <div class="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-zinc-400">
+          <span class="inline-flex items-center gap-1" data-testid="activity-card-hearts">
+            <HeartIcon aria-hidden="true" size={14} />
+            <span class="tabular-nums">{activity.heartCount}</span>
           </span>
-        )
-      }
-    </div>
-  </div>
-</a>
+          <span class="inline-flex items-center gap-1" data-testid="activity-card-views">
+            <EyeIcon aria-hidden="true" size={14} />
+            <span class="tabular-nums">{activity.viewTotal}</span>
+          </span>
+          {
+            highlighted && highlightLabel && (
+              <span class="ml-auto inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[0.65rem] font-semibold text-background">
+                {highlightLabel}
+              </span>
+            )
+          }
+          {
+            !highlighted && activity.viewedByViewer && (
+              <span
+                class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-zinc-300"
+                data-testid="activity-card-viewed-badge"
+              >
+                <CheckCircleIcon aria-hidden="true" size={12} weight="fill" />
+                {viewedLabel}
+              </span>
+            )
+          }
+        </div>
+      </div>
+    </a>
+  ) : (
+    <a
+      href={`/${lang}/ingles/actividades/${activity.id}`}
+      data-testid="activity-card"
+      data-variant="default"
+      class:list={[
+        'flex h-full flex-col overflow-hidden rounded-lg border transition-colors',
+        highlighted
+          ? 'border-accent bg-surface-soft shadow-elevation-1 hover:border-accent-hover'
+          : 'border-border bg-surface-soft hover:border-accent focus-visible:border-accent',
+      ]}
+    >
+      <div class="relative aspect-video w-full overflow-hidden bg-muted">
+        {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
+        {
+          highlighted && highlightLabel && (
+            <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-background shadow-elevation-1">
+              {highlightLabel}
+            </span>
+          )
+        }
+      </div>
+      <div class="flex flex-1 flex-col gap-2 p-4">
+        <span class="text-lg font-semibold text-zinc-100">{activity.title}</span>
+        <span class="text-sm text-zinc-400">
+          {levelLine}
+          {' · '}
+          {countLabel(activity.blockCount)}
+        </span>
+        <div class="mt-auto flex flex-wrap items-center gap-3 pt-1 text-sm text-zinc-400">
+          <span class="inline-flex items-center gap-1" data-testid="activity-card-hearts">
+            <HeartIcon aria-hidden="true" size={16} />
+            <span class="tabular-nums">{activity.heartCount}</span>
+          </span>
+          <span class="inline-flex items-center gap-1" data-testid="activity-card-views">
+            <EyeIcon aria-hidden="true" size={16} />
+            <span class="tabular-nums">{activity.viewTotal}</span>
+          </span>
+          {
+            activity.viewedByViewer && (
+              <span
+                class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-zinc-300"
+                data-testid="activity-card-viewed-badge"
+              >
+                <CheckCircleIcon aria-hidden="true" size={14} weight="fill" />
+                {viewedLabel}
+              </span>
+            )
+          }
+        </div>
+      </div>
+    </a>
+  )
+}
