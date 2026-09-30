@@ -1,0 +1,91 @@
+---
+/**
+ * Course authoring edit page — `/[lang]/admin/cursos/[id]` (moderator-only,
+ * hidden Courses feature). Same gate shape as `index.astro`, plus an
+ * existence check: a malformed or unknown `id` 404s exactly like a
+ * non-moderator, so this surface never confirms which course ids exist to a
+ * caller who cannot open them anyway.
+ *
+ * Only edits the course's own fields, status, and access grants —
+ * module/lesson authoring (add/rename/reorder/delete) is NOT wired up here
+ * yet; `src/lib/courses/admin.ts` already has the tested data layer for it.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import CourseEditPanel from '@components/islands/courses/CourseEditPanel';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+import { getCourseForEdit, listOwners } from '@lib/courses/admin';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const moderator = await requireRole(user, 'moderator');
+if (!moderator) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const course = await getCourseForEdit(id);
+if (!course) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const owners = await listOwners(course.id);
+const t = UI_LABELS[lang].admin.cursos;
+---
+
+<BaseLayout lang={lang} title={`${t.editTitle} — ${course.title}`} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}/admin/cursos`}>{course.title}</PageTitle>
+
+    <CourseEditPanel
+      client:load
+      lang={lang}
+      initialCourse={{
+        id: course.id,
+        slug: course.slug,
+        title: course.title,
+        subtitle: course.subtitle,
+        description: course.description,
+        level: course.level,
+        status: course.status,
+        included_in_premium: course.included_in_premium,
+        price_cents: course.price_cents,
+        currency: course.currency,
+      }}
+      initialOwners={owners}
+    />
+  </section>
+</BaseLayout>

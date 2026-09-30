@@ -1,0 +1,87 @@
+---
+/**
+ * Course authoring list — `/[lang]/admin/cursos` (moderator-only, hidden
+ * Courses feature: no nav/hub/menu entry anywhere, reachable only by URL).
+ *
+ * Same gate shape as `/[lang]/admin/actividades`: anonymous visitors are
+ * redirected to sign-in (`next` pointing back here), a signed-in
+ * NON-moderator gets a plain 404 (never a 403), and a moderator sees the
+ * list plus the "Nuevo curso" form.
+ *
+ * SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE — `markPrivate` runs
+ * unconditionally, before every branch.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import CourseCreateForm from '@components/islands/courses/CourseCreateForm';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+import { listCourses } from '@lib/courses/admin';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const moderator = await requireRole(user, 'moderator');
+if (!moderator) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].admin.cursos;
+const courses = await listCourses();
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+
+    <div class="flex flex-col gap-3" data-testid="course-list">
+      {
+        courses.length === 0 ? (
+          <p data-testid="course-list-empty" class="text-sm text-muted-foreground">
+            {t.empty}
+          </p>
+        ) : (
+          courses.map((course) => (
+            <a
+              href={`/${lang}/admin/cursos/${course.id}`}
+              data-testid={`course-list-item-${course.id}`}
+              class="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-4 py-3 text-sm transition-colors hover:bg-muted"
+            >
+              <span class="font-medium text-foreground">{course.title}</span>
+              <span class="text-xs text-muted-foreground">
+                {t.status[course.status]} · {course.slug}
+              </span>
+            </a>
+          ))
+        )
+      }
+    </div>
+
+    <div class="rounded-(--radius-card) bg-card p-6 ring-1 ring-foreground/10">
+      <CourseCreateForm client:load lang={lang} />
+    </div>
+  </section>
+</BaseLayout>
