@@ -4,48 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import ScrollToTop from './ScrollToTop';
 
-// ---------------------------------------------------------------------------
-// IntersectionObserver mock — same shape as `reveal.test.ts`'s: jsdom ships
-// none, so a controllable stub lets a test fire the footer intersection
-// synchronously via `trigger()`.
-// ---------------------------------------------------------------------------
-type IOEntryInit = { target: Element; isIntersecting: boolean };
-
-class MockIntersectionObserver {
-  static instances: MockIntersectionObserver[] = [];
-  readonly observed = new Set<Element>();
-  disconnected = false;
-
-  constructor(private readonly callback: IntersectionObserverCallback) {
-    MockIntersectionObserver.instances.push(this);
-  }
-
-  observe(el: Element): void {
-    this.observed.add(el);
-  }
-  unobserve(el: Element): void {
-    this.observed.delete(el);
-  }
-  disconnect(): void {
-    this.disconnected = true;
-    this.observed.clear();
-  }
-  takeRecords(): IntersectionObserverEntry[] {
-    return [];
-  }
-
-  trigger(entries: IOEntryInit[]): void {
-    const full = entries.map((e) => ({
-      target: e.target,
-      isIntersecting: e.isIntersecting,
-      intersectionRatio: e.isIntersecting ? 1 : 0,
-      boundingClientRect: {} as DOMRectReadOnly,
-      intersectionRect: {} as DOMRectReadOnly,
-      rootBounds: null,
-      time: 0,
-    })) as unknown as IntersectionObserverEntry[];
-    this.callback(full, this as unknown as IntersectionObserver);
-  }
+/** Stubs the footer's `getBoundingClientRect()` so `measure()` computes a
+ * deterministic `visibleFooterHeight` from it (jsdom's default rect is all
+ * zeros, which would always read as "fully visible"). */
+function setFooterTop(footer: Element, top: number) {
+  vi.spyOn(footer, 'getBoundingClientRect').mockReturnValue({
+    top,
+    left: 0,
+    right: 0,
+    bottom: top,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: top,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect);
 }
 
 function setReducedMotion(reduce: boolean) {
@@ -78,15 +53,6 @@ function fireContainerScroll(el: HTMLElement, scrollTop: number) {
   });
 }
 
-function triggerIntersection(
-  observer: MockIntersectionObserver,
-  entries: { target: Element; isIntersecting: boolean }[],
-) {
-  act(() => {
-    observer.trigger(entries);
-  });
-}
-
 /** No `@testing-library/jest-dom` matchers configured in this repo (no
  * global setup file) — read `aria-hidden` off the DOM node directly, same
  * convention `UserMenu.test.tsx` uses for every attribute assertion. */
@@ -95,14 +61,14 @@ function isHidden(el: HTMLElement): boolean {
 }
 
 beforeEach(() => {
-  MockIntersectionObserver.instances = [];
-  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
   Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
   Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
   setReducedMotion(false);
-  // A footer must exist in the document for the global mode's observer.
+  // A footer must exist in the document for global mode's bottom-offset
+  // tracking; parked well below the viewport (not encroaching) by default.
   const footer = document.createElement('footer');
   document.body.appendChild(footer);
+  setFooterTop(footer, 2000);
 });
 
 afterEach(() => {
@@ -131,29 +97,48 @@ describe('ScrollToTop — global mode (window scroll)', () => {
     expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(true);
   });
 
-  it('hides once the footer enters the viewport, even past the scroll threshold', () => {
+  it('stays visible (never hides) once the footer enters the viewport', () => {
     render(<ScrollToTop lang="es" />);
     fireWindowScroll(900);
     expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(false);
 
     const footer = document.querySelector('footer')!;
-    triggerIntersection(MockIntersectionObserver.instances[0], [
-      { target: footer, isIntersecting: true },
-    ]);
-    expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(true);
+    setFooterTop(footer, 700); // 100px of the footer now visible
+    fireWindowScroll(901); // re-run measure()
+
+    expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(false);
   });
 
-  it('reappears once the footer leaves the viewport again', () => {
+  it('sits at its base offset while the footer has not entered the viewport', () => {
     render(<ScrollToTop lang="es" />);
     fireWindowScroll(900);
+    expect(screen.getByTestId('scroll-to-top').style.bottom).toBe('24px');
+  });
+
+  it('rides up above the footer, in sync with how much of it is visible', () => {
+    render(<ScrollToTop lang="es" />);
     const footer = document.querySelector('footer')!;
-    triggerIntersection(MockIntersectionObserver.instances[0], [
-      { target: footer, isIntersecting: true },
-    ]);
-    triggerIntersection(MockIntersectionObserver.instances[0], [
-      { target: footer, isIntersecting: false },
-    ]);
-    expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(false);
+
+    setFooterTop(footer, 700); // 100px visible -> max(24, 100+16) = 116
+    fireWindowScroll(900);
+    expect(screen.getByTestId('scroll-to-top').style.bottom).toBe('116px');
+
+    setFooterTop(footer, 500); // 300px visible -> max(24, 300+16) = 316
+    fireWindowScroll(901);
+    expect(screen.getByTestId('scroll-to-top').style.bottom).toBe('316px');
+  });
+
+  it('settles back to the base offset once the footer leaves the viewport again', () => {
+    render(<ScrollToTop lang="es" />);
+    const footer = document.querySelector('footer')!;
+
+    setFooterTop(footer, 700);
+    fireWindowScroll(900);
+    expect(screen.getByTestId('scroll-to-top').style.bottom).toBe('116px');
+
+    setFooterTop(footer, 2000);
+    fireWindowScroll(901);
+    expect(screen.getByTestId('scroll-to-top').style.bottom).toBe('24px');
   });
 
   it('has the localized accessible label, in Spanish and English', () => {
@@ -246,7 +231,9 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
     render(<ScrollToTop lang="es" targetRef={ref} />);
     fireContainerScroll(el, 500);
 
-    expect(MockIntersectionObserver.instances).toHaveLength(0);
+    // Scoped mode never computes a footer-based offset — it keeps its
+    // static `bottom-4` Tailwind class instead of an inline style.
+    expect(screen.getByTestId('scroll-to-top-scoped').style.bottom).toBe('');
     expect(isHidden(screen.getByTestId('scroll-to-top-scoped'))).toBe(false);
   });
 
