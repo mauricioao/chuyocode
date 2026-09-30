@@ -222,7 +222,6 @@ export const UI_LABELS = {
           title: 'Preguntas',
           description: 'Preguntas de opción múltiple y otros ejercicios interactivos.',
         },
-        creating: 'Creando la actividad…',
         createError: 'No se pudo crear la actividad. Intentar de nuevo.',
       },
       editor: {
@@ -983,7 +982,6 @@ export const UI_LABELS = {
           title: 'Questions',
           description: 'Multiple-choice questions and other interactive exercises.',
         },
-        creating: 'Creating the activity…',
         createError: 'Could not create the activity. Try again.',
       },
       editor: {

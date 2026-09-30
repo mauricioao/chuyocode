@@ -16,10 +16,17 @@
  * empty quiz block". That second call is BEST-EFFORT: a failure there still
  * navigates to a valid (if momentarily empty) editor rather than stranding
  * the author on this screen after the activity already exists.
+ *
+ * Busy state (navigation-without-flicker PR): no more inline "Creando la
+ * actividad…" text. The chosen card itself shows the busy state
+ * (`BlockTypePicker`'s spinner + `aria-busy`) while the other one dims and
+ * both become non-interactive; a failure shows a toast (`sonner`) and
+ * restores the picker to idle instead of leaving an inline error message up.
  */
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import BlockTypePicker from './BlockTypePicker';
+import BlockTypePicker, { type BlockTypeCard } from './BlockTypePicker';
 
 export interface ActivityStartIslandProps {
   lang: Lang;
@@ -27,15 +34,13 @@ export interface ActivityStartIslandProps {
   navigate?: (url: string) => void;
 }
 
-type State = 'idle' | 'creating' | 'error';
-
 function defaultNavigate(url: string): void {
   window.location.href = url;
 }
 
 export default function ActivityStartIsland({ lang, navigate = defaultNavigate }: ActivityStartIslandProps) {
   const t = UI_LABELS[lang].activities.start;
-  const [state, setState] = useState<State>('idle');
+  const [busyCard, setBusyCard] = useState<BlockTypeCard | null>(null);
 
   const createActivity = useCallback(async (): Promise<string | null> => {
     const res = await fetch('/api/actividades', {
@@ -49,25 +54,28 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
   }, [lang]);
 
   const handleSelectWorksheet = useCallback(async () => {
-    setState('creating');
+    setBusyCard('worksheet');
     try {
       const id = await createActivity();
       if (!id) {
-        setState('error');
+        toast.error(t.createError);
+        setBusyCard(null);
         return;
       }
       navigate(`/${lang}/crear/${id}`);
     } catch {
-      setState('error');
+      toast.error(t.createError);
+      setBusyCard(null);
     }
-  }, [createActivity, lang, navigate]);
+  }, [createActivity, lang, navigate, t.createError]);
 
   const handleSelectQuestions = useCallback(async () => {
-    setState('creating');
+    setBusyCard('questions');
     try {
       const id = await createActivity();
       if (!id) {
-        setState('error');
+        toast.error(t.createError);
+        setBusyCard(null);
         return;
       }
       try {
@@ -87,9 +95,10 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
       }
       navigate(`/${lang}/crear/${id}`);
     } catch {
-      setState('error');
+      toast.error(t.createError);
+      setBusyCard(null);
     }
-  }, [createActivity, lang, navigate]);
+  }, [createActivity, lang, navigate, t.createError]);
 
   return (
     <div data-testid="activity-start-island" className="flex flex-col gap-6">
@@ -98,18 +107,8 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
         lang={lang}
         onSelectWorksheet={handleSelectWorksheet}
         onSelectQuestions={handleSelectQuestions}
-        disabled={state === 'creating'}
+        busyCard={busyCard}
       />
-      {state === 'creating' && (
-        <p role="status" data-testid="start-creating" className="text-sm text-muted-foreground">
-          {t.creating}
-        </p>
-      )}
-      {state === 'error' && (
-        <p role="alert" data-testid="start-error" className="text-sm text-destructive">
-          {t.createError}
-        </p>
-      )}
     </div>
   );
 }
