@@ -231,6 +231,41 @@ export async function getExerciseFacetRows(): Promise<FacetRow[]> {
 }
 
 /**
+ * Cheap total of published, visible exercises — the English hub's
+ * ("12 ejercicios") live count on its "Ejercicios propuestos" card
+ * (`/[lang]/ingles`).
+ *
+ * `head: true` makes this a COUNT-ONLY query: Postgrest returns the count in
+ * a response header and no rows are transferred, so this stays cheap even as
+ * the table grows — unlike `getExerciseFacetRows`, which has to read a row
+ * per exercise to group them by language point.
+ *
+ * FAIL-SAFE: `null` on any error, never `0` — the hub card degrades to no
+ * number at all, because "0 ejercicios" would read as "nothing published"
+ * when the truth is just "the count query failed".
+ */
+export async function getExerciseCount(): Promise<number | null> {
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const { count, error } = await client
+      .from(EXERCISES_TABLE)
+      .select('id', { count: 'exact', head: true })
+      .eq('visible', true);
+
+    if (error) {
+      console.error('[exercises] getExerciseCount failed:', error.message);
+      return null;
+    }
+    return typeof count === 'number' ? count : null;
+  } catch (err) {
+    console.error('[exercises] getExerciseCount threw:', err);
+    return null;
+  }
+}
+
+/**
  * Fetch every published exercise for one `(level, focus)` pair.
  *
  * An EMPTY array is a legitimate answer, not a failure: a valid combination

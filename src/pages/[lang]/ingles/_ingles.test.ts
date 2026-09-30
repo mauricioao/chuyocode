@@ -33,13 +33,24 @@ vi.mock('@lib/env', () => ({
 
 const getExerciseBySlug = vi.fn();
 const getExerciseFacetRows = vi.fn();
+const getExerciseCount = vi.fn();
 const getPublishedExercises = vi.fn();
 const getRelatedExercises = vi.fn();
 vi.mock('@lib/exercises', () => ({
   getExerciseBySlug: (...args: unknown[]) => getExerciseBySlug(...args),
   getExerciseFacetRows: (...args: unknown[]) => getExerciseFacetRows(...args),
+  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
   getPublishedExercises: (...args: unknown[]) => getPublishedExercises(...args),
   getRelatedExercises: (...args: unknown[]) => getRelatedExercises(...args),
+}));
+
+// The hub's own live count on its "Actividades de la comunidad" card.
+// `getActivityCount` is a real function the hub imports from the SAME
+// module — mocked here so no network happens, same posture as the
+// `@lib/exercises` mock above.
+const getActivityCount = vi.fn();
+vi.mock('@lib/activities/activities', () => ({
+  getActivityCount: (...args: unknown[]) => getActivityCount(...args),
 }));
 
 import EntryPage from './index.astro';
@@ -102,6 +113,13 @@ const publishedExercise = (slug: string, topic: string | null = 'job-interview')
 const valid = { lang: 'es', level: 'B1', focus: 'phrasal-verbs', slug: 'greetings' };
 
 describe('ingles/index.astro (hub)', () => {
+  beforeEach(() => {
+    getExerciseCount.mockReset();
+    getActivityCount.mockReset();
+    getExerciseCount.mockResolvedValue(null);
+    getActivityCount.mockResolvedValue(null);
+  });
+
   it('returns 404 for an unsupported language', async () => {
     const res = await renderPage(EntryPage, { lang: 'fr' });
 
@@ -161,6 +179,72 @@ describe('ingles/index.astro (hub)', () => {
 
     expect(html).toContain('data-back-button');
     expect(html).toContain('href="/es"');
+  });
+
+  describe('live counts', () => {
+    it('shows each card its own live count, and gives the link an accessible name of title + count', async () => {
+      getExerciseCount.mockResolvedValue(12);
+      getActivityCount.mockResolvedValue(34);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('12 ejercicios');
+      expect(html).toContain('34 actividades');
+      expect(html).toContain('aria-label="Ejercicios propuestos — 12 ejercicios"');
+      expect(html).toContain('aria-label="Actividades de la comunidad — 34 actividades"');
+    });
+
+    it('shows the singular noun for a count of exactly one', async () => {
+      getExerciseCount.mockResolvedValue(1);
+      getActivityCount.mockResolvedValue(1);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('1 ejercicio');
+      expect(html).not.toContain('1 ejercicios');
+      expect(html).toContain('1 actividad');
+      expect(html).not.toContain('1 actividades');
+    });
+
+    it('degrades to no number (never "0 …") when a count query fails', async () => {
+      getExerciseCount.mockResolvedValue(null);
+      getActivityCount.mockResolvedValue(null);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).not.toMatch(/\d+\s+ejercicios?/);
+      expect(html).not.toMatch(/\d+\s+actividades?/);
+      // The accessible name falls back to the bare title, no trailing dash.
+      expect(html).toContain('aria-label="Ejercicios propuestos"');
+      expect(html).toContain('aria-label="Actividades de la comunidad"');
+    });
+
+    it('shows live counts in English too', async () => {
+      getExerciseCount.mockResolvedValue(12);
+      getActivityCount.mockResolvedValue(34);
+
+      const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+      const html = await res.text();
+
+      expect(html).toContain('12 exercises');
+      expect(html).toContain('34 activities');
+    });
+  });
+
+  describe('hidden-features guard', () => {
+    it('never links to the hidden Courses catalog or the adventure prototype', async () => {
+      getExerciseCount.mockResolvedValue(12);
+      getActivityCount.mockResolvedValue(34);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).not.toMatch(/(?<!admin)\/cursos(?!\w)/);
+      expect(html).not.toContain('/aventura');
+    });
   });
 });
 

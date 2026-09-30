@@ -95,6 +95,7 @@ vi.mock('./supabase', () => ({
 import {
   getExerciseBySlug,
   getExerciseFacetRows,
+  getExerciseCount,
   getPublishedExercises,
   getRelatedExercises,
   getExercisesByAuthor,
@@ -403,6 +404,56 @@ describe('getExerciseFacetRows', () => {
     expect(await getExerciseFacetRows()).toEqual([
       { level: 'A1', focus: 'articles' },
     ]);
+  });
+});
+
+describe('getExerciseCount', () => {
+  it('returns the count Postgrest reports', async () => {
+    listResult.value = { data: null, error: null, count: 12 };
+
+    expect(await getExerciseCount()).toBe(12);
+  });
+
+  it('counts only visible rows', async () => {
+    listResult.value = { data: null, error: null, count: 0 };
+
+    await getExerciseCount();
+
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
+  });
+
+  it('is a count-only query — selects no columns of substance', async () => {
+    listResult.value = { data: null, error: null, count: 0 };
+
+    await getExerciseCount();
+
+    expect(fromMock).toHaveBeenCalledWith(EXERCISES_TABLE);
+    expect(selectMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fail-safes to null (never 0) when Supabase reports an error', async () => {
+    listResult.value = { data: null, error: { message: 'down' }, count: null };
+
+    expect(await getExerciseCount()).toBeNull();
+  });
+
+  it('fail-safes to null when the query throws', async () => {
+    listResult.throws = new Error('network');
+
+    expect(await getExerciseCount()).toBeNull();
+  });
+
+  it('fail-safes to null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+
+    expect(await getExerciseCount()).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('fail-safes to null when the driver reports no count', async () => {
+    listResult.value = { data: null, error: null, count: null };
+
+    expect(await getExerciseCount()).toBeNull();
   });
 });
 

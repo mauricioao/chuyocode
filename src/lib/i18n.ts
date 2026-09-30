@@ -998,6 +998,13 @@ export const UI_LABELS = {
         // same destination, same name for it everywhere it appears.
         communityTitle: 'Actividades de la comunidad',
         communityDescription: 'Actividades creadas por otros usuarios.',
+        // Live counts on each card ("12 ejercicios", "1 actividad"). The
+        // number is prepended by the page, same convention as
+        // `section.exerciseOne`/`exerciseMany` — these stay plain nouns.
+        exerciseCountOne: 'ejercicio',
+        exerciseCountMany: 'ejercicios',
+        activityCountOne: 'actividad',
+        activityCountMany: 'actividades',
       },
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
@@ -1828,6 +1835,10 @@ export const UI_LABELS = {
         proposedDescription: 'Exercises curated by level.',
         communityTitle: 'Community activities',
         communityDescription: 'Activities created by other users.',
+        exerciseCountOne: 'exercise',
+        exerciseCountMany: 'exercises',
+        activityCountOne: 'activity',
+        activityCountMany: 'activities',
       },
       section: {
         // Matches the Spanish move: name the section, not its audience.
