@@ -1,0 +1,59 @@
+---
+/**
+ * Aventura — the hidden retro-RPG English lesson prototype,
+ * `/[lang]/ingles/aventura` (SSR). HIDDEN ON PURPOSE: no nav entry, no card
+ * on the hub — `src/pages/[lang]/ingles/_ingles.test.ts`'s own
+ * "hidden-features guard" already asserts the hub never links `/aventura`,
+ * the same posture as the hidden Courses catalog next to it.
+ *
+ * Under `ingles/**`, so this route is ALREADY gated and marked
+ * private/no-store by the middleware (`@lib/access`'s `GATED_SECTIONS`) —
+ * no per-page gate or `markPrivate` call needed here, same posture as
+ * `/[lang]/ingles/actividades/index.astro`'s own header.
+ *
+ * Only "The Village Inn" exists today (`@/content/aventura/villageInn`) — a
+ * hardcoded single scene, no picker: this is a prototype to test the
+ * concept, not a finished feature.
+ *
+ * PIXEL FONT: "Press Start 2P" is loaded from Google Fonts via a `<link>`
+ * in this page's own `<head>` slot ONLY — the one place this repo's
+ * self-hosted-fonts rule (`BaseLayout`'s own header) is deliberately not
+ * followed, exactly as the owner's brief allowed for this prototype. Every
+ * other page keeps loading zero third-party fonts.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import AventuraIsland from '@components/islands/aventura/AventuraIsland';
+import { isValidLang, type Lang } from '@lib/i18n';
+import { villageInnScene } from '@/content/aventura/villageInn';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const title = lang === 'es' ? 'Aventura' : 'Adventure';
+const description =
+  lang === 'es'
+    ? 'Prototipo: una aventura de rol retro para practicar inglés.'
+    : 'Prototype: a retro role-playing adventure to practice English.';
+---
+
+<BaseLayout lang={lang} title={title} description={description}>
+  <Fragment slot="head">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+  </Fragment>
+
+  <section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+    <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{title}</PageTitle>
+    <AventuraIsland client:load scene={villageInnScene} lang={lang} />
+  </section>
+</BaseLayout>
