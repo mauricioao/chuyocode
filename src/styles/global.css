@@ -383,3 +383,24 @@ h3 {
 *::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
 }
+
+/* --- Glass floating controls (PR 1) --------------------------------------
+ * `BackButton` and `ScrollToTop`: a translucent surface + blur reads as
+ * "floating" above the page content behind it. A plain Tailwind
+ * `bg-surface-soft/55 backdrop-blur-md` pair would ALSO apply that alpha
+ * background in a browser with no `backdrop-filter` support, leaving a
+ * half-transparent control with nothing blurring behind it — this class
+ * pairs the translucent background with its own `@supports` fallback to a
+ * fully solid surface instead, so unsupported browsers get a normal opaque
+ * button rather than a broken-looking one. */
+.glass-floating {
+  background-color: rgb(24 24 27 / 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-floating {
+    background-color: var(--color-surface-soft);
+  }
+}
