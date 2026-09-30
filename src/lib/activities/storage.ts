@@ -257,3 +257,43 @@ export async function copyToImagesBucket(fromPath: string, toPath: string): Prom
     return false;
   }
 }
+
+/**
+ * Copy an already-PUBLIC image from the `activity-images` bucket into a
+ * fresh owner's PRIVATE `activity-uploads` folder ("Duplicar y adaptar", D7)
+ * — the mirror image of {@link copyToImagesBucket}, direction reversed: a
+ * duplicate's first draft must reference only paths its new owner is allowed
+ * to use (the same invariant `guardar.ts`/`index.ts` already enforce on every
+ * save), so every worksheet image the ORIGINAL's published revision points
+ * at is copied here, under a brand-new id, into the caller's own uploads
+ * folder before the duplicate activity is ever created.
+ *
+ * `toPath` is always derived from a freshly minted uuid by the caller
+ * ({@link uploadPath}(callerId, crypto.randomUUID())) — unlike
+ * `copyToImagesBucket`'s retried-approval case, there is no reasonable
+ * collision to guard against, so this does not pre-check for an existing
+ * object at the destination.
+ */
+export async function copyToUploadsBucket(fromPath: string, toPath: string): Promise<boolean> {
+  const fromParsed = parseImagePath(fromPath);
+  const toParsed = parseImagePath(toPath);
+  if (!fromParsed || fromParsed.bucket !== IMAGES_BUCKET) return false;
+  if (!toParsed || toParsed.bucket !== UPLOADS_BUCKET) return false;
+
+  const client = getClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.storage
+      .from(IMAGES_BUCKET)
+      .copy(fromParsed.objectPath, toParsed.objectPath, { destinationBucket: UPLOADS_BUCKET });
+    if (error) {
+      console.error('[activities/storage] copyToUploadsBucket copy failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[activities/storage] copyToUploadsBucket threw:', err);
+    return false;
+  }
+}

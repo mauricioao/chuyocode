@@ -69,6 +69,13 @@ export interface ActivityEditorIslandProps {
   initialStatus?: string;
   /** `activities.review_note` — shown alongside the badge when `initialStatus === 'rejected'`. */
   initialReviewNote?: string | null;
+  /**
+   * "Duplicar y adaptar" credit line (D7): the activity THIS one was
+   * duplicated from, or `null`/`undefined` for an ordinary activity.
+   * `href` is `null` once the source is no longer live — see
+   * `[id].astro`'s own practice-page credit line for the same rule.
+   */
+  sourceActivity?: { title: string; href: string | null } | null;
 }
 
 /** The editor's whole undo/redo-able document. */
@@ -105,6 +112,7 @@ export default function ActivityEditorIsland({
   initialBlocks,
   initialStatus = 'draft',
   initialReviewNote = null,
+  sourceActivity = null,
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
@@ -709,6 +717,28 @@ export default function ActivityEditorIsland({
             </Button>
           </div>
         </div>
+
+        {/* "Duplicar y adaptar" credit line (D7) — only ever set for a
+            duplicate's own editor; an ordinary activity never renders this. */}
+        {sourceActivity && (
+          <p data-testid="activity-based-on" className="flex-none px-3 pt-2 text-xs text-muted-foreground lg:px-3">
+            {sourceActivity.href ? (
+              <>
+                {t.basedOnPrefix}
+                <a href={sourceActivity.href} className="text-accent hover:underline">
+                  {sourceActivity.title}
+                </a>
+                {t.basedOnSuffix}
+              </>
+            ) : (
+              <>
+                {t.basedOnPrefix}
+                {sourceActivity.title}
+                {t.basedOnSuffix}
+              </>
+            )}
+          </p>
+        )}
 
         {preview ? (
           <div

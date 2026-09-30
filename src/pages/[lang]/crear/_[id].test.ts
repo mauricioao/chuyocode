@@ -151,3 +151,68 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('Falta una zona en la hoja 2.');
   });
 });
+
+describe('GET /[lang]/crear/[id] — "Duplicar y adaptar" credit line (D7)', () => {
+  it('shows nothing when the activity has no source', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: null,
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+      source: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="activity-based-on"');
+  });
+
+  it('links to the source when it is still live', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Copia',
+      level: null,
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+      source: { id: 'orig-1', title: 'Original', visible: true },
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-based-on"');
+    expect(html).toContain('Original');
+    expect(html).toContain('href="/es/ingles/actividades/orig-1"');
+  });
+
+  it('shows the title with no link once the source is no longer live', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Copia',
+      level: null,
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+      source: { id: 'orig-1', title: 'Original', visible: false },
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-based-on"');
+    expect(html).not.toContain('href="/es/ingles/actividades/orig-1"');
+  });
+});

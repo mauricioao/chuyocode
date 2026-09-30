@@ -32,13 +32,36 @@ const labels: ShareLabels = {
   copy: 'Copiar',
   copied: 'Copiado',
   qrAlt: 'Código QR con el enlace a este ejercicio',
+  whatsapp: 'WhatsApp',
+  downloadQr: 'Descargar QR',
+  native: 'Compartir con el dispositivo',
+  note: 'Quien reciba el enlace va a necesitar iniciar sesión.',
 };
+
+const WHATSAPP_HREF = `https://wa.me/?text=${encodeURIComponent(`Título ${URL_UNDER_TEST}`)}`;
+
+// jsdom does not implement `URL.createObjectURL`/`revokeObjectURL` — same
+// guard as `WorksheetUploader.test.tsx`.
+if (typeof URL.createObjectURL !== 'function') {
+  (URL as unknown as { createObjectURL: (blob: Blob) => string }).createObjectURL = () => '';
+}
+if (typeof URL.revokeObjectURL !== 'function') {
+  (URL as unknown as { revokeObjectURL: (url: string) => void }).revokeObjectURL = () => {};
+}
 
 /** Install a clipboard, or remove it entirely when `writeText` is undefined. */
 function stubClipboard(writeText?: () => Promise<void>) {
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: writeText ? { writeText } : undefined,
+  });
+}
+
+/** Install `navigator.share`, or remove it entirely when `share` is undefined. */
+function stubNativeShare(share?: (data: unknown) => Promise<void>) {
+  Object.defineProperty(navigator, 'share', {
+    configurable: true,
+    value: share,
   });
 }
 
@@ -52,6 +75,7 @@ async function open() {
 afterEach(() => {
   cleanup();
   stubClipboard(undefined);
+  stubNativeShare(undefined);
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -147,5 +171,83 @@ describe('ShareDialog', () => {
     // Give the rejected promise a turn; the label must not have changed.
     await waitFor(() => expect(copyButton.textContent).toBe(labels.copy));
     expect(screen.getByText(URL_UNDER_TEST)).toBeTruthy();
+  });
+});
+
+describe('ShareDialog — WhatsApp / QR download / native share / note (D8)', () => {
+  it('renders no WhatsApp/download/native/note controls when their props/labels are absent', async () => {
+    const { note: _note, ...labelsWithoutNote } = labels;
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labelsWithoutNote} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+    expect(screen.queryByTestId('exercise-share-whatsapp')).toBeNull();
+    expect(screen.queryByTestId('exercise-share-download')).toBeNull();
+    expect(screen.queryByTestId('exercise-share-native')).toBeNull();
+    expect(screen.queryByTestId('exercise-share-note')).toBeNull();
+  });
+
+  it('links the WhatsApp button to the exact wa.me href passed in, target=_blank', async () => {
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} whatsappHref={WHATSAPP_HREF} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    const link = await screen.findByTestId('exercise-share-whatsapp');
+    expect(link.getAttribute('href')).toBe(WHATSAPP_HREF);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.textContent).toBe(labels.whatsapp);
+  });
+
+  it('downloads the QR as an .svg file named from downloadFileName', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-1');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} downloadFileName="actividad.svg" />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    const button = await screen.findByTestId('exercise-share-download');
+    fireEvent.click(button);
+
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe('image/svg+xml');
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-1');
+  });
+
+  it('shows the native-share button only when navigator.share actually exists', async () => {
+    stubNativeShare(vi.fn().mockResolvedValue(undefined));
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    expect(await screen.findByTestId('exercise-share-native')).toBeTruthy();
+  });
+
+  it('hides the native-share button when navigator.share does not exist', async () => {
+    stubNativeShare(undefined);
+    await open();
+    expect(screen.queryByTestId('exercise-share-native')).toBeNull();
+  });
+
+  it('calls navigator.share with the title and url', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    stubNativeShare(share);
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    const button = await screen.findByTestId('exercise-share-native');
+    fireEvent.click(button);
+    await waitFor(() => expect(share).toHaveBeenCalledWith({ title: labels.title, url: URL_UNDER_TEST }));
+  });
+
+  it('does not throw when the native share sheet is cancelled', async () => {
+    stubNativeShare(vi.fn().mockRejectedValue(new DOMException('cancelled', 'AbortError')));
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    const button = await screen.findByTestId('exercise-share-native');
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+  });
+
+  it('renders the muted note only when labels.note is set', async () => {
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    const note = await screen.findByTestId('exercise-share-note');
+    expect(note.textContent).toBe(labels.note);
   });
 });

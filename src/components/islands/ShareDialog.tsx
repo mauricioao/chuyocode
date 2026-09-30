@@ -23,7 +23,7 @@
  * uptime.
  */
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,14 @@ export interface ShareLabels {
   copied: string;
   /** Accessible name for the code itself — it is an image, not decoration. */
   qrAlt: string;
+  /** The WhatsApp share button, rendered only when {@link ShareDialogProps.whatsappHref} is set. */
+  whatsapp?: string;
+  /** "Descargar QR" — the code as a standalone file, rendered only when {@link ShareDialogProps.downloadFileName} is set. */
+  downloadQr?: string;
+  /** The native share-sheet button (`navigator.share`), rendered only when it actually exists on the device. */
+  native?: string;
+  /** A short muted line under the dialog's content — e.g. "sign-in required" — omitted entirely when absent. */
+  note?: string;
 }
 
 export interface ShareDialogProps {
@@ -72,11 +80,25 @@ export interface ShareDialogProps {
   /** Server-rendered QR markup for {@link url}. */
   qr: string;
   labels: ShareLabels;
+  /**
+   * `https://wa.me/?text=…`, built server-side (title + url, already
+   * encoded) — activities-only (D8); omitted entirely, this dialog behaves
+   * exactly as it did before the WhatsApp/QR-download/native-share
+   * additions.
+   */
+  whatsappHref?: string;
+  /**
+   * The filename the QR download gets (e.g. `actividad.svg`). Its PRESENCE,
+   * not `labels.downloadQr`, is what decides whether the download button
+   * renders — a filename with no label would be a silent no-op button.
+   */
+  downloadFileName?: string;
 }
 
-export default function ShareDialog({ url, qr, labels }: ShareDialogProps) {
+export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFileName }: ShareDialogProps) {
   const [copied, setCopied] = useState(false);
   const [canCopy, setCanCopy] = useState(false);
+  const [canNativeShare, setCanNativeShare] = useState(false);
 
   // Detected in an effect rather than during render because this component is
   // ALSO server-rendered by Astro, where `navigator` does not exist. Reading it
@@ -84,6 +106,7 @@ export default function ShareDialog({ url, qr, labels }: ShareDialogProps) {
   // disagrees with the client's first paint.
   useEffect(() => {
     setCanCopy(typeof navigator?.clipboard?.writeText === 'function');
+    setCanNativeShare(typeof navigator?.share === 'function');
   }, []);
 
   // "Copied" is a transient acknowledgement, not a state the dialog stays in.
@@ -102,6 +125,38 @@ export default function ShareDialog({ url, qr, labels }: ShareDialogProps) {
       // button simply does not claim success — and the URL beside it is still
       // selectable text, which is the fallback that always works.
     }
+  }
+
+  /**
+   * The device's own share sheet, when one exists. `navigator.share` throws
+   * on a user-cancelled sheet (`AbortError`) — that is not a failure, just
+   * the person changing their mind, so it is swallowed the same way `copy`
+   * swallows a denied clipboard permission.
+   */
+  async function nativeShare() {
+    try {
+      await navigator.share({ title: labels.title, url });
+    } catch {
+      // Cancelled, or unsupported despite the feature check above (a device
+      // quirk) — either way, nothing else on the dialog depends on this.
+    }
+  }
+
+  /**
+   * The QR as its own downloadable `.svg` file — "PNG or SVG" per the task;
+   * SVG needs no canvas round trip and the markup is already in hand. A
+   * throwaway `<a download>` click is the standard trigger-a-download idiom
+   * with no extra dependency.
+   */
+  function downloadQr() {
+    if (!downloadFileName) return;
+    const blob = new Blob([qr], { type: 'image/svg+xml' });
+    const blobUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = downloadFileName;
+    anchor.click();
+    URL.revokeObjectURL(blobUrl);
   }
 
   return (
@@ -185,6 +240,56 @@ export default function ShareDialog({ url, qr, labels }: ShareDialogProps) {
             </Button>
           )}
         </div>
+
+        {/* WhatsApp / download-QR / native-share row (D8, activities only —
+            each control renders only when the prop/feature that backs it is
+            actually present, same "no dead button" posture as the copy
+            button above). */}
+        {(whatsappHref || downloadFileName || canNativeShare) && (
+          <div className="flex flex-wrap gap-2">
+            {whatsappHref && (
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="exercise-share-whatsapp"
+                className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+              >
+                {labels.whatsapp}
+              </a>
+            )}
+            {downloadFileName && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={downloadQr}
+                data-testid="exercise-share-download"
+              >
+                {labels.downloadQr}
+              </Button>
+            )}
+            {canNativeShare && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void nativeShare()}
+                data-testid="exercise-share-native"
+              >
+                {labels.native}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* A short muted line — e.g. "sign-in required" for a gated section
+            (D8) — omitted entirely when the caller has none to show. */}
+        {labels.note && (
+          <p data-testid="exercise-share-note" className="text-xs text-muted-foreground">
+            {labels.note}
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );
