@@ -365,3 +365,74 @@ describe('ActivityPracticeIsland — speech (D4)', () => {
     expect(synth.cancel).toHaveBeenCalled();
   });
 });
+
+/** D1 "Una actividad, muchos juegos" — the footer's Comprobar hint while a quiz tab sits in an alternate game mode. */
+describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
+  const THREE_QUESTION_QUIZ: QuizBlock = {
+    id: 'q1',
+    type: 'quiz',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] },
+        { id: 's2', label: 'What color is the sky?', input: 'text', answer: ['blue'] },
+        { id: 's3', label: 'How many days in a week?', input: 'text', answer: ['seven'] },
+      ],
+    },
+  };
+
+  it('shows no Comprobar hint while the quiz tab is in Preguntas mode', () => {
+    renderIsland([THREE_QUESTION_QUIZ]);
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+  });
+
+  it('shows the Comprobar hint once the tab switches to Tarjetas', () => {
+    renderIsland([THREE_QUESTION_QUIZ]);
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
+      'Comprobar corrige el modo "Preguntas".',
+    );
+  });
+
+  it('hides the hint again once switched back to Preguntas', () => {
+    renderIsland([THREE_QUESTION_QUIZ]);
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    fireEvent.click(screen.getByTestId('quiz-game-mode-quiz'));
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+  });
+
+  it('preserves Preguntas-mode answers across a switch to Tarjetas and back', () => {
+    renderIsland([THREE_QUESTION_QUIZ]);
+    const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'sits' } });
+
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('quiz-game-mode-quiz'));
+    const inputAgain = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
+    expect(inputAgain.value).toBe('sits');
+  });
+
+  it('also shows the Comprobar hint in Parejas mode, and preserves the underlying quiz block', () => {
+    renderIsland([THREE_QUESTION_QUIZ]);
+    fireEvent.click(screen.getByTestId('quiz-game-mode-match'));
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
+      'Comprobar corrige el modo "Preguntas".',
+    );
+  });
+
+  it('remembers the chosen mode across a tab switch away and back', () => {
+    renderIsland([WORKSHEET, THREE_QUESTION_QUIZ]);
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('practice-tab-w1'));
+    expect(screen.getByTestId('worksheet-player')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+  });
+});

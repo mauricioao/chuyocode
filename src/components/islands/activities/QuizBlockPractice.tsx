@@ -19,7 +19,18 @@
  *
  * Answers are NEVER stored here — same rule `ActivityPracticeIsland`'s own
  * header states; `response` is that component's plain, ephemeral state.
+ *
+ * GAME MODES (D1, "Una actividad, muchos juegos"): the same slots also drive
+ * `QuizGameModeSwitcher` plus the two alternate games it can switch to —
+ * `deriveGameItems`/`availableGameModes` (`gameModes.ts`) turn this block's
+ * `payload.slots` into `GameItem`s and the modes worth offering. `mode`/
+ * `onModeChange` are lifted to `ActivityPracticeIsland`, same shape as
+ * `response`/`onChange`, so a block's chosen mode survives this component
+ * unmounting on a tab switch and so the footer can show its Comprobar hint.
+ * Switching AWAY from `quiz` never touches `response`: the quiz-mode inputs
+ * below simply stop mounting, and the alternate games never write into it.
  */
+import { useMemo } from 'react';
 import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
@@ -28,8 +39,12 @@ import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { blocksForStep } from '@/lib/exerciseBlocks';
 import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exercisePayload';
+import { deriveGameItems, availableGameModes, type GameMode } from '@/lib/activities/gameModes';
 import { rendererFor } from '@/components/islands/mechanics/registry';
 import UnavailableRenderer from '@/components/islands/mechanics/UnavailableRenderer';
+import QuizGameModeSwitcher from './QuizGameModeSwitcher';
+import QuizFlashcards from './QuizFlashcards';
+import QuizMatching from './QuizMatching';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -40,15 +55,58 @@ export interface QuizBlockPracticeProps {
   /** Slot id -> outcome, present only once the page has graded. Absent entirely = not graded yet. */
   outcomes?: Record<string, SlotOutcome>;
   disabled: boolean;
+  /** This block's active game mode. Defaults to `'quiz'` — every caller written before D1 keeps rendering exactly as before. */
+  mode?: GameMode;
+  /** Report a new mode for this block. Defaults to a no-op, matching `mode`'s own default. */
+  onModeChange?: (mode: GameMode) => void;
 }
 
-export default function QuizBlockPractice({ lang, block, response, onChange, outcomes, disabled }: QuizBlockPracticeProps) {
+/** Modes this component can actually render. */
+const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match'];
+
+export default function QuizBlockPractice({
+  lang,
+  block,
+  response,
+  onChange,
+  outcomes,
+  disabled,
+  mode = 'quiz',
+  onModeChange = () => {},
+}: QuizBlockPracticeProps) {
   const t = UI_LABELS[lang].activities.player;
   const payload = block.payload;
   const placement = poolPlacement(payload);
 
+  const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
+  const modes = useMemo(
+    () => availableGameModes(gameItems).filter((m) => SUPPORTED_MODES.includes(m)),
+    [gameItems],
+  );
+  // A mode this block no longer offers (edited down since it was chosen)
+  // falls back to `quiz` rather than rendering nothing.
+  const effectiveMode = modes.includes(mode) ? mode : 'quiz';
+
+  if (effectiveMode === 'cards' || effectiveMode === 'match') {
+    return (
+      <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
+        {modes.length > 1 && (
+          <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
+        )}
+        {effectiveMode === 'cards' ? (
+          <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />
+        ) : (
+          <QuizMatching lang={lang} items={gameItems} seed={block.id} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-6">
+      {modes.length > 1 && (
+        <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
+      )}
       {payload.slots.map((slot, index) => {
         const Renderer = rendererFor(slot.input);
         const items = getSlotItems(payload, slot);
