@@ -210,6 +210,33 @@ describe('ShareDialog — WhatsApp / QR download / native share / note (D8)', ()
     expect(link.textContent).toBe(labels.whatsapp);
   });
 
+  it('renders each share action as a colored icon with its caption and an accessible name', async () => {
+    stubNativeShare(vi.fn().mockResolvedValue(undefined));
+    render(
+      <ShareDialog
+        url={URL_UNDER_TEST}
+        qr={QR}
+        labels={labels}
+        whatsappHref={WHATSAPP_HREF}
+        downloadFileName="actividad.svg"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('exercise-share'));
+
+    const actions: Array<[string, string]> = [
+      ['exercise-share-whatsapp', labels.whatsapp ?? ''],
+      ['exercise-share-download', labels.downloadQr ?? ''],
+      ['exercise-share-native', labels.native ?? ''],
+    ];
+    for (const [testId, caption] of actions) {
+      const control = await screen.findByTestId(testId);
+      expect(control.querySelector('svg')).not.toBeNull();
+      expect(control.getAttribute('aria-label')).toBe(caption);
+      expect(control.textContent).toContain(caption);
+      expect(control.querySelector('[data-share-icon]')?.getAttribute('data-share-icon')).toBeTruthy();
+    }
+  });
+
   it('downloads the QR as an .svg file named from downloadFileName', async () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-1');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
