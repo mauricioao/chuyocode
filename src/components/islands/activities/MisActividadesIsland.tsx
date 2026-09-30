@@ -185,6 +185,7 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
                     link: practiceT.shareLink,
                     copy: practiceT.shareCopy,
                     copied: practiceT.shareCopied,
+                    linkCopiedToast: UI_LABELS[lang].common.toast.linkCopied,
                     qrAlt: practiceT.shareQrAlt,
                     whatsapp: practiceT.shareWhatsapp,
                     downloadQr: practiceT.shareDownloadQr,

@@ -32,6 +32,7 @@
  * (Ctrl/⌘+S).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
@@ -254,7 +255,17 @@ export default function ActivityEditorIsland({
         });
         if (!res.ok) throw new Error('save failed');
       },
-      onStatusChange: setSaveState,
+      // Toast IN ADDITION TO the icon (owner spec), only on the transition
+      // INTO "error" — not on every status callback while it stays there —
+      // so a failed autosave surfaces once, not a toast spam loop.
+      onStatusChange: (status) => {
+        setSaveState((prev) => {
+          if (status === 'error' && prev !== 'error') {
+            toast.error(tCommon.toast.autosaveError);
+          }
+          return status;
+        });
+      },
     });
     schedulerRef.current = scheduler;
     return () => {
@@ -484,6 +495,7 @@ export default function ActivityEditorIsland({
 
       setStatus((prev) => (prev === 'live' ? 'live' : 'pending_review'));
       setSubmitDialog({ open: false, submitting: false, error: null });
+      toast.success(tCommon.toast.submittedForReview);
     } catch (err) {
       const code = err instanceof Error ? err.message : 'submit_failed';
       const message = t.submitErrors[code as keyof typeof t.submitErrors] ?? t.submitErrors.submit_failed;

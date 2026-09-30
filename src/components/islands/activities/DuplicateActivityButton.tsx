@@ -16,6 +16,7 @@
  * without stealing focus.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 
@@ -53,6 +54,7 @@ export default function DuplicateActivityButton({
         setStatus('error');
         return;
       }
+      toast.success(UI_LABELS[lang].common.toast.activityDuplicated);
       navigate(`/${lang}/crear/${body.id}`);
     } catch {
       setErrorKey('create_failed');

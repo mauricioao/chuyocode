@@ -16,6 +16,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import ShareDialog, { COPIED_RESET_MS, type ShareLabels } from './ShareDialog';
 
 const URL_UNDER_TEST =
@@ -31,6 +32,7 @@ const labels: ShareLabels = {
   link: 'Enlace',
   copy: 'Copiar',
   copied: 'Copiado',
+  linkCopiedToast: 'Enlace copiado',
   qrAlt: 'Código QR con el enlace a este ejercicio',
   whatsapp: 'WhatsApp',
   downloadQr: 'Descargar QR',
@@ -118,9 +120,22 @@ describe('ShareDialog', () => {
     stubClipboard(writeText);
     await open();
     const copyButton = await screen.findByTestId('exercise-share-copy');
+    const toastSuccess = vi.spyOn(toast, 'success');
     fireEvent.click(copyButton);
     await waitFor(() => expect(copyButton.textContent).toBe(labels.copied));
     expect(writeText).toHaveBeenCalledWith(URL_UNDER_TEST);
+    expect(toastSuccess).toHaveBeenCalledWith(labels.linkCopiedToast);
+  });
+
+  it('does NOT toast when the clipboard write fails', async () => {
+    stubClipboard(vi.fn().mockRejectedValue(new Error('denied')));
+    await open();
+    const copyButton = await screen.findByTestId('exercise-share-copy');
+    const toastSuccess = vi.spyOn(toast, 'success');
+    await act(async () => {
+      fireEvent.click(copyButton);
+    });
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 
   it('stops claiming "copied" after the reset window', async () => {

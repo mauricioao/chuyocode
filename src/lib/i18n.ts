@@ -117,6 +117,15 @@ export const UI_LABELS = {
       back: 'Volver',
       backTooltip: 'Volver a la página anterior',
       scrollToTop: 'Volver arriba',
+      // Toast copy (sonner, PR 1) — short, transient confirmations/errors
+      // shared across features, not tied to one section.
+      toast: {
+        linkCopied: 'Enlace copiado',
+        submittedForReview: 'Enviado a revisión',
+        activityDuplicated: 'Actividad duplicada',
+        reportSent: 'Reporte enviado',
+        autosaveError: 'No se pudo guardar automáticamente',
+      },
     },
     legal: {
       titles: { terms: 'Términos y condiciones', privacy: 'Política de privacidad' },
@@ -895,6 +904,13 @@ export const UI_LABELS = {
       back: 'Back',
       backTooltip: 'Back to the previous page',
       scrollToTop: 'Back to top',
+      toast: {
+        linkCopied: 'Link copied',
+        submittedForReview: 'Submitted for review',
+        activityDuplicated: 'Activity duplicated',
+        reportSent: 'Report sent',
+        autosaveError: 'Could not save automatically',
+      },
     },
     legal: {
       titles: { terms: 'Terms and conditions', privacy: 'Privacy policy' },

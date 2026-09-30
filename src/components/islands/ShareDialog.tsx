@@ -23,6 +23,7 @@
  * uptime.
  */
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -62,6 +63,8 @@ export interface ShareLabels {
   link: string;
   copy: string;
   copied: string;
+  /** Toast shown after a successful clipboard copy (PR 1 — sonner). */
+  linkCopiedToast: string;
   /** Accessible name for the code itself — it is an image, not decoration. */
   qrAlt: string;
   /** The WhatsApp share button, rendered only when {@link ShareDialogProps.whatsappHref} is set. */
@@ -120,6 +123,7 @@ export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFil
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      toast.success(labels.linkCopiedToast);
     } catch {
       // Denied permission, or a context where the API exists but refuses. The
       // button simply does not claim success — and the URL beside it is still
