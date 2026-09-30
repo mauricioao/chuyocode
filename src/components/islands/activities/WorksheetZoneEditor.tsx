@@ -124,6 +124,9 @@ import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useHydrated } from '@/hooks/useHydrated';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/ui/BottomSheet';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export interface ZonesChangeOptions {
   /**
@@ -1085,15 +1088,15 @@ export default function WorksheetZoneEditor({
           machine-readable text otherwise. Applies to both zone kinds. */}
       <div className="mt-4 flex flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">{t.zoneSpeakLabel}</span>
-        <input
+        <Input
           type="text"
+          fieldSize="sm"
           data-testid="zone-properties-speak-input"
           aria-label={t.zoneSpeakLabel}
           value={selectedZone.speak ?? ''}
           maxLength={MAX_ZONE_SPEAK_LENGTH}
           placeholder={t.zoneSpeakPlaceholder}
           onChange={(e) => setSpeak(e.target.value)}
-          className="h-8 rounded border border-border bg-background px-2 text-sm text-foreground"
         />
       </div>
 
@@ -1102,8 +1105,9 @@ export default function WorksheetZoneEditor({
           <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
           {selectedZone.answers.map((answer, i) => (
             <div key={i} className="flex gap-1">
-              <input
+              <Input
                 type="text"
+                fieldSize="sm"
                 // Keyboard zone creation's focus target (see
                 // `handleCreateZoneAtCenter`'s own header): the FIRST answer
                 // field of whichever zone is currently selected — every
@@ -1118,7 +1122,7 @@ export default function WorksheetZoneEditor({
                   next[i] = e.target.value;
                   setAnswers(next);
                 }}
-                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+                className="flex-1"
               />
               <Button
                 type="button"
@@ -1143,14 +1147,14 @@ export default function WorksheetZoneEditor({
           <span className="text-xs font-medium text-muted-foreground">{t.zoneOptionsLabel}</span>
           {(selectedZone.options ?? []).map((option, i) => (
             <div key={i} className="flex items-center gap-1">
-              <input
-                type="checkbox"
+              <Checkbox
                 aria-label={t.zoneOptionCorrect}
                 checked={selectedZone.answers.includes(option)}
-                onChange={(e) => toggleOptionCorrect(option, e.target.checked)}
+                onCheckedChange={(checked) => toggleOptionCorrect(option, checked === true)}
               />
-              <input
+              <Input
                 type="text"
+                fieldSize="sm"
                 value={option}
                 placeholder={t.zoneOptionPlaceholder}
                 aria-label={`${t.zoneOptionsLabel} ${i + 1}`}
@@ -1159,7 +1163,7 @@ export default function WorksheetZoneEditor({
                   options[i] = e.target.value;
                   setOptions(options);
                 }}
-                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground"
+                className="flex-1"
               />
               <Button
                 type="button"
@@ -1190,7 +1194,7 @@ export default function WorksheetZoneEditor({
           section itself relative to the rest of the panel. */}
       <div className="mt-4 flex flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">{t.zoneExplanationLabel}</span>
-        <textarea
+        <Textarea
           data-testid="zone-properties-explanation-input"
           aria-label={t.zoneExplanationLabel}
           value={selectedZone.explanation ?? ''}
@@ -1198,7 +1202,7 @@ export default function WorksheetZoneEditor({
           placeholder={t.zoneExplanationPlaceholder}
           onChange={(e) => setExplanation(e.target.value)}
           rows={2}
-          className="resize-none rounded border border-border bg-background px-2 py-1 text-sm text-foreground"
+          className="resize-none"
         />
         <span className="text-xs text-muted-foreground">{t.zoneExplanationHint}</span>
       </div>

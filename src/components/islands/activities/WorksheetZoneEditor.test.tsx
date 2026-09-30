@@ -447,24 +447,28 @@ describe('WorksheetZoneEditor — choice options', () => {
     render(<Harness initialZones={[zone]} initialSelected="z1" />);
     const removeButtons = screen.getAllByLabelText('Quitar opción');
     fireEvent.click(removeButtons[2]); // remove "c"
-    const checkboxes = screen.getAllByLabelText('Correcta') as HTMLInputElement[];
+    const checkboxes = screen.getAllByLabelText('Correcta');
     expect(checkboxes).toHaveLength(2);
   });
 
+  // The design-system Checkbox (PR 1) is a Radix `role="checkbox"` button,
+  // not a native `<input type="checkbox">` — it reports state via
+  // `aria-checked`, not the DOM `.checked` property (same rule
+  // `radio-group.tsx`'s own header documents for its radio items).
   it('checking an option marks it correct (adds it to answers)', () => {
     render(<Harness initialZones={[CHOICE_ZONE]} initialSelected="z1" />);
-    const checkboxes = screen.getAllByLabelText('Correcta') as HTMLInputElement[];
-    expect(checkboxes[0].checked).toBe(false);
+    const checkboxes = screen.getAllByLabelText('Correcta');
+    expect(checkboxes[0].getAttribute('aria-checked')).toBe('false');
     fireEvent.click(checkboxes[0]);
-    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[0].getAttribute('aria-checked')).toBe('true');
   });
 
   it('unchecking the only correct option removes it from answers', () => {
     render(<Harness initialZones={[CHOICE_ZONE]} initialSelected="z1" />);
-    const checkboxes = screen.getAllByLabelText('Correcta') as HTMLInputElement[];
-    expect(checkboxes[1].checked).toBe(true); // "b" is the seeded answer
+    const checkboxes = screen.getAllByLabelText('Correcta');
+    expect(checkboxes[1].getAttribute('aria-checked')).toBe('true'); // "b" is the seeded answer
     fireEvent.click(checkboxes[1]);
-    expect(checkboxes[1].checked).toBe(false);
+    expect(checkboxes[1].getAttribute('aria-checked')).toBe('false');
   });
 });
 

@@ -67,6 +67,7 @@ import {
 } from '@/lib/authoringDraft';
 import RowBlockEditor from '@/components/islands/authoring/RowBlockEditor';
 import SlotAnswerEditor from '@/components/islands/authoring/SlotAnswerEditor';
+import { Textarea } from '@/components/ui/textarea';
 
 export const COPY = {
   es: {
@@ -338,7 +339,7 @@ export default function QuizBlockEditor({
               authoring surface also reuses and must stay unchanged). */}
           <div className="mt-2 flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">{t.explanationLabel}</span>
-            <textarea
+            <Textarea
               data-testid={`quiz-explanation-${selectedSlot.id}`}
               aria-label={t.explanationLabel}
               value={selectedSlot.explanation ?? ''}
@@ -346,7 +347,7 @@ export default function QuizBlockEditor({
               placeholder={t.explanationPlaceholder}
               onChange={(e) => commit(setSlotExplanation(draft, selectedSlot.id, e.target.value))}
               rows={2}
-              className="resize-none rounded border border-border bg-background px-2 py-1 text-sm text-foreground"
+              className="resize-none"
             />
             <span className="text-xs text-muted-foreground">{t.explanationHint}</span>
           </div>
