@@ -618,6 +618,17 @@ export const UI_LABELS = {
         wheelRemoveOnExit: 'Eliminar al salir',
         wheelExhausted: 'No quedan elementos en la ruleta.',
         wheelLandedPrefix: 'La ruleta se detuvo en:',
+        // Anagrama (Wordwall "Anagram"): reorder the scrambled letters to
+        // spell the answer, clued by the question's own prompt.
+        modeAnagram: 'Anagrama',
+        anagramCounterPrefix: 'Palabra',
+        anagramCounterOf: 'de',
+        anagramBackspace: 'Deshacer',
+        anagramNext: 'Siguiente palabra',
+        anagramCorrectMessage: '¡Correcto!',
+        anagramWrongMessage: 'Inténtalo de nuevo.',
+        anagramDone: '¡Listo! Resolviste todos los anagramas.',
+        anagramPlayAgain: 'Jugar de nuevo',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1491,6 +1502,15 @@ export const UI_LABELS = {
         wheelRemoveOnExit: 'Remove on landing',
         wheelExhausted: 'No items left on the wheel.',
         wheelLandedPrefix: 'The wheel landed on:',
+        modeAnagram: 'Anagram',
+        anagramCounterPrefix: 'Word',
+        anagramCounterOf: 'of',
+        anagramBackspace: 'Undo',
+        anagramNext: 'Next word',
+        anagramCorrectMessage: 'Correct!',
+        anagramWrongMessage: 'Try again.',
+        anagramDone: 'Done! You solved every anagram.',
+        anagramPlayAgain: 'Play again',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',

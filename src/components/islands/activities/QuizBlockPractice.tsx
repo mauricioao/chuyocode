@@ -39,7 +39,7 @@ import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { blocksForStep } from '@/lib/exerciseBlocks';
 import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exercisePayload';
-import { deriveGameItems, availableGameModes, type GameMode } from '@/lib/activities/gameModes';
+import { deriveGameItems, availableGameModes, anagramEligible, type GameMode } from '@/lib/activities/gameModes';
 import { rendererFor } from '@/components/islands/mechanics/registry';
 import UnavailableRenderer from '@/components/islands/mechanics/UnavailableRenderer';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
@@ -47,6 +47,7 @@ import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
 import QuizSpeakingCards from './QuizSpeakingCards';
 import QuizWheel from './QuizWheel';
+import QuizAnagram from './QuizAnagram';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -64,7 +65,7 @@ export interface QuizBlockPracticeProps {
 }
 
 /** Modes this component can actually render. */
-const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak', 'wheel'];
+const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak', 'wheel', 'anagram'];
 
 export default function QuizBlockPractice({
   lang,
@@ -89,7 +90,13 @@ export default function QuizBlockPractice({
   // falls back to `quiz` rather than rendering nothing.
   const effectiveMode = modes.includes(mode) ? mode : 'quiz';
 
-  if (effectiveMode === 'cards' || effectiveMode === 'match' || effectiveMode === 'speak' || effectiveMode === 'wheel') {
+  if (
+    effectiveMode === 'cards' ||
+    effectiveMode === 'match' ||
+    effectiveMode === 'speak' ||
+    effectiveMode === 'wheel' ||
+    effectiveMode === 'anagram'
+  ) {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
         {modes.length > 1 && (
@@ -99,6 +106,9 @@ export default function QuizBlockPractice({
         {effectiveMode === 'match' && <QuizMatching lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'anagram' && (
+          <QuizAnagram lang={lang} items={anagramEligible(gameItems)} seed={block.id} />
+        )}
       </div>
     );
   }
