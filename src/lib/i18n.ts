@@ -629,6 +629,18 @@ export const UI_LABELS = {
         anagramWrongMessage: 'Inténtalo de nuevo.',
         anagramDone: '¡Listo! Resolviste todos los anagramas.',
         anagramPlayAgain: 'Jugar de nuevo',
+        // Ahorcado (Wordwall "Hangman"): guess the letters of a single-word
+        // answer, clued by the question's own prompt, before running out of
+        // lives (a friendly balloon row — no gallows imagery).
+        modeHangman: 'Ahorcado',
+        hangmanCounterPrefix: 'Palabra',
+        hangmanCounterOf: 'de',
+        hangmanLivesLabel: 'Vidas',
+        hangmanWon: '¡Lo lograste!',
+        hangmanLost: 'Se acabaron los intentos.',
+        hangmanNext: 'Siguiente palabra',
+        hangmanDone: '¡Listo! Jugaste todas las palabras.',
+        hangmanPlayAgain: 'Jugar de nuevo',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1511,6 +1523,15 @@ export const UI_LABELS = {
         anagramWrongMessage: 'Try again.',
         anagramDone: 'Done! You solved every anagram.',
         anagramPlayAgain: 'Play again',
+        modeHangman: 'Hangman',
+        hangmanCounterPrefix: 'Word',
+        hangmanCounterOf: 'of',
+        hangmanLivesLabel: 'Lives',
+        hangmanWon: 'You got it!',
+        hangmanLost: 'Out of tries.',
+        hangmanNext: 'Next word',
+        hangmanDone: 'Done! You played every word.',
+        hangmanPlayAgain: 'Play again',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',

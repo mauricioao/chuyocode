@@ -39,7 +39,13 @@ import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { blocksForStep } from '@/lib/exerciseBlocks';
 import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exercisePayload';
-import { deriveGameItems, availableGameModes, anagramEligible, type GameMode } from '@/lib/activities/gameModes';
+import {
+  deriveGameItems,
+  availableGameModes,
+  anagramEligible,
+  hangmanEligible,
+  type GameMode,
+} from '@/lib/activities/gameModes';
 import { rendererFor } from '@/components/islands/mechanics/registry';
 import UnavailableRenderer from '@/components/islands/mechanics/UnavailableRenderer';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
@@ -48,6 +54,7 @@ import QuizMatching from './QuizMatching';
 import QuizSpeakingCards from './QuizSpeakingCards';
 import QuizWheel from './QuizWheel';
 import QuizAnagram from './QuizAnagram';
+import QuizHangman from './QuizHangman';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -65,7 +72,7 @@ export interface QuizBlockPracticeProps {
 }
 
 /** Modes this component can actually render. */
-const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak', 'wheel', 'anagram'];
+const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match', 'speak', 'wheel', 'anagram', 'hangman'];
 
 export default function QuizBlockPractice({
   lang,
@@ -95,7 +102,8 @@ export default function QuizBlockPractice({
     effectiveMode === 'match' ||
     effectiveMode === 'speak' ||
     effectiveMode === 'wheel' ||
-    effectiveMode === 'anagram'
+    effectiveMode === 'anagram' ||
+    effectiveMode === 'hangman'
   ) {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
@@ -109,6 +117,7 @@ export default function QuizBlockPractice({
         {effectiveMode === 'anagram' && (
           <QuizAnagram lang={lang} items={anagramEligible(gameItems)} seed={block.id} />
         )}
+        {effectiveMode === 'hangman' && <QuizHangman lang={lang} items={hangmanEligible(gameItems)} />}
       </div>
     );
   }
