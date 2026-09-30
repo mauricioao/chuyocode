@@ -27,6 +27,7 @@
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 /** Kept in sync with `MIN_PASSWORD_LENGTH` in `@lib/authValidation`. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -209,10 +210,10 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       className="flex flex-col gap-3"
       data-testid="password-auth-form"
     >
-      <label htmlFor="password-auth-email" className="text-sm font-medium text-foreground">
+      <label htmlFor="password-auth-email" className="text-sm font-semibold text-foreground">
         {t.emailLabel}
       </label>
-      <input
+      <Input
         id="password-auth-email"
         name="email"
         type="email"
@@ -222,15 +223,14 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         disabled={pending}
-        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       />
 
       {mode !== 'reset' && (
         <>
-          <label htmlFor="password-auth-password" className="text-sm font-medium text-foreground">
+          <label htmlFor="password-auth-password" className="text-sm font-semibold text-foreground">
             {t.passwordLabel}
           </label>
-          <input
+          <Input
             id="password-auth-password"
             name="password"
             type="password"
@@ -241,7 +241,6 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             disabled={pending}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           />
         </>
       )}
