@@ -573,13 +573,18 @@ export default function EditorSideToolbar({
   const desktopRail = (
     <>
     {!docked && ghostPosition && (
+      // Floating affordance (hovers over the page like `BackButton`/
+      // `ScrollToTop`) — the system's own glass-floating recipe, not an
+      // ad-hoc `bg-card/70 backdrop-blur-sm`. The dashed border stays: it is
+      // what marks this specifically as a DROP TARGET, not an ordinary
+      // floating control.
       <button
         type="button"
         data-testid="toolbar-dock-target"
         aria-label={t.dockToolbar}
         title={t.dockToolbar}
         onClick={dock}
-        className="fixed z-40 flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-border bg-card/70 text-muted-foreground shadow-lg backdrop-blur-sm hover:text-foreground"
+        className="glass-floating fixed z-40 flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         style={{ left: ghostPosition.x, top: ghostPosition.y }}
       >
         <PushPinIcon aria-hidden="true" />
@@ -590,9 +595,14 @@ export default function EditorSideToolbar({
       data-testid="editor-side-toolbar"
       data-docked={docked}
       className={
+        // DOCKED: an ordinary opaque system surface, anchored to the card's
+        // own edge — never glass (glass reads as "floating above the page",
+        // which a docked rail is not). FLOATING (undocked): the same
+        // glass-floating recipe `BackButton`/`ScrollToTop` use, since once
+        // dragged free it IS a floating control.
         docked
-          ? 'fixed top-1/2 right-3 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-sm'
-          : 'fixed z-40 flex flex-col items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-sm'
+          ? 'fixed top-1/2 right-3 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
+          : 'glass-floating fixed z-40 flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-white/10 shadow-(--shadow-floating)'
       }
       style={docked ? undefined : { left: position.x, top: position.y }}
     >
