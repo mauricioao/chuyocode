@@ -8,9 +8,13 @@
  *    `fixed` to the viewport, and horizontally aligns to the site's content
  *    container edge (`max-w-6xl`, same width `Footer.astro` uses) rather than
  *    the bare viewport edge on wide screens — a `right` value computed with
- *    `max()`/`calc()` so no extra wrapper element is needed. It also watches
- *    the `<footer>` with an `IntersectionObserver` and hides itself the
- *    moment the footer becomes visible, so it can never sit on top of it.
+ *    `max()`/`calc()` so no extra wrapper element is needed. It also tracks
+ *    the `<footer>`'s own `getBoundingClientRect()` on every scroll tick and
+ *    raises its `bottom` offset to `max(baseOffset, visibleFooterHeight +
+ *    gap)` (`@lib/floatingOffset`) — so it NEVER hides behind the footer
+ *    (that used to be an `IntersectionObserver` that hid the button outright
+ *    the moment the footer entered the viewport); instead it rides up
+ *    smoothly, staying just clear of the footer's visible edge.
  *  - SCOPED (`targetRef` given): used inside the activity editor for its own
  *    block-list scroll container. Tracks that container's OWN scroll instead
  *    of the window, is `absolute` (the caller provides a `relative`
@@ -50,6 +54,7 @@ import { ArrowUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowUp';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { computeScrollProgress, ringDashOffset } from '@/lib/scrollProgress';
+import { computeFloatingBottomOffset, visibleFooterHeight } from '@/lib/floatingOffset';
 
 /** Progress-ring geometry: radius + stroke chosen to sit just inside the
  * 44px (`size-11`) circular button without touching its edge. */
@@ -81,6 +86,15 @@ const APPEAR_AFTER_VIEWPORTS = 1;
  */
 const APPEAR_AFTER_MAX_PX = 300;
 
+/** The button's normal resting `bottom` offset, global mode — matches the
+ * old static `bottom-6` Tailwind utility (1.5rem). Kept as a plain px
+ * number (not a class) so it can be raised by `computeFloatingBottomOffset`
+ * when the footer encroaches. */
+const BASE_BOTTOM_OFFSET_PX = 24;
+
+/** Clearance kept above the footer's visible edge once it starts showing. */
+const FOOTER_GAP_PX = 16;
+
 /** Read only at CLICK time — see the file header for why never at render time. */
 function prefersReducedMotion(): boolean {
   return (
@@ -96,14 +110,16 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
 
   const [pastThreshold, setPastThreshold] = useState(false);
   const [progress, setProgress] = useState(0);
-  // Always true in scoped mode — there is no footer to hide behind inside
-  // the editor card, so it never suppresses visibility there.
-  const [footerHidden, setFooterHidden] = useState(true);
+  // Global mode only — how far above its resting position the button must
+  // rise to stay clear of the footer's visible edge. Unused in scoped mode
+  // (there is no footer inside the editor card).
+  const [bottomOffset, setBottomOffset] = useState(BASE_BOTTOM_OFFSET_PX);
 
   useEffect(() => {
     const scrollEl = targetRef?.current ?? null;
     const scrollSource: { addEventListener: Window['addEventListener']; removeEventListener: Window['removeEventListener'] } =
       scrollEl ?? window;
+    const footer = !scoped && typeof document !== 'undefined' ? document.querySelector('footer') : null;
 
     function measure() {
       const top = scrollEl ? scrollEl.scrollTop : window.scrollY;
@@ -112,32 +128,17 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
       const threshold = Math.min(APPEAR_AFTER_MAX_PX, viewport * APPEAR_AFTER_VIEWPORTS);
       setPastThreshold(top > threshold);
       setProgress(computeScrollProgress(top, viewport, full));
+
+      if (footer) {
+        const visible = visibleFooterHeight(footer.getBoundingClientRect().top, window.innerHeight);
+        setBottomOffset(computeFloatingBottomOffset(BASE_BOTTOM_OFFSET_PX, visible, FOOTER_GAP_PX));
+      }
     }
 
     measure();
     scrollSource.addEventListener('scroll', measure, { passive: true });
     return () => scrollSource.removeEventListener('scroll', measure);
-  }, [targetRef]);
-
-  useEffect(() => {
-    if (scoped) return undefined;
-    if (typeof document === 'undefined' || typeof IntersectionObserver === 'undefined') {
-      return undefined;
-    }
-    const footer = document.querySelector('footer');
-    if (!footer) return undefined;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          setFooterHidden(!entry.isIntersecting);
-        }
-      },
-      { threshold: 0 },
-    );
-    observer.observe(footer);
-    return () => observer.disconnect();
-  }, [scoped]);
+  }, [targetRef, scoped]);
 
   const handleClick = useCallback(() => {
     const behavior: ScrollBehavior = prefersReducedMotion() ? 'auto' : 'smooth';
@@ -149,7 +150,7 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
     }
   }, [targetRef]);
 
-  const shown = pastThreshold && footerHidden;
+  const shown = pastThreshold;
 
   return (
     <button
@@ -160,6 +161,10 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
       title={label}
       aria-hidden={!shown}
       tabIndex={shown ? 0 : -1}
+      // Global mode's `bottom` rides above the footer (`bottomOffset`, in
+      // sync with `transition-all` below) instead of a static Tailwind
+      // utility — scoped mode keeps its own fixed `bottom-4` class, unaffected.
+      style={scoped ? undefined : { bottom: `${bottomOffset}px` }}
       className={cn(
         'glass-floating relative z-40 inline-flex h-11 w-11 items-center justify-center rounded-(--radius-pill) text-accent ring-1 ring-white/10 shadow-(--shadow-floating) transition-all duration-(--transition-duration-control) ease-(--ease-control)',
         'hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(250_204_21/0.4),0_8px_24px_-6px_rgb(250_204_21/0.35)]',
@@ -167,7 +172,7 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
         'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         scoped
           ? 'absolute right-4 bottom-4 hidden lg:inline-flex'
-          : 'fixed right-4 bottom-6 lg:right-[max(1rem,calc((100vw-72rem)/2+1rem))]',
+          : 'fixed right-4 lg:right-[max(1rem,calc((100vw-72rem)/2+1rem))]',
         shown ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
       )}
     >

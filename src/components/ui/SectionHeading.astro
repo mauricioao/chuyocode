@@ -1,0 +1,49 @@
+---
+/**
+ * SectionHeading — a real, legible heading for a SECONDARY section inside a
+ * page (e.g. the Inglés hub's "Para ti hoy" / "Ir directo a tu nivel",
+ * `propuestos`'s "Elegir nivel"). Those used to be `text-sm ... uppercase
+ * text-zinc-400` labels — the same visual weight as a metadata caption, not
+ * a heading — which owner feedback called out as not standing out at all.
+ *
+ * A real `<h2>` (foreground color, `sentence case`, `text-lg`/`sm:text-xl`
+ * semibold) with a short brand-accent bar to its left, replacing the tiny
+ * muted uppercase caption look. `description` is an optional one-line
+ * sub-label; the `action` slot is for a right-aligned control that belongs
+ * to the section's title row (a filter, a "see all" link) without the
+ * caller reinventing the `justify-between` row each time.
+ *
+ * SPACING IS OWNED HERE, NOT BY THE CALLER: generous top margin (`mt-12`,
+ * ~48px — section separation) and a smaller bottom margin (`mb-4`, ~16px,
+ * heading-to-content) are baked in so the component reads consistently
+ * wherever it's dropped, rather than depending on a parent's `gap-*`. A
+ * flex item establishes its own formatting context for its children's
+ * margins (they don't collapse through to the flex container's `gap`), so
+ * callers using this inside a `flex flex-col` section list should NOT also
+ * add a `gap`/`mt-*` for the boundary right before a `SectionHeading` — its
+ * own `mt-12` already supplies it (see `[lang]/ingles/index.astro` and
+ * `propuestos/index.astro`, which drop the ambient gap for exactly that
+ * reason).
+ */
+interface Props {
+  title: string;
+  description?: string;
+  /** Applied to the `<h2>` itself, for a page that pairs it with
+   * `aria-labelledby` on the enclosing `<section>`. */
+  id?: string;
+  class?: string;
+}
+
+const { title, description, id, class: className } = Astro.props;
+---
+
+<div class:list={['mt-12 mb-4 flex items-end justify-between gap-4', className]}>
+  <div class="flex flex-col gap-1">
+    <h2 id={id} class="flex items-center gap-3 text-lg font-semibold text-foreground sm:text-xl">
+      <span aria-hidden="true" class="inline-block h-[1.25em] w-1 shrink-0 rounded-full bg-accent" />
+      {title}
+    </h2>
+    {description && <p class="text-sm text-muted-foreground">{description}</p>}
+  </div>
+  <slot name="action" />
+</div>
