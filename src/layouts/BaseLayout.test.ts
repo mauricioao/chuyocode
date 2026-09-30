@@ -32,3 +32,46 @@ describe('BaseLayout — full-height mode is opt-in', () => {
     expect(html).toContain('lg:min-h-0');
   });
 });
+
+// Navigation-without-flicker PR: only the main content cross-fades on
+// navigation; header/footer/progress bar are excluded (persisted or
+// animate="none") so there is never a double-content cross-fade.
+describe('BaseLayout — navigation transitions (navigation-without-flicker PR)', () => {
+  it('mounts the navigation progress bar', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).toContain('id="nav-progress-bar"');
+  });
+
+  it('gives <main> its own transition scope (a fade), distinct from the rest of the page', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    const mainOpenTag = html.slice(html.indexOf('<main'), html.indexOf('>', html.indexOf('<main')) + 1);
+    expect(mainOpenTag).toContain('data-astro-transition-scope');
+  });
+
+  it('excludes the footer from the page fade animation', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    const footerOpenTag = html.slice(html.indexOf('<footer'), html.indexOf('>', html.indexOf('<footer')) + 1);
+    expect(footerOpenTag).toContain('data-astro-transition-scope');
+  });
+
+  it('persists the header across navigations', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).toContain('data-astro-transition-persist');
+  });
+});

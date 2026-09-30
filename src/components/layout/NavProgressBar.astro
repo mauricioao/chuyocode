@@ -1,0 +1,39 @@
+---
+/**
+ * NavProgressBar — thin brand-yellow bar fixed at the very top of the page
+ * (navigation-without-flicker PR). All the actual behavior (when it
+ * appears, how it trickles, when it completes/aborts) lives in
+ * `src/lib/navProgress.ts`'s `NavProgressController` + `initNavProgressBar`
+ * — this file is markup plus the one call that wires them to real
+ * `document` events.
+ *
+ * `transition:persist`: the SAME reasoning as `Header.astro` — this element
+ * (and the module script below, which only ever runs once regardless) must
+ * survive every client-side navigation rather than being swapped for a
+ * fresh, unstyled copy.
+ *
+ * `width`/`opacity` are driven entirely from JS (`applyNavProgressState`);
+ * the inline `style` below is only the pre-JS/no-JS resting state (hidden).
+ * `transition: opacity` (not `width`) is the only animated CSS property —
+ * the trickle's own width JUMPS are the animation for `active`/`completing`
+ * (matches the controller's discrete ticks); only the fade OUT should ease.
+ * `motion-reduce:` disables even that, per the task's reduced-motion
+ * requirement (appear/disappear only, no animation).
+ */
+---
+
+<div
+  id="nav-progress-bar"
+  data-testid="nav-progress-bar"
+  aria-hidden="true"
+  transition:persist
+  transition:animate="none"
+  class="pointer-events-none fixed inset-x-0 top-0 z-50 h-[3px] bg-primary opacity-0 transition-opacity duration-200 ease-out motion-reduce:transition-none"
+  style="width:0%"
+>
+</div>
+
+<script>
+  import { initNavProgressBar } from '@lib/navProgress';
+  initNavProgressBar();
+</script>

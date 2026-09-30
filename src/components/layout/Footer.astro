@@ -13,6 +13,10 @@
  * i18n note: secondary link labels come from the shared `src/lib/i18n.ts`
  * (`UI_LABELS`). The previous inline FOOTER_LABELS map was removed once
  * i18n.ts landed (Phase 3).
+ *
+ * Cleaner transitions (navigation-without-flicker PR): `transition:animate
+ * ="none"` excludes the footer from the page's fade animation — only
+ * `<main>` (`BaseLayout.astro`) cross-fades on navigation.
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
 
@@ -33,6 +37,7 @@ const secondaryLinks = [
 
 <footer
   class="border-t border-border bg-card transition-theme duration-theme"
+  transition:animate="none"
 >
   <div
     class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row"
