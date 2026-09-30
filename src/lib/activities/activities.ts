@@ -625,6 +625,39 @@ export async function getPublishedActivities(opts: GetPublishedActivitiesOptions
   }
 }
 
+/**
+ * Cheap total of live (`visible`) activities — the English hub's
+ * ("34 actividades") live count on its "Actividades de la comunidad" card
+ * (`/[lang]/ingles`).
+ *
+ * `head: true` makes this a COUNT-ONLY query, same posture as
+ * `getExerciseCount` (`@lib/exercises`): no rows are transferred, just the
+ * count Postgrest reports in the response header.
+ *
+ * FAIL-SAFE: `null` on any error, never `0` — the hub card degrades to no
+ * number rather than a misleading "0 actividades".
+ */
+export async function getActivityCount(): Promise<number | null> {
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const { count, error } = await client
+      .from(ACTIVITIES_TABLE)
+      .select('id', { count: 'exact', head: true })
+      .eq('visible', true);
+
+    if (error) {
+      console.error('[activities] getActivityCount failed:', error.message);
+      return null;
+    }
+    return typeof count === 'number' ? count : null;
+  } catch (err) {
+    console.error('[activities] getActivityCount threw:', err);
+    return null;
+  }
+}
+
 /** One activity + its PUBLISHED revision, as the practice page needs it. */
 export interface PublishedActivity {
   id: string;

@@ -12,14 +12,34 @@
  * It is now a plain choice between the two: "Ejercicios propuestos"
  * (`/[lang]/ingles/propuestos`, the former level picker, moved unchanged) and
  * "Actividades de la comunidad" (`/[lang]/ingles/actividades`, unchanged).
- * Zero JavaScript: two links, no query, no island.
+ *
+ * VISUAL UPGRADE (premium redesign pass): the two `HubCard`s now carry a live
+ * count ("12 ejercicios"/"34 actividades", `getExerciseCount`/
+ * `getActivityCount` — cheap `head: true` count-only queries, fail-safe to
+ * `null` so a query failure degrades to no number rather than a misleading
+ * "0"). Below them, a "Para ti hoy" strip highlights the community's daily
+ * pick (`pickDailyActivity`, reused unchanged from the actividades page) and
+ * the most-hearted activity of the week (`topActivityOfWeek`), both sharing
+ * the SAME single `getPublishedActivities({ orden: 'gustadas' })` read so the
+ * hub spends one extra round trip, not two. A row of CEFR pills below that
+ * jumps straight into `/[lang]/ingles/propuestos?nivel=<level>`.
+ *
+ * Still ships no client-side JavaScript FRAMEWORK of its own: every control
+ * here is a plain link, same posture as before.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import HubCard from '@components/ui/HubCard.astro';
+import ActivityCard from '@components/ui/ActivityCard.astro';
+import { badgeVariants } from '@components/ui/badge';
 import { BooksIcon } from '@phosphor-icons/react/dist/ssr/Books';
 import { UsersThreeIcon } from '@phosphor-icons/react/dist/ssr/UsersThree';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { LEVELS } from '@lib/exerciseTaxonomy';
+import { getExerciseCount } from '@lib/exercises';
+import { getActivityCount, getPublishedActivities } from '@lib/activities/activities';
+import { pickDailyActivity } from '@lib/activities/dailyPick';
+import { topActivityOfWeek } from '@lib/activities/topOfWeek';
 
 // Prefer the middleware-validated lang; fall back to the route param and 404
 // if neither is supported (defensive — middleware normally sets it).
@@ -31,7 +51,37 @@ if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const t = UI_LABELS[lang].english.hub;
+const english = UI_LABELS[lang].english;
+const t = english.hub;
+const levelLabels = english.levels;
+const activitiesT = UI_LABELS[lang].activities.explore;
+const viewerId = Astro.locals.user?.id ?? null;
+
+/** "12 ejercicios" / "1 ejercicio", or `null` when the count degraded (never "0 …"). */
+function formatCount(count: number | null, one: string, many: string): string | null {
+  if (count === null) return null;
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+// Two cheap counts plus ONE read of the top-hearted live activities — the
+// same pool `pickDailyActivity` picks from and `topActivityOfWeek` scans —
+// all in parallel, so the hub pays for one extra round trip total.
+const [exerciseCount, activityCount, heartedPool] = await Promise.all([
+  getExerciseCount(),
+  getActivityCount(),
+  getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId }),
+]);
+
+const exerciseCountLabel = formatCount(exerciseCount, t.exerciseCountOne, t.exerciseCountMany);
+const activityCountLabel = formatCount(activityCount, t.activityCountOne, t.activityCountMany);
+
+const dailyPick = pickDailyActivity(heartedPool.activities, new Date());
+// Excludes the daily pick's own id so the strip never shows the same card
+// twice when the pool is small.
+const weeklyPick = topActivityOfWeek(
+  heartedPool.activities.filter((activity) => activity.id !== dailyPick?.id),
+  new Date(),
+);
 ---
 
 <BaseLayout lang={lang} title={t.title} description={t.description}>
@@ -46,6 +96,8 @@ const t = UI_LABELS[lang].english.hub;
         href={`/${lang}/ingles/propuestos`}
         title={t.proposedTitle}
         description={t.proposedDescription}
+        count={exerciseCountLabel}
+        tone="sky"
       >
         <BooksIcon slot="icon" weight="duotone" size={56} aria-hidden="true" />
       </HubCard>
@@ -53,9 +105,72 @@ const t = UI_LABELS[lang].english.hub;
         href={`/${lang}/ingles/actividades`}
         title={t.communityTitle}
         description={t.communityDescription}
+        count={activityCountLabel}
+        tone="violet"
       >
         <UsersThreeIcon slot="icon" weight="duotone" size={56} aria-hidden="true" />
       </HubCard>
     </div>
+
+    {
+      (dailyPick || weeklyPick) && (
+        <section class="flex flex-col gap-4" aria-labelledby="hub-today-heading">
+          <h2 id="hub-today-heading" class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
+            {t.todayTitle}
+          </h2>
+          <div class="grid gap-4 sm:grid-cols-2">
+            {dailyPick && (
+              <ActivityCard
+                lang={lang}
+                activity={dailyPick}
+                levelLabels={levelLabels}
+                noLevel={activitiesT.noLevel}
+                blockCountOne={activitiesT.blockCountOne}
+                blockCountMany={activitiesT.blockCountMany}
+                viewedLabel={activitiesT.viewedBadge}
+                highlighted
+                highlightLabel={activitiesT.dailyPickLabel}
+              />
+            )}
+            {weeklyPick && (
+              <ActivityCard
+                lang={lang}
+                activity={weeklyPick}
+                levelLabels={levelLabels}
+                noLevel={activitiesT.noLevel}
+                blockCountOne={activitiesT.blockCountOne}
+                blockCountMany={activitiesT.blockCountMany}
+                viewedLabel={activitiesT.viewedBadge}
+                highlighted
+                highlightLabel={t.weeklyPickLabel}
+              />
+            )}
+          </div>
+        </section>
+      )
+    }
+
+    <nav class="flex flex-col gap-3" aria-label={t.levelShortcutTitle}>
+      <h2 class="text-sm font-semibold tracking-wide text-zinc-400 uppercase">
+        {t.levelShortcutTitle}
+      </h2>
+      <ul class="flex gap-2 overflow-x-auto pb-1">
+        {
+          LEVELS.map((level) => (
+            <li class="shrink-0">
+              <a
+                href={`/${lang}/ingles/propuestos?nivel=${level}`}
+                class={[
+                  badgeVariants({ variant: 'outline' }),
+                  'h-auto gap-1 rounded-full px-4 py-2 text-sm hover:border-accent hover:text-accent',
+                ].join(' ')}
+              >
+                {`${level} · ${levelLabels[level]}`}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
   </section>
 </BaseLayout>

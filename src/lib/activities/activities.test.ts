@@ -94,6 +94,7 @@ import {
   getActivityForEdit,
   getActivitiesByAuthor,
   getPublishedActivities,
+  getActivityCount,
   getPublishedActivity,
   ACTIVITIES_PAGE_SIZE,
   clearActivitiesClient,
@@ -844,6 +845,56 @@ describe('getPublishedActivities', () => {
       throw new Error('network down');
     });
     expect(await getPublishedActivities({ level: null, page: 1 })).toEqual({ activities: [], total: 0 });
+  });
+});
+
+describe('getActivityCount', () => {
+  it('returns the count Postgrest reports', async () => {
+    awaitResults.push({ data: null, error: null, count: 34 });
+
+    expect(await getActivityCount()).toBe(34);
+  });
+
+  it('counts only visible activities', async () => {
+    awaitResults.push({ data: null, error: null, count: 0 });
+
+    await getActivityCount();
+
+    expect(eqMock).toHaveBeenCalledWith('visible', true);
+  });
+
+  it('is a count-only query — selects no columns of substance', async () => {
+    awaitResults.push({ data: null, error: null, count: 0 });
+
+    await getActivityCount();
+
+    expect(selectMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fail-safes to null (never 0) when the service client is unavailable', async () => {
+    clientState.available = false;
+
+    expect(await getActivityCount()).toBeNull();
+  });
+
+  it('fail-safes to null when Supabase reports an error', async () => {
+    awaitResults.push({ data: null, error: { message: 'down' }, count: null });
+
+    expect(await getActivityCount()).toBeNull();
+  });
+
+  it('fail-safes to null when the query throws', async () => {
+    fromMock.mockImplementationOnce(() => {
+      throw new Error('network down');
+    });
+
+    expect(await getActivityCount()).toBeNull();
+  });
+
+  it('fail-safes to null when the driver reports no count', async () => {
+    awaitResults.push({ data: null, error: null, count: null });
+
+    expect(await getActivityCount()).toBeNull();
   });
 });
 

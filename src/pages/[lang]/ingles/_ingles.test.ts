@@ -33,13 +33,35 @@ vi.mock('@lib/env', () => ({
 
 const getExerciseBySlug = vi.fn();
 const getExerciseFacetRows = vi.fn();
+const getExerciseCount = vi.fn();
 const getPublishedExercises = vi.fn();
 const getRelatedExercises = vi.fn();
 vi.mock('@lib/exercises', () => ({
   getExerciseBySlug: (...args: unknown[]) => getExerciseBySlug(...args),
   getExerciseFacetRows: (...args: unknown[]) => getExerciseFacetRows(...args),
+  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
   getPublishedExercises: (...args: unknown[]) => getPublishedExercises(...args),
   getRelatedExercises: (...args: unknown[]) => getRelatedExercises(...args),
+}));
+
+// The hub's own reads: two counts plus the ONE "top hearted" pool it shares
+// between `pickDailyActivity` and `topActivityOfWeek`. `getActivityCount`
+// and `getPublishedActivities` are real functions the hub imports from the
+// SAME module — mocked here so no network happens, same posture as the
+// `@lib/exercises` mock above.
+const getActivityCount = vi.fn();
+const getPublishedActivities = vi.fn();
+vi.mock('@lib/activities/activities', () => ({
+  getActivityCount: (...args: unknown[]) => getActivityCount(...args),
+  getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+}));
+
+// `ActivityCard` (rendered in the "Para ti hoy" strip) resolves a thumbnail
+// URL through this module — every fixture below uses `thumbnailPath: null`
+// so it is never actually called, but the import itself must not reach for
+// a real Supabase client.
+vi.mock('@lib/activities/storage', () => ({
+  publicImageUrl: (path: string) => `https://public.example/${path}`,
 }));
 
 import EntryPage from './index.astro';
@@ -101,7 +123,32 @@ const publishedExercise = (slug: string, topic: string | null = 'job-interview')
 
 const valid = { lang: 'es', level: 'B1', focus: 'phrasal-verbs', slug: 'greetings' };
 
+/** A published activity card row, shaped like `getPublishedActivities` returns it. */
+function activityFixture(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'act-1',
+    title: 'Mi actividad',
+    level: 'B1',
+    blockCount: 3,
+    publishedAt: '2026-09-29T00:00:00Z',
+    thumbnailPath: null,
+    heartCount: 10,
+    viewTotal: 5,
+    viewedByViewer: false,
+    ...overrides,
+  };
+}
+
 describe('ingles/index.astro (hub)', () => {
+  beforeEach(() => {
+    getExerciseCount.mockReset();
+    getActivityCount.mockReset();
+    getPublishedActivities.mockReset();
+    getExerciseCount.mockResolvedValue(null);
+    getActivityCount.mockResolvedValue(null);
+    getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
+  });
+
   it('returns 404 for an unsupported language', async () => {
     const res = await renderPage(EntryPage, { lang: 'fr' });
 
@@ -161,6 +208,152 @@ describe('ingles/index.astro (hub)', () => {
 
     expect(html).toContain('data-back-button');
     expect(html).toContain('href="/es"');
+  });
+
+  describe('live counts', () => {
+    it('shows each card its own live count, and gives the link an accessible name of title + count', async () => {
+      getExerciseCount.mockResolvedValue(12);
+      getActivityCount.mockResolvedValue(34);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('12 ejercicios');
+      expect(html).toContain('34 actividades');
+      expect(html).toContain('aria-label="Ejercicios propuestos — 12 ejercicios"');
+      expect(html).toContain('aria-label="Actividades de la comunidad — 34 actividades"');
+    });
+
+    it('shows the singular noun for a count of exactly one', async () => {
+      getExerciseCount.mockResolvedValue(1);
+      getActivityCount.mockResolvedValue(1);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('1 ejercicio');
+      expect(html).not.toContain('1 ejercicios');
+      expect(html).toContain('1 actividad');
+      expect(html).not.toContain('1 actividades');
+    });
+
+    it('degrades to no number (never "0 …") when a count query fails', async () => {
+      getExerciseCount.mockResolvedValue(null);
+      getActivityCount.mockResolvedValue(null);
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).not.toMatch(/\d+\s+ejercicios?/);
+      expect(html).not.toMatch(/\d+\s+actividades?/);
+      // The accessible name falls back to the bare title, no trailing dash.
+      expect(html).toContain('aria-label="Ejercicios propuestos"');
+      expect(html).toContain('aria-label="Actividades de la comunidad"');
+    });
+
+    it('shows live counts in English too', async () => {
+      getExerciseCount.mockResolvedValue(12);
+      getActivityCount.mockResolvedValue(34);
+
+      const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+      const html = await res.text();
+
+      expect(html).toContain('12 exercises');
+      expect(html).toContain('34 activities');
+    });
+  });
+
+  describe('"Para ti hoy" strip', () => {
+    it('is absent entirely when there are no live community activities', async () => {
+      getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).not.toContain('Para ti hoy');
+      expect(html).not.toContain('data-testid="activity-card"');
+    });
+
+    it('shows the daily activity when the community pool has one candidate', async () => {
+      getPublishedActivities.mockResolvedValue({
+        activities: [activityFixture({ id: 'act-1', title: 'Daily one' })],
+        total: 1,
+      });
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('Para ti hoy');
+      expect(html).toContain('Daily one');
+      expect(html).toContain('Actividad del día');
+      // Only one candidate — the weekly slot has nothing left to show.
+      expect(html).not.toContain('Lo más querido de la semana');
+    });
+
+    it('also shows the most-hearted activity of the week alongside the daily pick', async () => {
+      getPublishedActivities.mockResolvedValue({
+        activities: [
+          activityFixture({ id: 'act-1', title: 'Candidate one', publishedAt: '2026-09-29T00:00:00Z' }),
+          activityFixture({ id: 'act-2', title: 'Candidate two', publishedAt: '2026-09-28T00:00:00Z' }),
+        ],
+        total: 2,
+      });
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('Para ti hoy');
+      expect(html).toContain('Candidate one');
+      expect(html).toContain('Candidate two');
+      expect(html).toContain('Lo más querido de la semana');
+    });
+
+    it('never shows the weekly pick as a duplicate of the daily pick', async () => {
+      // A single candidate is the daily pick AND would otherwise be its own
+      // "most hearted this week" — the weekly slot excludes it instead of
+      // rendering the same card twice.
+      getPublishedActivities.mockResolvedValue({
+        activities: [activityFixture({ id: 'only', title: 'Only one', publishedAt: '2026-09-29T00:00:00Z' })],
+        total: 1,
+      });
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      const cardCount = html.split('data-testid="activity-card"').length - 1;
+      expect(cardCount).toBe(1);
+    });
+  });
+
+  describe('CEFR level shortcut', () => {
+    it('renders a pill for every level, linking to the curated picker with ?nivel=', async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      for (const level of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']) {
+        expect(html).toContain(`href="/es/ingles/propuestos?nivel=${level}"`);
+      }
+    });
+  });
+
+  describe('hidden-features guard', () => {
+    it('never links to the hidden Courses catalog or the adventure prototype', async () => {
+      getExerciseCount.mockResolvedValue(12);
+      getActivityCount.mockResolvedValue(34);
+      getPublishedActivities.mockResolvedValue({
+        activities: [
+          activityFixture({ id: 'act-1', title: 'Candidate one' }),
+          activityFixture({ id: 'act-2', title: 'Candidate two', publishedAt: '2026-09-28T00:00:00Z' }),
+        ],
+        total: 2,
+      });
+
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).not.toMatch(/(?<!admin)\/cursos(?!\w)/);
+      expect(html).not.toContain('/aventura');
+    });
   });
 });
 
