@@ -31,7 +31,12 @@ export interface QuizGameModeSwitcherProps {
   onChange: (mode: GameMode) => void;
 }
 
-const ICONS: Record<GameMode, typeof ListChecksIcon> = {
+// Partial, not `Record<GameMode, ...>`: the switch template keeps growing
+// (D1 "cards"/"match" first, then batch 1's six Wordwall-style games), one
+// mode wired in at a time, one commit per mode. Requiring every `GameMode`
+// key here would force this file to change the moment `gameModes.ts` adds a
+// new union member, even for a mode this component cannot render yet.
+const ICONS: Partial<Record<GameMode, typeof ListChecksIcon>> = {
   quiz: ListChecksIcon,
   cards: CardsIcon,
   match: ArrowsLeftRightIcon,
@@ -39,7 +44,7 @@ const ICONS: Record<GameMode, typeof ListChecksIcon> = {
 
 export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: QuizGameModeSwitcherProps) {
   const t = UI_LABELS[lang].activities.gameModes;
-  const labels: Record<GameMode, string> = { quiz: t.modeQuiz, cards: t.modeCards, match: t.modeMatch };
+  const labels: Partial<Record<GameMode, string>> = { quiz: t.modeQuiz, cards: t.modeCards, match: t.modeMatch };
 
   return (
     <div
@@ -50,6 +55,11 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
     >
       {modes.map((mode) => {
         const Icon = ICONS[mode];
+        const label = labels[mode];
+        // A mode not yet wired into this switcher (its own icon/label pair
+        // not added here yet) simply does not render a tab — never a blank
+        // or mislabeled one.
+        if (!Icon || !label) return null;
         const isActive = mode === active;
         return (
           <button
@@ -67,7 +77,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
             )}
           >
             <Icon aria-hidden="true" />
-            <span>{labels[mode]}</span>
+            <span>{label}</span>
           </button>
         );
       })}
