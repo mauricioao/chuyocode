@@ -51,6 +51,8 @@ import {
 } from '@/lib/activities/history';
 import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
+import { fieldClasses } from '@/lib/ui/field';
 import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
@@ -683,7 +685,16 @@ export default function ActivityEditorIsland({
                 aria-label={t.titleLabel}
                 value={title}
                 onChange={(e) => changeTitle(e.target.value)}
-                className="h-9 rounded border border-border bg-background px-2 text-base font-medium text-foreground lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none"
+                // The field system's own tokens at mobile (filled surface,
+                // subtle border, comfortable padding); at `lg:` it stays the
+                // card's OWN naked, larger heading-style field (transparent,
+                // no border until hover/focus) — deliberately not the
+                // standard field look there, since it names the whole card.
+                className={fieldClasses({
+                  size: 'sm',
+                  className:
+                    'text-base font-medium lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none lg:focus-visible:ring-0',
+                })}
               />
             </label>
           </div>
@@ -697,12 +708,12 @@ export default function ActivityEditorIsland({
           <div className="flex flex-wrap items-center gap-2 lg:contents">
             <label className="flex flex-col gap-1 text-sm">
               <span className="sr-only">{t.levelLabel}</span>
-              <select
+              <Select
                 data-testid="activity-level-select"
                 aria-label={t.levelLabel}
+                fieldSize="sm"
                 value={level ?? ''}
                 onChange={(e) => changeLevel(e.target.value)}
-                className="h-9 rounded border border-border bg-background px-2 text-foreground"
               >
                 <option value="">{t.levelNone}</option>
                 {LEVELS.map((lvl) => (
@@ -710,7 +721,7 @@ export default function ActivityEditorIsland({
                     {levelLabels[lvl]}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
               <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
