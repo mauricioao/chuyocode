@@ -1,0 +1,63 @@
+---
+/**
+ * UI reference — `/[lang]/admin/ui` (PR 1, premium design system). Internal,
+ * moderators only: the living reference for every control/state the system
+ * defines, so later work has one place to check against instead of eyeballing
+ * scattered screens. Never linked from ordinary navigation.
+ *
+ * SAME GATE SHAPE as `/[lang]/admin/actividades` and `/[lang]/admin/ejercicios`
+ * (see that page's own header for the full rationale): anonymous visitors are
+ * redirected to sign-in (`next` pointing back here), a signed-in
+ * NON-moderator gets a plain 404 (never a 403 — `requireRole`'s own "don't
+ * confirm the surface exists" posture), and a moderator sees the page.
+ *
+ * SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE — `markPrivate` runs
+ * unconditionally, before every branch, same rule as every gated page.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import UiReferenceIsland from '@components/islands/admin/UiReferenceIsland';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const moderator = await requireRole(user, 'moderator');
+if (!moderator) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].admin.ui;
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+    <p class="text-sm text-muted-foreground">{t.pageDescription}</p>
+    <UiReferenceIsland client:load lang={lang === 'en' ? 'en' : 'es'} />
+  </section>
+</BaseLayout>

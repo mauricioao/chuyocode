@@ -127,6 +127,15 @@ export const UI_LABELS = {
         autosaveError: 'No se pudo guardar automáticamente',
       },
     },
+    // Internal reference-only page (`/[lang]/admin/ui`, PR 1) — moderators
+    // only, never linked from ordinary navigation.
+    admin: {
+      ui: {
+        pageTitle: 'Sistema de diseño',
+        pageDescription:
+          'Referencia interna de los controles, botones y tarjetas del sistema de diseño.',
+      },
+    },
     legal: {
       titles: { terms: 'Términos y condiciones', privacy: 'Política de privacidad' },
       pending: 'Contenido legal pendiente',
@@ -910,6 +919,12 @@ export const UI_LABELS = {
         activityDuplicated: 'Activity duplicated',
         reportSent: 'Report sent',
         autosaveError: 'Could not save automatically',
+      },
+    },
+    admin: {
+      ui: {
+        pageTitle: 'Design system',
+        pageDescription: 'Internal reference for the design system controls, buttons and cards.',
       },
     },
     legal: {
