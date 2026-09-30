@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
-import type { WorksheetBlock } from '@/lib/activities/blocks';
+import type { ImageRef, WorksheetBlock } from '@/lib/activities/blocks';
 
 /**
  * jsdom has NO real `PointerEvent` constructor, so `fireEvent.pointerDown/Move/Up`
@@ -31,7 +31,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const BLOCK: WorksheetBlock = {
+const BLOCK: WorksheetBlock & { image: ImageRef } = {
   id: 'b1',
   type: 'worksheet',
   rotation: 0,

@@ -599,7 +599,10 @@ export async function getPublishedActivities(opts: GetPublishedActivitiesOptions
         if (typeof revisionRow.id !== 'string') continue;
         const blocks = parseBlocks(revisionRow.blocks);
         const firstWorksheet = blocks?.find((block) => block.type === 'worksheet');
-        thumbnailByRevision.set(revisionRow.id, firstWorksheet ? firstWorksheet.image.path : null);
+        // `'submit'` mode (the default above) never parses a worksheet
+        // without an image, so `firstWorksheet.image` is always set here in
+        // practice — this is only a type-level guard.
+        thumbnailByRevision.set(revisionRow.id, firstWorksheet?.image ? firstWorksheet.image.path : null);
       }
     }
 

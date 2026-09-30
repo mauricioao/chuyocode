@@ -51,6 +51,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVertical';
+import { Button } from '@/components/ui/button';
 import { MAX_SLOT_EXPLANATION_LENGTH, type Payload, type RowBlock } from '@/lib/exercisePayload';
 import {
   addRowBlock,
@@ -72,7 +73,10 @@ import { Textarea } from '@/components/ui/textarea';
 export const COPY = {
   es: {
     addQuestion: 'Agregar pregunta',
-    noQuestionsYet: 'Todavía no hay preguntas. Agregar la primera.',
+    // Empty state's own big CTA (creator polish round 4, owner feedback #2)
+    // — a different, more inviting wording than the small "+ Agregar
+    // pregunta" this same button shows once questions already exist.
+    noQuestionsYet: 'Agrega tu primera pregunta',
     selectQuestionHint: 'Elegir una pregunta de la lista para editarla.',
     dragHandle: 'Reordenar pregunta',
     deleteQuestion: 'Eliminar pregunta',
@@ -87,7 +91,7 @@ export const COPY = {
   },
   en: {
     addQuestion: 'Add question',
-    noQuestionsYet: 'No questions yet. Add the first one.',
+    noQuestionsYet: 'Add your first question',
     selectQuestionHint: 'Choose a question from the list to edit it.',
     dragHandle: 'Reorder question',
     deleteQuestion: 'Delete question',
@@ -216,56 +220,68 @@ export default function QuizBlockEditor({
   return (
     <div className="flex flex-col gap-3" data-testid={`quiz-editor-${blockId}`}>
       {questions.length === 0 ? (
-        <p data-testid={`quiz-empty-${blockId}`} className="text-sm text-muted-foreground">
-          {t.noQuestionsYet}
-        </p>
+        // Empty state (creator polish round 4, owner feedback #2): a
+        // centered message and ONE primary button — replaces the small
+        // muted text + separate outline button pair this same block showed
+        // before any question existed.
+        <div
+          data-testid={`quiz-empty-${blockId}`}
+          className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-8 text-center"
+        >
+          <p className="text-sm font-medium text-foreground">{t.noQuestionsYet}</p>
+          <Button type="button" variant="primary" data-testid={`add-question-${blockId}`} onClick={addQuestion}>
+            + {t.addQuestion}
+          </Button>
+        </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
-            <ul data-testid={`quiz-question-list-${blockId}`} className="flex flex-col gap-1">
-              {questions.map((question, index) => {
-                const slotId = rowSlotId(draft, question.id);
-                const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
-                const selected = slotId !== null && slotId === selectedSlotId;
-                const preview = slot?.label.trim() || t.emptyQuestionPreview;
-                return (
-                  <SortableQuestionRow key={question.id} id={question.id} handleLabel={t.dragHandle}>
-                    <button
-                      type="button"
-                      data-testid={`select-question-${slot?.id ?? question.id}`}
-                      aria-pressed={selected}
-                      onClick={() => slotId && onSelectSlot(slotId)}
-                      className={`min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-sm ${
-                        selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {index + 1}. {preview}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={t.deleteQuestion}
-                      data-testid={`delete-question-${slot?.id ?? question.id}`}
-                      className="shrink-0 px-2 text-sm text-muted-foreground hover:text-destructive"
-                      onClick={() => slotId && removeQuestion(question.id, slotId)}
-                    >
-                      &times;
-                    </button>
-                  </SortableQuestionRow>
-                );
-              })}
-            </ul>
-          </SortableContext>
-        </DndContext>
-      )}
+        <>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
+              <ul data-testid={`quiz-question-list-${blockId}`} className="flex flex-col gap-1">
+                {questions.map((question, index) => {
+                  const slotId = rowSlotId(draft, question.id);
+                  const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
+                  const selected = slotId !== null && slotId === selectedSlotId;
+                  const preview = slot?.label.trim() || t.emptyQuestionPreview;
+                  return (
+                    <SortableQuestionRow key={question.id} id={question.id} handleLabel={t.dragHandle}>
+                      <button
+                        type="button"
+                        data-testid={`select-question-${slot?.id ?? question.id}`}
+                        aria-pressed={selected}
+                        onClick={() => slotId && onSelectSlot(slotId)}
+                        className={`min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-sm ${
+                          selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {index + 1}. {preview}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t.deleteQuestion}
+                        data-testid={`delete-question-${slot?.id ?? question.id}`}
+                        className="shrink-0 px-2 text-sm text-muted-foreground hover:text-destructive"
+                        onClick={() => slotId && removeQuestion(question.id, slotId)}
+                      >
+                        &times;
+                      </button>
+                    </SortableQuestionRow>
+                  );
+                })}
+              </ul>
+            </SortableContext>
+          </DndContext>
 
-      <button
-        type="button"
-        data-testid={`add-question-${blockId}`}
-        onClick={addQuestion}
-        className="w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
-      >
-        + {t.addQuestion}
-      </button>
+          <button
+            type="button"
+            data-testid={`add-question-${blockId}`}
+            onClick={addQuestion}
+            className="w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+          >
+            + {t.addQuestion}
+          </button>
+        </>
+      )}
 
       {selectedSlot ? (
         <div

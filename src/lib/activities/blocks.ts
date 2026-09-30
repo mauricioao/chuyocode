@@ -82,7 +82,17 @@ export interface WorksheetBlock {
    * worksheet saved before this field existed (backward compatible).
    */
   rotation: Rotation;
-  image: ImageRef;
+  /**
+   * `undefined` = no image uploaded yet — the editor's own "empty worksheet
+   * block" (creator polish round 4, owner feedback #2, "first block
+   * visible"): choosing Worksheet on the start screen creates a REAL block
+   * in the list immediately, before any upload, rendered as a drop-zone
+   * empty state. Only a `'draft'`-parsed block may be imageless;
+   * `'submit'` (and therefore anything published/pending review) always
+   * requires a real one — see {@link BlocksParseMode}'s own doc and
+   * `parseWorksheetBlock`.
+   */
+  image?: ImageRef;
   zones: Zone[];
 }
 
@@ -314,8 +324,19 @@ function parseWorksheetBlock(
   value: Record<string, unknown>,
   mode: BlocksParseMode,
 ): WorksheetBlock | null {
-  const image = parseImageRef(value.image);
-  if (!image) return null;
+  // "First block visible" (creator polish round 4, owner feedback #2): a
+  // MISSING image is only ever tolerated in `'draft'` mode — the editor's
+  // own empty-state block, before any upload. A PRESENT-but-unusable image
+  // (a forged/malformed one) fails in every mode, same as before this pass
+  // — this only relaxes "absent entirely".
+  let image: ImageRef | undefined;
+  if (value.image === undefined || value.image === null) {
+    if (mode !== 'draft') return null;
+  } else {
+    const parsed = parseImageRef(value.image);
+    if (!parsed) return null;
+    image = parsed;
+  }
 
   const rotation = parseRotation(value.rotation);
   if (rotation === null) return null;
@@ -328,6 +349,9 @@ function parseWorksheetBlock(
   // name which block is missing zones.
   if (!Array.isArray(value.zones)) return null;
   if (value.zones.length > MAX_ZONES_PER_WORKSHEET) return null;
+  // A zone's `x`/`y`/`w`/`h` are fractions of the image's own pixel space —
+  // never store one with nothing for it to be relative to.
+  if (!image && value.zones.length > 0) return null;
 
   const zones: Zone[] = [];
   for (const raw of value.zones) {
@@ -336,7 +360,9 @@ function parseWorksheetBlock(
     zones.push(zone);
   }
 
-  return { id, type: 'worksheet', name, rotation, image, zones };
+  const block: WorksheetBlock = { id, type: 'worksheet', name, rotation, zones };
+  if (image) block.image = image;
+  return block;
 }
 
 /**
@@ -416,6 +442,7 @@ export interface IncompleteBlockInfo {
    */
   zoneId: string | null;
   reason:
+    | 'no_image'
     | 'no_zones'
     | 'no_answers'
     | 'too_few_options'
@@ -470,6 +497,13 @@ function findIncompleteSlot(payload: Payload): { zoneId: string; reason: Incompl
 export function findIncompleteBlock(blocks: Block[]): IncompleteBlockInfo | null {
   for (const block of blocks) {
     if (block.type === 'worksheet') {
+      // Checked BEFORE zones (creator polish round 4, owner feedback #2):
+      // an imageless block can never carry zones anyway (`parseWorksheetBlock`
+      // enforces that), so this is always the first, more useful thing to
+      // point the author back at.
+      if (!block.image) {
+        return { blockId: block.id, zoneId: null, reason: 'no_image' };
+      }
       if (block.zones.length === 0) {
         return { blockId: block.id, zoneId: null, reason: 'no_zones' };
       }

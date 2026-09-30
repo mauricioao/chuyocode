@@ -34,6 +34,7 @@
  * the shape of what it hands back.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { UploadSimpleIcon } from '@phosphor-icons/react/dist/ssr/UploadSimple';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
   routeFileType,
@@ -377,6 +378,12 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
   }
 
   return (
+    // The empty-state drop zone — reused both here (the "+ Agregar bloque"
+    // flow) and as a brand-new worksheet block's own canvas-area empty state
+    // (`BlockList.tsx`, creator polish round 4, owner feedback #2): a large,
+    // centered call to action with the upload illustration, one primary
+    // button, and a muted formats/size hint — the whole area is the drop
+    // zone, with a visible dashed brand-yellow border while dragging over.
     <div
       data-testid="worksheet-uploader"
       onDragOver={(e) => {
@@ -389,6 +396,7 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
         dragActive ? 'border-primary bg-primary/5' : 'border-border'
       }`}
     >
+      <UploadSimpleIcon weight="duotone" size={48} className="text-primary" aria-hidden="true" />
       <p className="text-sm font-medium text-foreground">
         {dragActive ? t.uploadDragActive : t.uploadTitle}
       </p>
@@ -402,7 +410,7 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
         onChange={handleInputChange}
         aria-label={t.uploadButton}
       />
-      <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
+      <Button type="button" variant="primary" onClick={() => inputRef.current?.click()}>
         {t.uploadButton}
       </Button>
 

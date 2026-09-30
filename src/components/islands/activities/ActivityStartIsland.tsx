@@ -2,20 +2,22 @@
  * ActivityStartIsland — the `/[lang]/crear` start screen island (PR B,
  * "Activities creator"; the Questions path ships in PR C, "Preguntas (quiz)
  * block"). Renders {@link BlockTypePicker}: either choice creates a
- * brand-new, empty activity through `POST /api/actividades` and navigates
- * straight to its editor (`/[lang]/crear/<id>`).
+ * brand-new activity through `POST /api/actividades` and navigates straight
+ * to its editor (`/[lang]/crear/<id>`).
  *
- * Worksheet: the actual image upload happens INSIDE the editor's worksheet
- * block, not here — the activity is created with zero blocks.
+ * "First block visible" (creator polish round 4, owner feedback #2): the
+ * chosen type's first block is created in THIS SAME `POST /api/actividades`
+ * call, `'draft'`-tolerant server-side (`blocks.ts`'s `parseWorksheetBlock`/
+ * `parseBlocks`) — never a second, best-effort save afterward, so a failure
+ * here surfaces as the ordinary create-error toast instead of silently
+ * landing the author on an empty editor.
  *
- * Questions: the editor needs no upload step, so this ALSO seeds one empty
- * quiz block via a second call to the editor's own autosave endpoint
- * (`guardar`, `'draft'`-tolerant since blocks.ts/exercisePayload.ts's PR C
- * change) before navigating — the author lands straight on an editable
- * question, matching "starting with Preguntas creates the activity with one
- * empty quiz block". That second call is BEST-EFFORT: a failure there still
- * navigates to a valid (if momentarily empty) editor rather than stranding
- * the author on this screen after the activity already exists.
+ *  - Worksheet: one EMPTY worksheet block (no image yet) — the editor
+ *    renders its own drop-zone empty state for it (`BlockList.tsx`); the
+ *    actual upload still happens INSIDE the editor, not here.
+ *  - Questions: one empty quiz block, matching "starting with Preguntas
+ *    creates the activity with one empty quiz block" — the editor needs no
+ *    upload step, so the author lands straight on an editable question.
  *
  * Busy state (navigation-without-flicker PR): no more inline "Creando la
  * actividad…" text. The chosen card itself shows the busy state
@@ -42,21 +44,24 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
   const t = UI_LABELS[lang].activities.start;
   const [busyCard, setBusyCard] = useState<BlockTypeCard | null>(null);
 
-  const createActivity = useCallback(async (): Promise<string | null> => {
-    const res = await fetch('/api/actividades', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lang, blocks: [] }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { id?: string };
-    return data.id ?? null;
-  }, [lang]);
+  const createActivity = useCallback(
+    async (blocks: unknown[]): Promise<string | null> => {
+      const res = await fetch('/api/actividades', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ lang, blocks }),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { id?: string };
+      return data.id ?? null;
+    },
+    [lang],
+  );
 
   const handleSelectWorksheet = useCallback(async () => {
     setBusyCard('worksheet');
     try {
-      const id = await createActivity();
+      const id = await createActivity([{ id: crypto.randomUUID(), type: 'worksheet', rotation: 0, zones: [] }]);
       if (!id) {
         toast.error(t.createError);
         setBusyCard(null);
@@ -72,26 +77,13 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
   const handleSelectQuestions = useCallback(async () => {
     setBusyCard('questions');
     try {
-      const id = await createActivity();
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', payload: { pools: {}, slots: [] } },
+      ]);
       if (!id) {
         toast.error(t.createError);
         setBusyCard(null);
         return;
-      }
-      try {
-        await fetch(`/api/actividades/${id}/guardar`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            title: UI_LABELS[lang].activities.untitledTitle,
-            level: null,
-            blocks: [{ id: crypto.randomUUID(), type: 'quiz', payload: { pools: {}, slots: [] } }],
-          }),
-        });
-      } catch {
-        // Best-effort — see file header. The activity already exists; the
-        // editor simply opens with zero blocks, same as Worksheet does
-        // before any image is uploaded.
       }
       navigate(`/${lang}/crear/${id}`);
     } catch {

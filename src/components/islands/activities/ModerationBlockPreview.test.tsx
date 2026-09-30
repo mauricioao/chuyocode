@@ -32,7 +32,9 @@ describe('ModerationBlockPreview — worksheet', () => {
   it('renders the image via resolveImageUrl', () => {
     render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
     const img = screen.getByTestId('moderation-block-image') as HTMLImageElement;
-    expect(img.src).toContain(encodeURIComponent(WORKSHEET.type === 'worksheet' ? WORKSHEET.image.path : ''));
+    expect(img.src).toContain(
+      encodeURIComponent(WORKSHEET.type === 'worksheet' ? (WORKSHEET.image?.path ?? '') : ''),
+    );
   });
 
   it('lists every zone without answers when showAnswers is false', () => {

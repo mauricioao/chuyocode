@@ -11,7 +11,10 @@
  * 1. locals.user null                    -> 401
  * 2. bad JSON / wrong shape              -> 400
  * 3. lang not es/en                      -> 400
- * 4. parseBlocks(blocks) === null        -> 422 { error: 'invalid_blocks' }
+ * 4. parseBlocks(blocks, 'draft')        -> 422 { error: 'invalid_blocks' }
+ *    === null (tolerant — the start
+ *    screen may seed one empty-state
+ *    block of the chosen type)
  * 5. a worksheet image.path is not the   -> 422 { error: 'invalid_image_path' }
  *    caller's OWN upload path (no
  *    activity id exists yet to reference
@@ -52,10 +55,14 @@ function isCreateInput(value: unknown): value is CreateInput {
   return 'lang' in value && 'blocks' in value;
 }
 
-/** Every worksheet block's `image.path` must be the caller's OWN upload path. */
+/**
+ * Every worksheet block's `image.path` must be the caller's OWN upload path
+ * — a block with no image yet (the editor's own empty-state block, `'draft'`
+ * mode only — see `blocks.ts`'s `parseWorksheetBlock`) has nothing to check.
+ */
 function everyImageOwnedByCaller(blocks: Block[], userId: string): boolean {
   return blocks.every((block) => {
-    if (block.type !== 'worksheet') return true;
+    if (block.type !== 'worksheet' || !block.image) return true;
     return isOwnUploadPath(block.image.path, userId);
   });
 }
@@ -79,7 +86,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'bad_request' }, 400);
   }
 
-  const blocks = parseBlocks(body.blocks);
+  // `'draft'` (creator polish round 4, owner feedback #2, "first block
+  // visible"): the start screen now seeds the brand-new activity with one
+  // block of the chosen type in THIS same call — a worksheet block with no
+  // image yet, or an empty quiz block — same tolerant posture `guardar.ts`
+  // already uses for every later autosave.
+  const blocks = parseBlocks(body.blocks, 'draft');
   if (!blocks) {
     return json({ error: 'invalid_blocks' }, 422);
   }

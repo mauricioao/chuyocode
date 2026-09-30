@@ -46,7 +46,7 @@ import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
-import type { Block, QuizBlock, WorksheetBlock } from '@/lib/activities/blocks';
+import type { Block, ImageRef, QuizBlock, WorksheetBlock } from '@/lib/activities/blocks';
 import { imagePreviewUrl } from '@/lib/activities/paths';
 import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
@@ -313,8 +313,11 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
           {activeBlock.type === 'worksheet' ? (
             <WorksheetPracticePlayer
               lang={lang}
-              block={activeBlock as WorksheetBlock}
-              imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock).image.path)}
+              // A live activity's worksheet always has a real image
+              // ('submit' mode never parses one without it) — see
+              // `WorksheetPracticePlayer.tsx`'s own `SubmittedWorksheetBlock`.
+              block={activeBlock as WorksheetBlock & { image: ImageRef }}
+              imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock & { image: ImageRef }).image.path)}
               practice={{ values, onChange: handleChange, results, disabled: graded }}
               toolbarSlot={zoomSlot}
             />

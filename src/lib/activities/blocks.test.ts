@@ -489,6 +489,23 @@ describe("parseBlocks — 'draft' mode (creator polish round 3, owner feedback #
     expect(parseBlocks([worksheetBlock({ zones: [] })], 'draft')).not.toBeNull();
   });
 
+  // "First block visible" (creator polish round 4, owner feedback #2): the
+  // editor creates a brand-new worksheet block before any image is uploaded
+  // — a real block in the list, rendered as an empty-state drop zone — so
+  // `'draft'` must tolerate a missing `image` entirely, same tolerant
+  // posture as a zone with no answer yet.
+  it('accepts a worksheet block with no image at all (the empty-state block), draft mode only', () => {
+    const raw = worksheetBlock({ image: undefined, zones: [] });
+    expect(parseBlocks([raw])).toBeNull();
+    const result = parseBlocks([raw], 'draft');
+    expect(result).toEqual([expect.objectContaining({ type: 'worksheet', zones: [] })]);
+    expect((result?.[0] as WorksheetBlock).image).toBeUndefined();
+  });
+
+  it('rejects an imageless worksheet block that still carries zones — a zone needs image space to be relative to', () => {
+    expect(parseBlocks([worksheetBlock({ image: undefined })], 'draft')).toBeNull();
+  });
+
   it('accepts a quiz block with zero questions, unlike submit mode', () => {
     const raw = quizBlock({ payload: { pools: {}, slots: [] } });
     expect(parseBlocks([raw])).toBeNull();
@@ -563,6 +580,11 @@ describe("parseBlocks — 'draft' mode (creator polish round 3, owner feedback #
 describe('findIncompleteBlock', () => {
   it('returns null when every block is already submit-complete', () => {
     expect(findIncompleteBlock(parseBlocks([worksheetBlock()], 'draft') as Block[])).toBeNull();
+  });
+
+  it('reports a worksheet with no image yet (zoneId null), before ever checking its zones', () => {
+    const blocks = parseBlocks([worksheetBlock({ image: undefined, zones: [] })], 'draft') as Block[];
+    expect(findIncompleteBlock(blocks)).toEqual({ blockId: 'b1', zoneId: null, reason: 'no_image' });
   });
 
   it('reports a worksheet with no zones (zoneId null)', () => {

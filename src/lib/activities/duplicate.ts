@@ -94,12 +94,19 @@ export function buildDuplicateTitle(originalTitle: string): string {
   return `${base}${COPY_SUFFIX}`;
 }
 
-/** Every worksheet image path in `blocks`, in first-seen order, deduplicated. */
+/**
+ * Every worksheet image path in `blocks`, in first-seen order, deduplicated.
+ *
+ * A duplicated activity's blocks always came from a LIVE revision — `'submit'`
+ * mode (`getActivityForDuplicate`'s own parse) never parses a worksheet
+ * without an image, so the `block.image` guard below is only a type-level
+ * one, never actually skips a real block in practice.
+ */
 function uniqueWorksheetImagePaths(blocks: Block[]): string[] {
   const seen = new Set<string>();
   const paths: string[] = [];
   for (const block of blocks) {
-    if (block.type !== 'worksheet') continue;
+    if (block.type !== 'worksheet' || !block.image) continue;
     if (seen.has(block.image.path)) continue;
     seen.add(block.image.path);
     paths.push(block.image.path);
@@ -119,6 +126,12 @@ function rebuildBlocksForDuplicate(blocks: Block[], pathMapping: ReadonlyMap<str
       return { ...block, id };
     }
     const worksheet = block as WorksheetBlock;
+    // Same "always set in practice" invariant as `uniqueWorksheetImagePaths`
+    // above — a LIVE worksheet always has an image, so this only guards the
+    // type, never actually skips the rewrite for a real duplicated block.
+    if (!worksheet.image) {
+      return { ...worksheet, id, zones: worksheet.zones.map((zone) => ({ ...zone, id: crypto.randomUUID() })) };
+    }
     const newPath = pathMapping.get(worksheet.image.path) ?? worksheet.image.path;
     return {
       ...worksheet,

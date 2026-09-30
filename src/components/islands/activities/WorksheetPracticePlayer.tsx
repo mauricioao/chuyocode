@@ -55,7 +55,7 @@ import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { WorksheetBlock } from '@/lib/activities/blocks';
+import type { ImageRef, WorksheetBlock } from '@/lib/activities/blocks';
 import {
   fitCamera,
   clampCamera,
@@ -76,9 +76,20 @@ import WorksheetPracticePlayerMobile from './WorksheetPracticePlayerMobile';
 
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
+/**
+ * A worksheet block known to carry a real image — every block practice ever
+ * renders, since only a LIVE revision reaches here and `'submit'`-mode
+ * parsing never lets an imageless one through (`blocks.ts`'s own
+ * `parseWorksheetBlock`/`findIncompleteBlock`). Narrowing the prop type here
+ * (rather than a runtime guard on every `block.image` access below) keeps
+ * this whole file exactly as it was before `WorksheetBlock.image` became
+ * optional for the EDITOR's own empty-state block.
+ */
+type SubmittedWorksheetBlock = WorksheetBlock & { image: ImageRef };
+
 export interface WorksheetPracticePlayerProps {
   lang: Lang;
-  block: WorksheetBlock;
+  block: SubmittedWorksheetBlock;
   imageUrl: string;
   practice: WorksheetPracticeState;
   /**
@@ -101,7 +112,7 @@ function DesktopWorksheetCamera({
   toolbarSlot,
 }: {
   lang: Lang;
-  block: WorksheetBlock;
+  block: SubmittedWorksheetBlock;
   imageUrl: string;
   practice: WorksheetPracticeState;
   toolbarSlot?: HTMLElement | null;

@@ -81,20 +81,33 @@ const sourceActivity = activity.source
     renders its own `lg:hidden` copy of this SAME back button INLINE, left of
     the title, instead — see that component's own header on its title row.
   */}
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-8 pb-8 sm:px-6 sm:pt-12 sm:pb-12 lg:h-full lg:min-h-0 lg:flex-row lg:items-start lg:gap-0 lg:px-8 lg:py-6">
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-8 pb-8 sm:px-6 sm:pt-12 sm:pb-12 lg:h-full lg:min-h-0 lg:flex-row lg:gap-0 lg:px-8 lg:py-6">
     {/* `lg:`-only: the SAME `BackButton`, floating sticky in the left
-        gutter (see its own header) — the first item of this row, so its
-        normal-flow starting position lines up with the card's own top edge
-        (`items-start` on the row). No reserved height of its own: it
-        overlaps into the gutter via its own `-ml-12`, so the row's actual
-        width is unaffected by its presence. */}
+        gutter (see its own header) — the first item of this row. No reserved
+        height of its own: it overlaps into the gutter via its own `-ml-12`,
+        so the row's actual width is unaffected by its presence.
+
+        FULL-HEIGHT CARD FIX (owner report: "the card ends mid-screen, empty
+        space down to the footer"): this row used to force `lg:items-start`
+        on ITSELF — that also made `ActivityEditorIsland`'s own root div (the
+        row's OTHER item, immediately below) stretch only to ITS content
+        height instead of the row's full `lg:h-full`, since `items-start`
+        overrides the default cross-axis STRETCH for every item in the row,
+        not just this one. This div now gets its top alignment from its OWN
+        `lg:self-start` instead (its explicit `lg:h-(--card-header-h)` below
+        would have kept it unstretched either way, but self-start says so
+        directly) — leaving the row's `align-items` at its default `stretch`,
+        so the island's root (no explicit height of its own) fills the row's
+        real height end to end, and its OWN flex-column chain (root -> card
+        -> body -> block list -> the one focus-active block's canvas) can
+        then fill that height in turn instead of collapsing to content. */}
     {/* `lg:h-(--card-header-h)` + `items-center` centers the 40px button
         exactly inside a box the same height as the card's own 56px header
         row (owner fix: "the back button sits above the title row" — it used
-        to inherit the row's `items-start` directly and sit flush with the
-        row's top edge instead of centered against the header it belongs
+        to inherit the row's old `items-start` directly and sit flush with
+        the row's top edge instead of centered against the header it belongs
         next to). */}
-    <div class="hidden lg:flex lg:h-(--card-header-h) lg:flex-none lg:items-center">
+    <div class="hidden lg:flex lg:h-(--card-header-h) lg:flex-none lg:items-center lg:self-start">
       <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
     </div>
     <ActivityEditorIsland

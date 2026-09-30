@@ -190,6 +190,10 @@ function questionText(slot: Slot): string {
       <div class="flex flex-col gap-10">
         {labeledBlocks.map(({ block, label }) => {
           if (block.type === 'worksheet') {
+            // A live activity's worksheet always has an image — `'submit'`
+            // mode never parses one without it — this guard is only a
+            // type-level one, never actually skipped in practice.
+            if (!block.image) return null;
             const rotation = block.rotation ?? 0;
             const isQuarterTurn = rotation === 90 || rotation === 270;
             const displaySize = rotatedSize(block.image, rotation);
