@@ -89,6 +89,46 @@ describe('QuizBlockEditor — editing a question', () => {
   });
 });
 
+describe('QuizBlockEditor — explanation (D5, "¿Por qué?")', () => {
+  it('starts empty for a question with no explanation', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('select-question-s1'));
+    const input = screen.getByTestId('quiz-explanation-s1') as HTMLTextAreaElement;
+    expect(input.value).toBe('');
+  });
+
+  it('shows an already-authored explanation', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'x', input: 'text', answer: ['sits'], explanation: 'Third person -s.' }],
+    };
+    render(<Harness initialPayload={payload} />);
+    fireEvent.click(screen.getByTestId('select-question-s1'));
+    const input = screen.getByTestId('quiz-explanation-s1') as HTMLTextAreaElement;
+    expect(input.value).toBe('Third person -s.');
+  });
+
+  it('types an explanation and keeps it on the slot', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('select-question-s1'));
+    const input = screen.getByTestId('quiz-explanation-s1') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'Third person -s.' } });
+    expect(input.value).toBe('Third person -s.');
+  });
+
+  it('clearing the field back to blank drops the explanation entirely', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'x', input: 'text', answer: ['sits'], explanation: 'Third person -s.' }],
+    };
+    render(<Harness initialPayload={payload} />);
+    fireEvent.click(screen.getByTestId('select-question-s1'));
+    const input = screen.getByTestId('quiz-explanation-s1') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect(input.value).toBe('');
+  });
+});
+
 describe('QuizBlockEditor — removing a question', () => {
   it('removes the question and clears its selection', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);

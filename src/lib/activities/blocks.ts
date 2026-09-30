@@ -53,6 +53,15 @@ export interface Zone {
    * non-empty, capped at {@link MAX_ZONE_SPEAK_LENGTH} characters.
    */
   speak?: string;
+  /**
+   * Optional author-supplied "¿Por qué?" explanation (D5), shown to the
+   * learner only AFTER checking, only for THIS zone, and only while it is
+   * incorrect — never before checking, never for a correct answer.
+   * `undefined` = no explanation for this zone. Trimmed, non-empty, capped
+   * at {@link MAX_ZONE_EXPLANATION_LENGTH} characters — same
+   * trim/cap/all-or-nothing posture as {@link speak}.
+   */
+  explanation?: string;
 }
 
 /** A worksheet image's rotation, clockwise from its uploaded orientation. */
@@ -99,6 +108,9 @@ export const MAX_BLOCK_NAME_LENGTH = 60;
 
 /** A zone's optional "Escuchar/Listen" text (D4) may not exceed this many characters. */
 export const MAX_ZONE_SPEAK_LENGTH = 200;
+
+/** A zone's optional "¿Por qué?" explanation (D5) may not exceed this many characters. */
+export const MAX_ZONE_EXPLANATION_LENGTH = 300;
 
 /**
  * `parseBlocks`' two validation postures (creator polish round 3, owner
@@ -202,6 +214,9 @@ function parseZone(value: unknown, mode: BlocksParseMode): Zone | null {
   const speak = parseZoneSpeak(value.speak);
   if (speak === INVALID_SPEAK) return null;
 
+  const explanation = parseZoneExplanation(value.explanation);
+  if (explanation === INVALID_EXPLANATION) return null;
+
   const zone: Zone = {
     id: value.id,
     x: value.x,
@@ -212,6 +227,7 @@ function parseZone(value: unknown, mode: BlocksParseMode): Zone | null {
     answers,
   };
   if (speak !== undefined) zone.speak = speak;
+  if (explanation !== undefined) zone.explanation = explanation;
 
   if (kind === 'choice') {
     const options = parseTrimmedStrings(value.options);
@@ -240,6 +256,25 @@ function parseZoneSpeak(value: unknown): string | undefined | typeof INVALID_SPE
   if (typeof value !== 'string') return INVALID_SPEAK;
   const trimmed = value.trim();
   if (trimmed.length > MAX_ZONE_SPEAK_LENGTH) return INVALID_SPEAK;
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Parse a zone's optional `explanation` text (D5, "¿Por qué?"), or the
+ * sentinel `INVALID_EXPLANATION` if present but unusable — same
+ * all-or-nothing posture as {@link parseZoneSpeak}: a non-string, or one
+ * that stays over {@link MAX_ZONE_EXPLANATION_LENGTH} after trimming, fails
+ * the WHOLE block. A missing value, or one that is blank after trimming, is
+ * NOT an error: both parse to `undefined`, meaning "no explanation for this
+ * zone".
+ */
+const INVALID_EXPLANATION = Symbol('invalid-explanation');
+
+function parseZoneExplanation(value: unknown): string | undefined | typeof INVALID_EXPLANATION {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return INVALID_EXPLANATION;
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_ZONE_EXPLANATION_LENGTH) return INVALID_EXPLANATION;
   return trimmed.length > 0 ? trimmed : undefined;
 }
 

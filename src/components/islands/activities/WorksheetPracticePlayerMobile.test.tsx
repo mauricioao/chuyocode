@@ -233,6 +233,64 @@ describe('WorksheetPracticePlayerMobile — speak affordance (D4)', () => {
   });
 });
 
+/** D5 "¿Por qué?": the sheet shows the explanation under the input, only once graded and only while incorrect. */
+describe('WorksheetPracticePlayerMobile — explanation (D5)', () => {
+  const BLOCK_WITH_EXPLANATION: WorksheetBlock = {
+    ...BLOCK,
+    zones: BLOCK.zones.map((z) => (z.id === 'top-left' ? { ...z, explanation: 'Because it is "a".' } : z)),
+  };
+
+  function HarnessGraded({ correct }: { correct: boolean }) {
+    return (
+      <WorksheetPracticePlayerMobile
+        lang="es"
+        block={BLOCK_WITH_EXPLANATION}
+        imageUrl="/img.webp"
+        practice={{
+          values: { 'top-left': correct ? 'a' : 'wrong' },
+          onChange: () => {},
+          results: { 'top-left': correct },
+          disabled: true,
+        }}
+      />
+    );
+  }
+
+  it('shows nothing before grading (no results yet)', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.queryByTestId('zone-sheet-explanation')).toBeNull();
+  });
+
+  it('shows nothing for a correct zone', () => {
+    render(<HarnessGraded correct />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.queryByTestId('zone-sheet-explanation')).toBeNull();
+  });
+
+  it('shows the explanation under the input for an incorrect zone that has one', () => {
+    render(<HarnessGraded correct={false} />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.getByTestId('zone-sheet-explanation').textContent).toContain('Because it is "a".');
+  });
+
+  it('shows nothing for an incorrect zone with no explanation authored', () => {
+    function HarnessNoExplanation() {
+      return (
+        <WorksheetPracticePlayerMobile
+          lang="es"
+          block={BLOCK}
+          imageUrl="/img.webp"
+          practice={{ values: {}, onChange: () => {}, results: { 'top-left': false }, disabled: true }}
+        />
+      );
+    }
+    render(<HarnessNoExplanation />);
+    fireEvent.click(screen.getByTestId('player-zone-tap-top-left'));
+    expect(screen.queryByTestId('zone-sheet-explanation')).toBeNull();
+  });
+});
+
 describe('WorksheetPracticePlayerMobile — pinch/pan camera wiring', () => {
   it('a two-finger pinch scales the content layer and exits fit mode (touch-action switches to none)', () => {
     render(<Harness />);

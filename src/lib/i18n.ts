@@ -376,6 +376,12 @@ export const UI_LABELS = {
         // machine-readable text otherwise.
         zoneSpeakLabel: 'Texto para escuchar',
         zoneSpeakPlaceholder: 'Texto que se va a leer en voz alta',
+        // "¿Por qué?" explicación (D5): un campo opcional por zona, que se
+        // muestra al alumno solo después de comprobar, y solo si esa zona
+        // quedó incorrecta.
+        zoneExplanationLabel: '¿Por qué? (explicación)',
+        zoneExplanationPlaceholder: 'Explicación opcional',
+        zoneExplanationHint: 'Se muestra al alumno si se equivoca',
         zoneDelete: 'Eliminar zona',
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
@@ -421,6 +427,10 @@ export const UI_LABELS = {
         zoneNext: 'Siguiente',
         zoneDone: 'Listo',
         zoneOf: 'Zona',
+        // "¿Por qué?" explicación (D5) — el botón que abre el popover con la
+        // explicación, mostrado solo para una zona incorrecta que tiene una.
+        explanationButtonLabel: 'Ver explicación',
+        explanationHeading: '¿Por qué?',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -429,6 +439,8 @@ export const UI_LABELS = {
         pageDescription: 'Practicar esta actividad de inglés: hojas de trabajo y preguntas con corrección al instante.',
         back: 'Volver a actividades',
         noLevel: 'Sin nivel',
+        // "Imprimir" (D6): links to the print-optimized page.
+        print: 'Imprimir',
         check: 'Comprobar',
         retry: 'Reintentar',
         score: 'Puntaje',
@@ -612,6 +624,7 @@ export const UI_LABELS = {
         noAnswersYet: 'Todavía sin respuestas',
         zoneLabel: 'Zona',
         quizAnswerLabel: 'Respuesta correcta',
+        explanationLabel: 'Explicación',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
@@ -645,6 +658,21 @@ export const UI_LABELS = {
         removeError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
         confirmCancel: 'Cancelar',
         confirmAccept: 'Confirmar',
+      },
+      // Print page (`/[lang]/ingles/actividades/[id]/imprimir`, D6). A
+      // separate, minimal-layout page — no site header/footer/nav, light
+      // theme for paper — so its copy stays a sibling of `practice` rather
+      // than reusing that section's own vocabulary.
+      print: {
+        pageDescription: 'Versión para imprimir de esta actividad de inglés.',
+        noLevel: 'Sin nivel',
+        print: 'Imprimir',
+        includeAnswers: 'Incluir respuestas',
+        choicesLabel: 'Opciones',
+        answersHeading: 'Clave de respuestas',
+        explanationLabel: 'Por qué',
+        worksheetLabel: 'Hoja',
+        quizLabel: 'Preguntas',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1043,6 +1071,9 @@ export const UI_LABELS = {
         zoneOptionCorrect: 'Correct',
         zoneSpeakLabel: 'Text to listen to',
         zoneSpeakPlaceholder: 'Text to read aloud',
+        zoneExplanationLabel: 'Why? (explanation)',
+        zoneExplanationPlaceholder: 'Optional explanation',
+        zoneExplanationHint: 'Shown to the learner if they get it wrong',
         zoneDelete: 'Delete zone',
         zoneMinOptions: 'At least 2 options are needed.',
         zoneAnswerNotInOptions: 'Every answer must also be one of the options.',
@@ -1075,11 +1106,14 @@ export const UI_LABELS = {
         zoneNext: 'Next',
         zoneDone: 'Done',
         zoneOf: 'Zone',
+        explanationButtonLabel: 'See explanation',
+        explanationHeading: 'Why?',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
         back: 'Back to activities',
         noLevel: 'No level',
+        print: 'Print',
         check: 'Check',
         retry: 'Try again',
         score: 'Score',
@@ -1216,6 +1250,7 @@ export const UI_LABELS = {
         noAnswersYet: 'No answers yet',
         zoneLabel: 'Zone',
         quizAnswerLabel: 'Correct answer',
+        explanationLabel: 'Explanation',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
         approveConfirmBody: 'It will be published immediately.',
@@ -1249,6 +1284,17 @@ export const UI_LABELS = {
         removeError: 'Could not remove the activity. Try again.',
         confirmCancel: 'Cancel',
         confirmAccept: 'Confirm',
+      },
+      print: {
+        pageDescription: 'Print-friendly version of this English activity.',
+        noLevel: 'No level',
+        print: 'Print',
+        includeAnswers: 'Include answers',
+        choicesLabel: 'Options',
+        answersHeading: 'Answer key',
+        explanationLabel: 'Why',
+        worksheetLabel: 'Sheet',
+        quizLabel: 'Questions',
       },
     },
     notFound: {

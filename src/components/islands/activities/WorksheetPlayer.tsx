@@ -35,6 +35,7 @@
  * or whenever the zone's own input/select is itself focused.
  */
 import { useEffect, useRef, useState } from 'react';
+import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
@@ -108,6 +109,12 @@ export default function WorksheetPlayer({
   // below regardless of rotation.
   const [containerHeight, setContainerHeight] = useState(0);
   const isQuarterTurn = rotation === 90 || rotation === 270;
+  // D5 "¿Por qué?": which zone's explanation popover the learner explicitly
+  // clicked open — hover/focus reveal it too, but purely via CSS
+  // (`group-hover`/`group-focus-within`, same mechanism the speak badge
+  // already uses), so this state only needs to cover the click case (the
+  // task's third trigger, load-bearing on touch devices with no real hover).
+  const [openExplanationId, setOpenExplanationId] = useState<string | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -207,7 +214,13 @@ export default function WorksheetPlayer({
                   type="button"
                   data-testid={`player-zone-tap-${zone.id}`}
                   onClick={() => onZoneTap(zone.id)}
-                  disabled={practice?.disabled}
+                  // NOT disabled once graded (D5, "¿Por qué?"): the tap
+                  // target must stay reachable so the learner can still open
+                  // the sheet to REVIEW an incorrect zone's explanation —
+                  // what actually locks the answer is the sheet's own
+                  // input/option buttons (`practice.disabled`, passed
+                  // straight through by `WorksheetPracticePlayerMobile`),
+                  // not this outer tap target.
                   aria-label={accessibleLabel}
                   aria-pressed={isActive}
                   className={cn(
@@ -302,6 +315,42 @@ export default function WorksheetPlayer({
                   className="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                 >
                   <SpeakButton text={zone.speak} lang={lang} compact />
+                </div>
+              )}
+              {/* D5 "¿Por qué?": only once graded AND only for THIS zone's
+                  own incorrect verdict — never before checking, never for a
+                  correct answer. Opposite corner from the speak badge above
+                  so the two never overlap on a zone that has both. The
+                  popover is a plain descendant of this zone's own `group`
+                  wrapper, so it reveals via hover/focus exactly like the
+                  speak badge (pure CSS, `group-hover`/`group-focus-within`);
+                  `openExplanationId` only adds the click trigger on top. */}
+              {zone.explanation && isGraded && isCorrect === false && (
+                <div data-testid={`player-zone-explanation-${zone.id}`} className="absolute -left-3 -top-3 z-10">
+                  <button
+                    type="button"
+                    data-testid={`player-zone-explanation-button-${zone.id}`}
+                    aria-label={t.explanationButtonLabel}
+                    aria-describedby={`zone-explanation-${zone.id}`}
+                    aria-expanded={openExplanationId === zone.id}
+                    onClick={() =>
+                      setOpenExplanationId((prev) => (prev === zone.id ? null : zone.id))
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-amber-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  >
+                    <LightbulbIcon aria-hidden="true" weight="fill" />
+                  </button>
+                  <div
+                    id={`zone-explanation-${zone.id}`}
+                    role="note"
+                    data-testid={`player-zone-explanation-popover-${zone.id}`}
+                    className={cn(
+                      'pointer-events-none absolute left-0 top-full z-20 mt-1 w-48 rounded-md border border-border bg-card p-2 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+                      openExplanationId === zone.id && 'pointer-events-auto opacity-100',
+                    )}
+                  >
+                    {zone.explanation}
+                  </div>
                 </div>
               )}
             </div>

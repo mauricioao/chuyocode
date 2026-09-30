@@ -222,6 +222,31 @@ export function setSlotAnswer(draft: Draft, slotId: string, answer: string[]): D
   return { ...draft, slots: draft.slots.map((s) => (s.id === slotId ? { ...s, answer } : s)) };
 }
 
+/**
+ * Set (or clear, with a blank-after-trim value) a slot's optional "¿Por
+ * qué?" explanation (D5) — same "blank after trim = absent" rule
+ * `WorksheetZoneEditor.tsx`'s own `setSpeak` gives a zone's `speak` field,
+ * so a cleared field and a never-set one are the same on-disk shape.
+ */
+export function setSlotExplanation(draft: Draft, slotId: string, explanation: string): Draft {
+  const trimmed = explanation.trim();
+  return {
+    ...draft,
+    slots: draft.slots.map((s) => {
+      if (s.id !== slotId) return s;
+      const next = { ...s };
+      // Stores the RAW value (not `trimmed`) while the author is still
+      // typing — same reasoning as `WorksheetZoneEditor.tsx`'s own
+      // `setSpeak`: trimming on every keystroke would eat a trailing space
+      // the author is mid-typing before the next word. `parseSlot`
+      // (`exercisePayload.ts`) trims for real at the parse boundary.
+      if (trimmed.length > 0) next.explanation = explanation;
+      else delete next.explanation;
+      return next;
+    }),
+  };
+}
+
 /** Replace a whole named pool's items. Creates the pool if it did not exist. */
 export function setPool(draft: Draft, poolName: string, pool: Pool): Draft {
   return { ...draft, pools: { ...draft.pools, [poolName]: pool } };

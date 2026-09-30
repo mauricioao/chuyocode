@@ -20,6 +20,7 @@
  * Answers are NEVER stored here — same rule `ActivityPracticeIsland`'s own
  * header states; `response` is that component's plain, ephemeral state.
  */
+import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { QuizBlock } from '@/lib/activities/blocks';
@@ -110,6 +111,21 @@ export default function QuizBlockPractice({ lang, block, response, onChange, out
               <span data-testid={`quiz-slot-result-${slot.id}`} className="sr-only">
                 {outcome === 'correct' ? t.correct : t.incorrect}
               </span>
+            )}
+
+            {/* D5 "¿Por qué?": only once graded AND only while THIS
+                question is incorrect — never before checking, never for a
+                correct answer. Inline under the question (no popover here,
+                unlike the worksheet zone: a quiz question already has the
+                room a tiny drawn zone does not). */}
+            {slot.explanation && outcome === 'incorrect' && (
+              <div
+                data-testid={`quiz-slot-explanation-${slot.id}`}
+                className="flex items-start gap-1.5 rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground"
+              >
+                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
+                <p>{slot.explanation}</p>
+              </div>
             )}
           </div>
         );

@@ -42,6 +42,15 @@ export interface Slot {
   pool?: string;
   /** Accepted answers: item ids, or literal strings for `text` slots. */
   answer: string[];
+  /**
+   * Optional author-supplied "¿Por qué?" explanation (D5, activities' quiz
+   * block), shown to the learner only AFTER checking, only for THIS
+   * question, and only while it is incorrect. `undefined` = no explanation
+   * for this slot — including every curated exercise authored before this
+   * field existed. Trimmed, non-empty, capped at
+   * {@link MAX_SLOT_EXPLANATION_LENGTH} characters.
+   */
+  explanation?: string;
 }
 
 /**
@@ -54,6 +63,9 @@ export type PoolPlacement = 'bottom' | 'top' | 'left' | 'right';
 
 /** The accepted values, in one place, so parsing and typing cannot drift. */
 const POOL_PLACEMENTS: readonly string[] = ['bottom', 'top', 'left', 'right'];
+
+/** A slot's optional "¿Por qué?" explanation (D5) may not exceed this many characters. */
+export const MAX_SLOT_EXPLANATION_LENGTH = 300;
 
 /**
  * OPTIONAL per-exercise layout hints.
@@ -283,6 +295,9 @@ function parseSlot(value: unknown, mode: PayloadParseMode): Slot | null {
   // failure in 'submit' mode, a normal mid-drafting state in 'draft' mode.
   if (mode === 'submit' && answer.length === 0) return null;
 
+  const explanation = parseSlotExplanation(value.explanation);
+  if (explanation === INVALID_EXPLANATION) return null;
+
   const slot: Slot = {
     id: value.id,
     label: typeof value.label === 'string' ? value.label : '',
@@ -290,10 +305,31 @@ function parseSlot(value: unknown, mode: PayloadParseMode): Slot | null {
     answer,
   };
   if (typeof value.pool === 'string') slot.pool = value.pool;
+  if (explanation !== undefined) slot.explanation = explanation;
   // Every other authored key is dropped here, deliberately. A slot is rebuilt
   // field by field rather than spread, so a key nothing reads cannot survive
   // the boundary and cannot be mistaken downstream for a feature that works.
   return slot;
+}
+
+/**
+ * Parse a slot's optional `explanation` text (D5, "¿Por qué?"), or the
+ * sentinel `INVALID_EXPLANATION` if present but unusable — a non-string, or
+ * one that stays over {@link MAX_SLOT_EXPLANATION_LENGTH} after trimming,
+ * fails the WHOLE slot, same all-or-nothing posture `activities/blocks.ts`
+ * gives a zone's own `speak`/`explanation`. A missing value, or one that is
+ * blank after trimming, is NOT an error: both parse to `undefined`, meaning
+ * "no explanation for this slot" — every curated exercise authored before
+ * this field existed included.
+ */
+const INVALID_EXPLANATION = Symbol('invalid-explanation');
+
+function parseSlotExplanation(value: unknown): string | undefined | typeof INVALID_EXPLANATION {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return INVALID_EXPLANATION;
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_SLOT_EXPLANATION_LENGTH) return INVALID_EXPLANATION;
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 /** Parse one block, or `null` when its own shape is unusable. Dropped rather

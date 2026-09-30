@@ -51,7 +51,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVertical';
-import type { Payload, RowBlock } from '@/lib/exercisePayload';
+import { MAX_SLOT_EXPLANATION_LENGTH, type Payload, type RowBlock } from '@/lib/exercisePayload';
 import {
   addRowBlock,
   draftToPayload,
@@ -60,6 +60,7 @@ import {
   setPool,
   setRowLabel,
   setSlotAnswer,
+  setSlotExplanation,
   setSlotInput,
   setSlotPool,
   type Draft,
@@ -76,6 +77,12 @@ export const COPY = {
     deleteQuestion: 'Eliminar pregunta',
     questionLabel: 'Pregunta',
     emptyQuestionPreview: '(Sin enunciado todavía)',
+    // "¿Por qué?" explicación (D5): opcional por pregunta, se muestra al
+    // alumno solo después de comprobar, y solo si esa pregunta quedó
+    // incorrecta.
+    explanationLabel: '¿Por qué? (explicación)',
+    explanationPlaceholder: 'Explicación opcional',
+    explanationHint: 'Se muestra al alumno si se equivoca',
   },
   en: {
     addQuestion: 'Add question',
@@ -85,6 +92,9 @@ export const COPY = {
     deleteQuestion: 'Delete question',
     questionLabel: 'Question',
     emptyQuestionPreview: '(No sentence yet)',
+    explanationLabel: 'Why? (explanation)',
+    explanationPlaceholder: 'Optional explanation',
+    explanationHint: 'Shown to the learner if they get it wrong',
   },
 } as const;
 
@@ -320,6 +330,27 @@ export default function QuizBlockEditor({
               />
             }
           />
+
+          {/* D5 "¿Por qué?": optional per-question explanation, shown to
+              the learner only once they check and get THIS question
+              wrong. Sits under the answers, local to this editor (not
+              `SlotAnswerEditor`, which the curated `/admin/ejercicios`
+              authoring surface also reuses and must stay unchanged). */}
+          <div className="mt-2 flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">{t.explanationLabel}</span>
+            <textarea
+              data-testid={`quiz-explanation-${selectedSlot.id}`}
+              aria-label={t.explanationLabel}
+              value={selectedSlot.explanation ?? ''}
+              maxLength={MAX_SLOT_EXPLANATION_LENGTH}
+              placeholder={t.explanationPlaceholder}
+              onChange={(e) => commit(setSlotExplanation(draft, selectedSlot.id, e.target.value))}
+              rows={2}
+              className="resize-none rounded border border-border bg-background px-2 py-1 text-sm text-foreground"
+            />
+            <span className="text-xs text-muted-foreground">{t.explanationHint}</span>
+          </div>
+
           {incompleteSlotId === selectedSlot.id && incompleteMessage && (
             <p data-testid={`quiz-incomplete-${selectedSlot.id}`} className="text-sm text-destructive">
               {incompleteMessage}

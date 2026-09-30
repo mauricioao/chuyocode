@@ -14,6 +14,7 @@ import {
   hasAudio,
   poolPlacement,
   splitLabelAtBlank,
+  MAX_SLOT_EXPLANATION_LENGTH,
   type Payload,
 } from './exercisePayload';
 
@@ -159,6 +160,57 @@ describe('parsePayload — draft mode', () => {
 
   it('still rejects a non-array slots value', () => {
     expect(parsePayload({ pools: {}, slots: 'nope' }, 'draft')).toBeNull();
+  });
+});
+
+/**
+ * A slot's optional "¿Por qué?" explanation (D5, activities' quiz block).
+ * OPTIONAL and IGNORED IF ABSENT — every curated exercise written before
+ * this field existed keeps parsing exactly as before, in both modes.
+ */
+describe('parsePayload — slot explanation (D5, "¿Por qué?")', () => {
+  const withExplanation = (explanation: unknown) => ({
+    pools: {},
+    slots: [{ id: 's1', label: 'L', input: 'text', answer: ['x'], explanation }],
+  });
+
+  it('accepts a slot with no explanation at all', () => {
+    const payload = parsePayload({
+      pools: {},
+      slots: [{ id: 's1', label: 'L', input: 'text', answer: ['x'] }],
+    });
+    expect(payload?.slots[0]).not.toHaveProperty('explanation');
+  });
+
+  it('accepts and trims a valid explanation', () => {
+    const payload = parsePayload(withExplanation('  Because "sits" is third person.  '));
+    expect(payload?.slots[0]?.explanation).toBe('Because "sits" is third person.');
+  });
+
+  it('treats a blank-after-trim explanation as absent, not an error', () => {
+    const payload = parsePayload(withExplanation('   '));
+    expect(payload).not.toBeNull();
+    expect(payload?.slots[0]).not.toHaveProperty('explanation');
+  });
+
+  it('accepts an explanation at exactly MAX_SLOT_EXPLANATION_LENGTH characters', () => {
+    const explanation = 'a'.repeat(MAX_SLOT_EXPLANATION_LENGTH);
+    expect(parsePayload(withExplanation(explanation))).not.toBeNull();
+  });
+
+  it('rejects an explanation over MAX_SLOT_EXPLANATION_LENGTH characters', () => {
+    const explanation = 'a'.repeat(MAX_SLOT_EXPLANATION_LENGTH + 1);
+    expect(parsePayload(withExplanation(explanation))).toBeNull();
+  });
+
+  it('rejects a non-string explanation value', () => {
+    expect(parsePayload(withExplanation(42))).toBeNull();
+  });
+
+  it('works the same in draft mode', () => {
+    const raw = { pools: {}, slots: [{ id: 's1', label: 'L', input: 'text', answer: [], explanation: 'Because' }] };
+    const payload = parsePayload(raw, 'draft');
+    expect(payload?.slots[0]).toMatchObject({ answer: [], explanation: 'Because' });
   });
 });
 

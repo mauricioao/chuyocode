@@ -82,7 +82,13 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import { MAX_ZONE_SPEAK_LENGTH, type ImageRef, type Rotation, type Zone } from '@/lib/activities/blocks';
+import {
+  MAX_ZONE_SPEAK_LENGTH,
+  MAX_ZONE_EXPLANATION_LENGTH,
+  type ImageRef,
+  type Rotation,
+  type Zone,
+} from '@/lib/activities/blocks';
 import {
   rectFromDrag,
   moveRect,
@@ -879,6 +885,7 @@ export default function WorksheetZoneEditor({
               kind: 'text',
               answers: selectedZone.answers.length > 0 ? selectedZone.answers : [''],
               speak: selectedZone.speak,
+              explanation: selectedZone.explanation,
             }
           : {
               id: selectedZone.id,
@@ -890,6 +897,7 @@ export default function WorksheetZoneEditor({
               answers: [],
               options: selectedZone.options && selectedZone.options.length >= 2 ? selectedZone.options : ['', ''],
               speak: selectedZone.speak,
+              explanation: selectedZone.explanation,
             };
       onZonesChange(zones.map((z) => (z.id === next.id ? next : z)));
     },
@@ -917,6 +925,24 @@ export default function WorksheetZoneEditor({
       const trimmed = speak.trim();
       onZonesChange(
         zones.map((z) => (z.id === selectedZone.id ? { ...z, speak: trimmed.length > 0 ? speak : undefined } : z)),
+      );
+    },
+    [selectedZone, zones, onZonesChange],
+  );
+
+  /**
+   * D5 "¿Por qué?": the zone's optional explanation, shown to the learner
+   * only after an incorrect check. Same "blank after trim = absent" rule as
+   * {@link setSpeak} above.
+   */
+  const setExplanation = useCallback(
+    (explanation: string) => {
+      if (!selectedZone) return;
+      const trimmed = explanation.trim();
+      onZonesChange(
+        zones.map((z) =>
+          z.id === selectedZone.id ? { ...z, explanation: trimmed.length > 0 ? explanation : undefined } : z,
+        ),
       );
     },
     [selectedZone, zones, onZonesChange],
@@ -1157,6 +1183,25 @@ export default function WorksheetZoneEditor({
           </Button>
         </div>
       )}
+
+      {/* D5 "¿Por qué?": optional per-zone explanation, shown to the
+          learner only once they check and get THIS zone wrong. Sits under
+          the answers, for both zone kinds — same placement as the answers
+          section itself relative to the rest of the panel. */}
+      <div className="mt-4 flex flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">{t.zoneExplanationLabel}</span>
+        <textarea
+          data-testid="zone-properties-explanation-input"
+          aria-label={t.zoneExplanationLabel}
+          value={selectedZone.explanation ?? ''}
+          maxLength={MAX_ZONE_EXPLANATION_LENGTH}
+          placeholder={t.zoneExplanationPlaceholder}
+          onChange={(e) => setExplanation(e.target.value)}
+          rows={2}
+          className="resize-none rounded border border-border bg-background px-2 py-1 text-sm text-foreground"
+        />
+        <span className="text-xs text-muted-foreground">{t.zoneExplanationHint}</span>
+      </div>
     </div>
   ) : null;
 
