@@ -39,12 +39,26 @@ import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { blocksForStep } from '@/lib/exerciseBlocks';
 import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exercisePayload';
-import { deriveGameItems, availableGameModes, type GameMode } from '@/lib/activities/gameModes';
+import {
+  deriveGameItems,
+  availableGameModes,
+  anagramEligible,
+  hangmanEligible,
+  deriveTrueFalseItems,
+  seedFromString,
+  type GameMode,
+} from '@/lib/activities/gameModes';
 import { rendererFor } from '@/components/islands/mechanics/registry';
 import UnavailableRenderer from '@/components/islands/mechanics/UnavailableRenderer';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
+import QuizSpeakingCards from './QuizSpeakingCards';
+import QuizWheel from './QuizWheel';
+import QuizAnagram from './QuizAnagram';
+import QuizHangman from './QuizHangman';
+import QuizTrueFalse from './QuizTrueFalse';
+import QuizOpenBox from './QuizOpenBox';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -62,7 +76,17 @@ export interface QuizBlockPracticeProps {
 }
 
 /** Modes this component can actually render. */
-const SUPPORTED_MODES: readonly GameMode[] = ['quiz', 'cards', 'match'];
+const SUPPORTED_MODES: readonly GameMode[] = [
+  'quiz',
+  'cards',
+  'match',
+  'speak',
+  'wheel',
+  'anagram',
+  'hangman',
+  'truefalse',
+  'openbox',
+];
 
 export default function QuizBlockPractice({
   lang,
@@ -80,24 +104,40 @@ export default function QuizBlockPractice({
 
   const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
   const modes = useMemo(
-    () => availableGameModes(gameItems).filter((m) => SUPPORTED_MODES.includes(m)),
-    [gameItems],
+    () => availableGameModes(gameItems, payload).filter((m) => SUPPORTED_MODES.includes(m)),
+    [gameItems, payload],
   );
   // A mode this block no longer offers (edited down since it was chosen)
   // falls back to `quiz` rather than rendering nothing.
   const effectiveMode = modes.includes(mode) ? mode : 'quiz';
 
-  if (effectiveMode === 'cards' || effectiveMode === 'match') {
+  if (
+    effectiveMode === 'cards' ||
+    effectiveMode === 'match' ||
+    effectiveMode === 'speak' ||
+    effectiveMode === 'wheel' ||
+    effectiveMode === 'anagram' ||
+    effectiveMode === 'hangman' ||
+    effectiveMode === 'truefalse' ||
+    effectiveMode === 'openbox'
+  ) {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
         {modes.length > 1 && (
           <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
         )}
-        {effectiveMode === 'cards' ? (
-          <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />
-        ) : (
-          <QuizMatching lang={lang} items={gameItems} seed={block.id} />
+        {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'match' && <QuizMatching lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'anagram' && (
+          <QuizAnagram lang={lang} items={anagramEligible(gameItems)} seed={block.id} />
         )}
+        {effectiveMode === 'hangman' && <QuizHangman lang={lang} items={hangmanEligible(gameItems)} />}
+        {effectiveMode === 'truefalse' && (
+          <QuizTrueFalse lang={lang} items={deriveTrueFalseItems(payload, seedFromString(block.id))} />
+        )}
+        {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
       </div>
     );
   }

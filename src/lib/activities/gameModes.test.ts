@@ -5,7 +5,13 @@ import {
   hasUniqueAnswers,
   shuffleWithSeed,
   seedFromString,
+  isSingleWord,
+  anagramEligible,
+  hangmanEligible,
+  trueFalseEligibleCount,
+  deriveTrueFalseItems,
   type GameItem,
+  type TrueFalseItem,
 } from './gameModes';
 import type { Payload } from '@/lib/exercisePayload';
 
@@ -127,40 +133,201 @@ describe('hasUniqueAnswers', () => {
   });
 });
 
+// Multi-word answers throughout this describe block, deliberately: they are
+// never eligible for anagram/hangman (`isSingleWord` requires one letters-only
+// word), which keeps these assertions about cards/match/speak/wheel/openbox
+// from also having to account for the two single-word-only modes. Those two
+// get their own dedicated tests below.
 describe('availableGameModes', () => {
   it('offers only quiz for zero items', () => {
     expect(availableGameModes([])).toEqual(['quiz']);
   });
 
-  it('offers quiz + cards from one item, but not match', () => {
-    const items: GameItem[] = [{ id: '1', prompt: 'a', answer: 'cat' }];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards']);
+  it('offers quiz + cards + speak from one item, but not match/wheel/openbox', () => {
+    const items: GameItem[] = [{ id: '1', prompt: 'a', answer: 'a red cat' }];
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak']);
   });
 
-  it('offers quiz + cards for two items (still short of match)', () => {
+  it('offers quiz + cards + speak + wheel + openbox for two items (still short of match)', () => {
     const items: GameItem[] = [
-      { id: '1', prompt: 'a', answer: 'cat' },
-      { id: '2', prompt: 'b', answer: 'dog' },
+      { id: '1', prompt: 'a', answer: 'a red cat' },
+      { id: '2', prompt: 'b', answer: 'a brown dog' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
   });
 
-  it('offers all three modes from three items with unique answers', () => {
+  it('offers match too from three items with unique answers', () => {
     const items: GameItem[] = [
-      { id: '1', prompt: 'a', answer: 'cat' },
-      { id: '2', prompt: 'b', answer: 'dog' },
-      { id: '3', prompt: 'c', answer: 'bird' },
+      { id: '1', prompt: 'a', answer: 'a red cat' },
+      { id: '2', prompt: 'b', answer: 'a brown dog' },
+      { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'match']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'match', 'speak', 'wheel', 'openbox']);
   });
 
   it('withholds match from three items when two answers collide', () => {
     const items: GameItem[] = [
-      { id: '1', prompt: 'a', answer: 'cat' },
-      { id: '2', prompt: 'b', answer: 'cat' },
-      { id: '3', prompt: 'c', answer: 'bird' },
+      { id: '1', prompt: 'a', answer: 'a red cat' },
+      { id: '2', prompt: 'b', answer: 'a red cat' },
+      { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
+  });
+
+  it('offers anagram/hangman only once an eligible single-word answer exists', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'a long phrase' },
+    ];
+    expect(availableGameModes(items)).toContain('anagram');
+    expect(availableGameModes(items)).toContain('hangman');
+  });
+
+  it('withholds anagram/hangman when no answer is a single eligible word', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'two words' },
+      { id: '2', prompt: 'b', answer: 'ok' }, // too short
+    ];
+    const modes = availableGameModes(items);
+    expect(modes).not.toContain('anagram');
+    expect(modes).not.toContain('hangman');
+  });
+
+  it('withholds truefalse without a payload, even with enough items', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'dog' },
+    ];
+    expect(availableGameModes(items)).not.toContain('truefalse');
+  });
+
+  it('offers truefalse once the payload has 2+ eligible slots', () => {
+    const payload = payloadWith(
+      [
+        { id: 's1', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['cat'] },
+        { id: 's2', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['dog'] },
+      ],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }, { id: 'bird', text: 'bird' }] },
+    );
+    const items = deriveGameItems(payload);
+    expect(availableGameModes(items, payload)).toContain('truefalse');
+  });
+});
+
+describe('isSingleWord', () => {
+  it('accepts a plain letters-only word within range', () => {
+    expect(isSingleWord('cat', 3, 12)).toBe(true);
+  });
+
+  it('rejects a phrase with a space', () => {
+    expect(isSingleWord('a cat', 3, 12)).toBe(false);
+  });
+
+  it('rejects words outside the length range', () => {
+    expect(isSingleWord('ok', 3, 12)).toBe(false);
+    expect(isSingleWord('a'.repeat(13), 3, 12)).toBe(false);
+  });
+
+  it('rejects non-letter characters', () => {
+    expect(isSingleWord('cat9', 3, 12)).toBe(false);
+    expect(isSingleWord("can't", 3, 12)).toBe(false);
+  });
+
+  it('trims surrounding whitespace before checking', () => {
+    expect(isSingleWord('  cat  ', 3, 12)).toBe(true);
+  });
+});
+
+describe('anagramEligible / hangmanEligible', () => {
+  const items: GameItem[] = [
+    { id: '1', prompt: 'a', answer: 'cat' },
+    { id: '2', prompt: 'b', answer: 'a long phrase' },
+    { id: '3', prompt: 'c', answer: 'butterfly' }, // 9 letters: eligible for both
+  ];
+
+  it('keeps only single-word answers within the anagram length range', () => {
+    expect(anagramEligible(items).map((i) => i.id)).toEqual(['1', '3']);
+  });
+
+  it('keeps only single-word answers within the (longer) hangman length range', () => {
+    expect(hangmanEligible(items).map((i) => i.id)).toEqual(['1', '3']);
+  });
+});
+
+describe('trueFalseEligibleCount / deriveTrueFalseItems', () => {
+  it('counts zero for a payload with no pool-backed slots', () => {
+    const payload = payloadWith([{ id: 's1', label: 'The cat ___.', input: 'text', answer: ['sits'] }]);
+    expect(trueFalseEligibleCount(payload)).toBe(0);
+    expect(deriveTrueFalseItems(payload, 1)).toEqual([]);
+  });
+
+  it('excludes a slot whose label has no gap to fill', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'Pick one', input: 'choice', pool: 'p1', answer: ['cat'] }],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+    );
+    expect(trueFalseEligibleCount(payload)).toBe(0);
+  });
+
+  it('excludes a slot whose pool has no other option to use as a wrong filler', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['cat'] }],
+      { p1: [{ id: 'cat', text: 'cat' }] },
+    );
+    expect(trueFalseEligibleCount(payload)).toBe(0);
+  });
+
+  it('counts every slot with a gap and a wrong option', () => {
+    const payload = payloadWith(
+      [
+        { id: 's1', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['cat'] },
+        { id: 's2', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['dog'] },
+      ],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+    );
+    expect(trueFalseEligibleCount(payload)).toBe(2);
+  });
+
+  it('fills the gap with the correct answer when seeded true, marking isTrue', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'The animal is a ___.', input: 'choice', pool: 'p1', answer: ['cat'] }],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+    );
+    // Find a seed that lands on isTrue: true (deterministic once found).
+    const trueSeed = [...Array(50).keys()].find((s) => deriveTrueFalseItems(payload, s)[0]?.isTrue === true)!;
+    const item = deriveTrueFalseItems(payload, trueSeed)[0]!;
+    expect(item.isTrue).toBe(true);
+    expect(item.statement).toBe('The animal is a cat.');
+  });
+
+  it('fills the gap with a wrong pool option when seeded false, marking isTrue false', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'The animal is a ___.', input: 'choice', pool: 'p1', answer: ['cat'] }],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+    );
+    const falseSeed = [...Array(50).keys()].find((s) => deriveTrueFalseItems(payload, s)[0]?.isTrue === false)!;
+    const item = deriveTrueFalseItems(payload, falseSeed)[0]!;
+    expect(item.isTrue).toBe(false);
+    expect(item.statement).toBe('The animal is a dog.');
+  });
+
+  it('is deterministic for the same payload and seed', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['cat'] }],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+    );
+    expect(deriveTrueFalseItems(payload, 7)).toEqual<TrueFalseItem[]>(deriveTrueFalseItems(payload, 7));
+  });
+
+  it('skips ineligible slots but still derives eligible ones, in authored order', () => {
+    const payload = payloadWith(
+      [
+        { id: 's1', label: 'No gap here', input: 'text', answer: ['x'] },
+        { id: 's2', label: 'Pick: ___', input: 'choice', pool: 'p1', answer: ['cat'] },
+      ],
+      { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+    );
+    expect(deriveTrueFalseItems(payload, 1).map((i) => i.id)).toEqual(['s2']);
   });
 });
 

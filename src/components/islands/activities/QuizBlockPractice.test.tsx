@@ -276,6 +276,113 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
+  it('renders Cartas when mode="speak"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="speak"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('speaking-cards')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('renders Ruleta when mode="wheel"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="wheel"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-wheel')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('renders Anagrama when mode="anagram", filtered to eligible single-word answers', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="anagram"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-anagram')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('renders Ahorcado when mode="hangman", filtered to eligible single-word answers', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="hangman"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-hangman')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('renders Verdadero o falso when mode="truefalse", for a block with pool-backed eligible slots', () => {
+    const TRUEFALSE_BLOCK: QuizBlock = {
+      id: 'q-tf',
+      type: 'quiz',
+      payload: {
+        pools: { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
+        slots: [
+          { id: 's1', label: 'The animal is a ___.', input: 'choice', pool: 'p1', answer: ['cat'] },
+          { id: 's2', label: 'The pet is a ___.', input: 'choice', pool: 'p1', answer: ['dog'] },
+        ],
+      },
+    };
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={TRUEFALSE_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="truefalse"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-truefalse')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('renders Abre la caja when mode="openbox"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="openbox"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-openbox')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
   it('reports a mode change through onModeChange', () => {
     const onModeChange = vi.fn();
     render(

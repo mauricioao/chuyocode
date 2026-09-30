@@ -30,14 +30,44 @@ export interface GameItem {
   explanation?: string;
 }
 
-/** A playable mode for a quiz block. */
-export type GameMode = 'quiz' | 'cards' | 'match';
+/**
+ * A playable mode for a quiz block. `speak` (Cartas/speaking cards), `wheel`
+ * (Ruleta), `anagram` (Anagrama), `hangman` (Ahorcado), `truefalse`
+ * (Verdadero o falso) and `openbox` (Abre la caja) are the Wordwall-style
+ * "switch template" games added in batch 1, alongside the original
+ * `cards`/`match`.
+ */
+export type GameMode = 'quiz' | 'cards' | 'match' | 'speak' | 'wheel' | 'anagram' | 'hangman' | 'truefalse' | 'openbox';
 
 /** `cards` is worth flipping through from a single item. */
 const MIN_CARDS_ITEMS = 1;
 
 /** `match` needs at least this many pairs — fewer makes the last pair a guaranteed, un-losable match. */
 const MIN_MATCH_ITEMS = 3;
+
+/** `speak` (Cartas) is worth dealing from a single item, same as `cards`. */
+const MIN_SPEAK_ITEMS = 1;
+
+/** `wheel` (Ruleta) needs at least two segments — one segment is not a spin. */
+const MIN_WHEEL_ITEMS = 2;
+
+/** `anagram`/`hangman` need only one eligible single-word answer to be worth offering. */
+const MIN_ANAGRAM_ITEMS = 1;
+const MIN_HANGMAN_ITEMS = 1;
+
+/** `truefalse` needs at least two eligible statements — one is a guaranteed "verdadero". */
+const MIN_TRUEFALSE_ITEMS = 2;
+
+/** `openbox` (Abre la caja) needs at least two boxes — one box is not a grid. */
+const MIN_OPENBOX_ITEMS = 2;
+
+/** `anagram` tiles stay readable and quick to solve within this letter-count range. */
+const ANAGRAM_MIN_LEN = 3;
+const ANAGRAM_MAX_LEN = 12;
+
+/** `hangman` allows slightly longer words than `anagram` — no tile grid to keep compact. */
+const HANGMAN_MIN_LEN = 3;
+const HANGMAN_MAX_LEN = 14;
 
 /**
  * Resolve one slot's FIRST accepted answer to display text.
@@ -88,15 +118,102 @@ export function hasUniqueAnswers(items: readonly GameItem[]): boolean {
 }
 
 /**
- * Which modes a block can offer, from its own derived items. `quiz` is
- * always first — the block's native, always-authored form — and `cards`/
- * `match` appear only once there is enough content to make them meaningful
- * (design brief, "the same questions ... can be played as different games").
+ * A single word, letters-only (no spaces, digits or punctuation), whose
+ * length falls in `[min, max]` — what `anagram`/`hangman` need from an
+ * answer to be playable as tiles or a guessed word.
  */
-export function availableGameModes(items: readonly GameItem[]): GameMode[] {
+export function isSingleWord(answer: string, min: number, max: number): boolean {
+  const trimmed = answer.trim();
+  return /^[A-Za-z]+$/.test(trimmed) && trimmed.length >= min && trimmed.length <= max;
+}
+
+/** Items whose answer is playable as an `anagram` (letters shuffled into tiles). */
+export function anagramEligible(items: readonly GameItem[]): GameItem[] {
+  return items.filter((item) => isSingleWord(item.answer, ANAGRAM_MIN_LEN, ANAGRAM_MAX_LEN));
+}
+
+/** Items whose answer is playable as a `hangman` word. */
+export function hangmanEligible(items: readonly GameItem[]): GameItem[] {
+  return items.filter((item) => isSingleWord(item.answer, HANGMAN_MIN_LEN, HANGMAN_MAX_LEN));
+}
+
+/** One `truefalse` statement: a slot's prompt with its gap filled by either its correct answer or a wrong pool option. */
+export interface TrueFalseItem {
+  id: string;
+  statement: string;
+  isTrue: boolean;
+}
+
+/** A pool's own display texts (same fallback chain as {@link resolveFirstAnswer}), skipping any item with neither. */
+function poolOptionTexts(payload: Payload, poolName: string): string[] {
+  const pool = payload.pools[poolName] ?? [];
+  return pool.map((item) => item.text ?? item.media).filter((value): value is string => Boolean(value));
+}
+
+/** A slot's pool options other than its own correct answer — the candidates for a "falso" filler. */
+function wrongOptionsFor(payload: Payload, slot: Slot, correctAnswer: string): string[] {
+  if (!slot.pool) return [];
+  return poolOptionTexts(payload, slot.pool).filter(
+    (text) => normalizeAnswer(text) !== normalizeAnswer(correctAnswer),
+  );
+}
+
+/**
+ * A slot is playable as `truefalse` only when it has a gap to fill (the
+ * statement IS the label with the gap filled — nothing to fill in a
+ * gap-less label) AND at least one pool option other than the correct
+ * answer to offer as a "falso" filler.
+ */
+function eligibleForTrueFalse(payload: Payload, slot: Slot): boolean {
+  if (slot.answer.length === 0 || !slot.pool) return false;
+  if (!splitLabelAtBlank(slot.label)) return false;
+  return wrongOptionsFor(payload, slot, resolveFirstAnswer(payload, slot)).length > 0;
+}
+
+/** How many of a payload's slots are eligible for `truefalse` — `availableGameModes`'s own check, independent of any seed. */
+export function trueFalseEligibleCount(payload: Payload): number {
+  return payload.slots.filter((slot) => eligibleForTrueFalse(payload, slot)).length;
+}
+
+/**
+ * Derive every playable {@link TrueFalseItem}, one per eligible slot, in
+ * authored order. Each statement is seeded 50/50 between its correct answer
+ * (a true statement) and a random wrong pool option (a false one) — the SAME
+ * `seed` always reproduces the same set of statements, matching every other
+ * seeded derivation in this module.
+ */
+export function deriveTrueFalseItems(payload: Payload, seed: number): TrueFalseItem[] {
+  const random = mulberry32(seed);
+  return payload.slots.flatMap((slot): TrueFalseItem[] => {
+    if (!eligibleForTrueFalse(payload, slot)) return [];
+    const correctAnswer = resolveFirstAnswer(payload, slot);
+    const wrongOptions = wrongOptionsFor(payload, slot, correctAnswer);
+    const isTrue = random() < 0.5;
+    const filler = isTrue ? correctAnswer : wrongOptions[Math.floor(random() * wrongOptions.length)]!;
+    const parts = splitLabelAtBlank(slot.label)!;
+    return [{ id: slot.id, statement: `${parts.before}${filler}${parts.after}`, isTrue }];
+  });
+}
+
+/**
+ * Which modes a block can offer, from its own derived items. `quiz` is
+ * always first — the block's native, always-authored form — and every other
+ * mode appears only once there is enough eligible content to make it
+ * meaningful (design brief, "the same questions ... can be played as
+ * different games"). `payload` is optional and only needed for `truefalse`
+ * (the one mode that reads pool data `GameItem` alone does not carry) — a
+ * caller that only has `items` still gets every other mode's availability.
+ */
+export function availableGameModes(items: readonly GameItem[], payload?: Payload): GameMode[] {
   const modes: GameMode[] = ['quiz'];
   if (items.length >= MIN_CARDS_ITEMS) modes.push('cards');
   if (items.length >= MIN_MATCH_ITEMS && hasUniqueAnswers(items)) modes.push('match');
+  if (items.length >= MIN_SPEAK_ITEMS) modes.push('speak');
+  if (items.length >= MIN_WHEEL_ITEMS) modes.push('wheel');
+  if (anagramEligible(items).length >= MIN_ANAGRAM_ITEMS) modes.push('anagram');
+  if (hangmanEligible(items).length >= MIN_HANGMAN_ITEMS) modes.push('hangman');
+  if (payload && trueFalseEligibleCount(payload) >= MIN_TRUEFALSE_ITEMS) modes.push('truefalse');
+  if (items.length >= MIN_OPENBOX_ITEMS) modes.push('openbox');
   return modes;
 }
 
