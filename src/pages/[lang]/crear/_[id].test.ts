@@ -130,6 +130,62 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('lg:overflow-hidden');
   });
 
+  // Full-height card fix (owner report: "with one worksheet block the card
+  // ends mid-screen, empty space down to the footer"). Root cause: the row
+  // `[id].astro` lays the card out in used to force `lg:items-start` on
+  // ITSELF, which overrides flexbox's default cross-axis STRETCH for every
+  // item in that row — including `ActivityEditorIsland`'s own root div,
+  // which has no explicit height of its own and so collapsed to its content
+  // height instead of the row's `lg:h-full`. The fix moves the top-alignment
+  // onto the `BackButton` wrapper's own `lg:self-start` and leaves the row at
+  // the default stretch, so the island (and its whole internal flex-column
+  // chain: root -> card -> body -> block list -> the focus-active block's
+  // canvas) fills the row's real height end to end. Asserts the actual
+  // classes on that chain, not just the absence of a hardcoded calc, so a
+  // future edit that reintroduces a row-level `items-start` (or drops any
+  // link of the chain) fails this test instead of only showing up as empty
+  // space in a screenshot.
+  it('stretches the editor card to the row\'s full height instead of collapsing to content (structural flex chain)', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+
+    // The row itself: `lg:h-full` (a real, bounded height from `main`), and
+    // crucially NO `lg:items-start` any more — that class name must not
+    // appear anywhere in the page (nothing else on this page has a reason to
+    // use it either).
+    expect(html).toContain('lg:h-full');
+    expect(html).not.toContain('lg:items-start');
+
+    // The back button's OWN wrapper keeps itself top-aligned instead, via
+    // `lg:self-start` — the row's default stretch is what everything else
+    // (the island) now relies on.
+    expect(html).toContain(
+      'class="hidden lg:flex lg:h-(--card-header-h) lg:flex-none lg:items-center lg:self-start"',
+    );
+
+    // The island's root and the card inside it: both still `lg:min-h-0
+    // lg:flex-1` (a bounded flex item, not a growing one) — the two links
+    // that turn the row's real, now-stretched height into a bounded column
+    // the card can never grow past.
+    expect(html).toContain('data-testid="activity-editor-island"');
+    expect(html).toContain('lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16');
+    expect(html).toContain('data-testid="activity-editor-card"');
+    expect(html).toContain('lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden');
+  });
+
   it('seeds the review-state badge from the stored activity status and note', async () => {
     editableActivity.value = {
       id: 'abc',

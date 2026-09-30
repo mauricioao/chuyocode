@@ -616,10 +616,14 @@ export default function ActivityEditorIsland({
     // whose `<main>` is a real, bounded `flex-1 min-h-0` at `lg:` (see that
     // layout's own header) — this root is `lg:flex-1 lg:min-h-0` inside the
     // ROW `[id].astro`'s section lays out (this island beside the floating
-    // `BackButton`, both `items-start` so they share the row's own top edge
-    // — no separate `BackButton` row above it any more, and no pixel-perfect
-    // header-height math to keep in sync here). `astro-island` (this
-    // component's own wrapper tag) renders as `display: contents`, so the
+    // `BackButton`, which top-aligns itself via its own `lg:self-start` —
+    // see that section's own comment on the FULL-HEIGHT CARD FIX). This root
+    // has NO explicit height of its own, so the row's default cross-axis
+    // STRETCH (unlike the old `items-start` the row used to force on every
+    // item) is exactly what gives it the row's real `lg:h-full` height end to
+    // end — no separate `BackButton` row above it any more, and no
+    // pixel-perfect header-height math to keep in sync here). `astro-island`
+    // (this component's own wrapper tag) renders as `display: contents`, so the
     // flex chain passes straight through it. `lg:pr-16` reserves room for
     // `EditorSideToolbar`'s `fixed right-3` icon rail (docked position) so
     // it never overlaps the canvas/properties column — unchanged by the
