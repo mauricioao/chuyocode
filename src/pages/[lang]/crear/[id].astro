@@ -88,7 +88,13 @@ const sourceActivity = activity.source
         (`items-start` on the row). No reserved height of its own: it
         overlaps into the gutter via its own `-ml-12`, so the row's actual
         width is unaffected by its presence. */}
-    <div class="hidden lg:flex lg:flex-none">
+    {/* `lg:h-(--card-header-h)` + `items-center` centers the 40px button
+        exactly inside a box the same height as the card's own 56px header
+        row (owner fix: "the back button sits above the title row" — it used
+        to inherit the row's `items-start` directly and sit flush with the
+        row's top edge instead of centered against the header it belongs
+        next to). */}
+    <div class="hidden lg:flex lg:h-(--card-header-h) lg:flex-none lg:items-center">
       <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
     </div>
     <ActivityEditorIsland
