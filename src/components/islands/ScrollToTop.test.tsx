@@ -188,10 +188,35 @@ describe('ScrollToTop — global mode (window scroll)', () => {
   });
 });
 
+describe('ScrollToTop — circular scroll progress ring (global mode)', () => {
+  it('starts at the full circumference (empty ring) before scrolling', () => {
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      value: 2400,
+      configurable: true,
+    });
+    render(<ScrollToTop lang="es" />);
+    const ring = screen.getByTestId('scroll-progress-ring');
+    const circumference = 2 * Math.PI * 18;
+    expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(circumference);
+  });
+
+  it('fills in (lower stroke-dashoffset) as the page scrolls further down', () => {
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      value: 2400,
+      configurable: true,
+    });
+    render(<ScrollToTop lang="es" />);
+    const ring = screen.getByTestId('scroll-progress-ring');
+    fireWindowScroll(1600); // (2400 - 800) = 1600 max scroll -> 100%
+    expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(0);
+  });
+});
+
 describe('ScrollToTop — scoped mode (container scroll)', () => {
   function makeScrollableDiv(): HTMLDivElement {
     const el = document.createElement('div');
     Object.defineProperty(el, 'clientHeight', { value: 400, configurable: true });
+    Object.defineProperty(el, 'scrollHeight', { value: 1200, configurable: true });
     Object.defineProperty(el, 'scrollTop', { value: 0, writable: true, configurable: true });
     document.body.appendChild(el);
     return el;
@@ -240,5 +265,18 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
 
     expect(containerScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
     expect(windowScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('tracks scroll progress against the CONTAINER, not the window/document', () => {
+    const el = makeScrollableDiv(); // clientHeight 400, scrollHeight 1200 -> 800 max scroll
+    const ref = createRef<HTMLDivElement>();
+    (ref as { current: HTMLDivElement }).current = el;
+
+    render(<ScrollToTop lang="es" targetRef={ref} />);
+    fireContainerScroll(el, 400); // 400/800 = 50%
+
+    const ring = screen.getByTestId('scroll-progress-ring-scoped');
+    const circumference = 2 * Math.PI * 18;
+    expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(circumference / 2);
   });
 });

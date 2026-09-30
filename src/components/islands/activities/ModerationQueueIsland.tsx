@@ -18,6 +18,7 @@ import type { ReviewQueueItem, ReportedActivityItem } from '@/lib/activities/mod
 import ModerationBlockPreview from './ModerationBlockPreview';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 export interface ModerationQueueIslandProps {
@@ -432,15 +433,15 @@ export default function ModerationQueueIsland({ lang, initialPending, initialRep
               ))}
             </div>
           </div>
-          <label className="flex flex-col gap-1 text-sm text-foreground">
+          <label className="flex flex-col gap-1.5 text-sm font-semibold text-foreground">
             <span>{t.rejectNoteLabel}</span>
-            <textarea
+            <Textarea
               data-testid="moderation-reject-note"
               value={rejectNote}
               onChange={(e) => setRejectNote(e.target.value)}
               placeholder={t.rejectNotePlaceholder}
               maxLength={500}
-              className="min-h-24 rounded-md border border-border bg-background p-2 text-sm"
+              rows={4}
             />
           </label>
           {rejectError && (

@@ -18,10 +18,12 @@
  * this component's own tests matching `REPORT_REASONS` one-to-one.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 const REPORT_REASONS = ['inappropriate', 'off_topic', 'copyright', 'wrong_answers', 'other'] as const;
 type ReportReason = (typeof REPORT_REASONS)[number];
@@ -71,6 +73,7 @@ export default function ReportActivityButton({ lang, activityId }: ReportActivit
         return;
       }
       setStatus('success');
+      toast.success(UI_LABELS[lang].common.toast.reportSent);
     } catch {
       setErrorKey('report_failed');
       setStatus('error');
@@ -126,15 +129,14 @@ export default function ReportActivityButton({ lang, activityId }: ReportActivit
                 ))}
               </fieldset>
 
-              <label className="flex flex-col gap-1 text-sm text-foreground">
+              <label className="flex flex-col gap-1.5 text-sm font-semibold text-foreground">
                 <span>{t.detailsLabel}</span>
-                <textarea
+                <Textarea
                   data-testid="report-details"
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
                   placeholder={t.detailsPlaceholder}
                   maxLength={500}
-                  className="min-h-20 rounded-md border border-border bg-background p-2 text-sm text-foreground"
                 />
               </label>
 

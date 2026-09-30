@@ -17,10 +17,13 @@
  *    ancestor — the editor card), and skips the footer/window logic
  *    entirely, since it never leaves that card.
  *
- * BRAND YELLOW (nav buttons pass, owner feedback): filled with
- * `bg-primary`/`text-primary-foreground`, both modes — same pairing
- * `BackButton.astro` now uses, instead of the previous outlined/accent-icon
- * treatment.
+ * GLASS FLOATING (PR 1, premium design system): translucent blurred surface
+ * (`.glass-floating`, global.css) + hairline ring + `--shadow-floating`
+ * lift, accent-colored icon — same treatment as `BackButton.astro`,
+ * superseding the earlier solid brand-yellow fill. A thin circular progress
+ * ring (SVG `stroke-dashoffset`, geometry in `@lib/scrollProgress`) is drawn
+ * behind the icon, filling in as the tracked scroll source (window or
+ * `targetRef`'s container) approaches its end.
  *
  * SCOPED MODE'S "NEVER APPEARS" BUG, FIXED: the appear threshold used to be
  * ONLY `container height * APPEAR_AFTER_VIEWPORTS` (a full container height
@@ -46,6 +49,12 @@ import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { ArrowUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowUp';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { computeScrollProgress, ringDashOffset } from '@/lib/scrollProgress';
+
+/** Progress-ring geometry: radius + stroke chosen to sit just inside the
+ * 44px (`size-11`) circular button without touching its edge. */
+const RING_RADIUS = 18;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export interface ScrollToTopProps {
   lang: Lang;
@@ -86,6 +95,7 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
   const scoped = Boolean(targetRef);
 
   const [pastThreshold, setPastThreshold] = useState(false);
+  const [progress, setProgress] = useState(0);
   // Always true in scoped mode — there is no footer to hide behind inside
   // the editor card, so it never suppresses visibility there.
   const [footerHidden, setFooterHidden] = useState(true);
@@ -98,8 +108,10 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
     function measure() {
       const top = scrollEl ? scrollEl.scrollTop : window.scrollY;
       const viewport = scrollEl ? scrollEl.clientHeight : window.innerHeight;
+      const full = scrollEl ? scrollEl.scrollHeight : document.documentElement.scrollHeight;
       const threshold = Math.min(APPEAR_AFTER_MAX_PX, viewport * APPEAR_AFTER_VIEWPORTS);
       setPastThreshold(top > threshold);
+      setProgress(computeScrollProgress(top, viewport, full));
     }
 
     measure();
@@ -149,14 +161,41 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
       aria-hidden={!shown}
       tabIndex={shown ? 0 : -1}
       className={cn(
-        'z-40 inline-flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-all duration-200 ease-out hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none',
+        'glass-floating relative z-40 inline-flex h-11 w-11 items-center justify-center rounded-(--radius-pill) text-accent ring-1 ring-white/10 shadow-(--shadow-floating) transition-all duration-(--transition-duration-control) ease-(--ease-control)',
+        'hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(250_204_21/0.4),0_8px_24px_-6px_rgb(250_204_21/0.35)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         scoped
           ? 'absolute right-4 bottom-4 hidden lg:inline-flex'
           : 'fixed right-4 bottom-6 lg:right-[max(1rem,calc((100vw-72rem)/2+1rem))]',
         shown ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
       )}
     >
-      <ArrowUpIcon size={20} aria-hidden="true" />
+      <svg
+        className="pointer-events-none absolute inset-0 -rotate-90"
+        viewBox="0 0 40 40"
+        aria-hidden="true"
+      >
+        <circle
+          cx={20}
+          cy={20}
+          r={RING_RADIUS}
+          strokeWidth={2}
+          className="fill-none stroke-white/15"
+        />
+        <circle
+          data-testid={scoped ? 'scroll-progress-ring-scoped' : 'scroll-progress-ring'}
+          cx={20}
+          cy={20}
+          r={RING_RADIUS}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={ringDashOffset(progress, RING_RADIUS)}
+          className="fill-none stroke-accent transition-[stroke-dashoffset] duration-200 ease-out motion-reduce:transition-none"
+        />
+      </svg>
+      <ArrowUpIcon size={20} weight="bold" aria-hidden="true" />
     </button>
   );
 }

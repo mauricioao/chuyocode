@@ -23,6 +23,7 @@
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 /**
  * This island's own chrome, in both locales.
@@ -118,10 +119,10 @@ export default function SignInForm({ lang, next }: SignInFormProps) {
       className="flex flex-col gap-3"
       data-testid="signin-form"
     >
-      <label htmlFor="signin-email" className="text-sm font-medium text-foreground">
+      <label htmlFor="signin-email" className="text-sm font-semibold text-foreground">
         {t.emailLabel}
       </label>
-      <input
+      <Input
         id="signin-email"
         name="email"
         type="email"
@@ -131,7 +132,6 @@ export default function SignInForm({ lang, next }: SignInFormProps) {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         disabled={pending}
-        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       />
       <Button
         type="submit"

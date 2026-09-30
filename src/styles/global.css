@@ -61,6 +61,55 @@
   --transition-property-theme: background-color, border-color, color, fill,
     stroke;
   --transition-duration-theme: 300ms;
+
+  /* --- Premium design system tokens (PR 1) -------------------------------
+   * One consistent system for form controls, buttons, floating buttons and
+   * cards, replacing the ad-hoc styling scattered across the site.
+   *
+   * FIELD SURFACE: a soft filled surface slightly lighter than the card
+   * background (`--color-surface-soft` #18181b), so inputs read as "sunken"
+   * relative to the card that holds them rather than blending into it. */
+  --color-field: #1f1f23;
+  --color-field-border: rgb(255 255 255 / 0.09);
+  --color-field-border-hover: rgb(255 255 255 / 0.16);
+  /* Focus ring: brand accent at ~40% alpha, drawn 3px wide by the components
+   * that consume this token (`ring-3`), never a token-level width. */
+  --color-field-ring: rgb(250 204 21 / 0.4);
+
+  /* Radii: one scale for fields, cards and pill/circular controls, named for
+   * their ROLE (never after a font-size step, per project guard). */
+  --radius-field: 0.75rem; /* 12px */
+  --radius-card: 1rem; /* 16px */
+  --radius-pill: 999px;
+
+  /* Shadow for floating elements (BackButton, ScrollToTop, dropdowns) —
+   * layered like `--shadow-elevation-*` above, but softer/wider for a
+   * glass-like lift off the page rather than a hard drop shadow. */
+  --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+
+  /* Motion for controls (hover/focus/press transitions): 150-200ms ease-out,
+   * distinct from `--transition-duration-theme` (300ms theme toggle) because
+   * a control's own state change should feel snappier than a page-wide
+   * theme cross-fade. */
+  --transition-duration-control: 180ms;
+  --ease-control: cubic-bezier(0, 0, 0.2, 1); /* ease-out */
+}
+
+/* Control heights and the card padding rhythm are plain custom properties,
+ * not `@theme` entries: Tailwind 4 only turns `@theme` namespaces it
+ * recognizes (`--color-*`, `--radius-*`, `--shadow-*`, …) into utilities,
+ * and "control height" isn't one of those — `card.tsx` already uses this
+ * same local-custom-property + `h-(--var)` arbitrary-value pattern for
+ * `--card-spacing`. Every value still lands on the 4px scale (so on an 8px
+ * grid at every even step), matching Tailwind's own spacing rhythm. */
+:root {
+  --control-h-sm: 2.25rem; /* 36px */
+  --control-h-md: 2.5rem; /* 40px */
+  --control-h-lg: 2.75rem; /* 44px */
+
+  --card-padding-desktop: 1.5rem; /* 24px */
+  --card-padding-mobile: 1rem; /* 16px */
+  --card-header-h: 3.5rem; /* 56px */
 }
 
 /* --- shadcn/ui token bridge --------------------------------------------- *
@@ -333,4 +382,25 @@ h3 {
 
 *::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
+}
+
+/* --- Glass floating controls (PR 1) --------------------------------------
+ * `BackButton` and `ScrollToTop`: a translucent surface + blur reads as
+ * "floating" above the page content behind it. A plain Tailwind
+ * `bg-surface-soft/55 backdrop-blur-md` pair would ALSO apply that alpha
+ * background in a browser with no `backdrop-filter` support, leaving a
+ * half-transparent control with nothing blurring behind it — this class
+ * pairs the translucent background with its own `@supports` fallback to a
+ * fully solid surface instead, so unsupported browsers get a normal opaque
+ * button rather than a broken-looking one. */
+.glass-floating {
+  background-color: rgb(24 24 27 / 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-floating {
+    background-color: var(--color-surface-soft);
+  }
 }

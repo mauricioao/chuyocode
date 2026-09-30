@@ -19,6 +19,7 @@
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 /** Kept in sync with `MIN_PASSWORD_LENGTH` in `@lib/authValidation`. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -109,10 +110,10 @@ export default function NuevaClaveForm({ lang }: NuevaClaveFormProps) {
       className="flex flex-col gap-3"
       data-testid="nueva-clave-form"
     >
-      <label htmlFor="nueva-clave-password" className="text-sm font-medium text-foreground">
+      <label htmlFor="nueva-clave-password" className="text-sm font-semibold text-foreground">
         {t.passwordLabel}
       </label>
-      <input
+      <Input
         id="nueva-clave-password"
         name="password"
         type="password"
@@ -123,7 +124,6 @@ export default function NuevaClaveForm({ lang }: NuevaClaveFormProps) {
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         disabled={pending}
-        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       />
       <Button
         type="submit"

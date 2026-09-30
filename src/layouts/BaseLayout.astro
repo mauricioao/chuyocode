@@ -36,6 +36,7 @@ import { ClientRouter } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
 import Footer from '@components/layout/Footer.astro';
 import ScrollToTop from '@components/islands/ScrollToTop';
+import Toaster from '@components/islands/Toaster';
 // Visual-identity styles (PR 2). `fonts.css` self-hosts Raleway Variable
 // (font-display: swap baked into the @font-face blocks); `global.css` applies
 // the display-font heading rule, the Andean pattern mask, and the skip-link
@@ -137,6 +138,13 @@ const faviconSvg =
         (never per-visitor data), so it stays safe on publicly cached pages
         (home, libros, noticias). */}
     <ScrollToTop client:load lang={lang} />
+
+    {/* Toast host (PR 1 premium design system): one Toaster per page, backing
+        every `toast()` call across features (autosave error, share-link
+        copied, submitted for review, duplicated, report sent). Its own SSR
+        markup renders nothing visible until a toast is pushed, so it is safe
+        on publicly cached pages just like `ScrollToTop`. */}
+    <Toaster client:load />
 
     {/* Scroll-reveal init (decision #6). A module script so we can import
         `initReveals`; runs on first load and again after every Astro View
