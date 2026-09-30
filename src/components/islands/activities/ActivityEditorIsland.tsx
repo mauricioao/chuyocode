@@ -53,6 +53,7 @@ import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } 
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { fieldClasses } from '@/lib/ui/field';
+import { ROW_PADDING_X } from '@/lib/ui/layout';
 import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
@@ -656,7 +657,7 @@ export default function ActivityEditorIsland({
             (it names the whole card), and at `lg:` this row IS the card's
             own header (`border-b`, not a separate boxed element) — no other
             action row lives here. */}
-        <div className="flex flex-none flex-col gap-3 rounded-lg border border-border p-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
+        <div className={`flex flex-none flex-col gap-3 rounded-lg border border-border ${ROW_PADDING_X} py-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b`}>
           <div className="flex flex-1 items-center gap-3">
             {/* Mobile layout pass (owner request): below `lg:`, the back
                 button sits INLINE left of the title — the same "icon then
@@ -767,7 +768,13 @@ export default function ActivityEditorIsland({
           <div
             ref={previewScrollRef}
             data-testid="activity-preview"
-            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:p-3"
+            // `lg:px-3` (not a runtime `lg:${ROW_PADDING_X}` interpolation):
+            // Tailwind's build-time scanner needs the exact utility class
+            // token to appear literally in source text, so a responsive
+            // variant can never be assembled from a dynamic prefix + an
+            // imported base token — see `ROW_PADDING_X`'s own header. Kept
+            // at the SAME value `ROW_PADDING_X` names (`px-3`) by hand.
+            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-3 lg:py-3"
           >
             {blocks
               .filter((b): b is WorksheetBlock => b.type === 'worksheet')
@@ -790,7 +797,7 @@ export default function ActivityEditorIsland({
           // flexible height inside it. The add-block flow (picker/uploader)
           // scrolls into view here too, inside the same card, instead of
           // growing the page past it.
-          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:p-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:px-3 lg:py-3">
             <BlockList
               listRef={blockListRef}
               lang={lang}

@@ -39,6 +39,7 @@ import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { PrinterIcon } from '@phosphor-icons/react/dist/ssr/Printer';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
+import { ROW_PADDING_X } from '@lib/ui/layout';
 import { hasHeartedActivity } from '@lib/activities/hearts';
 import { qrSvg, shareUrl } from '@lib/qr';
 
@@ -132,7 +133,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           `initBackButtons` history.back() enhancement) rather than that
           floating/sticky component: this row already lives INSIDE the
           card at every width, so it needs no gutter-floating behavior. */}
-      <div class="flex flex-none flex-wrap items-center gap-3 rounded-lg border border-border p-3 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b">
+      <div class={`flex flex-none flex-wrap items-center gap-3 rounded-lg border border-border ${ROW_PADDING_X} py-3 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b`}>
         <a
           href={`/${lang}/ingles/actividades`}
           data-back-button

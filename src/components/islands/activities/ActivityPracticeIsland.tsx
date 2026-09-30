@@ -55,6 +55,7 @@ import type { ExerciseResponse } from '@/lib/exercisePayload';
 import type { GameMode } from '@/lib/activities/gameModes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ROW_PADDING_X } from '@/lib/ui/layout';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -240,7 +241,10 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
           data-testid="practice-tab-row"
           role={showTabs ? 'tablist' : undefined}
           aria-label={showTabs ? tEditor.blockIndexTitle : undefined}
-          className="flex flex-none flex-wrap items-center gap-1 border-b border-border px-2 py-1"
+          // `ROW_PADDING_X`: the same horizontal inset as this card's own
+          // header row (`[id].astro`) and its footer below — before this
+          // pass this row alone used `px-2`, one size off both neighbors.
+          className={cn('flex flex-none flex-wrap items-center gap-1 border-b border-border py-2', ROW_PADDING_X)}
         >
           {showTabs &&
             blocks.map((block, index) => {
@@ -334,7 +338,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
       {hasGradableContent && (
         <div
           data-testid="practice-footer"
-          className="flex flex-none flex-wrap items-center justify-between gap-3 border-t border-border p-3"
+          className={cn('flex flex-none flex-wrap items-center justify-between gap-3 border-t border-border py-3', ROW_PADDING_X)}
         >
           {graded ? (
             <p data-testid="practice-score" aria-live="polite" className="text-sm font-medium text-foreground">

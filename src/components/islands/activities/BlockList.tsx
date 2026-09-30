@@ -59,6 +59,9 @@ import type { Block, QuizBlock, WorksheetBlock, Zone } from '@/lib/activities/bl
 import type { Payload } from '@/lib/exercisePayload';
 import { rotateRects, turnRotation, type TurnDirection } from '@/lib/activities/zoneGeometry';
 import { Button } from '@/components/ui/button';
+import { fieldBase } from '@/lib/ui/field';
+import { cn } from '@/lib/utils';
+import { ROW_PADDING_X } from '@/lib/ui/layout';
 import WorksheetZoneEditor from './WorksheetZoneEditor';
 import QuizBlockEditor from './QuizBlockEditor';
 
@@ -330,17 +333,26 @@ export default function BlockList({
                 focusActive={focusBlockId === block.id}
               >
                 <div data-testid={`block-${block.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <div className="flex flex-none flex-wrap items-center gap-2 py-1">
-                    <button
+                  {/* `ROW_PADDING_X` matches the expanded editor's own
+                      horizontal inset just below (worksheet's zoom-toolbar/
+                      canvas, quiz's question list) — before this pass the
+                      header had NO horizontal padding of its own while the
+                      expanded body added `px-2`, so a block's header icons
+                      sat flush with its own left edge while the canvas below
+                      started 8px further right (the "margins feel uneven"
+                      complaint). */}
+                  <div className={cn('flex flex-none flex-wrap items-center gap-2 py-1', ROW_PADDING_X)}>
+                    <Button
                       type="button"
+                      size="icon-sm"
+                      variant="ghost"
                       data-testid={`block-header-${block.id}`}
                       aria-expanded={expanded}
                       aria-label={expanded ? t.collapseBlock : t.expandBlock}
                       onClick={() => onToggleExpand(block.id)}
-                      className="flex shrink-0 items-center justify-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       {expanded ? <CaretDownIcon aria-hidden="true" /> : <CaretRightIcon aria-hidden="true" />}
-                    </button>
+                    </Button>
 
                     <span className="shrink-0 text-primary" aria-hidden="true">
                       {worksheet ? (
@@ -350,6 +362,12 @@ export default function BlockList({
                       )}
                     </span>
 
+                    {/* Inline-editable title: reads as plain text at rest
+                        (transparent surface/border) and only turns into a
+                        recognizable field on hover/focus — the system's own
+                        filled surface, radius and focus ring
+                        (`fieldBase`/`field.ts`), not a naked, always-visible
+                        input box. */}
                     <input
                       type="text"
                       value={name}
@@ -357,7 +375,10 @@ export default function BlockList({
                       aria-label={t.blockNameLabel}
                       placeholder={t.blockNamePlaceholder}
                       onChange={(e) => renameBlock(block.id, e.target.value)}
-                      className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-sm font-medium text-foreground hover:border-border focus-visible:border-border focus-visible:outline-none"
+                      className={cn(
+                        fieldBase,
+                        'h-7 min-w-0 flex-1 border-transparent bg-transparent px-1.5 py-0 text-sm font-medium hover:bg-(--color-field) focus-visible:bg-(--color-field)',
+                      )}
                     />
 
                     {worksheet && (
@@ -413,7 +434,7 @@ export default function BlockList({
                     // its name/handle (this header, then the canvas' own
                     // zoom toolbar) rather than one padded content area —
                     // every pixel here is height the canvas doesn't get.
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border px-2 pb-2 pt-1">
+                    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
                       <WorksheetZoneEditor
                         lang={lang}
                         image={worksheet.image}
@@ -430,7 +451,7 @@ export default function BlockList({
                   )}
 
                   {expanded && quiz && (
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border px-2 pb-2 pt-1">
+                    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
                       <QuizBlockEditor
                         blockId={block.id}
                         lang={lang}
