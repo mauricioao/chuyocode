@@ -22,9 +22,12 @@
  * company with no relationship to this site and make the dialog depend on their
  * uptime.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { WhatsappLogoIcon } from '@phosphor-icons/react/dist/ssr/WhatsappLogo';
+import { QrCodeIcon } from '@phosphor-icons/react/dist/ssr/QrCode';
+import { ShareNetworkIcon } from '@phosphor-icons/react/dist/ssr/ShareNetwork';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -96,6 +99,34 @@ export interface ShareDialogProps {
    * renders — a filename with no label would be a silent no-op button.
    */
   downloadFileName?: string;
+}
+
+/**
+ * Share actions read as a row of colored icon tiles with a caption underneath
+ * (the iOS share-sheet pattern): the brand color makes WhatsApp recognizable at
+ * a glance, the caption says what each one does.
+ */
+const SHARE_ACTION_CLASS =
+  'group flex w-20 flex-col items-center gap-2 rounded-xl p-1 text-center outline-none transition-transform duration-150 hover:-translate-y-0.5 focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+const SHARE_CAPTION_CLASS = 'text-xs leading-tight text-muted-foreground group-hover:text-foreground';
+
+function ShareActionIcon({
+  kind,
+  className,
+  children,
+}: {
+  kind: 'whatsapp' | 'qr' | 'native';
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      data-share-icon={kind}
+      className={`flex size-12 items-center justify-center rounded-full shadow-md transition-shadow group-hover:shadow-lg ${className}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFileName }: ShareDialogProps) {
@@ -250,39 +281,49 @@ export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFil
             actually present, same "no dead button" posture as the copy
             button above). */}
         {(whatsappHref || downloadFileName || canNativeShare) && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-6">
             {whatsappHref && (
               <a
                 href={whatsappHref}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={labels.whatsapp}
                 data-testid="exercise-share-whatsapp"
-                className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+                className={SHARE_ACTION_CLASS}
               >
-                {labels.whatsapp}
+                <ShareActionIcon kind="whatsapp" className="bg-[#25D366] text-white">
+                  <WhatsappLogoIcon weight="fill" className="size-6" aria-hidden="true" />
+                </ShareActionIcon>
+                <span className={SHARE_CAPTION_CLASS}>{labels.whatsapp}</span>
               </a>
             )}
             {downloadFileName && (
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                size="sm"
                 onClick={downloadQr}
+                aria-label={labels.downloadQr}
                 data-testid="exercise-share-download"
+                className={SHARE_ACTION_CLASS}
               >
-                {labels.downloadQr}
-              </Button>
+                <ShareActionIcon kind="qr" className="bg-accent text-black">
+                  <QrCodeIcon weight="bold" className="size-6" aria-hidden="true" />
+                </ShareActionIcon>
+                <span className={SHARE_CAPTION_CLASS}>{labels.downloadQr}</span>
+              </button>
             )}
             {canNativeShare && (
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                size="sm"
                 onClick={() => void nativeShare()}
+                aria-label={labels.native}
                 data-testid="exercise-share-native"
+                className={SHARE_ACTION_CLASS}
               >
-                {labels.native}
-              </Button>
+                <ShareActionIcon kind="native" className="bg-sky-500 text-white">
+                  <ShareNetworkIcon weight="bold" className="size-6" aria-hidden="true" />
+                </ShareActionIcon>
+                <span className={SHARE_CAPTION_CLASS}>{labels.native}</span>
+              </button>
             )}
           </div>
         )}

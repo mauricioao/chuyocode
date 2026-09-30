@@ -536,7 +536,7 @@ export const UI_LABELS = {
         shareQrAlt: 'Código QR con el enlace a esta actividad',
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Descargar QR',
-        shareNative: 'Compartir con el dispositivo',
+        shareNative: 'Más opciones',
         // The Inglés section requires sign-in (this whole route is already
         // gated) — a short muted note so the dialog does not promise a link
         // that opens for an anonymous visitor.
@@ -1228,7 +1228,7 @@ export const UI_LABELS = {
         shareQrAlt: 'QR code linking to this activity',
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Download QR',
-        shareNative: 'Share with device',
+        shareNative: 'More options',
         shareSignInNote: 'Whoever opens the link will need to sign in first.',
       },
       report: {
