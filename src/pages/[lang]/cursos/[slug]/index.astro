@@ -17,12 +17,12 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
+import CourseCtaButtons from '@components/courses/CourseCtaButtons.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { requireRole } from '@lib/roles';
 import { getPlan } from '@lib/access';
 import { courseVisible, courseAccess, canViewLesson, ownsCourse } from '@lib/courses/access';
 import { getCourseDetailBySlug } from '@lib/courses/catalog';
-import { formatPrice } from '@lib/courses/price';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -94,49 +94,13 @@ const kindLabels = t.lessonKind as Record<string, string>;
     </header>
 
     <div class="flex flex-col gap-3 rounded-(--radius-card) bg-card p-6 ring-1 ring-foreground/10" data-testid="course-cta">
-      {
-        access === 'owned' && firstLesson ? (
-          <a
-            href={`/${lang}/cursos/${course.slug}/${firstLesson.id}`}
-            data-testid="cta-continue"
-            class="inline-flex w-fit items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-          >
-            {t.ctaContinue}
-          </a>
-        ) : access === 'premium' && firstLesson ? (
-          <a
-            href={`/${lang}/cursos/${course.slug}/${firstLesson.id}`}
-            data-testid="cta-start"
-            class="inline-flex w-fit items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-          >
-            {t.ctaStart}
-          </a>
-        ) : (
-          <>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled
-                data-testid="cta-premium"
-                class="cursor-not-allowed rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground opacity-60"
-              >
-                {t.ctaPremium}
-              </button>
-              {course.priceCents != null && (
-                <button
-                  type="button"
-                  disabled
-                  data-testid="cta-buy-lifetime"
-                  class="cursor-not-allowed rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground opacity-60"
-                >
-                  {t.ctaBuyLifetime} {formatPrice(course.priceCents, course.currency, lang)}
-                </button>
-              )}
-            </div>
-            <p class="text-xs text-muted-foreground">{t.paymentsSoon}</p>
-          </>
-        )
-      }
+      <CourseCtaButtons
+        lang={lang}
+        access={access}
+        href={firstLesson ? `/${lang}/cursos/${course.slug}/${firstLesson.id}` : null}
+        priceCents={course.priceCents}
+        currency={course.currency}
+      />
     </div>
 
     <div class="flex flex-col gap-4">

@@ -915,6 +915,14 @@ export const UI_LABELS = {
         paymentsSoon: 'Pagos próximamente',
         moderatorPreviewNotice: 'Vista de moderador: este curso no está publicado.',
       },
+      player: {
+        sidebarToggle: 'Contenido del curso',
+        prevLesson: 'Anterior',
+        nextLesson: 'Siguiente',
+        lockedTitle: 'Esta lección es de pago',
+        lockedBody: 'Hazte Premium o compra este curso de por vida para verla.',
+        activityUnavailable: 'Esta actividad ya no está disponible.',
+      },
     },
     english: {
       // Copy for the HUB route `/[lang]/ingles` (two cards: curated exercises
@@ -1694,6 +1702,14 @@ export const UI_LABELS = {
         ctaBuyLifetime: 'Buy for life',
         paymentsSoon: 'Payments coming soon',
         moderatorPreviewNotice: 'Moderator preview: this course is not published.',
+      },
+      player: {
+        sidebarToggle: 'Course content',
+        prevLesson: 'Previous',
+        nextLesson: 'Next',
+        lockedTitle: 'This lesson is paid content',
+        lockedBody: 'Go Premium or buy this course for life to watch it.',
+        activityUnavailable: 'This activity is no longer available.',
       },
     },
     english: {

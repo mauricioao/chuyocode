@@ -1,0 +1,243 @@
+---
+/**
+ * Lesson player — `/[lang]/cursos/[slug]/[lessonId]` (still HIDDEN — see
+ * `../index.astro`'s header). Same existence/visibility rules as the
+ * landing page (`courseVisible`) PLUS the per-lesson rule: a lesson that
+ * fails `canViewLesson` renders a LOCK SCREEN (same `CourseCtaButtons` the
+ * landing page uses) instead of its content — never a 404, since the
+ * lesson genuinely exists and IS listed in the syllabus, it is simply
+ * behind a paywall that does not exist yet.
+ *
+ * `content` rendering per `kind`:
+ *   text     -> `renderLessonMarkdown` (marked + sanitize-html; the ONLY
+ *               path lesson markdown is ever rendered through, see that
+ *               module's own header — never raw HTML).
+ *   video    -> `toVideoEmbed` (`@lib/courses/video`) into a 16:9
+ *               `youtube-nocookie.com`/`player.vimeo.com` iframe.
+ *   activity -> `getPublishedActivity` (`@lib/activities/activities`) for
+ *               the SAME activity id every course-admin write already
+ *               re-validated is live, fed straight into
+ *               `ActivityPracticeIsland` — the identical island the public
+ *               practice page uses, so a course "activity" lesson is
+ *               pixel-for-pixel that practice experience.
+ *
+ * `markPrivate` is called explicitly even though `src/middleware.ts`
+ * already marks every `cursos` response private — the owner's own spec
+ * calls this page out as private/no-store by name, and a lesson player is
+ * exactly the kind of page a future refactor of the gate must never
+ * silently stop covering.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import CourseCtaButtons from '@components/courses/CourseCtaButtons.astro';
+import ActivityPracticeIsland from '@components/islands/activities/ActivityPracticeIsland';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { requireRole } from '@lib/roles';
+import { getPlan } from '@lib/access';
+import { courseVisible, courseAccess, canViewLesson, ownsCourse } from '@lib/courses/access';
+import { getCourseDetailBySlug, type DetailLesson } from '@lib/courses/catalog';
+import { renderLessonMarkdown } from '@lib/courses/markdown';
+import { toVideoEmbed } from '@lib/courses/video';
+import { getPublishedActivity } from '@lib/activities/activities';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+markPrivate(Astro.response.headers);
+
+const { slug, lessonId } = Astro.params;
+if (!slug || !lessonId) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Middleware already redirected an anonymous visitor away from this gated path.
+const user = Astro.locals.user!;
+
+const course = await getCourseDetailBySlug(slug);
+if (!course) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const moderator = await requireRole(user, 'moderator');
+const isModerator = moderator !== null;
+
+if (!courseVisible({ status: course.status }, isModerator)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const flatLessons = course.modules.flatMap((m) => m.lessons);
+const currentIndex = flatLessons.findIndex((l) => l.id === lessonId);
+if (currentIndex === -1) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+const lesson: DetailLesson = flatLessons[currentIndex];
+const prevLesson = currentIndex > 0 ? flatLessons[currentIndex - 1] : null;
+const nextLesson = currentIndex < flatLessons.length - 1 ? flatLessons[currentIndex + 1] : null;
+
+const plan = await getPlan(user);
+const owns = await ownsCourse(user, course.id);
+const access = courseAccess({ course: { included_in_premium: course.includedInPremium }, plan, owns, isModerator });
+const viewable = canViewLesson({
+  lesson: { is_preview: lesson.is_preview },
+  course: { included_in_premium: course.includedInPremium },
+  plan,
+  owns,
+  isModerator,
+});
+
+const t = UI_LABELS[lang].courses.player;
+const landingT = UI_LABELS[lang].courses.landing;
+const kindLabels = landingT.lessonKind as Record<string, string>;
+
+let videoEmbed: ReturnType<typeof toVideoEmbed> = null;
+let activityBlocks: Awaited<ReturnType<typeof getPublishedActivity>> = null;
+
+if (viewable) {
+  if (lesson.kind === 'video' && typeof lesson.content.url === 'string') {
+    videoEmbed = toVideoEmbed(lesson.content.url);
+  }
+  if (lesson.kind === 'activity' && typeof lesson.content.activityId === 'string') {
+    activityBlocks = await getPublishedActivity(lesson.content.activityId);
+  }
+}
+
+const firstLesson = flatLessons[0] ?? null;
+---
+
+<BaseLayout lang={lang} title={`${lesson.title} — ${course.title}`} description={course.subtitle ?? undefined}>
+  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <PageTitle lang={lang} backHref={`/${lang}/cursos/${course.slug}`}>{lesson.title}</PageTitle>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
+      <aside data-testid="lesson-sidebar">
+        <details class="lg:hidden" data-testid="lesson-sidebar-toggle">
+          <summary class="cursor-pointer rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground">
+            {t.sidebarToggle}
+          </summary>
+          <nav class="mt-2 flex flex-col gap-1" aria-label={t.sidebarToggle}>
+            {
+              flatLessons.map((l) => (
+                <a
+                  href={`/${lang}/cursos/${course.slug}/${l.id}`}
+                  aria-current={l.id === lesson.id ? 'page' : undefined}
+                  class:list={[
+                    'rounded-md px-3 py-2 text-sm',
+                    l.id === lesson.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                  ]}
+                >
+                  {l.title}
+                </a>
+              ))
+            }
+          </nav>
+        </details>
+
+        <nav class="hidden flex-col gap-1 lg:flex" aria-label={t.sidebarToggle}>
+          {
+            course.modules.map((mod) => (
+              <div class="mb-2">
+                <p class="px-3 py-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  {mod.title}
+                </p>
+                {mod.lessons.map((l) => (
+                  <a
+                    href={`/${lang}/cursos/${course.slug}/${l.id}`}
+                    aria-current={l.id === lesson.id ? 'page' : undefined}
+                    class:list={[
+                      'block rounded-md px-3 py-2 text-sm',
+                      l.id === lesson.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                    ]}
+                  >
+                    {l.title}
+                  </a>
+                ))}
+              </div>
+            ))
+          }
+        </nav>
+      </aside>
+
+      <div class="flex flex-col gap-6" data-testid="lesson-content">
+        <p class="text-xs text-muted-foreground">{kindLabels[lesson.kind] ?? lesson.kind}</p>
+
+        {
+          !viewable ? (
+            <div
+              class="flex flex-col items-start gap-4 rounded-(--radius-card) bg-card p-6 ring-1 ring-foreground/10"
+              data-testid="lesson-locked"
+            >
+              <h2 class="text-lg font-semibold text-foreground">{t.lockedTitle}</h2>
+              <p class="text-sm text-muted-foreground">{t.lockedBody}</p>
+              <CourseCtaButtons
+                lang={lang}
+                access={access}
+                href={firstLesson ? `/${lang}/cursos/${course.slug}/${firstLesson.id}` : null}
+                priceCents={course.priceCents}
+                currency={course.currency}
+              />
+            </div>
+          ) : lesson.kind === 'text' ? (
+            <div
+              data-testid="lesson-text"
+              class="prose prose-invert max-w-none"
+              set:html={renderLessonMarkdown(typeof lesson.content.markdown === 'string' ? lesson.content.markdown : '')}
+            />
+          ) : lesson.kind === 'video' ? (
+            videoEmbed ? (
+              <div class="aspect-video w-full overflow-hidden rounded-lg" data-testid="lesson-video">
+                <iframe
+                  src={videoEmbed.embedUrl}
+                  class="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                  loading="lazy"
+                  referrerpolicy="strict-origin-when-cross-origin"
+                  title={lesson.title}
+                />
+              </div>
+            ) : (
+              <p data-testid="lesson-video-unavailable" class="text-sm text-muted-foreground">
+                {t.activityUnavailable}
+              </p>
+            )
+          ) : activityBlocks ? (
+            <ActivityPracticeIsland client:load lang={lang} blocks={activityBlocks.blocks} />
+          ) : (
+            <p data-testid="lesson-activity-unavailable" class="text-sm text-muted-foreground">
+              {t.activityUnavailable}
+            </p>
+          )
+        }
+
+        <div class="flex items-center justify-between border-t border-border pt-4">
+          {prevLesson ? (
+            <a
+              href={`/${lang}/cursos/${course.slug}/${prevLesson.id}`}
+              data-testid="lesson-prev"
+              class="text-sm font-medium text-muted-foreground hover:text-primary"
+            >
+              ← {t.prevLesson}
+            </a>
+          ) : (
+            <span />
+          )}
+          {nextLesson && (
+            <a
+              href={`/${lang}/cursos/${course.slug}/${nextLesson.id}`}
+              data-testid="lesson-next"
+              class="text-sm font-medium text-muted-foreground hover:text-primary"
+            >
+              {t.nextLesson} →
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
