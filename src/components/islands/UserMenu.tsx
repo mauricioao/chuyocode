@@ -32,10 +32,20 @@
  * intercepts the submit and replays it through `fetch`, which drops the
  * server's redirect — see commit 6d550dd and `entrar.astro`'s identical form.
  *
- * View transitions: this component is NOT `transition:persist`, so a normal
- * Astro navigation unmounts and remounts it fresh on the new page, which
- * re-runs the `/api/me` fetch and always reflects the CURRENT session —
- * important right after a sign-in/sign-out redirect.
+ * View transitions (navigation-without-flicker PR): `Header.astro` now
+ * carries `transition:persist`, so this island survives client-side
+ * navigations as the SAME mounted instance instead of remounting into its
+ * loading placeholder on every page. Its state also no longer starts at
+ * `loading` on a fresh mount (a hard reload, a new tab): `meCache.ts` caches
+ * the last `/api/me` answer in `sessionStorage`, read synchronously on
+ * mount, so the avatar or "Ingresar" renders on the very first paint. The
+ * `/api/me` fetch below still always runs, in the background, to revalidate
+ * that cached answer — it is never trusted on its own past the first paint.
+ * The cache is invalidated (so a stale answer can never survive past this
+ * component seeing it): right after a sign-in/sign-out redirect (the
+ * `?auth=signed-in|signed-out` marker set by `authRedirect.ts`), on
+ * submitting the sign-out form (before the full-page reload that form
+ * triggers), and on a `401` from any background `/api/me` refresh.
  *
  * MOBILE HAMBURGER MENU (mobile layout pass): `Header.astro`'s own
  * `#mobile-menu` panel (opened by the hamburger button, `md:hidden`) used to
@@ -63,6 +73,8 @@ import { UI_LABELS } from '@/lib/i18n';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/lib/profile';
+import { readMeCache, writeMeCache, clearMeCache } from '@/lib/meCache';
+import { AUTH_ERROR_PARAM, AUTH_SIGNED_IN, AUTH_SIGNED_OUT } from '@/lib/authRedirect';
 
 /** The id `Header.astro`'s `#mobile-menu` panel reserves for this island's portaled account entries — see the file header. */
 export const MOBILE_MENU_ACCOUNT_SLOT_ID = 'mobile-menu-account';
@@ -107,9 +119,37 @@ function isAuthPagePath(pathname: string): boolean {
   return /^\/[a-z]{2}\/auth(?:\/|$)/.test(pathname);
 }
 
+/**
+ * True right after the confirm/sign-out redirect (the `?auth=signed-in` /
+ * `?auth=signed-out` marker `authRedirect.ts` sets). A cached `/api/me`
+ * answer read on THIS page load may predate that round trip, so it must not
+ * be trusted — {@link initialState} clears it instead of reading it.
+ */
+function justCompletedAuthFlow(): boolean {
+  if (typeof window === 'undefined') return false;
+  const marker = new URLSearchParams(window.location.search).get(AUTH_ERROR_PARAM);
+  return marker === AUTH_SIGNED_IN || marker === AUTH_SIGNED_OUT;
+}
+
+/**
+ * The state to render on the very first paint: the cached `/api/me` answer
+ * when there is a trustworthy one (instant avatar/"Ingresar", no flash of
+ * the loading placeholder on every navigation), `loading` otherwise. The
+ * background fetch in the effect below always still runs to revalidate.
+ */
+function initialState(): State {
+  if (justCompletedAuthFlow()) {
+    clearMeCache();
+    return { status: 'loading' };
+  }
+  const cached = readMeCache();
+  if (!cached) return { status: 'loading' };
+  return cached.profile ? { status: 'signed-in', profile: cached.profile } : { status: 'signed-out' };
+}
+
 export default function UserMenu({ lang }: UserMenuProps) {
   const t = copyFor(lang);
-  const [state, setState] = useState<State>({ status: 'loading' });
+  const [state, setState] = useState<State>(initialState);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -128,7 +168,23 @@ export default function UserMenu({ lang }: UserMenuProps) {
     let cancelled = false;
 
     fetch('/api/me')
-      .then((res) => (res.ok ? res.json() : { profile: null }))
+      .then(async (res) => {
+        if (res.status === 401) {
+          // Definitively signed out server-side — a cached signed-in answer
+          // from before this response must not linger for the next mount.
+          clearMeCache();
+          return { profile: null };
+        }
+        if (!res.ok) {
+          // Any other failure is ambiguous (a transient 5xx, for example) —
+          // fall back to a safe signed-out RENDER without overwriting a
+          // possibly-still-valid cached answer with it.
+          return { profile: null };
+        }
+        const data = (await res.json()) as { profile: Profile | null };
+        writeMeCache({ profile: data.profile });
+        return data;
+      })
       .then((data: { profile: Profile | null }) => {
         if (cancelled) return;
         setState(
@@ -223,7 +279,7 @@ export default function UserMenu({ lang }: UserMenuProps) {
             )}
           </a>
         )}
-        <form method="POST" action="/api/auth/signout" data-astro-reload>
+        <form method="POST" action="/api/auth/signout" data-astro-reload onSubmit={() => clearMeCache()}>
           <button type="submit" data-testid="mobile-account-signout" className="w-full py-1 text-left text-sm font-medium text-muted-foreground hover:text-primary">
             {t.signOut}
           </button>
@@ -235,12 +291,15 @@ export default function UserMenu({ lang }: UserMenuProps) {
   const mobilePortal = mobileMenuSlot ? createPortal(mobileAccountEntries(), mobileMenuSlot) : null;
 
   if (state.status === 'loading') {
-    // Fixed size, matching the single "Ingresar" button below (the only one
-    // rendered now, at every breakpoint) so nothing in the header shifts
-    // once the real state is known.
+    // A NEUTRAL circle, sized like the avatar button below (`h-9 w-9
+    // rounded-full`) — never the "Ingresar" pill shape. Which one the real
+    // answer turns out to be is unknown yet (that's the whole point of this
+    // state), so the placeholder must not look like either one of them;
+    // `initialState` only ever reaches this branch when there is no cached
+    // answer to render immediately instead.
     return (
       <div data-testid="user-menu-loading" aria-hidden="true" className="flex items-center gap-2">
-        <span data-loading-pill className="h-7 w-24 animate-pulse rounded-full bg-muted" />
+        <span data-loading-pill className="h-9 w-9 animate-pulse rounded-full bg-muted" />
       </div>
     );
   }
@@ -361,7 +420,13 @@ export default function UserMenu({ lang }: UserMenuProps) {
               )}
             </a>
           )}
-          <form method="POST" action="/api/auth/signout" data-astro-reload className="mt-1">
+          <form
+            method="POST"
+            action="/api/auth/signout"
+            data-astro-reload
+            className="mt-1"
+            onSubmit={() => clearMeCache()}
+          >
             <button
               type="submit"
               role="menuitem"

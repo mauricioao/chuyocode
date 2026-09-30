@@ -30,6 +30,19 @@
  * `Header` reads no `Astro.locals.user` at all, ever: `UserMenu` hydrates
  * client-side and asks `GET /api/me` (always private/no-store) instead. See
  * that component's header for the full reasoning.
+ *
+ * PERSISTENT ACROSS NAVIGATIONS (navigation-without-flicker PR):
+ * `transition:persist` on the root `<header>` keeps this exact DOM subtree
+ * — nav links AND the mounted `UserMenu` island — across every client-side
+ * navigation instead of Astro swapping in a fresh copy. That is what stops
+ * the double-header cross-fade (old + new header briefly superimposed) and
+ * the "Ingresar" flash (`UserMenu` no longer remounts into its loading
+ * placeholder, or re-fetches `/api/me`, on every page). `transition:animate
+ * ="none"` on top: even though persisted elements are never part of the
+ * transition's old/new pair, this makes that explicit rather than relying
+ * on it implicitly. There is no active-nav-link state to update on
+ * navigation (no `aria-current` styling exists yet) — nothing else here
+ * needs an `astro:page-load` listener today.
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
 import UserMenu from '@components/islands/UserMenu';
@@ -53,6 +66,8 @@ const navLinks = [
 
 <header
   class="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur transition-theme duration-theme"
+  transition:persist
+  transition:animate="none"
 >
   <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
     {/* Masthead: small logo image (left) + wordmark (right), vertically
