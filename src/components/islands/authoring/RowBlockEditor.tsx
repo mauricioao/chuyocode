@@ -17,6 +17,7 @@
  */
 import { useState } from 'react';
 import { splitLabelAtBlank, type Slot } from '@/lib/exercisePayload';
+import { Textarea } from '@/components/ui/textarea';
 
 export const COPY = {
   es: {
@@ -72,7 +73,7 @@ export default function RowBlockEditor({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={fieldId} className="text-sm font-medium text-zinc-100">
+        <label htmlFor={fieldId} className="text-sm font-semibold text-foreground">
           {t.label}
         </label>
         <button
@@ -86,13 +87,12 @@ export default function RowBlockEditor({
         </button>
       </div>
 
-      <textarea
+      <Textarea
         id={fieldId}
         data-testid={`row-label-${slot.id}`}
         value={label}
         onChange={(event) => handleChange(event.target.value)}
         rows={2}
-        className="w-full rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       />
 
       {/* THE LIVE FEEDBACK — no reload, no explicit "parse" button. Reads the

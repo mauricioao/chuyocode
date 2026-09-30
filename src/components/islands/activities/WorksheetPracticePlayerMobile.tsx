@@ -55,6 +55,7 @@ import {
 import { orderZonesForReading } from '@/lib/activities/zoneGeometry';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import WorksheetPlayer, { type WorksheetPracticeState } from './WorksheetPlayer';
 
@@ -262,16 +263,17 @@ export default function WorksheetPracticePlayerMobile({
               // input itself (owner-approved design) — the tap target
               // rendered behind this sheet stays a plain answer preview.
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="text"
                   autoFocus
+                  fieldSize="lg"
                   data-testid="zone-sheet-text-input"
                   aria-label={t.textPlaceholder}
                   placeholder={t.textPlaceholder}
                   value={practice.values[activeZone.id] ?? ''}
                   disabled={practice.disabled}
                   onChange={(e) => practice.onChange(activeZone.id, e.target.value)}
-                  className="h-12 flex-1 rounded-md border border-border bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="flex-1 text-base"
                 />
                 {activeZone.speak && <SpeakButton text={activeZone.speak} lang={lang} />}
               </div>

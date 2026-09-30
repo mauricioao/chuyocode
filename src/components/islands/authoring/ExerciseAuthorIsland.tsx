@@ -18,6 +18,7 @@
  */
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import BlockList from './BlockList';
 import ProseBlockEditor from './ProseBlockEditor';
 import MediaBlockEditor from './MediaBlockEditor';
@@ -241,15 +242,14 @@ export default function ExerciseAuthorIsland({
       </div>
 
       <div className="flex flex-1 flex-col gap-4">
-        <h2 className="text-lg font-semibold text-zinc-100">{t.previewHeading}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t.previewHeading}</h2>
         <ExercisePreview lang={lang} payload={draftToPayload(draft)} />
 
-        <label className="flex items-start gap-2 text-sm text-zinc-100">
-          <input
-            type="checkbox"
+        <label className="flex items-start gap-2 text-sm text-foreground">
+          <Checkbox
             data-testid="accept-terms"
             checked={acceptedTerms}
-            onChange={(event) => setAcceptedTerms(event.target.checked)}
+            onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
           />
           {t.termsLabel}
         </label>

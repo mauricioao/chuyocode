@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { isAllowedMediaUrl } from '@/lib/exerciseMedia';
 import type { MediaBlock } from '@/lib/exercisePayload';
+import { Input } from '@/components/ui/input';
 
 export const COPY = {
   es: {
@@ -89,7 +90,7 @@ export default function MediaBlockEditor({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-zinc-100">{t.image}</span>
+        <span className="text-sm font-semibold text-foreground">{t.image}</span>
         <button
           type="button"
           aria-label={t.remove}
@@ -105,14 +106,13 @@ export default function MediaBlockEditor({
         <label htmlFor={imageFieldId} className="sr-only">
           {t.image}
         </label>
-        <input
+        <Input
           id={imageFieldId}
           type="text"
           data-testid={`media-image-${block.id}`}
           value={imageText}
           aria-invalid={imageInvalid}
           onChange={(event) => handleImageChange(event.target.value)}
-          className="w-full rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         {imageInvalid && (
           <p data-testid={`media-image-error-${block.id}`} className="text-sm text-destructive">
@@ -125,14 +125,13 @@ export default function MediaBlockEditor({
         <label htmlFor={audioFieldId} className="sr-only">
           {t.audio}
         </label>
-        <input
+        <Input
           id={audioFieldId}
           type="text"
           data-testid={`media-audio-${block.id}`}
           value={audioText}
           aria-invalid={audioInvalid}
           onChange={(event) => handleAudioChange(event.target.value)}
-          className="w-full rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         {audioInvalid && (
           <p data-testid={`media-audio-error-${block.id}`} className="text-sm text-destructive">
@@ -145,14 +144,13 @@ export default function MediaBlockEditor({
         <label htmlFor={altFieldId} className="sr-only">
           {t.alt}
         </label>
-        <input
+        <Input
           id={altFieldId}
           type="text"
           placeholder={t.alt}
           data-testid={`media-alt-${block.id}`}
           value={block.alt ?? ''}
           onChange={(event) => onChangeAlt(event.target.value === '' ? undefined : event.target.value)}
-          className="w-full rounded-md border border-input bg-input/30 px-3 py-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
       </div>
     </div>
