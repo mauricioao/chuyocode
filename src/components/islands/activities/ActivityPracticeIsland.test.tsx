@@ -67,10 +67,11 @@ describe('ActivityPracticeIsland — rendering blocks (one at a time)', () => {
 });
 
 describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => {
-  it('hides the tab bar entirely with a single block', () => {
+  it('hides the tab bar entirely with a single block — no empty bar, not even to host zoom controls', () => {
     renderIsland([WORKSHEET]);
     expect(screen.queryByRole('tablist')).toBeNull();
     expect(screen.queryByTestId('practice-tab-w1')).toBeNull();
+    expect(screen.queryByTestId('practice-tab-row')).toBeNull();
   });
 
   it('shows a role="tablist" with a tab per block once there are 2+', () => {
@@ -137,10 +138,21 @@ describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => 
     expect(inputAgain.value).toBe('cat');
   });
 
-  it('shows the worksheet zoom slot only while a worksheet tab is active', () => {
+  it('keeps the zoom slot mounted across every tab (no footer height jump), populated only on a worksheet tab', () => {
     renderIsland([WORKSHEET, QUIZ]);
     expect(screen.getByTestId('worksheet-zoom-slot')).toBeTruthy();
+    expect(screen.getByTestId('practice-zoom-in')).toBeTruthy();
+
     fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    expect(screen.getByTestId('worksheet-zoom-slot')).toBeTruthy();
+    expect(screen.queryByTestId('practice-zoom-in')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('practice-tab-w1'));
+    expect(screen.getByTestId('practice-zoom-in')).toBeTruthy();
+  });
+
+  it('never renders a zoom slot for an activity with no worksheet block at all', () => {
+    renderIsland([QUIZ]);
     expect(screen.queryByTestId('worksheet-zoom-slot')).toBeNull();
   });
 
@@ -191,6 +203,20 @@ describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar
     renderIsland([QUIZ]);
     expect(screen.getByTestId('practice-footer').className).not.toContain('sticky');
     expect(screen.getByTestId('practice-footer').className).not.toContain('fixed');
+  });
+
+  it('puts the zoom controls inside the FOOTER, on the left of Comprobar/Reintentar, for a single worksheet block', () => {
+    renderIsland([WORKSHEET]);
+    expect(screen.queryByTestId('practice-tab-row')).toBeNull();
+    const footer = screen.getByTestId('practice-footer');
+    const zoomSlot = screen.getByTestId('worksheet-zoom-slot');
+    const checkButton = screen.getByTestId('practice-check-button');
+    expect(footer.contains(zoomSlot)).toBe(true);
+    expect(footer.contains(checkButton)).toBe(true);
+    // Document order: the zoom slot comes before Comprobar (left before right).
+    expect(
+      zoomSlot.compareDocumentPosition(checkButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('shows Comprobar before grading', () => {

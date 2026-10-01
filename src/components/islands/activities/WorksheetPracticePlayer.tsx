@@ -42,17 +42,18 @@
  * zone's own input focuses it normally); a middle-button drag always pans
  * regardless of tool.
  *
- * ZOOM CONTROLS LIVE IN THE TAB BAR (owner-approved design: "zoom controls
- * live in the tab bar's right side, only for worksheet tabs"), not in a
- * toolbar row of this component's own: `toolbarSlot` is a DOM node
- * `ActivityPracticeIsland` renders as part of its tab row
- * (`worksheet-zoom-slot`), and this component PORTALS its own −/Ajustar/+/Mano
- * buttons into it via `createPortal` — the camera state stays owned entirely
- * HERE (this is the only thing that ever mounts a camera for the currently
- * active worksheet tab), while the buttons that drive it simply render
- * somewhere else in the DOM. `toolbarSlot` is CSS-hidden below `lg` by its
- * own owner, so the portaled buttons never flash on a phone even during the
- * pre-hydration dual-render below.
+ * ZOOM CONTROLS LIVE IN THE FOOTER (owner feedback: moved out of the tab row
+ * into the footer's own left side, next to Comprobar/Reintentar — a single-
+ * block activity no longer needs an otherwise-empty tab bar just to host
+ * them), only for a worksheet tab, not in a toolbar row of this component's
+ * own: `toolbarSlot` is a DOM node `ActivityPracticeIsland` renders as part
+ * of its footer (`worksheet-zoom-slot`), and this component PORTALS its own
+ * −/Ajustar/+/Mano buttons into it via `createPortal` — the camera state
+ * stays owned entirely HERE (this is the only thing that ever mounts a
+ * camera for the currently active worksheet tab), while the buttons that
+ * drive it simply render somewhere else in the DOM. `toolbarSlot` is
+ * CSS-hidden below `lg` by its own owner, so the portaled buttons never
+ * flash on a phone even during the pre-hydration dual-render below.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';

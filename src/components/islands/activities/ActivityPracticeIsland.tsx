@@ -22,15 +22,21 @@
  *
  * ONE combined Comprobar/Reintentar pair for the WHOLE activity, not one per
  * block/tab — unchanged from before this redesign: worksheet zones AND quiz
- * questions grade together into a single score, now shown in a plain FOOTER
- * row (never a sticky/floating bar — the whole card already fits the
- * screen at `lg:`, so nothing needs to float above scrolled-past content).
+ * questions grade together into a single score, shown in a plain FOOTER row
+ * (never a sticky/floating bar — the whole card already fits the screen at
+ * `lg:`, so nothing needs to float above scrolled-past content).
  *
- * ZOOM CONTROLS LIVE IN THE TAB BAR'S OWN RIGHT SIDE (owner-approved
- * design), only for a worksheet tab: `zoomSlot` is a plain DOM node this
- * component renders as part of its tab row; `WorksheetPracticePlayer`
- * PORTALS its own −/Ajustar/+/Mano buttons into it — see that file's own
- * header for why camera ownership stays there instead of here.
+ * ZOOM CONTROLS LIVE IN THE FOOTER'S OWN LEFT SIDE (owner feedback: they used
+ * to live in the tab row, which forced an empty tab bar to stay mounted for a
+ * single-block activity just to host them), only for a worksheet tab:
+ * `zoomSlot` is a plain DOM node this component renders as part of its
+ * footer; `WorksheetPracticePlayer` PORTALS its own −/Ajustar/+/Mano buttons
+ * into it — see that file's own header for why camera ownership stays there
+ * instead of here. The slot itself stays mounted across every tab (as long as
+ * SOME block in the activity is a worksheet) so switching to/from a quiz tab
+ * never jumps the footer's height — it simply has nothing portaled into it
+ * while a quiz tab is active, since only the active worksheet's own
+ * `WorksheetPracticePlayer` ever portals into it.
  *
  * Grading itself is delegated entirely to the pure `src/lib/activities/grading.ts`
  * (worksheet zones) and `src/lib/exerciseGrading.ts` (quiz slots, routed
@@ -99,6 +105,10 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const quizBlocks = useMemo(() => blocks.filter((b): b is QuizBlock => b.type === 'quiz'), [blocks]);
+  // Whether the footer's zoom slot needs to exist at all — see this file's
+  // own header on why it stays mounted across every tab once true, rather
+  // than only while a worksheet tab happens to be active.
+  const hasWorksheetBlock = useMemo(() => blocks.some((block) => block.type === 'worksheet'), [blocks]);
 
   // Every worksheet zone across every block, flattened — one half of the
   // grading unit for the page's single combined score.
@@ -195,7 +205,6 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
 
   const activeBlock = blocks.find((b) => b.id === activeTab) ?? blocks[0];
   const showTabs = blocks.length > 1;
-  const showControlRow = showTabs || activeBlock?.type === 'worksheet';
   // D1: while the active tab's quiz block sits in Tarjetas/Parejas, Comprobar
   // still only grades that block's Preguntas-mode answers — the footer says
   // so rather than leaving the learner to guess why an ungraded game did
@@ -236,69 +245,60 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {showControlRow && (
+      {showTabs && (
         <div
           data-testid="practice-tab-row"
-          role={showTabs ? 'tablist' : undefined}
-          aria-label={showTabs ? tEditor.blockIndexTitle : undefined}
+          role="tablist"
+          aria-label={tEditor.blockIndexTitle}
           // `ROW_PADDING_X`: the same horizontal inset as this card's own
           // header row (`[id].astro`) and its footer below — before this
           // pass this row alone used `px-2`, one size off both neighbors.
           className={cn('flex flex-none flex-wrap items-center gap-1 border-b border-border py-2', ROW_PADDING_X)}
         >
-          {showTabs &&
-            blocks.map((block, index) => {
-              if (block.type === 'worksheet') worksheetPosition += 1;
-              const isActive = block.id === activeTab;
-              const label = tabLabel(block, worksheetPosition, tEditor);
-              const result = tabResult(block);
-              const allCorrect = result !== undefined && result.total > 0 && result.correct === result.total;
-              const Icon = block.type === 'worksheet' ? ImageIcon : ListChecksIcon;
+          {blocks.map((block, index) => {
+            if (block.type === 'worksheet') worksheetPosition += 1;
+            const isActive = block.id === activeTab;
+            const label = tabLabel(block, worksheetPosition, tEditor);
+            const result = tabResult(block);
+            const allCorrect = result !== undefined && result.total > 0 && result.correct === result.total;
+            const Icon = block.type === 'worksheet' ? ImageIcon : ListChecksIcon;
 
-              return (
-                <button
-                  key={block.id}
-                  type="button"
-                  role="tab"
-                  id={`practice-tab-${block.id}`}
-                  data-testid={`practice-tab-${block.id}`}
-                  aria-selected={isActive}
-                  aria-controls={`practice-tabpanel-${block.id}`}
-                  tabIndex={isActive ? 0 : -1}
-                  ref={(el) => {
-                    tabRefs.current[block.id] = el;
-                  }}
-                  onClick={() => setActiveTab(block.id)}
-                  onKeyDown={(e) => handleTabKeyDown(e, index)}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  )}
-                >
-                  <Icon aria-hidden="true" />
-                  <span>{label}</span>
-                  {result && (
-                    <span
-                      data-testid={`practice-tab-result-${block.id}`}
-                      className={cn('flex items-center gap-0.5 tabular-nums', allCorrect && 'text-emerald-400')}
-                    >
-                      {result.correct}/{result.total}
-                      {allCorrect && <CheckCircleIcon aria-hidden="true" weight="fill" />}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-
-          {activeBlock?.type === 'worksheet' && (
-            <div
-              ref={setZoomSlot}
-              data-testid="worksheet-zoom-slot"
-              className="ml-auto hidden shrink-0 items-center gap-1 lg:flex"
-            />
-          )}
+            return (
+              <button
+                key={block.id}
+                type="button"
+                role="tab"
+                id={`practice-tab-${block.id}`}
+                data-testid={`practice-tab-${block.id}`}
+                aria-selected={isActive}
+                aria-controls={`practice-tabpanel-${block.id}`}
+                tabIndex={isActive ? 0 : -1}
+                ref={(el) => {
+                  tabRefs.current[block.id] = el;
+                }}
+                onClick={() => setActiveTab(block.id)}
+                onKeyDown={(e) => handleTabKeyDown(e, index)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <Icon aria-hidden="true" />
+                <span>{label}</span>
+                {result && (
+                  <span
+                    data-testid={`practice-tab-result-${block.id}`}
+                    className={cn('flex items-center gap-0.5 tabular-nums', allCorrect && 'text-emerald-400')}
+                  >
+                    {result.correct}/{result.total}
+                    {allCorrect && <CheckCircleIcon aria-hidden="true" weight="fill" />}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -341,29 +341,49 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
       {hasGradableContent && (
         <div
           data-testid="practice-footer"
-          className={cn('flex flex-none flex-wrap items-center justify-between gap-3 border-t border-border py-3', ROW_PADDING_X)}
+          className={cn('flex flex-none flex-wrap items-center gap-3 border-t border-border py-3', ROW_PADDING_X)}
         >
-          {graded ? (
-            <p data-testid="practice-score" aria-live="polite" className="text-sm font-medium text-foreground">
-              {t.score}: {correctCount} / {totalCount}
-            </p>
-          ) : activeQuizModeHint ? (
-            <p data-testid="practice-quiz-mode-hint" className="text-sm text-muted-foreground">
-              {tGameModes.gradesQuizModeHint}
-            </p>
-          ) : (
-            <span />
+          {/* Zoom, left — only for worksheet tabs, but mounted for the whole
+              activity's lifetime (see this file's own header) so toggling
+              to/from a quiz tab never changes the footer's own height. */}
+          {hasWorksheetBlock && (
+            <div
+              ref={setZoomSlot}
+              data-testid="worksheet-zoom-slot"
+              className="hidden shrink-0 items-center gap-1 lg:flex"
+            />
           )}
-          <div className="flex items-center gap-2">
-            {!graded ? (
-              <Button type="button" data-testid="practice-check-button" onClick={handleCheck}>
-                {t.check}
-              </Button>
-            ) : (
-              <Button type="button" variant="outline" data-testid="practice-retry-button" onClick={handleRetry}>
-                {t.retry}
-              </Button>
-            )}
+
+          {/* Score + Comprobar/Reintentar, right (owner feedback: "same row
+              as Comprobar/Reintentar, which stay on the right; the score
+              sits … next to the buttons"). */}
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            {graded ? (
+              <p data-testid="practice-score" aria-live="polite" className="text-sm font-medium text-foreground">
+                {t.score}: {correctCount} / {totalCount}
+              </p>
+            ) : activeQuizModeHint ? (
+              <p data-testid="practice-quiz-mode-hint" className="text-sm text-muted-foreground">
+                {tGameModes.gradesQuizModeHint}
+              </p>
+            ) : null}
+            <div className="flex items-center gap-2">
+              {!graded ? (
+                <Button type="button" data-testid="practice-check-button" className="min-h-11" onClick={handleCheck}>
+                  {t.check}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="practice-retry-button"
+                  className="min-h-11"
+                  onClick={handleRetry}
+                >
+                  {t.retry}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
