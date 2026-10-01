@@ -58,6 +58,26 @@ describe('ReportActivityButton — the dialog', () => {
 });
 
 describe('ReportActivityButton — submitting', () => {
+  it('shows the confirm button as loading/aria-busy and disables it while the request is in flight', async () => {
+    let resolveFetch!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+
+    render(<ReportActivityButton lang="es" activityId={ACTIVITY_ID} />);
+    fireEvent.click(screen.getByTestId('report-activity-button'));
+    fireEvent.click(screen.getByTestId('report-reason-other'));
+    fireEvent.click(screen.getByTestId('report-dialog-confirm'));
+
+    const confirm = screen.getByTestId('report-dialog-confirm') as HTMLButtonElement;
+    expect(confirm.getAttribute('aria-busy')).toBe('true');
+    expect(confirm.disabled).toBe(true);
+
+    await waitFor(() => resolveFetch({ ok: true, json: async () => ({ ok: true, hidden: false }) }));
+  });
+
   it('POSTs the chosen reason and trimmed details, then shows the success message', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

@@ -18,6 +18,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
+import { SpinnerGapIcon } from '@phosphor-icons/react/dist/ssr/SpinnerGap';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 
 export interface DuplicateActivityButtonProps {
@@ -75,7 +76,11 @@ export default function DuplicateActivityButton({
         aria-busy={status === 'duplicating'}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <CopySimpleIcon aria-hidden="true" size={16} />
+        {status === 'duplicating' ? (
+          <SpinnerGapIcon aria-hidden="true" size={16} className="animate-spin" />
+        ) : (
+          <CopySimpleIcon aria-hidden="true" size={16} />
+        )}
         <span>{status === 'duplicating' ? t.duplicating : t.duplicate}</span>
       </button>
       {errorMessage && (

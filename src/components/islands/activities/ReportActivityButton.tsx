@@ -160,9 +160,10 @@ export default function ReportActivityButton({ lang, activityId }: ReportActivit
                   type="button"
                   data-testid="report-dialog-confirm"
                   disabled={!reason || status === 'submitting'}
+                  loading={status === 'submitting'}
                   onClick={() => void submit()}
                 >
-                  {status === 'submitting' ? t.submitting : t.submit}
+                  {t.submit}
                 </Button>
               </div>
             </>

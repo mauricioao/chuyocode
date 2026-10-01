@@ -68,9 +68,10 @@ export default function SubmitForReviewDialog({
             type="button"
             data-testid="submit-dialog-confirm"
             disabled={!accepted || submitting}
+            loading={submitting}
             onClick={onConfirm}
           >
-            {submitting ? t.submitting : t.submitConfirm}
+            {t.submitConfirm}
           </Button>
         </div>
       </DialogContent>

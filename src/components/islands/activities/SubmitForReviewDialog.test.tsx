@@ -92,7 +92,7 @@ describe('SubmitForReviewDialog', () => {
     expect(screen.getByTestId('submit-rights-checkbox').getAttribute('aria-checked')).toBe('false');
   });
 
-  it('shows the submitting label and disables both buttons while submitting', () => {
+  it('shows the confirm button as loading/aria-busy and disables both buttons while submitting', () => {
     render(
       <SubmitForReviewDialog
         lang="es"
@@ -103,7 +103,9 @@ describe('SubmitForReviewDialog', () => {
         onCancel={() => {}}
       />,
     );
-    expect(screen.getByTestId('submit-dialog-confirm').textContent).toContain('Enviando');
+    const confirm = screen.getByTestId('submit-dialog-confirm') as HTMLButtonElement;
+    expect(confirm.getAttribute('aria-busy')).toBe('true');
+    expect(confirm.disabled).toBe(true);
     expect((screen.getByTestId('submit-dialog-cancel') as HTMLButtonElement).disabled).toBe(true);
   });
 
