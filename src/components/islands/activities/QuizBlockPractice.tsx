@@ -33,6 +33,7 @@
 import { useMemo } from 'react';
 import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { QuizBlock } from '@/lib/activities/blocks';
 import type { SlotOutcome } from '@/lib/exerciseGrading';
@@ -172,10 +173,11 @@ export default function QuizBlockPractice({
                 return (
                   <div key={contextBlock.id} className="flex flex-col gap-2">
                     {contextBlock.image && (
-                      <img
+                      <FadeImage
                         src={contextBlock.image}
                         alt={contextBlock.alt ?? ''}
                         className="max-h-64 w-full rounded-md object-contain"
+                        placeholderClassName="h-40 w-full rounded-md"
                       />
                     )}
                     {contextBlock.audio && <audio controls src={contextBlock.audio} className="w-full" />}

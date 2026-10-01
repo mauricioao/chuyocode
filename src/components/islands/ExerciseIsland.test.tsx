@@ -331,6 +331,28 @@ describe('ExerciseIsland — blocks (additive by construction)', () => {
     expect(screen.getByRole('img', { name: 'A cat' })).toBeTruthy();
   });
 
+  it('fades the step media in on load, and shows a neutral placeholder instead of the browser glyph on error', () => {
+    const withBlocks: Payload = {
+      ...pair,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png', alt: 'A cat' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    };
+    render(<ExerciseIsland lang="en" payload={withBlocks} />);
+    goToSlot(1);
+
+    const img = screen.getByRole('img', { name: 'A cat' }) as HTMLImageElement;
+    expect(img.className).toContain('opacity-0');
+    fireEvent.load(img);
+    expect(img.className).toContain('opacity-100');
+
+    fireEvent.error(img);
+    expect(screen.getByTestId('fade-image-broken')).toBeTruthy();
+    expect(document.querySelector('img')).toBeNull();
+  });
+
   it('never renders a `row` block itself as block markup — only prose/media', () => {
     const withBlocks: Payload = {
       ...single,

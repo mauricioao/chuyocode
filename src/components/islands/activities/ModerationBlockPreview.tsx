@@ -12,6 +12,7 @@
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import { zoneAnswerSummary, zoneOptionsSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
+import { FadeImage } from '@/components/ui/fade-image';
 
 export interface ModerationBlockPreviewProps {
   lang: Lang;
@@ -32,12 +33,15 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
     return (
       <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-3">
         {block.image && (
-          <img
-            src={resolveImageUrl(block.image.path)}
-            alt=""
-            data-testid="moderation-block-image"
-            className="max-h-96 w-full rounded-md border border-border object-contain"
-          />
+          <div className="rounded-md border border-border">
+            <FadeImage
+              data-testid="moderation-block-image"
+              src={resolveImageUrl(block.image.path)}
+              alt=""
+              className="max-h-96 w-full object-contain"
+              placeholderClassName="h-48 w-full"
+            />
+          </div>
         )}
         <ul className="flex flex-col gap-2">
           {block.zones.map((zone, index) => (
