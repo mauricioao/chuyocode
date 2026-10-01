@@ -6,6 +6,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }));
+
 import PasswordAuthForm, { COPY } from './PasswordAuthForm';
 
 function stubFetch(body: unknown, ok = true) {
@@ -108,6 +112,7 @@ describe('PasswordAuthForm — sign in (default mode)', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.signInError));
     expect(screen.getByTestId('password-auth-form')).toBeTruthy();
+    expect(toastErrorMock).toHaveBeenCalledWith(COPY.es.signInError);
   });
 
   it('shows the same error when fetch throws (offline)', async () => {
@@ -133,6 +138,23 @@ describe('PasswordAuthForm — sign in (default mode)', () => {
     fireEvent.click(submitButton());
 
     expect(submitButton().hasAttribute('disabled')).toBe(true);
+    release?.();
+  });
+
+  it('shows the submit button as loading/aria-busy (stable width, label unchanged) while in flight', async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise((resolve) => { release = () => resolve({ ok: true, json: async () => ({ ok: true }) }); })),
+    );
+    stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    expect(submitButton().getAttribute('aria-busy')).toBe('true');
+    expect(submitButton().textContent).toContain(COPY.es.signInSubmit);
     release?.();
   });
 });

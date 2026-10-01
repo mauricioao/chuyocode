@@ -26,6 +26,7 @@
  * `SignInForm.COPY`.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -158,6 +159,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
 
       if (!res.ok) {
         setStatus('error');
+        toast.error(mode === 'signin' ? t.signInError : t.genericError);
         return;
       }
 
@@ -177,6 +179,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       setStatus('sent');
     } catch {
       setStatus('error');
+      toast.error(mode === 'signin' ? t.signInError : t.genericError);
     }
   }
 
@@ -188,18 +191,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
     );
   }
 
-  const submitLabel =
-    mode === 'signin'
-      ? pending
-        ? t.signInSubmitting
-        : t.signInSubmit
-      : mode === 'signup'
-        ? pending
-          ? t.signUpSubmitting
-          : t.signUpSubmit
-        : pending
-          ? t.resetSubmitting
-          : t.resetSubmit;
+  const submitLabel = mode === 'signin' ? t.signInSubmit : mode === 'signup' ? t.signUpSubmit : t.resetSubmit;
 
   return (
     <form
@@ -248,7 +240,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       <Button
         type="submit"
         disabled={pending}
-        aria-busy={pending}
+        loading={pending}
         data-testid="password-auth-submit"
       >
         {submitLabel}

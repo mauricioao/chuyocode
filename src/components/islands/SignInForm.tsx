@@ -22,6 +22,7 @@
  * `UI_LABELS` sweep in `i18n.test.ts` cannot reach it.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -91,11 +92,17 @@ export default function SignInForm({ lang, next }: SignInFormProps) {
         body: JSON.stringify({ email, lang, ...(next ? { next } : {}) }),
       });
       // See the file header: `res.ok` is the ONLY signal this branches on.
-      setStatus(res.ok ? 'sent' : 'error');
+      if (res.ok) {
+        setStatus('sent');
+      } else {
+        setStatus('error');
+        toast.error(t.error);
+      }
     } catch {
       // Offline or aborted. Same neutral rule: the request did not complete,
       // so the visitor gets the retryable state, never the success one.
       setStatus('error');
+      toast.error(t.error);
     }
   }
 
@@ -136,10 +143,10 @@ export default function SignInForm({ lang, next }: SignInFormProps) {
       <Button
         type="submit"
         disabled={pending}
-        aria-busy={pending}
+        loading={pending}
         data-testid="signin-submit"
       >
-        {pending ? t.submitting : t.submit}
+        {t.submit}
       </Button>
       {status === 'error' && (
         <p role="alert" className="text-sm text-destructive">
