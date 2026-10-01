@@ -103,6 +103,17 @@ describe('GET /[lang]/cursos/[slug] — existence', () => {
   });
 });
 
+describe('GET /[lang]/cursos/[slug] — cover image loading', () => {
+  it('fades the cover in on load and falls back to a neutral placeholder on error', async () => {
+    getCourseDetailBySlugMock.mockResolvedValue(courseFixture({ coverPath: '/covers/react.webp' }));
+    const res = await render('https://chuyocode.test/es/cursos/react-basico', { lang: 'es', slug: 'react-basico' });
+    const html = await res.text();
+    expect(html).toContain('opacity-0');
+    expect(html).toContain(`onload="this.classList.remove('opacity-0')"`);
+    expect(html).toContain(`onerror="this.style.display='none'"`);
+  });
+});
+
 describe('GET /[lang]/cursos/[slug] — syllabus', () => {
   it('shows a preview tag on a preview lesson and a lock on a non-viewable one', async () => {
     const res = await render('https://chuyocode.test/es/cursos/react-basico', { lang: 'es', slug: 'react-basico' });
