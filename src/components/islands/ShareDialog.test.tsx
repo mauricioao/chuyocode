@@ -17,6 +17,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ShareDialog, { COPIED_RESET_MS, type ShareLabels } from './ShareDialog';
 
 const URL_UNDER_TEST =
@@ -291,5 +292,14 @@ describe('ShareDialog — WhatsApp / QR download / native share / note (D8)', ()
     fireEvent.click(screen.getByTestId('exercise-share'));
     const note = await screen.findByTestId('exercise-share-note');
     expect(note.textContent).toBe(labels.note);
+  });
+});
+
+describe('ShareDialog — hydration (Bug 1, React error #418)', () => {
+  it('does not report a recoverable hydration error', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => (
+      <ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} whatsappHref={WHATSAPP_HREF} downloadFileName="act.svg" />
+    ));
+    expect(recoverableErrors).toEqual([]);
   });
 });

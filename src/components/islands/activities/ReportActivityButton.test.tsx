@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ReportActivityButton from './ReportActivityButton';
 
 const ACTIVITY_ID = '11111111-1111-1111-1111-111111111111';
@@ -111,5 +112,14 @@ describe('ReportActivityButton — submitting', () => {
     render(<ReportActivityButton lang="en" activityId={ACTIVITY_ID} />);
     fireEvent.click(screen.getByTestId('report-activity-button'));
     expect(screen.getByTestId('report-activity-dialog').textContent).toContain('Report this activity');
+  });
+});
+
+describe('ReportActivityButton — hydration (Bug 1, React error #418)', () => {
+  it('does not report a recoverable hydration error', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => (
+      <ReportActivityButton lang="es" activityId={ACTIVITY_ID} />
+    ));
+    expect(recoverableErrors).toEqual([]);
   });
 });

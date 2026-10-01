@@ -5,6 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import HeartButton from './HeartButton';
 
 const ACTIVITY_ID = '3f1a2b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b';
@@ -175,5 +176,14 @@ describe('HeartButton — what it announces', () => {
 
     render(<HeartButton lang="en" activityId={ACTIVITY_ID} heartCount={3} hearted />);
     expect(screen.getByRole('button', { name: 'Remove heart 3' })).toBeTruthy();
+  });
+});
+
+describe('HeartButton — hydration (Bug 1, React error #418)', () => {
+  it('does not report a recoverable hydration error', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => (
+      <HeartButton lang="es" activityId={ACTIVITY_ID} heartCount={3} hearted={false} />
+    ));
+    expect(recoverableErrors).toEqual([]);
   });
 });

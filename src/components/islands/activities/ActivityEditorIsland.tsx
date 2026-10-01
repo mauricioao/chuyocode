@@ -360,14 +360,37 @@ export default function ActivityEditorIsland({
   // own (unthemeable) confirmation dialog. No browser lets a page customize
   // that text any more, so this is the one case the custom modal below
   // cannot replace.
+  //
+  // Bug 3 ("two contradictory unsaved-changes prompts"): this listener must
+  // be gone BEFORE any navigation WE initiate from the modal below (`window
+  // .location.href = …`, a real browser navigation) — otherwise that very
+  // navigation also fires `beforeunload`, and the native "leave site?"
+  // prompt stacks right behind the modal the learner/author just answered.
+  // The handler reference is kept in `onBeforeUnloadRef` precisely so
+  // `removeBeforeUnloadGuard` below can detach the SAME listener instance
+  // on demand, synchronously, instead of waiting for this effect's own
+  // cleanup to run on a future render — a render that a same-tick
+  // `window.location.href` assignment never gives React the chance to
+  // flush before the browser starts tearing the page down.
+  const onBeforeUnloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
   useEffect(() => {
     if (!isDirty) return undefined;
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
     }
+    onBeforeUnloadRef.current = onBeforeUnload;
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      onBeforeUnloadRef.current = null;
+    };
   }, [isDirty]);
+
+  const removeBeforeUnloadGuard = useCallback(() => {
+    if (!onBeforeUnloadRef.current) return;
+    window.removeEventListener('beforeunload', onBeforeUnloadRef.current);
+    onBeforeUnloadRef.current = null;
+  }, []);
 
   // Owner request #9: for an IN-APP navigation (a link inside the site, or
   // an Astro ClientRouter transition) while dirty, show our own modal
@@ -432,8 +455,14 @@ export default function ActivityEditorIsland({
   const handleLeaveWithoutSaving = useCallback(() => {
     const href = navGuard.href;
     closeNavGuard();
-    if (href) window.location.href = href;
-  }, [navGuard.href, closeNavGuard]);
+    if (href) {
+      // Bug 3: gone immediately — nothing was saved, but the learner/author
+      // explicitly chose to discard the warning by picking this option, so
+      // the native prompt must not also ask the same question again.
+      removeBeforeUnloadGuard();
+      window.location.href = href;
+    }
+  }, [navGuard.href, closeNavGuard, removeBeforeUnloadGuard]);
 
   const handleSaveAndLeave = useCallback(async () => {
     const href = navGuard.href;
@@ -447,11 +476,17 @@ export default function ActivityEditorIsland({
       });
       if (!res.ok) throw new Error('save failed');
       setNavGuard({ open: false, href: null, saving: false, error: false });
-      if (href) window.location.href = href;
+      if (href) {
+        // Bug 3: only removed once the save actually succeeded — a FAILED
+        // save (the `catch` below) must leave it armed, since the work is
+        // still genuinely unsaved and no navigation happens either.
+        removeBeforeUnloadGuard();
+        window.location.href = href;
+      }
     } catch {
       setNavGuard((g) => ({ ...g, saving: false, error: true }));
     }
-  }, [activityId, navGuard.href]);
+  }, [activityId, navGuard.href, removeBeforeUnloadGuard]);
 
   const openSubmitDialog = useCallback(() => {
     setSubmitDialog({ open: true, submitting: false, error: null });

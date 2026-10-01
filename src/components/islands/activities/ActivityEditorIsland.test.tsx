@@ -666,6 +666,65 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
   });
 });
 
+describe('ActivityEditorIsland — Bug 3, no double "unsaved changes" prompt', () => {
+  function openModalWhileDirty() {
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    const link = document.createElement('a');
+    link.href = '/es/libros';
+    document.body.appendChild(link);
+    fireEvent.click(link, { button: 0 });
+    return link;
+  }
+
+  it('"Salir sin guardar" removes the beforeunload guard before navigating — no native prompt follows', () => {
+    renderEditor();
+    const link = openModalWhileDirty();
+
+    fireEvent.click(screen.getByTestId('unsaved-modal-leave'));
+
+    // Our own in-app navigation already ran (`window.location.href`); the
+    // native prompt must not ALSO fire for it.
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    link.remove();
+  });
+
+  it('"Guardar y salir" removes the beforeunload guard only AFTER a successful save, before navigating', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    const link = openModalWhileDirty();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('unsaved-modal-save-and-leave'));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    link.remove();
+  });
+
+  it('keeps the beforeunload guard armed when "Guardar y salir" fails to save — stays on the page, no navigation', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
+    renderEditor();
+    const link = openModalWhileDirty();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('unsaved-modal-save-and-leave'));
+    });
+
+    expect(screen.getByTestId('unsaved-modal-error')).toBeTruthy();
+    // Never saved, never navigated — the native guard must still be armed.
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    link.remove();
+  });
+});
+
 describe('ActivityEditorIsland — beforeunload guard', () => {
   it('prevents unload while there are unsaved changes', () => {
     renderEditor();

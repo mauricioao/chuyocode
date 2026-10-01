@@ -35,17 +35,37 @@
  * View transitions (navigation-without-flicker PR): `Header.astro` now
  * carries `transition:persist`, so this island survives client-side
  * navigations as the SAME mounted instance instead of remounting into its
- * loading placeholder on every page. Its state also no longer starts at
- * `loading` on a fresh mount (a hard reload, a new tab): `meCache.ts` caches
- * the last `/api/me` answer in `sessionStorage`, read synchronously on
- * mount, so the avatar or "Ingresar" renders on the very first paint. The
- * `/api/me` fetch below still always runs, in the background, to revalidate
- * that cached answer — it is never trusted on its own past the first paint.
- * The cache is invalidated (so a stale answer can never survive past this
- * component seeing it): right after a sign-in/sign-out redirect (the
- * `?auth=signed-in|signed-out` marker set by `authRedirect.ts`), on
- * submitting the sign-out form (before the full-page reload that form
- * triggers), and on a `401` from any background `/api/me` refresh.
+ * loading placeholder on every page — so the "instant" cached render below
+ * only ever matters once per full page load anyway (a hard reload, a fresh
+ * tab), never on a client-side navigation. On THAT full page load,
+ * `meCache.ts`'s cached `/api/me` answer (`sessionStorage`) is applied in an
+ * effect right after mount, not read synchronously during the first render:
+ * this component's state ALWAYS starts at `loading` (see the SSR CONTRACT
+ * below), the cached answer — when there is one — replaces it moments
+ * later, same tick the one-time `justCompletedAuthFlow` cache-clear below
+ * runs. The `/api/me` fetch below still always runs, in the background, to
+ * revalidate whatever the cache said — it is never trusted on its own past
+ * that first effect. The cache is invalidated (so a stale answer can never
+ * survive past this component seeing it): right after a sign-in/sign-out
+ * redirect (the `?auth=signed-in|signed-out` marker set by
+ * `authRedirect.ts`), on submitting the sign-out form (before the full-page
+ * reload that form triggers), and on a `401` from any background `/api/me`
+ * refresh.
+ *
+ * SSR CONTRACT (Bug 1, React error #418): this component's rendered state is
+ * `loading` on the server AND on the very first CLIENT render (hydration) —
+ * full stop, regardless of what `meCache`/the URL already say. The PREVIOUS
+ * shape read `meCache`/`justCompletedAuthFlow` synchronously in a lazy
+ * `useState` initializer, which runs during the first CLIENT render too: a
+ * visitor with a cached signed-in answer got the avatar chrome on that very
+ * first client render while the server — which never reaches `sessionStorage`
+ * or the request URL's marker at all — always rendered the neutral `loading`
+ * placeholder, a hydration mismatch (React error #418) on every such visit.
+ * Applying the cached answer (or clearing it, post-auth-flow) in the mount
+ * effect below instead matches every other browser-only read in this
+ * codebase (`useIsDesktop`, `usePrefersReducedMotion`, `meCache` itself):
+ * the first commit always matches SSR, and a plain (non-hydration) render
+ * updates it moments later.
  *
  * MOBILE HAMBURGER MENU (mobile layout pass): `Header.astro`'s own
  * `#mobile-menu` panel (opened by the hamburger button, `md:hidden`) used to
@@ -132,27 +152,39 @@ function justCompletedAuthFlow(): boolean {
 }
 
 /**
- * The state to render on the very first paint: the cached `/api/me` answer
- * when there is a trustworthy one (instant avatar/"Ingresar", no flash of
- * the loading placeholder on every navigation), `loading` otherwise. The
- * background fetch in the effect below always still runs to revalidate.
+ * The cached `/api/me` answer to apply right after mount — see the file
+ * header's SSR CONTRACT. `undefined` means "nothing to apply" (no usable
+ * cache): the mount effect below leaves the render at `loading` in that
+ * case, same as a stale-cache-cleared post-auth-flow visit.
  */
-function initialState(): State {
-  if (justCompletedAuthFlow()) {
-    clearMeCache();
-    return { status: 'loading' };
-  }
+function cachedState(): State | undefined {
   const cached = readMeCache();
-  if (!cached) return { status: 'loading' };
+  if (!cached) return undefined;
   return cached.profile ? { status: 'signed-in', profile: cached.profile } : { status: 'signed-out' };
 }
 
 export default function UserMenu({ lang }: UserMenuProps) {
   const t = copyFor(lang);
-  const [state, setState] = useState<State>(initialState);
+  // Always `loading` on the very first render, server AND client alike —
+  // see the file header's SSR CONTRACT.
+  const [state, setState] = useState<State>({ status: 'loading' });
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+
+  // Applies the cached `/api/me` answer (or clears a stale one right after
+  // an auth redirect) the moment this component actually mounts on the
+  // client — never during the render itself, which is what kept the first
+  // client render matching the server's `loading` output. The background
+  // `/api/me` fetch below still always runs regardless, to revalidate.
+  useEffect(() => {
+    if (justCompletedAuthFlow()) {
+      clearMeCache();
+      return;
+    }
+    const cached = cachedState();
+    if (cached) setState(cached);
+  }, []);
 
   // Mobile hamburger menu (mobile layout pass) — see the file header. Found
   // by id after mount (`Header.astro` already renders the empty slot in its

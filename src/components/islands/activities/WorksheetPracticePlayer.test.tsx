@@ -252,6 +252,35 @@ describe('WorksheetPracticePlayer — pan (Mano tool / Space / middle-drag)', ()
   });
 });
 
+describe('WorksheetPracticePlayer — free panning (Bug 2, loose camera bound)', () => {
+  it('pans away from center at FIT scale once the Mano tool is active (clampCameraLoose, not the strict/locked clampCamera)', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-tool-hand'));
+    // At fit (1.25x, both axes landing exactly on the 1000x500 viewport),
+    // the OLD strict `clampCamera` forces x/y back to 0 (centered, locked)
+    // regardless of how far the drag moved — this must no longer hold.
+    const before = content().style.transform;
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(viewport, 'pointermove', 450, 250, { button: 0 });
+    firePointer(viewport, 'pointerup', 450, 250, { button: 0 });
+    expect(content().style.transform).not.toBe(before);
+  });
+
+  it('still re-centers via the Ajustar/Fit button after panning away at fit scale', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-tool-hand'));
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    firePointer(viewport, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(viewport, 'pointermove', 450, 250, { button: 0 });
+    firePointer(viewport, 'pointerup', 450, 250, { button: 0 });
+    fireEvent.click(screen.getByTestId('practice-zoom-fit'));
+    expect(content().style.transform).toBe('translate(0px, 0px) scale(1.25)');
+  });
+});
+
 describe('WorksheetPracticePlayer — no layout flash on the server render (mobile layout pass, priority fix)', () => {
   it('renders BOTH the desktop camera and the mobile pinch viewport on the server, gated by CSS `lg:` classes only', () => {
     window.matchMedia = undefined as unknown as typeof window.matchMedia;

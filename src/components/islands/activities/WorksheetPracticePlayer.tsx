@@ -5,8 +5,14 @@
  * `WorksheetPlayer` in its `practice` mode (see that component's own header)
  * with the one thing it does not own: ZOOM/PAN, reused directly from the
  * creator canvas' own camera math (`src/lib/activities/canvasViewport.ts` —
- * `fitCamera`, `zoomAt`, `panBy`, `clampCamera`, `stepZoomInput`,
- * `wheelZoomInput`) instead of a re-derived clamp. The OLD desktop model —
+ * `fitCamera`, `zoomAt`, `panBy`, `clampCameraLoose`, `stepZoomInput`,
+ * `wheelZoomInput`) instead of a re-derived clamp. FREE PANNING (Bug 2,
+ * "free panning in the practice player"): every pan/zoom entry point here
+ * clamps through the editor's own LOOSE bound (`clampCameraLoose`), not the
+ * stricter `clampCamera` this file used before — the learner can now drag
+ * the sheet around at any zoom, including while it already fits, exactly
+ * like the creator's own canvas; only "Ajustar"/Fit itself stays on the
+ * strict bound (it deliberately re-centers). The OLD desktop model —
  * a plain `zoom` number driving a `width: N%` wrapper inside a horizontally
  * scrolling strip, via the narrower `clampZoom`/`stepZoom` pair — is fully
  * retired here: `stepZoom`/`clampZoom`/`FIT_ZOOM` are now dead in this file
@@ -58,7 +64,7 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { ImageRef, WorksheetBlock } from '@/lib/activities/blocks';
 import {
   fitCamera,
-  clampCamera,
+  clampCameraLoose,
   zoomAt,
   panBy,
   stepZoomInput,
@@ -148,13 +154,16 @@ function DesktopWorksheetCamera({
   // own canvas — see that file's header for why a plain mount effect isn't
   // enough (this viewport's own height is layout-driven, not a fixed CSS
   // value). A resize while the learner already zoomed/panned RE-CLAMPS their
-  // camera instead of silently re-fitting it away.
+  // camera instead of silently re-fitting it away — through the LOOSE bound
+  // (Bug 2, "free panning in the practice player"), same reasoning as every
+  // other re-clamp below: only `fitCamera`/"Ajustar" itself stays on the
+  // strict bound, since it is the one action that deliberately re-centers.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
     const reconcile = () => {
       const vp = viewportSize();
-      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCamera(prev, displaySize, vp)));
+      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
     };
     reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -169,7 +178,10 @@ function DesktopWorksheetCamera({
       setCamera((prev) => {
         const vp = viewportSize();
         const point = anchor ?? { x: vp.width / 2, y: vp.height / 2 };
-        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp });
+        // LOOSE bound (Bug 2, "free panning in the practice player"): the
+        // editor's own free-panning policy, reused here — see
+        // `clampCameraLoose`'s own header.
+        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp }, clampCameraLoose);
       });
     },
     [displaySize, viewportSize],
@@ -262,7 +274,8 @@ function DesktopWorksheetCamera({
       if (!drag) return;
       const dx = e.clientX - drag.startClientX;
       const dy = e.clientY - drag.startClientY;
-      const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() });
+      // LOOSE bound (Bug 2): see `applyZoom`'s own note above.
+      const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() }, clampCameraLoose);
       cameraRef.current = next;
       setCamera(next);
     },
