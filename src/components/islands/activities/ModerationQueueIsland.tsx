@@ -404,8 +404,14 @@ export default function ModerationQueueIsland({ lang, initialPending, initialRep
             <Button type="button" variant="ghost" onClick={() => setApproveState(CONFIRM_IDLE)} disabled={approveState.submitting}>
               {t.confirmCancel}
             </Button>
-            <Button type="button" data-testid="moderation-approve-confirm" onClick={() => void approve()} disabled={approveState.submitting}>
-              {approveState.submitting ? t.approving : t.confirmAccept}
+            <Button
+              type="button"
+              data-testid="moderation-approve-confirm"
+              onClick={() => void approve()}
+              disabled={approveState.submitting}
+              loading={approveState.submitting}
+            >
+              {t.confirmAccept}
             </Button>
           </div>
         </DialogContent>
@@ -453,8 +459,14 @@ export default function ModerationQueueIsland({ lang, initialPending, initialRep
             <Button type="button" variant="ghost" onClick={() => setRejectOpen(false)} disabled={rejectSubmitting}>
               {t.confirmCancel}
             </Button>
-            <Button type="button" data-testid="moderation-reject-confirm" onClick={() => void reject()} disabled={rejectSubmitting}>
-              {rejectSubmitting ? t.rejecting : t.reject}
+            <Button
+              type="button"
+              data-testid="moderation-reject-confirm"
+              onClick={() => void reject()}
+              disabled={rejectSubmitting}
+              loading={rejectSubmitting}
+            >
+              {t.reject}
             </Button>
           </div>
         </DialogContent>
@@ -476,8 +488,14 @@ export default function ModerationQueueIsland({ lang, initialPending, initialRep
             <Button type="button" variant="ghost" onClick={() => setRestoreState(CONFIRM_IDLE)} disabled={restoreState.submitting}>
               {t.confirmCancel}
             </Button>
-            <Button type="button" data-testid="moderation-restore-confirm" onClick={() => void restore()} disabled={restoreState.submitting}>
-              {restoreState.submitting ? t.restoring : t.confirmAccept}
+            <Button
+              type="button"
+              data-testid="moderation-restore-confirm"
+              onClick={() => void restore()}
+              disabled={restoreState.submitting}
+              loading={restoreState.submitting}
+            >
+              {t.confirmAccept}
             </Button>
           </div>
         </DialogContent>
@@ -505,8 +523,9 @@ export default function ModerationQueueIsland({ lang, initialPending, initialRep
               data-testid="moderation-remove-confirm"
               onClick={() => void remove()}
               disabled={removeState.submitting}
+              loading={removeState.submitting}
             >
-              {removeState.submitting ? t.removing : t.confirmAccept}
+              {t.confirmAccept}
             </Button>
           </div>
         </DialogContent>

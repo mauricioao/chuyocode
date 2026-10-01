@@ -151,6 +151,29 @@ describe('MisActividadesIsland — delete', () => {
     expect(screen.getByTestId(`activity-row-${DRAFT.id}`)).toBeTruthy();
   });
 
+  it('shows the confirm button as loading/aria-busy and disables both buttons while deleting', async () => {
+    let resolveFetch!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      ),
+    );
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    fireEvent.click(screen.getByTestId('delete-dialog-confirm'));
+
+    const confirm = screen.getByTestId('delete-dialog-confirm') as HTMLButtonElement;
+    expect(confirm.getAttribute('aria-busy')).toBe('true');
+    expect(confirm.disabled).toBe(true);
+    expect((screen.getByTestId('delete-dialog-cancel') as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => resolveFetch({ ok: true, json: async () => ({ ok: true }) }));
+  });
+
   it('deletes on confirm, removing the row and posting to the eliminar endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
