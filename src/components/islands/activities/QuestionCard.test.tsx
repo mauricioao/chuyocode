@@ -186,6 +186,24 @@ describe('QuestionCard — footer', () => {
   });
 });
 
+describe('QuestionCard — tip wrappers (item 6 anchors)', () => {
+  it('renders the question text field and type control unwrapped by default', () => {
+    render(<QuestionCard {...baseProps()} />);
+    expect(screen.getByTestId('question-text-s1')).toBeTruthy();
+    expect(screen.getByTestId('question-type-s1')).toBeTruthy();
+  });
+
+  it('calls wrapQuestionText/wrapTypeControl with the real field/control so a caller can anchor a tip to them', () => {
+    const wrapQuestionText = vi.fn((field: React.ReactNode) => <div data-testid="wrapped-text">{field}</div>);
+    const wrapTypeControl = vi.fn((control: React.ReactNode) => <div data-testid="wrapped-type">{control}</div>);
+    render(<QuestionCard {...baseProps({ wrapQuestionText, wrapTypeControl })} />);
+    expect(wrapQuestionText).toHaveBeenCalled();
+    expect(wrapTypeControl).toHaveBeenCalled();
+    expect(screen.getByTestId('wrapped-text').querySelector('[data-testid="question-text-s1"]')).toBeTruthy();
+    expect(screen.getByTestId('wrapped-type').querySelector('[data-testid="question-type-s1"]')).toBeTruthy();
+  });
+});
+
 describe('QuestionCard — incomplete pointer', () => {
   it('shows the incomplete message when given one', () => {
     render(<QuestionCard {...baseProps({ incompleteMessage: 'Falta una respuesta.' })} />);

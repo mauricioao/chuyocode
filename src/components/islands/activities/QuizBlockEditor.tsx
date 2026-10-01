@@ -40,6 +40,13 @@
  * reaches {@link QuizLivePreview} already debounced (~300ms,
  * `useDebouncedValue`) so fast typing in a card does not reset the preview's
  * own in-progress answers on every keystroke.
+ *
+ * FIRST-RUN TIPS (owner build item 6): a 3-step tour anchored to the FIRST
+ * question card's text field, its type control, and the trailing "+ Agregar
+ * pregunta" button — `useFirstRunTips` persists "seen" to `localStorage` so
+ * it shows once per browser; `QuizFirstRunTip` anchors each bubble by CSS,
+ * never a blocking overlay. Only the first card is ever wrapped (`index ===
+ * 0`), so adding a 2nd+ question never grows a 2nd tour.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -79,9 +86,15 @@ import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizCheckli
 import { createExampleDraft, EXAMPLE_QUESTION_PROMPTS } from '@/lib/quizExampleQuestions';
 import type { Payload } from '@/lib/exercisePayload';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useFirstRunTips } from '@/hooks/useFirstRunTips';
 import { cn } from '@/lib/utils';
 import QuestionCard from './QuestionCard';
 import QuizLivePreview from './QuizLivePreview';
+import QuizFirstRunTip from './QuizFirstRunTip';
+
+/** Bumped only if the tour's steps/anchors change shape enough that a learner who dismissed the old one should see the new one. */
+const FIRST_RUN_TIPS_KEY = 'chuyo:quiz-editor-tips-v1';
+const FIRST_RUN_TIPS_STEPS = 3;
 
 export const COPY = {
   es: {
@@ -92,6 +105,12 @@ export const COPY = {
     dragHandle: 'Reordenar pregunta',
     tabQuestions: 'Preguntas',
     tabPreview: 'Vista previa',
+    tip1: 'Escribe la pregunta',
+    tip2: 'Toca el círculo de la correcta',
+    tip3: 'Agrega otra pregunta',
+    tipNext: 'Siguiente',
+    tipDone: 'Listo',
+    tipDismiss: 'Omitir',
     questionsCount: (n: number) => (n === 1 ? '1 pregunta' : `${n} preguntas`),
     allComplete: 'todas con respuesta',
     reason: (n: number, reason: ChecklistReason): string => {
@@ -113,6 +132,12 @@ export const COPY = {
     dragHandle: 'Reorder question',
     tabQuestions: 'Questions',
     tabPreview: 'Preview',
+    tip1: 'Write the question',
+    tip2: "Tap the correct answer's circle",
+    tip3: 'Add another question',
+    tipNext: 'Next',
+    tipDone: 'Done',
+    tipDismiss: 'Skip',
     questionsCount: (n: number) => (n === 1 ? '1 question' : `${n} questions`),
     allComplete: 'all with an answer',
     reason: (n: number, reason: ChecklistReason): string => {
@@ -208,6 +233,7 @@ export default function QuizBlockEditor({
   const checklist = listIncompleteQuestions(draft);
   const [mobileTab, setMobileTab] = useState<'questions' | 'preview'>('questions');
   const debouncedPayload = useDebouncedValue(payload, 300);
+  const tips = useFirstRunTips(FIRST_RUN_TIPS_KEY, FIRST_RUN_TIPS_STEPS);
 
   const counterRef = useRef(0);
   function nextId(prefix: string): string {
@@ -380,6 +406,44 @@ export default function QuizBlockEditor({
                           dragHandle={dragHandle}
                           highlighted={selectedSlotId === slot.id}
                           incompleteMessage={incompleteSlotId === slot.id ? incompleteMessage : null}
+                          // First-run tour (item 6): only the FIRST card ever anchors a tip,
+                          // so a second/third question never grows its own tour.
+                          wrapQuestionText={
+                            index === 0
+                              ? (field) => (
+                                  <QuizFirstRunTip
+                                    active={tips.step === 0}
+                                    text={t.tip1}
+                                    isLast={false}
+                                    nextLabel={t.tipNext}
+                                    doneLabel={t.tipDone}
+                                    dismissLabel={t.tipDismiss}
+                                    onNext={tips.next}
+                                    onDismiss={tips.dismiss}
+                                  >
+                                    {field}
+                                  </QuizFirstRunTip>
+                                )
+                              : undefined
+                          }
+                          wrapTypeControl={
+                            index === 0
+                              ? (control) => (
+                                  <QuizFirstRunTip
+                                    active={tips.step === 1}
+                                    text={t.tip2}
+                                    isLast={false}
+                                    nextLabel={t.tipNext}
+                                    doneLabel={t.tipDone}
+                                    dismissLabel={t.tipDismiss}
+                                    onNext={tips.next}
+                                    onDismiss={tips.dismiss}
+                                  >
+                                    {control}
+                                  </QuizFirstRunTip>
+                                )
+                              : undefined
+                          }
                           onLabelChange={(label) => commit(setRowLabel(draft, slot.id, label))}
                           onTypeChange={(segment: QuestionSegment, asDrop: boolean) =>
                             commit(changeQuestionSegment(draft, slot.id, segment, asDrop, () => nextId('item')))
@@ -425,14 +489,25 @@ export default function QuizBlockEditor({
             </SortableContext>
           </DndContext>
 
-          <button
-            type="button"
-            data-testid={`add-question-${blockId}`}
-            onClick={addQuestion}
-            className="min-h-11 w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+          <QuizFirstRunTip
+            active={tips.step === 2}
+            text={t.tip3}
+            isLast
+            nextLabel={t.tipNext}
+            doneLabel={t.tipDone}
+            dismissLabel={t.tipDismiss}
+            onNext={tips.next}
+            onDismiss={tips.dismiss}
           >
-            + {t.addQuestion}
-          </button>
+            <button
+              type="button"
+              data-testid={`add-question-${blockId}`}
+              onClick={addQuestion}
+              className="min-h-11 w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+            >
+              + {t.addQuestion}
+            </button>
+          </QuizFirstRunTip>
         </>
       )}
     </div>

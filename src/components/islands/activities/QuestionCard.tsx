@@ -86,6 +86,11 @@ function copyFor(lang: string): Copy {
   return lang === 'en' ? COPY.en : COPY.es;
 }
 
+/** Identity wrapper — the default for `wrapQuestionText`/`wrapTypeControl` below, so only the one card the first-run tour (item 6) anchors to needs to pass a real wrapper. */
+function identityWrap(node: React.ReactNode): React.ReactNode {
+  return node;
+}
+
 export interface QuestionCardProps {
   slot: Slot;
   index: number;
@@ -95,6 +100,10 @@ export interface QuestionCardProps {
   highlighted?: boolean;
   incompleteMessage?: string | null;
   dragHandle?: React.ReactNode;
+  /** Wraps the question text field — the first-run tour's step 1 anchor (`QuizBlockEditor`, item 6). Defaults to rendering the field unwrapped. */
+  wrapQuestionText?: (field: React.ReactNode) => React.ReactNode;
+  /** Wraps the type segmented control — the first-run tour's step 2 anchor. Defaults to rendering the control unwrapped. */
+  wrapTypeControl?: (control: React.ReactNode) => React.ReactNode;
   onLabelChange: (label: string) => void;
   onTypeChange: (segment: QuestionSegment, asDrop: boolean) => void;
   onMarkCorrect: (itemId: string) => void;
@@ -115,6 +124,8 @@ export default function QuestionCard({
   highlighted = false,
   incompleteMessage = null,
   dragHandle,
+  wrapQuestionText = identityWrap,
+  wrapTypeControl = identityWrap,
   onLabelChange,
   onTypeChange,
   onMarkCorrect,
@@ -166,14 +177,16 @@ export default function QuestionCard({
           <label htmlFor={`${slot.id}-question-text`} className="sr-only">
             {t.questionLabel}
           </label>
-          <Textarea
-            id={`${slot.id}-question-text`}
-            data-testid={`question-text-${slot.id}`}
-            value={slot.label}
-            placeholder={t.questionPlaceholder}
-            onChange={(event) => onLabelChange(event.target.value)}
-            rows={2}
-          />
+          {wrapQuestionText(
+            <Textarea
+              id={`${slot.id}-question-text`}
+              data-testid={`question-text-${slot.id}`}
+              value={slot.label}
+              placeholder={t.questionPlaceholder}
+              onChange={(event) => onLabelChange(event.target.value)}
+              rows={2}
+            />,
+          )}
           {segment === 'gap' && (
             <span
               data-testid={`gap-hint-${slot.id}`}
@@ -185,37 +198,39 @@ export default function QuestionCard({
         </div>
       </div>
 
-      <div
-        role="radiogroup"
-        aria-label={t.questionLabel}
-        data-testid={`question-type-${slot.id}`}
-        className="flex w-fit flex-wrap gap-1 rounded-lg border border-border p-1"
-      >
-        {(
-          [
-            ['choice', t.typeChoice],
-            ['text', t.typeText],
-            ['gap', t.typeGap],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={segment === value}
-            data-testid={`question-type-${slot.id}-${value}`}
-            onClick={() => onTypeChange(value, value === 'gap' ? asDrop : false)}
-            className={cn(
-              'max-lg:min-h-11 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
-              segment === value
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {wrapTypeControl(
+        <div
+          role="radiogroup"
+          aria-label={t.questionLabel}
+          data-testid={`question-type-${slot.id}`}
+          className="flex w-fit flex-wrap gap-1 rounded-lg border border-border p-1"
+        >
+          {(
+            [
+              ['choice', t.typeChoice],
+              ['text', t.typeText],
+              ['gap', t.typeGap],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={segment === value}
+              data-testid={`question-type-${slot.id}-${value}`}
+              onClick={() => onTypeChange(value, value === 'gap' ? asDrop : false)}
+              className={cn(
+                'max-lg:min-h-11 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
+                segment === value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>,
+      )}
 
       {segment === 'gap' && (
         <label className="flex w-fit items-center gap-2 text-sm text-muted-foreground">

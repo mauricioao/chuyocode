@@ -2,10 +2,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
 import type { Payload } from '@/lib/exercisePayload';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 const EMPTY_PAYLOAD: Payload = { pools: {}, slots: [] };
 
@@ -222,6 +226,50 @@ describe('QuizBlockEditor — live preview (items 3 and 8)', () => {
   });
 });
 
+describe('QuizBlockEditor — first-run tips (item 6)', () => {
+  it('shows step 1 anchored near the first question once a question exists', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    const tip = screen.getByTestId('quiz-first-run-tip');
+    expect(tip.textContent).toContain('Escribe la pregunta');
+  });
+
+  it('walks through all 3 steps via "Siguiente", ending on "Listo" at the add-question button', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    expect(screen.getByTestId('quiz-first-run-tip').textContent).toContain('Escribe la pregunta');
+
+    fireEvent.click(screen.getByTestId('quiz-first-run-tip-next'));
+    expect(screen.getByTestId('quiz-first-run-tip').textContent).toContain('Toca el círculo de la correcta');
+
+    fireEvent.click(screen.getByTestId('quiz-first-run-tip-next'));
+    const lastTip = screen.getByTestId('quiz-first-run-tip');
+    expect(lastTip.textContent).toContain('Agrega otra pregunta');
+    expect(screen.getByTestId('quiz-first-run-tip-next').textContent).toBe('Listo');
+
+    fireEvent.click(screen.getByTestId('quiz-first-run-tip-next'));
+    expect(screen.queryByTestId('quiz-first-run-tip')).toBeNull();
+  });
+
+  it('"Omitir" ends the tour immediately', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('quiz-first-run-tip-dismiss'));
+    expect(screen.queryByTestId('quiz-first-run-tip')).toBeNull();
+  });
+
+  it('never shows again once finished, even after remounting the editor', () => {
+    const { unmount } = render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('quiz-first-run-tip-dismiss'));
+    unmount();
+
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    expect(screen.queryByTestId('quiz-first-run-tip')).toBeNull();
+  });
+
+  it('only the first question card ever anchors a tip — a second question gets none', () => {
+    render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
+    expect(screen.getAllByTestId('quiz-first-run-tip')).toHaveLength(1);
+  });
+});
+
 describe('QuizBlockEditor — incomplete pointer', () => {
   it('shows the incomplete message on the pointed-to question', () => {
     render(
@@ -239,5 +287,20 @@ describe('QuizBlockEditor — incomplete pointer', () => {
     expect(screen.getByTestId('question-incomplete-s1').textContent).toBe(
       'Esta pregunta todavía no tiene una respuesta.',
     );
+  });
+});
+
+describe('QuizBlockEditor — hydration (useFirstRunTips reads localStorage, item 6)', () => {
+  it('does not report a recoverable hydration error when the tour has never been seen', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => <Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error when the tour was already dismissed', async () => {
+    const { recoverableErrors } = await renderThenHydrate(
+      () => <Harness initialPayload={ONE_QUESTION_PAYLOAD} />,
+      { localStorage: { 'chuyo:quiz-editor-tips-v1': '1' } },
+    );
+    expect(recoverableErrors).toEqual([]);
   });
 });
