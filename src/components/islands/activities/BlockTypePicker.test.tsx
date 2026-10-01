@@ -30,6 +30,20 @@ describe('BlockTypePicker', () => {
     expect(onSelectQuestions).toHaveBeenCalledTimes(1);
   });
 
+  it('renders a tiny CSS-only animated preview on each card, that only animates under motion-safe', () => {
+    render(<BlockTypePicker lang="es" onSelectWorksheet={vi.fn()} onSelectQuestions={vi.fn()} />);
+    const worksheetPreview = screen.getByTestId('card-preview-worksheet');
+    const questionsPreview = screen.getByTestId('card-preview-questions');
+    expect(worksheetPreview.getAttribute('aria-hidden')).toBe('true');
+    expect(questionsPreview.getAttribute('aria-hidden')).toBe('true');
+    // `motion-safe:animate-pulse` means "animate only when the viewer has no
+    // reduced-motion preference" — a reduced-motion viewer gets the exact
+    // same markup, just static (the Tailwind variant never applies), so
+    // there is nothing JS-side to branch on here.
+    expect(worksheetPreview.innerHTML).toContain('motion-safe:animate-pulse');
+    expect(questionsPreview.innerHTML).toContain('motion-safe:animate-pulse');
+  });
+
   it('is idle by default: neither card is disabled or busy', () => {
     render(<BlockTypePicker lang="es" onSelectWorksheet={vi.fn()} onSelectQuestions={vi.fn()} />);
     const worksheetButton = screen.getByTestId('picker-worksheet') as HTMLButtonElement;

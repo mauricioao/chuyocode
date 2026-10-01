@@ -42,7 +42,10 @@ export interface QuizGameModeSwitcherProps {
 // mode wired in at a time, one commit per mode. Requiring every `GameMode`
 // key here would force this file to change the moment `gameModes.ts` adds a
 // new union member, even for a mode this component cannot render yet.
-const ICONS: Partial<Record<GameMode, typeof ListChecksIcon>> = {
+// Exported for `QuizLivePreview.tsx`'s own "Estas preguntas se usan en N
+// juegos" badge (owner build item 3) — same icon per mode everywhere a game
+// mode is named, rather than a second icon map drifting from this one.
+export const GAME_MODE_ICONS: Partial<Record<GameMode, typeof ListChecksIcon>> = {
   quiz: ListChecksIcon,
   cards: CardsIcon,
   match: ArrowsLeftRightIcon,
@@ -76,7 +79,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
       className="flex flex-none flex-wrap items-center gap-1 pb-3"
     >
       {modes.map((mode) => {
-        const Icon = ICONS[mode];
+        const Icon = GAME_MODE_ICONS[mode];
         const label = labels[mode];
         // A mode not yet wired into this switcher (its own icon/label pair
         // not added here yet) simply does not render a tab — never a blank
