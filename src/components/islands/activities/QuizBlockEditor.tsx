@@ -26,6 +26,11 @@
  * plain incrementing counter, seeded from the block's own id so two quiz
  * blocks minting ids in the same render never collide.
  *
+ * THE EXAMPLE-FIRST EMPTY STATE (owner build item 4): a brand-new block
+ * offers `quizExampleQuestions.ts`'s 3 ready-made A1 questions as a
+ * read-only preview, with "Usar este ejemplo" (fills the block, submit-ready)
+ * or "Empezar en blanco" (today's single empty question, focused).
+ *
  * THE LIVE PREVIEW (owner build items 3 and 8) sits beside the question
  * column on desktop and behind a "Vista previa" tab on phones — a PURE CSS
  * layout (`lg:grid-cols-2` plus `max-lg:hidden` toggled by `mobileTab`), not
@@ -71,6 +76,7 @@ import {
 } from '@/lib/authoringDraft';
 import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionType';
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
+import { createExampleDraft, EXAMPLE_QUESTION_PROMPTS } from '@/lib/quizExampleQuestions';
 import type { Payload } from '@/lib/exercisePayload';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
@@ -81,6 +87,8 @@ export const COPY = {
   es: {
     addQuestion: 'Agregar pregunta',
     noQuestionsYet: 'Agrega tu primera pregunta',
+    useExample: 'Usar este ejemplo',
+    startBlank: 'Empezar en blanco',
     dragHandle: 'Reordenar pregunta',
     tabQuestions: 'Preguntas',
     tabPreview: 'Vista previa',
@@ -100,6 +108,8 @@ export const COPY = {
   en: {
     addQuestion: 'Add question',
     noQuestionsYet: 'Add your first question',
+    useExample: 'Use this example',
+    startBlank: 'Start blank',
     dragHandle: 'Reorder question',
     tabQuestions: 'Questions',
     tabPreview: 'Preview',
@@ -216,6 +226,10 @@ export default function QuizBlockEditor({
     onSelectSlot(slotId);
   }
 
+  function useExample() {
+    commit(createExampleDraft(() => nextId('ex')));
+  }
+
   function removeQuestion(rowId: string, slotId: string) {
     commit(removeBlock(draft, rowId));
     if (selectedSlotId === slotId) onSelectSlot(null);
@@ -315,12 +329,27 @@ export default function QuizBlockEditor({
       {!hasQuestions ? (
         <div
           data-testid={`quiz-empty-${blockId}`}
-          className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-8 text-center"
+          className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-4 text-center"
         >
           <p className="text-sm font-medium text-foreground">{t.noQuestionsYet}</p>
-          <Button type="button" variant="primary" data-testid={`add-question-${blockId}`} onClick={addQuestion}>
-            + {t.addQuestion}
-          </Button>
+          <div
+            data-testid={`quiz-example-preview-${blockId}`}
+            className="flex w-full flex-col gap-1 rounded-md bg-muted/40 p-3 text-left text-sm text-muted-foreground"
+          >
+            {EXAMPLE_QUESTION_PROMPTS.map((prompt, i) => (
+              <span key={prompt}>
+                {i + 1}. {prompt}
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button type="button" variant="primary" data-testid={`quiz-use-example-${blockId}`} onClick={useExample}>
+              {t.useExample}
+            </Button>
+            <Button type="button" variant="outline" data-testid={`quiz-start-blank-${blockId}`} onClick={addQuestion}>
+              {t.startBlank}
+            </Button>
+          </div>
         </div>
       ) : (
         <>

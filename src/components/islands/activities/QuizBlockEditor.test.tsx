@@ -41,28 +41,57 @@ function Harness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
-describe('QuizBlockEditor — empty state', () => {
-  it('shows the empty-questions message, a primary add button, and no question list or checklist', () => {
+describe('QuizBlockEditor — empty state (item 4, example-first)', () => {
+  it('shows the empty-questions message, a 3-question example preview, and no question list or checklist', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
     const empty = screen.getByTestId('quiz-empty-b1');
     expect(empty.textContent).toContain('Agrega tu primera pregunta');
     expect(screen.queryByTestId('quiz-question-list-b1')).toBeNull();
     expect(screen.queryByTestId('quiz-checklist-b1')).toBeNull();
-    const addButton = screen.getByTestId('add-question-b1');
-    expect(empty.contains(addButton)).toBe(true);
-    expect(addButton.getAttribute('data-variant')).toBe('primary');
+
+    const preview = screen.getByTestId('quiz-example-preview-b1');
+    expect(preview.textContent).toContain('What color is the sky?');
+
+    const useExampleButton = screen.getByTestId('quiz-use-example-b1');
+    expect(empty.contains(useExampleButton)).toBe(true);
+    expect(useExampleButton.getAttribute('data-variant')).toBe('primary');
+
+    const startBlankButton = screen.getByTestId('quiz-start-blank-b1');
+    expect(empty.contains(startBlankButton)).toBe(true);
+    expect(startBlankButton.getAttribute('data-variant')).toBe('outline');
+  });
+
+  it('"Usar este ejemplo" fills the block with 3 submit-ready questions', () => {
+    render(<Harness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('quiz-use-example-b1'));
+    expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(3);
+    expect(screen.getByTestId('quiz-checklist-b1').textContent).toContain('todas con respuesta');
+  });
+
+  it('"Empezar en blanco" adds one empty question card, focused', () => {
+    render(<Harness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
+    const cards = screen.getAllByTestId(/^question-card-/);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.getAttribute('data-highlighted')).toBe('true');
   });
 });
 
 describe('QuizBlockEditor — adding a question', () => {
-  it('adds a question as an always-editable card and selects it', () => {
+  it('"Empezar en blanco" from the empty state adds a question as an always-editable card and selects it', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('add-question-b1'));
+    fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
 
     expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
     expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
     const cards = screen.getAllByTestId(/^question-card-/);
     expect(cards).toHaveLength(1);
+  });
+
+  it('the trailing "+ Agregar pregunta" button adds another question once at least one exists', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('add-question-b1'));
+    expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(2);
   });
 
   it('Ctrl+Enter anywhere inside the block adds the next question', () => {

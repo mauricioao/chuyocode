@@ -177,7 +177,10 @@ describe('BlockList — quiz blocks', () => {
   it('adding a question through the quiz editor updates the block list via onBlocksChange', () => {
     render(<Harness initialBlocks={[quizBlock('b1')]} />);
     fireEvent.click(screen.getByTestId('block-header-b1'));
-    fireEvent.click(screen.getByTestId('add-question-b1'));
+    // Empty quiz block: the example-first empty state's "Empezar en blanco"
+    // (item 4), not the trailing "+ Agregar pregunta" (that only appears
+    // once at least one question already exists).
+    fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
     expect(screen.getByTestId('block-b1').textContent).toContain('pregunta');
     expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
   });
