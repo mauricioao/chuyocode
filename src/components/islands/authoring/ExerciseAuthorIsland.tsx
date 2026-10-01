@@ -101,12 +101,21 @@ export interface ExerciseAuthorIslandProps {
    * Until it is provided, both controls render `disabled`.
    */
   onSave?: (input: AuthoringSaveInput) => void;
+  /**
+   * Which action `onSave` is currently in flight for, if any — set by
+   * `ExercisePublishFlow` while its own `POST .../guardar` is pending.
+   * Drives the pressed button's own `loading` spinner/`aria-busy` and
+   * disables BOTH controls meanwhile, so a slow save can't be fired twice
+   * (coherent loading states, item 3). `undefined`/`null` means idle.
+   */
+  saving?: 'draft' | 'publish' | null;
 }
 
 export default function ExerciseAuthorIsland({
   lang,
   initialDraft,
   onSave,
+  saving = null,
 }: ExerciseAuthorIslandProps) {
   const t = copyFor(lang);
   const [draft, setDraft] = useState<Draft>(initialDraft);
@@ -123,6 +132,7 @@ export default function ExerciseAuthorIsland({
   }
 
   function handleSave(publish: boolean) {
+    if (saving) return; // belt-and-braces: the buttons are already disabled while a save is in flight.
     onSave?.({ payload: draftToPayload(draft), blocks: draft.blocks, publish, acceptedTerms });
   }
 
@@ -259,7 +269,8 @@ export default function ExerciseAuthorIsland({
             type="button"
             variant="outline"
             data-testid="save-draft"
-            disabled={!onSave}
+            disabled={!onSave || !!saving}
+            loading={saving === 'draft'}
             onClick={() => handleSave(false)}
           >
             {t.saveDraft}
@@ -267,7 +278,8 @@ export default function ExerciseAuthorIsland({
           <Button
             type="button"
             data-testid="publish-exercise"
-            disabled={!onSave}
+            disabled={!onSave || !!saving}
+            loading={saving === 'publish'}
             onClick={() => handleSave(true)}
           >
             {t.publish}

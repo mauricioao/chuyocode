@@ -220,9 +220,10 @@ export default function ModuleManager({ lang, courseId, initialModules }: Module
                     type="button"
                     data-testid={`module-rename-save-${mod.id}`}
                     disabled={busyModuleId === mod.id}
+                    loading={busyModuleId === mod.id}
                     onClick={() => void renameModule(mod.id)}
                   >
-                    {busyModuleId === mod.id ? t.modules.renaming : t.modules.save}
+                    {t.modules.save}
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => setRenamingModuleId(null)}>
                     {t.modules.cancel}
@@ -271,9 +272,10 @@ export default function ModuleManager({ lang, courseId, initialModules }: Module
                   variant="destructive"
                   data-testid={`module-delete-${mod.id}`}
                   disabled={busyModuleId === mod.id}
+                  loading={busyModuleId === mod.id}
                   onClick={() => void deleteModule(mod.id)}
                 >
-                  {busyModuleId === mod.id ? t.modules.deleting : t.modules.delete}
+                  {t.modules.delete}
                 </Button>
               </div>
             </div>
@@ -294,7 +296,6 @@ export default function ModuleManager({ lang, courseId, initialModules }: Module
                     onSubmit={(values) => saveLesson(mod.id, lesson.id, values)}
                     onCancel={() => setEditingLesson(null)}
                     submitLabel={t.lessons.save}
-                    submittingLabel={t.actions.saving}
                   />
                 ) : (
                   <div
@@ -344,9 +345,10 @@ export default function ModuleManager({ lang, courseId, initialModules }: Module
                         variant="destructive"
                         data-testid={`lesson-delete-${lesson.id}`}
                         disabled={busyLessonId === lesson.id}
+                        loading={busyLessonId === lesson.id}
                         onClick={() => void deleteLesson(mod.id, lesson.id)}
                       >
-                        {busyLessonId === lesson.id ? t.lessons.deleting : t.lessons.delete}
+                        {t.lessons.delete}
                       </Button>
                     </div>
                   </div>
@@ -359,7 +361,6 @@ export default function ModuleManager({ lang, courseId, initialModules }: Module
                   onSubmit={(values) => addLesson(mod.id, values)}
                   onCancel={() => setAddingLessonFor(null)}
                   submitLabel={t.lessons.addButton}
-                  submittingLabel={t.lessons.adding}
                 />
               ) : (
                 <div>
@@ -398,8 +399,8 @@ export default function ModuleManager({ lang, courseId, initialModules }: Module
             placeholder={t.modules.addPlaceholder}
           />
         </div>
-        <Button type="submit" data-testid="module-add-submit" disabled={addingModule}>
-          {addingModule ? t.modules.adding : t.modules.addButton}
+        <Button type="submit" data-testid="module-add-submit" disabled={addingModule} loading={addingModule}>
+          {t.modules.addButton}
         </Button>
       </form>
     </section>

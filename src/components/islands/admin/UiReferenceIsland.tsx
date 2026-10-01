@@ -11,6 +11,7 @@
  */
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +20,8 @@ import { Field } from '@/components/ui/field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TaskProgress } from '@/components/ui/task-progress';
 
 const COPY = {
   es: {
@@ -47,6 +50,21 @@ const COPY = {
     triggerError: 'Mostrar error',
     triggerInfo: 'Mostrar información',
     checkboxLabel: 'Aceptar términos',
+    // Coherent loading states reference (item 2/3/4/6 of that pass).
+    skeletons: 'Esqueletos (contenido cargando)',
+    skeletonCardList: 'Lista de tarjetas',
+    skeletonLines: 'Líneas de texto',
+    taskProgress: 'Progreso de tarea (subidas largas)',
+    taskProgressRunning: 'En curso',
+    taskProgressError: 'Con error',
+    taskProgressLabel: 'Convirtiendo página 2 de 5',
+    taskProgressCancel: 'Cancelar',
+    taskProgressRetry: 'Reintentar',
+    taskProgressChooseAnother: 'Elegir otro archivo',
+    taskProgressErrorMessage: 'No se pudo subir el archivo. Intentar de nuevo.',
+    images: 'Imágenes (carga y error)',
+    imageLoaded: 'Con fundido al cargar',
+    imageBroken: 'Imagen rota (placeholder neutral)',
   },
   en: {
     inputs: 'Text fields',
@@ -74,6 +92,20 @@ const COPY = {
     triggerError: 'Show error',
     triggerInfo: 'Show info',
     checkboxLabel: 'Accept terms',
+    skeletons: 'Skeletons (content loading)',
+    skeletonCardList: 'Card list',
+    skeletonLines: 'Text lines',
+    taskProgress: 'Task progress (long uploads)',
+    taskProgressRunning: 'Running',
+    taskProgressError: 'With error',
+    taskProgressLabel: 'Converting page 2 of 5',
+    taskProgressCancel: 'Cancel',
+    taskProgressRetry: 'Retry',
+    taskProgressChooseAnother: 'Choose another file',
+    taskProgressErrorMessage: 'Could not upload the file. Try again.',
+    images: 'Images (loading and error)',
+    imageLoaded: 'With a fade-in on load',
+    imageBroken: 'Broken image (neutral placeholder)',
   },
 } as const;
 
@@ -95,6 +127,29 @@ function Swatch({ label, children }: { label: string; children: React.ReactNode 
     <div className="flex w-64 flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
+    </div>
+  );
+}
+
+/** `images` section swatch: fades in on load, falls back to a neutral icon on error — the exact pattern `WorksheetPlayer.tsx`/`ActivityCard.astro` use. */
+function FadeImageSwatch({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [broken, setBroken] = useState(false);
+  return (
+    <div className="relative h-24 w-24 overflow-hidden rounded-lg bg-muted">
+      {broken ? (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+          <ImageBrokenIcon aria-hidden="true" size={28} />
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          className={`h-full w-full object-cover transition-opacity duration-300 motion-reduce:transition-none ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setBroken(true)}
+        />
+      )}
     </div>
   );
 }
@@ -223,6 +278,70 @@ export default function UiReferenceIsland({ lang }: UiReferenceIslandProps) {
         <Button variant="secondary" onClick={() => toast(t.triggerInfo)} data-testid="ui-ref-toast-info">
           {t.triggerInfo}
         </Button>
+      </Section>
+
+      {/* Coherent loading states reference — item 2: a skeleton shaped like
+          the final content, never a bare "Cargando…" text. */}
+      <Section title={t.skeletons}>
+        <Swatch label={t.skeletonCardList}>
+          <div className="flex flex-col gap-2" data-testid="ui-ref-skeleton-card-list">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Swatch>
+        <Swatch label={t.skeletonLines}>
+          <div className="flex flex-col gap-2" data-testid="ui-ref-skeleton-lines">
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-2/3" />
+          </div>
+        </Swatch>
+      </Section>
+
+      {/* Item 4: the task progress panel that REPLACES an empty state while
+          a long multi-step job (PDF/image upload) runs. */}
+      <Section title={t.taskProgress}>
+        <Swatch label={t.taskProgressRunning}>
+          <TaskProgress
+            label={t.taskProgressLabel}
+            progress={0.4}
+            cancel={{ label: t.taskProgressCancel, onCancel: () => {} }}
+          />
+        </Swatch>
+        <Swatch label={t.taskProgressError}>
+          <TaskProgress
+            label={t.taskProgressLabel}
+            progress={0.4}
+            error={{
+              message: t.taskProgressErrorMessage,
+              retryLabel: t.taskProgressRetry,
+              onRetry: () => {},
+              chooseAnotherLabel: t.taskProgressChooseAnother,
+              onChooseAnother: () => {},
+            }}
+          />
+        </Swatch>
+      </Section>
+
+      {/* Item 6: a soft fade-in once an image decodes, and a neutral
+          placeholder (never the browser's broken-image glyph) on error. */}
+      <Section title={t.images}>
+        <Swatch label={t.imageLoaded}>
+          <FadeImageSwatch
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect width='96' height='96' fill='%23d4a72c'/%3E%3C/svg%3E"
+            alt=""
+          />
+        </Swatch>
+        <Swatch label={t.imageBroken}>
+          <FadeImageSwatch src="data:image/does-not-decode" alt="" />
+        </Swatch>
       </Section>
     </div>
   );

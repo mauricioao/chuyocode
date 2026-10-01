@@ -60,6 +60,28 @@ describe('GET /[lang]/cursos — rendering', () => {
     expect(html).toContain('3');
   });
 
+  it('fades the cover image in on load and falls back to a neutral placeholder on error', async () => {
+    listPublishedCoursesMock.mockResolvedValue([
+      {
+        id: 'c1',
+        slug: 'react-basico',
+        title: 'React básico',
+        subtitle: 'De cero a productivo',
+        level: 'A2',
+        coverPath: '/covers/react.webp',
+        includedInPremium: true,
+        priceCents: 1999,
+        currency: 'USD',
+        lessonCount: 3,
+      },
+    ]);
+    const res = await render('https://chuyocode.test/es/cursos', { lang: 'es' });
+    const html = await res.text();
+    expect(html).toContain('opacity-0');
+    expect(html).toContain(`onload="this.classList.remove('opacity-0')"`);
+    expect(html).toContain(`onerror="this.style.display='none'"`);
+  });
+
   it('never shows the premium/price badge when the course has neither', async () => {
     listPublishedCoursesMock.mockResolvedValue([
       {

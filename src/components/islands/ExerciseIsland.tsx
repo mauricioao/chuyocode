@@ -17,6 +17,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowButton } from '@/components/ui/ArrowButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import { blocksForStep } from '@/lib/exerciseBlocks';
@@ -574,10 +575,11 @@ export default function ExerciseIsland({
                   className={PROMPT_MEASURE}
                 >
                   {block.image && (
-                    <img
+                    <FadeImage
                       src={block.image}
                       alt={block.alt ?? ''}
                       className="mx-auto max-h-48 w-auto object-contain"
+                      placeholderClassName="h-32 w-full"
                     />
                   )}
                   {block.audio && (

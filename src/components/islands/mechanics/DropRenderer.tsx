@@ -55,6 +55,7 @@ import {
   type ScreenReaderInstructions,
 } from '@dnd-kit/core';
 import { Label } from '@/components/ui/label';
+import { FadeImage } from '@/components/ui/fade-image';
 import { cn } from '@/lib/utils';
 import { availableTiles, clearTile, placeTile, placedTile } from '@/lib/exerciseDrop';
 import {
@@ -278,7 +279,7 @@ function TileFace({ item }: { item: PoolItem }) {
   if (item.media) {
     // `alt=""` on purpose: the accessible name is carried by the BUTTON, and a
     // duplicate alt would make a screen reader say the tile twice.
-    return <img src={item.media} alt="" className="h-20 w-20 object-contain" />;
+    return <FadeImage src={item.media} alt="" className="h-20 w-20 object-contain" placeholderIconSize={18} />;
   }
   return <span>{tileLabel(item)}</span>;
 }

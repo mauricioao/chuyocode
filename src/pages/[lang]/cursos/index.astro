@@ -14,6 +14,7 @@
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { listPublishedCourses } from '@lib/courses/catalog';
 import { formatPrice } from '@lib/courses/price';
@@ -48,12 +49,19 @@ const courses = await listPublishedCourses();
               class="flex h-full flex-col gap-3 rounded-lg border border-border bg-surface-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
             >
               {course.coverPath && (
-                <img
-                  src={course.coverPath}
-                  alt=""
-                  class="aspect-video w-full rounded-md object-cover"
-                  loading="lazy"
-                />
+                <div class="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
+                  <div class="absolute inset-0 flex items-center justify-center text-muted-foreground" aria-hidden="true">
+                    <ImageBrokenIcon size={28} />
+                  </div>
+                  <img
+                    src={course.coverPath}
+                    alt=""
+                    loading="lazy"
+                    class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+                    onload="this.classList.remove('opacity-0')"
+                    onerror="this.style.display='none'"
+                  />
+                </div>
               )}
               <span class="font-display text-lg font-semibold text-foreground">{course.title}</span>
               {course.subtitle && <span class="text-sm text-muted-foreground">{course.subtitle}</span>}

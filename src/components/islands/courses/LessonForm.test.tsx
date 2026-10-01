@@ -29,7 +29,6 @@ function submitProps(overrides: Partial<Parameters<typeof LessonForm>[0]> = {}) 
     onSubmit: vi.fn().mockResolvedValue({ ok: true }),
     onCancel: vi.fn(),
     submitLabel: 'Agregar lección',
-    submittingLabel: 'Agregando…',
     ...overrides,
   };
 }
@@ -84,6 +83,28 @@ describe('LessonForm — video kind', () => {
 });
 
 describe('LessonForm — activity kind', () => {
+  it('shows skeleton rows (never a bare "Cargando…" text) while searching, then the real results', async () => {
+    let resolveSearch!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      }),
+    );
+    render(<LessonForm {...submitProps()} />);
+    fireEvent.change(screen.getByTestId('lesson-kind'), { target: { value: 'activity' } });
+    fireEvent.change(screen.getByTestId('lesson-activity-search'), { target: { value: 'presente' } });
+
+    await waitFor(() => expect(screen.getByTestId('lesson-activity-searching')).toBeTruthy(), { timeout: 2000 });
+    const skeletonRows = screen.getByTestId('lesson-activity-searching').querySelectorAll('[data-slot="skeleton"]');
+    expect(skeletonRows.length).toBe(3);
+
+    await waitFor(() =>
+      resolveSearch({ ok: true, json: async () => ({ activities: [{ id: 'a1', title: 'Presente simple', level: 'A1' }] }) }),
+    );
+    await waitFor(() => expect(screen.getByTestId('lesson-activity-option-a1')).toBeTruthy());
+    expect(screen.queryByTestId('lesson-activity-searching')).toBeNull();
+  });
+
   it('searches (debounced) and lets the author pick a result', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

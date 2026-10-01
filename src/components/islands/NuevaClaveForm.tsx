@@ -18,6 +18,7 @@
  * `UI_LABELS` sweep in `i18n.test.ts` cannot reach it.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -85,9 +86,15 @@ export default function NuevaClaveForm({ lang }: NuevaClaveFormProps) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ password }),
       });
-      setStatus(res.ok ? 'success' : 'error');
+      if (res.ok) {
+        setStatus('success');
+      } else {
+        setStatus('error');
+        toast.error(t.error);
+      }
     } catch {
       setStatus('error');
+      toast.error(t.error);
     }
   }
 
@@ -128,10 +135,10 @@ export default function NuevaClaveForm({ lang }: NuevaClaveFormProps) {
       <Button
         type="submit"
         disabled={pending}
-        aria-busy={pending}
+        loading={pending}
         data-testid="nueva-clave-submit"
       >
-        {pending ? t.submitting : t.submit}
+        {t.submit}
       </Button>
       {status === 'error' && (
         <p role="alert" className="text-sm text-destructive">

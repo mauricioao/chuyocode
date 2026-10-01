@@ -58,6 +58,53 @@ describe('ExercisePublishFlow — request shape', () => {
   });
 });
 
+describe('ExercisePublishFlow — in-flight state (coherent loading states, item 3)', () => {
+  it('shows the pressed button as loading/aria-busy and disables both buttons, never a bare "Guardando…" text', async () => {
+    let resolveFetch!: (value: { status: number; json: () => Promise<unknown> }) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      ),
+    );
+    render(<ExercisePublishFlow lang="en" exerciseId={EXERCISE_ID} initialDraft={draftWithOneSentence()} />);
+
+    fireEvent.click(screen.getByTestId('save-draft'));
+
+    const saveDraft = screen.getByTestId('save-draft') as HTMLButtonElement;
+    const publish = screen.getByTestId('publish-exercise') as HTMLButtonElement;
+    expect(saveDraft.getAttribute('aria-busy')).toBe('true');
+    expect(saveDraft.disabled).toBe(true);
+    expect(publish.disabled).toBe(true);
+    expect(screen.queryByText(/Guardando/i)).toBeNull();
+
+    await waitFor(() =>
+      resolveFetch({ status: 200, json: async () => ({ ok: true, url: '/en/x' }) }),
+    );
+    await waitFor(() => expect(saveDraft.getAttribute('aria-busy')).toBeNull());
+  });
+
+  it('never fires a second request while the first save is still in flight', async () => {
+    let resolveFetch!: (value: { status: number; json: () => Promise<unknown> }) => void;
+    const fetchMock = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ExercisePublishFlow lang="en" exerciseId={EXERCISE_ID} initialDraft={draftWithOneSentence()} />);
+
+    fireEvent.click(screen.getByTestId('save-draft'));
+    fireEvent.click(screen.getByTestId('save-draft'));
+    fireEvent.click(screen.getByTestId('publish-exercise'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => resolveFetch({ status: 200, json: async () => ({ ok: true, url: '/en/x' }) }));
+  });
+});
+
 describe('ExercisePublishFlow — save result', () => {
   it('shows a saved confirmation on a plain draft save', async () => {
     stubFetch(200, { ok: true, slug: 'ordering-coffee', url: '/ingles/A1/present-simple/ordering-coffee' });

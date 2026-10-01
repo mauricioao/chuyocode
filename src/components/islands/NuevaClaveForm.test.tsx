@@ -6,6 +6,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }));
+
 import NuevaClaveForm, { COPY } from './NuevaClaveForm';
 
 function stubFetch(ok = true) {
@@ -67,6 +71,22 @@ describe('NuevaClaveForm — submitting', () => {
     release?.();
     await waitFor(() => expect(screen.queryByTestId('nueva-clave-form')).toBeNull());
   });
+
+  it('shows the submit button as loading/aria-busy (stable width, label unchanged) while in flight', async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise((resolve) => { release = () => resolve({ ok: true, json: async () => ({}) }); })),
+    );
+    render(<NuevaClaveForm lang="es" />);
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    expect(submitButton().getAttribute('aria-busy')).toBe('true');
+    expect(submitButton().textContent).toContain(COPY.es.submit);
+    release?.();
+    await waitFor(() => expect(screen.queryByTestId('nueva-clave-form')).toBeNull());
+  });
 });
 
 describe('NuevaClaveForm — outcomes', () => {
@@ -82,7 +102,7 @@ describe('NuevaClaveForm — outcomes', () => {
     expect(screen.queryByTestId('nueva-clave-form')).toBeNull();
   });
 
-  it('shows a retryable error on a non-ok response, keeping the form', async () => {
+  it('shows a retryable error on a non-ok response, keeping the form, and toasts it', async () => {
     stubFetch(false);
     render(<NuevaClaveForm lang="es" />);
     fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
@@ -90,6 +110,7 @@ describe('NuevaClaveForm — outcomes', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.error));
     expect(screen.getByTestId('nueva-clave-form')).toBeTruthy();
+    expect(toastErrorMock).toHaveBeenCalledWith(COPY.es.error);
   });
 
   it('shows the same retryable error when fetch throws', async () => {

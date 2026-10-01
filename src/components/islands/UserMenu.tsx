@@ -91,6 +91,7 @@ import { SignInIcon } from '@phosphor-icons/react/dist/ssr/SignIn';
 // import { UserPlusIcon } from '@phosphor-icons/react/dist/ssr/UserPlus';
 import { UI_LABELS } from '@/lib/i18n';
 import { buttonVariants } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache, clearMeCache } from '@/lib/meCache';
@@ -331,7 +332,7 @@ export default function UserMenu({ lang }: UserMenuProps) {
     // answer to render immediately instead.
     return (
       <div data-testid="user-menu-loading" aria-hidden="true" className="flex items-center gap-2">
-        <span data-loading-pill className="h-9 w-9 animate-pulse rounded-full bg-muted" />
+        <Skeleton data-loading-pill className="h-9 w-9 rounded-full" />
       </div>
     );
   }
