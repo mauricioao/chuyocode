@@ -1345,7 +1345,7 @@ export default function WorksheetZoneEditor({
           // touch gestures (page scroll, pinch-zoom-the-page) never fire
           // anywhere inside this bounded box, matching this component's own
           // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
-          className="relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="canvas-dots relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div
             ref={containerRef}

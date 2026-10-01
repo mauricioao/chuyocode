@@ -404,3 +404,21 @@ h3 {
     background-color: var(--color-surface-soft);
   }
 }
+
+/* --- Dotted work-surface background (canvas polish) ----------------------
+ * A subtle Figma/Miro-style dot grid for every canvas VIEWPORT — the
+ * practice player's worksheet camera (desktop AND mobile) and the editor's
+ * own `WorksheetZoneEditor.tsx` canvas. One shared class so all three stay
+ * visually identical and never duplicate the gradient inline.
+ *
+ * Applied to the VIEWPORT (the bounded, `overflow: hidden` box), never to
+ * the content layer that carries the camera's own `transform: translate(…)
+ * scale(…)` — so the dots stay FIXED relative to the viewport and panning/
+ * zooming the sheet reads as moving it over a surface, not scaling the
+ * surface itself. The dot color is plain white at ~9% alpha, legible but
+ * quiet against the dark `bg-muted` surface underneath; `background-size`
+ * sets the 16px grid pitch. */
+.canvas-dots {
+  background-image: radial-gradient(rgb(255 255 255 / 0.09) 1px, transparent 1px);
+  background-size: 16px 16px;
+}

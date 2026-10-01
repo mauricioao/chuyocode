@@ -230,7 +230,7 @@ export default function WorksheetPracticePlayerMobile({
       <div
         ref={viewportRef}
         data-testid="practice-mobile-viewport"
-        className="relative w-full overflow-hidden rounded-lg bg-muted"
+        className="canvas-dots relative w-full overflow-hidden rounded-lg bg-muted"
         style={{
           aspectRatio: `${displaySize.width} / ${displaySize.height}`,
           // See the file header's "Gesture ownership": at fit scale, a
