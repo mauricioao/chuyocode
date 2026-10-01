@@ -301,7 +301,7 @@ function DesktopWorksheetCamera({
         onPointerCancel={endPan}
         onLostPointerCapture={endPan}
         className={cn(
-          'relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-muted focus-visible:outline-none',
+          'canvas-dots relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-muted focus-visible:outline-none',
           effectiveTool === 'hand' && (isPanning ? 'cursor-grabbing' : 'cursor-grab'),
         )}
       >
