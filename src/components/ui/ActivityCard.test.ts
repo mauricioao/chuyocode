@@ -45,6 +45,30 @@ async function render(props: Record<string, unknown>): Promise<string> {
   return container.renderToString(ActivityCard, { props });
 }
 
+describe('ActivityCard.astro — thumbnail loading (coherent loading states, item 6)', () => {
+  it('fades the thumbnail in on load and hides it on error, revealing a neutral placeholder underneath', async () => {
+    const html = await render({
+      ...baseProps,
+      activity: {
+        ...baseActivity,
+        thumbnailPath: 'activity-images/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.webp',
+      },
+    });
+    expect(html).toContain('opacity-0');
+    expect(html).toContain(`onload="this.classList.remove('opacity-0')"`);
+    expect(html).toContain(`onerror="this.style.display='none'"`);
+    // The placeholder icon sits in the DOM before the <img>, so default
+    // stacking (both absolute, DOM order decides) paints the loaded image
+    // over it — and reveals it again once `onerror` hides the <img>.
+    expect(html.indexOf('<svg')).toBeLessThan(html.indexOf('<img'));
+  });
+
+  it('renders no image/placeholder markup when there is no thumbnail', async () => {
+    const html = await render(baseProps);
+    expect(html).not.toContain('<img');
+  });
+});
+
 describe('ActivityCard.astro — default variant (unchanged)', () => {
   it('renders the full-size card with a 16:9 thumbnail area', async () => {
     const html = await render(baseProps);

@@ -144,6 +144,22 @@ describe('WorksheetZoneEditor — rendering', () => {
     expect(screen.getByTestId('zone-canvas').querySelector('img')).toBeTruthy();
   });
 
+  it('fades the canvas image in once it loads (coherent loading states, item 6)', () => {
+    render(<Harness />);
+    const img = screen.getByTestId('zone-canvas').querySelector('img') as HTMLImageElement;
+    expect(img.className).toContain('opacity-0');
+    fireEvent.load(img);
+    expect(img.className).toContain('opacity-100');
+  });
+
+  it('shows a neutral broken-image placeholder instead of the browser glyph on error', () => {
+    render(<Harness />);
+    const img = screen.getByTestId('zone-canvas').querySelector('img') as HTMLImageElement;
+    fireEvent.error(img);
+    expect(screen.getByTestId('zone-canvas-image-broken')).toBeTruthy();
+    expect(screen.getByTestId('zone-canvas').querySelector('img')).toBeNull();
+  });
+
   it('renders an existing zone positioned by its fractional rect', () => {
     const zone: Zone = { id: 'z1', x: 0.25, y: 0.1, w: 0.2, h: 0.15, kind: 'text', answers: ['sat'] };
     render(<Harness initialZones={[zone]} />);

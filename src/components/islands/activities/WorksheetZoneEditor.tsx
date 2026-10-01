@@ -81,6 +81,7 @@ import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
   MAX_ZONE_SPEAK_LENGTH,
@@ -209,6 +210,20 @@ export default function WorksheetZoneEditor({
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // Coherent loading states, item 6: a soft fade-in once the canvas image
+  // actually decodes (the muted canvas background behind it already reads
+  // as a loading surface), and a neutral broken-image placeholder — never
+  // the browser's own glyph — if it fails. Resets whenever `imageUrl`
+  // itself changes so a later block/upload doesn't inherit a stale broken
+  // state. Purely cosmetic: it touches neither `image.width/height` nor any
+  // zone coordinate math, which stays driven by the `image` prop alone.
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageBroken, setImageBroken] = useState(false);
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageBroken(false);
+  }, [imageUrl]);
 
   // Keyboard zone creation (accessibility, Enter/N — see the file header):
   // an `aria-live` announcement, and the pending focus handoff into the
@@ -1369,25 +1384,43 @@ export default function WorksheetZoneEditor({
               willChange: isPanning ? 'transform' : undefined,
             }}
           >
-            <img
-              src={imageUrl}
-              alt=""
-              draggable={false}
-              className="pointer-events-none absolute object-contain"
-              style={{
-                top: '50%',
-                left: '50%',
-                width: image.width,
-                height: image.height,
-                // Rotation (creator polish round 2) is a pure CSS transform
-                // around the image's own center — the outer content layer
-                // above is already sized to the ROTATED dimensions
-                // (`displaySize`), so the rotated image exactly fills it.
-                // The camera's own scale/translate lives on that OUTER
-                // layer, so this transform stays rotation-only.
-                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-              }}
-            />
+            {imageBroken ? (
+              <div
+                data-testid="zone-canvas-image-broken"
+                className="absolute flex items-center justify-center bg-muted text-muted-foreground"
+                style={{
+                  top: '50%',
+                  left: '50%',
+                  width: image.width,
+                  height: image.height,
+                  transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                }}
+              >
+                <ImageBrokenIcon aria-hidden="true" size={Math.min(image.width, image.height, 48)} />
+              </div>
+            ) : (
+              <img
+                src={imageUrl}
+                alt=""
+                draggable={false}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageBroken(true)}
+                className={`pointer-events-none absolute object-contain transition-opacity duration-300 motion-reduce:transition-none ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                style={{
+                  top: '50%',
+                  left: '50%',
+                  width: image.width,
+                  height: image.height,
+                  // Rotation (creator polish round 2) is a pure CSS transform
+                  // around the image's own center — the outer content layer
+                  // above is already sized to the ROTATED dimensions
+                  // (`displaySize`), so the rotated image exactly fills it.
+                  // The camera's own scale/translate lives on that OUTER
+                  // layer, so this transform stays rotation-only.
+                  transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                }}
+              />
+            )}
             {zones.map((zone) => {
               const selected = zone.id === selectedZoneId;
               const style = {

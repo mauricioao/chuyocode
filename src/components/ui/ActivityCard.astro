@@ -24,6 +24,7 @@
 import { HeartIcon } from '@phosphor-icons/react/dist/ssr/Heart';
 import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { publicImageUrl } from '@lib/activities/storage';
 import type { PublishedActivityCard } from '@lib/activities/activities';
 import type { Level } from '@lib/exerciseTaxonomy';
@@ -79,7 +80,23 @@ function countLabel(count: number): string {
       ]}
     >
       <div class="relative aspect-square h-full w-24 shrink-0 overflow-hidden bg-muted">
-        {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
+        {
+          thumbnailUrl && (
+            <>
+              <div class="absolute inset-0 flex items-center justify-center text-muted-foreground" aria-hidden="true">
+                <ImageBrokenIcon size={20} />
+              </div>
+              <img
+                src={thumbnailUrl}
+                alt=""
+                loading="lazy"
+                class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+                onload="this.classList.remove('opacity-0')"
+                onerror="this.style.display='none'"
+              />
+            </>
+          )
+        }
       </div>
       <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-2">
         <span class="truncate text-sm font-semibold text-zinc-100">{activity.title}</span>
@@ -127,7 +144,23 @@ function countLabel(count: number): string {
       ]}
     >
       <div class="relative aspect-video w-full overflow-hidden bg-muted">
-        {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
+        {
+          thumbnailUrl && (
+            <>
+              <div class="absolute inset-0 flex items-center justify-center text-muted-foreground" aria-hidden="true">
+                <ImageBrokenIcon size={32} />
+              </div>
+              <img
+                src={thumbnailUrl}
+                alt=""
+                loading="lazy"
+                class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+                onload="this.classList.remove('opacity-0')"
+                onerror="this.style.display='none'"
+              />
+            </>
+          )
+        }
         {
           highlighted && highlightLabel && (
             <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-background shadow-elevation-1">
