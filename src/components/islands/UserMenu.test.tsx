@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo } from '@/lib/neutralSpanish';
 import { UI_LABELS } from '@/lib/i18n';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import UserMenu, { MOBILE_MENU_ACCOUNT_SLOT_ID } from './UserMenu';
 import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache } from '@/lib/meCache';
@@ -243,6 +244,39 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
     expect(readMeCache()).toEqual({ profile: PASSWORD_PROFILE });
     fireEvent.submit(form!);
     expect(readMeCache()).toBeUndefined();
+  });
+});
+
+describe('UserMenu — hydration (Bug 1, React error #418)', () => {
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('does not report a recoverable hydration error with no cached /api/me answer', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />);
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error when a cached signed-in profile is already in sessionStorage on the client (the server never sees it)', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />, {
+      sessionStorage: { 'chuyocode:me:v1': JSON.stringify({ profile: PASSWORD_PROFILE }) },
+    });
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error when a cached signed-out answer is already in sessionStorage on the client', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />, {
+      sessionStorage: { 'chuyocode:me:v1': JSON.stringify({ profile: null }) },
+    });
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error right after a sign-in redirect (?auth=signed-in), with a stale cache present', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />, {
+      sessionStorage: { 'chuyocode:me:v1': JSON.stringify({ profile: PASSWORD_PROFILE }) },
+      locationSearch: '?auth=signed-in',
+    });
+    expect(recoverableErrors).toEqual([]);
   });
 });
 

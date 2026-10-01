@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { DESKTOP_QUERY } from '@/hooks/useIsDesktop';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ActivityPracticeIsland from './ActivityPracticeIsland';
 import type { Block, WorksheetBlock, QuizBlock } from '@/lib/activities/blocks';
 
@@ -434,5 +436,38 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
 
     fireEvent.click(screen.getByTestId('practice-tab-q1'));
     expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+  });
+});
+
+describe('ActivityPracticeIsland — hydration (Bug 1, React error #418)', () => {
+  // A zone with `speak` and a quiz slot both mount `SpeakButton` — the
+  // island's own real path to every island this bug report named.
+  const SPEAKABLE_WORKSHEET: WorksheetBlock = {
+    ...WORKSHEET,
+    zones: [{ ...WORKSHEET.zones[0], speak: 'The cat sits.' }, WORKSHEET.zones[1]],
+  };
+
+  it('does not report a recoverable hydration error on a narrow (mobile) viewport', async () => {
+    const { recoverableErrors } = await renderThenHydrate(
+      () => <ActivityPracticeIsland lang="es" blocks={[SPEAKABLE_WORKSHEET, QUIZ]} />,
+      { matches: () => false, speechSynthesisSupported: true },
+    );
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error on a wide (desktop) viewport', async () => {
+    const { recoverableErrors } = await renderThenHydrate(
+      () => <ActivityPracticeIsland lang="es" blocks={[SPEAKABLE_WORKSHEET, QUIZ]} />,
+      { matches: (query) => query === DESKTOP_QUERY, speechSynthesisSupported: true },
+    );
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error when the browser has no speechSynthesis either', async () => {
+    const { recoverableErrors } = await renderThenHydrate(
+      () => <ActivityPracticeIsland lang="es" blocks={[SPEAKABLE_WORKSHEET, QUIZ]} />,
+      { matches: (query) => query === DESKTOP_QUERY, speechSynthesisSupported: false },
+    );
+    expect(recoverableErrors).toEqual([]);
   });
 });

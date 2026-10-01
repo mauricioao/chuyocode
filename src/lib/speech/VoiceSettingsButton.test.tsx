@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import VoiceSettingsButton, { COPY } from './VoiceSettingsButton';
 
 class FakeUtterance {
@@ -170,5 +171,16 @@ describe('VoiceSettingsButton', () => {
   it('uses neutral Spanish copy (no voseo)', () => {
     expect(findVoseo(COPY.es)).toEqual([]);
     expect(voseoWords('Elegí tu voz favorita.')).toEqual(['Elegí']);
+  });
+});
+
+describe('VoiceSettingsButton — hydration (Bug 1, React error #418)', () => {
+  afterEach(uninstallSynth);
+
+  it('does not report a recoverable hydration error when the browser supports speechSynthesis (SSR has none, the real browser does)', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => <VoiceSettingsButton lang="en" />, {
+      speechSynthesisSupported: true,
+    });
+    expect(recoverableErrors).toEqual([]);
   });
 });

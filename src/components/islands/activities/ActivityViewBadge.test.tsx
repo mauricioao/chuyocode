@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ActivityViewBadge from './ActivityViewBadge';
 
 afterEach(() => {
@@ -64,5 +65,13 @@ describe('ActivityViewBadge', () => {
     render(<ActivityViewBadge lang="en" activityId="act-1" />);
     await waitFor(() => expect(screen.getByTestId('activity-view-badge')).toBeTruthy());
     expect(screen.getByTestId('activity-view-badge').textContent).toContain("You've seen this");
+  });
+});
+
+describe('ActivityViewBadge — hydration (Bug 1, React error #418)', () => {
+  it('does not report a recoverable hydration error', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    const { recoverableErrors } = await renderThenHydrate(() => <ActivityViewBadge lang="es" activityId="act-1" />);
+    expect(recoverableErrors).toEqual([]);
   });
 });

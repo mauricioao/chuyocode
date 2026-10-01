@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import DuplicateActivityButton from './DuplicateActivityButton';
 
 const ACTIVITY_ID = '11111111-1111-1111-1111-111111111111';
@@ -91,5 +92,14 @@ describe('DuplicateActivityButton', () => {
 
     await waitFor(() => expect(screen.getByTestId('duplicate-activity-button').textContent).toContain('Duplicando'));
     resolveFetch({ ok: true, json: async () => ({ id: 'new-activity-1' }) });
+  });
+});
+
+describe('DuplicateActivityButton — hydration (Bug 1, React error #418)', () => {
+  it('does not report a recoverable hydration error', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => (
+      <DuplicateActivityButton lang="es" activityId={ACTIVITY_ID} navigate={() => {}} />
+    ));
+    expect(recoverableErrors).toEqual([]);
   });
 });

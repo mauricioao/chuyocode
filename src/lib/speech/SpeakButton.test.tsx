@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import SpeakButton, { COPY, SLOW_RATE } from './SpeakButton';
 import { NORMAL_RATE } from './useSpeech';
 
@@ -132,6 +133,30 @@ describe('SpeakButton', () => {
     // Triangulation: proves the detector this file imports actually fires,
     // so the guard above is not vacuously green.
     expect(voseoWords('Escuchá esta oración.')).toEqual(['Escuchá']);
+  });
+
+  describe('hydration (Bug 1, React error #418)', () => {
+    afterEach(uninstallSynth);
+
+    it('does not report a recoverable hydration error when the browser supports speechSynthesis (SSR has none, the real browser does)', async () => {
+      const { recoverableErrors, html } = await renderThenHydrate(
+        () => <SpeakButton text="The cat sits." lang="en" />,
+        { speechSynthesisSupported: true },
+      );
+      // The server, with no Web Speech API, must render nothing — the same
+      // "renders nothing when unsupported" contract this file already tests
+      // above, now also asserted for the SSR half specifically.
+      expect(html).toBe('');
+      expect(recoverableErrors).toEqual([]);
+    });
+
+    it('does not report a recoverable hydration error when the browser has no speechSynthesis either', async () => {
+      const { recoverableErrors } = await renderThenHydrate(
+        () => <SpeakButton text="The cat sits." lang="en" />,
+        { speechSynthesisSupported: false },
+      );
+      expect(recoverableErrors).toEqual([]);
+    });
   });
 
   describe('showSettings', () => {
