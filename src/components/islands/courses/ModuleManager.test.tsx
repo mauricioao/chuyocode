@@ -47,6 +47,24 @@ describe('ModuleManager — modules', () => {
     expect((screen.getByTestId('module-add-input') as HTMLInputElement).value).toBe('');
   });
 
+  it('shows the add-module button as loading/aria-busy while the request is in flight', async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise((resolve) => { release = () => resolve(jsonResponse({ id: 'm1' })); })),
+    );
+    render(<ModuleManager lang="es" courseId={COURSE_ID} initialModules={[]} />);
+
+    fireEvent.change(screen.getByTestId('module-add-input'), { target: { value: 'Módulo 1' } });
+    fireEvent.click(screen.getByTestId('module-add-submit'));
+
+    const submit = screen.getByTestId('module-add-submit') as HTMLButtonElement;
+    expect(submit.getAttribute('aria-busy')).toBe('true');
+    expect(submit.disabled).toBe(true);
+    release?.();
+    await waitFor(() => expect(screen.getByTestId('module-m1')).toBeTruthy());
+  });
+
   it('renames a module', async () => {
     const modules: ModuleRecord[] = [{ id: 'm1', position: 0, title: 'Viejo', lessons: [] }];
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse({ ok: true }));
