@@ -271,6 +271,56 @@ export async function renderPdfThumbnails(
   }
 }
 
+export interface PdfPageConverter {
+  /** The PDF's actual total page count. */
+  totalPages: number;
+  /**
+   * Render one 1-based `pageNumber` to a scaled WebP `Blob`. Checks
+   * `signal.aborted` both before starting and right after the page itself
+   * finishes rendering — the two points where `uploadTask.ts`'s run loop
+   * can actually observe a cancel mid-item.
+   */
+  convertPage(pageNumber: number, signal?: AbortSignal): Promise<Blob>;
+  /** Releases the underlying `pdfjs-dist` document — call once done with every page. */
+  dispose(): Promise<void>;
+}
+
+/**
+ * Opens `file` (a PDF) ONCE for repeated single-page conversion —
+ * `WorksheetUploader.tsx`'s upload task machine converts one page at a
+ * time (convert -> upload -> next page) so cancelling between pages stops
+ * real work instead of waiting out a whole-document batch; re-parsing the
+ * PDF per page would undo that. {@link convertPdfPagesToWebp} stays
+ * available for a one-shot batch conversion of several pages, unrelated to
+ * this per-page flow. BROWSER ONLY — see file header.
+ */
+export async function openPdfForConversion(file: File): Promise<PdfPageConverter> {
+  const pdfjs = await loadPdfjs();
+  const loadingTask = pdfjs.getDocument({ data: await file.arrayBuffer() });
+  const doc = await loadingTask.promise;
+
+  return {
+    totalPages: doc.numPages,
+    async convertPage(pageNumber, signal) {
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      if (pageNumber > doc.numPages) {
+        throw new RangeError(`openPdfForConversion: page ${pageNumber} does not exist`);
+      }
+      const page = await doc.getPage(pageNumber);
+      const unscaledViewport = page.getViewport({ scale: 1 });
+      const { width, height } = computeScaledSize(unscaledViewport.width, unscaledViewport.height);
+      const viewport = page.getViewport({ scale: width / unscaledViewport.width });
+      const { canvas } = create2dContext(width, height);
+      await page.render({ canvas, viewport }).promise;
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      return canvasToWebpBlob(canvas);
+    },
+    async dispose() {
+      await loadingTask.destroy();
+    },
+  };
+}
+
 /**
  * Render `file`'s (a PDF) `pages` (1-based, validated by {@link
  * validatePageSelection}) to scaled WebP `Blob`s, in the given order. The

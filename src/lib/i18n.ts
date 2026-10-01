@@ -493,6 +493,20 @@ export const UI_LABELS = {
         pdfThumbnailsTruncated:
           'Este PDF tiene más de 40 páginas: se muestran las primeras 40. Para elegir otra página, usar el número de página.',
         pdfThumbnailsSwitchToText: 'Elegir por número de página',
+        // Task progress panel (coherent loading states, item 4): replaces
+        // the drop zone entirely while a PDF/image task runs — see
+        // `src/lib/activities/uploadTask.ts` and `WorksheetUploader.tsx`'s
+        // `stageLabel`. Assembled as "<prefix> <i> <taskOf> <n>", e.g.
+        // "Convirtiendo página 2 de 5" / "Optimizando imagen 1 de 1".
+        taskPreparingPdf: 'Preparando el PDF…',
+        taskConvertingPage: 'Convirtiendo página',
+        taskUploadingPage: 'Subiendo página',
+        taskOptimizingImage: 'Optimizando imagen',
+        taskUploadingImage: 'Subiendo',
+        taskOf: 'de',
+        taskCancel: 'Cancelar',
+        taskRetry: 'Reintentar',
+        taskChooseAnother: 'Elegir otro archivo',
         errors: {
           unsupported_media_type: 'Ese tipo de archivo no está admitido.',
           empty_body: 'El archivo está vacío.',
@@ -1455,6 +1469,15 @@ export const UI_LABELS = {
         pdfThumbnailsTruncated:
           'This PDF has more than 40 pages: showing the first 40. To pick another page, use the page number field.',
         pdfThumbnailsSwitchToText: 'Choose by page number',
+        taskPreparingPdf: 'Preparing the PDF…',
+        taskConvertingPage: 'Converting page',
+        taskUploadingPage: 'Uploading page',
+        taskOptimizingImage: 'Optimizing image',
+        taskUploadingImage: 'Uploading',
+        taskOf: 'of',
+        taskCancel: 'Cancel',
+        taskRetry: 'Retry',
+        taskChooseAnother: 'Choose another file',
         errors: {
           unsupported_media_type: 'That file type is not supported.',
           empty_body: 'The file is empty.',

@@ -12,7 +12,7 @@ const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
   convertImageToWebp: vi.fn(),
   validatePageSelection: vi.fn(),
-  convertPdfPagesToWebp: vi.fn(),
+  openPdfForConversion: vi.fn(),
   renderPdfThumbnails: vi.fn(),
 }));
 vi.mock('@/lib/activities/imagePipeline', async () => {
@@ -24,7 +24,7 @@ vi.mock('@/lib/activities/imagePipeline', async () => {
     routeFileType: pipelineMocks.routeFileType,
     convertImageToWebp: pipelineMocks.convertImageToWebp,
     validatePageSelection: pipelineMocks.validatePageSelection,
-    convertPdfPagesToWebp: pipelineMocks.convertPdfPagesToWebp,
+    openPdfForConversion: pipelineMocks.openPdfForConversion,
     renderPdfThumbnails: pipelineMocks.renderPdfThumbnails,
   };
 });
@@ -218,7 +218,11 @@ describe('BlockList — empty worksheet block (creator polish round 4, owner fee
     // (`WorksheetUploader.test.tsx` owns it).
     pipelineMocks.renderPdfThumbnails.mockRejectedValue(new Error('pdf_failed'));
     pipelineMocks.validatePageSelection.mockReturnValue([1, 2]);
-    pipelineMocks.convertPdfPagesToWebp.mockResolvedValue([new Blob(['p1']), new Blob(['p2'])]);
+    pipelineMocks.openPdfForConversion.mockResolvedValue({
+      totalPages: 2,
+      convertPage: vi.fn(async (pageNumber: number) => new Blob([`p${pageNumber}`])),
+      dispose: vi.fn(async () => {}),
+    });
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ path: 'p1.webp', width: 400, height: 300 }) })
