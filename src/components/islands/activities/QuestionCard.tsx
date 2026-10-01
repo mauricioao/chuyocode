@@ -206,7 +206,7 @@ export default function QuestionCard({
             data-testid={`question-type-${slot.id}-${value}`}
             onClick={() => onTypeChange(value, value === 'gap' ? asDrop : false)}
             className={cn(
-              'rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
+              'max-lg:min-h-11 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
               segment === value
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -251,7 +251,7 @@ export default function QuestionCard({
                   data-testid={`question-option-correct-${slot.id}-${item.id}`}
                   checked={correct}
                   onChange={() => onMarkCorrect(item.id)}
-                  className="size-4 shrink-0 accent-primary"
+                  className="size-4 max-lg:size-6 shrink-0 accent-primary"
                 />
                 <Input
                   type="text"
@@ -278,7 +278,7 @@ export default function QuestionCard({
                   aria-label={t.removeOption}
                   data-testid={`question-remove-option-${slot.id}-${item.id}`}
                   onClick={() => onRemoveOption(item.id)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  className="flex max-lg:min-h-11 max-lg:min-w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-destructive"
                 >
                   <XIcon aria-hidden="true" />
                 </button>
@@ -289,7 +289,7 @@ export default function QuestionCard({
             type="button"
             data-testid={`question-add-option-${slot.id}`}
             onClick={onAddOption}
-            className="w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+            className="min-h-11 w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
           >
             {t.addOption}
           </button>
@@ -312,7 +312,7 @@ export default function QuestionCard({
                   aria-label={t.removeAnswer}
                   data-testid={`question-remove-answer-${slot.id}-${i}`}
                   onClick={() => onAnswerChange(slot.answer.filter((_, idx) => idx !== i))}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="flex max-lg:min-h-11 max-lg:min-w-11 items-center justify-center text-muted-foreground hover:text-destructive"
                 >
                   <XIcon aria-hidden="true" size={12} />
                 </button>
@@ -349,7 +349,7 @@ export default function QuestionCard({
           data-testid={`question-more-options-${slot.id}`}
           aria-expanded={showMore}
           onClick={() => setShowMore((v) => !v)}
-          className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+          className="flex max-lg:min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           <CaretDownIcon
             aria-hidden="true"
@@ -362,6 +362,7 @@ export default function QuestionCard({
             type="button"
             variant="ghost"
             size="icon-sm"
+            className="max-lg:size-11"
             aria-label={t.duplicate}
             data-testid={`question-duplicate-${slot.id}`}
             onClick={onDuplicate}
@@ -372,6 +373,7 @@ export default function QuestionCard({
             type="button"
             variant="ghost"
             size="icon-sm"
+            className="max-lg:size-11"
             aria-label={t.deleteQuestion}
             data-testid={`question-delete-${slot.id}`}
             onClick={onDelete}

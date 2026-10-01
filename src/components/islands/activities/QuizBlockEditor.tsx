@@ -25,8 +25,18 @@
  * IDS ARE THIS COMPONENT'S JOB, same rule `authoringDraft.ts` documents: a
  * plain incrementing counter, seeded from the block's own id so two quiz
  * blocks minting ids in the same render never collide.
+ *
+ * THE LIVE PREVIEW (owner build items 3 and 8) sits beside the question
+ * column on desktop and behind a "Vista previa" tab on phones — a PURE CSS
+ * layout (`lg:grid-cols-2` plus `max-lg:hidden` toggled by `mobileTab`), not
+ * a structural `isDesktop`-branched remount: the exact same DOM renders on
+ * server and client either way, so there is no hydration-flash concern and
+ * no duplicate ids to reconcile, unlike a genuine two-subtree split. `payload`
+ * reaches {@link QuizLivePreview} already debounced (~300ms,
+ * `useDebouncedValue`) so fast typing in a card does not reset the preview's
+ * own in-progress answers on every keystroke.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -62,13 +72,18 @@ import {
 import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionType';
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
 import type { Payload } from '@/lib/exercisePayload';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { cn } from '@/lib/utils';
 import QuestionCard from './QuestionCard';
+import QuizLivePreview from './QuizLivePreview';
 
 export const COPY = {
   es: {
     addQuestion: 'Agregar pregunta',
     noQuestionsYet: 'Agrega tu primera pregunta',
     dragHandle: 'Reordenar pregunta',
+    tabQuestions: 'Preguntas',
+    tabPreview: 'Vista previa',
     questionsCount: (n: number) => (n === 1 ? '1 pregunta' : `${n} preguntas`),
     allComplete: 'todas con respuesta',
     reason: (n: number, reason: ChecklistReason): string => {
@@ -86,6 +101,8 @@ export const COPY = {
     addQuestion: 'Add question',
     noQuestionsYet: 'Add your first question',
     dragHandle: 'Reorder question',
+    tabQuestions: 'Questions',
+    tabPreview: 'Preview',
     questionsCount: (n: number) => (n === 1 ? '1 question' : `${n} questions`),
     allComplete: 'all with an answer',
     reason: (n: number, reason: ChecklistReason): string => {
@@ -142,7 +159,7 @@ function SortableQuestionCard({
     <button
       type="button"
       aria-label={dragHandleLabel}
-      className="mt-2 flex shrink-0 touch-none cursor-grab items-center justify-center rounded p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground active:cursor-grabbing"
+      className="mt-2 flex max-lg:min-h-11 max-lg:min-w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground active:cursor-grabbing"
       {...attributes}
       {...listeners}
     >
@@ -179,6 +196,8 @@ export default function QuizBlockEditor({
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
+  const [mobileTab, setMobileTab] = useState<'questions' | 'preview'>('questions');
+  const debouncedPayload = useDebouncedValue(payload, 300);
 
   const counterRef = useRef(0);
   function nextId(prefix: string): string {
@@ -263,13 +282,11 @@ export default function QuizBlockEditor({
     cardNodeRefs.current[selectedSlotId]?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   }, [selectedSlotId]);
 
-  return (
-    <div
-      className="flex flex-col gap-3"
-      data-testid={`quiz-editor-${blockId}`}
-      onKeyDownCapture={handleContainerKeyDown}
-    >
-      {questions.length > 0 && (
+  const hasQuestions = questions.length > 0;
+
+  const questionsColumn = (
+    <div className="flex flex-col gap-3">
+      {hasQuestions && (
         <div data-testid={`quiz-checklist-${blockId}`} className="flex flex-col gap-1 rounded-md border border-border p-2">
           {checklist.length === 0 ? (
             <span className="flex items-center gap-1.5 text-sm text-foreground">
@@ -295,7 +312,7 @@ export default function QuizBlockEditor({
         </div>
       )}
 
-      {questions.length === 0 ? (
+      {!hasQuestions ? (
         <div
           data-testid={`quiz-empty-${blockId}`}
           className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-8 text-center"
@@ -383,12 +400,81 @@ export default function QuizBlockEditor({
             type="button"
             data-testid={`add-question-${blockId}`}
             onClick={addQuestion}
-            className="w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+            className="min-h-11 w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
           >
             + {t.addQuestion}
           </button>
         </>
       )}
+    </div>
+  );
+
+  // No preview beside/behind an empty block — item 3/8 only apply once
+  // there is something to try (`QuizLivePreview` itself assumes >=1 slot
+  // for its "Comprobar" score denominator).
+  const previewColumn = hasQuestions ? (
+    <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} />
+  ) : null;
+
+  if (!hasQuestions) {
+    return (
+      <div
+        className="flex flex-col gap-3"
+        data-testid={`quiz-editor-${blockId}`}
+        onKeyDownCapture={handleContainerKeyDown}
+      >
+        {questionsColumn}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-3"
+      data-testid={`quiz-editor-${blockId}`}
+      onKeyDownCapture={handleContainerKeyDown}
+    >
+      {/* Mobile-only tab bar (PURE CSS: `lg:hidden`, not a JS/isDesktop branch
+          — see this file's own header). Desktop shows both columns at once
+          side by side and never reads `mobileTab`. */}
+      <div
+        role="tablist"
+        aria-label={t.tabQuestions}
+        data-testid={`quiz-mobile-tabs-${blockId}`}
+        className="flex gap-1 rounded-md border border-border p-1 lg:hidden"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === 'questions'}
+          data-testid={`quiz-tab-questions-${blockId}`}
+          onClick={() => setMobileTab('questions')}
+          className={cn(
+            'min-h-11 flex-1 rounded px-2 text-sm font-medium',
+            mobileTab === 'questions' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {t.tabQuestions}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === 'preview'}
+          data-testid={`quiz-tab-preview-${blockId}`}
+          onClick={() => setMobileTab('preview')}
+          className={cn(
+            'min-h-11 flex-1 rounded px-2 text-sm font-medium',
+            mobileTab === 'preview' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {t.tabPreview}
+        </button>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className={cn('min-w-0', mobileTab === 'preview' && 'max-lg:hidden')}>{questionsColumn}</div>
+        <div className={cn('min-w-0', mobileTab === 'questions' && 'max-lg:hidden')}>{previewColumn}</div>
+      </div>
     </div>
   );
 }

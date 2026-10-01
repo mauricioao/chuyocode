@@ -164,6 +164,35 @@ describe('QuizBlockEditor — checklist', () => {
   });
 });
 
+describe('QuizBlockEditor — live preview (items 3 and 8)', () => {
+  it('renders no preview or mobile tabs in the empty state', () => {
+    render(<Harness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.queryByTestId('quiz-preview-b1')).toBeNull();
+    expect(screen.queryByTestId('quiz-mobile-tabs-b1')).toBeNull();
+  });
+
+  it('renders both the question list and the live preview once there is a question', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
+    expect(screen.getByTestId('quiz-preview-b1')).toBeTruthy();
+  });
+
+  it('the mobile tab bar starts on "Preguntas" and switches to "Vista previa" on click (CSS-only visibility, both columns stay mounted)', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    const questionsTab = screen.getByTestId('quiz-tab-questions-b1');
+    const previewTab = screen.getByTestId('quiz-tab-preview-b1');
+    expect(questionsTab.getAttribute('aria-selected')).toBe('true');
+    expect(previewTab.getAttribute('aria-selected')).toBe('false');
+
+    fireEvent.click(previewTab);
+    expect(previewTab.getAttribute('aria-selected')).toBe('true');
+    expect(questionsTab.getAttribute('aria-selected')).toBe('false');
+    // Both columns remain in the DOM (CSS visibility only) — no unmount/remount.
+    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
+    expect(screen.getByTestId('quiz-preview-b1')).toBeTruthy();
+  });
+});
+
 describe('QuizBlockEditor — incomplete pointer', () => {
   it('shows the incomplete message on the pointed-to question', () => {
     render(
