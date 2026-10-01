@@ -217,6 +217,9 @@ function SortableQuestionCard({
   );
 }
 
+/** Each column (questions, preview) scrolls on its own inside the desktop focus block. */
+const QUIZ_COLUMN_CLASS = 'min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:[scrollbar-gutter:stable]';
+
 export default function QuizBlockEditor({
   blockId,
   lang,
@@ -520,10 +523,15 @@ export default function QuizBlockEditor({
     <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} />
   ) : null;
 
+  // HEIGHT CHAIN: in the editor's desktop focus layout the expanded block has
+  // a fixed height and clips its overflow (BlockList). The root and the
+  // two-column grid must take that height (`flex-1 min-h-0`), and each column
+  // scrolls on its own — otherwise long lists are cut off with no way to reach
+  // them. Phones keep normal document flow (the `lg:` scroll classes).
   if (!hasQuestions) {
     return (
       <div
-        className="flex flex-col gap-3"
+        className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-y-auto lg:[scrollbar-gutter:stable]"
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
@@ -534,7 +542,7 @@ export default function QuizBlockEditor({
 
   return (
     <div
-      className="flex flex-col gap-3"
+      className="flex min-h-0 flex-1 flex-col gap-3"
       data-testid={`quiz-editor-${blockId}`}
       onKeyDownCapture={handleContainerKeyDown}
     >
@@ -575,9 +583,19 @@ export default function QuizBlockEditor({
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className={cn('min-w-0', mobileTab === 'preview' && 'max-lg:hidden')}>{questionsColumn}</div>
-        <div className={cn('min-w-0', mobileTab === 'questions' && 'max-lg:hidden')}>{previewColumn}</div>
+      <div data-testid={`quiz-columns-${blockId}`} className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-2">
+        <div
+          data-testid={`quiz-col-questions-${blockId}`}
+          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
+        >
+          {questionsColumn}
+        </div>
+        <div
+          data-testid={`quiz-col-preview-${blockId}`}
+          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'questions' && 'max-lg:hidden')}
+        >
+          {previewColumn}
+        </div>
       </div>
     </div>
   );
