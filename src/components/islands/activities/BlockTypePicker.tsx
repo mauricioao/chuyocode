@@ -12,6 +12,15 @@
  * OTHER card dims (and both become non-interactive) rather than the whole
  * picker just going generically `disabled`. There is no separate "Creando
  * la actividad…" text anymore; the spinner IS the busy indicator.
+ *
+ * EACH CARD'S TINY ANIMATED PREVIEW (owner build item 7, "Preguntas editor
+ * redesign"): a few decorative bars/dots hinting at the actual result —
+ * marks on a worksheet, a checked multiple-choice option — PURE CSS
+ * (Tailwind's `motion-safe:`/`motion-reduce:` variants, same convention
+ * `QuizWheel.tsx`/`SpeakButton.tsx` already use), so "reduced motion ->
+ * static" needs no JS at all: the animation simply never applies under
+ * `prefers-reduced-motion: reduce`, with zero risk of a server/client
+ * mismatch (there is nothing here for React to hydrate differently).
  */
 import { FileTextIcon } from '@phosphor-icons/react/dist/ssr/FileText';
 import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
@@ -35,6 +44,50 @@ function CardIcon({ busy, Icon }: { busy: boolean; Icon: typeof FileTextIcon }) 
   return (
     <div aria-hidden="true" className="flex h-9 w-9 items-center justify-center text-primary">
       {busy ? <CircleNotchIcon size={24} className="animate-spin" /> : <Icon size={24} />}
+    </div>
+  );
+}
+
+/**
+ * The worksheet card's tiny result preview: a couple of text lines with one
+ * highlighted "answer" mark that softly pulses, hinting at "mark where the
+ * answers go" without needing a real image.
+ */
+function WorksheetCardPreview() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="card-preview-worksheet"
+      className="mt-2 flex h-11 w-full flex-col justify-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5"
+    >
+      <span className="h-1.5 w-3/4 rounded-full bg-foreground/15" />
+      <span className="flex items-center gap-1.5">
+        <span className="h-1.5 w-1/3 rounded-full bg-foreground/15" />
+        <span className="motion-safe:animate-pulse h-2.5 w-5 rounded-sm border border-primary/50 bg-primary/20" />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The questions card's tiny result preview: two option rows, the correct one
+ * softly pulsing its checkmark dot — "the learner answers it".
+ */
+function QuestionsCardPreview() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="card-preview-questions"
+      className="mt-2 flex h-11 w-full flex-col justify-center gap-1 rounded-md border border-border bg-muted/40 px-2.5"
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="motion-safe:animate-pulse size-2 shrink-0 rounded-full bg-primary" />
+        <span className="h-1.5 w-2/3 rounded-full bg-foreground/15" />
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="size-2 shrink-0 rounded-full border border-foreground/30" />
+        <span className="h-1.5 w-1/2 rounded-full bg-foreground/15" />
+      </span>
     </div>
   );
 }
@@ -71,6 +124,7 @@ export default function BlockTypePicker({
             <CardIcon busy={busyCard === 'worksheet'} Icon={FileTextIcon} />
             <CardTitle className="text-lg">{t.worksheet.title}</CardTitle>
             <CardDescription>{t.worksheet.description}</CardDescription>
+            <WorksheetCardPreview />
           </CardHeader>
         </Card>
       </button>
@@ -91,6 +145,7 @@ export default function BlockTypePicker({
             <CardIcon busy={busyCard === 'questions'} Icon={ListChecksIcon} />
             <CardTitle className="text-lg">{t.questions.title}</CardTitle>
             <CardDescription>{t.questions.description}</CardDescription>
+            <QuestionsCardPreview />
           </CardHeader>
         </Card>
       </button>

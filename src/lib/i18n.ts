@@ -334,11 +334,12 @@ export const UI_LABELS = {
         heading: 'Elegir el punto de partida',
         worksheet: {
           title: 'Hoja de trabajo',
-          description: 'Subir una hoja de trabajo o un PDF y agregar respuestas encima.',
+          description: 'Sube una hoja o PDF y marca dónde van las respuestas.',
         },
         questions: {
           title: 'Preguntas',
-          description: 'Preguntas de opción múltiple y otros ejercicios interactivos.',
+          description:
+            'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
         },
         createError: 'No se pudo crear la actividad. Intentar de nuevo.',
       },
@@ -1326,11 +1327,12 @@ export const UI_LABELS = {
         heading: 'What do you want to start with?',
         worksheet: {
           title: 'Worksheet',
-          description: 'Upload a worksheet or a PDF and add answers on top.',
+          description: 'Upload a worksheet or a PDF and mark where the answers go.',
         },
         questions: {
           title: 'Questions',
-          description: 'Multiple-choice questions and other interactive exercises.',
+          description:
+            'Write questions; learners answer them and can also play them as flashcards, a wheel, hangman…',
         },
         createError: 'Could not create the activity. Try again.',
       },
