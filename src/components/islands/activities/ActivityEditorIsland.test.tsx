@@ -30,6 +30,10 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // A handful of "open the first block on entry" tests set this to exercise
+  // hash-targeting — reset unconditionally so a later test never inherits a
+  // leftover hash, even if one of those failed before its own cleanup line.
+  window.location.hash = '';
 });
 
 const WORKSHEET_BLOCK: WorksheetBlock = {
@@ -112,6 +116,53 @@ describe('ActivityEditorIsland — initial render', () => {
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();
     expect(screen.getByTestId('block-type-picker')).toBeTruthy();
     expect(screen.queryByTestId('add-block-button')).toBeNull();
+  });
+});
+
+describe('ActivityEditorIsland — open the first block on entry (creator polish round 4, owner feedback #1)', () => {
+  it('expands the first block automatically, with no click needed', () => {
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+    expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
+    expect(screen.getByTestId('block-b2').querySelector('[data-testid="worksheet-zone-editor"]')).toBeNull();
+    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBe('true');
+  });
+
+  it('shows a brand-new (imageless) sole block\'s own upload drop zone immediately, auto-expanded', () => {
+    const emptyWorksheet: WorksheetBlock = { ...WORKSHEET_BLOCK, image: undefined, zones: [] };
+    renderEditor({ initialBlocks: [emptyWorksheet] });
+    expect(screen.getByTestId('worksheet-uploader')).toBeTruthy();
+  });
+
+  it('still shows the empty-blocks state (no block to expand) for a brand-new, zero-block activity', () => {
+    renderEditor({ initialBlocks: [] });
+    expect(screen.getByTestId('blocks-empty')).toBeTruthy();
+    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+  });
+
+  it('expands the block the URL hash targets instead of the first one', () => {
+    window.location.hash = '#block-b2';
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+    expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeNull();
+    expect(screen.getByTestId('block-b2').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
+    window.location.hash = '';
+  });
+
+  it('falls back to the first block when the hash targets an unknown block id', () => {
+    window.location.hash = '#block-does-not-exist';
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+    expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
+    window.location.hash = '';
+  });
+
+  it('"collapse all" still works after the first block auto-opens', () => {
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('collapse-all-button'));
+    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
   });
 });
 
@@ -228,7 +279,7 @@ describe('ActivityEditorIsland — autosave', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
 
-    fireEvent.click(screen.getByTestId('block-header-b1'));
+    // The first (only) block opens on entry (owner feedback #1) — no click needed.
     const canvas = screen.getByTestId('zone-canvas');
     mockRect(canvas, { width: 200, height: 100 });
     const zone = screen.getByTestId('zone-z1');
@@ -361,7 +412,7 @@ describe('ActivityEditorIsland — adding a quiz block', () => {
 describe('ActivityEditorIsland — Escape deselects the current zone', () => {
   it('deselects the selected zone on Escape, without collapsing its block', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
-    fireEvent.click(screen.getByTestId('block-header-b1'));
+    // The first (only) block opens on entry (owner feedback #1) — no click needed.
     expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
 
     // Selects the existing zone (canvas tools pass: the accessible "+ Zona"
@@ -399,12 +450,14 @@ describe('ActivityEditorIsland — sticky toolbar wiring', () => {
 });
 
 describe('ActivityEditorIsland — collapse/expand per block', () => {
-  it('collapses a block again on a second header click', () => {
+  it('collapses the (auto-opened) block on header click, and a second click re-expands it', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    fireEvent.click(screen.getByTestId('block-header-b1'));
+    // The first block opens on entry (owner feedback #1) — no click needed.
     expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
     fireEvent.click(screen.getByTestId('block-header-b1'));
     expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+    fireEvent.click(screen.getByTestId('block-header-b1'));
+    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
   });
 });
 
@@ -413,7 +466,7 @@ describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pa
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
 
-    fireEvent.click(screen.getByTestId('block-header-b1'));
+    // The first block opens on entry (owner feedback #1) — no click needed.
     expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
     expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
 

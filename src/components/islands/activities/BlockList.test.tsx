@@ -271,6 +271,48 @@ describe('BlockList — reordering (drag-and-drop wiring)', () => {
   });
 });
 
+describe('BlockList — fill the empty space (creator polish round 4, owner feedback #2)', () => {
+  it('keeps the drag handle inside the block HEADER row, not its own column beside the expanded body', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
+    const handle = screen.getByTestId('block-handle-b1');
+    const headerCaret = screen.getByTestId('block-header-b1');
+    // Same immediate row: the handle and the expand/collapse caret are
+    // siblings inside ONE header row, not the handle sitting in its own
+    // sibling column of the whole block (the old structure — see
+    // `SortableBlockItem`'s own header for why that left an empty gutter the
+    // expanded body's full height).
+    expect(handle.parentElement).toBe(headerCaret.parentElement);
+  });
+
+  it('lets the expanded body span the block\'s full width — no intermediate wrapper narrows it beside a handle column', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
+    const blockDiv = screen.getByTestId('block-b1');
+    // The `<li>` (focus layout's own bounded-height element) now has exactly
+    // ONE direct child: the `block-${id}` div itself — no wrapping flex ROW
+    // (handle + content, `items-start`) sitting between them any more.
+    const li = blockDiv.closest('li')!;
+    expect(Array.from(li.children)).toEqual([blockDiv]);
+    // That div's own two children are the header row and the expanded body
+    // — both full width, no reserved handle gutter beside the body.
+    expect(blockDiv.children).toHaveLength(2);
+    expect(blockDiv.children[1].querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
+  });
+
+  it('keeps a real flex-1/min-h-0 chain from the focus-active <li> down to the canvas viewport — no `items-start` ancestor breaks it', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
+    const viewport = screen.getByTestId('zone-viewport');
+    const li = screen.getByTestId('block-b1').closest('li')!;
+    expect(li.className).toContain('lg:flex-1');
+
+    let el: Element | null = viewport;
+    while (el && el !== li) {
+      expect(el.className).not.toContain('items-start');
+      el = el.parentElement;
+    }
+    expect(el).toBe(li); // actually reached the <li> — the chain is intact
+  });
+});
+
 describe('BlockList — rotation', () => {
   it('rotating right advances rotation by 90 and keeps zones (transformed)', () => {
     const zone: Zone = { id: 'z1', x: 0, y: 0, w: 0.1, h: 0.2, kind: 'text', answers: ['x'] };

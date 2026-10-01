@@ -106,7 +106,7 @@ import {
   stepZoomInput,
   wheelZoomInput,
   fitCamera,
-  clampCamera,
+  clampCameraLoose,
   zoomAt,
   panBy,
   screenToContentPoint,
@@ -313,13 +313,17 @@ export default function WorksheetZoneEditor({
   // `ResizeObserver` callback alone would have. The observer below re-runs
   // this on LATER resizes; while NOT in fit mode, a resize RE-CLAMPS the
   // user's own camera instead (see the file header) rather than leaving it
-  // referencing a viewport size that no longer exists.
+  // referencing a viewport size that no longer exists — through the SAME
+  // loose bound (`clampCameraLoose`, canvas UX follow-up) every other
+  // non-fit camera change in this editor now uses (see `applyCameraZoom`/
+  // the pan branch of `handlePointerMove` below), so a resize never snaps a
+  // free-panned camera back into the practice player's strict bound.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
     const reconcile = () => {
       const vp = viewportSize();
-      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCamera(prev, displaySize, vp)));
+      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
     };
     reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -340,7 +344,12 @@ export default function WorksheetZoneEditor({
       setCamera((prev) => {
         const vp = viewportSize();
         const point = anchor ?? { x: vp.width / 2, y: vp.height / 2 };
-        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp });
+        // Loose bound (canvas UX follow-up, owner feedback) — see
+        // `clampCameraLoose`'s own header and this file's header's Camera
+        // note: every explicit camera change the EDITOR itself makes (zoom
+        // in/out, the typed %, wheel, pan) uses this, never the practice
+        // player's strict `clampCamera`.
+        return zoomAt(prev, nextScale, point, { image: displaySize, viewport: vp }, clampCameraLoose);
       });
     },
     [displaySize, viewportSize],
@@ -728,7 +737,12 @@ export default function WorksheetZoneEditor({
         // `requestAnimationFrame` is ever in flight for this drag.
         const dx = e.clientX - drag.startClientX;
         const dy = e.clientY - drag.startClientY;
-        const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() });
+        // Loose bound (canvas UX follow-up) — covers every pan entry point
+        // that reaches this ONE branch: the Mano tool, a middle-button drag,
+        // and a Space-held drag all set `dragRef.current = { kind: 'pan', ... }`
+        // the same way (see `startPan`'s own callers) and are handled right
+        // here, uniformly.
+        const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() }, clampCameraLoose);
         panFrameRef.current.target = next;
         if (panFrameRef.current.id == null) {
           panFrameRef.current.id = requestAnimationFrame(() => {
@@ -1295,6 +1309,20 @@ export default function WorksheetZoneEditor({
           >
             <HandIcon aria-hidden="true" />
           </Button>
+          {/* "Fill the empty space" pass (owner feedback #2): this hint used
+              to be its own `flex-none` row UNDER the canvas — real height the
+              canvas viewport's own `flex-1` never got back, on top of the
+              zoom toolbar directly above it. Folded into the SAME row as the
+              zoom/tool controls instead (this toolbar already wraps via its
+              own `flex-wrap` — see `zoom-toolbar` above), a thin line that
+              adds no height of its own rather than a whole extra row. */}
+          <div
+            data-testid="worksheet-canvas-hint"
+            className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
+          >
+            {zones.length === 0 && <span>{t.noZonesYet}</span>}
+            <span>{t.addZoneHint}</span>
+          </div>
         </div>
 
         <div
@@ -1426,12 +1454,6 @@ export default function WorksheetZoneEditor({
               />
             )}
           </div>
-        </div>
-        {/* One compact line (creator "one-screen" pass: every extra row here
-            is height the canvas doesn't get) instead of two stacked hints. */}
-        <div className="mt-1 flex flex-none flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          {zones.length === 0 && <span>{t.noZonesYet}</span>}
-          <span>{t.addZoneHint}</span>
         </div>
         {/* Block-level incomplete pointer (creator polish round 3, owner
             feedback #1): `incompleteZoneId === null` means the gap is

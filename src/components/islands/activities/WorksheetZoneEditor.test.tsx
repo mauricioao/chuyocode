@@ -151,6 +151,17 @@ describe('WorksheetZoneEditor — rendering', () => {
     expect(el.style.left).toBe('25%');
     expect(el.style.top).toBe('10%');
   });
+
+  // "Fill the empty space" pass (owner feedback #2): the "Dibujar un
+  // recuadro…"/no-zones hint used to be its own extra row UNDER the canvas —
+  // real height the canvas `flex-1` viewport never got back. It now lives
+  // INSIDE the zoom toolbar's own row instead, adding no height of its own.
+  it('folds the canvas hint into the zoom toolbar row instead of its own row under the canvas', () => {
+    render(<Harness />);
+    const toolbar = screen.getByTestId('zoom-toolbar');
+    const hint = screen.getByTestId('worksheet-canvas-hint');
+    expect(toolbar.contains(hint)).toBe(true);
+  });
 });
 
 describe('WorksheetZoneEditor — properties panel is always rendered (no layout jump)', () => {
@@ -1289,6 +1300,36 @@ describe('WorksheetZoneEditor — panning', () => {
 
     expect(cameraTransform()).toBe('translate(-40px, -30px) scale(1)');
     expect(screen.getByTestId('zone-z1').style.left).toBe(originalLeft);
+  });
+
+  it('frees panning away from center even when the whole image already fits the viewport (canvas camera follow-up, owner feedback: "drag to the bottom corner at any zoom")', () => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    MockResizeObserver.instances = [];
+    render(<Harness />);
+    const viewport = screen.getByTestId('zone-viewport');
+    const canvas = screen.getByTestId('zone-canvas');
+    // 1600x800 matches the 800x400 IMAGE's own 2:1 aspect ratio exactly — the
+    // fit camera lands on scale 2 with content EXACTLY filling the viewport
+    // on both axes (offset 0, 0): the worst case for the OLD strict
+    // `clampCamera`, which always re-centers content that is `<=` the
+    // viewport — ignoring any drag entirely once it exactly fills it.
+    mockRect(viewport, { width: 1600, height: 800 });
+    act(() => {
+      MockResizeObserver.instances.at(-1)?.fire();
+    });
+    expect(cameraTransform()).toBe('translate(0px, 0px) scale(2)');
+
+    fireEvent.click(screen.getByTestId('tool-hand'));
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointermove', 60, 70);
+    firePointer(canvas, 'pointerup', 60, 70);
+
+    // dx=-40, dy=-30: under the old strict clamp this stayed at (0, 0) —
+    // content exactly fills the viewport, so `clampCameraAxis` always
+    // re-centers regardless of the drag. The editor's own pan now goes
+    // through `clampCameraLoose` (owner feedback), which only bounds the
+    // drag so at least 20%/80px of the image stays visible — real movement.
+    expect(cameraTransform()).toBe('translate(-40px, -30px) scale(2)');
   });
 });
 

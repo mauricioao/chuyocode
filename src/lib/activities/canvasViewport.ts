@@ -20,7 +20,8 @@
  *    unit-tested, and cheap to keep in case a future non-camera zoom UI wants
  *    them again.
  *  - The worksheet CREATOR canvas' own bounded CAMERA (`Camera`,
- *    `fitCamera`, `zoomAt`, `panBy`, `clampCamera`, `screenToContentPoint`) —
+ *    `fitCamera`, `zoomAt`, `panBy`, `clampCamera`, `clampCameraLoose`,
+ *    `screenToContentPoint`) —
  *    `{ scale, x, y }` applied as a CSS `transform` on the content layer,
  *    replacing the older scroll-based viewport (native `scrollLeft`/`scrollTop`)
  *    this module used to also expose (`zoomAroundPoint`, `clampPanAxis`,
@@ -216,6 +217,100 @@ export function clampCamera(camera: Camera, image: Size, viewport: Size): Camera
 }
 
 /**
+ * A camera-clamping policy — what {@link clampCamera} and
+ * {@link clampCameraLoose} both are — threaded as an optional parameter
+ * through {@link zoomAt}/{@link anchoredZoom}/{@link panBy} (editor camera UX
+ * pass) so a caller can swap in a DIFFERENT bound for a SPECIFIC camera
+ * change without those functions needing to know which policy exists or
+ * duplicating their own anchor/translate math per policy. Every existing
+ * caller that omits this parameter keeps getting {@link clampCamera} (the
+ * strict, PRACTICE-player bound) exactly as before this pass.
+ */
+export type ClampCameraFn = (camera: Camera, image: Size, viewport: Size) => Camera;
+
+/** {@link clampCameraLoose}'s own tuning — see its header for what each one bounds. */
+export interface ClampCameraLooseOptions {
+  /** Fraction of the CONTENT's own length, per axis, that must stay visible. Default `0.2` (20%). */
+  minVisibleFraction?: number;
+  /** The absolute floor, per axis, in CSS pixels — wins over the fraction for a small image. Default `80`. */
+  minVisiblePx?: number;
+}
+
+const DEFAULT_MIN_VISIBLE_FRACTION = 0.2;
+const DEFAULT_MIN_VISIBLE_PX = 80;
+
+/**
+ * One axis of {@link clampCameraLoose}: unlike {@link clampCameraAxis}
+ * (which ALWAYS centers content that is `<=` the viewport, and otherwise only
+ * lets an oversized image's own edge reach the viewport's edge — no further),
+ * this allows the offset to range freely past either edge, bounded only so
+ * that at least `visibleMin` CONTENT pixels stay inside the viewport on this
+ * axis. `visibleMin` itself is capped at both `contentLength` and
+ * `viewportLength` — a TINY image (smaller than the requested minimum) never
+ * demands more of itself be visible than it actually has, and a TINY
+ * viewport (smaller than the requested minimum) never demands more than the
+ * viewport can ever show — which also keeps the returned `[min, max]` range
+ * from ever inverting (see {@link clampCameraLoose}'s own header for the
+ * proof): `visibleMin <= min(contentLength, viewportLength)`, so
+ * `max - min = viewportLength + contentLength - 2 * visibleMin >= 0` always.
+ */
+function clampCameraLooseAxis(
+  offset: number,
+  viewportLength: number,
+  contentLength: number,
+  minVisibleFraction: number,
+  minVisiblePx: number,
+): number {
+  const visibleMin = Math.min(
+    Math.max(minVisibleFraction * contentLength, minVisiblePx),
+    contentLength,
+    viewportLength,
+  );
+  const min = visibleMin - contentLength;
+  const max = viewportLength - visibleMin;
+  return Math.min(max, Math.max(min, offset));
+}
+
+/**
+ * The worksheet CREATOR EDITOR's own free-panning camera bound (creator
+ * canvas UX follow-up, owner feedback: "when the whole sheet fits, the
+ * camera centers and LOCKS it, so the author can't drag the sheet up to work
+ * on its bottom corner — only zoomed in can it move"). {@link clampCamera}
+ * (unchanged, still the PRACTICE player's own bound) always centers an axis
+ * once content is `<=` the viewport, and otherwise only lets an oversized
+ * image's own edge reach the viewport's edge; this instead lets the EDITOR
+ * pan in every direction at ANY zoom — including while the whole image
+ * already fits — bounded only so that at least `minVisibleFraction` of the
+ * image (never less than `minVisiblePx`, and never more than the image or
+ * viewport themselves allow) stays inside the viewport on each axis, so the
+ * image can never be fully lost off screen. `scale` is clamped exactly like
+ * {@link clampCamera} — the same unified 10%-400% camera range.
+ *
+ * Used as the `clamp` policy for `panBy`/`zoomAt`/`anchoredZoom` at the
+ * editor's own pan/zoom entry points (wheel-zoom-around-the-pointer, the
+ * Mano tool, a middle-button drag, and a Space-held drag) — see
+ * `WorksheetZoneEditor.tsx`'s own header. `fitCamera`/"Ajustar" (and the `0`
+ * key) stay on the STRICT bound — they are the one action that deliberately
+ * re-centers, unaffected by this pass.
+ */
+export function clampCameraLoose(
+  camera: Camera,
+  image: Size,
+  viewport: Size,
+  options?: ClampCameraLooseOptions,
+): Camera {
+  const minVisibleFraction = options?.minVisibleFraction ?? DEFAULT_MIN_VISIBLE_FRACTION;
+  const minVisiblePx = options?.minVisiblePx ?? DEFAULT_MIN_VISIBLE_PX;
+  const scale = clampZoomInput(camera.scale);
+  const content = contentSize(image, scale);
+  return {
+    scale,
+    x: clampCameraLooseAxis(camera.x, viewport.width, content.width, minVisibleFraction, minVisiblePx),
+    y: clampCameraLooseAxis(camera.y, viewport.height, content.height, minVisibleFraction, minVisiblePx),
+  };
+}
+
+/**
  * The camera that shows the WHOLE `image` (already the rotated display
  * size — see `rotatedSize`) centered inside `viewport` — "Ajustar"/Fit, and
  * the editor's default view. Reuses {@link fitZoom}'s own scale (its
@@ -244,8 +339,14 @@ export function fitCamera(image: Size, viewport: Size): Camera {
  * the content becomes smaller than the viewport re-centers it instead of
  * leaving it pinned to a now-stale anchor.
  */
-export function zoomAt(camera: Camera, nextScale: number, point: Point, bounds: CameraBounds): Camera {
-  return anchoredZoom(camera, nextScale, point, point, bounds);
+export function zoomAt(
+  camera: Camera,
+  nextScale: number,
+  point: Point,
+  bounds: CameraBounds,
+  clamp: ClampCameraFn = clampCamera,
+): Camera {
+  return anchoredZoom(camera, nextScale, point, point, bounds, clamp);
 }
 
 /**
@@ -271,13 +372,14 @@ export function anchoredZoom(
   anchorStart: Point,
   anchorCurrent: Point,
   bounds: CameraBounds,
+  clamp: ClampCameraFn = clampCamera,
 ): Camera {
   if (camera.scale <= 0) {
-    return clampCamera({ ...camera, scale: nextScale }, bounds.image, bounds.viewport);
+    return clamp({ ...camera, scale: nextScale }, bounds.image, bounds.viewport);
   }
   const contentX = (anchorStart.x - camera.x) / camera.scale;
   const contentY = (anchorStart.y - camera.y) / camera.scale;
-  return clampCamera(
+  return clamp(
     { scale: nextScale, x: anchorCurrent.x - contentX * nextScale, y: anchorCurrent.y - contentY * nextScale },
     bounds.image,
     bounds.viewport,
@@ -285,8 +387,14 @@ export function anchoredZoom(
 }
 
 /** Translate `camera` by a pixel `(dx, dy)`, clamped like every other camera change via {@link clampCamera}. */
-export function panBy(camera: Camera, dx: number, dy: number, bounds: CameraBounds): Camera {
-  return clampCamera({ ...camera, x: camera.x + dx, y: camera.y + dy }, bounds.image, bounds.viewport);
+export function panBy(
+  camera: Camera,
+  dx: number,
+  dy: number,
+  bounds: CameraBounds,
+  clamp: ClampCameraFn = clampCamera,
+): Camera {
+  return clamp({ ...camera, x: camera.x + dx, y: camera.y + dy }, bounds.image, bounds.viewport);
 }
 
 /**

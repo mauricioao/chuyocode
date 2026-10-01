@@ -181,15 +181,34 @@ function DeleteBlockButton({
   );
 }
 
-/** The drag wiring for one block — same `useSortable` pattern as `authoring/SortableBlock.tsx`. */
+/**
+ * The drag wiring for one block — same `useSortable` pattern as
+ * `authoring/SortableBlock.tsx`. `useSortable` must be called from a
+ * component mounted once per sortable `id`, so this still wraps the `<li>`;
+ * but unlike before (owner feedback #2, "fill the empty space"), it no
+ * longer ALSO renders the drag-handle button itself in its own row beside
+ * `children` — that put the handle and ALL of a block's content (header row
+ * AND, once expanded, the canvas/panel body) side by side in one flex ROW,
+ * so the handle's own (narrow, `items-start`-aligned) column stayed empty
+ * for the body's full height below the button, and — because that wrapping
+ * row used `items-start` rather than the default stretch — the flex-1/min-h-0
+ * chain down into `WorksheetZoneEditor`'s own viewport never actually got a
+ * bounded height to fill either (the "canvas stops short, empty space below
+ * it" half of the same bug). `children` is now a RENDER PROP instead,
+ * handed the sortable `attributes`/`listeners` to spread onto whatever
+ * button IT renders as the drag handle — see the block map below, which
+ * places that button as the first item INSIDE its own header row (not a
+ * sibling column of the whole block), so the expanded body right after it
+ * spans the block's full width and the `<li>`'s default (stretching) cross-
+ * axis alignment lets that body's own `flex-1 min-h-0` chain actually fill
+ * the `<li>`'s real (focus-layout) height.
+ */
 function SortableBlockItem({
   id,
-  handleLabel,
   focusActive,
   children,
 }: {
   id: string;
-  handleLabel: string;
   /**
    * Desktop "focus" layout (creator "one-screen" pass): true for the ONE
    * expanded block when it is the sole expanded one — see `focusBlockId`
@@ -200,7 +219,7 @@ function SortableBlockItem({
    * if that no longer fits (documented, acceptable).
    */
   focusActive: boolean;
-  children: React.ReactNode;
+  children: (handle: Pick<ReturnType<typeof useSortable>, 'attributes' | 'listeners'>) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -215,19 +234,7 @@ function SortableBlockItem({
         focusActive ? 'lg:min-h-[22rem] lg:flex-1' : 'lg:flex-none'
       }`}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 items-start gap-1 px-1 pt-1">
-        <button
-          type="button"
-          aria-label={handleLabel}
-          data-testid={`block-handle-${id}`}
-          className="mt-1 flex shrink-0 touch-none cursor-grab items-center justify-center rounded-md p-1.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
-        >
-          <DotsSixVerticalIcon aria-hidden="true" />
-        </button>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
-      </div>
+      {children({ attributes, listeners })}
     </li>
   );
 }
@@ -357,12 +364,8 @@ export default function BlockList({
             const questionCount = quiz?.payload.slots.length ?? 0;
 
             return (
-              <SortableBlockItem
-                key={block.id}
-                id={block.id}
-                handleLabel={`${t.dragHandle}: ${name}`}
-                focusActive={focusBlockId === block.id}
-              >
+              <SortableBlockItem key={block.id} id={block.id} focusActive={focusBlockId === block.id}>
+                {({ attributes, listeners }) => (
                 <div data-testid={`block-${block.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
                   {/* `ROW_PADDING_X` matches the expanded editor's own
                       horizontal inset just below (worksheet's zoom-toolbar/
@@ -371,8 +374,23 @@ export default function BlockList({
                       expanded body added `px-2`, so a block's header icons
                       sat flush with its own left edge while the canvas below
                       started 8px further right (the "margins feel uneven"
-                      complaint). */}
+                      complaint). The drag handle (fill-the-space pass, owner
+                      feedback #2) is now the FIRST item in this same header
+                      row instead of its own column beside the whole block —
+                      see `SortableBlockItem`'s own header for why: it used to
+                      leave an empty gutter the expanded body's full height. */}
                   <div className={cn('flex flex-none flex-wrap items-center gap-2 py-1', ROW_PADDING_X)}>
+                    <button
+                      type="button"
+                      aria-label={`${t.dragHandle}: ${name}`}
+                      data-testid={`block-handle-${block.id}`}
+                      className="flex shrink-0 touch-none cursor-grab items-center justify-center rounded-md p-1.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+                      {...attributes}
+                      {...listeners}
+                    >
+                      <DotsSixVerticalIcon aria-hidden="true" />
+                    </button>
+
                     <Button
                       type="button"
                       size="icon-sm"
@@ -511,6 +529,7 @@ export default function BlockList({
                     </div>
                   )}
                 </div>
+                )}
               </SortableBlockItem>
             );
           })}
