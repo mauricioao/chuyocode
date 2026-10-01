@@ -202,6 +202,16 @@ describe('EditorSideToolbar — save', () => {
     renderToolbar({ saveDisabled: true, saveState: 'saving' });
     expect((screen.getByTestId('save-button') as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('shows the save button as loading/aria-busy while a manual save runs', () => {
+    renderToolbar({ saveDisabled: true, saveState: 'saving' });
+    expect(screen.getByTestId('save-button').getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('does not show the save button as loading when idle/saved/pending', () => {
+    renderToolbar({ saveState: 'saved' });
+    expect(screen.getByTestId('save-button').getAttribute('aria-busy')).toBeNull();
+  });
 });
 
 // Floating side toolbar pass. jsdom has no real layout (`getBoundingClientRect`

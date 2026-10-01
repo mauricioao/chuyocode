@@ -134,12 +134,15 @@ function ToolbarIconButton({
   label,
   testId,
   disabled,
+  loading,
   onClick,
   children,
 }: {
   label: string;
   testId: string;
   disabled?: boolean;
+  /** Shows the shared `Button`'s own spinner in place of the icon — the manual save button's own in-flight state (coherent loading states, item 3). Every other toolbar icon leaves this unset. */
+  loading?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -152,6 +155,7 @@ function ToolbarIconButton({
       title={label}
       data-testid={testId}
       disabled={disabled}
+      loading={loading}
       onClick={onClick}
     >
       {children}
@@ -563,7 +567,13 @@ export default function EditorSideToolbar({
 
       <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
 
-      <ToolbarIconButton label={t.save} testId="save-button" disabled={saveDisabled} onClick={onSave}>
+      <ToolbarIconButton
+        label={t.save}
+        testId="save-button"
+        disabled={saveDisabled}
+        loading={saveState === 'saving'}
+        onClick={onSave}
+      >
         <FloppyDiskIcon aria-hidden="true" />
       </ToolbarIconButton>
       <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
@@ -663,7 +673,13 @@ export default function EditorSideToolbar({
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 
-      <ToolbarIconButton label={t.save} testId="save-button" disabled={saveDisabled} onClick={onSave}>
+      <ToolbarIconButton
+        label={t.save}
+        testId="save-button"
+        disabled={saveDisabled}
+        loading={saveState === 'saving'}
+        onClick={onSave}
+      >
         <FloppyDiskIcon aria-hidden="true" />
       </ToolbarIconButton>
       <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
