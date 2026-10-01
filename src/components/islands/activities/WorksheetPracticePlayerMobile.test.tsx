@@ -340,3 +340,28 @@ describe('WorksheetPracticePlayerMobile — pinch/pan camera wiring', () => {
     expect(contentTransform()).not.toBe(afterPinch);
   });
 });
+
+describe('WorksheetPracticePlayerMobile — free panning (Bug 2, loose camera bound)', () => {
+  it('a two-finger pan (no scale change) moves the content past where the OLD strict bound would force it back to center', () => {
+    render(<Harness />);
+    const viewport = screen.getByTestId('practice-mobile-viewport');
+    // The camera starts at IDENTITY (scale 1, see the "rendering" describe
+    // above) — a 1000x500 viewport then leaves the 800x400 image SMALLER
+    // than the viewport on both axes, so the OLD strict `clampCamera`
+    // forces it centered (x=100, y=50) regardless of any drag; the real
+    // bug (content exactly filling the viewport at fit) behaves the same
+    // way under the strict bound — see `clampCameraAxis`'s own header.
+    mockRect(viewport, { width: 1000, height: 500 });
+
+    // Two fingers, same distance apart before and after (no pinch-zoom) —
+    // purely a two-finger PAN, translated by +30px/+0px.
+    firePointer(viewport, 'pointerdown', 150, 100, { pointerId: 1 });
+    firePointer(viewport, 'pointerdown', 250, 100, { pointerId: 2 });
+    firePointer(viewport, 'pointermove', 180, 100, { pointerId: 1 });
+    firePointer(viewport, 'pointermove', 280, 100, { pointerId: 2 });
+
+    // LOOSE bound: x lands at the actually-dragged-to 30 (never forced back
+    // to the strict bound's centered 100).
+    expect(contentTransform()).toBe('translate(30px, 0px) scale(1)');
+  });
+});

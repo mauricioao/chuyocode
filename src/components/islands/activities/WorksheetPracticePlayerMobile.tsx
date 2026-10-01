@@ -3,11 +3,17 @@
  * layout pass, highest-priority build: "practice page on a phone"). The
  * worksheet fits the screen width by default (camera-style fit, the exact
  * same math the creator canvas already uses —
- * `src/lib/activities/canvasViewport.ts`'s `fitCamera`/`clampCamera`), with
- * real two-finger pinch-to-zoom and two-finger pan on the image itself.
+ * `src/lib/activities/canvasViewport.ts`'s `fitCamera`/`clampCameraLoose`),
+ * with real two-finger pinch-to-zoom and two-finger pan on the image itself.
  * `WorksheetPracticePlayer.tsx` mounts this instead of its own desktop
  * toolbar+horizontal-scroll zoom once `useIsDesktop()` says the viewport is
- * narrower than `lg` — see that file's own header for the split.
+ * narrower than `lg` — see that file's own header for the split. FREE
+ * PANNING (Bug 2, "free panning in the practice player"): every pinch/pan
+ * gesture below clamps through the editor's own LOOSE bound
+ * (`clampCameraLoose`), not the stricter `clampCamera` this file used
+ * before, so the sheet can be dragged around at any zoom, including while
+ * it already fits the viewport; only `fitMode`'s own `fitCamera` stays on
+ * the strict bound (it deliberately re-centers).
  *
  * TINY ZONES PROBLEM (the reason this file exists at all): at fit scale a
  * worksheet's answer zones are too small to type into on a phone. Rather
@@ -41,7 +47,7 @@ import SpeakButton from '@/lib/speech/SpeakButton';
 import type { ImageRef, WorksheetBlock, Zone } from '@/lib/activities/blocks';
 import {
   fitCamera,
-  clampCamera,
+  clampCameraLoose,
   clampZoom,
   anchoredZoom,
   panBy,
@@ -108,13 +114,16 @@ export default function WorksheetPracticePlayerMobile({
   // Same fit-on-mount-and-resize shape as `WorksheetZoneEditor.tsx`'s own
   // `useLayoutEffect` — see that file's header for why it must run before
   // paint and why a resize re-clamps (rather than silently re-fitting away)
-  // a camera the learner already moved.
+  // a camera the learner already moved — through the LOOSE bound (Bug 2,
+  // "free panning in the practice player"), same as every other re-clamp
+  // below; only `fitCamera`/fit mode itself stays strict (it deliberately
+  // re-centers).
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
     const reconcile = () => {
       const vp = viewportSize();
-      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCamera(prev, displaySize, vp)));
+      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
     };
     reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -168,7 +177,18 @@ export default function WorksheetPracticePlayerMobile({
         const nextScale = clampZoom(
           gesture.startCamera.scale * (distanceBetween(pts[0], pts[1]) / gesture.startDistance),
         );
-        const next = anchoredZoom(gesture.startCamera, nextScale, gesture.startMid, midpoint(pts[0], pts[1]), bounds);
+        // LOOSE bound (Bug 2, "free panning in the practice player"): see
+        // the reconcile effect's own note above.
+        // LOOSE bound (Bug 2, "free panning in the practice player"): see
+        // the reconcile effect's own note above.
+        const next = anchoredZoom(
+          gesture.startCamera,
+          nextScale,
+          gesture.startMid,
+          midpoint(pts[0], pts[1]),
+          bounds,
+          clampCameraLoose,
+        );
         cameraRef.current = next;
         setCamera(next);
         setFitMode(false);
@@ -177,7 +197,7 @@ export default function WorksheetPracticePlayerMobile({
 
       const dx = e.clientX - gesture.startClientX;
       const dy = e.clientY - gesture.startClientY;
-      const next = panBy(gesture.startCamera, dx, dy, bounds);
+      const next = panBy(gesture.startCamera, dx, dy, bounds, clampCameraLoose);
       cameraRef.current = next;
       setCamera(next);
     },
