@@ -18,6 +18,7 @@
 import { countBlanks, hasAudio, type Payload, type Pool, type Slot } from './exercisePayload';
 import { comparatorFor } from './exerciseGrading';
 import { isAllowedMediaUrl } from './exerciseMedia';
+import { serverAllowedMediaHosts } from './exerciseMedia.server';
 
 /** Closed union of every rule this validator enforces. */
 export type ValidationCode =
@@ -253,15 +254,18 @@ function checkBlockCoverage(payload: Payload): ValidationIssue[] {
 function checkBlockMedia(payload: Payload): ValidationIssue[] {
   if (payload.blocks === undefined) return [];
   const found: ValidationIssue[] = [];
+  // The server-side, Supabase-aware list: publish time runs here (never in
+  // the browser), so this is the one call site allowed to pull in `env`.
+  const hosts = serverAllowedMediaHosts();
 
   for (const block of payload.blocks) {
     if (block.kind !== 'media') continue;
-    if (block.image !== undefined && !isAllowedMediaUrl(block.image)) {
+    if (block.image !== undefined && !isAllowedMediaUrl(block.image, hosts)) {
       found.push(
         issue('media_url_not_allowed', 'error', { blockId: block.id, detail: block.image }),
       );
     }
-    if (block.audio !== undefined && !isAllowedMediaUrl(block.audio)) {
+    if (block.audio !== undefined && !isAllowedMediaUrl(block.audio, hosts)) {
       found.push(
         issue('media_url_not_allowed', 'error', { blockId: block.id, detail: block.audio }),
       );

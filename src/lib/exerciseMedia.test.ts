@@ -1,54 +1,30 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { isAllowedMediaUrl, mediaHostsFor, STATIC_ALLOWED_MEDIA_HOSTS } from './exerciseMedia';
 
-vi.mock('./env', () => ({
-  loadEnv: () => ({
-    SANITY_PROJECT_ID: 'proj',
-    SANITY_DATASET: 'production',
-    SUPABASE_URL: 'https://abcdefgh.supabase.co',
-    SUPABASE_ANON_KEY: 'anon',
-    SUPABASE_SERVICE_ROLE_KEY: '',
-    AD_HMAC_SECRET: '',
-  }),
-}));
-
-import {
-  allowedMediaHosts,
-  isAllowedMediaUrl,
-  resetMediaHostsCache,
-  STATIC_ALLOWED_MEDIA_HOSTS,
-} from './exerciseMedia';
-
-beforeEach(() => {
-  resetMediaHostsCache();
-});
-
-afterEach(() => {
-  resetMediaHostsCache();
-});
-
-describe('allowedMediaHosts', () => {
-  it('always includes the Sanity media CDN', () => {
-    expect(allowedMediaHosts()).toContain('cdn.sanity.io');
+describe('mediaHostsFor', () => {
+  it('is exactly the static list when supabaseUrl is undefined', () => {
+    expect(mediaHostsFor(undefined)).toEqual(STATIC_ALLOWED_MEDIA_HOSTS);
   });
 
-  it('includes the Supabase project host derived from SUPABASE_URL', () => {
-    expect(allowedMediaHosts()).toContain('abcdefgh.supabase.co');
+  it('adds the Supabase storage host derived from a valid URL', () => {
+    expect(mediaHostsFor('https://abcdefgh.supabase.co')).toEqual([
+      ...STATIC_ALLOWED_MEDIA_HOSTS,
+      'abcdefgh.supabase.co',
+    ]);
   });
 
-  it('is exactly the static list plus one derived host', () => {
-    expect(allowedMediaHosts()).toEqual([...STATIC_ALLOWED_MEDIA_HOSTS, 'abcdefgh.supabase.co']);
+  it('falls back to the static list alone when supabaseUrl cannot be parsed', () => {
+    expect(mediaHostsFor('not-a-url')).toEqual(STATIC_ALLOWED_MEDIA_HOSTS);
+  });
+
+  it('falls back to the static list alone for an empty string', () => {
+    expect(mediaHostsFor('')).toEqual(STATIC_ALLOWED_MEDIA_HOSTS);
   });
 });
 
-describe('isAllowedMediaUrl', () => {
+describe('isAllowedMediaUrl — default hosts (static list only, the client behavior)', () => {
   it('accepts an https Sanity CDN URL', () => {
     expect(isAllowedMediaUrl('https://cdn.sanity.io/images/proj/production/cat.png')).toBe(true);
-  });
-
-  it('accepts an https Supabase storage URL', () => {
-    expect(
-      isAllowedMediaUrl('https://abcdefgh.supabase.co/storage/v1/object/public/media/cat.png'),
-    ).toBe(true);
   });
 
   it('rejects http, even on an allow-listed host', () => {
@@ -70,26 +46,30 @@ describe('isAllowedMediaUrl', () => {
   it('rejects a string that is not a URL at all', () => {
     expect(isAllowedMediaUrl('not a url')).toBe(false);
   });
+
+  it('rejects a Supabase storage URL when no extra host is passed', () => {
+    expect(
+      isAllowedMediaUrl('https://abcdefgh.supabase.co/storage/v1/object/public/media/cat.png'),
+    ).toBe(false);
+  });
 });
 
-describe('allowedMediaHosts — resilience', () => {
-  it('falls back to the static list alone when SUPABASE_URL cannot be parsed', async () => {
-    vi.resetModules();
-    vi.doMock('./env', () => ({
-      loadEnv: () => ({
-        SANITY_PROJECT_ID: 'proj',
-        SANITY_DATASET: 'production',
-        SUPABASE_URL: 'not-a-url',
-        SUPABASE_ANON_KEY: 'anon',
-        SUPABASE_SERVICE_ROLE_KEY: '',
-        AD_HMAC_SECRET: '',
-      }),
-    }));
+describe('isAllowedMediaUrl — explicit hosts (the server behavior)', () => {
+  it('accepts a host present only in the explicit list', () => {
+    expect(
+      isAllowedMediaUrl('https://abcdefgh.supabase.co/cat.png', ['abcdefgh.supabase.co']),
+    ).toBe(true);
+  });
 
-    const fresh = await import('./exerciseMedia');
-    expect(fresh.allowedMediaHosts()).toEqual([...fresh.STATIC_ALLOWED_MEDIA_HOSTS]);
+  it('still rejects http on an explicitly allowed host', () => {
+    expect(
+      isAllowedMediaUrl('http://abcdefgh.supabase.co/cat.png', ['abcdefgh.supabase.co']),
+    ).toBe(false);
+  });
 
-    vi.doUnmock('./env');
-    vi.resetModules();
+  it('still rejects a host absent from the explicit list', () => {
+    expect(
+      isAllowedMediaUrl('https://evil.example/cat.png', ['abcdefgh.supabase.co']),
+    ).toBe(false);
   });
 });
