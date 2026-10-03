@@ -2,9 +2,13 @@
  * The deterministic structural validator (openspec/changes/user-authored-
  * exercises, design.md §7; specs/exercise-validation/spec.md).
  *
- * PURE, ZERO I/O. It checks payload SHAPE — never a learner's answer — so it
- * can run identically at publish time, on every later edit, and inline in the
- * authoring UI for live feedback.
+ * DETERMINISTIC, BUT SERVER-ONLY NOW. It checks payload SHAPE — never a
+ * learner's answer — and runs identically at publish time and on every
+ * later edit. `checkBlockMedia`'s host allow-list comes from
+ * `serverAllowedMediaHosts()` ({@link "./exerciseMedia.server"}), which
+ * reads `env`, so this module is no longer safe to call inline from the
+ * browser — `src/lib/build/serverOnlyModules.ts` fails the build if that
+ * import chain is ever reachable from a client island.
  *
  * NO HUMAN STRINGS. This module emits `ValidationCode`s only; bilingual copy
  * lives in {@link "./exerciseValidatorCopy"} (existing `COPY` pattern), so the
