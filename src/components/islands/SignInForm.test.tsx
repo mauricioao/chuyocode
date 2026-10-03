@@ -13,7 +13,7 @@
  * thrown fetch) gets a different, retryable state.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
 import SignInForm, { COPY } from './SignInForm';
 
@@ -254,7 +254,9 @@ describe('SignInForm — Turnstile, site key configured', () => {
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     expect(renderMock.mock.calls[0][1].sitekey).toBe('1x00000000000000000000AA');
 
-    renderMock.mock.calls[0][1].callback('tok-abc');
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
     await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
 
     fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
@@ -277,7 +279,9 @@ describe('SignInForm — Turnstile, site key configured', () => {
     render(<SignInForm lang="es" />);
 
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
-    renderMock.mock.calls[0][1].callback('tok-abc');
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
     await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
 
     fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
@@ -301,7 +305,9 @@ describe('SignInForm — Turnstile, site key configured', () => {
     render(<SignInForm lang="es" />);
 
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
-    renderMock.mock.calls[0][1].callback('tok-abc');
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
     await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
 
     fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
@@ -309,6 +315,32 @@ describe('SignInForm — Turnstile, site key configured', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.captchaError));
     expect(screen.getByTestId('signin-form')).toBeTruthy();
+  });
+
+  it('resets the widget and re-arms the captcha gate when fetch throws (offline)', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    const { render: renderMock, reset: resetMock } = stubTurnstileGlobal();
+    render(<SignInForm lang="es" />);
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
+
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.error));
+    expect(screen.getByTestId('signin-form')).toBeTruthy();
+    expect(resetMock).toHaveBeenCalledWith('widget-1');
+    expect(submitButton().hasAttribute('disabled')).toBe(true);
+
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-def');
+    });
+    await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
   });
 });
 
