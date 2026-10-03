@@ -7,9 +7,35 @@
  * identically for every rule, plus a determinism check and the real seeded
  * exercise as a must-pass fixture.
  */
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// `checkBlockMedia` (exerciseValidator.ts) pulls the Supabase storage host
+// in through `serverAllowedMediaHosts()` (exerciseMedia.server.ts) whenever
+// a payload defines `blocks`. Mocked the same way exerciseMedia.server.test.ts
+// mocks it, so this suite stays hermetic instead of depending on whatever
+// SUPABASE_URL happens to be set in the process running the tests.
+vi.mock('./env', () => ({
+  loadEnv: () => ({
+    SANITY_PROJECT_ID: 'proj',
+    SANITY_DATASET: 'production',
+    SUPABASE_URL: 'https://abcdefgh.supabase.co',
+    SUPABASE_ANON_KEY: 'anon',
+    SUPABASE_SERVICE_ROLE_KEY: '',
+    AD_HMAC_SECRET: '',
+  }),
+}));
+
 import { validateExercise, type ValidationIssue, type ValidatorInput } from './exerciseValidator';
 import type { Payload } from './exercisePayload';
+import { resetMediaHostsCache } from './exerciseMedia.server';
+
+beforeEach(() => {
+  resetMediaHostsCache();
+});
+
+afterEach(() => {
+  resetMediaHostsCache();
+});
 
 /** A `ValidatorInput` around one payload, with taxonomy fields that are
  * themselves valid so a test only ever exercises the rule it names. */
@@ -222,6 +248,24 @@ describe('validateExercise — media_url_not_allowed', () => {
       pools: {},
       slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
     };
+    const result = validateExercise(inputFor(payload));
+    expect(result.issues.some((i) => i.code === 'media_url_not_allowed')).toBe(false);
+  });
+
+  it('is silent for a media block on the Supabase storage host (server-only allow-list)', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+      blocks: [
+        {
+          kind: 'media',
+          id: 'm1',
+          image: 'https://abcdefgh.supabase.co/storage/v1/object/public/media/cat.png',
+        },
+        { kind: 'row', id: 'r1', slotId: 's1' },
+      ],
+    };
+
     const result = validateExercise(inputFor(payload));
     expect(result.issues.some((i) => i.code === 'media_url_not_allowed')).toBe(false);
   });

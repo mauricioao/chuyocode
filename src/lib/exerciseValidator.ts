@@ -2,9 +2,13 @@
  * The deterministic structural validator (openspec/changes/user-authored-
  * exercises, design.md §7; specs/exercise-validation/spec.md).
  *
- * PURE, ZERO I/O. It checks payload SHAPE — never a learner's answer — so it
- * can run identically at publish time, on every later edit, and inline in the
- * authoring UI for live feedback.
+ * DETERMINISTIC, BUT SERVER-ONLY NOW. It checks payload SHAPE — never a
+ * learner's answer — and runs identically at publish time and on every
+ * later edit. `checkBlockMedia`'s host allow-list comes from
+ * `serverAllowedMediaHosts()` ({@link "./exerciseMedia.server"}), which
+ * reads `env`, so this module is no longer safe to call inline from the
+ * browser — `src/lib/build/serverOnlyModules.ts` fails the build if that
+ * import chain is ever reachable from a client island.
  *
  * NO HUMAN STRINGS. This module emits `ValidationCode`s only; bilingual copy
  * lives in {@link "./exerciseValidatorCopy"} (existing `COPY` pattern), so the
@@ -18,6 +22,7 @@
 import { countBlanks, hasAudio, type Payload, type Pool, type Slot } from './exercisePayload';
 import { comparatorFor } from './exerciseGrading';
 import { isAllowedMediaUrl } from './exerciseMedia';
+import { serverAllowedMediaHosts } from './exerciseMedia.server';
 
 /** Closed union of every rule this validator enforces. */
 export type ValidationCode =
@@ -253,15 +258,18 @@ function checkBlockCoverage(payload: Payload): ValidationIssue[] {
 function checkBlockMedia(payload: Payload): ValidationIssue[] {
   if (payload.blocks === undefined) return [];
   const found: ValidationIssue[] = [];
+  // The server-side, Supabase-aware list: publish time runs here (never in
+  // the browser), so this is the one call site allowed to pull in `env`.
+  const hosts = serverAllowedMediaHosts();
 
   for (const block of payload.blocks) {
     if (block.kind !== 'media') continue;
-    if (block.image !== undefined && !isAllowedMediaUrl(block.image)) {
+    if (block.image !== undefined && !isAllowedMediaUrl(block.image, hosts)) {
       found.push(
         issue('media_url_not_allowed', 'error', { blockId: block.id, detail: block.image }),
       );
     }
-    if (block.audio !== undefined && !isAllowedMediaUrl(block.audio)) {
+    if (block.audio !== undefined && !isAllowedMediaUrl(block.audio, hosts)) {
       found.push(
         issue('media_url_not_allowed', 'error', { blockId: block.id, detail: block.audio }),
       );
