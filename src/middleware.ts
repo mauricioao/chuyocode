@@ -3,6 +3,7 @@ import { hasAccess, requiresLogin } from '@lib/access';
 import { safeNextPath } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
 import { DEFAULT_LANG, isValidLang, type Lang } from '@lib/i18n';
+import { withSecurityHeaders } from '@lib/securityHeaders';
 import {
   createSessionClient,
   flushSessionHeaders,
@@ -11,7 +12,11 @@ import {
 /**
  * Locale routing and identity resolution (spec 5: Lang Routing · user-identity).
  *
- * Runs on every request. It does two jobs, in a fixed order.
+ * Runs on every request. It does three jobs, in a fixed order: locale/identity
+ * below, plus security headers (`src/lib/securityHeaders.ts`) applied to
+ * EVERY exit point — this is SSR on Netlify Functions with no prerendered
+ * pages, so Netlify's static `_headers`/`netlify.toml` headers never apply
+ * here; see that module's header for why.
  *
  * Locale contract, unchanged:
  *  - `/`                -> 302 redirect to `/{DEFAULT_LANG}/` (root redirect).
@@ -84,7 +89,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Root: redirect to the default locale home (spec 5: root redirect).
   // Nothing renders, so no session work.
   if (pathname === '/') {
-    return context.redirect(`/${DEFAULT_LANG}/`, 302);
+    return withSecurityHeaders(context.redirect(`/${DEFAULT_LANG}/`, 302));
   }
 
   const firstSegment = pathname.split('/')[1] ?? '';
@@ -102,10 +107,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!isValidLang(firstSegment)) {
       // Invalid lang segment -> 404 (spec 5: invalid lang). Nothing renders,
       // so no session work.
-      return new Response(null, {
-        status: 404,
-        statusText: 'Not Found',
-      });
+      return withSecurityHeaders(
+        new Response(null, {
+          status: 404,
+          statusText: 'Not Found',
+        }),
+      );
     }
 
     // Valid lang: expose it to pages so they don't re-parse the URL.
@@ -113,7 +120,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   if (!needsSession(pathname)) {
-    return next();
+    return withSecurityHeaders(await next());
   }
 
   const session = createSessionClient({
@@ -168,7 +175,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // request. See `src/lib/httpCache.ts` (design §2 / T7).
     markPrivate(headers);
 
-    return new Response(null, { status: 303, statusText: 'See Other', headers });
+    return withSecurityHeaders(
+      new Response(null, { status: 303, statusText: 'See Other', headers }),
+    );
   }
 
   const response = await next();
@@ -190,5 +199,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     markPrivate(response.headers);
   }
 
-  return response;
+  // LAST, on every path that reaches here: pages, API JSON, and anything else
+  // `next()` produced all get the same security headers (see
+  // `src/lib/securityHeaders.ts` on why this cannot be left to Netlify's
+  // static `_headers` file, and on the immutable-headers fallback this uses).
+  return withSecurityHeaders(response);
 });
