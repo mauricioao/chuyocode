@@ -37,6 +37,7 @@ import { POST, ALL } from './validar-anuncio';
 import { getPassState, PASS_COOKIE_NAME } from '@lib/pass';
 import { createAdStartCookie, AD_START_COOKIE_NAME } from '@lib/adStartCookie';
 import { AD_MIN_WATCH_MS, AD_START_TTL_MS } from '@lib/adTiming';
+import { PRIVATE_CACHE_CONTROL } from '@lib/httpCache';
 
 const SECRET = 'test-secret-please-change';
 const URL = 'https://chuyo.test/api/validar-anuncio';
@@ -71,6 +72,14 @@ function cookieValueFrom(setCookie: string): string {
   return setCookie.slice(setCookie.indexOf('=') + 1, setCookie.indexOf(';'));
 }
 
+/** Every response from this endpoint — success or failure — must be
+ * private/no-store (T7): a cached response carrying `Set-Cookie` could hand
+ * one visitor's cookie (the pass it just minted, or the start cookie it just
+ * cleared) to another. */
+function expectPrivate(res: Response): void {
+  expect(res.headers.get('cache-control')).toBe(PRIVATE_CACHE_CONTROL);
+}
+
 /** Mint a `chu_ad_start` cookie whose start time is `ageMs` in the past, ready
  * to send as a request `Cookie` header. */
 function startCookieAged(ageMs: number): string {
@@ -90,6 +99,7 @@ describe('POST /api/validar-anuncio', () => {
   it('RED: a bare {timestamp} with no ad-start cookie must not mint a pass', async () => {
     const res = await POST(ctx(postWith({ timestamp: Date.now() })));
 
+    expectPrivate(res);
     const setCookies = res.headers.getSetCookie();
     const mintedPass = setCookies.some((c) => c.includes(`${PASS_COOKIE_NAME}=`));
     expect(mintedPass).toBe(false);
@@ -99,6 +109,7 @@ describe('POST /api/validar-anuncio', () => {
     const res = await POST(ctx(new Request(URL, { method: 'POST' })));
 
     expect(res.status).toBe(403);
+    expectPrivate(res);
     await expect(res.json()).resolves.toEqual({ ok: false, error: expect.any(String) });
     expect(res.headers.getSetCookie()).toHaveLength(0);
   });
@@ -108,15 +119,20 @@ describe('POST /api/validar-anuncio', () => {
     const res = await POST(ctx(postWithCookieHeader(tooYoung)));
 
     expect(res.status).toBe(403);
+    expectPrivate(res);
     const setCookies = res.headers.getSetCookie();
     expect(setCookies.some((c) => c.includes(`${PASS_COOKIE_NAME}=`))).toBe(false);
   });
 
+  // RED: today's success response is built by hand (never calls
+  // `markPrivate`), unlike the shared `json()` helper's failure branches —
+  // this is the case that must fail before the fix.
   it('mints a pass and clears the start cookie once the minimum watch time has elapsed', async () => {
     const justOldEnough = startCookieAged(AD_MIN_WATCH_MS + 50);
     const res = await POST(ctx(postWithCookieHeader(justOldEnough)));
 
     expect(res.status).toBe(200);
+    expectPrivate(res);
     await expect(res.json()).resolves.toEqual({ ok: true });
 
     const setCookies = res.headers.getSetCookie();
@@ -133,6 +149,7 @@ describe('POST /api/validar-anuncio', () => {
     const cookie = startCookieAged(AD_MIN_WATCH_MS + 50);
     const res = await POST(ctx(postWithCookieHeader(cookie)));
 
+    expectPrivate(res);
     const setCookies = res.headers.getSetCookie();
     const passCookie = setCookies.find((c) => c.startsWith(`${PASS_COOKIE_NAME}=`));
     expect(passCookie).toBeDefined();
@@ -149,6 +166,7 @@ describe('POST /api/validar-anuncio', () => {
     const res = await POST(ctx(postWithCookieHeader(stale)));
 
     expect(res.status).toBe(403);
+    expectPrivate(res);
     expect(res.headers.getSetCookie().some((c) => c.includes(`${PASS_COOKIE_NAME}=`))).toBe(false);
   });
 
@@ -159,6 +177,7 @@ describe('POST /api/validar-anuncio', () => {
     const res = await POST(ctx(postWithCookieHeader(tampered)));
 
     expect(res.status).toBe(403);
+    expectPrivate(res);
     expect(res.headers.getSetCookie().some((c) => c.includes(`${PASS_COOKIE_NAME}=`))).toBe(false);
   });
 
@@ -174,6 +193,7 @@ describe('POST /api/validar-anuncio', () => {
     // A wildly stale/garbage body must not matter either way: only the
     // start cookie is ever consulted.
     expect(res.status).toBe(200);
+    expectPrivate(res);
   });
 
   it('returns 500 when AD_HMAC_SECRET is not configured', async () => {
@@ -182,6 +202,7 @@ describe('POST /api/validar-anuncio', () => {
     const res = await POST(ctx(postWithCookieHeader(cookie)));
 
     expect(res.status).toBe(500);
+    expectPrivate(res);
     await expect(res.json()).resolves.toEqual({ ok: false, error: 'Server error' });
     expect(res.headers.getSetCookie()).toHaveLength(0);
   });
@@ -193,6 +214,7 @@ describe('validar-anuncio — method guard', () => {
     const res = await ALL(ctx(req));
 
     expect(res.status).toBe(405);
+    expectPrivate(res);
     await expect(res.json()).resolves.toEqual({
       ok: false,
       error: 'Method not allowed',

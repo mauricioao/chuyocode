@@ -33,13 +33,16 @@ import { loadEnv } from '@lib/env';
 import { createPassCookie } from '@lib/pass';
 import { clearAdStartCookie, readAdStartCookie } from '@lib/adStartCookie';
 import { AD_MIN_WATCH_MS, AD_START_TTL_MS } from '@lib/adTiming';
+import { markPrivate } from '@lib/httpCache';
 
-/** Build a JSON response with the given status. */
+/** Build a JSON response with the given status, always private/no-store. */
 function json(body: unknown, status: number, headers?: HeadersInit): Response {
-  return new Response(JSON.stringify(body), {
+  const response = new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json', ...headers },
   });
+  markPrivate(response.headers);
+  return response;
 }
 
 /**
@@ -81,6 +84,10 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const { cookie: passCookie } = createPassCookie(secret, now);
     const headers = new Headers({ 'content-type': 'application/json' });
+    // A cached copy of this response would hand the pass it mints (via
+    // Set-Cookie, below) to the next visitor who gets that cached copy (T7) —
+    // same hazard `markPrivate`'s own header comment describes.
+    markPrivate(headers);
     // Both are legitimate `Set-Cookie` headers for the SAME response — the
     // start proof is single-use and the pass is the grant it just earned.
     // `append`, never `set`, or the second call would drop the first.
