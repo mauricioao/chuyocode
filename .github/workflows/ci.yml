@@ -1,0 +1,52 @@
+# Runs on every pull request and on every push to main: install with a
+# frozen lockfile, typecheck, run the unit/integration suite, build for
+# production, then make sure no server-only secret name leaked into the
+# client bundle (see src/lib/build/serverOnlyModules.ts, which already
+# fails the build itself if one is reachable from the client import graph
+# — this step is a second, independent check against the built output).
+#
+# No secrets are configured here on purpose: the site is SSR-only (no
+# prerendered pages touch env at build time), so `pnpm build` never needs
+# a real env value.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+      - name: Check client bundle for leaked server-only secret names
+        run: |
+          if grep -rlE 'SUPABASE_SERVICE_ROLE_KEY|AD_HMAC_SECRET' dist/_astro; then
+            echo "Server-only secret name(s) found in the client bundle (dist/_astro)." >&2
+            exit 1
+          fi
