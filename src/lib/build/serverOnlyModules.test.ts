@@ -11,19 +11,38 @@ import {
 } from './serverOnlyModules';
 
 describe('looksLikeServerOnlySpecifier', () => {
-  it.each(['./env', '../env', '@lib/env', '@/lib/env', './env.ts', 'ENV'])(
-    'matches %s',
-    (source) => {
-      expect(looksLikeServerOnlySpecifier(source)).toBe(true);
-    },
-  );
+  it.each([
+    './env',
+    '../env',
+    '@lib/env',
+    '@/lib/env',
+    './env.ts',
+    'ENV',
+    // RED (query/hash-suffixed specifiers): a raw import specifier can carry
+    // a `?query` (a Vite-specific import, e.g. `?raw`/`?url`) or a `#hash`
+    // that the OLD pattern's bare `$` anchor never stripped, so it silently
+    // never matched these at all.
+    '@lib/env?raw',
+    '@lib/env?url',
+    '@lib/env#hash',
+    // RED (.js specifier resolving to a .ts file): TS lets `./env.js` resolve
+    // to `./env.ts` at build time, which the OLD pattern's hard-coded
+    // `(\.ts)?` extension group never accepted.
+    './env.js',
+  ])('matches %s', (source) => {
+    expect(looksLikeServerOnlySpecifier(source)).toBe(true);
+  });
 
   it.each(['react', './exerciseMedia', '@/lib/supabase', './environment'])(
     'does not match %s',
     (source) => {
-      // "./environment" is a false negative we accept: no real specifier in
-      // this codebase is spelled that way, and the resolve-based check below
-      // is still the source of truth for anything that does slip through.
+      // "./environment" is a real, uncovered gap, not a safety net with a
+      // backup: `looksLikeServerOnlySpecifier` is a HARD GATE, so a
+      // specifier it rejects here never reaches `context.resolve` at all
+      // (see `resolveServerOnlyModule`'s early return below) — there is no
+      // resolve-based check backing this prefilter up for anything that
+      // slips past it. Accepted anyway because no real specifier in this
+      // codebase is spelled that way.
       expect(looksLikeServerOnlySpecifier(source)).toBe(false);
     },
   );

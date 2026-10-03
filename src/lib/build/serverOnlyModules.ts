@@ -29,15 +29,30 @@ export const SERVER_ONLY_MODULES = ['/src/lib/env.ts'] as const;
  * Cheap prefilter so the thousands of ordinary imports in the app skip the
  * real (async) resolve call below. Deliberately loose: a false positive
  * just costs one extra `resolve`, a false negative would silently defeat
- * the whole guard. Matches any specifier ending in `env` or `env.ts`,
- * covering `./env`, `../env`, `@lib/env` and `@/lib/env` alike.
+ * the whole guard — this is a HARD GATE, not backed by a resolve-based
+ * check (a rejected specifier returns before `context.resolve` is ever
+ * called, see {@link resolveServerOnlyModule}). Matches a last path segment
+ * of exactly `env`, with an optional `.ts`/`.js`/`.mts`/`.mjs`/`.cts`/`.cjs`
+ * extension — covering `./env`, `../env`, `@lib/env` and `@/lib/env` alike,
+ * including a `.js` specifier TS resolves to a `.ts` file. Applied AFTER
+ * {@link stripSpecifierSuffix}, so a trailing `?query` (e.g. `@lib/env?raw`,
+ * `@lib/env?url`) or `#hash` on the raw specifier cannot be used to dodge it.
  */
-const ENV_SPECIFIER_PATTERN = /env(\.ts)?$/i;
+const ENV_SPECIFIER_PATTERN = /(^|\/)env(\.(?:ts|js|mts|mjs|cts|cjs))?$/i;
+
+/**
+ * Strips a trailing `?query` or `#hash` from a RAW (not-yet-resolved) import
+ * specifier, so {@link ENV_SPECIFIER_PATTERN} matches regardless of a
+ * Vite-specific query (`@lib/env?raw`, `@lib/env?url`) or hash suffix.
+ */
+function stripSpecifierSuffix(source: string): string {
+  return source.split(/[?#]/)[0] ?? source;
+}
 
 /** Does `source` (the raw, not-yet-resolved import specifier) look like it
  * could point at one of {@link SERVER_ONLY_MODULES}? */
 export function looksLikeServerOnlySpecifier(source: string): boolean {
-  return ENV_SPECIFIER_PATTERN.test(source);
+  return ENV_SPECIFIER_PATTERN.test(stripSpecifierSuffix(source));
 }
 
 /**
