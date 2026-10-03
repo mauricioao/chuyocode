@@ -16,6 +16,8 @@ export default getViteConfig({
     // through the Container API is more likely to touch Astro-internal
     // module-level state, and this project is only 24 files.
     pool: 'threads',
-    poolOptions: { threads: { maxThreads: 5, minThreads: 1 } },
+    // See vitest.node.config.ts: `poolOptions.threads.maxThreads` became the
+    // top-level `maxWorkers` in Vitest 4; `poolOptions` no longer exists.
+    maxWorkers: 5,
   },
 });

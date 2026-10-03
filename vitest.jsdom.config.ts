@@ -21,6 +21,8 @@ export default defineProject({
     // `window.matchMedia` having been set up by an earlier file rather than
     // mocking it themselves) — 27 tests failed. Not worth the speed win.
     pool: 'threads',
-    poolOptions: { threads: { maxThreads: 5, minThreads: 1 } },
+    // See vitest.node.config.ts: `poolOptions.threads.maxThreads` became the
+    // top-level `maxWorkers` in Vitest 4; `poolOptions` no longer exists.
+    maxWorkers: 5,
   },
 });

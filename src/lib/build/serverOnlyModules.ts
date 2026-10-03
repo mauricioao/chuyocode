@@ -11,8 +11,13 @@
  * the exact import that caused it, instead of something only a bundle
  * inspection would ever catch.
  *
- * Astro 5.18 runs on Vite 6.4 internally, which is what the `this.environment`
- * / `consumer` check below targets (Vite's per-environment Plugin API).
+ * Astro 7 runs on Vite 8 internally, which is what the `this.environment` /
+ * `consumer` check below targets (Vite's per-environment Plugin API). Vite 8
+ * also moved the client build's bundler to Rolldown; this hook still runs
+ * (verified with a real `pnpm build` against a client island importing
+ * `./env.ts`, which fails with this plugin's own error, stack-traced through
+ * `rolldown`), because `resolveId` is a standard Rollup/Rolldown-compatible
+ * plugin hook, not an esbuild-specific one.
  * {@link SERVER_ONLY_MODULES} is the single place new server-only modules
  * get added as the app grows.
  */
