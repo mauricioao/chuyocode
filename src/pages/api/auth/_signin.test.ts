@@ -75,6 +75,7 @@ function otpOptions() {
       data?: { lang?: string };
       emailRedirectTo?: string;
       shouldCreateUser?: boolean;
+      captchaToken?: string;
     };
   };
   return call;
@@ -249,6 +250,63 @@ describe('POST /api/auth/signin — response shape', () => {
     const res = await POST(ctx({ email: KNOWN_EMAIL }));
 
     expect(res.headers.get('content-type')).toContain('application/json');
+  });
+});
+
+describe('POST /api/auth/signin — captchaToken (Turnstile)', () => {
+  it('forwards a valid token inside options', async () => {
+    await POST(ctx({ email: KNOWN_EMAIL, captchaToken: 'tok-abc' }));
+
+    expect(otpOptions().options?.captchaToken).toBe('tok-abc');
+  });
+
+  it('calls Supabase exactly as today when no token is sent', async () => {
+    await POST(ctx({ email: KNOWN_EMAIL }));
+
+    expect(otpOptions().options).not.toHaveProperty('captchaToken');
+  });
+
+  it('drops an oversized token instead of forwarding it', async () => {
+    await POST(ctx({ email: KNOWN_EMAIL, captchaToken: 'a'.repeat(2049) }));
+
+    expect(otpOptions().options).not.toHaveProperty('captchaToken');
+  });
+
+  it('maps a captcha rejection to a distinct error code instead of the uniform body', async () => {
+    signInWithOtpMock.mockResolvedValueOnce({
+      data: {},
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const res = await POST(ctx({ email: KNOWN_EMAIL, captchaToken: 'bad-tok' }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'captcha_failed' });
+  });
+
+  it('the captcha_failed mapping stays byte-identical for an address with no account (T3)', async () => {
+    signInWithOtpMock.mockResolvedValue({
+      data: {},
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const known = await fingerprint(
+      await POST(ctx({ email: KNOWN_EMAIL, captchaToken: 'bad-tok' })),
+    );
+    const unknown = await fingerprint(
+      await POST(ctx({ email: UNKNOWN_EMAIL, captchaToken: 'bad-tok' })),
+    );
+
+    expect(unknown).toEqual(known);
+    expect(known.status).toBe(400);
+  });
+
+  it('still carries the PKCE verifier cookie on a captcha_failed response', async () => {
+    signInWithOtpMock.mockResolvedValueOnce({
+      data: {},
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const res = await POST(ctx({ email: KNOWN_EMAIL, captchaToken: 'bad-tok' }));
+
+    expect(res.headers.getSetCookie()).toEqual([VERIFIER_COOKIE]);
   });
 });
 

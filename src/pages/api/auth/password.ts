@@ -28,6 +28,20 @@
  * Every response is private/no-store (T7): all three actions mint or rotate
  * session cookies, `signin` and `signup` on success, `reset` because it
  * still exercises the session client.
+ *
+ * 🔴 `captchaToken` (OPTIONAL) — Cloudflare Turnstile. `normalizeCaptchaToken`
+ * (`@lib/turnstile`) reduces it to a usable string or `undefined` before it
+ * ever reaches Supabase; `undefined` means "call Supabase exactly as before
+ * this field existed" for every action, which is what keeps the endpoint
+ * inert while `PUBLIC_TURNSTILE_SITE_KEY` is unset (no caller can send a
+ * token for a widget that was never rendered). When Supabase's CAPTCHA
+ * protection is on and rejects the token, `isCaptchaError` maps that one
+ * failure to `{ ok: false, error: 'captcha_failed' }` on all three actions —
+ * including `signup` and `reset`, which otherwise swallow every Supabase
+ * error into the same uniform success body. This is safe for T3: a captcha
+ * failure depends only on the submitted token, never on whether `email` has
+ * an account, so it is identical for a known and an unknown address and
+ * cannot become a new enumeration oracle.
  */
 import type { APIRoute } from 'astro';
 import { safeNextPath } from '@lib/authRedirect';
@@ -39,6 +53,7 @@ import {
   flushSessionHeaders,
   type SessionClient,
 } from '@lib/supabaseSession';
+import { isCaptchaError, normalizeCaptchaToken } from '@lib/turnstile';
 
 interface PasswordBody {
   action?: unknown;
@@ -46,6 +61,7 @@ interface PasswordBody {
   password?: unknown;
   lang?: unknown;
   next?: unknown;
+  captchaToken?: unknown;
 }
 
 function json(body: unknown, status: number, session: SessionClient): Response {
@@ -61,6 +77,11 @@ function badRequest(): Response {
   const headers = new Headers();
   markPrivate(headers);
   return new Response(null, { status: 400, statusText: 'Bad Request', headers });
+}
+
+/** The one response every action maps a Supabase captcha rejection to. */
+function captchaFailed(session: SessionClient): Response {
+  return json({ ok: false, error: 'captcha_failed' }, 400, session);
 }
 
 /** Build the confirm-route URL every action here redirects/redeems through. */
@@ -81,6 +102,7 @@ async function handleSignIn(
   request: Request,
   email: string,
   password: string,
+  captchaToken: string | undefined,
 ): Promise<Response> {
   const session = newSession(request);
 
@@ -88,10 +110,14 @@ async function handleSignIn(
     const { data, error } = await session.client.auth.signInWithPassword({
       email,
       password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
     });
     if (error || !data.session) {
       if (error) {
         console.error('[auth/password] signInWithPassword failed:', error.message);
+        if (isCaptchaError(error)) {
+          return captchaFailed(session);
+        }
       }
       return json({ ok: false, error: 'invalid_credentials' }, 401, session);
     }
@@ -113,6 +139,7 @@ async function handleSignUp(
   password: string,
   lang: Lang,
   rawNext: unknown,
+  captchaToken: string | undefined,
 ): Promise<Response> {
   const next = safeNextPath(typeof rawNext === 'string' ? rawNext : null);
   const session = newSession(request);
@@ -126,14 +153,20 @@ async function handleSignUp(
         // Read back server-side like the magic-link signup path (design §9).
         data: { lang },
         emailRedirectTo: confirmUrl(request, next),
+        ...(captchaToken ? { captchaToken } : {}),
       },
     });
     if (error) {
       // Logged, never returned — this is what keeps an existing-address
       // signup (Supabase may answer "User already registered" once
       // confirmations are disabled project-wide) indistinguishable from a
-      // brand new one at this endpoint's boundary.
+      // brand new one at this endpoint's boundary. The ONE exception is a
+      // captcha rejection (see the file header): it depends only on the
+      // token, never on the address, so surfacing it cannot reopen that.
       console.error('[auth/password] signUp failed:', error.message);
+      if (isCaptchaError(error)) {
+        return captchaFailed(session);
+      }
     } else if (data.session) {
       signedIn = true;
     }
@@ -148,6 +181,7 @@ async function handleReset(
   request: Request,
   email: string,
   lang: Lang,
+  captchaToken: string | undefined,
 ): Promise<Response> {
   const session = newSession(request);
   // The one legitimate exception to `safeNextPath`'s default auth-page block
@@ -158,9 +192,18 @@ async function handleReset(
   try {
     const { error } = await session.client.auth.resetPasswordForEmail(email, {
       redirectTo: confirmUrl(request, next),
+      ...(captchaToken ? { captchaToken } : {}),
     });
     if (error) {
       console.error('[auth/password] resetPasswordForEmail failed:', error.message);
+      // Stays uniform ACROSS EMAILS (see the file header): both a known and
+      // an unknown address get this same captcha_failed body for the same
+      // bad token, and both still get the same `{ ok: true }` for a good
+      // one. Only Supabase's own `error` (e.g. a nonexistent address, which
+      // it already answers as if it succeeded) keeps falling through below.
+      if (isCaptchaError(error)) {
+        return captchaFailed(session);
+      }
     }
   } catch (err) {
     console.error('[auth/password] resetPasswordForEmail threw:', err);
@@ -182,22 +225,23 @@ export const POST: APIRoute = async ({ request }) => {
   }
   const email = body.email;
   const lang = isValidLang(body?.lang) ? body.lang : DEFAULT_LANG;
+  const captchaToken = normalizeCaptchaToken(body?.captchaToken);
 
   switch (body?.action) {
     case 'signin': {
       if (typeof body.password !== 'string' || body.password === '') {
         return badRequest();
       }
-      return handleSignIn(request, email, body.password);
+      return handleSignIn(request, email, body.password, captchaToken);
     }
     case 'signup': {
       if (!isValidPassword(body.password)) {
         return badRequest();
       }
-      return handleSignUp(request, email, body.password, lang, body.next);
+      return handleSignUp(request, email, body.password, lang, body.next, captchaToken);
     }
     case 'reset':
-      return handleReset(request, email, lang);
+      return handleReset(request, email, lang, captchaToken);
     default:
       return badRequest();
   }
