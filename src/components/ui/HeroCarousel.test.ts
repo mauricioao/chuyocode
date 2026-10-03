@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { loadRenderers } from 'astro:container';
-import { getContainerRenderer } from '@astrojs/react';
+// @astrojs/react 6+ moved this to a dedicated entrypoint — see
+// src/testSupport/astroContainer.ts for the doc citation.
+import { getContainerRenderer } from '@astrojs/react/container-renderer';
 
 // HeroCarousel runs the server-only image pipeline (buildImage → @sanity/
 // image-url built from validated env) and then hands plain slide data to the
