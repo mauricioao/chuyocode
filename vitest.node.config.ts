@@ -40,10 +40,9 @@ export default defineProject({
     // (152/152 files). The cost is small: the full three-project suite ran
     // in 179.86s vs. the pre-upgrade 174.66s baseline (~3% slower).
     //
-    // This reverses this project's own stated intent to keep isolate:false,
-    // so flag it on review rather than treating it as routine — a cheaper
-    // mitigation (e.g. `pool: 'forks'`, or waiting on an upstream Vitest fix)
-    // may exist; `true` was chosen here only because it is the safe default.
+    // Reviewed and kept (2026-10-03): determinism beats a few seconds. Only
+    // retry `isolate: false` after a Vitest release fixes cross-file mock
+    // leakage, and verify it with repeated and `--sequence.shuffle` runs.
     isolate: true,
   },
 });
