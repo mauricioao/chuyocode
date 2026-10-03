@@ -24,10 +24,23 @@
  *
  * COPY IS LOCAL, exported and swept by this file's own test, same rule as
  * `SignInForm.COPY`.
+ *
+ * 🔴 TURNSTILE IS INERT UNTIL `PUBLIC_TURNSTILE_SITE_KEY` IS SET. `siteKey`
+ * below is `null` when unset (`@lib/turnstile`'s whole point), and every
+ * piece of this feature is gated on it: no `<TurnstileWidget>` renders (so
+ * its effect never loads Cloudflare's script), the submit button is never
+ * held disabled waiting for a token, and `captchaToken` stays `null` forever
+ * so the request body never carries the field — see the `needsCaptcha`/
+ * `captchaToken ? { captchaToken } : {}` lines below. One widget serves all
+ * three modes (signin/signup/reset all need a token per the file header's
+ * Supabase facts), so it mounts once with the form and is never remounted
+ * on `switchMode`.
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { getTurnstileSiteKey } from '@lib/turnstile';
+import TurnstileWidget from './TurnstileWidget';
 
 /** Kept in sync with `MIN_PASSWORD_LENGTH` in `@lib/authValidation`. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -55,6 +68,8 @@ export const COPY = {
     backToSignIn: 'Volver a entrar',
     switchToSignUp: '¿Aún no tienes una cuenta? ¿Qué esperas?',
     switchToSignIn: '¿Ya hay una cuenta? Entrar',
+    captchaPending: 'Esperando verificación…',
+    captchaError: 'No pudimos verificar que eres una persona. Inténtalo de nuevo.',
   },
   en: {
     emailLabel: 'Email address',
@@ -78,6 +93,8 @@ export const COPY = {
     backToSignIn: 'Back to sign in',
     switchToSignUp: "Don't have an account yet? What are you waiting for?",
     switchToSignIn: 'Already have an account? Sign in',
+    captchaPending: 'Waiting for verification…',
+    captchaError: "We couldn't verify you're human. Please try again.",
   },
 } as const;
 
@@ -109,11 +126,12 @@ export interface PasswordAuthFormProps {
 }
 
 type Mode = 'signin' | 'signup' | 'reset';
-type Status = 'idle' | 'pending' | 'error' | 'sent' | 'too-short';
+type Status = 'idle' | 'pending' | 'error' | 'captcha-error' | 'sent' | 'too-short';
 
 interface PasswordResponseBody {
   ok: boolean;
   signedIn?: boolean;
+  error?: string;
 }
 
 export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAuthFormProps) {
@@ -121,8 +139,14 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<Status>('idle');
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const t = copyFor(lang);
   const pending = status === 'pending';
+  // `null` while unset (`@lib/turnstile`'s header): see this file's own
+  // header for why every captcha-related line below is gated on it.
+  const siteKey = getTurnstileSiteKey();
+  const needsCaptcha = siteKey !== null && captchaToken === null;
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);
@@ -132,6 +156,17 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
 
   function goTo(destination: string) {
     window.location.assign(destination);
+  }
+
+  /**
+   * Tokens are single-use (Turnstile): clear the stale one and bump the
+   * widget's reset signal together, so the submit button goes back to
+   * "waiting for verification" immediately rather than staying enabled with
+   * a token Supabase will no longer accept.
+   */
+  function resetCaptcha() {
+    setCaptchaToken(null);
+    setCaptchaResetSignal((n) => n + 1);
   }
 
   async function submit() {
@@ -153,11 +188,15 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
           lang,
           ...(mode !== 'reset' ? { password } : {}),
           ...(mode === 'signup' && next ? { next } : {}),
+          ...(captchaToken ? { captchaToken } : {}),
         }),
       });
+      // Every attempt, success or failure (see this file's header).
+      resetCaptcha();
 
       if (!res.ok) {
-        setStatus('error');
+        const errorBody = (await res.json().catch(() => null)) as PasswordResponseBody | null;
+        setStatus(errorBody?.error === 'captcha_failed' ? 'captcha-error' : 'error');
         return;
       }
 
@@ -176,6 +215,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       // anything the response body says beyond `signedIn` above.
       setStatus('sent');
     } catch {
+      resetCaptcha();
       setStatus('error');
     }
   }
@@ -245,18 +285,38 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
         </>
       )}
 
+      {siteKey && (
+        <TurnstileWidget
+          siteKey={siteKey}
+          language={lang}
+          onToken={setCaptchaToken}
+          resetSignal={captchaResetSignal}
+        />
+      )}
+
       <Button
         type="submit"
-        disabled={pending}
+        disabled={pending || needsCaptcha}
         aria-busy={pending}
+        aria-describedby={needsCaptcha ? 'password-auth-captcha-hint' : undefined}
         data-testid="password-auth-submit"
       >
         {submitLabel}
       </Button>
 
+      {needsCaptcha && (
+        <p id="password-auth-captcha-hint" className="text-xs text-muted-foreground">
+          {t.captchaPending}
+        </p>
+      )}
       {status === 'error' && (
         <p role="alert" className="text-sm text-destructive">
           {mode === 'signin' ? t.signInError : t.genericError}
+        </p>
+      )}
+      {status === 'captcha-error' && (
+        <p role="alert" className="text-sm text-destructive">
+          {t.captchaError}
         </p>
       )}
       {status === 'too-short' && (

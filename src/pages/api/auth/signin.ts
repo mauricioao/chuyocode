@@ -41,6 +41,16 @@
  * registered in Supabase's redirect allow-list, and a lang prefix would mean two
  * allow-list entries that drift apart. The locale rides in `next` and in user
  * metadata instead (design §1).
+ *
+ * 🔴 `captchaToken` (OPTIONAL) — Cloudflare Turnstile, same posture as
+ * `password.ts`'s header. `normalizeCaptchaToken` (`@lib/turnstile`) reduces
+ * it to a usable string or `undefined`; `undefined` calls `signInWithOtp`
+ * exactly as before. A Supabase captcha rejection (`isCaptchaError`) is the
+ * ONE case that breaks out of `uniformAccepted` into a distinct
+ * `{ ok: false, error: 'captcha_failed' }` body — still safe for T3 above,
+ * because the rejection depends only on the submitted token, never on
+ * whether `email` has an account, so a known and an unknown address with the
+ * same bad token get byte-identical responses.
  */
 import type { APIRoute } from 'astro';
 import { safeNextPath } from '@lib/authRedirect';
@@ -51,12 +61,14 @@ import {
   flushSessionHeaders,
   type SessionClient,
 } from '@lib/supabaseSession';
+import { isCaptchaError, normalizeCaptchaToken } from '@lib/turnstile';
 
 /** The body shape the sign-in form posts. */
 interface SignInBody {
   email?: unknown;
   lang?: unknown;
   next?: unknown;
+  captchaToken?: unknown;
 }
 
 /**
@@ -86,7 +98,7 @@ function looksLikeEmail(value: unknown): value is string {
  * malformed body, or an environment so broken that construction threw — and
  * those paths mint nothing, so there is nothing to make them differ.
  */
-function uniformAccepted(session: SessionClient | null): Response {
+function respond(body: unknown, status: number, session: SessionClient | null): Response {
   const headers = new Headers({
     'content-type': 'application/json; charset=utf-8',
   });
@@ -94,7 +106,20 @@ function uniformAccepted(session: SessionClient | null): Response {
     flushSessionHeaders(headers, session);
   }
   markPrivate(headers);
-  return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+  return new Response(JSON.stringify(body), { status, headers });
+}
+
+function uniformAccepted(session: SessionClient | null): Response {
+  return respond({ ok: true }, 200, session);
+}
+
+/**
+ * The one response a Supabase captcha rejection maps to, instead of
+ * {@link uniformAccepted}. See the file header for why this stays safe for
+ * T3: the token, not the email, decides which of these two a caller gets.
+ */
+function captchaFailed(session: SessionClient | null): Response {
+  return respond({ ok: false, error: 'captcha_failed' }, 400, session);
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -111,6 +136,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const email = body.email;
   const lang = isValidLang(body?.lang) ? body.lang : DEFAULT_LANG;
+  const captchaToken = normalizeCaptchaToken(body?.captchaToken);
 
   // The guard runs here as well as at confirm time. `next` is embedded in an
   // emailed link, which is the hardest place for anyone to inspect it, so it is
@@ -135,13 +161,19 @@ export const POST: APIRoute = async ({ request }) => {
         // Read back server-side when a moderation email is sent (design §9).
         data: { lang },
         emailRedirectTo: confirmUrl.toString(),
+        ...(captchaToken ? { captchaToken } : {}),
       },
     });
 
     if (error) {
       // Logged, never returned. A rate limit and an unknown address must look
-      // the same to the caller and different to whoever reads the logs.
+      // the same to the caller and different to whoever reads the logs. A
+      // captcha rejection is the one exception (see the file header): it
+      // depends only on the token, so it is allowed its own response.
       console.error('[auth/signin] signInWithOtp failed:', error.message);
+      if (isCaptchaError(error)) {
+        return captchaFailed(session);
+      }
     }
   } catch (err) {
     // An unreachable Supabase throws. Letting that become a 500 would answer

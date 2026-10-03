@@ -4,7 +4,7 @@
  * (`POST /api/auth/password`).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
 import PasswordAuthForm, { COPY } from './PasswordAuthForm';
 
@@ -36,10 +36,38 @@ function submitButton(): HTMLElement {
   return screen.getByTestId('password-auth-submit');
 }
 
+function scriptTags(): NodeListOf<HTMLScriptElement> {
+  return document.head.querySelectorAll('script[src*="challenges.cloudflare.com"]');
+}
+
+/** The slice of `turnstile.render`'s options this test suite reads. */
+interface FakeRenderOptions {
+  sitekey: string;
+  callback: (token: string) => void;
+  'expired-callback': () => void;
+  'error-callback': () => void;
+  theme: string;
+  language: string;
+}
+
+/** Install a `window.turnstile` stub; the loader then skips the script tag. */
+function stubTurnstileGlobal() {
+  const render = vi.fn<(container: HTMLElement, options: FakeRenderOptions) => string>(
+    () => 'widget-1',
+  );
+  const remove = vi.fn();
+  const reset = vi.fn();
+  (window as unknown as { turnstile?: unknown }).turnstile = { render, remove, reset };
+  return { render, remove, reset };
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  delete (window as unknown as { turnstile?: unknown }).turnstile;
+  scriptTags().forEach((el) => el.remove());
 });
 
 describe('PasswordAuthForm — initialMode', () => {
@@ -229,6 +257,104 @@ describe('PasswordAuthForm — forgot password', () => {
     fireEvent.click(screen.getByText(COPY.es.backToSignIn));
 
     expect(screen.getByRole('button', { name: COPY.es.signInSubmit })).toBeTruthy();
+  });
+});
+
+describe('PasswordAuthForm — Turnstile, no site key configured', () => {
+  it('renders no widget, loads no script, and submits exactly as before', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+
+    expect(screen.queryByTestId('turnstile-widget')).toBeNull();
+    expect(scriptTags()).toHaveLength(0);
+    expect(submitButton().hasAttribute('disabled')).toBe(false);
+
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('captchaToken');
+  });
+});
+
+describe('PasswordAuthForm — Turnstile, site key configured', () => {
+  it('loads the script once, renders the widget, holds submit disabled until a token arrives, sends the token, and resets after submit', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    const fetchMock = stubFetch({ ok: true });
+    stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+
+    expect(scriptTags()).toHaveLength(1);
+    expect(submitButton().hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(COPY.es.captchaPending)).toBeTruthy();
+
+    const { render: renderMock, reset: resetMock } = stubTurnstileGlobal();
+    scriptTags()[0].dispatchEvent(new Event('load'));
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    expect(renderMock.mock.calls[0][1].sitekey).toBe('1x00000000000000000000AA');
+
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
+
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).captchaToken).toBe('tok-abc');
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith('widget-1'));
+  });
+
+  it('shows the captcha-specific error and keeps the form when the server reports captcha_failed', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    stubFetch({ ok: false, error: 'captcha_failed' }, false);
+    const { render: renderMock } = stubTurnstileGlobal();
+    render(<PasswordAuthForm lang="es" />);
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
+
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.captchaError));
+    expect(screen.getByTestId('password-auth-form')).toBeTruthy();
+  });
+
+  it('resets the widget and re-arms the captcha gate when fetch throws (offline)', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    const { render: renderMock, reset: resetMock } = stubTurnstileGlobal();
+    render(<PasswordAuthForm lang="es" />);
+
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
+
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.signInError));
+    expect(resetMock).toHaveBeenCalledWith('widget-1');
+    expect(submitButton().hasAttribute('disabled')).toBe(true);
+
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-def');
+    });
+    await waitFor(() => expect(submitButton().hasAttribute('disabled')).toBe(false));
   });
 });
 
