@@ -29,8 +29,9 @@
 -- `approve_activity_revision` already use their own row lock for). The
 -- public `view_total` is then incremented only when there was no previous
 -- row at all, or that previous `last_viewed_at` is already more than 30
--- minutes old — a SLIDING window: a view separated from the last counted
--- one by 30+ minutes counts again, rather than a fixed daily quota.
+-- minutes old — a SLIDING window measured from the same user's previous
+-- view (counted or not): only a view that comes 30+ minutes after the last
+-- one counts again, so steady viewing every few minutes counts once.
 --
 -- Same privilege posture every migration since `0012_activity_views.sql`
 -- documents: `create or replace` does not touch privileges, so every
@@ -65,9 +66,9 @@ begin
   returning view_count into new_count;
 
   -- Sliding 30-minute window: count this view toward the PUBLIC view_total
-  -- only the first time ever, or once the previously counted view has aged
-  -- out of the window — never on every call, which is the defect this
-  -- migration fixes.
+  -- only the first time ever, or when this user's previous view (counted or
+  -- not) is more than 30 minutes old — never on every call, which is the
+  -- defect this migration fixes.
   if not v_had_previous or v_previous_last_viewed < now() - interval '30 minutes' then
     update public.activities set view_total = view_total + 1 where id = p_activity;
   end if;
