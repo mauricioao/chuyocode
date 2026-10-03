@@ -16,8 +16,9 @@
  *
  * Same signing scheme, secret, and cookie-value shape as `chu_pass`
  * (`src/lib/pass.ts`), so this module reuses that module's codec/signing
- * primitives (`toBase64Url`, `sign`, `verifySignedValue`) rather than a
- * second, independently-maintained implementation of the same cryptography.
+ * primitives (`toBase64Url`, `sign`, `verifySignedValue`) and its shared
+ * `cookieAttributes()` builder rather than a second, independently-maintained
+ * implementation of the same cryptography and security attributes.
  *
  * Unlike `chu_pass`, the payload carries no expiry of its own: whether a
  * start proof is "too young" (ad not actually watched yet) or "too old"
@@ -31,7 +32,7 @@
  * the client `AdModal` island. `src/lib/adTiming.ts` holds the constants the
  * client DOES need.
  */
-import { sign, readCookie, toBase64Url, verifySignedValue } from './pass';
+import { sign, readCookie, toBase64Url, verifySignedValue, cookieAttributes } from './pass';
 import { AD_START_TTL_MS } from './adTiming';
 
 /** Cookie name that carries the signed ad-start proof. */
@@ -47,15 +48,6 @@ interface AdStartPayload {
 export interface AdStartState {
   /** When the ad started, per the signed cookie. */
   start: number;
-}
-
-/** Build the shared non-value cookie attributes (HttpOnly/SameSite/Path/Secure). */
-function cookieAttributes(): string[] {
-  const attributes = ['HttpOnly', 'SameSite=Lax', 'Path=/'];
-  if (import.meta.env?.PROD === true) {
-    attributes.push('Secure');
-  }
-  return attributes;
 }
 
 /**

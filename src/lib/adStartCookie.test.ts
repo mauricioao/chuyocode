@@ -6,6 +6,7 @@ import {
   readAdStartCookie,
 } from './adStartCookie';
 import { AD_START_TTL_MS } from './adTiming';
+import { createPassCookie } from './pass';
 
 const SECRET = 'test-secret-please-change';
 const NOW = 1_700_000_000_000; // fixed epoch ms for deterministic payloads
@@ -102,5 +103,22 @@ describe('clearAdStartCookie', () => {
     expect(cookie).toContain('SameSite=Lax');
     expect(cookie).toContain('Path=/');
     expect(cookie).toContain('Max-Age=0');
+  });
+});
+
+describe('cookie attributes — shared with chu_pass', () => {
+  it('chu_ad_start and chu_pass carry identical HttpOnly/SameSite/Path/Secure attributes, built by the same helper', () => {
+    const adStart = createAdStartCookie(SECRET, NOW);
+    const { cookie: pass } = createPassCookie(SECRET, NOW);
+
+    // Both values are `name=value; <shared attrs>; Max-Age=<own lifetime>`;
+    // drop the name=value pair and each cookie's own (deliberately
+    // different) Max-Age to compare only what `cookieAttributes()`
+    // (`src/lib/pass.ts`) is responsible for.
+    const sharedAttributesOf = (setCookie: string): string[] =>
+      setCookie.split('; ').slice(1).filter((attribute) => !attribute.startsWith('Max-Age='));
+
+    expect(sharedAttributesOf(adStart)).toEqual(['HttpOnly', 'SameSite=Lax', 'Path=/']);
+    expect(sharedAttributesOf(adStart)).toEqual(sharedAttributesOf(pass));
   });
 });

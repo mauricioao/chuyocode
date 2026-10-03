@@ -20,11 +20,12 @@
  * endpoint in the rewarded-ads work unit (PR 7).
  *
  * A handful of generic primitives (`readCookie`, `sign`, `signaturesMatch`,
- * `toBase64Url`/`fromBase64Url`, `verifySignedValue`) are exported so
- * `src/lib/adStartCookie.ts` — the ad-start proof cookie: same HMAC scheme and
- * secret, a different cookie name and payload shape — reuses this module's
- * codec/signing instead of a second, independently-maintained implementation
- * of the same cryptography.
+ * `toBase64Url`/`fromBase64Url`, `verifySignedValue`, `cookieAttributes`) are
+ * exported so `src/lib/adStartCookie.ts` — the ad-start proof cookie: same
+ * HMAC scheme and secret, a different cookie name and payload shape — reuses
+ * this module's codec/signing/cookie-attribute building instead of a second,
+ * independently-maintained implementation of the same cryptography and
+ * security attributes.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { loadEnv } from './env';
@@ -111,6 +112,22 @@ export function readCookie(request: Request, name: string): string | null {
 /** Extract the `chu_pass` cookie value from a request's `Cookie` header. */
 function readPassCookie(request: Request): string | null {
   return readCookie(request, PASS_COOKIE_NAME);
+}
+
+/**
+ * Build the shared non-value `Set-Cookie` attributes — `HttpOnly`,
+ * `SameSite=Lax`, `Path=/`, and `Secure` in production — common to both
+ * `chu_pass` (this module) and `chu_ad_start` (`src/lib/adStartCookie.ts`).
+ * Exported so both cookies get this security posture from exactly one
+ * place instead of two separately-maintained copies; each caller still
+ * appends its own `Max-Age`, which differs between the two.
+ */
+export function cookieAttributes(): string[] {
+  const attributes = ['HttpOnly', 'SameSite=Lax', 'Path=/'];
+  if (import.meta.env?.PROD === true) {
+    attributes.push('Secure');
+  }
+  return attributes;
 }
 
 /**
@@ -225,18 +242,12 @@ export function createPassCookie(
   const value = `${payloadB64}.${signatureB64}`;
 
   const maxAgeSeconds = Math.floor(PASS_DURATION_MS / 1000);
-  const isProd = import.meta.env?.PROD === true;
 
   const attributes = [
     `${PASS_COOKIE_NAME}=${value}`,
-    'HttpOnly',
-    'SameSite=Lax',
-    'Path=/',
+    ...cookieAttributes(),
     `Max-Age=${maxAgeSeconds}`,
   ];
-  if (isProd) {
-    attributes.push('Secure');
-  }
 
   return {
     cookie: attributes.join('; '),
