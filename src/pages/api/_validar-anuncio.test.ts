@@ -2,9 +2,14 @@
  * Integration tests for POST /api/validar-anuncio (spec 4: rewarded-ads).
  *
  * Verifies the full ad-validation contract:
- *  - a fresh timestamp mints a signed pass cookie and returns { ok: true },
- *  - the minted cookie is one getPassState accepts (round-trip),
- *  - stale/future/malformed/missing bodies return 400,
+ *  - a bare client-reported timestamp, with no ad-start cookie, mints no pass
+ *    (the bypass this endpoint used to have — see the RED test below),
+ *  - a valid, sufficiently-aged start cookie mints a pass and clears itself,
+ *  - a start cookie younger than the minimum watch time is rejected,
+ *  - a start cookie older than the TTL is rejected,
+ *  - a tampered start-cookie signature is rejected,
+ *  - a missing start cookie is rejected,
+ *  - the minted pass cookie is one getPassState accepts (round-trip),
  *  - non-POST methods return 405,
  *  - an unconfigured secret fails closed with 500.
  *
@@ -28,28 +33,49 @@ vi.mock('@lib/env', () => ({
   }),
 }));
 
-import { POST, ALL, AD_TOKEN_TTL_MS } from './validar-anuncio';
+import { POST, ALL } from './validar-anuncio';
 import { getPassState, PASS_COOKIE_NAME } from '@lib/pass';
+import { createAdStartCookie, AD_START_COOKIE_NAME } from '@lib/adStartCookie';
+import { AD_MIN_WATCH_MS, AD_START_TTL_MS } from '@lib/adTiming';
 
 const SECRET = 'test-secret-please-change';
+const URL = 'https://chuyo.test/api/validar-anuncio';
 
 /** Minimal APIContext stub carrying just the request the handler reads. */
 function ctx(request: Request): Parameters<typeof POST>[0] {
   return { request } as unknown as Parameters<typeof POST>[0];
 }
 
-/** Build a POST request with a JSON body. */
+/** Build a POST request with a JSON body (legacy shape — now ignored). */
 function postWith(body: unknown): Request {
-  return new Request('https://chuyo.test/api/validar-anuncio', {
+  return new Request(URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
 
-/** Extract the raw chu_pass cookie value from a Set-Cookie header. */
+/** Build a POST request carrying a raw `Cookie` header. */
+function postWithCookieHeader(cookieHeader: string): Request {
+  return new Request(URL, { method: 'POST', headers: { cookie: cookieHeader } });
+}
+
+/** Extract just the `name=value` pair off a full `Set-Cookie` string, so it
+ * can be sent back as a request's `Cookie` header. */
+function asCookieHeader(setCookie: string): string {
+  return setCookie.slice(0, setCookie.indexOf(';'));
+}
+
+/** Extract the raw value (after `=`, before the first `;`) of a Set-Cookie string. */
 function cookieValueFrom(setCookie: string): string {
   return setCookie.slice(setCookie.indexOf('=') + 1, setCookie.indexOf(';'));
+}
+
+/** Mint a `chu_ad_start` cookie whose start time is `ageMs` in the past, ready
+ * to send as a request `Cookie` header. */
+function startCookieAged(ageMs: number): string {
+  const setCookie = createAdStartCookie(SECRET, Date.now() - ageMs);
+  return asCookieHeader(setCookie);
 }
 
 beforeEach(() => {
@@ -57,86 +83,113 @@ beforeEach(() => {
 });
 
 describe('POST /api/validar-anuncio', () => {
-  it('mints a pass cookie and returns { ok: true } for a fresh timestamp', async () => {
+  // RED (recorded before the fix, per the Unit 3 brief): today's code mints a
+  // pass from a bare client-reported timestamp alone, with no proof the ad
+  // ever played. This is the bypass the fix must close — a bare POST with the
+  // current time, and NO start cookie, must never mint a pass.
+  it('RED: a bare {timestamp} with no ad-start cookie must not mint a pass', async () => {
     const res = await POST(ctx(postWith({ timestamp: Date.now() })));
+
+    const setCookies = res.headers.getSetCookie();
+    const mintedPass = setCookies.some((c) => c.includes(`${PASS_COOKIE_NAME}=`));
+    expect(mintedPass).toBe(false);
+  });
+
+  it('returns 403 when there is no start cookie at all', async () => {
+    const res = await POST(ctx(new Request(URL, { method: 'POST' })));
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({ ok: false, error: expect.any(String) });
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+  });
+
+  it('returns 403, and mints no pass, when the start cookie is younger than the minimum watch time', async () => {
+    const tooYoung = startCookieAged(AD_MIN_WATCH_MS - 500);
+    const res = await POST(ctx(postWithCookieHeader(tooYoung)));
+
+    expect(res.status).toBe(403);
+    const setCookies = res.headers.getSetCookie();
+    expect(setCookies.some((c) => c.includes(`${PASS_COOKIE_NAME}=`))).toBe(false);
+  });
+
+  it('mints a pass and clears the start cookie once the minimum watch time has elapsed', async () => {
+    const justOldEnough = startCookieAged(AD_MIN_WATCH_MS + 50);
+    const res = await POST(ctx(postWithCookieHeader(justOldEnough)));
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true });
 
-    const setCookie = res.headers.get('set-cookie');
-    expect(setCookie).toContain(`${PASS_COOKIE_NAME}=`);
-    expect(setCookie).toContain('HttpOnly');
+    const setCookies = res.headers.getSetCookie();
+    const passCookie = setCookies.find((c) => c.startsWith(`${PASS_COOKIE_NAME}=`));
+    expect(passCookie).toBeDefined();
+    expect(passCookie).toContain('HttpOnly');
+
+    const clearedStart = setCookies.find((c) => c.startsWith(`${AD_START_COOKIE_NAME}=`));
+    expect(clearedStart).toBeDefined();
+    expect(clearedStart).toContain('Max-Age=0');
   });
 
-  it('mints a cookie that getPassState accepts (round-trip)', async () => {
-    const res = await POST(ctx(postWith({ timestamp: Date.now() })));
-    const setCookie = res.headers.get('set-cookie');
-    expect(setCookie).not.toBeNull();
+  it('mints a pass cookie that getPassState accepts (round-trip)', async () => {
+    const cookie = startCookieAged(AD_MIN_WATCH_MS + 50);
+    const res = await POST(ctx(postWithCookieHeader(cookie)));
 
-    const value = cookieValueFrom(setCookie as string);
+    const setCookies = res.headers.getSetCookie();
+    const passCookie = setCookies.find((c) => c.startsWith(`${PASS_COOKIE_NAME}=`));
+    expect(passCookie).toBeDefined();
+
+    const value = cookieValueFrom(passCookie as string);
     const gated = new Request('https://chuyo.test/es/libros/x', {
       headers: { cookie: `${PASS_COOKIE_NAME}=${value}` },
     });
     expect(getPassState(gated)).toBe('valid');
   });
 
-  it('returns 400 for a stale timestamp (older than the TTL)', async () => {
-    const stale = Date.now() - AD_TOKEN_TTL_MS - 1000;
-    const res = await POST(ctx(postWith({ timestamp: stale })));
+  it('returns 403 when the start cookie is older than the TTL', async () => {
+    const stale = startCookieAged(AD_START_TTL_MS + 5000);
+    const res = await POST(ctx(postWithCookieHeader(stale)));
 
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ ok: false, error: 'Invalid token' });
-    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(res.status).toBe(403);
+    expect(res.headers.getSetCookie().some((c) => c.includes(`${PASS_COOKIE_NAME}=`))).toBe(false);
   });
 
-  it('returns 400 for a future timestamp beyond the TTL', async () => {
-    const future = Date.now() + AD_TOKEN_TTL_MS + 1000;
-    const res = await POST(ctx(postWith({ timestamp: future })));
+  it('returns 403 for a tampered start-cookie signature', async () => {
+    const valid = startCookieAged(AD_MIN_WATCH_MS + 50);
+    const [payload] = valid.slice(valid.indexOf('=') + 1).split('.');
+    const tampered = `${AD_START_COOKIE_NAME}=${payload}.deadbeefdeadbeefdeadbeef`;
+    const res = await POST(ctx(postWithCookieHeader(tampered)));
 
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ ok: false, error: 'Invalid token' });
+    expect(res.status).toBe(403);
+    expect(res.headers.getSetCookie().some((c) => c.includes(`${PASS_COOKIE_NAME}=`))).toBe(false);
   });
 
-  it('returns 400 when timestamp is not a number', async () => {
-    const res = await POST(ctx(postWith({ timestamp: 'not-a-number' })));
-
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ ok: false, error: 'Invalid token' });
-  });
-
-  it('returns 400 when the body is missing the timestamp field', async () => {
-    const res = await POST(ctx(postWith({})));
-
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ ok: false, error: 'Invalid token' });
-  });
-
-  it('returns 400 for a missing/empty body (non-JSON)', async () => {
-    const req = new Request('https://chuyo.test/api/validar-anuncio', {
+  it('ignores the legacy {timestamp} body even alongside a valid start cookie — body carries no weight', async () => {
+    const valid = startCookieAged(AD_MIN_WATCH_MS + 50);
+    const req = new Request(URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: valid },
+      body: JSON.stringify({ timestamp: Date.now() - AD_START_TTL_MS - 999_999 }),
     });
     const res = await POST(ctx(req));
 
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ ok: false, error: 'Invalid token' });
+    // A wildly stale/garbage body must not matter either way: only the
+    // start cookie is ever consulted.
+    expect(res.status).toBe(200);
   });
 
   it('returns 500 when AD_HMAC_SECRET is not configured', async () => {
     envState.secret = '';
-    const res = await POST(ctx(postWith({ timestamp: Date.now() })));
+    const cookie = startCookieAged(AD_MIN_WATCH_MS + 50);
+    const res = await POST(ctx(postWithCookieHeader(cookie)));
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ ok: false, error: 'Server error' });
-    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(res.headers.getSetCookie()).toHaveLength(0);
   });
 });
 
 describe('validar-anuncio — method guard', () => {
   it('returns 405 for non-POST methods', async () => {
-    const req = new Request('https://chuyo.test/api/validar-anuncio', {
-      method: 'GET',
-    });
+    const req = new Request(URL, { method: 'GET' });
     const res = await ALL(ctx(req));
 
     expect(res.status).toBe(405);

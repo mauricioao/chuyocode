@@ -18,6 +18,13 @@
  * This module is READ-ONLY with respect to `getPassState`: it never sets
  * cookies. Cookie issuance (`createPassCookie`) is used by the ad-validation
  * endpoint in the rewarded-ads work unit (PR 7).
+ *
+ * A handful of generic primitives (`readCookie`, `sign`, `signaturesMatch`,
+ * `toBase64Url`/`fromBase64Url`, `verifySignedValue`) are exported so
+ * `src/lib/adStartCookie.ts` — the ad-start proof cookie: same HMAC scheme and
+ * secret, a different cookie name and payload shape — reuses this module's
+ * codec/signing instead of a second, independently-maintained implementation
+ * of the same cryptography.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { loadEnv } from './env';
@@ -49,17 +56,17 @@ function resolveSecret(): string | null {
 }
 
 /** Base64url-encode a UTF-8 string (URL/cookie-safe, no padding). */
-function toBase64Url(input: string): string {
+export function toBase64Url(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64url');
 }
 
 /** Base64url-decode to a UTF-8 string. */
-function fromBase64Url(input: string): string {
+export function fromBase64Url(input: string): string {
   return Buffer.from(input, 'base64url').toString('utf8');
 }
 
 /** Compute the HMAC-SHA256 signature (base64url) of `payload` under `secret`. */
-function sign(payloadB64: string, secret: string): string {
+export function sign(payloadB64: string, secret: string): string {
   return createHmac('sha256', secret).update(payloadB64).digest('base64url');
 }
 
@@ -67,7 +74,7 @@ function sign(payloadB64: string, secret: string): string {
  * Constant-time comparison of two base64url signatures. Length mismatch is a
  * fast, safe reject; equal-length strings are compared without early exit.
  */
-function signaturesMatch(a: string, b: string): boolean {
+export function signaturesMatch(a: string, b: string): boolean {
   const bufA = Buffer.from(a, 'base64url');
   const bufB = Buffer.from(b, 'base64url');
   if (bufA.length !== bufB.length) {
@@ -77,10 +84,13 @@ function signaturesMatch(a: string, b: string): boolean {
 }
 
 /**
- * Extract the `chu_pass` cookie value from a request's `Cookie` header.
- * Returns `null` when the header or cookie is absent.
+ * Extract a named cookie's value from a request's `Cookie` header. Returns
+ * `null` when the header or that specific cookie is absent.
+ *
+ * Generic and exported so `src/lib/adStartCookie.ts` reads its differently
+ * named cookie the same way, instead of a second copy of this parsing loop.
  */
-function readPassCookie(request: Request): string | null {
+export function readCookie(request: Request, name: string): string | null {
   const header = request.headers.get('cookie');
   if (!header) {
     return null;
@@ -90,12 +100,50 @@ function readPassCookie(request: Request): string | null {
     if (eq === -1) {
       continue;
     }
-    const name = part.slice(0, eq).trim();
-    if (name === PASS_COOKIE_NAME) {
+    const key = part.slice(0, eq).trim();
+    if (key === name) {
       return part.slice(eq + 1).trim();
     }
   }
   return null;
+}
+
+/** Extract the `chu_pass` cookie value from a request's `Cookie` header. */
+function readPassCookie(request: Request): string | null {
+  return readCookie(request, PASS_COOKIE_NAME);
+}
+
+/**
+ * Split a `payload.signature` cookie value, verify the signature under
+ * `secret`, and return the decoded JSON payload. Returns `null` for every
+ * structural or cryptographic problem (malformed value, bad signature,
+ * non-JSON payload) — never which one, so callers fail closed without
+ * learning why.
+ *
+ * Generic and exported so `src/lib/adStartCookie.ts` verifies its own
+ * (differently shaped) signed cookie with the same codec/signing primitives,
+ * instead of a second, independently-maintained implementation of this
+ * cryptography under the same secret.
+ */
+export function verifySignedValue(rawValue: string, secret: string): unknown | null {
+  const dot = rawValue.indexOf('.');
+  // Must be exactly `payload.signature` — no dot means malformed.
+  if (dot <= 0 || dot === rawValue.length - 1) {
+    return null;
+  }
+  const payloadB64 = rawValue.slice(0, dot);
+  const signatureB64 = rawValue.slice(dot + 1);
+
+  const expected = sign(payloadB64, secret);
+  if (!signaturesMatch(signatureB64, expected)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fromBase64Url(payloadB64));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -104,27 +152,8 @@ function readPassCookie(request: Request): string | null {
  * or cryptographic problem resolves to `'invalid'` (fail-closed).
  */
 function verify(rawValue: string, secret: string, nowMs: number): PassState {
-  const dot = rawValue.indexOf('.');
-  // Must be exactly `payload.signature` — no dot means malformed.
-  if (dot <= 0 || dot === rawValue.length - 1) {
-    return 'invalid';
-  }
-  const payloadB64 = rawValue.slice(0, dot);
-  const signatureB64 = rawValue.slice(dot + 1);
-
-  const expected = sign(payloadB64, secret);
-  if (!signaturesMatch(signatureB64, expected)) {
-    return 'invalid';
-  }
-
-  let payload: PassPayload;
-  try {
-    payload = JSON.parse(fromBase64Url(payloadB64)) as PassPayload;
-  } catch {
-    return 'invalid';
-  }
-
-  if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) {
+  const payload = verifySignedValue(rawValue, secret) as Partial<PassPayload> | null;
+  if (!payload || typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) {
     return 'invalid';
   }
 

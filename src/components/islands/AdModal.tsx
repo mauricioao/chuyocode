@@ -2,17 +2,21 @@
  * AdModal — rewarded-ads unlock island (spec 4: rewarded-ads).
  *
  * Rendered on obscured (pass-less) gated pages. It shows an ad placeholder and a
- * "Watch ad to unlock" CTA. The flow (design decision #7, simplified for v1):
+ * "Watch ad to unlock" CTA. The flow (design decision #7, hardened after v1's
+ * client-trusting stub — see `src/pages/api/validar-anuncio.ts`'s header):
  *
- *   1. User clicks Watch Ad -> a simulated ad "plays" (3s countdown). The modal
- *      cannot be dismissed while the ad is playing.
- *   2. On completion the island POSTs `{ timestamp: Date.now() }` to
- *      `/api/validar-anuncio`. The SECRET never touches the client — the server
- *      validates freshness and mints the signed pass cookie.
+ *   1. User clicks Watch Ad -> the island POSTs `/api/anuncio/inicio`, which
+ *      sets a server-signed `chu_ad_start` cookie carrying the SERVER's own
+ *      clock reading. Only once that call succeeds does the simulated ad
+ *      "play" (3s countdown) — the modal cannot be dismissed while playing.
+ *   2. On completion the island POSTs (empty body) to `/api/validar-anuncio`,
+ *      which requires that cookie and the elapsed time it proves. The SECRET
+ *      never touches the client either way.
  *   3. On `{ ok: true }` it shows a success state and reloads the page, so the
- *      next SSR render picks up the new cookie and reveals the full content.
- *   4. On a non-ok response (or network error) it shows an error state with a
- *      retry affordance.
+ *      next SSR render picks up the new pass cookie and reveals the full
+ *      content.
+ *   4. On a non-ok response (or network error, at either step) it shows an
+ *      error state with a retry affordance.
  *
  * Hydrated with `client:load` so the CTA is interactive immediately. All
  * user-facing text is localized (es/en). Accessibility: `role="dialog"` +
@@ -26,12 +30,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { AD_MIN_WATCH_SECONDS } from '@/lib/adTiming';
+
+/** Endpoint that starts the flow: sets the server-signed ad-start cookie. */
+const START_URL = '/api/anuncio/inicio';
 
 /** Endpoint that validates the ad and issues the pass cookie. */
 const VALIDATE_URL = '/api/validar-anuncio';
 
-/** Simulated ad duration before validation fires: 3 seconds. */
-export const AD_DURATION_SECONDS = 3;
+/** Simulated ad duration before validation fires (spec 4: `AD_MIN_WATCH_SECONDS`). */
+export const AD_DURATION_SECONDS = AD_MIN_WATCH_SECONDS;
 
 export interface AdModalProps {
   /** Active locale; drives all copy. Falls back to English for unknown values. */
@@ -114,15 +122,14 @@ export default function AdModal({ lang }: AdModalProps) {
 
   useEffect(() => clearTimer, [clearTimer]);
 
-  /** POST the completion timestamp; the server mints the pass cookie. */
+  /**
+   * POST completion. No body: the server trusts only the `chu_ad_start`
+   * cookie `startAd` already armed, never a client-supplied timestamp.
+   */
   const validate = useCallback(async () => {
     setPhase('validating');
     try {
-      const res = await fetch(VALIDATE_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ timestamp: Date.now() }),
-      });
+      const res = await fetch(VALIDATE_URL, { method: 'POST' });
       const data = (await res.json()) as { ok?: boolean };
       if (res.ok && data.ok === true) {
         setPhase('success');
@@ -136,11 +143,36 @@ export default function AdModal({ lang }: AdModalProps) {
     }
   }, []);
 
-  /** Start the simulated ad: a 3s countdown, then validation. */
-  const startAd = useCallback(() => {
+  /**
+   * Start the simulated ad: arm the server-signed start cookie, THEN run the
+   * 3s countdown.
+   *
+   * The start call is AWAITED, not fire-and-forget: `validar-anuncio` measures
+   * elapsed time from the moment the server actually signs the `chu_ad_start`
+   * cookie, not from this click. Starting the local countdown in parallel with
+   * that request would race a slow `/inicio` round trip (a cold connection's
+   * first request is often slower than its later ones) against a countdown
+   * that always takes exactly `AD_DURATION_SECONDS` — on an unlucky network a
+   * visitor who genuinely watched the full duration could still measure as
+   * "too young" server-side. Awaiting first means the countdown's elapsed time
+   * is always ADDED on top of the start cookie's timestamp, never racing it.
+   */
+  const startAd = useCallback(async () => {
     setPhase('playing');
     setSecondsLeft(AD_DURATION_SECONDS);
     clearTimer();
+
+    try {
+      const res = await fetch(START_URL, { method: 'POST' });
+      if (!res.ok) {
+        setPhase('error');
+        return;
+      }
+    } catch {
+      setPhase('error');
+      return;
+    }
+
     timerRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
