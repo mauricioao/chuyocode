@@ -14,9 +14,10 @@
  * a wrong password AND for an address with no account.
  *
  * `signup` and `reset` stay uniform, mirroring the endpoint: both always
- * show {@link COPY.signUpSent} / {@link COPY.resetSent} on a completed
- * request, never branching on what the response body actually says (the
- * body is uniform too, so there is nothing to branch on) — the neutral
+ * show a neutral confirmation on a completed request — {@link COPY.signUpSent}
+ * for `signup`, the {@link COPY.resetSentHeading}/{@link COPY.resetSentBody}
+ * card for `reset` — never branching on what the response body actually says
+ * (the body is uniform too, so there is nothing to branch on) — the neutral
  * outcome is the whole point, same rule as `SignInForm`'s header. The one
  * signal this form DOES read from the body is `signedIn` on `signup`, which
  * is a PROJECT-WIDE setting (email confirmation disabled), never a
@@ -37,6 +38,7 @@
  * on `switchMode`.
  */
 import { useState } from 'react';
+import { EnvelopeSimpleIcon } from '@phosphor-icons/react/dist/ssr/EnvelopeSimple';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getTurnstileSiteKey } from '@lib/turnstile';
@@ -63,8 +65,10 @@ export const COPY = {
     forgotPassword: '¿Olvidaste la contraseña?',
     resetSubmit: 'Enviar instrucciones',
     resetSubmitting: 'Enviando…',
-    resetSent:
-      'Se enviaron instrucciones para restablecer la contraseña a esa dirección, si corresponde a una cuenta. Revisar la bandeja de entrada y la carpeta de spam.',
+    resetSentHeading: 'Revisa tu correo',
+    resetSentBody:
+      'Si {email} tiene una cuenta, te llegará un enlace para cambiar la contraseña. Mira también en spam.',
+    backToSignInFromReset: 'Volver a ingresar',
     backToSignIn: 'Volver a entrar',
     switchToSignUp: '¿Aún no tienes una cuenta? ¿Qué esperas?',
     switchToSignIn: '¿Te acordaste de tu cuenta? Ingresar',
@@ -88,8 +92,10 @@ export const COPY = {
     forgotPassword: 'Forgot your password?',
     resetSubmit: 'Send instructions',
     resetSubmitting: 'Sending…',
-    resetSent:
-      'Password reset instructions were sent to that address, if it has an account. Check your inbox and spam folder.',
+    resetSentHeading: 'Check your email',
+    resetSentBody:
+      "If {email} has an account, you'll get a link to reset your password. Check your spam folder too.",
+    backToSignInFromReset: 'Back to sign in',
     backToSignIn: 'Back to sign in',
     switchToSignUp: "Don't have an account yet? What are you waiting for?",
     switchToSignIn: 'Remembered your account? Sign in',
@@ -221,9 +227,40 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
   }
 
   if (status === 'sent') {
+    if (mode === 'reset') {
+      // `{email}` is a plain split marker, not markup — the two halves of
+      // the sentence around the bolded address the visitor typed.
+      const [sentBodyBefore, sentBodyAfter] = t.resetSentBody.split('{email}');
+      return (
+        <div
+          role="status"
+          data-testid="password-reset-sent"
+          className="flex flex-col gap-3 rounded-(--radius-card) border border-border bg-card p-4 text-card-foreground"
+        >
+          <div className="flex items-center gap-2">
+            <EnvelopeSimpleIcon aria-hidden="true" className="size-6 text-accent" />
+            <h2 className="text-lg font-semibold text-foreground">{t.resetSentHeading}</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {sentBodyBefore}
+            <strong className="font-semibold text-foreground">{email}</strong>
+            {sentBodyAfter}
+          </p>
+          <button
+            type="button"
+            onClick={() => switchMode('signin')}
+            className="self-start text-sm font-medium text-accent hover:text-accent-hover hover:underline"
+            data-testid="password-reset-back-to-signin"
+          >
+            {t.backToSignInFromReset}
+          </button>
+        </div>
+      );
+    }
+
     return (
       <p role="status" data-testid="password-auth-sent">
-        {mode === 'reset' ? t.resetSent : t.signUpSent}
+        {t.signUpSent}
       </p>
     );
   }

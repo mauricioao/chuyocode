@@ -232,7 +232,7 @@ describe('PasswordAuthForm — forgot password', () => {
     expect(screen.queryByLabelText(COPY.es.passwordLabel)).toBeNull();
   });
 
-  it('POSTs action=reset and shows the uniform confirmation message', async () => {
+  it('POSTs action=reset and shows a confirmation card with the typed email', async () => {
     const fetchMock = stubFetch({ ok: true });
     render(<PasswordAuthForm lang="es" />);
     fireEvent.click(screen.getByText(COPY.es.forgotPassword));
@@ -246,9 +246,39 @@ describe('PasswordAuthForm — forgot password', () => {
         body: JSON.stringify({ action: 'reset', email: 'lector@example.com', lang: 'es' }),
       }),
     );
-    await waitFor(() =>
-      expect(screen.getByTestId('password-auth-sent').textContent).toBe(COPY.es.resetSent),
-    );
+
+    const card = await screen.findByTestId('password-reset-sent');
+    expect(card.getAttribute('role')).toBe('status');
+    expect(screen.getByText(COPY.es.resetSentHeading)).toBeTruthy();
+    expect(card.textContent).toContain('lector@example.com');
+    expect(screen.getByRole('button', { name: COPY.es.backToSignInFromReset })).toBeTruthy();
+  });
+
+  it('shows the identical card regardless of whether the address has an account (anti-enumeration)', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.forgotPassword));
+    fireEvent.change(emailInput(), { target: { value: 'sin-cuenta@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: COPY.es.resetSubmit }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const card = await screen.findByTestId('password-reset-sent');
+    expect(screen.getByText(COPY.es.resetSentHeading)).toBeTruthy();
+    expect(card.textContent).toContain('sin-cuenta@example.com');
+  });
+
+  it('returns to sign-in mode with the email prefilled from the reset confirmation card', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.forgotPassword));
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: COPY.es.resetSubmit }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole('button', { name: COPY.es.backToSignInFromReset }));
+
+    expect(screen.getByRole('button', { name: COPY.es.signInSubmit })).toBeTruthy();
+    expect(emailInput().value).toBe('lector@example.com');
   });
 
   it('returns to sign-in mode from the back link', () => {
