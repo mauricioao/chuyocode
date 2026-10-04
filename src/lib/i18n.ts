@@ -1010,23 +1010,17 @@ export const UI_LABELS = {
         courses: 'Cursos',
         english: 'Inglés para programadores',
       },
-      // Inglés product section (home redesign: "Inglés en ChuyoCode"). Two
-      // entry points, honest about what exists today: creating an activity
-      // (`/{lang}/crear`) and practicing one (`/{lang}/ingles/actividades`).
-      // Both routes are already login-gated by the middleware.
+      // Inglés product banner on the home (full-width illustration with the
+      // copy over its empty paper area). Two entry points, honest about what
+      // exists today: creating an activity (`/{lang}/crear`) and practicing
+      // one (`/{lang}/ingles/actividades`); both are login-gated.
       ingles: {
-        heading: 'Inglés en ChuyoCode',
+        label: 'Inglés · English',
+        title: 'Aprende y enseña inglés jugando',
         intro: 'Actividades interactivas para enseñar y practicar inglés, en español.',
-        teachersLabel: 'Para docentes',
-        teachersTitle: 'Tu ficha, ahora interactiva',
-        teachersBody:
-          'Sube tu ficha o PDF, marca las respuestas y proyéctala en clase. Gratis.',
         teachersCta: 'Crear mi actividad',
-        learnersLabel: 'Para aprender',
-        learnersTitle: 'Practica a tu ritmo',
-        learnersBody:
-          'Actividades y juegos por nivel, con explicaciones en español cuando te equivocas.',
         learnersCta: 'Explorar actividades',
+        note: 'Crear y jugar es gratis.',
       },
     },
     courses: {
@@ -1928,18 +1922,12 @@ export const UI_LABELS = {
       },
       // Mirrors `es.home.ingles` — see its comment there.
       ingles: {
-        heading: 'English on ChuyoCode',
+        label: 'English · Inglés',
+        title: 'Learn and teach English through play',
         intro: 'Interactive activities to teach and practice English, explained in Spanish.',
-        teachersLabel: 'For teachers',
-        teachersTitle: 'Your worksheet, now interactive',
-        teachersBody:
-          'Upload your worksheet or PDF, mark the answers and project it in class. Free.',
         teachersCta: 'Create my activity',
-        learnersLabel: 'For learners',
-        learnersTitle: 'Practice at your own pace',
-        learnersBody:
-          'Activities and games by level, with explanations in Spanish when you get it wrong.',
         learnersCta: 'Explore activities',
+        note: 'Creating and playing is free.',
       },
     },
     courses: {
