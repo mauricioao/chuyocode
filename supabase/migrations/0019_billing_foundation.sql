@@ -20,10 +20,18 @@ begin;
 -- NULL `provider`/`provider_ref` is the existing shape (0010): a manual/test
 -- grant with no billing provider behind it. Once set, (provider, provider_ref)
 -- identifies the Paddle (or future provider) subscription this row mirrors.
+--
+-- `provider_event_at` is the ordering guard `src/lib/billing/apply.ts`
+-- (`applySubscriptionState`) reads before writing: it stores the `occurred_at`
+-- of the last provider event actually applied to this row, so a delayed,
+-- out-of-order delivery (e.g. an older `subscription.canceled` arriving after
+-- a newer `subscription.activated` already applied) is detected and skipped
+-- instead of silently reverting the row to a stale state.
 alter table public.user_subscriptions
   add column provider              text,
   add column provider_ref          text,
-  add column provider_customer_ref text;
+  add column provider_customer_ref text,
+  add column provider_event_at     timestamptz;
 
 -- Paddle (and presumably any future provider) can put a subscription into a
 -- trialing state before the first charge — `status` must accept it, or

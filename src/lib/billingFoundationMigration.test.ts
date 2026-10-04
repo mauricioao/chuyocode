@@ -44,6 +44,10 @@ describe('0019_billing_foundation.sql', () => {
       );
     });
 
+    it('adds provider_event_at to guard against applying an out-of-order webhook delivery', () => {
+      expect(sql).toMatch(/add column provider_event_at\s+timestamptz/);
+    });
+
     it('drops the old status check before re-adding it (idempotent re-run safety)', () => {
       expect(sql).toMatch(/drop constraint if exists user_subscriptions_status_check;/);
     });

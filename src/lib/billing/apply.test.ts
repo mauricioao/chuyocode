@@ -216,6 +216,7 @@ describe('applyBillingEvent — subscription state', () => {
       provider: 'paddle',
       provider_ref: 'sub_123',
       provider_customer_ref: 'ctm_123',
+      provider_event_at: null,
     });
     expect(calls[0]?.[1]).toEqual({ onConflict: 'user_id' });
     expect(result).toEqual({ ok: true });
@@ -255,6 +256,82 @@ describe('applyBillingEvent — subscription state', () => {
 
     expect(await applyBillingEvent(subscriptionEvent())).toEqual({ ok: false, error: 'unavailable' });
     expect(fromMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyBillingEvent — subscription event ordering (out-of-order webhook deliveries)', () => {
+  it('ignores a stale canceled event delivered after a newer activated event (no-op, not an error)', async () => {
+    const { builder: select } = selectBuilder({
+      data: { current_period_end: '2024-02-01T00:00:00.000Z', provider_event_at: '2024-01-10T00:00:00.000Z' },
+      error: null,
+    });
+    fromMock.mockReturnValueOnce(select);
+
+    const result = await applyBillingEvent(
+      subscriptionEvent({
+        type: 'subscription.canceled',
+        status: 'canceled',
+        occurredAt: '2024-01-05T00:00:00.000Z',
+      }),
+    );
+
+    expect(result).toEqual({ ok: true });
+    // Only the read happened — the stale write never reached upsert.
+    expect(fromMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies a newer event over an older stored provider_event_at, storing the new occurredAt', async () => {
+    const { builder: select } = selectBuilder({
+      data: { current_period_end: '2024-01-01T00:00:00.000Z', provider_event_at: '2024-01-05T00:00:00.000Z' },
+      error: null,
+    });
+    const { builder: upsert, calls } = terminalBuilder('upsert', { error: null });
+    fromMock.mockReturnValueOnce(select).mockReturnValueOnce(upsert);
+
+    const result = await applyBillingEvent(subscriptionEvent({ occurredAt: '2024-01-10T00:00:00.000Z' }));
+
+    expect(result).toEqual({ ok: true });
+    expect(calls[0]?.[0]).toMatchObject({ provider_event_at: '2024-01-10T00:00:00.000Z' });
+  });
+
+  it('applies the first event when no provider_event_at is stored yet', async () => {
+    const { builder: select } = selectBuilder({ data: null, error: null });
+    const { builder: upsert, calls } = terminalBuilder('upsert', { error: null });
+    fromMock.mockReturnValueOnce(select).mockReturnValueOnce(upsert);
+
+    const result = await applyBillingEvent(subscriptionEvent({ occurredAt: '2024-01-10T00:00:00.000Z' }));
+
+    expect(result).toEqual({ ok: true });
+    expect(calls[0]?.[0]).toMatchObject({ provider_event_at: '2024-01-10T00:00:00.000Z' });
+  });
+
+  it('applies an event carrying no occurredAt (unknown time can never be judged stale)', async () => {
+    const { builder: select } = selectBuilder({
+      data: { current_period_end: '2024-01-01T00:00:00.000Z', provider_event_at: '2024-01-05T00:00:00.000Z' },
+      error: null,
+    });
+    const { builder: upsert, calls } = terminalBuilder('upsert', { error: null });
+    fromMock.mockReturnValueOnce(select).mockReturnValueOnce(upsert);
+
+    const result = await applyBillingEvent(subscriptionEvent({ occurredAt: null }));
+
+    expect(result).toEqual({ ok: true });
+    // No new timestamp carried — the previously-stored one is preserved, not blanked.
+    expect(calls[0]?.[0]).toMatchObject({ provider_event_at: '2024-01-05T00:00:00.000Z' });
+  });
+
+  it('treats an equal occurredAt as new enough to apply (idempotent re-delivery)', async () => {
+    const { builder: select } = selectBuilder({
+      data: { current_period_end: '2024-01-01T00:00:00.000Z', provider_event_at: '2024-01-10T00:00:00.000Z' },
+      error: null,
+    });
+    const { builder: upsert } = terminalBuilder('upsert', { error: null });
+    fromMock.mockReturnValueOnce(select).mockReturnValueOnce(upsert);
+
+    const result = await applyBillingEvent(subscriptionEvent({ occurredAt: '2024-01-10T00:00:00.000Z' }));
+
+    expect(result).toEqual({ ok: true });
+    expect(fromMock).toHaveBeenCalledTimes(2);
   });
 });
 

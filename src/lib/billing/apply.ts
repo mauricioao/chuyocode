@@ -127,6 +127,17 @@ export async function markBillingEventProcessed(provider: string, eventId: strin
  * key). `current_period_end` is read back first so an event that carries no
  * period end (Paddle nulls it on cancellation) PRESERVES the last known
  * value instead of blanking the grace-period check in `getPlan` relies on.
+ *
+ * ORDERING GUARD: webhook deliveries are not guaranteed to arrive in the
+ * order the provider emitted them (retries, queueing, network jitter can all
+ * reorder two deliveries). `provider_event_at` (0019) stores the `occurredAt`
+ * of the last event actually applied; an incoming event strictly OLDER than
+ * that is a stale, out-of-order delivery — e.g. a delayed `canceled` arriving
+ * after a newer `activated` already granted access — and is skipped as a
+ * successful no-op rather than reverting the row to stale state. An event
+ * with no `occurredAt` (unknown time) can never be judged stale, so it always
+ * applies; an equal timestamp also applies (idempotent re-delivery of the
+ * exact same event).
  */
 async function applySubscriptionState(
   client: SupabaseClient,
@@ -135,7 +146,7 @@ async function applySubscriptionState(
   try {
     const { data: existing, error: selectError } = await client
       .from(USER_SUBSCRIPTIONS_TABLE)
-      .select('current_period_end')
+      .select('current_period_end, provider_event_at')
       .eq('user_id', event.userId)
       .maybeSingle();
 
@@ -144,9 +155,22 @@ async function applySubscriptionState(
       return { ok: false, error: 'db_error' };
     }
 
-    const existingPeriodEnd =
-      (existing as Record<string, unknown> | null)?.current_period_end as string | null | undefined;
+    const existingRow = existing as Record<string, unknown> | null;
+    const existingPeriodEnd = existingRow?.current_period_end as string | null | undefined;
+    const existingProviderEventAt = (existingRow?.provider_event_at as string | null | undefined) ?? null;
+
+    if (
+      event.occurredAt != null &&
+      existingProviderEventAt != null &&
+      new Date(event.occurredAt).getTime() < new Date(existingProviderEventAt).getTime()
+    ) {
+      // Stale, out-of-order delivery: a newer state is already applied.
+      // No-op, not a failure — the caller must still mark it processed.
+      return { ok: true };
+    }
+
     const currentPeriodEnd = event.currentPeriodEnd ?? existingPeriodEnd ?? null;
+    const providerEventAt = event.occurredAt ?? existingProviderEventAt;
 
     const { error } = await client.from(USER_SUBSCRIPTIONS_TABLE).upsert(
       {
@@ -157,6 +181,7 @@ async function applySubscriptionState(
         provider: event.provider,
         provider_ref: event.providerRef,
         provider_customer_ref: event.providerCustomerRef,
+        provider_event_at: providerEventAt,
       },
       { onConflict: 'user_id' },
     );
