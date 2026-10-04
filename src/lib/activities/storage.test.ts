@@ -12,12 +12,14 @@ const { clientState, results, fromMock } = vi.hoisted(() => {
     upload: { data: unknown; error: unknown };
     list: { data: unknown; error: unknown };
     copy: { data: unknown; error: unknown };
+    remove: { data: unknown; error: unknown };
   } = {
     createSignedUploadUrl: { data: { signedUrl: 'https://signed/upload', token: 'tok' }, error: null },
     createSignedUrl: { data: { signedUrl: 'https://signed/read' }, error: null },
     upload: { data: {}, error: null },
     list: { data: [], error: null },
     copy: { data: { path: 'copied' }, error: null },
+    remove: { data: [], error: null },
   };
 
   const createSignedUploadUrl = vi.fn(async () => results.createSignedUploadUrl);
@@ -25,12 +27,13 @@ const { clientState, results, fromMock } = vi.hoisted(() => {
   const upload = vi.fn(async () => results.upload);
   const list = vi.fn(async () => results.list);
   const copy = vi.fn(async () => results.copy);
-  const fromMock = vi.fn(() => ({ createSignedUploadUrl, createSignedUrl, upload, list, copy }));
+  const remove = vi.fn(async () => results.remove);
+  const fromMock = vi.fn(() => ({ createSignedUploadUrl, createSignedUrl, upload, list, copy, remove }));
 
   return {
     clientState: { available: true },
     results,
-    fromMock: Object.assign(fromMock, { createSignedUploadUrl, createSignedUrl, upload, list, copy }),
+    fromMock: Object.assign(fromMock, { createSignedUploadUrl, createSignedUrl, upload, list, copy, remove }),
   };
 });
 
@@ -48,6 +51,7 @@ import {
   signedReadUrl,
   uploadToUploadsBucket,
   countUserUploads,
+  removeAllUserUploads,
   copyToImagesBucket,
   copyToUploadsBucket,
   clearStorageClient,
@@ -69,6 +73,7 @@ beforeEach(() => {
   results.upload = { data: {}, error: null };
   results.list = { data: [], error: null };
   results.copy = { data: { path: 'copied' }, error: null };
+  results.remove = { data: [], error: null };
   clearStorageClient();
 });
 
@@ -180,6 +185,44 @@ describe('countUserUploads', () => {
   it('fails CLOSED to null when the service-role key is unconfigured', async () => {
     clientState.available = false;
     expect(await countUserUploads(USER)).toBeNull();
+  });
+});
+
+describe('removeAllUserUploads', () => {
+  it('lists then removes every object in the user folder', async () => {
+    results.list = { data: [{ name: 'a.webp' }, { name: 'b.webp' }], error: null };
+    expect(await removeAllUserUploads(USER)).toBe(true);
+    expect(fromMock).toHaveBeenCalledWith(UPLOADS_BUCKET);
+    expect(fromMock.list).toHaveBeenCalledWith(USER, { limit: MAX_UPLOADS_PER_USER });
+    expect(fromMock.remove).toHaveBeenCalledWith([`${USER}/a.webp`, `${USER}/b.webp`]);
+  });
+
+  it('returns true for an already-empty folder, without calling remove', async () => {
+    results.list = { data: [], error: null };
+    expect(await removeAllUserUploads(USER)).toBe(true);
+    expect(fromMock.remove).not.toHaveBeenCalled();
+  });
+
+  it('returns false for a malformed userId', async () => {
+    expect(await removeAllUserUploads('not-a-uuid')).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED to false on a list error', async () => {
+    results.list = { data: null, error: { message: 'down' } };
+    expect(await removeAllUserUploads(USER)).toBe(false);
+    expect(fromMock.remove).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED to false on a remove error', async () => {
+    results.list = { data: [{ name: 'a.webp' }], error: null };
+    results.remove = { data: null, error: { message: 'denied' } };
+    expect(await removeAllUserUploads(USER)).toBe(false);
+  });
+
+  it('fails CLOSED to false when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await removeAllUserUploads(USER)).toBe(false);
   });
 });
 
