@@ -318,7 +318,7 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     });
     const html = await res.text();
     expect(html).toContain('data-testid="guest-banner"');
-    expect(html).toContain('Jugando como invitado');
+    expect(html).toContain('Estás jugando como invitado');
     expect(html).toContain('data-testid="guest-sign-up-link"');
     expect(html).toContain('href="/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc"');
   });

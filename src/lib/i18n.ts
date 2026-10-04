@@ -331,7 +331,7 @@ export const UI_LABELS = {
       start: {
         pageTitle: 'Crear actividad',
         pageDescription: 'Elegir el tipo de contenido para una nueva actividad.',
-        heading: 'Elegir el punto de partida',
+        heading: 'Elige el punto de partida',
         worksheet: {
           title: 'Hoja de trabajo',
           description: 'Sube una hoja o PDF y marca dónde van las respuestas.',
@@ -341,7 +341,7 @@ export const UI_LABELS = {
           description:
             'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
         },
-        createError: 'No se pudo crear la actividad. Intentar de nuevo.',
+        createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
         pageTitle: 'Editar actividad',
@@ -709,10 +709,10 @@ export const UI_LABELS = {
         // Keyed by the endpoint's own reason codes (`duplicar.ts`'s header).
         duplicateErrors: {
           not_found: 'Esta actividad ya no está disponible.',
-          daily_limit: 'Se alcanzó el límite diario de duplicados. Intentar mañana.',
-          upload_limit: 'No hay espacio para copiar las imágenes de esta actividad. Liberar espacio antes de duplicar.',
-          copy_failed: 'No se pudo duplicar la actividad. Intentar de nuevo.',
-          create_failed: 'No se pudo duplicar la actividad. Intentar de nuevo.',
+          daily_limit: 'Se alcanzó el límite diario de duplicados. Inténtalo mañana.',
+          upload_limit: 'No hay espacio para copiar las imágenes de esta actividad. Libera espacio antes de duplicar.',
+          copy_failed: 'No se pudo duplicar la actividad. Inténtalo de nuevo.',
+          create_failed: 'No se pudo duplicar la actividad. Inténtalo de nuevo.',
         },
         // Credit line (D7): shown once a duplicate gets approved and
         // published, on ITS OWN practice page — the original's page shows
@@ -725,7 +725,7 @@ export const UI_LABELS = {
         // share sheet.
         share: 'Compartir',
         shareTitle: 'Compartir esta actividad',
-        shareHint: 'Escanear el código para abrir la actividad en otro dispositivo.',
+        shareHint: 'Escanea el código para abrir la actividad en otro dispositivo.',
         shareLink: 'Enlace',
         shareCopy: 'Copiar',
         shareCopied: 'Copiado',
@@ -736,11 +736,10 @@ export const UI_LABELS = {
         // Guest play: friendly line shown only to an anonymous visitor,
         // right below the header row — invites them to sign up without
         // blocking anything they can already do (play, check answers,
-        // share, present). IMPERSONAL, no second-person verb (gerund +
-        // infinitive, same register `src/lib/neutralSpanish.ts` enforces
-        // site-wide) — "Estás"/"Creá"/"Crea" all read as a tú/vos pick,
-        // which this codebase avoids at the root instead of choosing a side.
-        guestBanner: 'Jugando como invitado. Crear una cuenta gratis permite dar corazones y crear actividades propias.',
+        // share, present). Neutral Latin-American tuteo, same register
+        // `src/lib/neutralSpanish.ts` enforces site-wide (owner decision,
+        // 2026-10-04) — "Estás"/"Crea"/"tus" address the reader directly.
+        guestBanner: 'Estás jugando como invitado. Crea tu cuenta gratis para dar corazones y crear tus propias actividades.',
         guestSignUp: 'Crear cuenta',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
@@ -768,9 +767,9 @@ export const UI_LABELS = {
         // Keyed by the endpoint's own reason codes (`reportar.ts`'s header).
         errors: {
           self_report: 'No se puede reportar la propia actividad.',
-          invalid_reason: 'Elegir un motivo antes de enviar el reporte.',
+          invalid_reason: 'Elige un motivo antes de enviar el reporte.',
           invalid_details: 'Los detalles son demasiado largos.',
-          report_failed: 'No se pudo enviar el reporte. Intentar de nuevo.',
+          report_failed: 'No se pudo enviar el reporte. Inténtalo de nuevo.',
         },
       },
       // Author's own workspace (`/[lang]/mis-actividades`, PR D "Activities
@@ -938,7 +937,7 @@ export const UI_LABELS = {
         noLevel: 'Sin nivel',
         questionsCountOne: 'pregunta',
         questionsCountMany: 'preguntas',
-        scanHint: 'Escanear el código para abrir esta actividad en el teléfono.',
+        scanHint: 'Escanea el código para abrir esta actividad en el teléfono.',
         qrAlt: 'Código QR para abrir esta actividad en un teléfono',
         summaryTitle: '¡Listo!',
         restart: 'Volver a empezar',

@@ -29,7 +29,7 @@ const QR = '<svg data-testid="qr-svg" viewBox="0 0 45 45"><path d="M4,4h1v1h-1z"
 const labels: ShareLabels = {
   trigger: 'Compartir',
   title: 'Compartir este ejercicio',
-  hint: 'Escanear el código para abrir el ejercicio en otro dispositivo.',
+  hint: 'Escanea el código para abrir el ejercicio en otro dispositivo.',
   link: 'Enlace',
   copy: 'Copiar',
   copied: 'Copiado',

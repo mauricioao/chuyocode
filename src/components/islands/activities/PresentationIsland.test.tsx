@@ -77,7 +77,7 @@ describe('PresentationIsland — cover slide', () => {
     expect(cover.textContent).toContain('A2');
     expect(cover.textContent).toContain('2 preguntas');
     expect(screen.getByTestId('presentation-cover-qr')).toBeTruthy();
-    expect(cover.textContent).toContain('Escanear el código');
+    expect(cover.textContent).toContain('Escanea el código');
   });
 
   it('skips the QR block entirely when none was generated', () => {
