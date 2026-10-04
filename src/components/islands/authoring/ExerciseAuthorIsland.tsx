@@ -52,7 +52,7 @@ export const COPY = {
     addProse: 'Agregar texto de contexto',
     addMedia: 'Agregar imagen o audio',
     addRow: 'Agregar oración',
-    empty: 'Este ejercicio todavía no tiene partes. Agregar una para empezar.',
+    empty: 'Este ejercicio todavía no tiene partes. Agrega una para empezar.',
     previewHeading: 'Vista previa',
     termsLabel: 'Acepto los términos de publicación (obligatorio en la primera publicación).',
     saveDraft: 'Guardar borrador',

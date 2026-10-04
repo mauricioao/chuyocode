@@ -115,7 +115,7 @@ describe('SubmitForReviewDialog', () => {
         lang="es"
         open
         submitting={false}
-        errorMessage="No se pudo enviar la actividad. Intentar de nuevo."
+        errorMessage="No se pudo enviar la actividad. Inténtalo de nuevo."
         onConfirm={() => {}}
         onCancel={() => {}}
       />,

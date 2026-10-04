@@ -355,10 +355,10 @@ export const UI_LABELS = {
         saving: 'Guardando…',
         saved: 'Cambios guardados',
         unsaved: 'Cambios sin guardar',
-        saveError: 'No se pudo guardar. Intentar de nuevo.',
+        saveError: 'No se pudo guardar. Inténtalo de nuevo.',
         saveRetry: 'Reintentar',
-        unloadWarning: 'Hay cambios sin guardar. Van a perderse si se cierra la página.',
-        blocksEmpty: 'Todavía no hay bloques. Agregar el primero para empezar.',
+        unloadWarning: 'Tienes cambios sin guardar. Vas a perderlos si cierras la página.',
+        blocksEmpty: 'Todavía no hay bloques. Agrega el primero para empezar.',
         // Empty block list (creator polish round 4, owner feedback #3): the
         // list itself always shows the picker right below this line — no
         // separate "+" click needed first (unlike `blocksEmpty` above, which
@@ -419,7 +419,7 @@ export const UI_LABELS = {
         // Inline messages next to the exact block/zone `enviar.ts` points
         // back to on a rejected submit (creator polish round 3, `t.submitErrors`'s
         // sibling, keyed by `findIncompleteBlock`'s own reason codes).
-        incompleteNoImage: 'Esta hoja de trabajo todavía no tiene una imagen. Subir un archivo antes de enviarla.',
+        incompleteNoImage: 'Esta hoja de trabajo todavía no tiene una imagen. Sube un archivo antes de enviarla.',
         incompleteNoZones: 'Esta hoja de trabajo necesita al menos una zona de respuesta.',
         incompleteNoAnswers: 'Esta zona todavía no tiene una respuesta.',
         incompleteTooFewOptions: 'Esta zona de opción múltiple necesita al menos dos opciones.',
@@ -457,13 +457,13 @@ export const UI_LABELS = {
         submitting: 'Enviando…',
         // Keyed by the endpoint's own reason codes (`enviar.ts`'s header).
         submitErrors: {
-          rights_required: 'Hace falta confirmar el derecho de uso del material.',
-          invalid_title: 'Poner un título antes de enviar la actividad.',
-          no_blocks: 'Agregar al menos un bloque antes de enviar la actividad.',
+          rights_required: 'Debes confirmar que tienes el derecho de usar este material.',
+          invalid_title: 'Pon un título antes de enviar la actividad.',
+          no_blocks: 'Agrega al menos un bloque antes de enviar la actividad.',
           missing_zones: 'Cada hoja de trabajo necesita al menos una zona de respuesta.',
           invalid_blocks: 'El contenido de la actividad no es válido.',
           no_draft: 'No hay cambios nuevos para enviar a revisión.',
-          submit_failed: 'No se pudo enviar la actividad. Intentar de nuevo.',
+          submit_failed: 'No se pudo enviar la actividad. Inténtalo de nuevo.',
         },
       },
       worksheet: {
@@ -484,14 +484,14 @@ export const UI_LABELS = {
         // rendering thumbnails fails and as a manual "type a page number"
         // escape hatch, e.g. past the 40-page thumbnail cap).
         pdfThumbnailsLoading: 'Generando miniaturas…',
-        pdfThumbnailsHint: 'Elegir hasta 10 páginas para agregar como bloques.',
+        pdfThumbnailsHint: 'Elige hasta 10 páginas para agregar como bloques.',
         pdfSelectAll: 'Seleccionar todas',
         pdfSelectedCountLabel: 'seleccionadas',
         pdfAddPagesPrefix: 'Agregar',
         pdfPageCountOne: 'página',
         pdfPageCountMany: 'páginas',
         pdfThumbnailsTruncated:
-          'Este PDF tiene más de 40 páginas: se muestran las primeras 40. Para elegir otra página, usar el número de página.',
+          'Este PDF tiene más de 40 páginas: se muestran las primeras 40. Para elegir otra página, usa el número de página.',
         pdfThumbnailsSwitchToText: 'Elegir por número de página',
         // Task progress panel (coherent loading states, item 4): replaces
         // the drop zone entirely while a PDF/image task runs — see
@@ -514,10 +514,10 @@ export const UI_LABELS = {
           not_webp: 'La imagen no pudo procesarse.',
           invalid_dimensions: 'La imagen debe medir entre 200 y 2400 píxeles de lado.',
           upload_limit_reached: 'Se alcanzó el límite de archivos subidos.',
-          upload_failed: 'No se pudo subir el archivo. Intentar de nuevo.',
+          upload_failed: 'No se pudo subir el archivo. Inténtalo de nuevo.',
           pdf_failed: 'No se pudo procesar el PDF.',
         },
-        addZoneHint: 'Dibujar un recuadro sobre la imagen para agregar una respuesta.',
+        addZoneHint: 'Dibuja un recuadro sobre la imagen para agregar una respuesta.',
         zoneKindText: 'Texto',
         zoneKindChoice: 'Opción',
         zoneKindLabel: 'Tipo de respuesta',
@@ -545,7 +545,7 @@ export const UI_LABELS = {
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
         noZonesYet: 'Todavía no hay zonas dibujadas sobre esta imagen.',
-        panelEmpty: 'Dibujar un recuadro sobre la hoja o seleccionar uno para editarlo.',
+        panelEmpty: 'Dibuja un recuadro sobre la hoja o selecciona uno para editarlo.',
         panelEmptyHint:
           'Atajos: V para la herramienta Zona, H para Mano, Enter o N para crear una zona centrada en lo visible, flechas para mover una zona seleccionada, Suprimir para eliminarla, rueda o los botones de abajo para hacer zoom.',
         zoomOut: 'Alejar',
@@ -796,7 +796,7 @@ export const UI_LABELS = {
         deleteConfirmBody: 'Esta acción no se puede deshacer.',
         deleteConfirmCancel: 'Cancelar',
         deleteConfirmAccept: 'Eliminar',
-        deleteError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
+        deleteError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
       },
       // Public feed (`/[lang]/ingles/actividades`, PR D "Activities
       // practice") — live activities only, newest published first. Under
@@ -862,7 +862,7 @@ export const UI_LABELS = {
         tabReported: 'Reportadas',
         empty: 'No hay actividades pendientes de revisión.',
         emptyReported: 'No hay actividades reportadas.',
-        selectPrompt: 'Elegir un elemento de la lista para revisarlo.',
+        selectPrompt: 'Elige un elemento de la lista para revisarlo.',
         byAuthor: 'Autor',
         submittedAt: 'Enviado',
         firstPublication: 'Primera publicación',
@@ -881,7 +881,7 @@ export const UI_LABELS = {
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
         approving: 'Aprobando…',
-        approveError: 'No se pudo aprobar la actividad. Intentar de nuevo.',
+        approveError: 'No se pudo aprobar la actividad. Inténtalo de nuevo.',
         reject: 'Rechazar',
         rejectDialogTitle: 'Rechazar esta actividad',
         rejectQuickPicksLabel: 'Motivos frecuentes',
@@ -894,20 +894,20 @@ export const UI_LABELS = {
         rejectNoteLabel: 'Nota para el autor',
         rejectNotePlaceholder: 'Explicar qué hay que corregir…',
         rejecting: 'Rechazando…',
-        rejectError: 'No se pudo rechazar la actividad. Intentar de nuevo.',
-        rejectNoteRequired: 'Escribir una nota antes de rechazar.',
+        rejectError: 'No se pudo rechazar la actividad. Inténtalo de nuevo.',
+        rejectNoteRequired: 'Escribe una nota antes de rechazar.',
         reportsLabel: 'Reportes',
         reportDetailsNone: 'Sin detalles adicionales.',
         restore: 'Restaurar',
         restoreConfirmTitle: '¿Restaurar esta actividad?',
         restoreConfirmBody: 'Vuelve a quedar publicada para el público.',
         restoring: 'Restaurando…',
-        restoreError: 'No se pudo restaurar la actividad. Intentar de nuevo.',
+        restoreError: 'No se pudo restaurar la actividad. Inténtalo de nuevo.',
         remove: 'Eliminar',
         removeConfirmTitle: '¿Eliminar esta actividad?',
         removeConfirmBody: 'Esta acción no se puede deshacer.',
         removing: 'Eliminando…',
-        removeError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
+        removeError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
         confirmCancel: 'Cancelar',
         confirmAccept: 'Confirmar',
       },
