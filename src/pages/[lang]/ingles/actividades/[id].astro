@@ -37,8 +37,10 @@ import ShareDialog from '@components/islands/ShareDialog';
 import { HeartIcon } from '@phosphor-icons/react/dist/ssr/Heart';
 import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { PrinterIcon } from '@phosphor-icons/react/dist/ssr/Printer';
+import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
+import { hasPresentableQuiz } from '@lib/activities/presentationSlides';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { hasHeartedActivity } from '@lib/activities/hearts';
 import { qrSvg, shareUrl } from '@lib/qr';
@@ -85,6 +87,15 @@ const hearted = canHeart ? await hasHeartedActivity(activity.id, user!.id) : fal
 // `DuplicateActivityButton`'s own header for why this gate differs from
 // `canHeart`/`canReport` above.
 const canDuplicate = user !== null;
+
+/**
+ * "Presentar" (presentation mode v1): shown only when there is at least one
+ * question to show — `hasPresentableQuiz` (shared with
+ * `presentar.astro`'s own defensive 404, `@lib/activities/presentationSlides`)
+ * is the single source of truth for that, so this button's visibility can
+ * never drift from what the route itself would actually serve.
+ */
+const canPresent = hasPresentableQuiz(activity.blocks);
 
 function heartsLabel(count: number): string {
   return `${count} ${count === 1 ? t.heartsOne : t.heartsMany}`;
@@ -206,6 +217,20 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           }
           {canDuplicate && <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />}
           {canReport && <ReportActivityButton client:load lang={lang} activityId={activity.id} />}
+          {/* "Presentar" (presentation mode v1): a plain link to the
+              full-screen, projector-facing deck — same access rules as this
+              page, and hidden entirely when there is nothing to present
+              (`canPresent`, above). */}
+          {canPresent && (
+            <a
+              href={`/${lang}/ingles/actividades/${activity.id}/presentar`}
+              data-testid="activity-present-link"
+              class="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <PresentationIcon aria-hidden="true" />
+              {t.present}
+            </a>
+          )}
           {/* "Imprimir" (D6): a plain link to the print-optimized page —
               same access rules as this page (private/no-store, 404 when not
               visible), so no extra gate is needed here either. */}
