@@ -2,7 +2,8 @@
  * GET /sitemap.xml (SEO basics pass).
  *
  * Lists every indexable PUBLIC url: home, libros (index + every book slug),
- * noticias (index + every news slug), legal pages, and the practice page of
+ * noticias (index + every news slug), premium (pricing page), legal pages,
+ * and the practice page of
  * every PUBLISHED community activity (guest play) — never the gated
  * sections (`/ingles` hub/catalog, `/cursos`, `/crear`, `/mis-actividades`,
  * `/admin`, `/auth`), which `@lib/seo.ts#isNoindexPath` already keeps out of
@@ -98,6 +99,7 @@ export const GET: APIRoute = async ({ site }) => {
     urlEntries(origin, sharedPath('/')),
     urlEntries(origin, sharedPath('/libros')),
     urlEntries(origin, sharedPath('/noticias')),
+    urlEntries(origin, sharedPath('/premium')),
     urlEntries(origin, sharedPath('/legal/terms')),
     urlEntries(origin, sharedPath('/legal/privacy')),
   ];

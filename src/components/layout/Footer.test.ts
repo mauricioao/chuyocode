@@ -44,6 +44,28 @@ describe('Footer.astro — legal links', () => {
   });
 });
 
+// Premium pricing page link (owner decision 2026-10-04) — footer only, never
+// the header (that stays untouched by this change).
+describe('Footer.astro — Premium link', () => {
+  it('links to /[lang]/premium in es', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('href="/es/premium"');
+    expect(html).toContain(escapeHtml(UI_LABELS.es.footer.premium));
+  });
+
+  it('links to /[lang]/premium in en', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'en' },
+    });
+    expect(html).toContain('href="/en/premium"');
+    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.premium));
+  });
+});
+
 // SEO basics pass: the copyright year used to be a hardcoded "2026" literal
 // in the markup — it would have gone stale the moment the calendar turned.
 // Pinning the system clock to a year that is NOT today's proves the value is

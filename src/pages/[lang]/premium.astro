@@ -1,0 +1,193 @@
+---
+/**
+ * Premium pricing page — `/[lang]/premium` (SSR).
+ *
+ * Marketing/pricing page for the Inglés product's upcoming Premium tier
+ * (owner decision 2026-10-04). Payments are not live yet (Paddle pending), so
+ * every purchase CTA reads "Próximamente"/"Coming soon" and is a plain,
+ * non-interactive `<span aria-disabled="true">` — never an `<a>` to a
+ * checkout that does not exist yet. Same disabled-CTA shape already used by
+ * the exhausted-page arrows in `ingles/actividades/index.astro`
+ * (`global.css` already styles `[role="button"][aria-disabled="true"]` with
+ * `cursor: not-allowed`; this page also dims opacity so it reads as inert at
+ * a glance, not just on hover). Only the Free plan's "Empieza
+ * gratis"/"Start for free" is a real link, to the existing (login-gated)
+ * activities feed — nothing else here is a dead link.
+ *
+ * Public, cacheable with the SAME policy the home page uses
+ * (`publicCachePolicy`, `@lib/cache.ts`): this page never reads
+ * `Astro.locals.user` and is byte-identical for every visitor, in both
+ * languages — see `_premium.test.ts`'s own "public cache safety" block.
+ *
+ * Visual scope: the whole page opts into the light Inglés palette
+ * (`theme="ingles"` on `BaseLayout`, same as `ingles/index.astro`) since this
+ * is part of the English product, not the dark brand chrome. Label/headline/
+ * intro layering and the CTA classes are lifted from the home's Inglés
+ * banner (`[lang]/index.astro`) so this page reads as the same "papel y
+ * tinta" product, not a bolted-on page.
+ *
+ * SEO: canonical/hreflang come from `BaseLayout` automatically (derived from
+ * the real request path, `@lib/seo.ts`); this route is not in
+ * `NOINDEX_SECTIONS` and is not `ingles/**`, so it is indexable with no extra
+ * wiring. Listed in `sitemap.xml.ts`'s static entries.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import SectionHeading from '@components/ui/SectionHeading.astro';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { publicCachePolicy } from '@lib/cache';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Public edge cache (see file header): byte-identical for every visitor, so
+// this is safe to cache at Netlify's edge exactly like the home page.
+const cacheHeaders = publicCachePolicy();
+for (const [name, value] of Object.entries(cacheHeaders)) {
+  Astro.response.headers.set(name, value);
+}
+
+const t = UI_LABELS[lang].premium;
+
+// Shared button classes — lifted verbatim from the home's Inglés banner
+// (`[lang]/index.astro`) so these CTAs match that section's look exactly.
+const PRIMARY_CTA =
+  'inline-flex h-11 items-center justify-center rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground transition-colors duration-(--transition-duration-control) hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none';
+const OUTLINE_CTA =
+  'inline-flex h-11 items-center justify-center rounded-lg border border-foreground/25 px-6 text-sm font-semibold text-foreground transition-colors duration-(--transition-duration-control) hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none';
+/** Same shape, but inert — no `href`, `aria-disabled`, dimmed and inert to pointer/hover. */
+function disabledCta(base: string): string {
+  return `${base} pointer-events-none cursor-not-allowed opacity-60`;
+}
+---
+
+<BaseLayout lang={lang} title={`${t.label} — ChuyoCode`} description={t.intro} theme="ingles">
+  <div class="flex flex-col">
+    <section class="reveal mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-8 sm:py-12" data-testid="premium-hero">
+      <span class="text-xs font-semibold uppercase tracking-[0.25em] text-accent-ink">
+        {t.label}
+      </span>
+      <h1 class="font-display max-w-3xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl xl:text-5xl">
+        {t.title}
+      </h1>
+      <p class="max-w-xl text-base text-muted-foreground sm:text-lg">{t.intro}</p>
+    </section>
+
+    <section class="reveal mx-auto w-full max-w-5xl px-4 pb-4 sm:pb-8" aria-label={t.label} data-testid="premium-plans">
+      <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {/* Free — the only real link on the page: today's actual product. */}
+        <div
+          class="flex flex-col gap-4 rounded-(--radius-card) border border-border bg-card p-6 text-card-foreground shadow-elevation-1"
+          data-testid="premium-plan-free"
+        >
+          <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold">{t.plans.free.name}</h2>
+            <p class="text-3xl font-extrabold">{t.plans.free.price}</p>
+            <p class="text-sm text-muted-foreground">{t.plans.free.note}</p>
+          </div>
+          <a href={`/${lang}/ingles/actividades`} class={`${PRIMARY_CTA} mt-auto`} data-testid="premium-cta-free">
+            {t.plans.free.cta}
+          </a>
+        </div>
+
+        {/* Annual — recommended/highlighted; CTA is inert (payments pending). */}
+        <div
+          class="relative flex flex-col gap-4 rounded-(--radius-card) border-2 border-accent-ink bg-card p-6 text-card-foreground shadow-elevation-2"
+          data-testid="premium-plan-annual"
+        >
+          <span
+            class="absolute -top-3 left-6 rounded-full bg-accent-ink px-3 py-1 text-xs font-semibold text-background"
+            data-testid="premium-plan-annual-badge"
+          >
+            {t.recommendedBadge}
+          </span>
+          <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold">{t.plans.annual.name}</h2>
+            <p class="text-3xl font-extrabold">{t.plans.annual.price}</p>
+            <p class="text-sm text-muted-foreground">{t.plans.annual.note}</p>
+          </div>
+          <span
+            class={`${disabledCta(PRIMARY_CTA)} mt-auto`}
+            aria-disabled="true"
+            data-testid="premium-cta-annual"
+          >
+            {t.comingSoon}
+          </span>
+        </div>
+
+        {/* Monthly — CTA is inert (payments pending). */}
+        <div
+          class="flex flex-col gap-4 rounded-(--radius-card) border border-border bg-card p-6 text-card-foreground shadow-elevation-1"
+          data-testid="premium-plan-monthly"
+        >
+          <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold">{t.plans.monthly.name}</h2>
+            <p class="text-3xl font-extrabold">{t.plans.monthly.price}</p>
+            <p class="text-sm text-muted-foreground">{t.plans.monthly.note}</p>
+          </div>
+          <span
+            class={`${disabledCta(OUTLINE_CTA)} mt-auto`}
+            aria-disabled="true"
+            data-testid="premium-cta-monthly"
+          >
+            {t.comingSoon}
+          </span>
+        </div>
+      </div>
+
+      <p class="mt-6 max-w-2xl text-sm text-muted-foreground" data-testid="premium-founder-note">
+        {t.founderNote}
+      </p>
+      <p class="mt-2 max-w-2xl text-xs text-muted-foreground" data-testid="premium-price-disclaimer">
+        {t.priceDisclaimer}
+      </p>
+    </section>
+
+    <section class="reveal mx-auto w-full max-w-5xl px-4" aria-labelledby="premium-comparison-heading">
+      <SectionHeading id="premium-comparison-heading" title={t.comparison.heading} />
+      <div class="overflow-x-auto rounded-(--radius-card) border border-border" data-testid="premium-comparison-table">
+        <table class="w-full border-collapse text-left text-sm">
+          <caption class="sr-only">{t.comparison.heading}</caption>
+          <thead>
+            <tr class="border-b border-border bg-surface-soft">
+              <th scope="col" class="px-4 py-3 font-semibold">{t.comparison.featureHeader}</th>
+              <th scope="col" class="px-4 py-3 font-semibold">{t.comparison.freeHeader}</th>
+              <th scope="col" class="px-4 py-3 font-semibold">{t.comparison.premiumHeader}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              t.comparison.rows.map((row) => (
+                <tr class="border-b border-border last:border-0">
+                  <th scope="row" class="px-4 py-3 font-medium">
+                    {row.feature}
+                  </th>
+                  <td class="px-4 py-3 text-muted-foreground">{row.free}</td>
+                  <td class="px-4 py-3 text-muted-foreground">{row.premium}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="reveal mx-auto w-full max-w-3xl px-4 pb-12" aria-labelledby="premium-faq-heading">
+      <SectionHeading id="premium-faq-heading" title={t.faq.heading} />
+      <dl class="flex flex-col gap-6" data-testid="premium-faq">
+        {
+          t.faq.items.map((item) => (
+            <div>
+              <dt class="font-semibold">{item.q}</dt>
+              <dd class="mt-1 text-muted-foreground">{item.a}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+  </div>
+</BaseLayout>

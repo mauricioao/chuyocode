@@ -38,7 +38,7 @@ describe('GET /sitemap.xml', () => {
     );
   });
 
-  it('always includes the static entries: home, libros index, noticias index, legal pages', async () => {
+  it('always includes the static entries: home, libros index, noticias index, premium, legal pages', async () => {
     const res = await GET(ctx('https://chuyocode.netlify.app/'));
     const xml = await res.text();
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/</loc>');
@@ -46,6 +46,8 @@ describe('GET /sitemap.xml', () => {
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/libros</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/libros</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/noticias</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/premium</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/premium</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/terms</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/privacy</loc>');
   });

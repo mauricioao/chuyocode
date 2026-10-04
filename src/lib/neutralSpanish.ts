@@ -62,6 +62,11 @@ export const NON_VOSEO_ACCENTED_WORDS = [
   // Same third-person future tense shape as `será`/`estará`/`podrá` above
   // ("un enlace te llegará" — the link, not the reader, is the subject).
   'llegará',
+  // FIRST-person singular future ("¿Cuándo podré pagar?" — the visitor
+  // asking about themselves, "yo podré"), not a second-person form at all:
+  // the future tense's `-é` ending no more forks tú/vos than `podrá`'s `-á`
+  // does above. Premium pricing page FAQ (owner decision 2026-10-04).
+  'podré',
   'quizá',
   'café',
   'sí',

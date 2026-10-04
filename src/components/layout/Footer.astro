@@ -14,6 +14,11 @@
  * (`UI_LABELS`). The previous inline FOOTER_LABELS map was removed once
  * i18n.ts landed (Phase 3).
  *
+ * "Premium" link (pricing page, owner decision 2026-10-04): points at the
+ * new `/[lang]/premium` route, listed first since it is a product link, not
+ * legal boilerplate like the two links after it. Footer-only on purpose —
+ * `Header.astro` is not touched by this change.
+ *
  * Cleaner transitions (navigation-without-flicker PR): `transition:animate
  * ="none"` excludes the footer from the page's fade animation — only
  * `<main>` (`BaseLayout.astro`) cross-fades on navigation.
@@ -34,6 +39,7 @@ const base = `/${lang}`;
 const currentYear = new Date().getFullYear();
 
 const secondaryLinks = [
+  { href: `${base}/premium`, label: labels.premium },
   { href: `${base}/legal/terms`, label: labels.terms },
   { href: `${base}/legal/privacy`, label: labels.privacy },
 ];
