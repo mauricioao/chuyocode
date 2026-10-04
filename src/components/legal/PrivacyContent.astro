@@ -3,14 +3,22 @@
  * PrivacyContent — Privacy Policy + Cookies body (es/en) for
  * /[lang]/legal/privacy.
  *
- * Aligned with Peru's Ley N° 29733 (Protección de Datos Personales) and Google
- * AdSense publisher requirements: identifies the data controller, states data
- * collected and purpose, dedicates a section to cookies (first-party + Google
- * third-party), covers third-party advertising and opt-out, and lists ARCO
- * rights (acceso, rectificación, cancelación, oposición).
+ * Aligned with Peru's Ley N° 29733 (Protección de Datos Personales) and the
+ * facts verified in the codebase at drafting time: the account/activities
+ * platform (Supabase Auth, community activities, curated exercises),
+ * Cloudflare Turnstile, the cookies the Site actually sets
+ * (`src/lib/pass.ts`, `src/lib/adStartCookie.ts`), the providers in use
+ * today, Premium billing (Paddle, pending), and account deletion
+ * (`src/lib/accountDeletion.ts` / migration 0020). Identifies the data
+ * controller, states data collected and purpose, dedicates a section to
+ * cookies and local storage (first-party + Google third-party), covers
+ * third-party advertising and opt-out, and lists ARCO rights (acceso,
+ * rectificación, cancelación, oposición).
  *
  * DISCLAIMER: solid industry-standard structure, NOT lawyer-reviewed. Have it
- * reviewed by a legal professional before production use with live ads.
+ * reviewed by a legal professional (and confirmed by the owner — see the open
+ * points in this change's own report) before production use, especially
+ * before Premium payments go live.
  */
 import type { Lang } from '@lib/i18n';
 
@@ -64,13 +72,28 @@ const isEs = lang === 'es';
             2. Datos que recolectamos
           </h2>
           <p>
-            El Sitio está diseñado para funcionar con la mínima recolección de
-            datos posible. No solicitamos registro ni datos de identificación para
-            navegar. Podemos recolectar de forma automática: dirección IP,
-            identificadores de cookies, tipo de navegador y dispositivo, y datos de
-            navegación (páginas vistas, descargas realizadas). La publicidad de
-            terceros puede recolectar datos adicionales según sus propias
-            políticas.
+            Si creas una cuenta: tu correo electrónico y, si usas Google para
+            entrar, el nombre y la foto de perfil públicos que Google nos
+            entrega. Si creas o subes contenido: tus actividades y ejercicios,
+            las imágenes o páginas de PDF que subes, tus explicaciones «¿Por
+            qué?», los reportes que presentas y los "me gusta" que das.
+            También registramos, por cada actividad, como máximo una vista por
+            usuario cada 30 minutos, para un conteo público de popularidad.
+          </p>
+          <p>
+            Automáticamente podemos recolectar: tu dirección IP,
+            identificadores de cookies, el tipo de navegador y dispositivo, y
+            datos de navegación (páginas vistas, descargas realizadas). El
+            desafío anti-bots Cloudflare Turnstile puede procesar señales
+            técnicas de tu dispositivo para distinguirte de un robot al
+            iniciar sesión, registrarte o restablecer tu contraseña. La
+            publicidad de terceros puede recolectar datos adicionales según
+            sus propias políticas.
+          </p>
+          <p>
+            No recolectamos las respuestas que das en los ejercicios: se
+            califican en tu propio navegador y nunca se envían a nuestros
+            servidores.
           </p>
         </section>
 
@@ -79,54 +102,114 @@ const isEs = lang === 'es';
             3. Finalidad del tratamiento
           </h2>
           <p>
-            Utilizamos los datos para: (a) permitir el funcionamiento del Sitio y
-            el acceso recompensado por publicidad; (b) contabilizar descargas para
-            elaborar rankings de contenido ("Más vistos"); (c) mostrar publicidad,
-            incluida publicidad personalizada de terceros; y (d) obtener métricas
-            agregadas de uso para mejorar el servicio.
+            Utilizamos los datos para: (a) crear y operar tu cuenta y
+            permitirte usar las actividades y ejercicios; (b) moderar el
+            contenido que se publica y atender reportes; (c) contabilizar "me
+            gusta" y vistas para mostrar rankings de contenido; (d) dar acceso
+            recompensado por publicidad a ciertas descargas; (e) mostrar
+            publicidad, incluida publicidad personalizada de terceros; (f)
+            gestionar tu suscripción Premium, cuando actives los pagos; y (g)
+            obtener métricas agregadas de uso para mejorar el servicio.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            4. Cookies
+            4. Menores de edad
           </h2>
           <p>
-            Una cookie es un pequeño archivo que se almacena en tu navegador. El
-            Sitio utiliza:
+            Conforme a la Ley N° 29733, tratar datos personales de un menor de
+            14 años requiere el consentimiento previo de su padre, madre o
+            apoderado. Por eso, un menor de 14 años necesita ese consentimiento
+            para crear una cuenta. Un menor puede, sin necesidad de cuenta ni
+            consentimiento, jugar una actividad que su profesor comparta con
+            él mediante un enlace: en ese caso no recolectamos ningún dato
+            suyo (ver "Juego como invitado" en los Términos y Condiciones).
           </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Cookies y almacenamiento local
+          </h2>
+          <p>Usamos:</p>
           <ul class="ml-5 flex list-disc flex-col gap-2">
             <li>
-              <strong class="text-zinc-100">Cookies técnicas propias:</strong>{' '}
-              necesarias para el funcionamiento. Por ejemplo, la cookie de acceso
-              recompensado (que recuerda que viste un anuncio para no repetirlo por
-              un período) y cookies para evitar contar la misma descarga varias
-              veces. Sin estas, el Sitio no funciona correctamente.
+              <strong class="text-zinc-100">Cookies de sesión de Supabase Auth:</strong>{' '}
+              te mantienen con la sesión iniciada.
             </li>
             <li>
-              <strong class="text-zinc-100">Cookies de terceros:</strong>{' '}
-              proveedores como Google (AdSense / Ad Manager y, en su caso,
-              Analytics) instalan cookies para mostrar y medir publicidad, incluida
-              publicidad personalizada. Estas se rigen por las políticas de dichos
-              proveedores.
+              <strong class="text-zinc-100">chu_pass:</strong> cookie técnica
+              propia que registra un pase de acceso de 24 horas tras ver un
+              anuncio recompensado.
+            </li>
+            <li>
+              <strong class="text-zinc-100">chu_ad_start:</strong> cookie
+              técnica propia, de corta duración, que mide el tiempo mientras
+              ves ese anuncio.
+            </li>
+            <li>
+              <strong class="text-zinc-100">Cloudflare Turnstile:</strong> sus
+              propias cookies de desafío, cuando el widget se carga (inicio de
+              sesión, registro, restablecimiento de contraseña).
+            </li>
+            <li>
+              <strong class="text-zinc-100">Cookies de terceros:</strong> redes
+              publicitarias, principalmente Google, para mostrar y medir
+              publicidad, incluida publicidad personalizada. Estas se rigen
+              por las políticas de dichos proveedores.
             </li>
           </ul>
           <p>
-            Puedes gestionar o eliminar las cookies desde la configuración de tu
-            navegador. Bloquear las cookies técnicas puede afectar el
-            funcionamiento del Sitio.
+            Además, guardamos en el almacenamiento local de tu navegador
+            (localStorage/sessionStorage, que nunca sale de tu dispositivo ni
+            llega a nuestros servidores) tus preferencias de interfaz: la voz
+            elegida para la lectura en voz alta, la posición de la barra de
+            herramientas del editor, qué consejos de primer uso ya viste, y una
+            caché breve de tu estado de sesión. Hoy no usamos ninguna cookie de
+            analítica ni de seguimiento publicitario propio, fuera de la red
+            publicitaria mencionada arriba.
+          </p>
+          <p>
+            Puedes gestionar o eliminar las cookies desde la configuración de
+            tu navegador; bloquear las cookies técnicas puede impedir que el
+            Sitio funcione correctamente.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            5. Publicidad de terceros
+            6. Proveedores que procesan datos por nosotros
+          </h2>
+          <p>
+            Hoy usamos: Netlify (alojamiento, funciones de servidor y
+            registros), Supabase (autenticación, base de datos y
+            almacenamiento de archivos), Sanity (contenido de libros y
+            noticias), Cloudflare (el desafío Turnstile) y Google (inicio de
+            sesión). Como estos proveedores operan sus propios servidores, tus
+            datos pueden procesarse fuera del Perú, bajo las medidas de
+            seguridad propias de cada proveedor.
+          </p>
+          <p>
+            Cuando los activemos, usaremos además: Paddle como comerciante
+            registrado para los pagos de Premium (Paddle recibe y procesa los
+            datos de tu pago directamente; nosotros no), un proveedor de
+            correo para los mensajes relacionados con tu cuenta, una
+            herramienta de analítica respetuosa de la privacidad, y una
+            herramienta de monitoreo de errores.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            7. Publicidad de terceros
           </h2>
           <p>
             El Sitio muestra publicidad de redes de terceros, principalmente
-            Google. Estos proveedores pueden usar cookies e identificadores para
-            mostrar anuncios basados en tus visitas a este y otros sitios. Puedes
-            configurar tus preferencias de anuncios personalizados de Google en{' '}
+            Google. Estos proveedores pueden usar cookies e identificadores
+            para mostrar anuncios basados en tus visitas a este y otros
+            sitios. Puedes configurar tus preferencias de anuncios
+            personalizados de Google en{' '}
             <a
               class="text-primary hover:underline"
               href="https://adssettings.google.com"
@@ -150,12 +233,33 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            6. Tus derechos (ARCO)
+            8. Eliminación de tu cuenta y tus datos
           </h2>
           <p>
-            Conforme a la Ley N° 29733, tienes derecho de acceso, rectificación,
-            cancelación y oposición sobre tus datos personales. Puedes ejercerlos
-            escribiendo a{' '}
+            Puedes eliminar tu cuenta tú mismo en cualquier momento, desde sus
+            ajustes (ver "Eliminación de tu cuenta" en los Términos y
+            Condiciones para el detalle completo). Al hacerlo se eliminan tus
+            datos personales asociados: tus borradores, tus "me gusta", tu
+            historial de vistas y tus archivos privados subidos. Tus
+            actividades y ejercicios ya publicados permanecen disponibles
+            atribuidos a "ChuyoCode", conservando solo un identificador interno
+            sin tu nombre ni tu correo. Los reportes que hayas presentado se
+            conservan sin tu identidad. Tu suscripción Premium o tus compras se
+            eliminan junto con tu cuenta; el procesador de pagos conserva sus
+            propios comprobantes conforme a sus propias obligaciones legales.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            9. Tus derechos (ARCO)
+          </h2>
+          <p>
+            Conforme a la Ley N° 29733, tienes derecho de acceso,
+            rectificación, cancelación y oposición sobre tus datos personales.
+            El derecho de cancelación puedes ejercerlo tú mismo eliminando tu
+            cuenta (sección anterior); para cualquiera de los cuatro puedes
+            también escribir a{' '}
             {ownerEmail ? (
               <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
                 {ownerEmail}
@@ -170,24 +274,26 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            7. Conservación y seguridad
+            10. Conservación y seguridad
           </h2>
           <p>
             Conservamos los datos solo durante el tiempo necesario para las
-            finalidades descritas y aplicamos medidas técnicas y organizativas
-            razonables para protegerlos. Ningún sistema es completamente infalible,
-            por lo que no podemos garantizar seguridad absoluta.
+            finalidades descritas — ver la sección anterior para lo que ocurre
+            específicamente al eliminar tu cuenta — y aplicamos medidas
+            técnicas y organizativas razonables para protegerlos. Ningún
+            sistema es completamente infalible, por lo que no podemos
+            garantizar seguridad absoluta.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            8. Cambios en esta política
+            11. Cambios en esta política
           </h2>
           <p>
-            Podemos actualizar esta Política de Privacidad en cualquier momento.
-            Los cambios rigen desde su publicación en el Sitio. Te recomendamos
-            revisarla periódicamente.
+            Podemos actualizar esta Política de Privacidad en cualquier
+            momento. Los cambios rigen desde su publicación en el Sitio. Te
+            recomendamos revisarla periódicamente.
           </p>
         </section>
       </>
@@ -221,12 +327,26 @@ const isEs = lang === 'es';
             2. Data we collect
           </h2>
           <p>
-            The Site is designed to work with the least data collection possible.
-            We do not require registration or identification to browse. We may
-            automatically collect: IP address, cookie identifiers, browser and
-            device type, and browsing data (pages viewed, downloads made).
+            If you create an account: your email and, if you sign in with
+            Google, the public name and avatar Google gives us. If you create
+            or upload content: your activities and exercises, the images or
+            PDF pages you upload, your "Why?" explanations, the reports you
+            file, and the "likes" you give. We also record, per activity, at
+            most one view per user every 30 minutes, for a public popularity
+            count.
+          </p>
+          <p>
+            We may automatically collect: your IP address, cookie identifiers,
+            browser and device type, and browsing data (pages viewed,
+            downloads made). The Cloudflare Turnstile anti-bot challenge may
+            process technical signals from your device to tell you apart from
+            a bot when signing in, signing up, or resetting your password.
             Third-party advertising may collect additional data under its own
             policies.
+          </p>
+          <p>
+            We do not collect the answers you give in exercises: they are
+            graded in your own browser and never sent to our servers.
           </p>
         </section>
 
@@ -235,44 +355,103 @@ const isEs = lang === 'es';
             3. Purpose of processing
           </h2>
           <p>
-            We use data to: (a) operate the Site and the ad-rewarded access; (b)
-            count downloads to build content rankings ("Most viewed"); (c) serve
-            advertising, including personalized third-party ads; and (d) obtain
-            aggregate usage metrics to improve the service.
+            We use data to: (a) create and operate your account and let you
+            use activities and exercises; (b) moderate published content and
+            handle reports; (c) count "likes" and views to show content
+            rankings; (d) grant ad-rewarded access to certain downloads; (e)
+            serve advertising, including personalized third-party ads; (f)
+            manage your Premium subscription, once payments are enabled; and
+            (g) obtain aggregate usage metrics to improve the service.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            4. Cookies
+            4. Minors
           </h2>
           <p>
-            A cookie is a small file stored in your browser. The Site uses:
+            Under Peru's Law No. 29733, processing the personal data of a
+            minor under 14 requires the prior consent of a parent or guardian.
+            That is why a minor under 14 needs that consent to create an
+            account. A minor can, with no account and no consent needed, play
+            an activity their teacher shares with them by link: in that case
+            we collect no data about them at all (see "Guest play" in the
+            Terms & Conditions).
           </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Cookies and local storage
+          </h2>
+          <p>We use:</p>
           <ul class="ml-5 flex list-disc flex-col gap-2">
             <li>
-              <strong class="text-zinc-100">First-party technical cookies:</strong>{' '}
-              required for operation. For example, the rewarded-access cookie
-              (remembering you watched an ad so it is not repeated for a period)
-              and cookies to avoid counting the same download multiple times.
-              Without these, the Site does not work correctly.
+              <strong class="text-zinc-100">Supabase Auth session cookies:</strong>{' '}
+              keep you signed in.
             </li>
             <li>
-              <strong class="text-zinc-100">Third-party cookies:</strong> providers
-              such as Google (AdSense / Ad Manager and, where applicable,
-              Analytics) set cookies to serve and measure advertising, including
-              personalized ads. These are governed by those providers' policies.
+              <strong class="text-zinc-100">chu_pass:</strong> our own
+              technical cookie recording a 24-hour access pass after you watch
+              a rewarded ad.
+            </li>
+            <li>
+              <strong class="text-zinc-100">chu_ad_start:</strong> our own
+              short-lived technical cookie timing that ad while you watch it.
+            </li>
+            <li>
+              <strong class="text-zinc-100">Cloudflare Turnstile:</strong> its
+              own challenge cookies, when the widget loads (sign-in, sign-up,
+              password reset).
+            </li>
+            <li>
+              <strong class="text-zinc-100">Third-party cookies:</strong>{' '}
+              advertising networks, mainly Google, to serve and measure
+              advertising, including personalized ads. These are governed by
+              those providers' own policies.
             </li>
           </ul>
           <p>
-            You can manage or delete cookies from your browser settings. Blocking
-            technical cookies may affect how the Site works.
+            We also store, in your browser's own local storage
+            (localStorage/sessionStorage, which never leaves your device or
+            reaches our servers), your interface preferences: the voice chosen
+            for read-aloud, the editor toolbar's position, which first-run
+            tips you have already seen, and a short-lived cache of your
+            sign-in state. We use no analytics cookie and no first-party
+            advertising-tracking cookie today, beyond the advertising network
+            mentioned above.
+          </p>
+          <p>
+            You can manage or delete cookies from your browser settings;
+            blocking technical cookies may prevent the Site from working
+            correctly.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            5. Third-party advertising
+            6. Providers that process data on our behalf
+          </h2>
+          <p>
+            Today we use: Netlify (hosting, server functions, and logs),
+            Supabase (authentication, database, and file storage), Sanity
+            (books/news content), Cloudflare (the Turnstile challenge), and
+            Google (sign-in). Since these providers run their own servers,
+            your data may be processed outside Peru, under each provider's own
+            security safeguards.
+          </p>
+          <p>
+            Once enabled, we will also use: Paddle as the Merchant of Record
+            for Premium payments (Paddle receives and processes your payment
+            data directly; we do not), an email provider for account-related
+            messages, a privacy-friendly analytics tool, and an error-
+            monitoring tool.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            7. Third-party advertising
           </h2>
           <p>
             The Site shows advertising from third-party networks, mainly Google.
@@ -302,12 +481,32 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            6. Your rights
+            8. Deleting your account and your data
+          </h2>
+          <p>
+            You can delete your account yourself at any time, from its
+            settings (see "Deleting your account" in the Terms & Conditions
+            for the full detail). Doing so deletes your associated personal
+            data: your drafts, your "likes", your view history, and your
+            private uploads. Your already-published activities and exercises
+            remain available, attributed to "ChuyoCode", keeping only an
+            internal identifier with no name or email of yours. Reports you
+            filed are kept with your identity removed. Your Premium
+            subscription or purchases are deleted along with your account; the
+            payment processor keeps its own receipts under its own legal
+            obligations.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            9. Your rights
           </h2>
           <p>
             Under Law No. 29733, you have the rights of access, rectification,
-            cancellation, and objection over your personal data. You may exercise
-            them by writing to{' '}
+            cancellation, and objection over your personal data. You can
+            exercise the cancellation right yourself by deleting your account
+            (previous section); for any of the four, you may also write to{' '}
             {ownerEmail ? (
               <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
                 {ownerEmail}
@@ -322,19 +521,20 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            7. Retention and security
+            10. Retention and security
           </h2>
           <p>
             We retain data only for as long as necessary for the purposes
-            described and apply reasonable technical and organizational measures to
-            protect it. No system is completely foolproof, so we cannot guarantee
-            absolute security.
+            described — see the previous section for exactly what happens when
+            you delete your account — and apply reasonable technical and
+            organizational measures to protect it. No system is completely
+            foolproof, so we cannot guarantee absolute security.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-zinc-100">
-            8. Changes to this policy
+            11. Changes to this policy
           </h2>
           <p>
             We may update this Privacy Policy at any time. Changes take effect upon
