@@ -9,6 +9,14 @@
  * Kept as two pure, zero-I/O functions so the gate is unit-testable without a
  * request/response round trip, and so the single spot a future subscription
  * check replaces is obvious rather than scattered across every gated route.
+ *
+ * ONE CARVE-OUT (guest play): the practice and presentation-mode pages for a
+ * PUBLISHED activity are reachable without signing in — {@link isPublicActivityRoute}
+ * — so a teacher's QR/WhatsApp link does not hit the login wall in class.
+ * `hasAccess` is the only function that knows about it; `requiresLogin` stays
+ * exactly as it was, so the middleware still treats these two routes as
+ * "private, no-store" (the rendered page differs by visitor) even though
+ * they no longer redirect an anonymous one away.
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from './supabase';
@@ -32,6 +40,39 @@ const GATED_SECTIONS = ['ingles', 'cursos'] as const;
 export function requiresLogin(pathname: string): boolean {
   const section = pathname.split('/')[2];
   return (GATED_SECTIONS as readonly string[]).includes(section ?? '');
+}
+
+/**
+ * Is this one of the two guest-playable activity routes (owner-approved
+ * "students can play a shared activity without an account")?
+ *
+ * Matches, for any `<id>`:
+ *   - `/<lang>/ingles/actividades/<id>`             (practice)
+ *   - `/<lang>/ingles/actividades/<id>/presentar`   (presentation mode)
+ *
+ * Does NOT match the catalog (`/<lang>/ingles/actividades`, no `<id>`),
+ * `imprimir`, or anything else — those stay fully gated.
+ *
+ * SHAPE ONLY, same pure/zero-I/O posture as {@link requiresLogin}: whether
+ * the activity at `<id>` is actually published is for the PAGE itself to
+ * decide (`getPublishedActivity`, which 404s for anything not live, author
+ * included) — never here. This keeps the gate a single synchronous check
+ * with no per-request database round trip, and it is why an anonymous visit
+ * to a draft/pending/rejected activity still collapses to a plain 404
+ * (rendered past the gate, not a sign-in redirect) rather than leaking that
+ * the id exists.
+ *
+ * @param pathname - A request path, e.g. `/es/ingles/actividades/abc123`.
+ */
+export function isPublicActivityRoute(pathname: string): boolean {
+  const segments = pathname.split('/');
+  if (segments[2] !== 'ingles' || segments[3] !== 'actividades') return false;
+
+  const id = segments[4];
+  if (!id) return false; // the catalog itself: /<lang>/ingles/actividades
+
+  if (segments.length === 5) return true; // .../actividades/<id>
+  return segments.length === 6 && segments[5] === 'presentar'; // .../<id>/presentar
 }
 
 /**
@@ -151,8 +192,11 @@ function isEntitled(user: Pick<User, 'id'> | null): boolean {
 /**
  * May this visitor see this path?
  *
- * A public section is always accessible, signed in or not. A gated section
- * defers to {@link isEntitled}.
+ * A public section is always accessible, signed in or not. The two guest-play
+ * activity routes ({@link isPublicActivityRoute}) are accessible to EVERY
+ * visitor too — the page itself is what turns an anonymous visit to a
+ * non-published activity into a 404, not this gate. Every other gated
+ * section defers to {@link isEntitled}.
  *
  * @param user - The server-verified caller from `Astro.locals.user`, or
  *   `null` for an anonymous visitor.
@@ -163,6 +207,9 @@ export function hasAccess(
   pathname: string,
 ): boolean {
   if (!requiresLogin(pathname)) {
+    return true;
+  }
+  if (isPublicActivityRoute(pathname)) {
     return true;
   }
   return isEntitled(user);

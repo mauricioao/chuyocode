@@ -48,6 +48,7 @@ vi.mock('./supabase', () => ({
 import {
   requiresLogin,
   hasAccess,
+  isPublicActivityRoute,
   getPlan,
   clearAccessClient,
   USER_SUBSCRIPTIONS_TABLE,
@@ -115,6 +116,48 @@ describe('hasAccess', () => {
   it('grants a gated section to a signed-in visitor (today: login is the whole gate)', () => {
     expect(hasAccess(user(), '/es/ingles')).toBe(true);
     expect(hasAccess(user(), '/es/cursos')).toBe(true);
+  });
+
+  // Guest play: the two activity routes are exempt from the gate, for every
+  // visitor — the page itself (`getPublishedActivity`) decides whether the
+  // activity is actually published.
+  it('grants an anonymous visitor the practice page', () => {
+    expect(hasAccess(null, '/es/ingles/actividades/abc123')).toBe(true);
+  });
+
+  it('grants an anonymous visitor the presentation-mode page', () => {
+    expect(hasAccess(null, '/es/ingles/actividades/abc123/presentar')).toBe(true);
+  });
+
+  it('still denies an anonymous visitor the activities catalog', () => {
+    expect(hasAccess(null, '/es/ingles/actividades')).toBe(false);
+  });
+
+  it('still denies an anonymous visitor the print page', () => {
+    expect(hasAccess(null, '/es/ingles/actividades/abc123/imprimir')).toBe(false);
+  });
+});
+
+describe('isPublicActivityRoute', () => {
+  it.each([
+    ['/es/ingles/actividades/abc123', 'the practice page'],
+    ['/en/ingles/actividades/abc123', 'the practice page, en'],
+    ['/es/ingles/actividades/abc123/presentar', 'the presentation-mode page'],
+  ])('is true for %s (%s)', (pathname) => {
+    expect(isPublicActivityRoute(pathname)).toBe(true);
+  });
+
+  it.each([
+    ['/es/ingles/actividades', 'the catalog itself, no id'],
+    ['/es/ingles/actividades/abc123/imprimir', 'the print page'],
+    ['/es/ingles/actividades/abc123/presentar/extra', 'an over-long path'],
+    ['/es/ingles', 'the ingles hub'],
+    ['/es/ingles/propuestos', 'the proposed-activities page'],
+    ['/es/ingles/A1/present-simple', 'a curated exercise path'],
+    ['/es/cursos/abc123', 'a cursos path (different section)'],
+    ['/es/crear/abc123', 'the editor (different section entirely)'],
+  ])('is false for %s (%s)', (pathname) => {
+    expect(isPublicActivityRoute(pathname)).toBe(false);
   });
 });
 
