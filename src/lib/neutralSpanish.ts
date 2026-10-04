@@ -42,6 +42,9 @@ export const NON_VOSEO_ACCENTED_WORDS = [
   'será',
   'habrá',
   'podrá',
+  // Same third-person future tense shape as `será`/`estará`/`podrá` above
+  // ("un enlace te llegará" — the link, not the reader, is the subject).
+  'llegará',
   'quizá',
   'café',
   'sí',
