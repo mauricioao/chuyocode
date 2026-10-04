@@ -37,6 +37,9 @@ const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
 const isEs = lang === 'es';
 ---
 
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/legal/[page]` route (no `theme="ingles"`), so the
+    raw Tailwind step was never affected by the removed remap. */}
 <div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
   <p class="text-sm text-zinc-500">
     {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
@@ -46,14 +49,14 @@ const isEs = lang === 'es';
     isEs ? (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Alcance de esta política
           </h2>
           <p>
             Esta Política de Reembolsos aplica a los pagos de la suscripción
             Premium de ChuyoCode, operado por{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, domiciliado en {ownerCity}, Perú</>}, cuando se
             procesen a través de Paddle. Mientras los pagos de Premium no
             estén activos no se cobra nada, así que todavía no hay ningún pago
@@ -63,7 +66,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Tu derecho a reembolso
           </h2>
           <p>
@@ -76,7 +79,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Cancelación y reembolso son cosas distintas
           </h2>
           <p>
@@ -89,7 +92,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Cómo pedir tu reembolso
           </h2>
           <p>
@@ -109,7 +112,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Los términos de Paddle también aplican
           </h2>
           <p>
@@ -120,7 +123,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Cambios en esta política
           </h2>
           <p>
@@ -132,14 +135,14 @@ const isEs = lang === 'es';
     ) : (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Scope of this policy
           </h2>
           <p>
             This Refund Policy applies to payments for ChuyoCode's Premium
             subscription, operated by{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, based in {ownerCity}, Peru</>}, once they are
             processed through Paddle. While Premium payments are not active,
             nothing is charged, so there is nothing to refund yet; we publish
@@ -148,7 +151,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Your right to a refund
           </h2>
           <p>
@@ -161,7 +164,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Cancelling is not the same as a refund
           </h2>
           <p>
@@ -174,7 +177,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. How to request your refund
           </h2>
           <p>
@@ -194,7 +197,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Paddle's own terms also apply
           </h2>
           <p>
@@ -205,7 +208,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Changes to this policy
           </h2>
           <p>
