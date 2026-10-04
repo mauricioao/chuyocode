@@ -94,7 +94,7 @@ export const UI_LABELS = {
       // catalogue the previous sentence just named — same promise, no verb
       // addressing the reader. `aprender` was already carried by "cursos".
       siteDescription:
-        'ChuyoCode: libros, artículos y cursos de programación para la comunidad latina. Tecnología en tu idioma, con fundamentos sólidos.',
+        'ChuyoCode: inglés y tecnología en tu idioma. Actividades interactivas para docentes y estudiantes, libros y noticias de programación para la comunidad latina.',
       booksDescription:
         'Catálogo de libros de programación y tecnología en español, seleccionados para aprender con fundamentos sólidos.',
       newsDescription:
@@ -969,6 +969,24 @@ export const UI_LABELS = {
         courses: 'Cursos',
         english: 'Inglés para programadores',
       },
+      // Inglés product section (home redesign: "Inglés en ChuyoCode"). Two
+      // entry points, honest about what exists today: creating an activity
+      // (`/{lang}/crear`) and practicing one (`/{lang}/ingles/actividades`).
+      // Both routes are already login-gated by the middleware.
+      ingles: {
+        heading: 'Inglés en ChuyoCode',
+        intro: 'Actividades interactivas para enseñar y practicar inglés, en español.',
+        teachersLabel: 'Para docentes',
+        teachersTitle: 'Tu ficha, ahora interactiva',
+        teachersBody:
+          'Sube tu ficha o PDF, marca las respuestas y proyéctala en clase. Gratis.',
+        teachersCta: 'Crear mi actividad',
+        learnersLabel: 'Para aprender',
+        learnersTitle: 'Practica a tu ritmo',
+        learnersBody:
+          'Actividades y juegos por nivel, con explicaciones en español cuando te equivocas.',
+        learnersCta: 'Explorar actividades',
+      },
     },
     courses: {
       teaser: {
@@ -1161,7 +1179,7 @@ export const UI_LABELS = {
   en: {
     meta: {
       siteDescription:
-        'ChuyoCode: books, articles, and programming courses for the Latin community. Learn technology in your own language, with solid foundations.',
+        'ChuyoCode: English and technology in your language. Interactive activities for teachers and students, plus programming books and news for the Latin community.',
       booksDescription:
         'A catalog of programming and technology books curated to help you learn with solid foundations.',
       newsDescription:
@@ -1851,6 +1869,21 @@ export const UI_LABELS = {
         latestArticles: 'Latest news',
         courses: 'Courses',
         english: 'English for developers',
+      },
+      // Mirrors `es.home.ingles` — see its comment there.
+      ingles: {
+        heading: 'English on ChuyoCode',
+        intro: 'Interactive activities to teach and practice English, explained in Spanish.',
+        teachersLabel: 'For teachers',
+        teachersTitle: 'Your worksheet, now interactive',
+        teachersBody:
+          'Upload your worksheet or PDF, mark the answers and project it in class. Free.',
+        teachersCta: 'Create my activity',
+        learnersLabel: 'For learners',
+        learnersTitle: 'Practice at your own pace',
+        learnersBody:
+          'Activities and games by level, with explanations in Spanish when you get it wrong.',
+        learnersCta: 'Explore activities',
       },
     },
     courses: {
