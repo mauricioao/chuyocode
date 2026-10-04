@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import Footer from './Footer.astro';
 import { UI_LABELS } from '@lib/i18n';
@@ -41,5 +41,28 @@ describe('Footer.astro — legal links', () => {
     expect(html).toContain('href="/en/legal/privacy"');
     expect(html).toContain(escapeHtml(UI_LABELS.en.footer.terms));
     expect(html).toContain(escapeHtml(UI_LABELS.en.footer.privacy));
+  });
+});
+
+// SEO basics pass: the copyright year used to be a hardcoded "2026" literal
+// in the markup — it would have gone stale the moment the calendar turned.
+// Pinning the system clock to a year that is NOT today's proves the value is
+// actually computed, not a coincidence of running this test in 2026.
+describe('Footer.astro — copyright year', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('computes the year from the current date instead of a hardcoded value', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2030-06-15T00:00:00Z'));
+
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+
+    expect(html).toContain('2030 ChuyoCode');
+    expect(html).not.toContain('2026 ChuyoCode');
   });
 });

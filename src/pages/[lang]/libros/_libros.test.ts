@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
+import { createContainer } from '@/testSupport/astroContainer';
 
 // env.ts reads import.meta.env — stub it before any module that calls loadEnv().
 vi.mock('@lib/env', () => ({
@@ -120,5 +121,61 @@ describe('libros/[slug].astro (detail)', () => {
       locals: { lang: 'es' },
     });
     expect(res.status).toBe(404);
+  });
+});
+
+// SEO basics pass: OG image + Book JSON-LD on the detail page. These go
+// through `@/testSupport/astroContainer`'s `createContainer()` (registers
+// the React server renderer) rather than the bare `AstroContainer.create()`
+// above, because the page mounts the `AdModal` React island whenever no
+// valid pass cookie is present (the default here) — see that helper's own
+// header.
+describe('libros/[slug].astro — OG image + JSON-LD (SEO basics pass)', () => {
+  beforeEach(() => {
+    getBookBySlug.mockReset();
+  });
+
+  it('builds an og:image from the Sanity cover via buildImage, and valid Book JSON-LD', async () => {
+    getBookBySlug.mockResolvedValue({
+      _id: 'b1',
+      title: 'Clean Code',
+      slug: 'clean-code',
+      author: 'Robert C. Martin',
+      coverUrl: 'https://cdn.sanity.io/images/proj/production/abc123-800x1200.jpg',
+      coverLqip: 'data:image/jpeg;base64,abc',
+      description: 'A handbook of agile software craftsmanship.',
+    });
+
+    const container = await createContainer();
+    const res = await container.renderToResponse(DetailPage, {
+      locals: { user: null, lang: 'es' },
+      params: { lang: 'es', slug: 'clean-code' },
+      request: new Request('https://chuyocode.netlify.app/es/libros/clean-code'),
+    });
+    const html = await res.text();
+
+    // og:image / twitter:image come from `buildImage`'s 'wide' variant, not
+    // the raw `coverUrl` straight from Sanity.
+    const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)">/);
+    expect(ogImageMatch).not.toBeNull();
+    expect(ogImageMatch?.[1]).toContain('cdn.sanity.io');
+    // 'wide' variant's largest width (src is always the widest candidate).
+    expect(ogImageMatch?.[1]).toContain('w=1920');
+    expect(html).toContain(`<meta name="twitter:image" content="${ogImageMatch?.[1]}">`);
+
+    const jsonLdMatch = html.match(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+    );
+    expect(jsonLdMatch).not.toBeNull();
+    const jsonLd = JSON.parse(jsonLdMatch![1]) as Record<string, unknown>;
+    expect(jsonLd).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'Book',
+      name: 'Clean Code',
+      author: { '@type': 'Person', name: 'Robert C. Martin' },
+      description: 'A handbook of agile software craftsmanship.',
+      url: 'https://chuyocode.netlify.app/es/libros/clean-code',
+      inLanguage: 'es',
+    });
   });
 });

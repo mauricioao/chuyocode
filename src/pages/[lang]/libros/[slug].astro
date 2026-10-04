@@ -21,6 +21,9 @@ import { isValidLang, type Lang } from '@lib/i18n';
 import { getBookBySlug } from '@lib/sanity';
 import { getPassState } from '@lib/pass';
 import { noStorePolicy } from '@lib/cache';
+import { buildImage } from '@lib/image';
+import { toJsonLd } from '@lib/jsonLd';
+import { canonicalUrl } from '@lib/seo';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -72,9 +75,41 @@ const COPY = {
 } as const;
 
 const t = COPY[lang];
+
+// OG image (SEO basics pass): reuse the existing Sanity image URL helper
+// (`buildImage`) for a responsive, optimized URL instead of the raw cover
+// asset — same helper the discovery cards already use. `coverUrl`/`coverLqip`
+// are the flat shape `getBookBySlug` projects; `buildImage` wants them
+// nested as `{ asset: { url, metadata: { lqip } } }`. 'wide' gives a larger
+// widest candidate (1920px) than the page's own 'poster'-sized cover
+// thumbnail would, better suited to a social-card preview.
+const ogImage = buildImage(
+  {
+    asset: {
+      url: book.coverUrl,
+      ...(book.coverLqip ? { metadata: { lqip: book.coverLqip } } : {}),
+    },
+  },
+  'wide',
+).src || undefined;
+
+// JSON-LD (SEO basics pass): Book, book detail page only.
+const bookJsonLd = toJsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'Book',
+  name: book.title,
+  ...(book.author ? { author: { '@type': 'Person', name: book.author } } : {}),
+  description: book.description || undefined,
+  image: book.coverUrl || undefined,
+  url: canonicalUrl(Astro.site, Astro.url.pathname),
+  inLanguage: lang,
+});
 ---
 
-<BaseLayout lang={lang} title={book.title}>
+<BaseLayout lang={lang} title={book.title} description={book.description} ogImage={ogImage}>
+  <Fragment slot="head">
+    <script is:inline type="application/ld+json" set:html={bookJsonLd} />
+  </Fragment>
   <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:py-12">
     {/* Page-level back action — its own row above the article, aligned to the
         container edge (not buried inside the text column). No page-level

@@ -179,3 +179,38 @@ describe('GET /[lang]/ — meta description', () => {
     );
   });
 });
+
+// SEO basics pass: Organization + WebSite JSON-LD, home page only. `site`
+// comes from the real astro.config.mjs (vitest.astro.config.ts wraps Astro's
+// own getViteConfig()); `process.env.URL` is unset in this test run, so it
+// resolves to the literal `https://chuyocode.netlify.app` fallback.
+describe('GET /[lang]/ — structured data (JSON-LD)', () => {
+  it('renders valid Organization and WebSite JSON-LD', async () => {
+    const res = await render('https://chuyocode.test/es/', {
+      params: { lang: 'es' },
+      locals: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    const blocks = [
+      ...html.matchAll(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ),
+    ].map((m) => JSON.parse(m[1]) as Record<string, unknown>);
+
+    const organization = blocks.find((b) => b['@type'] === 'Organization');
+    const website = blocks.find((b) => b['@type'] === 'WebSite');
+
+    expect(organization).toMatchObject({
+      '@context': 'https://schema.org',
+      name: 'ChuyoCode',
+      url: 'https://chuyocode.netlify.app/',
+      logo: 'https://chuyocode.netlify.app/chuyocode.svg',
+    });
+    expect(website).toMatchObject({
+      '@context': 'https://schema.org',
+      name: 'ChuyoCode',
+      url: 'https://chuyocode.netlify.app/',
+    });
+  });
+});

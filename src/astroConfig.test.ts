@@ -54,3 +54,19 @@ describe('astro.config.mjs auth-safety guard', () => {
     expect(config).not.toContain(option);
   });
 });
+
+/**
+ * SEO basics: `site` backs the canonical/hreflang/OG tags and the sitemap
+ * with one absolute origin (design: derive it from Netlify's own build-time
+ * `URL` env var, which becomes the custom domain automatically once one is
+ * attached — no code change needed on 2026-11-01). Same raw-text approach as
+ * the guard above: this file already reads the config as text, so a second,
+ * unrelated assertion costs nothing extra to anchor here.
+ */
+describe('astro.config.mjs site config', () => {
+  it('derives `site` from Netlify\'s build-time URL, with a literal fallback', () => {
+    expect(config).toContain(
+      "site: process.env.URL || 'https://chuyocode.netlify.app',",
+    );
+  });
+});
