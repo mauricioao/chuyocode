@@ -514,6 +514,76 @@ describe('gating private sections', () => {
   });
 });
 
+// Guest play (owner-approved): the practice and presentation-mode pages for a
+// PUBLISHED activity are reachable without signing in — `@lib/access`'s
+// `isPublicActivityRoute`. Everything else under `ingles/**` stays gated.
+describe('guest play — the two public activity routes', () => {
+  it('lets an anonymous visitor through to the practice page', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades/abc123');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('lets an anonymous visitor through to the presentation-mode page', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades/abc123/presentar');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('still marks the practice page private/no-store for an anonymous visitor (T7)', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades/abc123');
+    const res = await result;
+
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('still marks the presentation-mode page private/no-store for an anonymous visitor', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades/abc123/presentar');
+    const res = await result;
+
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('still redirects an anonymous visitor away from the activities catalog', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades');
+    const res = await result;
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/entrar?next=%2Fes%2Fingles%2Factividades',
+    );
+  });
+
+  it('still redirects an anonymous visitor away from the print page', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades/abc123/imprimir');
+    const res = await result;
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(303);
+  });
+
+  it('leaves a signed-in visitor unaffected on the practice page', async () => {
+    armSession(signedIn('user-12'));
+    const { result } = run('/es/ingles/actividades/abc123');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
 // Security headers (work unit 4): every exit point the middleware can
 // produce or pass through must carry them — see `src/lib/securityHeaders.ts`
 // for why this cannot be left to Netlify's static `_headers` file (no

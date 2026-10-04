@@ -1,14 +1,22 @@
 ---
 /**
  * Print page — `/[lang]/ingles/actividades/[id]/imprimir` (SSR, D6
- * "Imprimir"). Same access rules as the practice page (`[id].astro`, one
+ * "Imprimir"). Same VISIBILITY rule as the practice page (`[id].astro`, one
  * level up): `getPublishedActivity` 404s for anything not `visible`,
  * including the author's own non-live activity — this route is the public
- * player's print view, not a preview. Under `ingles/**`, so the middleware
- * already gates it (sign-in required) — `markPrivate` is called here anyway,
- * explicitly, because this page also builds several early-return
- * `Response`s of its own (invalid lang, missing id, not found) that bypass
- * `Astro.response.headers` entirely and need their own header.
+ * player's print view, not a preview.
+ *
+ * 🔴 UNLIKE `[id].astro`/`presentar.astro`, THIS ROUTE STAYS SIGN-IN GATED
+ * (guest play, owner-approved, deliberately scoped to exactly those two
+ * routes — `@lib/access`'s `isPublicActivityRoute` does not match
+ * `imprimir`). The practice page's own "Imprimir" link is therefore a plain,
+ * unconditional link for every visitor, guest included — clicking it as a
+ * guest hits this route's own login wall, same as any other gated page.
+ * Under `ingles/**`, so the middleware still gates it (sign-in required) —
+ * `markPrivate` is called here anyway, explicitly, because this page also
+ * builds several early-return `Response`s of its own (invalid lang, missing
+ * id, not found) that bypass `Astro.response.headers` entirely and need
+ * their own header.
  *
  * A DELIBERATELY BARE page — no `BaseLayout`: the task is "light theme for
  * paper, no site header/footer/nav", which is the opposite of what

@@ -177,3 +177,42 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// Guest play: this route has no user-dependent branching of its own (no
+// hearts/report/duplicate here) — it only needed the login gate removed
+// (`@lib/access`'s `isPublicActivityRoute`, covered by `middleware.test.ts`).
+// This confirms the page's own frontmatter already renders correctly with no
+// session at all.
+describe('GET /[lang]/ingles/actividades/[id]/presentar — guest play (anonymous visitor)', () => {
+  it('returns 200 with private cache headers for an anonymous visitor', async () => {
+    activityResult.value = QUIZ_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    const html = await res.text();
+    expect(html).toContain('data-testid="presentation-slide-cover"');
+  });
+
+  it('404s an anonymous visit to a draft/unpublished activity, same as a missing one', async () => {
+    activityResult.value = null;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('still renders the cover QR (pointing at the now-public practice page) for an anonymous visitor', async () => {
+    activityResult.value = QUIZ_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="presentation-cover-qr"');
+    expect(html).toContain('/es/ingles/actividades/abc');
+  });
+});
