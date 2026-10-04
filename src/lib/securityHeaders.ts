@@ -17,8 +17,11 @@
 
 /**
  * The target Content-Security-Policy, shipped `Report-Only` for now so
- * nothing breaks before it is verified clean in production — violations only
- * show up in the browser console. No `report-uri` yet.
+ * nothing breaks before it is verified clean in production. Violations are
+ * collected at `POST /api/csp-report` (`src/pages/api/csp-report.ts`,
+ * `report-uri`/`report-to` below) instead of only showing up in a visitor's
+ * own console, so the full policy can be enforced once production is
+ * verified clean.
  *
  * Every non-`'self'`/non-generic source is listed because something in
  * `src/` actually uses it; see the reason beside each one.
@@ -59,6 +62,13 @@ const REPORT_ONLY_CSP = [
   "form-action 'self' https://*.supabase.co https://accounts.google.com",
   "frame-ancestors 'self'",
   'upgrade-insecure-requests',
+  // Both travel together, pointed at the SAME endpoint: `report-to` is the
+  // modern Reporting API directive (Chromium only), `report-uri` is the
+  // legacy one every browser still honors (Firefox/Safari never shipped
+  // report-to). The `report-to` value names the `Reporting-Endpoints` entry
+  // set below, not a URL directly.
+  'report-to csp-endpoint',
+  'report-uri /api/csp-report',
 ].join('; ');
 
 /**
@@ -93,6 +103,12 @@ export function applySecurityHeaders(headers: Headers): void {
   }
   if (!headers.has('content-security-policy-report-only')) {
     headers.set('content-security-policy-report-only', REPORT_ONLY_CSP);
+  }
+  if (!headers.has('reporting-endpoints')) {
+    // Names the `csp-endpoint` the report-only policy's `report-to`
+    // directive (above) points at. Only the Reporting API path needs this
+    // header — `report-uri` carries its own target URL inline.
+    headers.set('reporting-endpoints', 'csp-endpoint="/api/csp-report"');
   }
 }
 

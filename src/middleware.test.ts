@@ -595,6 +595,16 @@ describe('security headers on every response', () => {
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
     expect(res.headers.has('content-security-policy-report-only')).toBe(true);
+    // CSP report collection (src/pages/api/csp-report.ts): both reporting
+    // directives, plus the header the Reporting API path needs to resolve
+    // `report-to csp-endpoint`.
+    expect(res.headers.get('content-security-policy-report-only')).toContain(
+      'report-to csp-endpoint',
+    );
+    expect(res.headers.get('content-security-policy-report-only')).toContain(
+      'report-uri /api/csp-report',
+    );
+    expect(res.headers.get('reporting-endpoints')).toBe('csp-endpoint="/api/csp-report"');
   }
 
   it('carries the headers on a normal page response', async () => {
