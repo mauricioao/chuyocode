@@ -378,10 +378,10 @@ describe('SignInForm — localization', () => {
   });
 
   it('writes its Spanish in neutral Spanish, with no voseo', () => {
-    // Triangulation: the detector does fire on copy that IS voseo.
+    // Triangulation: the detector does fire on copy that IS voseo. `vas` is
+    // valid tuteo (identical to its voseo form), so only `Revisá` fires.
     expect(voseoWords('Revisá tu correo, vas a recibir un enlace.')).toEqual([
       'Revisá',
-      'vas',
     ]);
     expect(findVoseo(COPY.es)).toEqual([]);
   });

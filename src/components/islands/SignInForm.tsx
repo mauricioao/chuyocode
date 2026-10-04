@@ -43,8 +43,8 @@ import TurnstileWidget from './TurnstileWidget';
 /**
  * This island's own chrome, in both locales.
  *
- * Neutral, impersonal Spanish: infinitives and impersonal prose, no voseo, no
- * second person at all — swept by `findVoseo` from this file's test.
+ * Neutral Latin-American tuteo, no voseo — swept by `findVoseo` from this
+ * file's test.
  */
 export const COPY = {
   es: {
@@ -53,8 +53,8 @@ export const COPY = {
     submit: 'Enviar enlace',
     submitting: 'Enviando…',
     success:
-      'Se envió un enlace de acceso a esa dirección, si corresponde a una cuenta. Revisar la bandeja de entrada y la carpeta de spam.',
-    error: 'No se pudo enviar la solicitud. Intentar de nuevo.',
+      'Se envió un enlace de acceso a esa dirección, si corresponde a una cuenta. Revisa la bandeja de entrada y la carpeta de spam.',
+    error: 'No se pudo enviar la solicitud. Inténtalo de nuevo.',
     captchaPending: 'Esperando verificación…',
     captchaError: 'No pudimos verificar que eres una persona. Inténtalo de nuevo.',
   },

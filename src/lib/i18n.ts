@@ -271,7 +271,7 @@ export const UI_LABELS = {
       description:
         'Entrar con correo y contraseña, con Google o con un enlace de acceso.',
       linkInvalid:
-        'Ese enlace no es válido o ya venció. Solicitar uno nuevo con el formulario de abajo.',
+        'Ese enlace no es válido o ya venció. Solicita uno nuevo con el formulario de abajo.',
       signedIn: 'Sesión iniciada.',
       alreadySignedIn: 'Ya hay una sesión iniciada en este navegador.',
       signOut: 'Salir',
@@ -283,7 +283,7 @@ export const UI_LABELS = {
       // `SignInForm.COPY` — see that island's header.
       google: 'Continuar con Google',
       googleUnavailable:
-        'El acceso con Google no está disponible en este momento. Probar con correo y contraseña.',
+        'El acceso con Google no está disponible en este momento. Prueba con correo y contraseña.',
       orDivider: 'o',
       nuevaClave: {
         title: 'Nueva contraseña',

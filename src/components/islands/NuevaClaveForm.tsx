@@ -26,9 +26,8 @@ import { Input } from '@/components/ui/input';
 const MIN_PASSWORD_LENGTH = 8;
 
 /**
- * This island's own chrome, in both locales. Neutral, impersonal Spanish:
- * infinitives and impersonal prose, no voseo, no second person at all —
- * swept by `findVoseo` from this file's test.
+ * This island's own chrome, in both locales. Neutral Latin-American tuteo,
+ * no voseo — swept by `findVoseo` from this file's test.
  */
 export const COPY = {
   es: {
@@ -37,7 +36,7 @@ export const COPY = {
     submit: 'Guardar contraseña',
     submitting: 'Guardando…',
     success: 'Contraseña actualizada. Ya se puede usar para entrar.',
-    error: 'No se pudo actualizar la contraseña. Intentar de nuevo.',
+    error: 'No se pudo actualizar la contraseña. Inténtalo de nuevo.',
     tooShort: 'La contraseña debe tener al menos 8 caracteres.',
   },
   en: {

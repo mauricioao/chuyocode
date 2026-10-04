@@ -136,9 +136,10 @@ describe('NuevaClaveForm — localization', () => {
   });
 
   it('writes its Spanish in neutral Spanish, with no voseo', () => {
+    // `vas` is valid tuteo (identical to its voseo form), so only `Revisá`
+    // fires.
     expect(voseoWords('Revisá tu correo, vas a recibir un enlace.')).toEqual([
       'Revisá',
-      'vas',
     ]);
     expect(findVoseo(COPY.es)).toEqual([]);
   });
