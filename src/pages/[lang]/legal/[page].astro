@@ -52,13 +52,31 @@ const ownerRuc = env.LEGAL_OWNER_RUC;
 const ownerCity = env.LEGAL_OWNER_CITY;
 const ownerEmail = env.LEGAL_OWNER_EMAIL;
 
-// Last-updated date, localized. Computed at render time (SSR), so it always
-// reflects the current deploy — good enough for a "last updated" line.
-const updated = new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'es-PE', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-});
+/**
+ * Fixed "last updated" date per legal document (SEO basics pass). This used
+ * to be `new Date()` at render time, which silently advanced the displayed
+ * date every single day even when the document's actual text had not
+ * changed — a dishonest "last updated" for both readers and search engines.
+ * Bump a document's entry BY HAND exactly when its copy in
+ * `TermsContent.astro` / `PrivacyContent.astro` actually changes; this value
+ * must never auto-advance again.
+ */
+const LAST_UPDATED: Record<LegalPage, string> = {
+  terms: '2026-10-04',
+  privacy: '2026-10-04',
+};
+
+// Localized, same display format as before — only the underlying date is
+// now a fixed constant instead of the render-time clock. `timeZone: 'UTC'`
+// is NOT optional here: without it, `toLocaleDateString` formats in the
+// SERVER's local timezone, and `LAST_UPDATED`'s date-only string parses as
+// UTC midnight — any timezone behind UTC (Peru included, this very page's
+// own `es-PE` audience) would then display the day BEFORE the one written
+// above. Pinning UTC makes the fixed date render identically everywhere.
+const updated = new Date(`${LAST_UPDATED[legalPage]}T00:00:00Z`).toLocaleDateString(
+  lang === 'en' ? 'en-US' : 'es-PE',
+  { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' },
+);
 ---
 
 <BaseLayout lang={lang} title={title}>
