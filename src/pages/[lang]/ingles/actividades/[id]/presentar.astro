@@ -1,0 +1,106 @@
+---
+/**
+ * Presentation page — `/[lang]/ingles/actividades/[id]/presentar`
+ * (presentation mode v1, "Preguntas"). Same access rules as the practice
+ * page (`[id].astro`, two levels up): `getPublishedActivity` 404s for
+ * anything not `visible`, including the author's own non-live activity —
+ * this route is the public player's presentation view, not a preview.
+ * Additionally 404s when the activity has no presentable question
+ * (`hasPresentableQuiz`, `@lib/activities/presentationSlides`) — the SAME
+ * predicate the practice page's own "Presentar" link uses to decide whether
+ * to show itself at all, so a direct visit can never reach a stage with
+ * nothing to present just because the entry point happened to be hidden.
+ *
+ * Under `ingles/**`, so this route is ALREADY gated by the middleware
+ * (sign-in required) — `markPrivate` is called here anyway, explicitly,
+ * same reasoning as the print page (`imprimir.astro`, one level up): this
+ * file also builds several early-return `Response`s of its own (invalid
+ * lang, missing id, not found) that bypass `Astro.response.headers`
+ * entirely and need their own header.
+ *
+ * BARE + LIGHT INGLÉS THEME: no site header/footer/nav — `BaseLayout`'s
+ * `bare` prop (added for this feature) drops them — and `theme="ingles"`
+ * for the warm, light palette the stage renders in (`PresentationIsland`'s
+ * own header). `fullHeight` on top keeps the page itself from ever
+ * scrolling, belt-and-suspenders alongside the island's own `fixed
+ * inset-0` stage (which already covers the whole viewport on its own).
+ *
+ * ONLY `quiz` BLOCKS, FLATTENED, EVER REACH THE ISLAND — never the
+ * activity's worksheet blocks (images, zones, and their answers), which
+ * this route has no use for and therefore never serializes to the client
+ * at all. Every prop below is plain, serializable data (id, title, level,
+ * a URL, QR markup, the quiz blocks themselves) — see
+ * `src/astroIslandProps.test.ts`'s own guard.
+ *
+ * The QR (D8's own `@lib/qr`, reused verbatim) encodes the activity's
+ * PRACTICE page, not this presentation page itself — "scan to open on your
+ * phone" means the ordinary player, built from the CURRENT request's own
+ * origin exactly like `[id].astro`'s own share QR.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PresentationIsland from '@components/islands/activities/PresentationIsland';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { getPublishedActivity } from '@lib/activities/activities';
+import { hasPresentableQuiz } from '@lib/activities/presentationSlides';
+import { markPrivate } from '@lib/httpCache';
+import { qrSvg, shareUrl } from '@lib/qr';
+import type { QuizBlock } from '@lib/activities/blocks';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+markPrivate(Astro.response.headers);
+
+const { id } = Astro.params;
+if (!id) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const activity = await getPublishedActivity(id);
+if (!activity) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const quizBlocks = activity.blocks.filter((block): block is QuizBlock => block.type === 'quiz');
+if (!hasPresentableQuiz(quizBlocks)) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'cache-control': 'private, no-store' },
+  });
+}
+
+const t = UI_LABELS[lang].activities.present;
+const practiceUrl = `/${lang}/ingles/actividades/${activity.id}`;
+const shareLink = shareUrl(new URL(practiceUrl, Astro.url));
+const shareQr = qrSvg(shareLink);
+---
+
+<BaseLayout lang={lang} title={activity.title} description={t.pageDescription} theme="ingles" bare fullHeight>
+  <PresentationIsland
+    client:load
+    lang={lang}
+    title={activity.title}
+    level={activity.level}
+    practiceUrl={practiceUrl}
+    qrSvg={shareQr}
+    quizBlocks={quizBlocks}
+  />
+</BaseLayout>
