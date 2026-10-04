@@ -8,7 +8,7 @@
  * edge behavior. Autoplay/embla motion is validated in the browser.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import HeroCarouselIsland, {
   type HeroSlideData,
 } from './HeroCarouselIsland';
@@ -113,5 +113,62 @@ describe('HeroCarouselIsland', () => {
     render(<HeroCarouselIsland slides={[slide(1)]} />);
     expect(document.querySelectorAll('[data-hero-slide]')).toHaveLength(1);
     expect(screen.getByText('Libro 1')).toBeTruthy();
+  });
+});
+
+// The active slide/dot must be OBSERVABLE (assistive tech, e2e) via
+// `aria-current`, not left inside Embla's own internal, unqueryable state —
+// see tests/e2e/hero-carousel.spec.ts for the real-browser autoplay/hover/
+// reduced-motion coverage this attribute now makes possible.
+describe('HeroCarouselIsland — active slide state', () => {
+  it('exposes the configured interval for e2e to read (not hardcoded)', () => {
+    render(
+      <HeroCarouselIsland slides={[slide(1), slide(2)]} interval={1234} />,
+    );
+    expect(
+      document.querySelector('[data-hero-carousel]')?.getAttribute('data-interval'),
+    ).toBe('1234');
+  });
+
+  it('marks only the first slide as aria-current on mount', () => {
+    render(<HeroCarouselIsland slides={[slide(1), slide(2), slide(3)]} />);
+    const items = document.querySelectorAll('[data-hero-slide]');
+    expect(items[0]?.getAttribute('aria-current')).toBe('true');
+    expect(items[1]?.getAttribute('aria-current')).toBeNull();
+    expect(items[2]?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('renders one real, labeled button per slide as indicator dots', () => {
+    render(<HeroCarouselIsland slides={[slide(1), slide(2), slide(3)]} />);
+    const dots = screen.getAllByRole('button', { name: /^Ir a la diapositiva \d$/ });
+    expect(dots).toHaveLength(3);
+    expect(dots[0]?.getAttribute('aria-label')).toBe('Ir a la diapositiva 1');
+    expect(dots[1]?.getAttribute('aria-label')).toBe('Ir a la diapositiva 2');
+    expect(dots[2]?.getAttribute('aria-label')).toBe('Ir a la diapositiva 3');
+    // The first dot starts as the active one, same as the first slide.
+    expect(dots[0]?.getAttribute('aria-current')).toBe('true');
+    expect(dots[1]?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('moves aria-current to the clicked slide AND its dot', () => {
+    render(<HeroCarouselIsland slides={[slide(1), slide(2), slide(3)]} />);
+    const dots = screen.getAllByRole('button', { name: /^Ir a la diapositiva \d$/ });
+
+    fireEvent.click(dots[2]!);
+
+    const items = document.querySelectorAll('[data-hero-slide]');
+    expect(items[2]?.getAttribute('aria-current')).toBe('true');
+    expect(items[0]?.getAttribute('aria-current')).toBeNull();
+    expect(dots[2]?.getAttribute('aria-current')).toBe('true');
+    expect(dots[0]?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('renders no indicator dots for a single (static) slide', () => {
+    render(<HeroCarouselIsland slides={[slide(1)]} />);
+    expect(document.querySelectorAll('[data-hero-dot]')).toHaveLength(0);
+    // The lone slide is still trivially "current".
+    expect(
+      document.querySelector('[data-hero-slide]')?.getAttribute('aria-current'),
+    ).toBe('true');
   });
 });
