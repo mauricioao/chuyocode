@@ -193,13 +193,13 @@ export const UI_LABELS = {
           user_not_found: 'No se encontró un usuario con ese correo.',
           already_owned: 'Ese usuario ya tiene acceso a este curso.',
           unavailable: 'El servicio no está disponible en este momento.',
-          db_error: 'Ocurrió un error. Intentar de nuevo.',
+          db_error: 'Ocurrió un error. Inténtalo de nuevo.',
           bad_request: 'Solicitud inválida.',
           invalid_duration: 'La duración debe ser un número mayor a cero.',
           invalid_kind: 'Tipo de lección inválido.',
           invalid_content: 'El contenido de la lección no es válido para su tipo.',
           activity_not_live: 'Esa actividad no está publicada todavía.',
-          invalid_order: 'No se pudo reordenar. Volver a intentar.',
+          invalid_order: 'No se pudo reordenar. Vuelve a intentarlo.',
         },
         modules: {
           title: 'Módulos',
@@ -968,11 +968,10 @@ export const UI_LABELS = {
     },
     home: {
       hero: {
-        // Infinitive, matching the register the rest of the site already uses
-        // for actions ("Elegir nivel", "Revisar las respuestas"). It keeps the
-        // headline's rhythm, length and `aprender` keyword intact and changes
-        // only the one thing the rule is about: the direct address.
-        headline: 'Aprender tecnología en tu idioma',
+        // Tuteo imperative, matching the site's neutral Latin-American
+        // register (owner decision, 2026-10-04). Keeps the headline's
+        // rhythm, length and `aprender` keyword intact.
+        headline: 'Aprende tecnología en tu idioma',
         subline:
           'Libros, artículos y cursos de programación pensados para la comunidad latina. Contenido claro, sin atajos, con fundamentos sólidos.',
         primaryCta: 'Explorar libros',
@@ -1010,12 +1009,10 @@ export const UI_LABELS = {
       teaser: {
         badge: 'Próximamente',
         title: 'Cursos en camino',
-        // "vas a poder" addressed the reader in the second person. The same
-        // phrasing the English section already uses for a not-yet-available
-        // state ("van a estar disponibles") keeps the promise without it, and
-        // "con nosotros" went with it — "Estamos preparando" already says who.
+        // "vas a poder" is valid tuteo (owner decision, 2026-10-04) — it is
+        // no longer rewritten into the third person to dodge the reader.
         description:
-          'Estamos preparando cursos prácticos de programación. Muy pronto van a estar disponibles para aprender paso a paso.',
+          'Estamos preparando cursos prácticos de programación. Muy pronto vas a poder aprender paso a paso.',
         imageAlt: 'Vista previa de los próximos cursos de programación',
       },
       // The hidden Courses feature itself — catalog (`/[lang]/cursos`) and
