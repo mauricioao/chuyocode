@@ -76,7 +76,8 @@ export const PLACEMENT_ITEMS: readonly PlacementItem[] = [
     level: 'A1',
     skill: 'grammar',
     prompt: 'She has ___ umbrella in her bag.',
-    options: ['a', 'an', 'the', '-'],
+    // No 'the' option: "the umbrella" is grammatical too (a known umbrella).
+    options: ['a', 'an', 'some', '-'],
     correctIndex: 1,
     explanationEs: "Se usa 'an' delante de una palabra que empieza con sonido vocálico, como 'umbrella'.",
   },
@@ -211,17 +212,21 @@ export const PLACEMENT_ITEMS: readonly PlacementItem[] = [
     id: 'b1-1',
     level: 'B1',
     skill: 'grammar',
-    prompt: "I ___ this movie before; let's watch something else.",
-    options: ['saw', 'have seen', 'see', 'was seeing'],
-    correctIndex: 1,
-    explanationEs: "El presente perfecto ('have seen') expresa una experiencia sin un momento concreto del pasado.",
+    // 'since' forces the present perfect; "I saw this movie before" would be
+    // accepted in American English, so an experience cue is not enough.
+    prompt: 'I ___ in this city since 2019.',
+    options: ['live', 'lived', 'have lived', 'am living'],
+    correctIndex: 2,
+    explanationEs:
+      "Con 'since' + el momento en que empezó algo que sigue hoy se usa el presente perfecto: 'have lived'.",
   },
   {
     id: 'b1-2',
     level: 'B1',
     skill: 'grammar',
     prompt: 'If it rains tomorrow, we ___ the picnic.',
-    options: ['cancel', 'will cancel', 'cancelled', 'would cancel'],
+    // Not 'cancel': a present-tense plan ("we cancel") is heard colloquially.
+    options: ['cancelling', 'will cancel', 'cancelled', 'would cancel'],
     correctIndex: 1,
     explanationEs: "El primer condicional usa 'will' + verbo en la cláusula principal para una condición real y futura.",
   },
@@ -306,19 +311,25 @@ export const PLACEMENT_ITEMS: readonly PlacementItem[] = [
     id: 'b2-3',
     level: 'B2',
     skill: 'grammar',
-    prompt: "She isn't answering her phone. She ___ be asleep.",
-    options: ['must', 'can', 'should', 'will'],
+    // Distractors are ungrammatical here on purpose: 'will' (British deduction)
+    // and 'should' (expectation) would both be defensible answers.
+    prompt: "You've been working for twelve hours. You ___ be exhausted.",
+    options: ['must', 'can', 'need', 'ought'],
     correctIndex: 0,
-    explanationEs: "'Must' expresa una deducción lógica fuerte sobre el presente.",
+    explanationEs:
+      "'Must' expresa una deducción lógica fuerte sobre el presente; 'need' y 'ought' necesitarían otra estructura ('need not', 'ought to').",
   },
   {
     id: 'b2-4',
     level: 'B2',
     skill: 'grammar',
-    prompt: 'She said that she ___ tired the day before.',
-    options: ['is', 'was', 'has been', 'will be'],
-    correctIndex: 1,
-    explanationEs: "En el estilo indirecto, el presente ('is') retrocede a pasado ('was').",
+    // A reported QUESTION: backshift in reported statements is optional when
+    // the fact still holds, so 'is' vs 'was' items have two defensible answers.
+    prompt: 'She asked me where ___.',
+    options: ['I lived', 'did I live', 'do I live', 'I do live'],
+    correctIndex: 0,
+    explanationEs:
+      "En las preguntas indirectas va el orden de una afirmación (sujeto + verbo), sin 'do/did': 'where I lived'.",
   },
   {
     id: 'b2-5',
