@@ -15,45 +15,33 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { requireRole } from '@lib/roles';
 import { isUuid } from '@lib/activities/paths';
 import { createModule } from '@lib/courses/admin';
 
-function json(body: Record<string, unknown>, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
-
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const moderator = await requireRole(user, 'moderator');
-  if (!moderator) return notFound();
+  if (!moderator) return notFoundResponse();
 
   const courseId = params.courseId;
-  if (typeof courseId !== 'string' || !isUuid(courseId)) return notFound();
+  if (typeof courseId !== 'string' || !isUuid(courseId)) return notFoundResponse();
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   const title = (body as { title?: unknown } | null)?.title;
-  if (typeof title !== 'string') return json({ error: 'bad_request' }, 400);
+  if (typeof title !== 'string') return jsonResponse({ error: 'bad_request' }, 400);
 
   const result = await createModule(courseId, title);
-  if (result.ok) return json({ id: result.value.id }, 201);
+  if (result.ok) return jsonResponse({ id: result.value.id }, 201);
 
-  if (result.error === 'invalid_title') return json({ error: result.error }, 422);
-  return json({ error: result.error }, 500);
+  if (result.error === 'invalid_title') return jsonResponse({ error: result.error }, 422);
+  return jsonResponse({ error: result.error }, 500);
 };

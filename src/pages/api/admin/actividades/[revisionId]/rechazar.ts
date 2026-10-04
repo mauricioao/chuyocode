@@ -17,22 +17,10 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { requireRole } from '@lib/roles';
 import { isUuid } from '@lib/activities/paths';
 import { rejectRevision } from '@lib/activities/moderation';
-
-function json(body: Record<string, unknown>, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 const VALIDATION_ERRORS: ReadonlySet<string> = new Set(['not_pending', 'invalid_note']);
 
@@ -46,28 +34,28 @@ function isRechazarInput(value: unknown): value is RechazarInput {
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const moderator = await requireRole(user, 'moderator');
-  if (!moderator) return notFound();
+  if (!moderator) return notFoundResponse();
 
   const revisionId = params.revisionId;
-  if (typeof revisionId !== 'string' || !isUuid(revisionId)) return notFound();
+  if (typeof revisionId !== 'string' || !isUuid(revisionId)) return notFoundResponse();
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   if (!isRechazarInput(body) || typeof body.note !== 'string') {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
 
   const result = await rejectRevision(revisionId, moderator.id, body.note);
-  if (result.ok) return json({ ok: true }, 200);
+  if (result.ok) return jsonResponse({ ok: true }, 200);
 
-  if (result.error === 'not_found') return notFound();
-  if (VALIDATION_ERRORS.has(result.error)) return json({ error: result.error }, 422);
-  return json({ error: result.error }, 500);
+  if (result.error === 'not_found') return notFoundResponse();
+  if (VALIDATION_ERRORS.has(result.error)) return jsonResponse({ error: result.error }, 422);
+  return jsonResponse({ error: result.error }, 500);
 };
