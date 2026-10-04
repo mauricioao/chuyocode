@@ -16,7 +16,6 @@ import { describe, expect, it } from 'vitest';
 import { COMPARATORS, check, comparatorFor } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
 import ChoiceRenderer from './ChoiceRenderer';
-import DropRenderer from './DropRenderer';
 import SelectRenderer from './SelectRenderer';
 import TextRenderer from './TextRenderer';
 import { comparatorForRenderable, rendererFor } from './registry';
@@ -29,7 +28,12 @@ describe('rendererFor', () => {
     expect(rendererFor('choice')).toBe(ChoiceRenderer);
     expect(rendererFor('select')).toBe(SelectRenderer);
     expect(rendererFor('text')).toBe(TextRenderer);
-    expect(rendererFor('drop')).toBe(DropRenderer);
+    // `drop` is registered as a React.lazy-wrapped component (see
+    // registry.tsx's own header on why) rather than the real `DropRenderer`
+    // module, so it is a function distinct from the other three — not a
+    // reference-equality match against the eager `./DropRenderer` export.
+    expect(typeof rendererFor('drop')).toBe('function');
+    expect(rendererFor('drop')).not.toBe(ChoiceRenderer);
   });
 
   // TRIANGULATION: four distinct mechanics must map to four DISTINCT
