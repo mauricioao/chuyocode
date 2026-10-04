@@ -66,6 +66,29 @@ describe('Footer.astro — Premium link', () => {
   });
 });
 
+// Refund Policy link (third legal document, RefundsContent.astro). The
+// `reembolsos` slug is deliberately the SAME in both languages — see
+// `legal/[page].astro`'s own `LEGAL_PAGES` comment.
+describe('Footer.astro — Refunds link', () => {
+  it('links to /[lang]/legal/reembolsos in es', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('href="/es/legal/reembolsos"');
+    expect(html).toContain(escapeHtml(UI_LABELS.es.footer.reembolsos));
+  });
+
+  it('links to /[lang]/legal/reembolsos in en', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'en' },
+    });
+    expect(html).toContain('href="/en/legal/reembolsos"');
+    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.reembolsos));
+  });
+});
+
 // SEO basics pass: the copyright year used to be a hardcoded "2026" literal
 // in the markup — it would have gone stale the moment the calendar turned.
 // Pinning the system clock to a year that is NOT today's proves the value is

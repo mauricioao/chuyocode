@@ -1,0 +1,219 @@
+---
+/**
+ * RefundsContent — Refund Policy body (es/en) for /[lang]/legal/reembolsos.
+ *
+ * New third legal document (alongside TermsContent/PrivacyContent), same
+ * pattern: owner identity from env props, isEs/en branch, fixed "last
+ * updated" date from the page. Covers Premium subscription payments only
+ * (processed through Paddle, acting as Merchant of Record — see
+ * `src/lib/billing/paddle.ts`); course purchases are out of scope today
+ * since the "Cursos incluidos" Premium feature is itself not live yet
+ * (`UI_LABELS.*.premium.comparison.rows`).
+ *
+ * The 14-day/renewal-not-used refund terms below are a PROPOSAL the owner
+ * must confirm before Premium payments go live — see this change's own
+ * report for the full list of points to confirm. Premium payments are not
+ * active yet (`PADDLE_WEBHOOK_SECRET` unset, `src/lib/env.ts`), so nothing is
+ * being charged today; this policy is published ahead of time so it is
+ * visible before anyone subscribes.
+ *
+ * DISCLAIMER: solid industry-standard structure, NOT lawyer-reviewed. Have it
+ * reviewed by a legal professional (and confirmed by the owner) before
+ * Premium payments go live.
+ */
+import type { Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  ownerName: string;
+  ownerRuc: string;
+  ownerCity: string;
+  ownerEmail: string;
+  updated: string;
+}
+
+const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
+  Astro.props;
+const isEs = lang === 'es';
+---
+
+<div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
+  <p class="text-sm text-zinc-500">
+    {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
+  </p>
+
+  {
+    isEs ? (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            1. Alcance de esta política
+          </h2>
+          <p>
+            Esta Política de Reembolsos aplica a los pagos de la suscripción
+            Premium de ChuyoCode, operado por{' '}
+            <strong class="text-zinc-100">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            {ownerCity && <>, domiciliado en {ownerCity}, Perú</>}, cuando se
+            procesen a través de Paddle. Mientras los pagos de Premium no
+            estén activos no se cobra nada, así que todavía no hay ningún pago
+            que reembolsar; publicamos esta política de antemano para que la
+            conozcas antes de suscribirte.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            2. Tu derecho a reembolso
+          </h2>
+          <p>
+            Puedes pedir el reembolso completo de: (a) tu primer pago de una
+            suscripción Premium, dentro de los 14 días siguientes a ese pago;
+            o (b) el cobro de una renovación, dentro de los 14 días siguientes
+            a esa renovación, si no usaste Premium después de que se cobrara.
+            Puedes pedir un reembolso por cada pago, una sola vez.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            3. Cancelación y reembolso son cosas distintas
+          </h2>
+          <p>
+            Cancelar tu suscripción detiene las renovaciones futuras;
+            conservas el acceso a Premium hasta el final del período que ya
+            pagaste. Cancelar no te devuelve automáticamente el dinero del
+            período actual: si quieres eso, debes pedir el reembolso según la
+            sección anterior.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            4. Cómo pedir tu reembolso
+          </h2>
+          <p>
+            Puedes pedirlo directamente desde el comprobante o el soporte de
+            Paddle (nuestro procesador de pagos y comerciante registrado), o
+            escribiendo a{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'el correo de contacto del Sitio'
+            )}
+            , y lo gestionaremos con Paddle. Al ser Paddle quien procesa el
+            cobro, también es quien procesa la devolución.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Los términos de Paddle también aplican
+          </h2>
+          <p>
+            Como Paddle actúa como comerciante registrado de esta venta, sus
+            propios Términos para compradores (Paddle Buyer Terms) también se
+            aplican a tu compra, además de esta política.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            6. Cambios en esta política
+          </h2>
+          <p>
+            Podemos actualizar esta Política de Reembolsos en cualquier
+            momento; los cambios rigen desde su publicación en el Sitio.
+          </p>
+        </section>
+      </>
+    ) : (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            1. Scope of this policy
+          </h2>
+          <p>
+            This Refund Policy applies to payments for ChuyoCode's Premium
+            subscription, operated by{' '}
+            <strong class="text-zinc-100">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            {ownerCity && <>, based in {ownerCity}, Peru</>}, once they are
+            processed through Paddle. While Premium payments are not active,
+            nothing is charged, so there is nothing to refund yet; we publish
+            this policy ahead of time so you know it before you subscribe.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            2. Your right to a refund
+          </h2>
+          <p>
+            You can request a full refund of: (a) your first payment for a
+            Premium subscription, within 14 days of that payment; or (b) a
+            renewal charge, within 14 days of that renewal, if you did not use
+            Premium after it was charged. You can request a refund once per
+            payment.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            3. Cancelling is not the same as a refund
+          </h2>
+          <p>
+            Cancelling your subscription stops future renewals; you keep
+            Premium access until the end of the period you already paid for.
+            Cancelling does not automatically refund the current period's
+            payment: if that is what you want, request a refund under the
+            previous section.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            4. How to request your refund
+          </h2>
+          <p>
+            You can request it directly from your Paddle receipt or Paddle
+            support (our payment processor and Merchant of Record), or by
+            writing to{' '}
+            {ownerEmail ? (
+              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+                {ownerEmail}
+              </a>
+            ) : (
+              'the Site contact address'
+            )}
+            , and we will handle it with Paddle. Since Paddle processes the
+            charge, it also processes the refund.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            5. Paddle's own terms also apply
+          </h2>
+          <p>
+            Because Paddle acts as the Merchant of Record for this sale, its
+            own Paddle Buyer Terms also apply to your purchase, in addition to
+            this policy.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-zinc-100">
+            6. Changes to this policy
+          </h2>
+          <p>
+            We may update this Refund Policy at any time; changes take effect
+            upon publication on the Site.
+          </p>
+        </section>
+      </>
+    )
+  }
+</div>

@@ -110,7 +110,12 @@ export const UI_LABELS = {
       soon: 'Pronto',
       switchTo: 'Cambiar a',
     },
-    footer: { terms: 'Términos y Condiciones', privacy: 'Privacidad', premium: 'Premium' },
+    footer: {
+      terms: 'Términos y Condiciones',
+      privacy: 'Privacidad',
+      premium: 'Premium',
+      reembolsos: 'Reembolsos',
+    },
     // Chrome shared by any page that mounts it (`BackButton`, `ScrollToTop`) —
     // not tied to one section, unlike `english`/`activities`/`legal` below.
     common: {
@@ -255,7 +260,11 @@ export const UI_LABELS = {
       },
     },
     legal: {
-      titles: { terms: 'Términos y condiciones', privacy: 'Política de privacidad' },
+      titles: {
+        terms: 'Términos y condiciones',
+        privacy: 'Política de privacidad',
+        reembolsos: 'Política de reembolsos',
+      },
       pending: 'Contenido legal pendiente',
       privacyNote:
         'Respetamos tu privacidad. Todavía estamos redactando la versión completa de este documento; mientras tanto, no vendemos ni compartimos tus datos personales con terceros.',
@@ -1151,18 +1160,27 @@ export const UI_LABELS = {
           {
             q: '¿Cuándo podré pagar?',
             a: 'Todavía estamos activando los pagos. En cuanto estén listos, vas a poder suscribirte desde esta misma página.',
+            link: null,
           },
           {
             q: '¿Puedo cancelar cuando quiera?',
             a: 'Sí, vas a poder cancelar cuando quieras, sin permanencia mínima.',
+            link: null,
           },
           {
+            // Owner decision 2026-10-04 (refund proposal): full refund within
+            // 14 days of the first payment or of a renewal not used since —
+            // see `RefundsContent.astro`/`legal/reembolsos` for the full
+            // policy, now that that page exists (`legal/[page].astro`'s
+            // `LEGAL_PAGES` allow-list).
             q: '¿Hay reembolso?',
-            a: 'Te lo contaremos en nuestra política de reembolsos al activar los pagos.',
+            a: 'Sí: tienes 14 días desde tu primer pago (o desde una renovación, si no usaste Premium después) para pedir el reembolso completo. Lee el detalle en nuestra',
+            link: { href: '/legal/reembolsos', label: 'política de reembolsos' },
           },
           {
             q: '¿Qué pasa con mis actividades si no pago?',
             a: 'Siguen siendo tuyas y gratis. Free no tiene fecha de vencimiento.',
+            link: null,
           },
         ],
       },
@@ -1325,7 +1343,12 @@ export const UI_LABELS = {
       soon: 'Soon',
       switchTo: 'Switch to',
     },
-    footer: { terms: 'Terms & Conditions', privacy: 'Privacy', premium: 'Premium' },
+    footer: {
+      terms: 'Terms & Conditions',
+      privacy: 'Privacy',
+      premium: 'Premium',
+      reembolsos: 'Refunds',
+    },
     common: {
       back: 'Back',
       backTooltip: 'Back to the previous page',
@@ -1460,7 +1483,11 @@ export const UI_LABELS = {
       },
     },
     legal: {
-      titles: { terms: 'Terms and conditions', privacy: 'Privacy policy' },
+      titles: {
+        terms: 'Terms and conditions',
+        privacy: 'Privacy policy',
+        reembolsos: 'Refund policy',
+      },
       pending: 'Legal content pending',
       privacyNote:
         'We respect your privacy. We are still drafting the full version of this document; in the meantime, we do not sell or share your personal data with third parties.',
@@ -2135,18 +2162,23 @@ export const UI_LABELS = {
           {
             q: 'When can I pay?',
             a: "We're still activating payments. As soon as they're ready, you'll be able to subscribe right from this page.",
+            link: null,
           },
           {
             q: 'Can I cancel anytime?',
             a: "Yes, you'll be able to cancel anytime, with no minimum commitment.",
+            link: null,
           },
           {
+            // Mirrors `es.premium.faq.items` — see its comment there.
             q: 'Is there a refund?',
-            a: "We'll cover that in our refund policy once payments go live.",
+            a: 'Yes: you have 14 days from your first payment (or from a renewal, if you did not use Premium after it) to request a full refund. Read the details in our',
+            link: { href: '/legal/reembolsos', label: 'refund policy' },
           },
           {
             q: 'What happens to my activities if I do not pay?',
             a: 'They stay yours and free. Free has no expiration date.',
+            link: null,
           },
         ],
       },

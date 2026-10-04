@@ -102,6 +102,7 @@ export const GET: APIRoute = async ({ site }) => {
     urlEntries(origin, sharedPath('/premium')),
     urlEntries(origin, sharedPath('/legal/terms')),
     urlEntries(origin, sharedPath('/legal/privacy')),
+    urlEntries(origin, sharedPath('/legal/reembolsos')),
   ];
 
   // Libros — every published book slug. `getBooks` returns ALL books (no

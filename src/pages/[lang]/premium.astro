@@ -183,7 +183,22 @@ function disabledCta(base: string): string {
           t.faq.items.map((item) => (
             <div>
               <dt class="font-semibold">{item.q}</dt>
-              <dd class="mt-1 text-muted-foreground">{item.a}</dd>
+              <dd class="mt-1 text-muted-foreground">
+                {item.a}
+                {item.link && (
+                  <>
+                    {' '}
+                    <a
+                      href={`/${lang}${item.link.href}`}
+                      class="text-primary hover:underline"
+                      data-testid="premium-faq-refunds-link"
+                    >
+                      {item.link.label}
+                    </a>
+                    .
+                  </>
+                )}
+              </dd>
             </div>
           ))
         }

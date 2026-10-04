@@ -124,7 +124,10 @@ describe('GET /[lang]/premium — comparison table', () => {
 });
 
 describe('GET /[lang]/premium — FAQ', () => {
-  it('answers the refund question honestly (no refund page exists yet)', async () => {
+  // The refund page now exists (`/[lang]/legal/reembolsos`, RefundsContent):
+  // the FAQ answer links to it instead of deferring to "once payments go
+  // live" (owner decision 2026-10-04, refund proposal — 14 days).
+  it('answers the refund question and links to the refund policy (es)', async () => {
     const res = await render('https://chuyocode.test/es/premium', {
       params: { lang: 'es' },
       locals: { lang: 'es' },
@@ -132,9 +135,24 @@ describe('GET /[lang]/premium — FAQ', () => {
     const html = await res.text();
 
     expect(html).toContain('¿Hay reembolso?');
-    expect(html).toContain('Te lo contaremos en nuestra política de reembolsos al activar los pagos.');
-    // Never a link to a refund page that does not exist.
-    expect(html).not.toContain('/es/legal/reembolsos');
+    expect(html).toContain('14 días');
+    expect(html).toMatch(
+      /<a[^>]+href="\/es\/legal\/reembolsos"[^>]*data-testid="premium-faq-refunds-link"/,
+    );
+  });
+
+  it('answers the refund question and links to the refund policy (en)', async () => {
+    const res = await render('https://chuyocode.test/en/premium', {
+      params: { lang: 'en' },
+      locals: { lang: 'en' },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('Is there a refund?');
+    expect(html).toContain('14 days');
+    expect(html).toMatch(
+      /<a[^>]+href="\/en\/legal\/reembolsos"[^>]*data-testid="premium-faq-refunds-link"/,
+    );
   });
 
   it('tells the visitor their free activities stay free if they never pay', async () => {

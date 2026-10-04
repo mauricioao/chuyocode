@@ -50,6 +50,10 @@ describe('GET /sitemap.xml', () => {
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/premium</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/terms</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/privacy</loc>');
+    // Refund Policy (third legal document) — same Spanish slug in both
+    // languages, same convention as every other `[lang]`-scoped page segment.
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/reembolsos</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/legal/reembolsos</loc>');
   });
 
   it('emits hreflang alternates (es/en + x-default -> es) on every entry', async () => {

@@ -2,13 +2,15 @@
 /**
  * Footer — site footer (spec 7: Footer requirement).
  *
- * Renders the copyright line and secondary links (Términos, Privacidad).
- * Simple zinc-900 background surface.
+ * Renders the copyright line and secondary links (Términos, Privacidad,
+ * Reembolsos). Simple zinc-900 background surface.
  *
  * The secondary links point at the single localized legal route
  * `/[lang]/legal/[page]` (design decision #9). They previously targeted
  * `/[lang]/terminos` and `/[lang]/privacidad`, which had no backing page and
- * 404'd; they now resolve to real `terms` / `privacy` documents.
+ * 404'd; they now resolve to real `terms` / `privacy` / `reembolsos`
+ * documents (the last one keeps its Spanish slug in both languages, same
+ * convention as every other `[lang]`-scoped page segment).
  *
  * i18n note: secondary link labels come from the shared `src/lib/i18n.ts`
  * (`UI_LABELS`). The previous inline FOOTER_LABELS map was removed once
@@ -42,6 +44,7 @@ const secondaryLinks = [
   { href: `${base}/premium`, label: labels.premium },
   { href: `${base}/legal/terms`, label: labels.terms },
   { href: `${base}/legal/privacy`, label: labels.privacy },
+  { href: `${base}/legal/reembolsos`, label: labels.reembolsos },
 ];
 ---
 
