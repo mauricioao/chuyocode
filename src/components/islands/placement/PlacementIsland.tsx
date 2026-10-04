@@ -112,7 +112,9 @@ export default function PlacementIsland({ lang }: PlacementIslandProps) {
           <p data-testid="placement-last-result" className="text-sm text-muted-foreground">
             {t.intro.lastResultPrefix}{' '}
             <span className="font-semibold text-foreground">
-              {previousResult.estimatedLevel ? levels[previousResult.estimatedLevel] : t.result.estimatedNone}
+              {previousResult.estimatedLevel
+                ? `${previousResult.estimatedLevel} · ${levels[previousResult.estimatedLevel]}`
+                : t.result.estimatedNone}
             </span>{' '}
             ({formatDate(previousResult.takenAt)})
           </p>

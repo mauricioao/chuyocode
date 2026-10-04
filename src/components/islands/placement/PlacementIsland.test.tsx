@@ -113,7 +113,10 @@ describe('PlacementIsland', () => {
 
     render(<PlacementIsland lang="es" />);
 
-    expect(screen.getByTestId('placement-last-result').textContent).toContain('2026-09-01');
+    const lastResult = screen.getByTestId('placement-last-result').textContent;
+    // Same "code · name" label the result screen shows, not the name alone.
+    expect(lastResult).toContain('A2 · Básico');
+    expect(lastResult).toContain('2026-09-01');
     expect(screen.getByTestId('placement-start').textContent).toBe('Repetir el test');
   });
 
