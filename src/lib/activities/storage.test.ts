@@ -203,6 +203,31 @@ describe('removeAllUserUploads', () => {
     expect(fromMock.remove).not.toHaveBeenCalled();
   });
 
+  it('paginates past the MAX_UPLOADS_PER_USER (100) list limit, removing every page (more than 100 uploads)', async () => {
+    const page1 = Array.from({ length: MAX_UPLOADS_PER_USER }, (_, i) => ({ name: `obj-${i}.webp` }));
+    const page2 = [{ name: 'obj-last.webp' }];
+    fromMock.list
+      .mockResolvedValueOnce({ data: page1, error: null })
+      .mockResolvedValueOnce({ data: page2, error: null });
+
+    expect(await removeAllUserUploads(USER)).toBe(true);
+    expect(fromMock.list).toHaveBeenCalledTimes(2);
+    expect(fromMock.remove).toHaveBeenCalledTimes(2);
+    expect(fromMock.remove).toHaveBeenNthCalledWith(1, page1.map((f) => `${USER}/${f.name}`));
+    expect(fromMock.remove).toHaveBeenNthCalledWith(2, [`${USER}/obj-last.webp`]);
+  });
+
+  it('fails CLOSED to false when a later page fails to list (first page is already removed by then)', async () => {
+    const page1 = Array.from({ length: MAX_UPLOADS_PER_USER }, (_, i) => ({ name: `obj-${i}.webp` }));
+    fromMock.list
+      .mockResolvedValueOnce({ data: page1, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+
+    expect(await removeAllUserUploads(USER)).toBe(false);
+    expect(fromMock.list).toHaveBeenCalledTimes(2);
+    expect(fromMock.remove).toHaveBeenCalledTimes(1);
+  });
+
   it('returns false for a malformed userId', async () => {
     expect(await removeAllUserUploads('not-a-uuid')).toBe(false);
     expect(fromMock).not.toHaveBeenCalled();
