@@ -57,7 +57,7 @@ import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
-import { hasPresentableQuiz } from '@lib/activities/presentationSlides';
+import { hasPresentableContent } from '@lib/activities/presentationSlides';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { hasHeartedActivity } from '@lib/activities/hearts';
 import { qrSvg, shareUrl } from '@lib/qr';
@@ -120,13 +120,15 @@ const guestSignInHref = `/${lang}/auth/entrar?next=${encodeURIComponent(currentP
 const guestSignUpHref = `/${lang}/auth/entrar?mode=signup&next=${encodeURIComponent(currentPath)}`;
 
 /**
- * "Presentar" (presentation mode v1): shown only when there is at least one
- * question to show — `hasPresentableQuiz` (shared with
- * `presentar.astro`'s own defensive 404, `@lib/activities/presentationSlides`)
- * is the single source of truth for that, so this button's visibility can
- * never drift from what the route itself would actually serve.
+ * "Presentar": shown whenever the activity has anything presentation mode
+ * can show — a quiz question OR a worksheet zone (`hasPresentableContent`,
+ * shared with `presentar.astro`'s own defensive 404,
+ * `@lib/activities/presentationSlides`; broadened from the quiz-only
+ * `hasPresentableQuiz` sprint week 3's worksheet zoom tour) — the single
+ * source of truth for that, so this button's visibility can never drift
+ * from what the route itself would actually serve.
  */
-const canPresent = hasPresentableQuiz(activity.blocks);
+const canPresent = hasPresentableContent(activity.blocks);
 
 function heartsLabel(count: number): string {
   return `${count} ${count === 1 ? t.heartsOne : t.heartsMany}`;

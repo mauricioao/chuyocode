@@ -447,10 +447,22 @@ export const UI_LABELS = {
         // same composition pattern as `practice.heartsLabel`'s own callers.
         basedOnPrefix: 'Basado en «',
         basedOnSuffix: '» de la comunidad',
+        // "Ver como presentación" (worksheet zoom tour, sprint week 3): opens
+        // a full-screen overlay presenting the editor's own CURRENT (unsaved
+        // included) blocks — `PresentationIsland` reused, not a new route.
+        viewAsPresentation: 'Ver como presentación',
         // Submit-for-review dialog.
         submitForReview: 'Enviar a revisión',
         submitDialogTitle: 'Enviar esta actividad a revisión',
         submitDialogNote: 'La actividad va a ser revisada por un moderador antes de publicarse.',
+        // Non-blocking projection warnings (sprint week 3): shown above the
+        // rights checkbox in the SAME submit dialog, never disabling
+        // "Enviar" — `listProjectionWarnings` (`presentationSlides.ts`).
+        projectionWarningsHeading: 'Antes de proyectar',
+        projectionWarningQuizPromptTooLong:
+          'Esta pregunta es muy larga para proyectarse bien; intenta acortarla.',
+        projectionWarningWorksheetZoneTooSmall:
+          'Esta zona es muy pequeña para proyectarse bien; hazla más grande.',
         submitRightsLabel: 'Confirmo que tengo el derecho de usar este material.',
         submitConfirm: 'Enviar',
         submitCancel: 'Cancelar',
@@ -937,6 +949,11 @@ export const UI_LABELS = {
         noLevel: 'Sin nivel',
         questionsCountOne: 'pregunta',
         questionsCountMany: 'preguntas',
+        // Worksheet zoom tour (sprint week 3): the cover's own count line
+        // composes this alongside `questionsCountOne/Many` when the
+        // activity has presentable worksheet pages too.
+        worksheetCountOne: 'hoja',
+        worksheetCountMany: 'hojas',
         scanHint: 'Escanea el código para abrir esta actividad en el teléfono.',
         qrAlt: 'Código QR para abrir esta actividad en un teléfono',
         summaryTitle: '¡Listo!',
@@ -947,14 +964,21 @@ export const UI_LABELS = {
         fullscreenEnter: 'Pantalla completa',
         fullscreenExit: 'Salir de pantalla completa',
         exit: 'Salir',
-        progressPrefix: 'Pregunta',
+        // Generalized from "Pregunta" (worksheet zoom tour, sprint week 3):
+        // the progress readout now also counts a worksheet overview/zone
+        // slide, which "Pregunta 3 de 8" would misname while looking at a
+        // worksheet, not a question.
+        progressPrefix: 'Diapositiva',
         ofLabel: 'de',
         correctBadge: 'Correcta',
         answerLabel: 'Respuesta',
         explanationLabel: 'Por qué',
+        // The worksheet zoom tour's own zone badges/labels (sprint week 3).
+        zoneLabel: 'Zona',
         liveCover: 'Portada',
         liveSummary: 'Resumen',
         liveRevealed: 'Respuesta revelada',
+        liveWorksheetOverview: 'Vista general de la hoja',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1484,9 +1508,13 @@ export const UI_LABELS = {
         reviewNoteLabel: "Reviewer's note",
         basedOnPrefix: 'Based on "',
         basedOnSuffix: '" from the community',
+        viewAsPresentation: 'View as presentation',
         submitForReview: 'Submit for review',
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',
+        projectionWarningsHeading: 'Before you project',
+        projectionWarningQuizPromptTooLong: 'This question is too long to project well; try shortening it.',
+        projectionWarningWorksheetZoneTooSmall: 'This zone is too small to project well; make it bigger.',
         submitRightsLabel: 'I confirm I have the right to use this material.',
         submitConfirm: 'Submit',
         submitCancel: 'Cancel',
@@ -1852,6 +1880,8 @@ export const UI_LABELS = {
         noLevel: 'No level',
         questionsCountOne: 'question',
         questionsCountMany: 'questions',
+        worksheetCountOne: 'sheet',
+        worksheetCountMany: 'sheets',
         scanHint: 'Scan the code to open this activity on a phone.',
         qrAlt: 'QR code to open this activity on a phone',
         summaryTitle: 'All done!',
@@ -1862,14 +1892,16 @@ export const UI_LABELS = {
         fullscreenEnter: 'Full screen',
         fullscreenExit: 'Exit full screen',
         exit: 'Exit',
-        progressPrefix: 'Question',
+        progressPrefix: 'Slide',
         ofLabel: 'of',
         correctBadge: 'Correct',
         answerLabel: 'Answer',
         explanationLabel: 'Why',
+        zoneLabel: 'Zone',
         liveCover: 'Cover',
         liveSummary: 'Summary',
         liveRevealed: 'Answer revealed',
+        liveWorksheetOverview: 'Worksheet overview',
       },
     },
     notFound: {

@@ -38,6 +38,22 @@ export const STAGE_SAFE_AREA_FRACTION = 0.05;
 export const STAGE_SAFE_AREA_X = STAGE_WIDTH * STAGE_SAFE_AREA_FRACTION;
 export const STAGE_SAFE_AREA_Y = STAGE_HEIGHT * STAGE_SAFE_AREA_FRACTION;
 
+/**
+ * The safe area's own size, stage pixels (`1728x972` at the stage's own
+ * 1920x1080 — still exactly 16:9, since the inset is the same fraction on
+ * both axes) — the worksheet zoom tour's own "stage" (presentation mode v1,
+ * sprint week 3): `presentationCamera.ts`'s `cameraForPage`/`cameraForZone`
+ * fit a worksheet page/zone inside THIS box, not the full stage, so a
+ * worksheet slide's content stays inside the same safe area every other
+ * slide already respects (this file's own header: "projector/TV routinely
+ * overscans the outer edge"). Single source of truth, shared by
+ * `PresentationIsland.tsx`'s own render and `presentationSlides.ts`'s
+ * projection-warning checklist scan, so neither can quietly drift from the
+ * other's idea of how much room a worksheet actually gets.
+ */
+export const STAGE_SAFE_WIDTH = STAGE_WIDTH - 2 * STAGE_SAFE_AREA_X;
+export const STAGE_SAFE_HEIGHT = STAGE_HEIGHT - 2 * STAGE_SAFE_AREA_Y;
+
 /** The stage's resolved placement inside a real viewport — see this module's own header. */
 export interface StageFit {
   /** Uniform scale applied to the 1920x1080 stage so it fits entirely inside the viewport. */
