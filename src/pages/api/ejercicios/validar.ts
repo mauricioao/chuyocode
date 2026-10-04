@@ -20,21 +20,9 @@
  * future authoring panel once one exists.
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse } from '@lib/apiResponse';
 import { parsePayload } from '@lib/exercisePayload';
 import { validateExercise } from '@lib/exerciseValidator';
-
-interface ValidateResponse {
-  ok: boolean;
-  code?: string;
-  issues?: unknown[];
-}
-
-function json(body: ValidateResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
 
 interface ValidateInput {
   skill: string;
@@ -62,15 +50,15 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     body = await request.json();
   } catch {
-    return json({ ok: false, code: 'bad_request' }, 400);
+    return jsonResponse({ ok: false, code: 'bad_request' }, 400);
   }
   if (!isValidateInput(body)) {
-    return json({ ok: false, code: 'bad_request' }, 400);
+    return jsonResponse({ ok: false, code: 'bad_request' }, 400);
   }
 
   const payload = parsePayload(body.payload);
   if (!payload) {
-    return json({ ok: false, code: 'payload_unparseable' }, 422);
+    return jsonResponse({ ok: false, code: 'payload_unparseable' }, 422);
   }
 
   const result = validateExercise({
@@ -81,5 +69,5 @@ export const POST: APIRoute = async ({ request }) => {
     payload,
   });
 
-  return json({ ok: result.ok, issues: result.issues }, 200);
+  return jsonResponse({ ok: result.ok, issues: result.issues }, 200);
 };

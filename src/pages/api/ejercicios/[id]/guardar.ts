@@ -52,11 +52,11 @@
  * leak both identity and content.
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse } from '@lib/apiResponse';
 import { isExerciseId } from '@lib/likes';
 import { canTransition, type Status } from '@lib/exerciseLifecycle';
 import { parsePayload, type Payload } from '@lib/exercisePayload';
-import { validateExercise, type ValidationIssue } from '@lib/exerciseValidator';
+import { validateExercise } from '@lib/exerciseValidator';
 import { withCollisionSuffix } from '@lib/exerciseSlug';
 import { createServiceClient } from '@lib/supabase';
 
@@ -77,26 +77,6 @@ interface Row {
   payload: unknown;
   author_id: string | null;
   published_at: string | null;
-}
-
-interface SaveResponse {
-  ok: boolean;
-  code?: string;
-  issues?: ValidationIssue[];
-  slug?: string;
-  url?: string;
-}
-
-function json(body: SaveResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
 }
 
 /** The `AuthoringSaveInput` shape, narrowed from `unknown` request JSON. */
@@ -135,20 +115,22 @@ function getClient(): ReturnType<typeof createServiceClient> | null {
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   // T3: no session, no read, no write — checked before anything else, same
-  // rule as `/api/reacciones/[exerciseId]`.
+  // rule as `/api/reacciones/[exerciseId]`. Body is `{ ok: false }`, not the
+  // shared `requireUser()`'s `{ error: 'unauthorized' }` — kept exactly as
+  // this route always answered it.
   const user = locals.user;
   if (!user) {
-    return json({ ok: false }, 401);
+    return jsonResponse({ ok: false }, 401);
   }
 
   const id = params.id;
   if (!isExerciseId(id)) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const client = getClient();
   if (!client) {
-    return json({ ok: false, code: 'save_unavailable' }, 503);
+    return jsonResponse({ ok: false, code: 'save_unavailable' }, 503);
   }
 
   const { data, error: fetchError } = await client
@@ -159,10 +141,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (fetchError) {
     console.error('[guardar] row fetch failed:', fetchError.message);
-    return json({ ok: false, code: 'save_failed' }, 500);
+    return jsonResponse({ ok: false, code: 'save_failed' }, 500);
   }
   if (!data) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const row = data as unknown as Row;
@@ -170,31 +152,31 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   // T4: the row exists, but it is not this caller's — 403, and nothing is
   // written. Ownership is decided from the FETCHED row, never from the body.
   if (row.author_id !== user.id) {
-    return json({ ok: false, code: 'forbidden' }, 403);
+    return jsonResponse({ ok: false, code: 'forbidden' }, 403);
   }
 
   // Terminal in v1 (`exerciseLifecycle.ts`) and out of the author's own
   // workspace (`getExercisesByAuthor`'s header) — no save of any kind
   // reaches a `removed` row through this endpoint.
   if (row.status === 'removed') {
-    return json({ ok: false, code: 'exercise_removed' }, 409);
+    return jsonResponse({ ok: false, code: 'exercise_removed' }, 409);
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ ok: false, code: 'bad_request' }, 400);
+    return jsonResponse({ ok: false, code: 'bad_request' }, 400);
   }
   if (!isSaveInput(body)) {
-    return json({ ok: false, code: 'bad_request' }, 400);
+    return jsonResponse({ ok: false, code: 'bad_request' }, 400);
   }
 
   // Step 3: `parsePayload` is the one gate that turns untrusted `unknown`
   // into a `Payload` this endpoint can store and validate.
   const parsedPayload: Payload | null = parsePayload(body.payload);
   if (!parsedPayload) {
-    return json({ ok: false, code: 'payload_unparseable' }, 422);
+    return jsonResponse({ ok: false, code: 'payload_unparseable' }, 422);
   }
 
   // Step 4: validation is required whenever the row is, or is about to
@@ -209,7 +191,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       payload: parsedPayload,
     });
     if (!result.ok) {
-      return json({ ok: false, issues: result.issues }, 422);
+      return jsonResponse({ ok: false, issues: result.issues }, 422);
     }
   }
 
@@ -218,7 +200,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   // not be asked again.
   const isFirstPublish = body.publish && row.published_at === null;
   if (isFirstPublish && !body.acceptedTerms) {
-    return json({ ok: false, code: 'terms_required' }, 422);
+    return jsonResponse({ ok: false, code: 'terms_required' }, 422);
   }
 
   // Step 6/7: resolve the transition an author may actually request. Already
@@ -228,7 +210,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   if (body.publish) {
     const isTransition = row.status !== 'live';
     if (isTransition && (!AUTHOR_PUBLISHABLE_FROM.has(row.status) || !canTransition(row.status, 'live'))) {
-      return json({ ok: false, code: 'invalid_transition' }, 409);
+      return jsonResponse({ ok: false, code: 'invalid_transition' }, 409);
     }
     nextStatus = 'live';
   }
@@ -263,15 +245,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     finalSlug = withCollisionSuffix(row.slug);
     ({ error: updateError } = await attemptUpdate(finalSlug));
     if (updateError?.code === '23505') {
-      return json({ ok: false, code: 'slug_collision_unresolved' }, 422);
+      return jsonResponse({ ok: false, code: 'slug_collision_unresolved' }, 422);
     }
   }
 
   if (updateError) {
     console.error('[guardar] update failed:', updateError.message);
-    return json({ ok: false, code: 'save_failed' }, 500);
+    return jsonResponse({ ok: false, code: 'save_failed' }, 500);
   }
 
   const url = `/ingles/${row.level}/${row.focus}/${finalSlug}`;
-  return json({ ok: true, slug: finalSlug, url }, 200);
+  return jsonResponse({ ok: true, slug: finalSlug, url }, 200);
 };
