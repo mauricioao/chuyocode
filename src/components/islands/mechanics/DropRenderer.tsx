@@ -566,7 +566,7 @@ export default function DropRenderer({
         </BlankSentence>
       ) : (
         <>
-          <Label className={`${PROMPT_MEASURE} font-medium text-zinc-100`}>
+          <Label className={`${PROMPT_MEASURE} font-medium text-foreground`}>
             {slot.label}
           </Label>
           {box}

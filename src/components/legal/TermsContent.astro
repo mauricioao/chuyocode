@@ -29,6 +29,9 @@ const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
 const isEs = lang === 'es';
 ---
 
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/legal/[page]` route (no `theme="ingles"`), so the
+    raw Tailwind step was never affected by the removed remap. */}
 <div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
   <p class="text-sm text-zinc-500">
     {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
@@ -38,13 +41,13 @@ const isEs = lang === 'es';
     isEs ? (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Identificación del titular
           </h2>
           <p>
             Este sitio web ChuyoCode (en adelante, "el Sitio") es operado por{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, domiciliado en {ownerCity}, Perú</>} (en adelante,
             "el Titular"). Para cualquier consulta relacionada con estos términos
             puedes escribir a{' '}
@@ -60,7 +63,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Objeto y aceptación
           </h2>
           <p>
@@ -74,7 +77,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Descripción del servicio
           </h2>
           <p>
@@ -88,7 +91,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Propiedad intelectual
           </h2>
           <p>
@@ -102,7 +105,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Publicidad y acceso recompensado
           </h2>
           <p>
@@ -116,7 +119,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Conducta del usuario
           </h2>
           <p>
@@ -129,7 +132,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             7. Exención de responsabilidad
           </h2>
           <p>
@@ -142,7 +145,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             8. Enlaces a terceros
           </h2>
           <p>
@@ -154,7 +157,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             9. Modificaciones, ley aplicable y jurisdicción
           </h2>
           <p>
@@ -170,13 +173,13 @@ const isEs = lang === 'es';
     ) : (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Site owner
           </h2>
           <p>
             This ChuyoCode website (the "Site") is operated by{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, based in {ownerCity}, Peru</>} (the "Owner"). For any
             question regarding these terms, you may contact{' '}
             {ownerEmail ? (
@@ -191,7 +194,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Purpose and acceptance
           </h2>
           <p>
@@ -205,7 +208,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Service description
           </h2>
           <p>
@@ -218,7 +221,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Intellectual property
           </h2>
           <p>
@@ -232,7 +235,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Advertising and rewarded access
           </h2>
           <p>
@@ -245,7 +248,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. User conduct
           </h2>
           <p>
@@ -258,7 +261,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             7. Disclaimer
           </h2>
           <p>
@@ -271,7 +274,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             8. Third-party links
           </h2>
           <p>
@@ -282,7 +285,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             9. Changes, governing law, and jurisdiction
           </h2>
           <p>

@@ -76,14 +76,14 @@ export default function QuizOpenBox({ lang, items }: QuizOpenBoxProps) {
               aria-label={`${t.openboxBoxAriaPrefix} ${index + 1}, ${opened ? t.openboxOpenedSuffix : t.openboxClosedSuffix}`}
               className={cn(
                 'relative flex size-11 items-center justify-center rounded-md border-2 text-sm font-bold transition-colors',
-                isActive && 'border-accent-ink bg-accent/10 text-zinc-100',
-                !isActive && opened && 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300',
-                !isActive && !opened && 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60',
+                isActive && 'border-accent-ink bg-accent/10 text-foreground',
+                !isActive && opened && 'border-success-strong/60 bg-success-strong/10 text-success-strong-foreground',
+                !isActive && !opened && 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60',
               )}
             >
               {index + 1}
               {opened && !isActive && (
-                <CheckIcon aria-hidden="true" weight="bold" className="absolute -right-1 -top-1 size-4 rounded-full bg-emerald-500 p-0.5 text-white" />
+                <CheckIcon aria-hidden="true" weight="bold" className="absolute -right-1 -top-1 size-4 rounded-full bg-success-strong p-0.5 text-white" />
               )}
             </button>
           );
@@ -95,15 +95,15 @@ export default function QuizOpenBox({ lang, items }: QuizOpenBoxProps) {
           data-testid="openbox-card"
           className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center"
         >
-          <p className="text-lg font-semibold text-zinc-100 sm:text-xl">{active.prompt}</p>
+          <p className="text-lg font-semibold text-foreground sm:text-xl">{active.prompt}</p>
           <SpeakButton text={active.prompt} lang={lang} />
 
           {revealed ? (
             <div data-testid="openbox-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3">
-              <p className="text-lg font-semibold text-zinc-100">{active.answer}</p>
+              <p className="text-lg font-semibold text-foreground">{active.answer}</p>
               {active.explanation && (
                 <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                  <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
+                  <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
                   <p>{active.explanation}</p>
                 </div>
               )}

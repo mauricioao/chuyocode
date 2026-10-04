@@ -112,13 +112,13 @@ export default function QuizTrueFalse({ lang, items }: QuizTrueFalseProps) {
 
   function buttonClass(isTrueButton: boolean): string {
     if (feedback === 'idle' || given === undefined) {
-      return 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60';
+      return 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60';
     }
     const isCorrectAnswer = isTrueButton === current!.isTrue;
     const isTappedButton = isTrueButton === given;
-    if (isCorrectAnswer) return 'border-emerald-500 bg-emerald-500/10 text-emerald-300';
+    if (isCorrectAnswer) return 'border-success-strong bg-success-strong/10 text-success-strong-foreground';
     if (isTappedButton) return 'border-destructive bg-destructive/10 text-destructive';
-    return 'border-border bg-surface-soft text-zinc-100 opacity-60';
+    return 'border-border bg-surface-soft text-foreground opacity-60';
   }
 
   return (
@@ -138,7 +138,7 @@ export default function QuizTrueFalse({ lang, items }: QuizTrueFalseProps) {
 
       <p
         data-testid="truefalse-statement"
-        className="w-full max-w-md rounded-lg border-2 border-border bg-surface-soft p-6 text-center text-lg font-semibold text-zinc-100"
+        className="w-full max-w-md rounded-lg border-2 border-border bg-surface-soft p-6 text-center text-lg font-semibold text-foreground"
       >
         {current.statement}
       </p>

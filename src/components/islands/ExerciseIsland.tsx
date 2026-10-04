@@ -523,7 +523,7 @@ export default function ExerciseIsland({
           // covers a count-up clock as well as a countdown — it is "elapsed
           // time from a start point, or time remaining until an end point".
           role="timer"
-          className="ms-auto text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
+          className="ms-auto text-base font-semibold text-foreground tabular-nums sm:text-lg"
         >
           {t.elapsed} {formatElapsed(elapsed)}
         </p>
@@ -561,7 +561,7 @@ export default function ExerciseIsland({
                 <div key={block.id} className={`flex items-start justify-center gap-2 ${PROMPT_MEASURE}`}>
                   <p
                     data-testid={`exercise-block-${block.id}`}
-                    className="font-sans text-base text-zinc-300"
+                    className="font-sans text-base text-muted-foreground-subtle"
                   >
                     {block.text}
                   </p>
@@ -659,7 +659,7 @@ export default function ExerciseIsland({
                 // first time this copy grows an accent.
                 className={`font-sans ${
                   outcome === 'correct'
-                    ? 'text-base font-semibold text-emerald-400 sm:text-lg'
+                    ? 'text-base font-semibold text-success sm:text-lg'
                     : 'text-base font-semibold text-destructive sm:text-lg'
                 }`}
               >
@@ -742,7 +742,7 @@ export default function ExerciseIsland({
               data-testid="exercise-step"
               role="status"
               aria-atomic="true"
-              className="text-base font-semibold text-zinc-100 tabular-nums sm:text-lg"
+              className="text-base font-semibold text-foreground tabular-nums sm:text-lg"
             >
               <span aria-hidden="true">{formatStep(current, total, t.stepOf)}</span>
               <span className="sr-only">
@@ -765,7 +765,7 @@ export default function ExerciseIsland({
             <p
               data-testid="exercise-verdict"
               role="status"
-              className="text-lg font-semibold text-zinc-100 sm:text-xl"
+              className="text-lg font-semibold text-foreground sm:text-xl"
             >
               {result.correct ? t.allCorrect : t.someWrong}
             </p>

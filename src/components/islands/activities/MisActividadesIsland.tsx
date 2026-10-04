@@ -105,7 +105,7 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
     return (
       <div
         data-testid="mis-actividades-empty"
-        className="flex flex-col items-start gap-4 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300"
+        className="flex flex-col items-start gap-4 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground"
       >
         {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely decorative, next to the empty message below. */}
         <Emoji name="llama" size={48} />

@@ -247,7 +247,7 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
                 <a
                   href={chip.href}
                   data-testid={`filter-chip-${chip.key}`}
-                  class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-zinc-300 hover:border-accent-ink hover:text-accent-ink"
+                  class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-muted-foreground hover:border-accent-ink hover:text-accent-ink"
                 >
                   {chip.label} <span aria-hidden="true">&times;</span>
                 </a>
@@ -260,7 +260,7 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
 
     {
       activities.length === 0 && !(showDailyPick && dailyPick) ? (
-        <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
+        <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground">
           {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely decorative, next to the empty message below. */}
           <Emoji name="llama" size={48} />
           <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
@@ -317,7 +317,7 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
                   {t.prevPage}
                 </span>
               )}
-              <span class="text-sm text-zinc-400 tabular-nums">
+              <span class="text-sm text-muted-foreground tabular-nums">
                 {t.pageLabel} {currentPage} {t.ofLabel} {totalPages}
               </span>
               {currentPage < totalPages ? (

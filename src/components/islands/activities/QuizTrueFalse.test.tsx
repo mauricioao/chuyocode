@@ -33,7 +33,7 @@ describe('QuizTrueFalse', () => {
     vi.useFakeTimers();
     render(<QuizTrueFalse lang="es" items={items} />);
     fireEvent.click(screen.getByTestId('truefalse-true')); // item 1 is true
-    expect(screen.getByTestId('truefalse-true').className).toContain('border-emerald-500');
+    expect(screen.getByTestId('truefalse-true').className).toContain('border-success-strong');
     expect(screen.getByTestId('truefalse-live-region').textContent).toBe('Correcto');
     expect(screen.getByTestId('truefalse-true').hasAttribute('disabled')).toBe(true);
     expect(screen.getByTestId('truefalse-false').hasAttribute('disabled')).toBe(true);
@@ -44,7 +44,7 @@ describe('QuizTrueFalse', () => {
     render(<QuizTrueFalse lang="es" items={items} />);
     fireEvent.click(screen.getByTestId('truefalse-false')); // item 1 is true, so this is wrong
     expect(screen.getByTestId('truefalse-false').className).toContain('border-destructive');
-    expect(screen.getByTestId('truefalse-true').className).toContain('border-emerald-500');
+    expect(screen.getByTestId('truefalse-true').className).toContain('border-success-strong');
     expect(screen.getByTestId('truefalse-live-region').textContent).toBe('Incorrecto');
   });
 

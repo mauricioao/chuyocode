@@ -28,7 +28,7 @@ export default function UnavailableRenderer({
   return (
     <div className="flex flex-col gap-2">
       {slot.label.length > 0 && (
-        <p className="text-base font-medium text-zinc-100">{slot.label}</p>
+        <p className="text-base font-medium text-foreground">{slot.label}</p>
       )}
       <p
         role="status"
@@ -36,7 +36,7 @@ export default function UnavailableRenderer({
         // `font-sans`: this message is the app apologising, not English to
         // learn, and the Spanish copy ends in "aquí." — an accent the exercise
         // display face does not carry.
-        className="font-sans rounded-lg border border-dashed border-surface-muted bg-surface-muted/40 p-3 text-sm text-zinc-400"
+        className="font-sans rounded-lg border border-dashed border-surface-muted bg-surface-muted/40 p-3 text-sm text-muted-foreground"
       >
         {message}
       </p>

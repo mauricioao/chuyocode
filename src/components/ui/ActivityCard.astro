@@ -99,9 +99,9 @@ function countLabel(count: number): string {
         }
       </div>
       <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-2">
-        <span class="truncate text-sm font-semibold text-zinc-100">{activity.title}</span>
-        <span class="truncate text-xs text-zinc-400">{levelLine}</span>
-        <div class="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-zinc-400">
+        <span class="truncate text-sm font-semibold text-foreground">{activity.title}</span>
+        <span class="truncate text-xs text-muted-foreground">{levelLine}</span>
+        <div class="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-muted-foreground">
           <span class="inline-flex items-center gap-1" data-testid="activity-card-hearts">
             <HeartIcon aria-hidden="true" size={14} />
             <span class="tabular-nums">{activity.heartCount}</span>
@@ -120,7 +120,7 @@ function countLabel(count: number): string {
           {
             !highlighted && activity.viewedByViewer && (
               <span
-                class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-zinc-300"
+                class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground"
                 data-testid="activity-card-viewed-badge"
               >
                 <CheckCircleIcon aria-hidden="true" size={12} weight="fill" />
@@ -170,13 +170,13 @@ function countLabel(count: number): string {
         }
       </div>
       <div class="flex flex-1 flex-col gap-2 p-4">
-        <span class="text-lg font-semibold text-zinc-100">{activity.title}</span>
-        <span class="text-sm text-zinc-400">
+        <span class="text-lg font-semibold text-foreground">{activity.title}</span>
+        <span class="text-sm text-muted-foreground">
           {levelLine}
           {' · '}
           {countLabel(activity.blockCount)}
         </span>
-        <div class="mt-auto flex flex-wrap items-center gap-3 pt-1 text-sm text-zinc-400">
+        <div class="mt-auto flex flex-wrap items-center gap-3 pt-1 text-sm text-muted-foreground">
           <span class="inline-flex items-center gap-1" data-testid="activity-card-hearts">
             <HeartIcon aria-hidden="true" size={16} />
             <span class="tabular-nums">{activity.heartCount}</span>
@@ -188,7 +188,7 @@ function countLabel(count: number): string {
           {
             activity.viewedByViewer && (
               <span
-                class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-zinc-300"
+                class="ml-auto inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
                 data-testid="activity-card-viewed-badge"
               >
                 <CheckCircleIcon aria-hidden="true" size={14} weight="fill" />

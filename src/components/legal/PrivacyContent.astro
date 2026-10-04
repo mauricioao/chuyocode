@@ -28,6 +28,9 @@ const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
 const isEs = lang === 'es';
 ---
 
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/legal/[page]` route (no `theme="ingles"`), so the
+    raw Tailwind step was never affected by the removed remap. */}
 <div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
   <p class="text-sm text-zinc-500">
     {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
@@ -37,14 +40,14 @@ const isEs = lang === 'es';
     isEs ? (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Responsable del tratamiento
           </h2>
           <p>
             El responsable del tratamiento de los datos personales recolectados a
             través de este sitio ChuyoCode (el "Sitio") es{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, domiciliado en {ownerCity}, Perú</>}. El tratamiento
             se realiza conforme a la Ley N° 29733, Ley de Protección de Datos
             Personales, y su reglamento. Contacto:{' '}
@@ -60,7 +63,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Datos que recolectamos
           </h2>
           <p>
@@ -75,7 +78,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Finalidad del tratamiento
           </h2>
           <p>
@@ -88,7 +91,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Cookies
           </h2>
           <p>
@@ -97,14 +100,14 @@ const isEs = lang === 'es';
           </p>
           <ul class="ml-5 flex list-disc flex-col gap-2">
             <li>
-              <strong class="text-zinc-100">Cookies técnicas propias:</strong>{' '}
+              <strong class="text-foreground">Cookies técnicas propias:</strong>{' '}
               necesarias para el funcionamiento. Por ejemplo, la cookie de acceso
               recompensado (que recuerda que viste un anuncio para no repetirlo por
               un período) y cookies para evitar contar la misma descarga varias
               veces. Sin estas, el Sitio no funciona correctamente.
             </li>
             <li>
-              <strong class="text-zinc-100">Cookies de terceros:</strong>{' '}
+              <strong class="text-foreground">Cookies de terceros:</strong>{' '}
               proveedores como Google (AdSense / Ad Manager y, en su caso,
               Analytics) instalan cookies para mostrar y medir publicidad, incluida
               publicidad personalizada. Estas se rigen por las políticas de dichos
@@ -119,7 +122,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Publicidad de terceros
           </h2>
           <p>
@@ -149,7 +152,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Tus derechos (ARCO)
           </h2>
           <p>
@@ -169,7 +172,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             7. Conservación y seguridad
           </h2>
           <p>
@@ -181,7 +184,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             8. Cambios en esta política
           </h2>
           <p>
@@ -194,14 +197,14 @@ const isEs = lang === 'es';
     ) : (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Data controller
           </h2>
           <p>
             The controller of personal data collected through this ChuyoCode site
             (the "Site") is{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, based in {ownerCity}, Peru</>}. Processing is carried
             out in accordance with Peru's Law No. 29733 on Personal Data
             Protection and its regulations. Contact:{' '}
@@ -217,7 +220,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Data we collect
           </h2>
           <p>
@@ -231,7 +234,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Purpose of processing
           </h2>
           <p>
@@ -243,7 +246,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Cookies
           </h2>
           <p>
@@ -251,14 +254,14 @@ const isEs = lang === 'es';
           </p>
           <ul class="ml-5 flex list-disc flex-col gap-2">
             <li>
-              <strong class="text-zinc-100">First-party technical cookies:</strong>{' '}
+              <strong class="text-foreground">First-party technical cookies:</strong>{' '}
               required for operation. For example, the rewarded-access cookie
               (remembering you watched an ad so it is not repeated for a period)
               and cookies to avoid counting the same download multiple times.
               Without these, the Site does not work correctly.
             </li>
             <li>
-              <strong class="text-zinc-100">Third-party cookies:</strong> providers
+              <strong class="text-foreground">Third-party cookies:</strong> providers
               such as Google (AdSense / Ad Manager and, where applicable,
               Analytics) set cookies to serve and measure advertising, including
               personalized ads. These are governed by those providers' policies.
@@ -271,7 +274,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Third-party advertising
           </h2>
           <p>
@@ -301,7 +304,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Your rights
           </h2>
           <p>
@@ -321,7 +324,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             7. Retention and security
           </h2>
           <p>
@@ -333,7 +336,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             8. Changes to this policy
           </h2>
           <p>

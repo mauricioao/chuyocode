@@ -344,7 +344,7 @@ export default function WorksheetPracticePlayerMobile({
                 data-testid="zone-sheet-explanation"
                 className="rounded-md border border-border bg-muted/40 p-3 text-sm text-foreground"
               >
-                <div className="mb-1 flex items-center gap-1.5 font-medium text-amber-400">
+                <div className="mb-1 flex items-center gap-1.5 font-medium text-hint">
                   <LightbulbIcon aria-hidden="true" weight="fill" />
                   <span>{t.explanationHeading}</span>
                 </div>
