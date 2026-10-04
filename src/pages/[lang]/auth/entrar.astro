@@ -179,7 +179,7 @@ const t = UI_LABELS[lang].auth;
         <input type="hidden" name="lang" value={lang} />
         {next && <input type="hidden" name="next" value={next} />}
         {/* No island hydrates this page (see the file header), so the
-            loading feedback below is a tiny inert <script> — NOT React's
+            loading feedback below is a tiny inert script element — NOT React's
             `Button` — toggling the exact same visual contract that
             component's own `loading` prop gives everywhere else: a spinner
             over the stable-width label, the label itself kept (just
