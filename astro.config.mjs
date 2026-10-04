@@ -10,6 +10,13 @@ import { serverOnlyModules } from './src/lib/build/serverOnlyModules.ts';
 // Function, and `dist/` keeps only the prerendered/static assets that Netlify
 // serves from its CDN.
 export default defineConfig({
+  // SEO basics: backs the canonical/hreflang/OG tags (`BaseLayout.astro`) and
+  // the sitemap (`src/pages/sitemap.xml.ts`) with one absolute origin. Netlify
+  // sets the `URL` build-time env var to the site's primary URL — today's
+  // `*.netlify.app` subdomain, and the custom domain automatically once one is
+  // attached (bought 2026-11-01) — so this needs no code change that day. The
+  // literal fallback covers a local `pnpm build`/test run with no `URL` set.
+  site: process.env.URL || 'https://chuyocode.netlify.app',
   output: 'server',
   // 🔴 HARD RULE — the Netlify adapter is called with NO options, and must stay
   // that way. Two of its options break authentication, and both break it
