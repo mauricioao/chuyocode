@@ -1,15 +1,17 @@
 ---
 /**
  * Presentation page — `/[lang]/ingles/actividades/[id]/presentar`
- * (presentation mode v1, "Preguntas"). Same access rules as the practice
- * page (`[id].astro`, two levels up): `getPublishedActivity` 404s for
- * anything not `visible`, including the author's own non-live activity —
- * this route is the public player's presentation view, not a preview.
- * Additionally 404s when the activity has no presentable question
- * (`hasPresentableQuiz`, `@lib/activities/presentationSlides`) — the SAME
- * predicate the practice page's own "Presentar" link uses to decide whether
- * to show itself at all, so a direct visit can never reach a stage with
- * nothing to present just because the entry point happened to be hidden.
+ * (presentation mode; worksheet zoom tour added sprint week 3). Same access
+ * rules as the practice page (`[id].astro`, two levels up):
+ * `getPublishedActivity` 404s for anything not `visible`, including the
+ * author's own non-live activity — this route is the public player's
+ * presentation view, not a preview. Additionally 404s when the activity has
+ * nothing presentable at all (`hasPresentableContent`,
+ * `@lib/activities/presentationSlides` — a quiz question OR a worksheet
+ * zone) — the SAME predicate the practice page's own "Presentar" link uses
+ * to decide whether to show itself at all, so a direct visit can never
+ * reach a stage with nothing to present just because the entry point
+ * happened to be hidden.
  *
  * Under `ingles/**`, so this route is marked private/no-store by the
  * middleware like every other gated page — `markPrivate` is called here
@@ -31,12 +33,15 @@
  * scrolling, belt-and-suspenders alongside the island's own `fixed
  * inset-0` stage (which already covers the whole viewport on its own).
  *
- * ONLY `quiz` BLOCKS, FLATTENED, EVER REACH THE ISLAND — never the
- * activity's worksheet blocks (images, zones, and their answers), which
- * this route has no use for and therefore never serializes to the client
- * at all. Every prop below is plain, serializable data (id, title, level,
- * a URL, QR markup, the quiz blocks themselves) — see
- * `src/astroIslandProps.test.ts`'s own guard.
+ * EVERY BLOCK, IN AUTHORED ORDER, NOW REACHES THE ISLAND (sprint week 3):
+ * the worksheet zoom tour needs a presentable worksheet's own image/zones
+ * (answers included — revealing them to a projected class is the whole
+ * point, same posture v1 already accepted for quiz answers) to walk its own
+ * zones in order. `PresentationIsland`'s own deck builder
+ * (`presentationSlides.ts`) is what actually decides which blocks
+ * contribute a slide; this route just hands it the full list. Every prop
+ * below stays plain, serializable data — see `src/astroIslandProps.test.ts`'s
+ * own guard.
  *
  * The QR (D8's own `@lib/qr`, reused verbatim) encodes the activity's
  * PRACTICE page, not this presentation page itself — "scan to open on your
@@ -47,10 +52,9 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import PresentationIsland from '@components/islands/activities/PresentationIsland';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
-import { hasPresentableQuiz } from '@lib/activities/presentationSlides';
+import { hasPresentableContent } from '@lib/activities/presentationSlides';
 import { markPrivate } from '@lib/httpCache';
 import { qrSvg, shareUrl } from '@lib/qr';
-import type { QuizBlock } from '@lib/activities/blocks';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -84,8 +88,7 @@ if (!activity) {
   });
 }
 
-const quizBlocks = activity.blocks.filter((block): block is QuizBlock => block.type === 'quiz');
-if (!hasPresentableQuiz(quizBlocks)) {
+if (!hasPresentableContent(activity.blocks)) {
   return new Response(null, {
     status: 404,
     statusText: 'Not Found',
@@ -107,6 +110,6 @@ const shareQr = qrSvg(shareLink);
     level={activity.level}
     practiceUrl={practiceUrl}
     qrSvg={shareQr}
-    quizBlocks={quizBlocks}
+    blocks={activity.blocks}
   />
 </BaseLayout>

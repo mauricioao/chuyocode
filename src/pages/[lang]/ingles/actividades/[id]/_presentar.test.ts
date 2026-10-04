@@ -91,17 +91,9 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — routing', () => {
   });
 });
 
-describe('GET /[lang]/ingles/actividades/[id]/presentar — defensive quiz gate', () => {
+describe('GET /[lang]/ingles/actividades/[id]/presentar — defensive presentable-content gate', () => {
   it('404s when the activity has no blocks at all', async () => {
     activityResult.value = { ...WORKSHEET_ONLY_ACTIVITY, blocks: [] };
-    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
-      params: { lang: 'es', id: 'abc' },
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it('404s when the activity only has worksheet blocks', async () => {
-    activityResult.value = WORKSHEET_ONLY_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
     });
@@ -114,6 +106,25 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — defensive quiz gate'
       params: { lang: 'es', id: 'abc' },
     });
     expect(res.status).toBe(404);
+  });
+
+  it('404s when the only worksheet block has an image but no zones', async () => {
+    activityResult.value = {
+      ...WORKSHEET_ONLY_ACTIVITY,
+      blocks: [{ ...WORKSHEET_ONLY_ACTIVITY.blocks[0], zones: [] }],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('renders (does NOT 404) for a worksheet-only activity — the worksheet zoom tour, sprint week 3', async () => {
+    activityResult.value = WORKSHEET_ONLY_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -157,7 +168,7 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     expect(html).not.toContain('<footer');
   });
 
-  it('never ships the worksheet block to the client — only quiz blocks are presentable', async () => {
+  it('ships the worksheet block to the client too — the worksheet zoom tour needs its image/zones (sprint week 3)', async () => {
     activityResult.value = {
       ...QUIZ_ACTIVITY,
       blocks: [WORKSHEET_ONLY_ACTIVITY.blocks[0], ...QUIZ_ACTIVITY.blocks],
@@ -166,7 +177,11 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
-    expect(html).not.toContain('activity-images/abc/img-1.webp');
+    // Serialized straight into the island's own props for hydration — the
+    // client-only `imagePreviewUrl()` resolution happens later, inside the
+    // island itself, never during this server render.
+    expect(html).toContain('activity-images/abc/img-1.webp');
+    expect(html).toContain('data-testid="presentation-slide-cover"');
   });
 
   it('returns 200 in English', async () => {
