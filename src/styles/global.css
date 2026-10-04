@@ -44,6 +44,16 @@
   --color-accent-hover: #eab308;
   --color-accent-soft: #fde047;
 
+  /* Accent used as TEXT, a link, or a state-indicating border/outline —
+   * never as a FILL (that stays `--color-accent` above, unconditionally, in
+   * both themes). Dark/brand keeps the exact amber values already shipping,
+   * so a global `text-accent` -> `text-accent-ink` replace is byte-identical
+   * there; the light Inglés scope (`[data-theme="ingles"]`, below) overrides
+   * both to a warmer, ink-dark gold that clears 4.5:1 on cream/white — bare
+   * amber text/borders fail WCAG on a light background (contrast ~1.45). */
+  --color-accent-ink: #facc15;
+  --color-accent-ink-hover: #eab308;
+
   /* Display face for headings (decision #1). Raleway Variable loads via
    * fonts.css; the system-sans stack is the swap fallback. */
   --font-display: 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
@@ -86,6 +96,19 @@
    * layered like `--shadow-elevation-*` above, but softer/wider for a
    * glass-like lift off the page rather than a hard drop shadow. */
   --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+
+  /* Glass floating controls (BackButton, ScrollToTop, EditorSideToolbar): the
+   * hairline ring that catches light on `.glass-floating`'s translucent
+   * surface, and that surface's own tint. Dark/brand keeps the exact
+   * white-based values already shipping; a white ring/tint is invisible on a
+   * LIGHT glass surface, so the Inglés scope below swaps both to ink-based. */
+  --color-glass-ring: rgb(255 255 255 / 0.1);
+  --color-glass-bg: rgb(24 24 27 / 0.55);
+
+  /* `.canvas-dots`' dot colour (below): white dots read on the dark
+   * `bg-muted` worksheet canvas; the Inglés scope overrides to a warm ink dot
+   * instead, since white-on-cream would be unreadable. */
+  --color-canvas-dot: rgb(255 255 255 / 0.09);
 
   /* Motion for controls (hover/focus/press transitions): 150-200ms ease-out,
    * distinct from `--transition-duration-theme` (300ms theme toggle) because
@@ -177,6 +200,160 @@
   --input: #27272a;
   --ring: #facc15;
 }
+
+/* --- "Dark brand, light product" (visual-theme pass) -------------------- *
+ * The site stays black/yellow everywhere EXCEPT the Inglés product, which
+ * gets a light, warm palette. Two attribute-driven scopes make that possible
+ * without a mass rename of call sites:
+ *
+ *   [data-theme="ingles"] — set on <html> by `BaseLayout`'s `theme="ingles"`
+ *     prop, on every Inglés product route. Overrides BOTH the semantic roles
+ *     above (--background, --foreground, --card, …) AND the raw `@theme`
+ *     palette vars (--color-surface*, --color-platinum, --color-field*, the
+ *     new --color-accent-ink*) plus a few Tailwind DEFAULT-palette steps
+ *     (zinc/emerald/amber) that call sites reference directly — so existing
+ *     `bg-surface`/`text-platinum`/`bg-field`/`text-zinc-100`/`text-primary`
+ *     utilities flip to the light palette with NO class-name changes at
+ *     those call sites. `--color-accent`/`-hover`/`-soft` are deliberately
+ *     NOT overridden: the brand-yellow FILL stays amber in both themes
+ *     (owner spec) — only accent-as-TEXT/border (`--color-accent-ink`) and
+ *     the keyboard focus ring (`--ring`) move to ink/blue for contrast.
+ *
+ *   [data-theme="brand"] — set by `BaseLayout` on the header/footer/nav
+ *     progress bar/global scroll-to-top wrapper, PLUS `class="dark"` on that
+ *     same wrapper, so that chrome stays pixel-identical to today even
+ *     nested inside a light `[data-theme="ingles"]` page. It simply restates
+ *     every value below back to its current dark default.
+ *
+ * Every value here is independent of `:root`/`.dark` above, which is the
+ * dark DEFAULT for the rest of the site (home, header/footer markup itself,
+ * Libros, Noticias, auth, admin, Cursos, Aventura) and is read by
+ * `ingles-theme-contrast.test.ts` to guard that it never drifts. */
+[data-theme='brand'] {
+  color-scheme: dark;
+
+  --background: #000000;
+  --foreground: #f4f4f5;
+  --card: #18181b;
+  --card-foreground: #f4f4f5;
+  --popover: #18181b;
+  --popover-foreground: #f4f4f5;
+  --primary: #facc15;
+  --primary-foreground: #000000;
+  --secondary: #27272a;
+  --secondary-foreground: #f4f4f5;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #f4f4f5;
+  --destructive: #ef4444;
+  --destructive-foreground: #f4f4f5;
+  --success: #34d399;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #facc15;
+
+  --color-surface: #000000;
+  --color-surface-soft: #18181b;
+  --color-surface-muted: #27272a;
+  --color-platinum: #f4f4f5;
+  --color-accent-ink: #facc15;
+  --color-accent-ink-hover: #eab308;
+  --color-field: #1f1f23;
+  --color-field-border: rgb(255 255 255 / 0.09);
+  --color-field-border-hover: rgb(255 255 255 / 0.16);
+  --color-field-ring: rgb(250 204 21 / 0.4);
+  --color-glass-ring: rgb(255 255 255 / 0.1);
+  --color-glass-bg: rgb(24 24 27 / 0.55);
+  --color-canvas-dot: rgb(255 255 255 / 0.09);
+
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-amber-400: #fbbf24;
+
+  --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-elevation-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-elevation-3: 0 12px 32px -4px rgb(0 0 0 / 0.6);
+  --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+}
+
+/* Light, warm, cheerful — Inglés only. Values pre-computed for WCAG; see the
+ * token table in the feature's own notes for each ratio. */
+[data-theme='ingles'] {
+  color-scheme: light;
+
+  --background: #fff8ec;
+  --foreground: #2a2118;
+  --card: #ffffff;
+  --card-foreground: #2a2118;
+  --popover: #ffffff;
+  --popover-foreground: #2a2118;
+  --primary: #facc15;
+  --primary-foreground: #2a2118;
+  --secondary: #f3ead7;
+  --secondary-foreground: #2a2118;
+  --muted: #f3ead7;
+  --muted-foreground: #6b5b45;
+  --accent: #f3ead7;
+  --accent-foreground: #2a2118;
+  --destructive: #d5361d;
+  --destructive-foreground: #ffffff;
+  --success: #0b7a54;
+  --border: #eadfc8;
+  --input: #9a8a6e;
+  --ring: #1c7ed6;
+
+  --color-surface: #fff8ec;
+  --color-surface-soft: #ffffff;
+  --color-surface-muted: #f3ead7;
+  --color-platinum: #2a2118;
+  --color-accent-ink: #7a6200;
+  --color-accent-ink-hover: #665100;
+  --color-field: #ffffff;
+  --color-field-border: #9a8a6e;
+  --color-field-border-hover: #6b5b45;
+  --color-field-ring: rgb(28 126 214 / 0.4);
+  --color-glass-ring: rgb(42 33 24 / 0.1);
+  --color-glass-bg: rgb(255 255 255 / 0.6);
+  --color-canvas-dot: rgb(42 33 24 / 0.08);
+
+  /* Collapsing the Tailwind default-palette STEPS a few call sites reach for
+   * directly (never a `bg-*`/`border-*` in this codebase — verified — only
+   * `text-*`, so overriding the raw step is safe): zinc-100 tracks
+   * --foreground, zinc-300/400 both track --muted-foreground (the two steps
+   * were never semantically distinct, just two shades an author reached for),
+   * emerald-300/400/500 (all "correct!" feedback) track the table's
+   * text/icon success colour, and amber-400 (hint lightbulb icons) tracks
+   * accent-ink. */
+  --color-zinc-100: #2a2118;
+  --color-zinc-300: #6b5b45;
+  --color-zinc-400: #6b5b45;
+  --color-emerald-300: #0b7a54;
+  --color-emerald-400: #0b7a54;
+  --color-emerald-500: #0b7a54;
+  --color-amber-400: #7a6200;
+
+  /* Shadows on light: warm and soft, never black (owner spec). */
+  --shadow-elevation-1: 0 1px 2px 0 rgb(42 33 24 / 0.12);
+  --shadow-elevation-2: 0 4px 12px -2px rgb(42 33 24 / 0.16);
+  --shadow-elevation-3: 0 12px 32px -4px rgb(42 33 24 / 0.2);
+  --shadow-floating: 0 8px 24px -6px rgb(42 33 24 / 0.18), 0 2px 8px -2px rgb(42 33 24 / 0.14);
+}
+
+/* `sky-*`/`violet-*` are HubCard's own decorative tone pair (two Inglés hub
+ * cards), never re-pointed at a named token — they are not the brand accent
+ * and not the game-mechanic accent set, just two Tailwind default hues. The
+ * light Inglés scope cannot change what a STATIC `text-sky-300`/`text-
+ * violet-300` utility resolves to (unlike `zinc-*`/`emerald-*`/`amber-*`
+ * above, Tailwind's `sky`/`violet` steps are not overridden — other pages may
+ * legitimately use a DIFFERENT sky/violet step and must not be affected), so
+ * this is a dedicated variant, mirroring `@custom-variant dark` above, that
+ * lets a component opt a specific utility into "only when painted light". */
+@custom-variant ingles (&:where([data-theme='ingles'], [data-theme='ingles'] *));
 
 /* --- Form control legibility + site-wide pointer cursor ------------------ *
  * Two related, previously-reported production bugs, fixed once here instead
@@ -394,7 +571,7 @@ h3 {
  * fully solid surface instead, so unsupported browsers get a normal opaque
  * button rather than a broken-looking one. */
 .glass-floating {
-  background-color: rgb(24 24 27 / 0.55);
+  background-color: var(--color-glass-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -419,6 +596,6 @@ h3 {
  * quiet against the dark `bg-muted` surface underneath; `background-size`
  * sets the 16px grid pitch. */
 .canvas-dots {
-  background-image: radial-gradient(rgb(255 255 255 / 0.09) 1px, transparent 1px);
+  background-image: radial-gradient(var(--color-canvas-dot) 1px, transparent 1px);
   background-size: 16px 16px;
 }
