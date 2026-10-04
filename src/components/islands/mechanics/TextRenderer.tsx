@@ -106,7 +106,7 @@ export default function TextRenderer({
       <div className="flex flex-col gap-4">
         <Label
           htmlFor={inputId}
-          className={`${PROMPT_SCALE} ${PROMPT_MEASURE} font-medium text-zinc-100`}
+          className={`${PROMPT_SCALE} ${PROMPT_MEASURE} font-medium text-foreground`}
         >
           {slot.label}
         </Label>

@@ -141,7 +141,7 @@ export default function SelectRenderer({
       <div className="flex flex-col gap-4">
         <Label
           htmlFor={selectId}
-          className={`${PROMPT_SCALE} ${PROMPT_MEASURE} font-medium text-zinc-100`}
+          className={`${PROMPT_SCALE} ${PROMPT_MEASURE} font-medium text-foreground`}
         >
           {slot.label}
         </Label>

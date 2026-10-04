@@ -65,7 +65,7 @@ const books = await getBooks(lang);
 
     {
       books.length === 0 ? (
-        <p class="py-16 text-center text-lg text-zinc-400">{t.empty}</p>
+        <p class="py-16 text-center text-lg text-muted-foreground">{t.empty}</p>
       ) : (
         <>
           {/* Client-side filter empty state (hidden until a query hides every
@@ -74,7 +74,7 @@ const books = await getBooks(lang);
             id="books-no-results"
             hidden
             aria-live="polite"
-            class="py-16 text-center text-lg text-zinc-400"
+            class="py-16 text-center text-lg text-muted-foreground"
           >
             {t.noResults}
           </p>

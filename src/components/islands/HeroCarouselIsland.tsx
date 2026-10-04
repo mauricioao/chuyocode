@@ -194,7 +194,7 @@ export default function HeroCarouselIsland({
                     {slide.title}
                   </h2>
                   {slide.tagline && (
-                    <p className="max-w-prose font-display text-sm font-medium text-zinc-100 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)] sm:text-base">
+                    <p className="max-w-prose font-display text-sm font-medium text-foreground [text-shadow:0_1px_8px_rgba(0,0,0,0.8)] sm:text-base">
                       {slide.tagline}
                     </p>
                   )}

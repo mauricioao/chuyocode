@@ -164,7 +164,7 @@ export default function QuizBlockPractice({
               if (contextBlock.kind === 'prose') {
                 return (
                   <div key={contextBlock.id} className="flex items-start gap-2">
-                    <p className="text-sm text-zinc-300">{contextBlock.text}</p>
+                    <p className="text-sm text-muted-foreground-subtle">{contextBlock.text}</p>
                     <SpeakButton text={contextBlock.text} lang={lang} compact />
                   </div>
                 );

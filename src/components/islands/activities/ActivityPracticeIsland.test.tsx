@@ -170,9 +170,9 @@ describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => 
     fireEvent.click(screen.getByTestId('practice-check-button'));
 
     expect(screen.getByTestId('practice-tab-result-w1').textContent).toContain('2/2');
-    expect(screen.getByTestId('practice-tab-result-w1').className).toContain('text-emerald-400');
+    expect(screen.getByTestId('practice-tab-result-w1').className).toContain('text-success');
     expect(screen.getByTestId('practice-tab-result-q1').textContent).toContain('0/1');
-    expect(screen.getByTestId('practice-tab-result-q1').className).not.toContain('text-emerald-400');
+    expect(screen.getByTestId('practice-tab-result-q1').className).not.toContain('text-success');
   });
 
   it('shows no tab result before Comprobar has run', () => {

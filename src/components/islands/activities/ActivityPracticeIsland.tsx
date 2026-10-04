@@ -291,7 +291,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 {result && (
                   <span
                     data-testid={`practice-tab-result-${block.id}`}
-                    className={cn('flex items-center gap-0.5 tabular-nums', allCorrect && 'text-emerald-400')}
+                    className={cn('flex items-center gap-0.5 tabular-nums', allCorrect && 'text-success')}
                   >
                     {result.correct}/{result.total}
                     {allCorrect && <CheckCircleIcon aria-hidden="true" weight="fill" />}

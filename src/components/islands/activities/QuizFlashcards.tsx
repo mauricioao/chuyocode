@@ -174,17 +174,17 @@ export default function QuizFlashcards({ lang, items, seed }: QuizFlashcardsProp
             aria-hidden={flipped}
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center [backface-visibility:hidden]"
           >
-            <p className="text-lg font-semibold text-zinc-100 sm:text-xl">{current.prompt}</p>
+            <p className="text-lg font-semibold text-foreground sm:text-xl">{current.prompt}</p>
           </div>
           <div
             data-testid="flashcard-back"
             aria-hidden={!flipped}
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-accent-ink bg-accent/10 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
           >
-            <p className="text-lg font-semibold text-zinc-100 sm:text-xl">{current.answer}</p>
+            <p className="text-lg font-semibold text-foreground sm:text-xl">{current.answer}</p>
             {current.explanation && (
               <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
+                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
                 <p>{current.explanation}</p>
               </div>
             )}

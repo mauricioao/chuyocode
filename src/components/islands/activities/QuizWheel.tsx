@@ -212,17 +212,17 @@ export default function QuizWheel({ lang, items, seed }: QuizWheelProps) {
           data-testid="wheel-landed"
           className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center"
         >
-          <p className="text-lg font-semibold text-zinc-100 sm:text-xl">{landedItem.prompt}</p>
+          <p className="text-lg font-semibold text-foreground sm:text-xl">{landedItem.prompt}</p>
           <SpeakButton text={landedItem.prompt} lang={lang} />
           {revealed ? (
             <div
               data-testid="wheel-answer"
               className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3"
             >
-              <p className="text-lg font-semibold text-zinc-100">{landedItem.answer}</p>
+              <p className="text-lg font-semibold text-foreground">{landedItem.answer}</p>
               {landedItem.explanation && (
                 <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                  <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
+                  <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
                   <p>{landedItem.explanation}</p>
                 </div>
               )}

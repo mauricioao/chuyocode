@@ -48,7 +48,7 @@ export default function BlankSentence({
       // The size ramp and the measure cap are SHARED (see `./scale`) so the
       // sentence a `text` blank sits in cannot drift away from the one a `drop`
       // box sits in.
-      className={`${PROMPT_SCALE} ${PROMPT_MEASURE} leading-loose font-medium text-zinc-100`}
+      className={`${PROMPT_SCALE} ${PROMPT_MEASURE} leading-loose font-medium text-foreground`}
     >
       {before}
       {children}

@@ -130,7 +130,7 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
         ))}
       </div>
 
-      <p className="flex items-center gap-2 text-center text-base text-zinc-100">
+      <p className="flex items-center gap-2 text-center text-base text-foreground">
         {current.prompt}
         <SpeakButton text={current.prompt} lang={lang} compact />
       </p>
@@ -142,7 +142,7 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
             data-testid={`hangman-letter-${index}`}
             className={cn(
               'flex size-9 items-center justify-center border-b-2',
-              guessed.has(letter) || revealed ? 'border-accent-ink text-zinc-100' : 'border-border text-transparent',
+              guessed.has(letter) || revealed ? 'border-accent-ink text-foreground' : 'border-border text-transparent',
             )}
           >
             {guessed.has(letter) || revealed ? letter : '_'}
@@ -150,7 +150,7 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
         ))}
       </div>
 
-      {status === 'won' && <p className="text-lg font-medium text-emerald-300">{t.hangmanWon}</p>}
+      {status === 'won' && <p className="text-lg font-medium text-success-strong-foreground">{t.hangmanWon}</p>}
       {status === 'lost' && <p className="text-lg font-medium text-destructive">{t.hangmanLost}</p>}
 
       <div data-testid="hangman-keyboard" className="flex flex-wrap justify-center gap-1">
@@ -167,9 +167,9 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
               onClick={() => handleGuess(letter)}
               className={cn(
                 'flex size-9 items-center justify-center rounded-md border-2 text-sm font-bold uppercase',
-                isHit && 'border-emerald-500 bg-emerald-500/10 text-emerald-300',
+                isHit && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
                 isMiss && 'border-destructive bg-destructive/10 text-destructive',
-                !isGuessed && 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60',
+                !isGuessed && 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60',
               )}
             >
               {letter}

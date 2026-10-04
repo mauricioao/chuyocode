@@ -40,6 +40,9 @@ const isEs = lang === 'es';
 const refundsHref = `/${lang}/legal/reembolsos`;
 ---
 
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/legal/[page]` route (no `theme="ingles"`), so the
+    raw Tailwind step was never affected by the removed remap. */}
 <div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
   <p class="text-sm text-zinc-500">
     {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
@@ -49,13 +52,13 @@ const refundsHref = `/${lang}/legal/reembolsos`;
     isEs ? (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Quiénes somos y qué ofrece el Sitio
           </h2>
           <p>
             Este sitio web ChuyoCode (en adelante, "el Sitio") es operado por{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, domiciliado en {ownerCity}, Perú</>} (en adelante,
             "el Titular"). El Sitio es una plataforma en español para aprender
             y practicar inglés: actividades de la comunidad creadas a partir de
@@ -78,7 +81,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. Cuentas de usuario y menores de edad
           </h2>
           <p>
@@ -105,7 +108,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Juego como invitado
           </h2>
           <p>
@@ -117,7 +120,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Contenido que publicas y licencia que otorgas
           </h2>
           <p>
@@ -147,7 +150,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Niveles, interacciones y corrección de ejercicios
           </h2>
           <p>
@@ -163,7 +166,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Libros y noticias; acceso mediante publicidad
           </h2>
           <p>
@@ -181,7 +184,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             7. Premium: precios y pagos
           </h2>
           <p>
@@ -209,7 +212,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             8. Eliminación de tu cuenta
           </h2>
           <p>
@@ -245,7 +248,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             9. Propiedad intelectual
           </h2>
           <p>
@@ -261,7 +264,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             10. Conducta del usuario
           </h2>
           <p>
@@ -277,7 +280,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             11. Exención de responsabilidad
           </h2>
           <p>
@@ -290,7 +293,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             12. Enlaces a terceros
           </h2>
           <p>
@@ -302,7 +305,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             13. Modificaciones, ley aplicable y jurisdicción
           </h2>
           <p>
@@ -318,13 +321,13 @@ const refundsHref = `/${lang}/legal/reembolsos`;
     ) : (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             1. Who we are and what the Site offers
           </h2>
           <p>
             This ChuyoCode website (the "Site") is operated by{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, based in {ownerCity}, Peru</>} (the "Owner"). The
             Site is a Spanish-first platform to learn and practice English:
             community activities built from worksheets (uploaded images or PDF
@@ -346,7 +349,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             2. User accounts and minors
           </h2>
           <p>
@@ -372,7 +375,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             3. Guest play
           </h2>
           <p>
@@ -384,7 +387,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             4. Content you publish and the license you grant
           </h2>
           <p>
@@ -414,7 +417,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             5. Levels, interactions, and exercise grading
           </h2>
           <p>
@@ -429,7 +432,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             6. Books and news; ad-based download access
           </h2>
           <p>
@@ -446,7 +449,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             7. Premium: pricing and payments
           </h2>
           <p>
@@ -472,7 +475,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             8. Deleting your account
           </h2>
           <p>
@@ -507,7 +510,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             9. Intellectual property
           </h2>
           <p>
@@ -522,7 +525,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             10. User conduct
           </h2>
           <p>
@@ -537,7 +540,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             11. Disclaimer
           </h2>
           <p>
@@ -550,7 +553,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             12. Third-party links
           </h2>
           <p>
@@ -561,7 +564,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             13. Changes, governing law, and jurisdiction
           </h2>
           <p>

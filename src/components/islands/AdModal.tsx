@@ -251,7 +251,7 @@ export default function AdModal({ lang }: AdModalProps) {
         {phase === 'success' && (
           <p
             data-testid="ad-success"
-            className="text-center text-sm font-semibold text-emerald-400"
+            className="text-center text-sm font-semibold text-success"
           >
             {t.success}
           </p>

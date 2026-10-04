@@ -67,6 +67,12 @@ export default function SubmitForReviewDialog({
         {warnings.length > 0 && (
           <div
             data-testid="submit-projection-warnings"
+            // `dark:text-amber-400` kept literal (theme-remap-cleanup): this
+            // dialog only ever mounts under `theme="ingles"` (the activity
+            // editor), so `<html>` never carries the `.dark` class here and
+            // this variant never actually applies — the removed remap never
+            // touched it either way. The base `text-amber-700` (unaffected;
+            // not one of the 7 remapped steps) is what Inglés always shows.
             className="flex flex-col gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm text-amber-700 dark:text-amber-400"
           >
             <span className="flex items-center gap-1.5 font-medium">

@@ -32,12 +32,15 @@ const { lang } = Astro.props;
 const isEs = lang === 'es';
 ---
 
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/creditos` route (no `theme="ingles"`), so the raw
+    Tailwind step was never affected by the removed remap. */}
 <div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
   {
     isEs ? (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Microsoft Fluent Emoji
           </h2>
           <p>
@@ -65,7 +68,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Phosphor Icons
           </h2>
           <p>
@@ -92,7 +95,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Tipografía Raleway
           </h2>
           <p>
@@ -113,7 +116,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Tipografía ChunkFive
           </h2>
           <p>
@@ -134,7 +137,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Open Peeps / Open Doodles
           </h2>
           <p>
@@ -162,7 +165,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Ilustración del banner de Inglés
           </h2>
           <p>
@@ -174,7 +177,7 @@ const isEs = lang === 'es';
     ) : (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Microsoft Fluent Emoji
           </h2>
           <p>
@@ -202,7 +205,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Phosphor Icons
           </h2>
           <p>
@@ -229,7 +232,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Raleway typeface
           </h2>
           <p>
@@ -250,7 +253,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             ChunkFive typeface
           </h2>
           <p>
@@ -270,7 +273,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Open Peeps / Open Doodles
           </h2>
           <p>
@@ -298,7 +301,7 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
+          <h2 class="font-display text-xl font-semibold text-foreground">
             Inglés banner illustration
           </h2>
           <p>

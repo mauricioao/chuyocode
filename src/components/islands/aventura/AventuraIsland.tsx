@@ -305,9 +305,13 @@ export default function AventuraIsland({ scene, lang }: AventuraIslandProps) {
         className="relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-lg border-4 border-double border-white/80 bg-gradient-to-b from-[#1a2a52] to-[#0c1530] p-6 text-center text-white sm:p-10"
       >
         <h2 className={cn(PIXEL_FONT, 'text-lg text-accent sm:text-2xl')}>{t.endTitle}</h2>
+        {/* `zinc-300` kept literal everywhere in this file (theme-remap-cleanup):
+            this island only ever mounts on `/ingles/aventura` (dark; no
+            `theme="ingles"` on that route's `BaseLayout`), so the raw Tailwind
+            step was never affected by the removed remap. */}
         <p className="text-sm text-zinc-300">{t.endSubtitle}</p>
         {state.learnedGrammar.length === 0 ? (
-          <p className="text-sm text-zinc-400">{t.endNoGrammar}</p>
+          <p className="text-sm text-muted-foreground">{t.endNoGrammar}</p>
         ) : (
           <ul className="flex max-h-64 w-full max-w-md flex-col gap-2 overflow-y-auto text-left">
             {state.learnedGrammar.map((g) => (
@@ -318,7 +322,7 @@ export default function AventuraIsland({ scene, lang }: AventuraIslandProps) {
             ))}
           </ul>
         )}
-        <p className="text-xs text-zinc-400">{t.phrasesLearned(state.visitedLineIds.length)}</p>
+        <p className="text-xs text-muted-foreground">{t.phrasesLearned(state.visitedLineIds.length)}</p>
         <button
           type="button"
           data-testid="aventura-restart"

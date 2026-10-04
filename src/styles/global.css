@@ -178,6 +178,12 @@
   --secondary-foreground: #f4f4f5;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
+  /* A step lighter than `--muted-foreground`, for a call site that used to
+   * reach for the raw `zinc-300` step (theme-debt cleanup): dark keeps that
+   * exact shade; the light Inglés scope below collapses it onto the same
+   * muted ink as `--muted-foreground` (Inglés never distinguished the two
+   * steps — see that scope's own note). */
+  --muted-foreground-subtle: #d4d4d8;
   --accent: #27272a;
   --accent-foreground: #f4f4f5;
 
@@ -188,6 +194,19 @@
    * above — the activity editor's "saved" autosave status icon
    * (`CheckCircle`, weight "fill") uses it directly as `text-success`. */
   --success: #34d399;
+  /* The quiz "correct answer" accent (border + wash background): a richer,
+   * more saturated green than `--success` above, used at full strength for
+   * the border/ring and at low opacity (`/10`, `/50`, …) for the background
+   * wash — never a solid fill with text on top. `--success-strong-foreground`
+   * is the text/icon tone drawn alongside it (theme-debt cleanup: these used
+   * to be the raw `emerald-500`/`emerald-300` steps). */
+  --success-strong: #10b981;
+  --success-strong-foreground: #6ee7b7;
+  /* The hint-lightbulb-icon tone (theme-debt cleanup: used to be the raw
+   * `amber-400` step). Close to `--accent-ink` but kept as its own role since
+   * the two are NOT byte-identical on dark (amber-400 vs the brand's yellow-
+   * based ink) — only the light Inglés scope happens to collapse them. */
+  --hint: #fbbf24;
 
   --border: #27272a;
   --input: #27272a;
@@ -207,11 +226,15 @@
   --secondary-foreground: #f4f4f5;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
+  --muted-foreground-subtle: #d4d4d8;
   --accent: #27272a;
   --accent-foreground: #f4f4f5;
   --destructive: #ef4444;
   --destructive-foreground: #f4f4f5;
   --success: #34d399;
+  --success-strong: #10b981;
+  --success-strong-foreground: #6ee7b7;
+  --hint: #fbbf24;
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
@@ -226,14 +249,22 @@
  *     prop, on every Inglés product route. Overrides BOTH the semantic roles
  *     above (--background, --foreground, --card, …) AND the raw `@theme`
  *     palette vars (--color-surface*, --color-platinum, --color-field*, the
- *     new --color-accent-ink*) plus a few Tailwind DEFAULT-palette steps
- *     (zinc/emerald/amber) that call sites reference directly — so existing
- *     `bg-surface`/`text-platinum`/`bg-field`/`text-zinc-100`/`text-primary`
- *     utilities flip to the light palette with NO class-name changes at
- *     those call sites. `--color-accent`/`-hover`/`-soft` are deliberately
- *     NOT overridden: the brand-yellow FILL stays amber in both themes
- *     (owner spec) — only accent-as-TEXT/border (`--color-accent-ink`) and
- *     the keyboard focus ring (`--ring`) move to ink/blue for contrast.
+ *     new --color-accent-ink*) so existing `bg-surface`/`text-platinum`/
+ *     `bg-field`/`text-primary` utilities flip to the light palette with NO
+ *     class-name changes at those call sites. `--color-accent`/`-hover`/
+ *     `-soft` are deliberately NOT overridden: the brand-yellow FILL stays
+ *     amber in both themes (owner spec) — only accent-as-TEXT/border
+ *     (`--color-accent-ink`) and the keyboard focus ring (`--ring`) move to
+ *     ink/blue for contrast.
+ *
+ *     Call sites that need to read correctly in BOTH themes use a semantic
+ *     ROLE (`text-foreground`, `text-muted-foreground`, `text-muted-
+ *     foreground-subtle`, `text-success`, `text-success-strong`, `text-
+ *     success-strong-foreground`, `text-hint`, `text-accent-ink`, …), never a
+ *     raw Tailwind palette step — so there is no `--color-zinc-*`/`--color-
+ *     emerald-*`/`--color-amber-*` remap to keep in sync here. A literal
+ *     `text-zinc-400` (etc.) is never overridden by either scope below and
+ *     always means Tailwind's own zinc-400, in every scope.
  *
  *   [data-theme="brand"] — set by `BaseLayout` on the header/footer/nav
  *     progress bar/global scroll-to-top wrapper, PLUS `class="dark"` on that
@@ -260,11 +291,15 @@
   --secondary-foreground: #f4f4f5;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
+  --muted-foreground-subtle: #d4d4d8;
   --accent: #27272a;
   --accent-foreground: #f4f4f5;
   --destructive: #ef4444;
   --destructive-foreground: #f4f4f5;
   --success: #34d399;
+  --success-strong: #10b981;
+  --success-strong-foreground: #6ee7b7;
+  --hint: #fbbf24;
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
@@ -282,14 +317,6 @@
   --color-glass-ring: rgb(255 255 255 / 0.1);
   --color-glass-bg: rgb(24 24 27 / 0.55);
   --color-canvas-dot: rgb(255 255 255 / 0.09);
-
-  --color-zinc-100: #f4f4f5;
-  --color-zinc-300: #d4d4d8;
-  --color-zinc-400: #a1a1aa;
-  --color-emerald-300: #6ee7b7;
-  --color-emerald-400: #34d399;
-  --color-emerald-500: #10b981;
-  --color-amber-400: #fbbf24;
 
   --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
   --shadow-elevation-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
@@ -314,11 +341,27 @@
   --secondary-foreground: #2a2118;
   --muted: #f3ead7;
   --muted-foreground: #6b5b45;
+  /* Collapsed onto --muted-foreground: Inglés never distinguished the
+   * zinc-300/zinc-400 steps call sites used to reach for directly (just two
+   * shades an author reached for, never semantically distinct here) — see
+   * that token's own note in the dark `:root`/`.dark` blocks above. */
+  --muted-foreground-subtle: #6b5b45;
   --accent: #f3ead7;
   --accent-foreground: #2a2118;
   --destructive: #d5361d;
   --destructive-foreground: #ffffff;
   --success: #0b7a54;
+  /* The quiz "correct answer" accent (border/wash-background) and its paired
+   * text/icon tone both collapse onto the SAME warm teal ink here — Inglés's
+   * one "correct!" colour — unlike dark, where the fill is a richer green and
+   * the paired text is a lighter mint (see the dark blocks' own note). These
+   * used to be the raw `emerald-500`/`emerald-300` steps. */
+  --success-strong: #0b7a54;
+  --success-strong-foreground: #0b7a54;
+  /* The hint-lightbulb-icon tone: same ink as `--color-accent-ink` on this
+   * scope (used to be the raw `amber-400` step — see the dark blocks' own
+   * note for why it is still its own role rather than reusing accent-ink). */
+  --hint: #7a6200;
   --border: #eadfc8;
   --input: #9a8a6e;
   --ring: #1c7ed6;
@@ -337,22 +380,6 @@
   --color-glass-bg: rgb(255 255 255 / 0.6);
   --color-canvas-dot: rgb(42 33 24 / 0.08);
 
-  /* Collapsing the Tailwind default-palette STEPS a few call sites reach for
-   * directly (never a `bg-*`/`border-*` in this codebase — verified — only
-   * `text-*`, so overriding the raw step is safe): zinc-100 tracks
-   * --foreground, zinc-300/400 both track --muted-foreground (the two steps
-   * were never semantically distinct, just two shades an author reached for),
-   * emerald-300/400/500 (all "correct!" feedback) track the table's
-   * text/icon success colour, and amber-400 (hint lightbulb icons) tracks
-   * accent-ink. */
-  --color-zinc-100: #2a2118;
-  --color-zinc-300: #6b5b45;
-  --color-zinc-400: #6b5b45;
-  --color-emerald-300: #0b7a54;
-  --color-emerald-400: #0b7a54;
-  --color-emerald-500: #0b7a54;
-  --color-amber-400: #7a6200;
-
   /* Shadows on light: warm and soft, never black (owner spec). */
   --shadow-elevation-1: 0 1px 2px 0 rgb(42 33 24 / 0.12);
   --shadow-elevation-2: 0 4px 12px -2px rgb(42 33 24 / 0.16);
@@ -364,11 +391,13 @@
  * cards), never re-pointed at a named token — they are not the brand accent
  * and not the game-mechanic accent set, just two Tailwind default hues. The
  * light Inglés scope cannot change what a STATIC `text-sky-300`/`text-
- * violet-300` utility resolves to (unlike `zinc-*`/`emerald-*`/`amber-*`
- * above, Tailwind's `sky`/`violet` steps are not overridden — other pages may
- * legitimately use a DIFFERENT sky/violet step and must not be affected), so
- * this is a dedicated variant, mirroring `@custom-variant dark` above, that
- * lets a component opt a specific utility into "only when painted light". */
+ * violet-300` utility resolves to — Tailwind's `sky`/`violet` steps are not
+ * overridden by either scope above (same as every other raw Tailwind palette
+ * step, now that `zinc-*`/`emerald-*`/`amber-*` no longer are either) — other
+ * pages may legitimately use a DIFFERENT sky/violet step and must not be
+ * affected, so this is a dedicated variant, mirroring `@custom-variant dark`
+ * above, that lets a component opt a specific utility into "only when painted
+ * light". */
 @custom-variant ingles (&:where([data-theme='ingles'], [data-theme='ingles'] *));
 
 /* --- Form control legibility + site-wide pointer cursor ------------------ *
@@ -445,11 +474,15 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-muted-foreground-subtle: var(--muted-foreground-subtle);
   --color-accent-role: var(--accent);
   --color-accent-role-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-strong-foreground: var(--success-strong-foreground);
+  --color-hint: var(--hint);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
