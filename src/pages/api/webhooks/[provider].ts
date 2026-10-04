@@ -10,12 +10,25 @@
  * branch below, which is the expected, permanent response until that happens.
  *
  * Contract:
- *   - Any provider other than `paddle`           -> 404 (route does not exist).
- *   - `paddle`, `PADDLE_WEBHOOK_SECRET` unset     -> 503 (inert; logged once, not per request).
- *   - `paddle`, missing/bad `Paddle-Signature`    -> 401.
- *   - `paddle`, valid signature                   -> 200, fast. The event is
- *     recorded in `billing_events` BEFORE being applied; a retried delivery
- *     of the same (provider, event_id) is detected there and never re-applied.
+ *   - Any provider other than `paddle`            -> 404 (route does not exist).
+ *   - `paddle`, `PADDLE_WEBHOOK_SECRET` unset      -> 503 (inert; logged once, not per request).
+ *   - `paddle`, missing/bad `Paddle-Signature`     -> 401.
+ *   - `paddle`, valid signature, event applied (or
+ *     nothing to apply)                            -> 200, fast. The event is
+ *     recorded in `billing_events` BEFORE being applied; a duplicate
+ *     delivery that already finished applying is never re-applied, but one
+ *     recorded with no successful apply yet (`processed_at is null`) IS
+ *     re-applied — every write `applyBillingEvent` makes is an idempotent
+ *     upsert/delete (`src/lib/billing/apply.ts`'s header), so re-running it
+ *     is always safe.
+ *   - `paddle`, valid signature, a transient/unknown
+ *     apply failure (db outage, …)                 -> 500, so Paddle retries.
+ *   - `paddle`, valid signature, a genuine data
+ *     conflict (two users claiming the same
+ *     provider_ref)                                 -> 200 with a log line;
+ *     retrying the identical input cannot change the outcome, and
+ *     `processed_at` is deliberately left null as the signal an operator
+ *     needs to reconcile it by hand.
  *
  * The raw body is read as TEXT before anything else — Paddle's signature
  * covers the exact bytes it sent, so parsing (or re-serializing) first would
@@ -25,18 +38,25 @@
  * (including this one) but never gates or redirects it — `requiresLogin`
  * only inspects lang-prefixed pages, and `/api/*` is always treated as a
  * non-locale path — so this endpoint is reachable exactly like every other
- * JSON API route. Nothing here ever returns HTML: every exit is JSON.
+ * JSON API route. Nothing here ever returns HTML, and every response is
+ * marked `private, no-store` (T7 posture) — never served from a shared cache.
  */
 import type { APIRoute } from 'astro';
 import { loadEnv } from '@lib/env';
+import { markPrivate } from '@lib/httpCache';
 import { applyBillingEvent, markBillingEventProcessed, recordBillingEvent } from '@lib/billing/apply';
 import { mapPaddleEvent, PADDLE_SIGNATURE_HEADER, verifyPaddleSignature } from '@lib/billing/paddle';
 
+/**
+ * Every exit from this route is JSON AND private/no-store (T7 posture, same
+ * as `src/pages/api/actividades/imagen.ts`): a webhook response is never
+ * visitor-facing HTML, but it is still infrastructure-cacheable by default,
+ * and nothing here should ever be served from a shared cache to anyone.
+ */
 function json(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
+  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
+  markPrivate(headers);
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 /**
@@ -143,7 +163,7 @@ async function handlePaddle(request: Request): Promise<Response> {
 
 export const POST: APIRoute = async ({ params, request }) => {
   if (params.provider !== 'paddle') {
-    return new Response(null, { status: 404, statusText: 'Not Found' });
+    return json({ ok: false, error: 'not_found' }, 404);
   }
   return handlePaddle(request);
 };

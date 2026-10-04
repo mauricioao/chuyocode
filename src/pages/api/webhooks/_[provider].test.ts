@@ -68,10 +68,12 @@ beforeEach(() => {
 });
 
 describe('POST /api/webhooks/[provider] — routing', () => {
-  it('404s for any provider other than paddle', async () => {
+  it('404s with a JSON body for any provider other than paddle', async () => {
     const res = await POST(ctx('stripe'));
 
     expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(await res.json()).toEqual({ ok: false, error: 'not_found' });
     expect(verifyPaddleSignatureMock).not.toHaveBeenCalled();
   });
 
@@ -80,6 +82,30 @@ describe('POST /api/webhooks/[provider] — routing', () => {
 
     expect(res.headers.get('content-type')).toContain('application/json');
     expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
+describe('POST /api/webhooks/[provider] — cache safety (T7: never a shared cache)', () => {
+  it('marks the wrong-provider 404 private, no-store', async () => {
+    const res = await POST(ctx('stripe'));
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('marks the inert 503 private, no-store', async () => {
+    loadEnvMock.mockReturnValue({ PADDLE_WEBHOOK_SECRET: '' });
+    const res = await POST(ctx('paddle'));
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('marks the invalid-signature 401 private, no-store', async () => {
+    verifyPaddleSignatureMock.mockReturnValue(false);
+    const res = await POST(ctx('paddle', VALID_BODY, null));
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('marks the happy-path 200 private, no-store', async () => {
+    const res = await POST(ctx('paddle'));
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 });
 
