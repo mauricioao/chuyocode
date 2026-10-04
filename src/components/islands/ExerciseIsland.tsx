@@ -45,6 +45,7 @@ import {
   TICK_MS,
 } from '@/lib/exerciseStopwatch';
 import UnavailableRenderer from './mechanics/UnavailableRenderer';
+import SlotExplanation from './mechanics/SlotExplanation';
 import { comparatorForRenderable, rendererFor } from './mechanics/registry';
 import { PROMPT_MEASURE } from './mechanics/scale';
 
@@ -664,6 +665,15 @@ export default function ExerciseIsland({
               >
                 {outcome === 'correct' ? t.correct : t.incorrect}
               </p>
+            )}
+
+            {/* D5 "¿Por qué?": only once graded AND only while THIS slot is
+                incorrect — never before checking, never for a correct
+                answer. No separate reset: `retry()` nulls `result`, so
+                `outcome` (and therefore this) disappears on its own, the
+                same derived-from-grading rule `slot-feedback` above uses. */}
+            {slot.explanation && outcome === 'incorrect' && (
+              <SlotExplanation text={slot.explanation} testId={`slot-explanation-${slot.id}`} />
             )}
           </div>
         )}
