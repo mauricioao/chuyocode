@@ -12,7 +12,7 @@ import {
   PROMPT_FONT_MAX_PX,
   PROMPT_FONT_MIN_PX,
 } from './presentationSlides';
-import type { Block } from './blocks';
+import type { Block, QuizBlock } from './blocks';
 
 const WORKSHEET: Block = {
   id: 'w1',
@@ -45,7 +45,7 @@ const WORKSHEET_NO_ZONES: Block = {
   zones: [],
 };
 
-function quizBlock(id: string, slotIds: string[]): Block {
+function quizBlock(id: string, slotIds: string[]): QuizBlock {
   return {
     id,
     type: 'quiz',
