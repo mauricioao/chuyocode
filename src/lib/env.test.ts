@@ -28,6 +28,7 @@ describe('loadEnv', () => {
     const env = loadEnv(validEnv);
     expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe('');
     expect(env.AD_HMAC_SECRET).toBe('');
+    expect(env.PADDLE_WEBHOOK_SECRET).toBe('');
   });
 
   it('reads optional vars when present', () => {
@@ -35,9 +36,11 @@ describe('loadEnv', () => {
       ...validEnv,
       SUPABASE_SERVICE_ROLE_KEY: 'service-role',
       AD_HMAC_SECRET: 'hmac-secret',
+      PADDLE_WEBHOOK_SECRET: 'paddle-secret',
     });
     expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe('service-role');
     expect(env.AD_HMAC_SECRET).toBe('hmac-secret');
+    expect(env.PADDLE_WEBHOOK_SECRET).toBe('paddle-secret');
   });
 
   it('trims surrounding whitespace from values', () => {

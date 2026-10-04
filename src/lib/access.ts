@@ -119,10 +119,18 @@ function getClient(): SupabaseClient | null {
  * could not actually verify; failing closed only ever costs a visitor a badge
  * they were, in fact, entitled to.
  *
- * A row counts as premium when `status = 'active'` AND (`current_period_end`
- * is null — a manual/test grant with no billing cycle — OR still in the
- * future). A canceled/past_due row, an expired one, or no row at all is
- * `'free'`.
+ * Status rules (`status` per `0019_billing_foundation.sql`'s extended
+ * vocabulary — active/trialing/canceled/past_due):
+ *   - `active`/`trialing`: premium when `current_period_end` is null (a
+ *     manual/test grant with no billing cycle) OR still in the future.
+ *   - `canceled`/`past_due`: premium ONLY while `current_period_end` is set
+ *     AND still in the future — a provider subscription that lapsed or was
+ *     canceled with no grace period left is `'free'`, and so is one with no
+ *     period end at all (there is nothing to grace into). This is what lets
+ *     `src/lib/billing/apply.ts` write `status: 'canceled'` the moment Paddle
+ *     cancels a subscription while the customer keeps access through the
+ *     period they already paid for, without a separate "access until" field.
+ *   - Anything else (no row, an unrecognized status, an expired period): `'free'`.
  *
  * @param user - A signed-in caller, or `null` for an anonymous visitor —
  *   resolved to `'free'` immediately, with no round trip, mirroring
@@ -149,19 +157,25 @@ export async function getPlan(user: Pick<User, 'id'> | null): Promise<Plan> {
     }
 
     const row = data[0] as unknown as Record<string, unknown>;
-    if (row.status !== 'active') {
+    const status = row.status;
+    if (status !== 'active' && status !== 'trialing' && status !== 'canceled' && status !== 'past_due') {
       return 'free';
     }
 
     const currentPeriodEnd = row.current_period_end;
-    if (typeof currentPeriodEnd === 'string') {
-      const end = Date.parse(currentPeriodEnd);
-      if (!Number.isNaN(end) && end <= Date.now()) {
-        return 'free';
-      }
+    const isWithinPeriod =
+      typeof currentPeriodEnd === 'string' &&
+      !Number.isNaN(Date.parse(currentPeriodEnd)) &&
+      Date.parse(currentPeriodEnd) > Date.now();
+
+    if (status === 'active' || status === 'trialing') {
+      // null (no end date) is the manual/test-grant shape; anything else
+      // must still be in the future.
+      return currentPeriodEnd == null || isWithinPeriod ? 'premium' : 'free';
     }
 
-    return 'premium';
+    // canceled / past_due: only a real, still-future period grants access.
+    return isWithinPeriod ? 'premium' : 'free';
   } catch (err) {
     console.error('[access] getPlan threw:', err);
     return 'free';
