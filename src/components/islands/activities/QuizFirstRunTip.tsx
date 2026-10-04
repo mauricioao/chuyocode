@@ -70,7 +70,7 @@ export default function QuizFirstRunTip({
               type="button"
               data-testid="quiz-first-run-tip-next"
               onClick={onNext}
-              className="font-medium text-primary hover:underline"
+              className="font-medium text-accent-ink hover:underline"
             >
               {isLast ? doneLabel : nextLabel}
             </button>

@@ -14,11 +14,16 @@
  * same parent.
  *
  * GLASS FLOATING (PR 1, premium design system): a translucent blurred
- * surface (`.glass-floating`, global.css) with a hairline white/10 ring and
- * a soft `--shadow-floating` lift, rather than a solid yellow fill — a
- * floating control reads as glass sitting ABOVE the page, not as another
- * opaque button competing with it. The icon itself stays brand-accent
- * (`text-accent`) at Phosphor's "bold" weight. Hover adds a subtle
+ * surface (`.glass-floating`, global.css) with a hairline ring (now
+ * `ring-(--color-glass-ring)` — visual-theme pass: a literal `white/10`
+ * hairline is invisible on the light Inglés scope's own light glass tint, so
+ * this reads from the same themed token `.glass-floating`'s background
+ * does) and a soft `--shadow-floating` lift, rather than a solid yellow
+ * fill — a floating control reads as glass sitting ABOVE the page, not as
+ * another opaque button competing with it. The icon itself stays
+ * brand-accent-as-TEXT (`text-accent-ink` — visual-theme pass: bare
+ * `text-accent` is amber-on-amber-adjacent on light, see that token's own
+ * header in global.css) at Phosphor's "bold" weight. Hover adds a subtle
  * accent-colored glow plus a slight lift (`-translate-y-0.5`), both skipped
  * under `prefers-reduced-motion` via `motion-reduce:`. Supersedes the
  * earlier "brand yellow + floating" decision (still the treatment for
@@ -62,9 +67,9 @@ const t = UI_LABELS[lang].common;
   aria-label={t.back}
   title={t.backTooltip}
   class:list={[
-    'glass-floating inline-flex h-10 w-10 flex-none items-center justify-center rounded-(--radius-pill) text-accent ring-1 ring-white/10 shadow-(--shadow-floating) transition-all duration-(--transition-duration-control) ease-(--ease-control)',
+    'glass-floating inline-flex h-10 w-10 flex-none items-center justify-center rounded-(--radius-pill) text-accent-ink ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating) transition-all duration-(--transition-duration-control) ease-(--ease-control)',
     'hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(250_204_21/0.4),0_8px_24px_-6px_rgb(250_204_21/0.35)]',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
     'lg:sticky lg:top-20 lg:z-30 lg:-ml-12',
     className,

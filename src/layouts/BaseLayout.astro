@@ -9,7 +9,14 @@
  *  - A `<slot name="head">` for page-specific meta/title/link tags.
  *  - The default `<slot>` for body content, wrapped by Header + Footer.
  *  - Dark mode is HARDCODED: `<html class="dark">` ships on every page and the
- *    site is dark-only (no theme toggle, no persistence, no no-flash script).
+ *    site is dark-only (no theme toggle, no persistence, no no-flash script),
+ *    EXCEPT the Inglés product (visual-theme pass, "dark brand, light
+ *    product"): passing `theme="ingles"` swaps `<html>` to the light scope
+ *    instead (`data-theme="ingles"`, no `dark` class) — see the `theme` prop
+ *    below. `src/styles/global.css` carries both scopes' token values; there
+ *    is still no toggle, no persistence and no no-flash script, because the
+ *    scope is a per-ROUTE prop, decided at render time, never a visitor
+ *    preference.
  *  - SEO/social meta + a11y polish (design decision #7, PR 5): optional
  *    `description` / `ogImage` props feed the meta description and Open Graph /
  *    Twitter card tags; a skip-to-content link is the FIRST body element and
@@ -60,6 +67,19 @@ interface Props {
   ogImage?: string;
   /** Opt-in, `lg:`-only non-scrolling body — see the file header. Defaults to `false` (normal document flow) for every existing page. */
   fullHeight?: boolean;
+  /**
+   * Opt-in light visual scope (visual-theme pass, "dark brand, light
+   * product"). Omitted (every existing page): `<html>` keeps today's
+   * `class="dark"`, unchanged. `'ingles'`: `<html>` gets
+   * `data-theme="ingles"` instead and drops the `dark` class, so
+   * `src/styles/global.css`'s `[data-theme="ingles"]` scope takes over —
+   * see that file's own header for the token table. The header, footer, nav
+   * progress bar and global scroll-to-top button are NOT part of this swap:
+   * they render inside their own `[data-theme="brand"]` + `class="dark"`
+   * wrapper below, unconditionally, so the site's chrome stays exactly as
+   * today even on a `theme="ingles"` page.
+   */
+  theme?: 'ingles';
 }
 
 const {
@@ -68,7 +88,10 @@ const {
   description,
   ogImage,
   fullHeight = false,
+  theme,
 } = Astro.props;
+
+const isIngles = theme === 'ingles';
 
 // Localized fallback description keeps every page indexable even when a page
 // forgets to pass its own (decision #7: meta description always present).
@@ -84,7 +107,11 @@ const faviconSvg =
 ---
 
 <!doctype html>
-<html lang={lang} class="dark scroll-smooth">
+<html
+  lang={lang}
+  data-theme={isIngles ? 'ingles' : undefined}
+  class:list={['scroll-smooth', !isIngles && 'dark']}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -124,8 +151,17 @@ const faviconSvg =
     {/* Navigation progress bar (navigation-without-flicker PR): fixed at the
         very top, ahead of everything else in the body so it is never
         obscured. Hidden by default; `NavProgressBar.astro`'s own script
-        drives it from ClientRouter events. */}
-    <NavProgressBar />
+        drives it from ClientRouter events.
+
+        `data-theme="brand"` + `class="dark"` (visual-theme pass): this is
+        site CHROME, not product content, so it stays dark even on a
+        `theme="ingles"` page — see `global.css`'s own header for the scope.
+        `contents` keeps the wrapper out of layout entirely (it generates no
+        box of its own), so it is transparent to `NavProgressBar`'s `fixed`
+        positioning. */}
+    <div data-theme="brand" class="dark contents">
+      <NavProgressBar />
+    </div>
 
     {/* Skip-to-content link — FIRST focusable body element (decision #7 / a11y).
         Off-screen until focused (`.skip-link` in global.css), then jumps keyboard
@@ -133,7 +169,12 @@ const faviconSvg =
     <a href="#content" class="skip-link">
       {lang === 'en' ? 'Skip to content' : 'Saltar al contenido'}
     </a>
-    <Header lang={lang} />
+    {/* Brand chrome (visual-theme pass) — see the note on the progress bar
+        above. `contents` keeps `Header`'s own `sticky top-0` working exactly
+        as if this wrapper were not there. */}
+    <div data-theme="brand" class="dark contents">
+      <Header lang={lang} />
+    </div>
     {/* Cleaner transitions (navigation-without-flicker PR): ONLY the main
         content cross-fades on navigation, a quick ~150ms — matches
         `Header`/`Footer` being excluded (persisted / `animate="none"`), so
@@ -145,14 +186,26 @@ const faviconSvg =
     >
       <slot />
     </main>
-    <Footer lang={lang} />
+    {/* Brand chrome (visual-theme pass) — see the nav progress bar's own
+        note above. */}
+    <div data-theme="brand" class="dark contents">
+      <Footer lang={lang} />
+    </div>
 
     {/* Global "back to top" button (site-wide). `client:load` like
         `UserMenu` — always-relevant chrome, not below-the-fold content —
         and, same as that island, its SSR markup depends only on `lang`
         (never per-visitor data), so it stays safe on publicly cached pages
-        (home, libros, noticias). */}
-    <ScrollToTop client:load lang={lang} />
+        (home, libros, noticias).
+
+        Brand chrome (visual-theme pass): only THIS global instance — the
+        SCOPED instance the activity editor mounts for its own block list
+        renders straight into the page's own (possibly light) content and
+        must NOT be forced dark, which is why this wrapper lives here and not
+        inside `ScrollToTop.tsx` itself. */}
+    <div data-theme="brand" class="dark contents">
+      <ScrollToTop client:load lang={lang} />
+    </div>
 
     {/* Toast host (PR 1 premium design system): one Toaster per page, backing
         every `toast()` call across features (autosave error, share-link

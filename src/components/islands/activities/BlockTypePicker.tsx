@@ -42,7 +42,7 @@ export interface BlockTypePickerProps {
 /** One card's icon: its normal icon, or a spinning `CircleNotch` while `busy`. */
 function CardIcon({ busy, Icon }: { busy: boolean; Icon: typeof FileTextIcon }) {
   return (
-    <div aria-hidden="true" className="flex h-9 w-9 items-center justify-center text-primary">
+    <div aria-hidden="true" className="flex h-9 w-9 items-center justify-center text-accent-ink">
       {busy ? <CircleNotchIcon size={24} className="animate-spin" /> : <Icon size={24} />}
     </div>
   );

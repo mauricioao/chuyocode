@@ -286,7 +286,7 @@ export default function QuestionCard({
                   className="min-w-0 flex-1"
                 />
                 {correct && (
-                  <span className="shrink-0 text-xs font-medium text-primary">{t.correctAnswer}</span>
+                  <span className="shrink-0 text-xs font-medium text-accent-ink">{t.correctAnswer}</span>
                 )}
                 <button
                   type="button"

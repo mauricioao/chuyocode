@@ -74,8 +74,8 @@ function countLabel(count: number): string {
       class:list={[
         'flex h-24 items-stretch overflow-hidden rounded-lg border transition-colors',
         highlighted
-          ? 'border-accent bg-surface-soft shadow-elevation-1 hover:border-accent-hover'
-          : 'border-border bg-surface-soft hover:border-accent focus-visible:border-accent',
+          ? 'border-accent-ink bg-surface-soft shadow-elevation-1 hover:border-accent-ink-hover'
+          : 'border-border bg-surface-soft hover:border-accent-ink focus-visible:border-accent-ink',
       ]}
     >
       <div class="relative aspect-square h-full w-24 shrink-0 overflow-hidden bg-muted">
@@ -95,7 +95,7 @@ function countLabel(count: number): string {
           </span>
           {
             highlighted && highlightLabel && (
-              <span class="ml-auto inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[0.65rem] font-semibold text-background">
+              <span class="ml-auto inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[0.65rem] font-semibold text-primary-foreground">
                 {highlightLabel}
               </span>
             )
@@ -122,15 +122,15 @@ function countLabel(count: number): string {
       class:list={[
         'flex h-full flex-col overflow-hidden rounded-lg border transition-colors',
         highlighted
-          ? 'border-accent bg-surface-soft shadow-elevation-1 hover:border-accent-hover'
-          : 'border-border bg-surface-soft hover:border-accent focus-visible:border-accent',
+          ? 'border-accent-ink bg-surface-soft shadow-elevation-1 hover:border-accent-ink-hover'
+          : 'border-border bg-surface-soft hover:border-accent-ink focus-visible:border-accent-ink',
       ]}
     >
       <div class="relative aspect-video w-full overflow-hidden bg-muted">
         {thumbnailUrl && <img src={thumbnailUrl} alt="" loading="lazy" class="h-full w-full object-cover" />}
         {
           highlighted && highlightLabel && (
-            <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-background shadow-elevation-1">
+            <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-elevation-1">
               {highlightLabel}
             </span>
           )

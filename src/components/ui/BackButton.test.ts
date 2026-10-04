@@ -23,7 +23,7 @@ describe('BackButton.astro', () => {
 
   it('uses the accent-colored Phosphor icon at bold weight, not a filled yellow circle', async () => {
     const html = await render({ lang: 'es', href: '/es' });
-    expect(html).toContain('text-accent');
+    expect(html).toContain('text-accent-ink');
     // No longer the old solid brand-yellow fill.
     expect(html).not.toContain('bg-primary');
   });

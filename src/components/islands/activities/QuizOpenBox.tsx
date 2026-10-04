@@ -76,9 +76,9 @@ export default function QuizOpenBox({ lang, items }: QuizOpenBoxProps) {
               aria-label={`${t.openboxBoxAriaPrefix} ${index + 1}, ${opened ? t.openboxOpenedSuffix : t.openboxClosedSuffix}`}
               className={cn(
                 'relative flex size-11 items-center justify-center rounded-md border-2 text-sm font-bold transition-colors',
-                isActive && 'border-accent bg-accent/10 text-zinc-100',
+                isActive && 'border-accent-ink bg-accent/10 text-zinc-100',
                 !isActive && opened && 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300',
-                !isActive && !opened && 'border-border bg-surface-soft text-zinc-100 hover:border-accent/60',
+                !isActive && !opened && 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60',
               )}
             >
               {index + 1}
@@ -99,7 +99,7 @@ export default function QuizOpenBox({ lang, items }: QuizOpenBoxProps) {
           <SpeakButton text={active.prompt} lang={lang} />
 
           {revealed ? (
-            <div data-testid="openbox-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent bg-accent/10 p-3">
+            <div data-testid="openbox-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3">
               <p className="text-lg font-semibold text-zinc-100">{active.answer}</p>
               {active.explanation && (
                 <div className="flex items-start gap-1.5 text-left text-sm text-foreground">

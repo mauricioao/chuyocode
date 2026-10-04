@@ -167,7 +167,7 @@ export default function LikeButton({
       aria-disabled={pending}
       aria-busy={pending}
       data-testid="exercise-like"
-      className={cn(liked && 'text-accent')}
+      className={cn(liked && 'text-accent-ink')}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

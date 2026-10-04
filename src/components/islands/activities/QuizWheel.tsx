@@ -217,7 +217,7 @@ export default function QuizWheel({ lang, items, seed }: QuizWheelProps) {
           {revealed ? (
             <div
               data-testid="wheel-answer"
-              className="flex flex-col items-center gap-2 rounded-md border border-accent bg-accent/10 p-3"
+              className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3"
             >
               <p className="text-lg font-semibold text-zinc-100">{landedItem.answer}</p>
               {landedItem.explanation && (

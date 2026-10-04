@@ -126,8 +126,8 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
       'min-h-11 w-full rounded-md border-2 px-3 py-2.5 text-left text-sm font-medium transition-colors sm:text-base',
       isMatched && 'border-emerald-500 bg-emerald-500/10 text-emerald-300',
       isWrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
-      !isMatched && !isWrong && isSelected && 'border-accent bg-accent/10 text-zinc-100',
-      !isMatched && !isWrong && !isSelected && 'border-border bg-surface-soft text-zinc-100 hover:border-accent/60',
+      !isMatched && !isWrong && isSelected && 'border-accent-ink bg-accent/10 text-zinc-100',
+      !isMatched && !isWrong && !isSelected && 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60',
     );
   }
 

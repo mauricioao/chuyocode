@@ -154,7 +154,12 @@ export default function WorksheetPlayer({
       {!practice && <p className="mb-2 text-xs text-muted-foreground">{t.notGraded}</p>}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-lg bg-muted"
+        // Visual-theme pass: a warm, subtle shadow + hairline border so the
+        // sheet reads as a distinct surface on the light Inglés canvas (same
+        // `bg-muted` cream `.canvas-dots` uses) — both restate their current
+        // dark values in `[data-theme="brand"]`/default, so this is a no-op
+        // on dark.
+        className="relative w-full overflow-hidden rounded-lg border border-(--color-field-border) bg-muted shadow-elevation-1"
         style={{ aspectRatio: `${displaySize.width} / ${displaySize.height}` }}
       >
         <img
