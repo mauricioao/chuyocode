@@ -929,6 +929,47 @@ describe('ActivityEditorIsland — submit for review', () => {
   });
 });
 
+describe('ActivityEditorIsland — "Ver como presentación" overlay (worksheet zoom tour, sprint week 3)', () => {
+  it('opens a full-screen presentation of the CURRENT draft state, unsaved changes included', () => {
+    renderEditor({ initialTitle: 'Título guardado' });
+    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+
+    // An unsaved title edit — the overlay must reflect THIS, not whatever
+    // was last saved.
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Título sin guardar' } });
+
+    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+    expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
+    expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('Título sin guardar');
+  });
+
+  it('presents the current worksheet/quiz blocks, including a worksheet zone (reusing the SAME island the real route mounts)', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
+    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+    fireEvent.click(screen.getByTestId('presentation-next'));
+    expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
+  });
+
+  it('closes on Escape and returns focus to the button that opened it', () => {
+    renderEditor();
+    const trigger = screen.getByTestId('view-as-presentation-button');
+    fireEvent.click(trigger);
+    expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('closes via the overlay\'s own exit control too (rendered as a button, not a navigation link)', () => {
+    renderEditor();
+    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+    expect(screen.queryByRole('link', { name: 'Salir' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
+    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+  });
+});
+
 describe('ActivityEditorIsland — scoped ScrollToTop wiring (nav buttons pass)', () => {
   it('appears after scrolling the block list — the list is the ACTUAL scroll container, not its outer wrapper', () => {
     // Regression test for the actual root cause: the scoped ScrollToTop
