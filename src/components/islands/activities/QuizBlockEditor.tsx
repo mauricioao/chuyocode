@@ -330,7 +330,7 @@ export default function QuizBlockEditor({
         <div data-testid={`quiz-checklist-${blockId}`} className="flex flex-col gap-1 rounded-md border border-border p-2">
           {checklist.length === 0 ? (
             <span className="flex items-center gap-1.5 text-sm text-foreground">
-              <CheckCircleIcon aria-hidden="true" weight="fill" className="text-primary" />
+              <CheckCircleIcon aria-hidden="true" weight="fill" className="text-accent-ink" />
               {t.questionsCount(questions.length)} · {t.allComplete}
             </span>
           ) : (

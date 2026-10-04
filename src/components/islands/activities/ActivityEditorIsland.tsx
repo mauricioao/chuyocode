@@ -739,7 +739,7 @@ export default function ActivityEditorIsland({
               data-back-button
               aria-label={tCommon.back}
               title={tCommon.backTooltip}
-              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
             >
               <ArrowLeftIcon size={20} aria-hidden="true" />
             </a>
@@ -814,7 +814,7 @@ export default function ActivityEditorIsland({
             {sourceActivity.href ? (
               <>
                 {t.basedOnPrefix}
-                <a href={sourceActivity.href} className="text-accent hover:underline">
+                <a href={sourceActivity.href} className="text-accent-ink hover:underline">
                   {sourceActivity.title}
                 </a>
                 {t.basedOnSuffix}

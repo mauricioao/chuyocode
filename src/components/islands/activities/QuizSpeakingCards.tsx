@@ -94,7 +94,7 @@ export default function QuizSpeakingCards({ lang, items, seed }: QuizSpeakingCar
         <div data-testid="speaking-deck" className="relative h-40 w-28" aria-hidden="true">
           <div className="absolute inset-0 -rotate-6 rounded-lg border-2 border-border bg-surface-soft" />
           <div className="absolute inset-0 rotate-3 rounded-lg border-2 border-border bg-surface-soft" />
-          <div className="absolute inset-0 rounded-lg border-2 border-accent bg-accent/10" />
+          <div className="absolute inset-0 rounded-lg border-2 border-accent-ink bg-accent/10" />
         </div>
         <Button type="button" data-testid="speaking-deal" onClick={handleDeal} className="h-11 sm:h-8">
           {t.speakDeal}
@@ -118,7 +118,7 @@ export default function QuizSpeakingCards({ lang, items, seed }: QuizSpeakingCar
         <SpeakButton text={current.prompt} lang={lang} />
 
         {revealed ? (
-          <div data-testid="speaking-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent bg-accent/10 p-3">
+          <div data-testid="speaking-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3">
             <p className="text-lg font-semibold text-zinc-100">{current.answer}</p>
             {current.explanation && (
               <div className="flex items-start gap-1.5 text-left text-sm text-foreground">

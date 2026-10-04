@@ -112,7 +112,7 @@ export default function QuizTrueFalse({ lang, items }: QuizTrueFalseProps) {
 
   function buttonClass(isTrueButton: boolean): string {
     if (feedback === 'idle' || given === undefined) {
-      return 'border-border bg-surface-soft text-zinc-100 hover:border-accent/60';
+      return 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60';
     }
     const isCorrectAnswer = isTrueButton === current!.isTrue;
     const isTappedButton = isTrueButton === given;

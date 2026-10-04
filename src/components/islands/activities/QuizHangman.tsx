@@ -125,7 +125,7 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
             key={i}
             weight="fill"
             aria-hidden="true"
-            className={cn('size-6', i < livesLeft ? 'text-accent' : 'text-muted opacity-30')}
+            className={cn('size-6', i < livesLeft ? 'text-accent-ink' : 'text-muted opacity-30')}
           />
         ))}
       </div>
@@ -142,7 +142,7 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
             data-testid={`hangman-letter-${index}`}
             className={cn(
               'flex size-9 items-center justify-center border-b-2',
-              guessed.has(letter) || revealed ? 'border-accent text-zinc-100' : 'border-border text-transparent',
+              guessed.has(letter) || revealed ? 'border-accent-ink text-zinc-100' : 'border-border text-transparent',
             )}
           >
             {guessed.has(letter) || revealed ? letter : '_'}
@@ -169,7 +169,7 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
                 'flex size-9 items-center justify-center rounded-md border-2 text-sm font-bold uppercase',
                 isHit && 'border-emerald-500 bg-emerald-500/10 text-emerald-300',
                 isMiss && 'border-destructive bg-destructive/10 text-destructive',
-                !isGuessed && 'border-border bg-surface-soft text-zinc-100 hover:border-accent/60',
+                !isGuessed && 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60',
               )}
             >
               {letter}

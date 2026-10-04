@@ -305,7 +305,7 @@ export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFil
                 data-testid="exercise-share-download"
                 className={SHARE_ACTION_CLASS}
               >
-                <ShareActionIcon kind="qr" className="bg-accent text-black">
+                <ShareActionIcon kind="qr" className="bg-accent text-primary-foreground">
                   <QrCodeIcon weight="bold" className="size-6" aria-hidden="true" />
                 </ShareActionIcon>
                 <span className={SHARE_CAPTION_CLASS}>{labels.downloadQr}</span>

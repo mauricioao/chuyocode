@@ -22,9 +22,12 @@
  *    entirely, since it never leaves that card.
  *
  * GLASS FLOATING (PR 1, premium design system): translucent blurred surface
- * (`.glass-floating`, global.css) + hairline ring + `--shadow-floating`
- * lift, accent-colored icon — same treatment as `BackButton.astro`,
- * superseding the earlier solid brand-yellow fill. A thin circular progress
+ * (`.glass-floating`, global.css) + hairline ring (`ring-(--color-glass-ring)`
+ * — visual-theme pass: themed, not a literal `white/10`, so it stays visible
+ * on the light Inglés scope's own light glass tint) + `--shadow-floating`
+ * lift, accent-as-text icon (`text-accent-ink`, same reasoning) — same
+ * treatment as `BackButton.astro`, superseding the earlier solid
+ * brand-yellow fill. A thin circular progress
  * ring (SVG `stroke-dashoffset`, geometry in `@lib/scrollProgress`) is drawn
  * behind the icon, filling in as the tracked scroll source (window or
  * `targetRef`'s container) approaches its end.
@@ -166,9 +169,9 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
       // utility — scoped mode keeps its own fixed `bottom-4` class, unaffected.
       style={scoped ? undefined : { bottom: `${bottomOffset}px` }}
       className={cn(
-        'glass-floating relative z-40 inline-flex h-11 w-11 items-center justify-center rounded-(--radius-pill) text-accent ring-1 ring-white/10 shadow-(--shadow-floating) transition-all duration-(--transition-duration-control) ease-(--ease-control)',
+        'glass-floating relative z-40 inline-flex h-11 w-11 items-center justify-center rounded-(--radius-pill) text-accent-ink ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating) transition-all duration-(--transition-duration-control) ease-(--ease-control)',
         'hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(250_204_21/0.4),0_8px_24px_-6px_rgb(250_204_21/0.35)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         scoped
           ? 'absolute right-4 bottom-4 hidden lg:inline-flex'
@@ -186,7 +189,7 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
           cy={20}
           r={RING_RADIUS}
           strokeWidth={2}
-          className="fill-none stroke-white/15"
+          className="fill-none stroke-(--color-glass-ring)"
         />
         <circle
           data-testid={scoped ? 'scroll-progress-ring-scoped' : 'scroll-progress-ring'}
@@ -197,7 +200,7 @@ export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
           strokeLinecap="round"
           strokeDasharray={RING_CIRCUMFERENCE}
           strokeDashoffset={ringDashOffset(progress, RING_RADIUS)}
-          className="fill-none stroke-accent transition-[stroke-dashoffset] duration-200 ease-out motion-reduce:transition-none"
+          className="fill-none stroke-accent-ink transition-[stroke-dashoffset] duration-200 ease-out motion-reduce:transition-none"
         />
       </svg>
       <ArrowUpIcon size={20} weight="bold" aria-hidden="true" />
