@@ -45,8 +45,13 @@ import { POST, resetPaddleInertWarningForTests } from './[provider]';
 
 const VALID_BODY = JSON.stringify({ event_id: 'evt_1', event_type: 'subscription.activated', data: {} });
 
-function ctx(provider: string, body = VALID_BODY, header: string | null = 'ts=1;h1=abc') {
-  const headers = new Headers({ 'content-type': 'application/json' });
+function ctx(
+  provider: string,
+  body = VALID_BODY,
+  header: string | null = 'ts=1;h1=abc',
+  extraHeaders: Record<string, string> = {},
+) {
+  const headers = new Headers({ 'content-type': 'application/json', ...extraHeaders });
   if (header !== null) headers.set('paddle-signature', header);
   const request = new Request(`https://chuyocode.com/api/webhooks/${provider}`, {
     method: 'POST',
@@ -158,6 +163,38 @@ describe('POST /api/webhooks/paddle — signature', () => {
     expect(verifyPaddleSignatureMock).toHaveBeenCalledWith(
       expect.objectContaining({ rawBody: VALID_BODY, header: 'ts=1;h1=abc' }),
     );
+  });
+});
+
+describe('POST /api/webhooks/paddle — body size cap', () => {
+  const OVER_CAP = 1024 * 1024 + 1;
+
+  it('413s when Content-Length declares a body over the cap, without verifying any signature', async () => {
+    const res = await POST(ctx('paddle', VALID_BODY, 'ts=1;h1=abc', { 'content-length': String(OVER_CAP) }));
+
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ ok: false, error: 'payload_too_large' });
+    expect(verifyPaddleSignatureMock).not.toHaveBeenCalled();
+  });
+
+  it('413s on the actual read length even with no Content-Length header at all', async () => {
+    const oversizedBody = JSON.stringify({
+      event_id: 'evt_1',
+      event_type: 'subscription.activated',
+      data: { pad: 'x'.repeat(OVER_CAP) },
+    });
+
+    const res = await POST(ctx('paddle', oversizedBody));
+
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ ok: false, error: 'payload_too_large' });
+    expect(verifyPaddleSignatureMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reject a body at/under the cap', async () => {
+    const res = await POST(ctx('paddle', VALID_BODY, 'ts=1;h1=abc', { 'content-length': String(VALID_BODY.length) }));
+
+    expect(res.status).not.toBe(413);
   });
 });
 

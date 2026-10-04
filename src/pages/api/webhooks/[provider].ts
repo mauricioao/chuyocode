@@ -12,6 +12,8 @@
  * Contract:
  *   - Any provider other than `paddle`            -> 404 (route does not exist).
  *   - `paddle`, `PADDLE_WEBHOOK_SECRET` unset      -> 503 (inert; logged once, not per request).
+ *   - `paddle`, body over `MAX_BODY_BYTES` (by
+ *     Content-Length or actual read length)        -> 413, before verifying anything.
  *   - `paddle`, missing/bad `Paddle-Signature`     -> 401.
  *   - `paddle`, valid signature, event applied (or
  *     nothing to apply)                            -> 200, fast. The event is
@@ -46,6 +48,14 @@ import { loadEnv } from '@lib/env';
 import { markPrivate } from '@lib/httpCache';
 import { applyBillingEvent, markBillingEventProcessed, recordBillingEvent } from '@lib/billing/apply';
 import { mapPaddleEvent, PADDLE_SIGNATURE_HEADER, verifyPaddleSignature } from '@lib/billing/paddle';
+
+/**
+ * Paddle's own webhook bodies are small JSON (a handful of KB). 1 MB is a
+ * generous ceiling that still bounds the worst case before any work runs on
+ * an attacker-controlled payload — mirrors the same kind of guard on
+ * `src/pages/api/actividades/imagen.ts` (2 MB there, for actual image bytes).
+ */
+const MAX_BODY_BYTES = 1024 * 1024;
 
 /**
  * Every exit from this route is JSON AND private/no-store (T7 posture, same
@@ -87,8 +97,24 @@ async function handlePaddle(request: Request): Promise<Response> {
     return json({ ok: false, error: 'not_configured' }, 503);
   }
 
+  // Reject an oversized request before doing any work on it — hashing a
+  // multi-megabyte attacker-controlled body for signature verification
+  // (and then JSON-parsing it) is wasted CPU for a payload that is never
+  // going to be a genuine Paddle webhook (Paddle's own bodies are small
+  // JSON). Content-Length is checked FIRST so an honestly-declared oversized
+  // body is rejected without reading it at all; the ACTUAL read length is
+  // checked right after, since Content-Length can be absent or simply wrong.
+  const declaredLength = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return json({ ok: false, error: 'payload_too_large' }, 413);
+  }
+
   // Read the EXACT bytes Paddle signed, before any parsing.
   const rawBody = await request.text();
+  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
+    return json({ ok: false, error: 'payload_too_large' }, 413);
+  }
+
   const header = request.headers.get(PADDLE_SIGNATURE_HEADER);
 
   if (!verifyPaddleSignature({ header, rawBody, secret })) {
