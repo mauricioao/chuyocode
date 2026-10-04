@@ -958,7 +958,7 @@ export default function ActivityEditorIsland({
             scrolls that container to its top — in the block-list mode, that
             IS the first block, since `BlockList.tsx`'s `<ul>` renders blocks
             in order with nothing else above them. */}
-        <ScrollToTop lang={lang} targetRef={preview ? previewScrollRef : blockListRef} />
+        <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={preview ? previewScrollRef : blockListRef} />
       </div>
 
       <EditorSideToolbar

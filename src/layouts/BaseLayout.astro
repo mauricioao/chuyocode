@@ -136,6 +136,11 @@ const noindex = isNoindexPath(Astro.url.pathname);
  * elsewhere (`legal/[page].astro`, `noticias/[slug].astro`). */
 const OG_LOCALE: Record<Lang, string> = { es: 'es_PE', en: 'en_US' };
 
+// Computed here (server-side) so the global `ScrollToTop` — hydrated on
+// EVERY page — only ever receives the one string it needs as a plain prop,
+// never the full `UI_LABELS` dictionary. See that component's own props doc.
+const scrollToTopLabels = { scrollToTop: UI_LABELS[lang].common.scrollToTop };
+
 // SVG favicon from public/chuyocode.svg (decision #7: no binary asset).
 // Served at the root URL so the browser can cache it across pages.
 const faviconSvg =
@@ -268,7 +273,7 @@ const faviconSvg =
         stage has no page scroll to return from. */}
     {!bare && (
       <div data-theme="brand" class="dark contents">
-        <ScrollToTop client:load lang={lang} />
+        <ScrollToTop client:load labels={scrollToTopLabels} />
       </div>
     )}
 

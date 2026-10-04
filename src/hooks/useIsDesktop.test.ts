@@ -24,7 +24,7 @@ function stubMatchMedia(initialMatches: boolean) {
       listener = null;
     },
   };
-  window.matchMedia = vi.fn().mockReturnValue(mql);
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(mql));
   return {
     change(next: boolean) {
       matches = next;
@@ -36,7 +36,7 @@ function stubMatchMedia(initialMatches: boolean) {
 describe('useIsDesktop', () => {
   it('defaults to true (desktop) before mount, matching the SSR-safe default', () => {
     // No matchMedia stubbed at all — simulates the very first render.
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const { result } = renderHook(() => useIsDesktop());
     expect(result.current).toBe(true);
   });
@@ -63,10 +63,13 @@ describe('useIsDesktop', () => {
 
   it('queries the Tailwind default lg breakpoint', () => {
     let queried: string | null = null;
-    window.matchMedia = vi.fn().mockImplementation((query: string) => {
-      queried = query;
-      return { matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} };
-    });
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => {
+        queried = query;
+        return { matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} };
+      }),
+    );
     renderHook(() => useIsDesktop());
     expect(queried).toBe('(min-width: 1024px)');
   });

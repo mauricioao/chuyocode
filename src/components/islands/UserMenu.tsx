@@ -89,7 +89,7 @@ import { SignInIcon } from '@phosphor-icons/react/dist/ssr/SignIn';
 // Sign-up entry hidden for now; users register from the sign-in page. Kept
 // commented, not deleted, so it can be restored with a one-line revert.
 // import { UserPlusIcon } from '@phosphor-icons/react/dist/ssr/UserPlus';
-import { UI_LABELS } from '@/lib/i18n';
+import type { UI_LABELS } from '@/lib/i18n';
 import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -101,18 +101,26 @@ import { AUTH_ERROR_PARAM, AUTH_SIGNED_IN, AUTH_SIGNED_OUT } from '@/lib/authRed
 export const MOBILE_MENU_ACCOUNT_SLOT_ID = 'mobile-menu-account';
 
 export interface UserMenuProps {
-  /** Active locale. Drives the sign-in link target and all copy. */
+  /** Active locale. Drives the sign-in link target and every other href this island builds. */
   lang: string;
+  /**
+   * This island's own copy, computed server-side from
+   * `UI_LABELS[lang].auth.userMenu` (see `Header.astro`) instead of a `lang`
+   * resolved against the full dictionary here — `UserMenu` is hydrated on
+   * EVERY page (`Header.astro`, `client:load`), so importing all of
+   * `UI_LABELS` in this file would ship its entire es+en copy (every
+   * section, every feature) to every visitor just for these few strings.
+   * Typed off `UI_LABELS` itself (keys only — `Record<..., string>`, not the
+   * `es` literal values themselves) so the two can't drift, while still
+   * accepting either locale's actual strings.
+   */
+  labels: Record<keyof (typeof UI_LABELS)['es']['auth']['userMenu'], string>;
 }
 
 type State =
   | { status: 'loading' }
   | { status: 'signed-out' }
   | { status: 'signed-in'; profile: Profile };
-
-function copyFor(lang: string) {
-  return lang === 'en' ? UI_LABELS.en.auth.userMenu : UI_LABELS.es.auth.userMenu;
-}
 
 /** Where the current tab is, for the sign-in page's `next` round trip. */
 function currentPath(): string {
@@ -164,8 +172,8 @@ function cachedState(): State | undefined {
   return cached.profile ? { status: 'signed-in', profile: cached.profile } : { status: 'signed-out' };
 }
 
-export default function UserMenu({ lang }: UserMenuProps) {
-  const t = copyFor(lang);
+export default function UserMenu({ lang, labels }: UserMenuProps) {
+  const t = labels;
   // Always `loading` on the very first render, server AND client alike —
   // see the file header's SSR CONTRACT.
   const [state, setState] = useState<State>({ status: 'loading' });

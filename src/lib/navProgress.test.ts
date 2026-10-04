@@ -14,6 +14,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe('NavProgressController — fast navigation never flashes', () => {
@@ -242,12 +243,15 @@ describe('initNavProgressBar — real event wiring (jsdom cannot run real view t
 
   it('respects prefers-reduced-motion: reduce — no matchMedia call throws, trickle is skipped', () => {
     const bar = withBar();
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes('prefers-reduced-motion'),
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('prefers-reduced-motion'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
 
     const dispose = initNavProgressBar(document, window);
     document.dispatchEvent(new Event('astro:before-preparation'));
@@ -258,6 +262,5 @@ describe('initNavProgressBar — real event wiring (jsdom cannot run real view t
     expect(bar.style.width).toBe(widthAtReveal);
 
     dispose?.();
-    Reflect.deleteProperty(window, 'matchMedia');
   });
 });

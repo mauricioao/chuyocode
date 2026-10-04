@@ -1515,26 +1515,29 @@ describe('ExerciseIsland — stepping through the slots', () => {
     return screen.getByTestId('exercise-prev') as HTMLButtonElement;
   }
 
-  /** Install a `matchMedia` stub whose reduced-motion answer we control. */
+  /**
+   * Install a `matchMedia` stub whose reduced-motion answer we control.
+   * jsdom ships NO `matchMedia`, and the island's guard depends on that
+   * absence being the real default — `vi.stubGlobal` plus the file-level
+   * `afterEach`'s `vi.unstubAllGlobals()` restores exactly that absence
+   * after each test, so a regression in that guard can't hide behind a
+   * leftover stub.
+   */
   function stubMatchMedia(reduce: boolean) {
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes('prefers-reduced-motion') ? reduce : false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('prefers-reduced-motion') ? reduce : false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
   }
-
-  afterEach(() => {
-    // jsdom ships NO `matchMedia`, and the island's guard depends on that
-    // absence being the real default. Leaving a stub installed would hide a
-    // regression in exactly the code path the guard exists for.
-    Reflect.deleteProperty(window, 'matchMedia');
-  });
 
   describe('a single-slot exercise', () => {
     /**

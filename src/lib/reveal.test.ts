@@ -67,16 +67,19 @@ class MockIntersectionObserver {
 
 /** Install a `matchMedia` stub whose reduced-motion answer we control. */
 function setReducedMotion(reduce: boolean): void {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: query.includes('prefers-reduced-motion') ? reduce : false,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })) as unknown as typeof window.matchMedia;
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion') ? reduce : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
 }
 
 /** Add N `.reveal` divs to the document body and return them. */

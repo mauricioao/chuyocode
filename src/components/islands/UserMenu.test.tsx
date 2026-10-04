@@ -17,6 +17,12 @@ import UserMenu, { MOBILE_MENU_ACCOUNT_SLOT_ID } from './UserMenu';
 import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache } from '@/lib/meCache';
 
+// `UserMenu` now takes its copy as a `labels` prop (see that component's own
+// props doc) instead of resolving it itself from the full dictionary —
+// these are the same two slices `Header.astro` computes server-side.
+const esLabels = UI_LABELS.es.auth.userMenu;
+const enLabels = UI_LABELS.en.auth.userMenu;
+
 const GOOGLE_PROFILE: Profile = {
   name: 'Juan Perez',
   email: 'juan.perez@gmail.com',
@@ -93,7 +99,7 @@ function withMobileMenuSlot(): HTMLElement {
 describe('UserMenu — loading', () => {
   it('renders a fixed-size placeholder before the fetch resolves', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     expect(screen.getByTestId('user-menu-loading')).toBeTruthy();
     expect(screen.queryByTestId('user-menu-signin')).toBeNull();
     expect(screen.queryByTestId('user-menu-trigger')).toBeNull();
@@ -104,7 +110,7 @@ describe('UserMenu — signed out', () => {
   it('shows a sign-in button to /<lang>/auth/entrar with next=<current path>', async () => {
     window.history.pushState({}, '', '/es/libros/clean-architecture');
     stubMe(null);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const link = await screen.findByTestId('user-menu-signin');
     expect(link.textContent).toBe(UI_LABELS.es.auth.userMenu.signIn);
@@ -116,7 +122,7 @@ describe('UserMenu — signed out', () => {
   it('does not show a create-account button (sign-up entry hidden for now)', async () => {
     window.history.pushState({}, '', '/es/libros/clean-architecture');
     stubMe(null);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     await screen.findByTestId('user-menu-signin');
     expect(screen.queryByTestId('user-menu-signup')).toBeNull();
@@ -124,7 +130,7 @@ describe('UserMenu — signed out', () => {
 
   it('renders the sign-in button as the primary (brand yellow), rounded-full', async () => {
     stubMe(null);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const signIn = await screen.findByTestId('user-menu-signin');
     expect(signIn.className).toContain('rounded-full');
@@ -135,7 +141,7 @@ describe('UserMenu — signed out', () => {
   it('omits `next` when the current page is already an auth page', async () => {
     window.history.pushState({}, '', '/es/auth/nueva-clave');
     stubMe(null);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const link = await screen.findByTestId('user-menu-signin');
     expect(link.getAttribute('href')).toBe('/es/auth/entrar');
@@ -144,7 +150,7 @@ describe('UserMenu — signed out', () => {
   it('localizes the sign-in button to English', async () => {
     window.history.pushState({}, '', '/en/libros');
     stubMe(null);
-    render(<UserMenu lang="en" />);
+    render(<UserMenu lang="en" labels={enLabels} />);
 
     expect((await screen.findByTestId('user-menu-signin')).textContent).toBe(
       UI_LABELS.en.auth.userMenu.signIn,
@@ -153,7 +159,7 @@ describe('UserMenu — signed out', () => {
 
   it('shows the sign-in button on a network failure too (never gets stuck loading)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     await screen.findByTestId('user-menu-signin');
   });
 });
@@ -161,7 +167,7 @@ describe('UserMenu — signed out', () => {
 describe('UserMenu — loading placeholder shape', () => {
   it('renders a neutral circle the size of the avatar, never the "Ingresar" pill shape', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const placeholder = screen.getByTestId('user-menu-loading');
     const pills = placeholder.querySelectorAll('[data-loading-pill]');
@@ -178,7 +184,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
   it('renders the avatar immediately from a cached signed-in profile, with no loading placeholder', () => {
     writeMeCache({ profile: PASSWORD_PROFILE });
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     expect(screen.getByTestId('user-menu-trigger')).toBeTruthy();
     expect(screen.queryByTestId('user-menu-loading')).toBeNull();
@@ -187,7 +193,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
   it('renders "Ingresar" immediately from a cached signed-out result, with no loading placeholder', () => {
     writeMeCache({ profile: null });
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     expect(screen.getByTestId('user-menu-signin')).toBeTruthy();
     expect(screen.queryByTestId('user-menu-loading')).toBeNull();
@@ -196,7 +202,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
   it('still revalidates in the background and updates the cache once the fetch resolves', async () => {
     writeMeCache({ profile: null });
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     expect(screen.getByTestId('user-menu-signin')).toBeTruthy();
     await screen.findByTestId('user-menu-trigger');
@@ -207,7 +213,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
     writeMeCache({ profile: null });
     window.history.pushState({}, '', '/es/?auth=signed-in');
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     expect(screen.getByTestId('user-menu-loading')).toBeTruthy();
     expect(readMeCache()).toBeUndefined();
@@ -217,7 +223,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
     writeMeCache({ profile: PASSWORD_PROFILE });
     window.history.pushState({}, '', '/es/?auth=signed-out');
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     expect(screen.getByTestId('user-menu-loading')).toBeTruthy();
     expect(readMeCache()).toBeUndefined();
@@ -229,7 +235,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
       'fetch',
       vi.fn().mockResolvedValue({ status: 401, ok: false, json: async () => ({ profile: null }) }),
     );
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     await screen.findByTestId('user-menu-signin');
     expect(readMeCache()).toBeUndefined();
@@ -237,7 +243,7 @@ describe('UserMenu — cached /api/me (instant account state, navigation-without
 
   it('invalidates the cache when the sign-out form is submitted', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const form = screen.getByTestId('user-menu-dropdown').querySelector('form');
@@ -253,26 +259,26 @@ describe('UserMenu — hydration (Bug 1, React error #418)', () => {
   });
 
   it('does not report a recoverable hydration error with no cached /api/me answer', async () => {
-    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />);
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" labels={esLabels} />);
     expect(recoverableErrors).toEqual([]);
   });
 
   it('does not report a recoverable hydration error when a cached signed-in profile is already in sessionStorage on the client (the server never sees it)', async () => {
-    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />, {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" labels={esLabels} />, {
       sessionStorage: { 'chuyocode:me:v1': JSON.stringify({ profile: PASSWORD_PROFILE }) },
     });
     expect(recoverableErrors).toEqual([]);
   });
 
   it('does not report a recoverable hydration error when a cached signed-out answer is already in sessionStorage on the client', async () => {
-    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />, {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" labels={esLabels} />, {
       sessionStorage: { 'chuyocode:me:v1': JSON.stringify({ profile: null }) },
     });
     expect(recoverableErrors).toEqual([]);
   });
 
   it('does not report a recoverable hydration error right after a sign-in redirect (?auth=signed-in), with a stale cache present', async () => {
-    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" />, {
+    const { recoverableErrors } = await renderThenHydrate(() => <UserMenu lang="es" labels={esLabels} />, {
       sessionStorage: { 'chuyocode:me:v1': JSON.stringify({ profile: PASSWORD_PROFILE }) },
       locationSearch: '?auth=signed-in',
     });
@@ -283,7 +289,7 @@ describe('UserMenu — hydration (Bug 1, React error #418)', () => {
 describe('UserMenu — signed in (avatar image, e.g. Google)', () => {
   it('renders the avatar image and no initials fallback', async () => {
     stubMe(GOOGLE_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const trigger = await screen.findByTestId('user-menu-trigger');
     const img = trigger.querySelector('img');
@@ -295,7 +301,7 @@ describe('UserMenu — signed in (avatar image, e.g. Google)', () => {
 describe('UserMenu — signed in (initials, e.g. email + password)', () => {
   it('renders initials in place of an avatar image when there is none', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const trigger = await screen.findByTestId('user-menu-trigger');
     expect(trigger.querySelector('img')).toBeNull();
@@ -306,7 +312,7 @@ describe('UserMenu — signed in (initials, e.g. email + password)', () => {
 describe('UserMenu — dropdown', () => {
   it('is closed by default and opens on trigger click, with correct aria wiring', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const trigger = await screen.findByTestId('user-menu-trigger');
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
@@ -322,7 +328,7 @@ describe('UserMenu — dropdown', () => {
 
   it('shows the name, email and free-plan badge', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const dropdown = screen.getByTestId('user-menu-dropdown');
@@ -333,7 +339,7 @@ describe('UserMenu — dropdown', () => {
 
   it('shows the Premium badge for a premium plan', async () => {
     stubMe(PREMIUM_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const dropdown = screen.getByTestId('user-menu-dropdown');
@@ -343,7 +349,7 @@ describe('UserMenu — dropdown', () => {
 
   it('links to the activities creator, lang-prefixed', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const link = screen.getByTestId('user-menu-create-activity');
@@ -353,7 +359,7 @@ describe('UserMenu — dropdown', () => {
 
   it('links to the author workspace, lang-prefixed', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const link = screen.getByTestId('user-menu-my-activities');
@@ -363,7 +369,7 @@ describe('UserMenu — dropdown', () => {
 
   it('never shows a moderation link for an ordinary user', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     expect(screen.queryByTestId('user-menu-moderation')).toBeNull();
@@ -371,7 +377,7 @@ describe('UserMenu — dropdown', () => {
 
   it('shows a moderation link with a pending-count badge for a moderator', async () => {
     stubMe(MODERATOR_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const link = screen.getByTestId('user-menu-moderation');
@@ -382,7 +388,7 @@ describe('UserMenu — dropdown', () => {
 
   it('hides the badge when the moderator has nothing pending', async () => {
     stubMe({ ...MODERATOR_PROFILE, moderationPendingCount: 0 });
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     expect(screen.getByTestId('user-menu-moderation')).toBeTruthy();
@@ -391,7 +397,7 @@ describe('UserMenu — dropdown', () => {
 
   it('renders sign-out as a plain POST form with data-astro-reload', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
     const form = screen.getByTestId('user-menu-dropdown').querySelector('form');
@@ -405,7 +411,7 @@ describe('UserMenu — dropdown', () => {
 
   it('closes on Escape', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     const trigger = await screen.findByTestId('user-menu-trigger');
     fireEvent.click(trigger);
     expect(screen.getByTestId('user-menu-dropdown')).toBeTruthy();
@@ -421,7 +427,7 @@ describe('UserMenu — dropdown', () => {
     render(
       <div>
         <div data-testid="outside">outside</div>
-        <UserMenu lang="es" />
+        <UserMenu lang="es" labels={esLabels} />
       </div>,
     );
     const trigger = await screen.findByTestId('user-menu-trigger');
@@ -435,7 +441,7 @@ describe('UserMenu — dropdown', () => {
 
   it('stays open on a click inside the dropdown itself', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
     const dropdown = screen.getByTestId('user-menu-dropdown');
 
@@ -446,7 +452,7 @@ describe('UserMenu — dropdown', () => {
 
   it('the trigger is keyboard focusable', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     const trigger = await screen.findByTestId('user-menu-trigger');
     trigger.focus();
     expect(document.activeElement).toBe(trigger);
@@ -459,7 +465,7 @@ describe('UserMenu — dropdown', () => {
    */
   it('scales the avatar on hover instead of ringing it, and keeps a focus-visible indicator', async () => {
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     const trigger = await screen.findByTestId('user-menu-trigger');
 
     expect(trigger.className).not.toContain('hover:border-primary');
@@ -482,7 +488,7 @@ describe('UserMenu — localization', () => {
 describe('UserMenu — mobile hamburger menu account entries (mobile layout pass)', () => {
   it('does nothing (no crash, no stray nodes) when Header\'s mobile-menu slot is not present', async () => {
     stubMe(null);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     await screen.findByTestId('user-menu-signin');
     // Nothing to assert on directly — the absence of a crash IS the test;
     // the top-bar rendering above is proof the component still works fine.
@@ -491,7 +497,7 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
   it('signed out: portals a single "Ingresar" link into the slot', async () => {
     const slot = withMobileMenuSlot();
     stubMe(null);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     await screen.findByTestId('user-menu-signin'); // top-bar rendering, unaffected
     const mobileLink = await screen.findByTestId('mobile-account-signin');
@@ -503,7 +509,7 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
   it('signed in: portals Crear actividad / Mis actividades / Cerrar sesión, no moderación for an ordinary user', async () => {
     const slot = withMobileMenuSlot();
     stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const create = await screen.findByTestId('mobile-account-create-activity');
     expect(slot.contains(create)).toBe(true);
@@ -525,7 +531,7 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
   it('signed in as a moderator: portals the moderación entry with its pending-count badge', async () => {
     withMobileMenuSlot();
     stubMe(MODERATOR_PROFILE);
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
 
     const moderation = await screen.findByTestId('mobile-account-moderation');
     expect(moderation.getAttribute('href')).toBe('/es/admin/actividades');
@@ -535,7 +541,7 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
   it('portals nothing while still loading (avoids a flash of empty-state content)', () => {
     const slot = withMobileMenuSlot();
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" />);
+    render(<UserMenu lang="es" labels={esLabels} />);
     expect(slot.childElementCount).toBe(0);
   });
 });

@@ -28,6 +28,7 @@ function firePointer(
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -328,7 +329,7 @@ describe('WorksheetPracticePlayer — free panning (Bug 2, loose camera bound)',
 
 describe('WorksheetPracticePlayer — no layout flash on the server render (mobile layout pass, priority fix)', () => {
   it('renders BOTH the desktop camera and the mobile pinch viewport on the server, gated by CSS `lg:` classes only', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(
       <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
     );
@@ -339,7 +340,7 @@ describe('WorksheetPracticePlayer — no layout flash on the server render (mobi
   });
 
   it('does not mark the desktop camera `inert` on the server', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(
       <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
     );
@@ -347,7 +348,7 @@ describe('WorksheetPracticePlayer — no layout flash on the server render (mobi
   });
 
   it('never renders a zoom toolbar on the server (no toolbarSlot to portal into yet)', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(
       <WorksheetPracticePlayer lang="es" block={BLOCK} imageUrl="/img.webp" practice={{ values: {}, onChange: () => {} }} />,
     );
