@@ -48,6 +48,7 @@ import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { Emoji } from '@/components/ui/Emoji';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Level } from '@/lib/exerciseTaxonomy';
 import type { Block, Zone } from '@/lib/activities/blocks';
@@ -750,6 +751,9 @@ function SummarySlide({
       data-testid="presentation-slide-summary"
       className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-10 text-center"
     >
+      {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely
+          decorative, next to the already-accessible "¡Listo!" heading below. */}
+      <Emoji data-testid="presentation-summary-emoji" name="trophy" size={64} />
       <h2 style={{ fontSize: 80 }} className="font-display font-bold text-foreground">
         {t.summaryTitle} {countLabel}
       </h2>

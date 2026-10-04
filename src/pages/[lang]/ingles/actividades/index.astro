@@ -39,6 +39,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import ActivityCard from '@components/ui/ActivityCard.astro';
+import Emoji from '@components/ui/Emoji.astro';
 import SearchFilter from '@components/ui/SearchFilter.astro';
 import CommunityFiltersPanel from '@components/activities/CommunityFiltersPanel.astro';
 import { buttonVariants } from '@components/ui/button';
@@ -260,6 +261,8 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
     {
       activities.length === 0 && !(showDailyPick && dailyPick) ? (
         <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
+          {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely decorative, next to the empty message below. */}
+          <Emoji name="llama" size={48} />
           <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
           {anyFilterActive && (
             <a href={basePath} class="text-sm font-medium text-accent-ink hover:underline">

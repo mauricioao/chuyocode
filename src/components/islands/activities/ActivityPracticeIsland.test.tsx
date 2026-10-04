@@ -246,6 +246,35 @@ describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar
     expect(screen.getByTestId('practice-score').textContent).toContain('0 / 3');
   });
 
+  describe('result emoji (visual-identity decision, 2026-10-04)', () => {
+    it('shows no result emoji before Comprobar has run', () => {
+      renderIsland([WORKSHEET]);
+      expect(screen.queryByTestId('practice-result-emoji')).toBeNull();
+    });
+
+    it('shows the party popper only once every gradable item is correct', () => {
+      renderIsland([WORKSHEET]);
+      const textInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+      fireEvent.change(textInput, { target: { value: 'cat' } });
+      const select = screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement;
+      fireEvent.change(select, { target: { value: 'blue' } });
+
+      fireEvent.click(screen.getByTestId('practice-check-button'));
+
+      const img = screen.getByTestId('practice-result-emoji').querySelector('img') as HTMLImageElement;
+      expect(img.getAttribute('src')).toContain('party-popper');
+    });
+
+    it('shows the thinking face instead once at least one gradable item is wrong', () => {
+      renderIsland([WORKSHEET, SECOND_WORKSHEET]);
+      // Nothing filled in — every zone grades wrong (0 / 3).
+      fireEvent.click(screen.getByTestId('practice-check-button'));
+
+      const img = screen.getByTestId('practice-result-emoji').querySelector('img') as HTMLImageElement;
+      expect(img.getAttribute('src')).toContain('thinking-face');
+    });
+  });
+
   it('swaps Comprobar for Reintentar once graded', () => {
     renderIsland([WORKSHEET]);
     fireEvent.click(screen.getByTestId('practice-check-button'));

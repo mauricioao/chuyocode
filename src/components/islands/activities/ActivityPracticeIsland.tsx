@@ -60,6 +60,7 @@ import { comparatorForRenderable } from '@/components/islands/mechanics/registry
 import type { ExerciseResponse } from '@/lib/exercisePayload';
 import type { GameMode } from '@/lib/activities/gameModes';
 import { Button } from '@/components/ui/button';
+import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
@@ -359,8 +360,28 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               sits … next to the buttons"). */}
           <div className="ml-auto flex flex-wrap items-center gap-3">
             {graded ? (
-              <p data-testid="practice-score" aria-live="polite" className="text-sm font-medium text-foreground">
-                {t.score}: {correctCount} / {totalCount}
+              <p
+                data-testid="practice-score"
+                aria-live="polite"
+                className="flex items-center gap-2 text-sm font-medium text-foreground"
+              >
+                <span>
+                  {t.score}: {correctCount} / {totalCount}
+                </span>
+                {/* Emoji sticker accent (visual-identity decision, 2026-10-04):
+                    party popper once every gradable item is correct, a
+                    thinking face otherwise — purely decorative, next to the
+                    already-accessible score text above, so grading/copy stay
+                    unchanged. Hidden entirely when there is nothing gradable
+                    (totalCount === 0 never reaches this branch regardless,
+                    since `hasGradableContent` already gates the whole footer). */}
+                {totalCount > 0 && (
+                  <Emoji
+                    data-testid="practice-result-emoji"
+                    name={correctCount === totalCount ? 'party-popper' : 'thinking-face'}
+                    size={32}
+                  />
+                )}
               </p>
             ) : activeQuizModeHint ? (
               <p data-testid="practice-quiz-mode-hint" className="text-sm text-muted-foreground">

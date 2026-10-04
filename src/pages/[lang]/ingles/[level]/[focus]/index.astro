@@ -23,6 +23,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import ExerciseCard from '@components/ui/ExerciseCard.astro';
+import Emoji from '@components/ui/Emoji.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { isLevel, isFocus, FOCUS_LABELS } from '@lib/exerciseTaxonomy';
@@ -86,6 +87,7 @@ const backHref = `/${lang}/ingles/propuestos?nivel=${level}`;
            "nothing published anywhere" panel, and it always offers a way out —
            an empty state with no exit is a dead end. */
         <div class="flex flex-col items-start gap-4 rounded-lg border border-border bg-surface-soft p-6">
+          <Emoji name="llama" size={48} />
           <p class="text-zinc-300">{t.section.emptyPair}</p>
           <a
             href={backHref}
