@@ -113,6 +113,12 @@ describe('duplicateActivity', () => {
     expect(createActivityMock).not.toHaveBeenCalled();
   });
 
+  it('duplicates a ChuyoCode-owned original (NULL authorId, 0020 account deletion transfer) same as any other', async () => {
+    getPublishedActivityMock.mockResolvedValue(originalActivity({ authorId: null }));
+    const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+    expect(result).toEqual({ ok: true, id: 'new-activity-id' });
+  });
+
   it('returns daily_limit at the daily cap, before any copy or create', async () => {
     countState.result = { count: MAX_DUPLICATES_PER_DAY, error: null };
     const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);

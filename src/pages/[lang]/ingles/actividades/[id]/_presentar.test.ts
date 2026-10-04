@@ -138,6 +138,14 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
+  it('returns 200 for a ChuyoCode-owned activity (NULL authorId, 0020 account deletion transfer)', async () => {
+    activityResult.value = { ...QUIZ_ACTIVITY, authorId: null };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    expect(res.status).toBe(200);
+  });
+
   it('renders the activity title and level on the cover slide', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {

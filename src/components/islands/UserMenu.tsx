@@ -96,6 +96,7 @@ import { cn } from '@/lib/utils';
 import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache, clearMeCache } from '@/lib/meCache';
 import { AUTH_ERROR_PARAM, AUTH_SIGNED_IN, AUTH_SIGNED_OUT } from '@/lib/authRedirect';
+import DeleteAccountDialog from './DeleteAccountDialog';
 
 /** The id `Header.astro`'s `#mobile-menu` panel reserves for this island's portaled account entries — see the file header. */
 export const MOBILE_MENU_ACCOUNT_SLOT_ID = 'mobile-menu-account';
@@ -325,6 +326,20 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
             {t.signOut}
           </button>
         </form>
+        <DeleteAccountDialog
+          lang={lang}
+          labels={t}
+          renderTrigger={(onOpen) => (
+            <button
+              type="button"
+              data-testid="mobile-account-delete-account"
+              onClick={onOpen}
+              className="w-full py-1 text-left text-sm font-medium text-destructive"
+            >
+              {t.deleteAccount}
+            </button>
+          )}
+        />
       </>
     );
   }
@@ -476,6 +491,21 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
               {t.signOut}
             </button>
           </form>
+          <DeleteAccountDialog
+            lang={lang}
+            labels={t}
+            renderTrigger={(onOpen) => (
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="user-menu-delete-account"
+                onClick={onOpen}
+                className="mt-1 w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
+              >
+                {t.deleteAccount}
+              </button>
+            )}
+          />
         </div>
       )}
       {mobilePortal}

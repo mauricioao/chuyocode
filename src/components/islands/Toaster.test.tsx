@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, act } from '@testing-library/react';
 import { toast } from 'sonner';
+import { writePendingToast } from '@/lib/pendingToast';
 import Toaster from './Toaster';
 
 function stubMatchMedia(matchesNarrow: boolean) {
@@ -34,6 +35,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  sessionStorage.clear();
 });
 
 describe('Toaster', () => {
@@ -81,5 +83,38 @@ describe('Toaster', () => {
     const icon = document.querySelector('[data-icon] svg');
     expect(icon).not.toBeNull();
     expect(icon?.getAttribute('class')).toContain('text-success');
+  });
+});
+
+describe('Toaster — pending toast relay (account deletion\'s hard-navigation case)', () => {
+  beforeEach(() => {
+    stubMatchMedia(false);
+  });
+
+  it('shows a message left by writePendingToast on mount', async () => {
+    writePendingToast('Tu cuenta se eliminó correctamente.');
+    render(<Toaster />);
+    expect(await screen.findByText('Tu cuenta se eliminó correctamente.')).not.toBeNull();
+  });
+
+  it('clears the pending toast after showing it once (a later mount never repeats it)', async () => {
+    writePendingToast('listo');
+    const first = render(<Toaster />);
+    await screen.findByText('listo');
+    first.unmount();
+
+    act(() => {
+      toast.dismiss();
+    });
+
+    render(<Toaster />);
+    // Give any stray effect a tick, then confirm it never reappeared.
+    await act(async () => {});
+    expect(screen.queryByText('listo')).toBeNull();
+  });
+
+  it('renders normally with no pending toast at all', () => {
+    expect(() => render(<Toaster />)).not.toThrow();
+    expect(document.querySelector('[data-sonner-toast]')).toBeNull();
   });
 });

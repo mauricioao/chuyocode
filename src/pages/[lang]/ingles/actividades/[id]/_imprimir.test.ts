@@ -98,6 +98,14 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — rendering', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
+  it('returns 200 for a ChuyoCode-owned activity (NULL authorId, 0020 account deletion transfer)', async () => {
+    activityResult.value = { ...WORKSHEET_ACTIVITY, authorId: null };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    expect(res.status).toBe(200);
+  });
+
   it('renders the title and level', async () => {
     activityResult.value = WORKSHEET_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {

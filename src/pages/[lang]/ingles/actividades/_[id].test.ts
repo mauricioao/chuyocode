@@ -279,6 +279,33 @@ describe('GET /[lang]/ingles/actividades/[id] — "Duplicar" (D7)', () => {
   });
 });
 
+describe('GET /[lang]/ingles/actividades/[id] — ChuyoCode-owned activity (NULL authorId, 0020 account deletion transfer)', () => {
+  it('renders 200 and offers heart/report/duplicate to a signed-in visitor — nobody owns a ChuyoCode activity', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: null, heartCount: 3 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-heart-button"');
+    expect(html).toContain('data-testid="report-activity-button"');
+    expect(html).toContain('data-testid="duplicate-activity-button"');
+  });
+
+  it('still renders the guest fallback (200) for an anonymous visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: null, heartCount: 3 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-heart-guest"');
+    expect(html).toContain('data-testid="activity-duplicate-guest"');
+  });
+});
+
 describe('GET /[lang]/ingles/actividades/[id] — "Compartir" (D8)', () => {
   it('renders the share trigger with a WhatsApp link encoding the title and the page URL', async () => {
     activityResult.value = { id: 'abc', title: 'Present simple', level: null, blocks: [], authorId: 'someone-else' };

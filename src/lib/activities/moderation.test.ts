@@ -154,6 +154,41 @@ describe('getReviewQueue', () => {
     expect(queue.reported[0].reports).toHaveLength(1);
     expect(queue.reported[0].reports[0].reason).toBe('inappropriate');
   });
+
+  it('includes a reported activity whose author was deleted (NULL author_id, 0020 account deletion transfer), showing "ChuyoCode" without a user lookup', async () => {
+    push('activity_revisions', { data: [], error: null });
+    push('activities', { data: [{ id: ACTIVITY, title: 'Transferida', author_id: null }], error: null });
+    push('activity_reports', {
+      data: [{ id: 'r1', activity_id: ACTIVITY, reporter_id: OTHER_USER, reason: 'inappropriate', details: null, created_at: '2026-01-02T00:00:00Z' }],
+      error: null,
+    });
+
+    const queue = await getReviewQueue();
+    expect(queue.reported).toHaveLength(1);
+    expect(queue.reported[0].activityTitle).toBe('Transferida');
+    expect(queue.reported[0].author).toEqual({ id: 'ChuyoCode', email: null });
+    expect(state.getUserById).not.toHaveBeenCalled();
+  });
+
+  it("does not key the pending-revisions queue off the activity's own author_id (defensive: loadPendingRevisions reads only the revision's created_by)", async () => {
+    // Not a reachable production combination — 0020 deletes a transferred
+    // activity's own in-flight draft/pending/rejected revisions, and nobody
+    // can submit a NEW one once `author_id` is null (`getActivityForEdit`
+    // matches on `author_id = caller`, which no real id ever is). This only
+    // locks in that `loadPendingRevisions` never grows the same bug
+    // `loadReportedActivities` just had, by never requiring the ACTIVITY's
+    // own author_id to be a string (only the revision's `created_by`).
+    push('activity_revisions', {
+      data: [{ id: REVISION, activity_id: ACTIVITY, blocks: worksheetBlocks(`${UPLOADS_BUCKET}/${AUTHOR}/${IMAGE_ID}.webp`), created_by: AUTHOR, rights_accepted_at: null }],
+      error: null,
+    });
+    push('activities', { data: [{ id: ACTIVITY, title: 'Transferida', author_id: null, published_revision_id: null }], error: null });
+    push('activities', { data: [], error: null });
+
+    const queue = await getReviewQueue();
+    expect(queue.pending).toHaveLength(1);
+    expect(queue.pending[0].activityTitle).toBe('Transferida');
+  });
 });
 
 describe('getPendingModerationCount', () => {

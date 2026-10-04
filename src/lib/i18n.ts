@@ -312,6 +312,22 @@ export const UI_LABELS = {
         // placement/chrome rule as `createActivity`/`myActivities`.
         moderation: 'Moderación',
         signOut: 'Cerrar sesión',
+        // Account deletion (owner decision, 2026-10-04). Flat keys, not a
+        // nested object — `UserMenu`'s own `labels` prop is typed
+        // `Record<keyof UI_LABELS['es']['auth']['userMenu'], string>`
+        // (every value a leaf string), the same reason this whole map has
+        // no nested objects anywhere else.
+        deleteAccount: 'Eliminar mi cuenta',
+        deleteAccountDialogTitle: 'Eliminar tu cuenta',
+        // Owner-authored copy, verbatim.
+        deleteAccountDialogBody:
+          'Tus actividades publicadas seguirán disponibles para la comunidad a nombre de ChuyoCode. Tus borradores, tus corazones y los datos de tu cuenta se eliminarán. Esta acción no se puede deshacer.',
+        deleteAccountConfirmLabel: 'Escribe ELIMINAR para confirmar',
+        deleteAccountConfirmWord: 'ELIMINAR',
+        deleteAccountCancel: 'Cancelar',
+        deleteAccountButton: 'Eliminar mi cuenta',
+        deleteAccountSuccessToast: 'Tu cuenta se eliminó correctamente.',
+        deleteAccountErrorGeneric: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo.',
       },
     },
     // Authoring pages (`/[lang]/crear/*`, slice 15). UNLINKED routes — no nav
@@ -1010,23 +1026,17 @@ export const UI_LABELS = {
         courses: 'Cursos',
         english: 'Inglés para programadores',
       },
-      // Inglés product section (home redesign: "Inglés en ChuyoCode"). Two
-      // entry points, honest about what exists today: creating an activity
-      // (`/{lang}/crear`) and practicing one (`/{lang}/ingles/actividades`).
-      // Both routes are already login-gated by the middleware.
+      // Inglés product banner on the home (full-width illustration with the
+      // copy over its empty paper area). Two entry points, honest about what
+      // exists today: creating an activity (`/{lang}/crear`) and practicing
+      // one (`/{lang}/ingles/actividades`); both are login-gated.
       ingles: {
-        heading: 'Inglés en ChuyoCode',
+        label: 'Inglés · English',
+        title: 'Aprende y enseña inglés jugando',
         intro: 'Actividades interactivas para enseñar y practicar inglés, en español.',
-        teachersLabel: 'Para docentes',
-        teachersTitle: 'Tu ficha, ahora interactiva',
-        teachersBody:
-          'Sube tu ficha o PDF, marca las respuestas y proyéctala en clase. Gratis.',
         teachersCta: 'Crear mi actividad',
-        learnersLabel: 'Para aprender',
-        learnersTitle: 'Practica a tu ritmo',
-        learnersBody:
-          'Actividades y juegos por nivel, con explicaciones en español cuando te equivocas.',
         learnersCta: 'Explorar actividades',
+        note: 'Crear y jugar es gratis.',
       },
     },
     courses: {
@@ -1401,6 +1411,16 @@ export const UI_LABELS = {
         myActivities: 'My activities',
         moderation: 'Moderation',
         signOut: 'Sign out',
+        deleteAccount: 'Delete my account',
+        deleteAccountDialogTitle: 'Delete your account',
+        deleteAccountDialogBody:
+          'Your published activities will stay available to the community under the ChuyoCode name. Your drafts, hearts and account data will be deleted. This action cannot be undone.',
+        deleteAccountConfirmLabel: 'Type DELETE to confirm',
+        deleteAccountConfirmWord: 'DELETE',
+        deleteAccountCancel: 'Cancel',
+        deleteAccountButton: 'Delete my account',
+        deleteAccountSuccessToast: 'Your account was deleted.',
+        deleteAccountErrorGeneric: 'Could not delete your account. Try again.',
       },
     },
     authoring: {
@@ -1928,18 +1948,12 @@ export const UI_LABELS = {
       },
       // Mirrors `es.home.ingles` — see its comment there.
       ingles: {
-        heading: 'English on ChuyoCode',
+        label: 'English · Inglés',
+        title: 'Learn and teach English through play',
         intro: 'Interactive activities to teach and practice English, explained in Spanish.',
-        teachersLabel: 'For teachers',
-        teachersTitle: 'Your worksheet, now interactive',
-        teachersBody:
-          'Upload your worksheet or PDF, mark the answers and project it in class. Free.',
         teachersCta: 'Create my activity',
-        learnersLabel: 'For learners',
-        learnersTitle: 'Practice at your own pace',
-        learnersBody:
-          'Activities and games by level, with explanations in Spanish when you get it wrong.',
         learnersCta: 'Explore activities',
+        note: 'Creating and playing is free.',
       },
     },
     courses: {

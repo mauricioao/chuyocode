@@ -74,6 +74,15 @@ export interface ActivityReport {
   createdAt: string;
 }
 
+/**
+ * The moderation queue's display identity for a `null` `author_id` — an
+ * activity transferred to ChuyoCode by account deletion
+ * (`transfer_and_purge_user`, `supabase/migrations/0020_account_deletion.sql#1`).
+ * No real user to resolve, so `resolveAuthors`/`auth.admin.getUserById` is
+ * never called for it.
+ */
+const CHUYOCODE_AUTHOR: QueueAuthor = { id: 'ChuyoCode', email: null };
+
 /** One activity hidden by reports (see file header: `status = 'pending_review'` + `published_revision_id` set). */
 export interface ReportedActivityItem {
   activityId: string;
@@ -317,12 +326,20 @@ async function loadReportedActivities(client: SupabaseClient): Promise<ReportedA
     return rows.flatMap((row): ReportedActivityItem[] => {
       const id = row.id;
       const authorId = row.author_id;
-      if (typeof id !== 'string' || typeof row.title !== 'string' || typeof authorId !== 'string') return [];
+      if (typeof id !== 'string' || typeof row.title !== 'string') return [];
+      // `author_id` is nullable since the 0020 migration (account deletion):
+      // NULL means this activity was TRANSFERRED to ChuyoCode, not that the
+      // row is malformed — it must still show up here (it may still need
+      // moderating), just with no real user behind it. Anything else
+      // non-string (including a missing/undefined key) is still dropped as
+      // malformed, same fail-safe posture as before.
+      if (authorId !== null && typeof authorId !== 'string') return [];
+      const author = authorId === null ? CHUYOCODE_AUTHOR : (authors.get(authorId) ?? { id: authorId, email: null });
       return [
         {
           activityId: id,
           activityTitle: row.title,
-          author: authors.get(authorId) ?? { id: authorId, email: null },
+          author,
           reports: reportsByActivity.get(id) ?? [],
         },
       ];

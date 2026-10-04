@@ -197,6 +197,20 @@ describe('GET /[lang]/cursos/[slug]/[lessonId] — activity lesson', () => {
     expect(html).toContain('component-url="@components/islands/activities/ActivityPracticeIsland"');
   });
 
+  it('renders the practice island for a ChuyoCode-owned activity (NULL authorId, 0020 account deletion transfer)', async () => {
+    getPlanMock.mockResolvedValue('premium');
+    getPublishedActivityMock.mockResolvedValue({
+      id: 'a1a1a1a1-0000-4000-8000-000000000001',
+      title: 'Presente simple',
+      blocks: [],
+      authorId: null,
+    });
+    const res = await render('https://chuyocode.test/es/cursos/react-basico/l3', { lang: 'es', slug: 'react-basico', lessonId: 'l3' });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('component-url="@components/islands/activities/ActivityPracticeIsland"');
+  });
+
   it('shows the unavailable fallback when the activity is no longer live', async () => {
     getPlanMock.mockResolvedValue('premium');
     getPublishedActivityMock.mockResolvedValue(null);

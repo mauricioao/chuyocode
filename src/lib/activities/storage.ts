@@ -205,6 +205,80 @@ export async function countUserUploads(userId: string): Promise<number | null> {
 }
 
 /**
+ * Delete every object in `userId`'s private uploads folder, whole-folder,
+ * never a per-activity subset (account deletion,
+ * `supabase/migrations/0020_account_deletion.sql`).
+ *
+ * Safe regardless of which of that user's activities/exercises were just
+ * transferred to ChuyoCode vs hard-deleted by `transfer_and_purge_user`:
+ * once a worksheet image is moderator-approved, the revision that
+ * references it is rewritten to point at the PUBLIC
+ * `activity-images/<activityId>/…` copy instead (`copyToImagesBucket`,
+ * called from `aprobar.ts`), so nothing a transferred/live activity still
+ * shows ever lives in this bucket — only drafts-in-progress and
+ * already-superseded originals do, and ALL of those are gone or orphaned
+ * the moment the account itself is gone.
+ *
+ * The folder's path is a pure function of `userId` alone
+ * ({@link uploadPath}), so this needs no list of paths FROM the database —
+ * only `userId`, which the caller already has.
+ *
+ * PAGINATES past {@link MAX_UPLOADS_PER_USER}: `.list()` itself caps at
+ * `limit` objects per call, so a user with MORE than that many uploads (the
+ * limit only bounds NEW uploads going forward, via `countUserUploads` — it
+ * never shrinks an already-larger folder) would otherwise have every object
+ * past the first page silently left behind. Each page is removed BEFORE the
+ * next `.list()` call, always re-listing from the top (no `offset`):
+ * removing a page shifts every later object down by exactly that many
+ * positions, so an incrementing offset would skip objects past the first
+ * page — re-listing from the top after each deletion sidesteps that
+ * entirely, since everything already removed can never be listed again.
+ * Stops once a page comes back empty or shorter than `limit` (the last
+ * page).
+ *
+ * `true` when the folder was already empty or every found object (every
+ * page) was removed; `false` on ANY page's list/remove failure — the caller
+ * (`src/lib/accountDeletion.ts`) treats that as "stop here, do not delete
+ * the auth user yet", same FAIL-CLOSED posture as {@link countUserUploads}.
+ * A failure partway through still leaves every PRIOR page's objects
+ * removed; retrying (the caller's own story, see its header) simply resumes
+ * against whatever remains.
+ */
+export async function removeAllUserUploads(userId: string): Promise<boolean> {
+  if (!isUuid(userId)) return false;
+  const client = getClient();
+  if (!client) return false;
+
+  try {
+    for (;;) {
+      const { data, error } = await client.storage
+        .from(UPLOADS_BUCKET)
+        .list(userId, { limit: MAX_UPLOADS_PER_USER });
+      if (error) {
+        console.error('[activities/storage] removeAllUserUploads list failed:', error.message);
+        return false;
+      }
+      if (!data || data.length === 0) return true;
+
+      const paths = data.map((file) => `${userId}/${file.name}`);
+      const { error: removeError } = await client.storage.from(UPLOADS_BUCKET).remove(paths);
+      if (removeError) {
+        console.error('[activities/storage] removeAllUserUploads remove failed:', removeError.message);
+        return false;
+      }
+
+      // A full page: more may remain, go around again (from the top — see
+      // this function's own header for why never an offset). Fewer than a
+      // full page: that was the last one.
+      if (data.length < MAX_UPLOADS_PER_USER) return true;
+    }
+  } catch (err) {
+    console.error('[activities/storage] removeAllUserUploads threw:', err);
+    return false;
+  }
+}
+
+/**
  * Copy an approved upload from the PRIVATE `activity-uploads` bucket to its
  * moderator-approved home in the PUBLIC `activity-images` bucket (PR E,
  * "Moderation"). Called by `aprobar.ts` for every worksheet image the
