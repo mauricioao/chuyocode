@@ -4,13 +4,17 @@
  *
  * Image-first discovery layout, sections IN ORDER:
  *   1. HeroCarousel   — getHeroItems()     → auto-rotating featured billboard.
- *   2. Reserved rows  — getRowsByTheme()   → the RESERVED_THEMES that have
- *      content (today "Libros Recomendados"); the FIRST one overlaps the hero.
- *   3. Más descargados — getMostDownloaded() → automatic numbered ranking by
+ *   2. Inglés         — static, two entry points (create an activity /
+ *      explore activities). The main product; placed first so it overlaps
+ *      the hero like every other first-row content, before any Libros/
+ *      Noticias section. No discovery query — localized copy only.
+ *   3. Reserved rows  — getRowsByTheme()   → the RESERVED_THEMES that have
+ *      content (today "Libros Recomendados").
+ *   4. Más descargados — getMostDownloaded() → automatic numbered ranking by
  *      REAL download count (RankedRow). Self-hides until downloads exist.
- *   4. Other themes   — getRowsByTheme()   → one titled row per remaining theme,
+ *   5. Other themes   — getRowsByTheme()   → one titled row per remaining theme,
  *      mixed books + news as poster MediaCards.
- *   5. Spotlight      — getSpotlight()     → single featured doc, wide cover +
+ *   6. Spotlight      — getSpotlight()     → single featured doc, wide cover +
  *      long synopsis + CTA.
  *
  * Themes are a free-text multi-select array (`themes`), so a document can appear
@@ -29,6 +33,9 @@ import HeroCarousel from '@components/ui/HeroCarousel.astro';
 import EditorialRow from '@components/ui/EditorialRow.astro';
 import RankedRow from '@components/ui/RankedRow.astro';
 import SpotlightCarousel from '@components/ui/SpotlightCarousel.astro';
+import SectionHeading from '@components/ui/SectionHeading.astro';
+import { buttonVariants } from '@components/ui/button';
+import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   getHeroItems,
@@ -60,6 +67,14 @@ for (const [name, value] of Object.entries(cacheHeaders)) {
 }
 
 const description = UI_LABELS[lang].meta.siteDescription;
+
+// Inglés product section (now the main product): two static entry points,
+// teacher-authoring and learner-practice. Both destinations are login-gated
+// already (the middleware redirects an anonymous visitor to sign-in with
+// `next`), so these stay plain links — no extra gating logic needed here.
+// Localized copy only; nothing here reads `Astro.locals.user` (see the public
+// cache note below).
+const inglesT = UI_LABELS[lang].home.ingles;
 
 // SSR-fetch every discovery section in parallel. All helpers are fail-safe
 // (return [] / null on error), so empty results simply collapse their section.
@@ -120,6 +135,64 @@ const otherRows: EditorialRowData[] = editorialRows.filter(
         underneath; each row child re-enables `pointer-events-auto` so cards
         stay fully interactive. --- */}
     <div class="pointer-events-none relative z-10 -mt-28 flex flex-col gap-12 pt-8 [&>*]:pointer-events-auto sm:-mt-44 sm:gap-16 sm:pt-12">
+      {/* --- Inglés — the main product, two entry points (create an activity /
+          explore activities). FIRST in this list so it reads as "directly
+          after the hero", before any Libros/Noticias content, while still
+          sitting at the top of the shademanga overlap band like every other
+          first-row content does. Zero session-dependent content: only
+          localized copy and plain links, so the page stays byte-identical for
+          every visitor (see `description`/`inglesT` above and
+          `publicCachePolicy()` below). --------------------------------- */}
+      <div class="reveal" style="--reveal-delay:40ms">
+        <section aria-labelledby="home-ingles-heading" data-testid="home-ingles-section">
+          <SectionHeading
+            id="home-ingles-heading"
+            title={inglesT.heading}
+            description={inglesT.intro}
+          />
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-3 rounded-(--radius-card) bg-card p-6 text-card-foreground ring-1 ring-foreground/10">
+              <span
+                class={badgeVariants({
+                  variant: 'outline',
+                  className: 'w-fit uppercase tracking-wide text-accent',
+                })}
+              >
+                {inglesT.teachersLabel}
+              </span>
+              <h3 class="text-lg font-semibold text-foreground">{inglesT.teachersTitle}</h3>
+              <p class="text-sm text-muted-foreground">{inglesT.teachersBody}</p>
+              <a
+                href={`/${lang}/crear`}
+                class={buttonVariants({ variant: 'default', size: 'lg', className: 'w-fit px-5 py-2.5' })}
+                data-testid="home-ingles-cta-crear"
+              >
+                {inglesT.teachersCta}
+              </a>
+            </div>
+            <div class="flex flex-col gap-3 rounded-(--radius-card) bg-card p-6 text-card-foreground ring-1 ring-foreground/10">
+              <span
+                class={badgeVariants({
+                  variant: 'outline',
+                  className: 'w-fit uppercase tracking-wide text-accent',
+                })}
+              >
+                {inglesT.learnersLabel}
+              </span>
+              <h3 class="text-lg font-semibold text-foreground">{inglesT.learnersTitle}</h3>
+              <p class="text-sm text-muted-foreground">{inglesT.learnersBody}</p>
+              <a
+                href={`/${lang}/ingles/actividades`}
+                class={buttonVariants({ variant: 'default', size: 'lg', className: 'w-fit px-5 py-2.5' })}
+                data-testid="home-ingles-cta-actividades"
+              >
+                {inglesT.learnersCta}
+              </a>
+            </div>
+          </div>
+        </section>
+      </div>
+
       {/* --- Reserved editorial rows FIRST ("Libros Recomendados"). The first
           one is the row that overlaps the hero. Title via themeTitle() (override
           map + generic hyphen→space capitalize). Empty reserved themes never
