@@ -578,7 +578,7 @@ describe('ExerciseIsland — disabled submit hint', () => {
     render(<ExerciseIsland lang="es" payload={single} />);
 
     expect(screen.getByTestId('exercise-submit-hint').textContent).toContain(
-      'Responder todas las partes',
+      'Responde todas las partes',
     );
   });
 });

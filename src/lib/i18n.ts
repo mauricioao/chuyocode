@@ -1087,10 +1087,10 @@ export const UI_LABELS = {
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
       // was removed when the section actually shipped.
-      // REGISTER: neutral Spanish, impersonal. Instructions use the infinitive
-      // ("Revisar las respuestas") and descriptions avoid the second person
-      // entirely. The site is not Argentina-specific, so no voseo reaches the
-      // UI — enforced by a guard in `i18n.test.ts`.
+      // REGISTER: neutral Latin-American tuteo. Instructions address the
+      // reader as "tú" ("Revisa las respuestas", "Elige tu nivel"). The site
+      // is not Argentina-specific, so no voseo reaches the UI — enforced by
+      // a guard in `i18n.test.ts`.
       section: {
         // Names the SECTION, not its audience. "Inglés para programadores"
         // described who the section was for, which the visitor already knows by
@@ -1104,14 +1104,13 @@ export const UI_LABELS = {
         // it is the one string here that must stay a full descriptive sentence.
         description:
           'Ejercicios cortos de inglés técnico, organizados por nivel y por punto gramatical, con corrección al instante.',
-        // MAINTAINER-AUTHORED, VERBATIM. "Elige" is TUTEO, and the standing
-        // neutral-Spanish rule bans REGIONAL forms (`Elegí`), not the second
-        // person as a category — so this passes `neutralSpanish.ts` unchanged
-        // and was NOT rewritten into an infinitive to match `chooseLevel`.
-        // Asserted exactly in `i18n.test.ts` so a future "consistency" pass has
-        // to argue with a red test instead of quietly editing the maintainer.
+        // MAINTAINER-AUTHORED, VERBATIM. "Elige" is tuteo, matching the
+        // standing neutral-Spanish rule exactly (tuteo, no voseo) — kept
+        // asserted exactly in `i18n.test.ts` regardless.
         intro: 'Elige un nivel y tema para practicar en el día a día',
-        chooseLevel: 'Elegir nivel',
+        // Matches `hub.levelShortcutTitle` ("Ir directo a tu nivel") and the
+        // English copy's own "Choose your level".
+        chooseLevel: 'Elige tu nivel',
         // The grid under a level lists LANGUAGE POINTS, not settings: someone
         // arriving here wants "conditionals", not "something about airports".
         // This is chrome and localizes; the point NAMES themselves are exercise
@@ -1125,7 +1124,7 @@ export const UI_LABELS = {
           'Todavía no hay ejercicios publicados. Estamos preparando los primeros y van a estar disponibles en unos días.',
         emptyLevel: 'Todavía no hay ejercicios para este nivel.',
         emptyPair:
-          'Todavía no hay ejercicios de este punto gramatical en este nivel. Probar con otro punto.',
+          'Todavía no hay ejercicios de este punto gramatical en este nivel. Prueba con otro punto.',
         // Accessible name for the magnifier filter over the language-point grid.
         // It is the ONLY name that control has: the trigger is an icon and the
         // input carries a blank placeholder so the bar can animate open, so
@@ -1163,15 +1162,15 @@ export const UI_LABELS = {
         // component's test sweeps with `findVoseo` so the neutral-Spanish rule
         // still applies to it. Leaving a stale `like` here would look live.
         //
-        // The share dialog. Impersonal register throughout: the hint is an
-        // infinitive ("Escanear"), never an instruction addressed to a person,
-        // and the button labels are bare verbs and participles.
+        // The share dialog. Tuteo throughout: the hint addresses the reader
+        // directly ("Escanea"), and the button labels are bare verbs and
+        // participles.
         share: 'Compartir',
         shareTitle: 'Compartir este ejercicio',
         // Says what the code is FOR. "Código QR" alone names the object and
         // leaves the teacher to guess that the point is opening it elsewhere.
         shareHint:
-          'Escanear el código para abrir el ejercicio en otro dispositivo.',
+          'Escanea el código para abrir el ejercicio en otro dispositivo.',
         shareLink: 'Enlace',
         shareCopy: 'Copiar',
         shareCopied: 'Copiado',
