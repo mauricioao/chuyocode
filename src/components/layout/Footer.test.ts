@@ -89,6 +89,27 @@ describe('Footer.astro — Refunds link', () => {
   });
 });
 
+// Credits page link (visual-identity decision, 2026-10-04).
+describe('Footer.astro — credits link', () => {
+  it('links to /[lang]/creditos next to the legal links', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('href="/es/creditos"');
+    expect(html).toContain(UI_LABELS.es.footer.credits);
+  });
+
+  it('localizes the credits link label and base path for en', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'en' },
+    });
+    expect(html).toContain('href="/en/creditos"');
+    expect(html).toContain(UI_LABELS.en.footer.credits);
+  });
+});
+
 // SEO basics pass: the copyright year used to be a hardcoded "2026" literal
 // in the markup — it would have gone stale the moment the calendar turned.
 // Pinning the system clock to a year that is NOT today's proves the value is

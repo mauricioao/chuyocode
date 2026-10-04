@@ -54,6 +54,8 @@ describe('GET /sitemap.xml', () => {
     // languages, same convention as every other `[lang]`-scoped page segment.
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/reembolsos</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/legal/reembolsos</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/creditos</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/creditos</loc>');
   });
 
   it('emits hreflang alternates (es/en + x-default -> es) on every entry', async () => {
@@ -155,6 +157,8 @@ describe('GET /sitemap.xml', () => {
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/noticias</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/terms</loc>');
     expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/legal/privacy</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/es/creditos</loc>');
+    expect(xml).toContain('<loc>https://chuyocode.netlify.app/en/creditos</loc>');
   });
 
   it('falls back to the literal Netlify domain when site is undefined', async () => {

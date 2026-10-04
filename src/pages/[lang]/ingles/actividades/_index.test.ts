@@ -83,6 +83,12 @@ describe('GET /[lang]/ingles/actividades — empty states', () => {
     expect(html).not.toContain('Limpiar filtros');
   });
 
+  it('shows the llama emoji sticker next to the empty message', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('/images/emoji/llama-v1-64.webp');
+  });
+
   it('renders the filtered empty message with a "Limpiar filtros" link when a level filter is active', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
     const html = await res.text();

@@ -3,7 +3,7 @@
  * Footer — site footer (spec 7: Footer requirement).
  *
  * Renders the copyright line and secondary links (Términos, Privacidad,
- * Reembolsos). Simple zinc-900 background surface.
+ * Reembolsos, Créditos). Simple zinc-900 background surface.
  *
  * The secondary links point at the single localized legal route
  * `/[lang]/legal/[page]` (design decision #9). They previously targeted
@@ -45,6 +45,7 @@ const secondaryLinks = [
   { href: `${base}/legal/terms`, label: labels.terms },
   { href: `${base}/legal/privacy`, label: labels.privacy },
   { href: `${base}/legal/reembolsos`, label: labels.reembolsos },
+  { href: `${base}/creditos`, label: labels.credits },
 ];
 ---
 

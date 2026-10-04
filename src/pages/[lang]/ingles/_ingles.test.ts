@@ -478,9 +478,13 @@ describe('ingles/propuestos/index.astro (curated exercises)', () => {
     getExerciseFacetRows.mockResolvedValue([]);
 
     const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
 
     expect(res.status).toBe(200);
     expect(getExerciseFacetRows).toHaveBeenCalledTimes(1);
+    // "Nothing published anywhere" is the one empty state with its own emoji
+    // sticker accent (visual-identity decision, 2026-10-04).
+    expect(html).toContain('/images/emoji/llama-v1-64.webp');
   });
 
   it('headlines the screen with the section, not with its audience', async () => {
@@ -617,6 +621,8 @@ describe('ingles/propuestos/index.astro (curated exercises)', () => {
       expect(html).not.toContain('chu-search');
       expect(html).not.toContain('id="focuses-no-results"');
       expect(html).toContain('Todavía no hay ejercicios para este nivel.');
+      // Emoji sticker accent (visual-identity decision, 2026-10-04).
+      expect(html).toContain('/images/emoji/llama-v1-64.webp');
     });
 
     it('keeps the filter free of any island or framework runtime', async () => {
@@ -841,6 +847,8 @@ describe('ingles/[level]/[focus]/index.astro (listing)', () => {
     // dead end.
     expect(html).toContain('Todavía no hay ejercicios');
     expect(html).toContain('href="/es/ingles/propuestos?nivel=B1"');
+    // Emoji sticker accent (visual-identity decision, 2026-10-04).
+    expect(html).toContain('/images/emoji/llama-v1-64.webp');
   });
 
   it('returns 200 in English', async () => {

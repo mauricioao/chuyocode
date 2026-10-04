@@ -104,6 +104,24 @@ describe('applySecurityHeaders', () => {
       expect(csp).toContain('upgrade-insecure-requests');
       expect(csp).toContain("worker-src 'self'");
     });
+
+    it('points both reporting directives at the csp-report endpoint', () => {
+      const csp = reportOnly();
+      expect(csp).toContain('report-to csp-endpoint');
+      expect(csp).toContain('report-uri /api/csp-report');
+    });
+  });
+
+  it('sets Reporting-Endpoints naming the same csp-endpoint the report-only policy points at', () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+    expect(headers.get('reporting-endpoints')).toBe('csp-endpoint="/api/csp-report"');
+  });
+
+  it('does not overwrite an existing Reporting-Endpoints header', () => {
+    const headers = new Headers({ 'reporting-endpoints': 'other-endpoint="/elsewhere"' });
+    applySecurityHeaders(headers);
+    expect(headers.get('reporting-endpoints')).toBe('other-endpoint="/elsewhere"');
   });
 });
 
