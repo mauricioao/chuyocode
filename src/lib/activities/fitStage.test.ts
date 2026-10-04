@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { fitStage, STAGE_WIDTH, STAGE_HEIGHT, STAGE_SAFE_AREA_X, STAGE_SAFE_AREA_Y } from './fitStage';
+import {
+  fitStage,
+  STAGE_WIDTH,
+  STAGE_HEIGHT,
+  STAGE_SAFE_AREA_X,
+  STAGE_SAFE_AREA_Y,
+  STAGE_SAFE_WIDTH,
+  STAGE_SAFE_HEIGHT,
+} from './fitStage';
 
 describe('fitStage', () => {
   it('scales 1:1 and centers with no bands when the viewport is exactly the stage size', () => {
@@ -47,5 +55,11 @@ describe('fitStage', () => {
   it('exposes the safe-area inset as 5% of the stage on each axis', () => {
     expect(STAGE_SAFE_AREA_X).toBeCloseTo(STAGE_WIDTH * 0.05);
     expect(STAGE_SAFE_AREA_Y).toBeCloseTo(STAGE_HEIGHT * 0.05);
+  });
+
+  it('exposes the safe area size, still exactly 16:9, with the inset removed from each side', () => {
+    expect(STAGE_SAFE_WIDTH).toBeCloseTo(STAGE_WIDTH - 2 * STAGE_SAFE_AREA_X);
+    expect(STAGE_SAFE_HEIGHT).toBeCloseTo(STAGE_HEIGHT - 2 * STAGE_SAFE_AREA_Y);
+    expect(STAGE_SAFE_WIDTH / STAGE_SAFE_HEIGHT).toBeCloseTo(STAGE_WIDTH / STAGE_HEIGHT);
   });
 });

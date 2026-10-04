@@ -38,6 +38,7 @@
  * on `switchMode`.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { EnvelopeSimpleIcon } from '@phosphor-icons/react/dist/ssr/EnvelopeSimple';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,8 +61,8 @@ export const COPY = {
     signInError: 'Correo o contraseña incorrectos.',
     tooShort: 'La contraseña debe tener al menos 8 caracteres.',
     signUpSent:
-      'Se envió un correo de confirmación a esa dirección, si corresponde a una cuenta nueva. Revisar la bandeja de entrada y la carpeta de spam.',
-    genericError: 'No se pudo completar la solicitud. Intentar de nuevo.',
+      'Se envió un correo de confirmación a esa dirección, si corresponde a una cuenta nueva. Revisa la bandeja de entrada y la carpeta de spam.',
+    genericError: 'No se pudo completar la solicitud. Inténtalo de nuevo.',
     forgotPassword: '¿Olvidaste la contraseña?',
     resetSubmit: 'Enviar instrucciones',
     resetSubmitting: 'Enviando…',
@@ -202,7 +203,12 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
 
       if (!res.ok) {
         const errorBody = (await res.json().catch(() => null)) as PasswordResponseBody | null;
-        setStatus(errorBody?.error === 'captcha_failed' ? 'captcha-error' : 'error');
+        if (errorBody?.error === 'captcha_failed') {
+          setStatus('captcha-error');
+        } else {
+          setStatus('error');
+          toast.error(mode === 'signin' ? t.signInError : t.genericError);
+        }
         return;
       }
 
@@ -223,6 +229,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
     } catch {
       resetCaptcha();
       setStatus('error');
+      toast.error(mode === 'signin' ? t.signInError : t.genericError);
     }
   }
 
@@ -265,18 +272,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
     );
   }
 
-  const submitLabel =
-    mode === 'signin'
-      ? pending
-        ? t.signInSubmitting
-        : t.signInSubmit
-      : mode === 'signup'
-        ? pending
-          ? t.signUpSubmitting
-          : t.signUpSubmit
-        : pending
-          ? t.resetSubmitting
-          : t.resetSubmit;
+  const submitLabel = mode === 'signin' ? t.signInSubmit : mode === 'signup' ? t.signUpSubmit : t.resetSubmit;
 
   return (
     <form
@@ -334,7 +330,7 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       <Button
         type="submit"
         disabled={pending || needsCaptcha}
-        aria-busy={pending}
+        loading={pending}
         aria-describedby={needsCaptcha ? 'password-auth-captcha-hint' : undefined}
         data-testid="password-auth-submit"
       >

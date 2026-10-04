@@ -9,6 +9,7 @@
  * function props, same rule every other island in this codebase follows.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,8 @@ export default function CourseCreateForm({ lang }: CourseCreateFormProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
 
+  const errors = t.errors as Record<string, string>;
+
   async function submit() {
     setStatus('submitting');
     setError(null);
@@ -38,18 +41,20 @@ export default function CourseCreateForm({ lang }: CourseCreateFormProps) {
       });
       const body: { course?: { id: string }; error?: string } = await res.json().catch(() => ({}));
       if (!res.ok || !body.course) {
-        setError(body.error ?? 'db_error');
+        const code = body.error ?? 'db_error';
+        setError(code);
         setStatus('idle');
+        toast.error(errors[code] ?? errors.db_error);
         return;
       }
       window.location.assign(`/${lang}/admin/cursos/${body.course.id}`);
     } catch {
       setError('db_error');
       setStatus('idle');
+      toast.error(errors.db_error);
     }
   }
 
-  const errors = t.errors as Record<string, string>;
   const errorMessage = error ? (errors[error] ?? errors.db_error) : null;
 
   return (
@@ -95,8 +100,13 @@ export default function CourseCreateForm({ lang }: CourseCreateFormProps) {
         </p>
       )}
       <div>
-        <Button type="submit" data-testid="course-create-submit" disabled={status === 'submitting'}>
-          {status === 'submitting' ? t.creating : t.createButton}
+        <Button
+          type="submit"
+          data-testid="course-create-submit"
+          disabled={status === 'submitting'}
+          loading={status === 'submitting'}
+        >
+          {t.createButton}
         </Button>
       </div>
     </form>

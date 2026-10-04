@@ -29,6 +29,10 @@ const { lang = DEFAULT_LANG } = Astro.props;
 const labels = UI_LABELS[lang].footer;
 const base = `/${lang}`;
 
+// Copyright year (SEO basics pass): computed at render time instead of
+// hardcoded, so the footer never silently goes stale after a new year.
+const currentYear = new Date().getFullYear();
+
 const secondaryLinks = [
   { href: `${base}/legal/terms`, label: labels.terms },
   { href: `${base}/legal/privacy`, label: labels.privacy },
@@ -42,7 +46,7 @@ const secondaryLinks = [
   <div
     class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row"
   >
-    <p class="text-sm text-muted-foreground">&copy; 2026 ChuyoCode</p>
+    <p class="text-sm text-muted-foreground">&copy; {currentYear} ChuyoCode</p>
     <nav class="flex items-center gap-6" aria-label="Secondary">
       {
         secondaryLinks.map((link) => (

@@ -34,13 +34,13 @@ export const COPY = {
   es: {
     saved: 'Guardado como borrador.',
     published: (url: string) => `Publicado. Ver el ejercicio: ${url}`,
-    termsRequired: 'Aceptá los términos de publicación para publicar por primera vez.',
+    termsRequired: 'Acepta los términos de publicación para publicar por primera vez.',
     invalidTransition: 'Este ejercicio no se puede publicar desde su estado actual.',
-    slugCollision: 'No se pudo resolver un slug único para este ejercicio. Probá de nuevo.',
+    slugCollision: 'No se pudo resolver un slug único para este ejercicio. Prueba de nuevo.',
     exerciseRemoved: 'Este ejercicio fue eliminado y ya no se puede editar.',
-    forbidden: 'No tenés permiso para editar este ejercicio.',
+    forbidden: 'No tienes permiso para editar este ejercicio.',
     notFound: 'Este ejercicio no existe.',
-    genericError: 'Ocurrió un error al guardar. Intentá de nuevo.',
+    genericError: 'Ocurrió un error al guardar. Inténtalo de nuevo.',
     saving: 'Guardando…',
   },
   en: {
@@ -97,6 +97,12 @@ export default function ExercisePublishFlow({ lang, exerciseId, initialDraft }: 
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  // Which button is in flight — drives ExerciseAuthorIsland's own `loading`
+  // spinner/disable-both-buttons (coherent loading states, item 3) instead
+  // of this component's own bare "Guardando…" text, which used to be the
+  // ONLY feedback while a save was pending and did not stop the author from
+  // pressing Save/Publish again mid-request.
+  const [savingKind, setSavingKind] = useState<'draft' | 'publish' | null>(null);
 
   function errorMessageFor(res: Response, body: SaveResponseBody | null): string {
     const key = body?.code ? ERROR_COPY_KEY[body.code] : undefined;
@@ -112,50 +118,56 @@ export default function ExercisePublishFlow({ lang, exerciseId, initialDraft }: 
   }
 
   async function handleSave(input: AuthoringSaveInput) {
+    if (savingKind) return; // a save is already in flight — never overlap two requests.
+    setSavingKind(input.publish ? 'publish' : 'draft');
     setStatus('saving');
     setMessage(null);
     setIssues([]);
 
-    let res: Response;
-    let body: SaveResponseBody | null;
     try {
-      res = await fetch(`/api/ejercicios/${exerciseId}/guardar`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-      });
-      body = (await res.json().catch(() => null)) as SaveResponseBody | null;
-    } catch {
+      let res: Response;
+      let body: SaveResponseBody | null;
+      try {
+        res = await fetch(`/api/ejercicios/${exerciseId}/guardar`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        });
+        body = (await res.json().catch(() => null)) as SaveResponseBody | null;
+      } catch {
+        setStatus('error');
+        setMessage(t.genericError);
+        return;
+      }
+
+      if (res.status === 200 && body?.ok && body.url) {
+        setStatus('saved');
+        setMessage(input.publish ? t.published(`/${lang}${body.url}`) : t.saved);
+        return;
+      }
+
+      if (res.status === 422 && isValidationIssueList(body?.issues) && body.issues.length > 0) {
+        setStatus('error');
+        setIssues(body.issues);
+        return;
+      }
+
       setStatus('error');
-      setMessage(t.genericError);
-      return;
+      setMessage(errorMessageFor(res, body));
+    } finally {
+      setSavingKind(null);
     }
-
-    if (res.status === 200 && body?.ok && body.url) {
-      setStatus('saved');
-      setMessage(input.publish ? t.published(`/${lang}${body.url}`) : t.saved);
-      return;
-    }
-
-    if (res.status === 422 && isValidationIssueList(body?.issues) && body.issues.length > 0) {
-      setStatus('error');
-      setIssues(body.issues);
-      return;
-    }
-
-    setStatus('error');
-    setMessage(errorMessageFor(res, body));
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <ExerciseAuthorIsland lang={lang} initialDraft={initialDraft} onSave={handleSave} />
+      <ExerciseAuthorIsland
+        lang={lang}
+        initialDraft={initialDraft}
+        onSave={handleSave}
+        saving={savingKind}
+      />
 
-      {status === 'saving' && (
-        <p data-testid="save-status" role="status">
-          {t.saving}
-        </p>
-      )}
       {status === 'saved' && message && (
         <p data-testid="save-status" role="status">
           {message}

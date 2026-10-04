@@ -16,22 +16,10 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { requireRole } from '@lib/roles';
 import { isUuid } from '@lib/activities/paths';
 import { updateCourse, type CourseInput } from '@lib/courses/admin';
-
-function json(body: Record<string, unknown>, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 const VALIDATION_ERRORS: ReadonlySet<string> = new Set([
   'invalid_slug',
@@ -96,29 +84,29 @@ function toPatch(body: UpdateBody): Partial<CourseInput> | null {
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const moderator = await requireRole(user, 'moderator');
-  if (!moderator) return notFound();
+  if (!moderator) return notFoundResponse();
 
   const courseId = params.courseId;
-  if (typeof courseId !== 'string' || !isUuid(courseId)) return notFound();
+  if (typeof courseId !== 'string' || !isUuid(courseId)) return notFoundResponse();
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
-  if (typeof body !== 'object' || body === null) return json({ error: 'bad_request' }, 400);
+  if (typeof body !== 'object' || body === null) return jsonResponse({ error: 'bad_request' }, 400);
 
   const patch = toPatch(body as UpdateBody);
-  if (!patch) return json({ error: 'bad_request' }, 400);
+  if (!patch) return jsonResponse({ error: 'bad_request' }, 400);
 
   const result = await updateCourse(courseId, patch);
-  if (result.ok) return json({ ok: true }, 200);
+  if (result.ok) return jsonResponse({ ok: true }, 200);
 
-  if (VALIDATION_ERRORS.has(result.error)) return json({ error: result.error }, 422);
-  if (result.error === 'duplicate_slug') return json({ error: result.error }, 409);
-  return json({ error: result.error }, 500);
+  if (VALIDATION_ERRORS.has(result.error)) return jsonResponse({ error: result.error }, 422);
+  if (result.error === 'duplicate_slug') return jsonResponse({ error: result.error }, 409);
+  return jsonResponse({ error: result.error }, 500);
 };

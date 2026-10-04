@@ -51,7 +51,13 @@ import Toaster from '@components/islands/Toaster';
 // helper. Astro bundles these once and injects them into every page's <head>.
 import '@styles/fonts.css';
 import '@styles/global.css';
-import { UI_LABELS, type Lang } from '@lib/i18n';
+import { UI_LABELS, SUPPORTED_LANGS, type Lang } from '@lib/i18n';
+import {
+  canonicalUrl,
+  hreflangAlternates,
+  defaultHreflangAlternate,
+  isNoindexPath,
+} from '@lib/seo';
 
 interface Props {
   /** Active locale for the `<html lang>` attribute. */
@@ -112,8 +118,28 @@ const isIngles = theme === 'ingles';
 // forgets to pass its own (decision #7: meta description always present).
 const metaDescription = description ?? UI_LABELS[lang].meta.siteDescription;
 
-// Canonical URL for og:url — resolved from the current request when available.
-const canonicalUrl = Astro.url?.href;
+// SEO basics pass: canonical/hreflang/robots derive from `site`
+// (astro.config.mjs) + the current path, never from the request's own host —
+// so a Netlify branch deploy or preview URL is never canonicalized to ITSELF.
+// `alternates`/`defaultAlternate` are `[]`/`undefined` for the few routes this
+// layout never renders for anyway (`/sitemap.xml`, `/robots.txt`, `/api/*`).
+const canonical = canonicalUrl(Astro.site, Astro.url.pathname);
+const alternates = hreflangAlternates(Astro.url.pathname, Astro.site);
+const defaultAlternate = defaultHreflangAlternate(alternates);
+// Gated sections (admin/auth/crear/mis-actividades/cursos, and `ingles/**`
+// except the two guest-play activity routes) are rendered but excluded from
+// search results — see `@lib/seo.ts#isNoindexPath` for the exact rule.
+const noindex = isNoindexPath(Astro.url.pathname);
+
+/** `og:locale` per language (Facebook's `xx_YY` format). `es_PE`/`en_US`
+ * mirror the locale strings this codebase already formats dates with
+ * elsewhere (`legal/[page].astro`, `noticias/[slug].astro`). */
+const OG_LOCALE: Record<Lang, string> = { es: 'es_PE', en: 'en_US' };
+
+// Computed here (server-side) so the global `ScrollToTop` — hydrated on
+// EVERY page — only ever receives the one string it needs as a plain prop,
+// never the full `UI_LABELS` dictionary. See that component's own props doc.
+const scrollToTopLabels = { scrollToTop: UI_LABELS[lang].common.scrollToTop };
 
 // SVG favicon from public/chuyocode.svg (decision #7: no binary asset).
 // Served at the root URL so the browser can cache it across pages.
@@ -137,6 +163,20 @@ const faviconSvg =
     <meta name="description" content={metaDescription} />
     <link rel="icon" href={faviconSvg} type="image/svg+xml" />
 
+    {/* Canonical + hreflang (SEO basics pass): every page in this layout
+        gets a canonical link; a lang-prefixed page additionally gets an
+        alternate per supported language plus `x-default` -> es. */}
+    <link rel="canonical" href={canonical} />
+    {alternates.map((alt) => (
+      <link rel="alternate" hreflang={alt.lang} href={alt.href} />
+    ))}
+    {defaultAlternate && (
+      <link rel="alternate" hreflang="x-default" href={defaultAlternate.href} />
+    )}
+    {/* Gated sections stay rendered (the gate itself decides who sees them)
+        but excluded from search results — see the `noindex` const above. */}
+    {noindex && <meta name="robots" content="noindex" />}
+
     {/* SPA-feel navigation via native View Transitions (frontend-v3 PR3.5).
         reveal.ts already re-runs on astro:after-swap, so scroll reveals keep
         working across client-side navigations. */}
@@ -145,7 +185,11 @@ const faviconSvg =
     <meta property="og:title" content={title} />
     <meta property="og:description" content={metaDescription} />
     <meta property="og:type" content="website" />
-    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={OG_LOCALE[lang]} />
+    {SUPPORTED_LANGS.filter((l) => l !== lang).map((l) => (
+      <meta property="og:locale:alternate" content={OG_LOCALE[l]} />
+    ))}
     {ogImage && <meta property="og:image" content={ogImage} />}
 
     <meta
@@ -229,7 +273,7 @@ const faviconSvg =
         stage has no page scroll to return from. */}
     {!bare && (
       <div data-theme="brand" class="dark contents">
-        <ScrollToTop client:load lang={lang} />
+        <ScrollToTop client:load labels={scrollToTopLabels} />
       </div>
     )}
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
+import { createContainer } from '@/testSupport/astroContainer';
 
 // env.ts reads import.meta.env — stub it before any module that calls loadEnv().
 vi.mock('@lib/env', () => ({
@@ -15,15 +16,21 @@ vi.mock('@lib/env', () => ({
 
 // Stub the Sanity content layer so tests drive the returned news pages.
 const getNews = vi.fn();
+const getArticleBySlug = vi.fn();
 vi.mock('@lib/sanity', async () => {
   const actual = await vi.importActual<typeof import('@lib/sanity')>('@lib/sanity');
-  return { ...actual, getNews: (...args: unknown[]) => getNews(...args) };
+  return {
+    ...actual,
+    getNews: (...args: unknown[]) => getNews(...args),
+    getArticleBySlug: (...args: unknown[]) => getArticleBySlug(...args),
+  };
 });
 
 import { NEWS_PAGE_SIZE } from '@lib/sanity';
 import { isValidLang, type Lang } from '@lib/i18n';
 
 import NewsPage from './[...page].astro';
+import ArticlePage from './[slug].astro';
 
 async function render(params: Record<string, string | undefined>) {
   const container = await AstroContainer.create();
@@ -116,5 +123,53 @@ describe('noticias/[...page].astro', () => {
     const res = await render({ lang: 'es', page: 'abc' });
     expect(res.status).toBe(404);
     expect(getNews).not.toHaveBeenCalled();
+  });
+});
+
+// SEO basics pass: NewsArticle JSON-LD on the detail page. Uses
+// `@/testSupport/astroContainer`'s `createContainer()` (registers the React
+// server renderer BaseLayout's Header/ScrollToTop/Toaster islands need) —
+// the list-page tests above use the bare container only because their own
+// render helper predates that shared helper.
+describe('noticias/[slug].astro — structured data (JSON-LD)', () => {
+  beforeEach(() => {
+    getArticleBySlug.mockReset();
+  });
+
+  it('renders valid NewsArticle JSON-LD from the loaded article', async () => {
+    getArticleBySlug.mockResolvedValue({
+      _id: 'n1',
+      title: 'Astro 7 ya está disponible',
+      slug: 'astro-7',
+      excerpt: 'Un resumen de las novedades.',
+      body: 'body',
+      publishedAt: '2026-09-15T00:00:00Z',
+      imageUrl: 'https://cdn.sanity.io/images/test-proj/production/abc123-1600x900.jpg',
+    });
+
+    const container = await createContainer();
+    const res = await container.renderToResponse(ArticlePage, {
+      locals: { user: null, lang: 'es' },
+      params: { lang: 'es', slug: 'astro-7' },
+      request: new Request('https://chuyocode.netlify.app/es/noticias/astro-7'),
+    });
+    const html = await res.text();
+
+    const jsonLdMatch = html.match(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+    );
+    expect(jsonLdMatch).not.toBeNull();
+    const jsonLd = JSON.parse(jsonLdMatch![1]) as Record<string, unknown>;
+    expect(jsonLd).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      headline: 'Astro 7 ya está disponible',
+      description: 'Un resumen de las novedades.',
+      image: ['https://cdn.sanity.io/images/test-proj/production/abc123-1600x900.jpg'],
+      datePublished: '2026-09-15T00:00:00Z',
+      mainEntityOfPage: 'https://chuyocode.netlify.app/es/noticias/astro-7',
+      inLanguage: 'es',
+      publisher: { '@type': 'Organization', name: 'ChuyoCode' },
+    });
   });
 });

@@ -136,6 +136,18 @@ describe('GET /[lang]/auth/entrar — the anonymous form', () => {
     expect(html).toContain('data-testid="google-signin-form"');
   });
 
+  it('renders the Google button with a spinner/label pair its own inert script toggles on submit (MANUAL/Playwright check for the real submit behavior — see that script, and this test file cannot see hoisted <script src> content)', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('id="google-signin-submit"');
+    expect(html).toContain('id="google-signin-spinner"');
+    expect(html).toContain('id="google-signin-label"');
+    expect(html).toContain('hidden items-center justify-center'); // spinner starts hidden
+  });
+
   it('renders a back button to home', async () => {
     const res = await render('https://chuyocode.test/es/auth/entrar', {
       params: { lang: 'es' },

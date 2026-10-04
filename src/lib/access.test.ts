@@ -189,9 +189,85 @@ describe('getPlan', () => {
     expect(await getPlan(user())).toBe('free');
   });
 
-  it('is free for a canceled subscription', async () => {
+  // 🔴 CHANGED BY 0019 (billing foundation): a canceled Paddle subscription
+  // keeps access until the period the customer already paid for ends — see
+  // `getPlan`'s header. Was 'free' unconditionally before this migration;
+  // now it depends on whether `current_period_end` is still in the future.
+  it('is premium for a canceled subscription still within its paid period', async () => {
     listResult.value = {
       data: [{ status: 'canceled', current_period_end: future }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('premium');
+  });
+
+  it('is free for a canceled subscription whose paid period already ended', async () => {
+    listResult.value = {
+      data: [{ status: 'canceled', current_period_end: past }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is free for a canceled subscription with no period end at all', async () => {
+    listResult.value = {
+      data: [{ status: 'canceled', current_period_end: null }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is premium for a past_due subscription still within its paid period', async () => {
+    listResult.value = {
+      data: [{ status: 'past_due', current_period_end: future }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('premium');
+  });
+
+  it('is free for a past_due subscription whose paid period already ended', async () => {
+    listResult.value = {
+      data: [{ status: 'past_due', current_period_end: past }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is free for a past_due subscription with no period end at all', async () => {
+    listResult.value = {
+      data: [{ status: 'past_due', current_period_end: null }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is premium for a trialing subscription with no end date yet', async () => {
+    listResult.value = {
+      data: [{ status: 'trialing', current_period_end: null }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('premium');
+  });
+
+  it('is premium for a trialing subscription with a future end date', async () => {
+    listResult.value = {
+      data: [{ status: 'trialing', current_period_end: future }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('premium');
+  });
+
+  it('is free for a trialing subscription whose period already ended', async () => {
+    listResult.value = {
+      data: [{ status: 'trialing', current_period_end: past }],
+      error: null,
+    };
+    expect(await getPlan(user())).toBe('free');
+  });
+
+  it('is free for an unrecognized status', async () => {
+    listResult.value = {
+      data: [{ status: 'something_else', current_period_end: future }],
       error: null,
     };
     expect(await getPlan(user())).toBe('free');

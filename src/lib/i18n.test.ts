@@ -473,14 +473,15 @@ describe('UI_LABELS — auth keys (sign-in page, slice 4)', () => {
 });
 
 describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
-  // STANDING PROJECT RULE, and no longer scoped to the English section.
+  // STANDING PROJECT RULE (owner decision, 2026-10-04), and no longer scoped
+  // to the English section.
   //
   // ChuyoCode serves the whole Latin community, not Argentina, so regional
   // (Rioplatense) verb forms must not reach the UI anywhere. The register is
-  // impersonal: the infinitive for instructions ("Revisar las respuestas",
-  // "Probar con otro tema") and impersonal prose for descriptions — no
-  // second-person verb at all, which removes the tú/vos fork at the root
-  // instead of picking a side of it.
+  // NEUTRAL LATIN-AMERICAN TUTEO: instructions address the reader as "tú"
+  // ("Revisa las respuestas", "Prueba con otro tema"), with short action
+  // labels and the occasional impersonal infinitive still allowed where they
+  // already read naturally. The one thing that must never happen is VOSEO.
   //
   // Possessives (`tu idioma`) are deliberately still allowed: identical in
   // tuteo and voseo, so they carry no regional signal.
@@ -495,7 +496,9 @@ describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
     );
     expect(voseoWords('Aprendé tecnología en tu idioma')).toEqual(['Aprendé']);
     expect(voseoWords('La página que buscás no existe.')).toEqual(['buscás']);
-    expect(voseoWords('Muy pronto vas a poder aprender.')).toEqual(['vas']);
+    // `vas` is valid tuteo now (identical to its voseo form), so it no longer
+    // fires — see `neutralSpanish.ts`'s own note on `SECOND_PERSON_WORDS`.
+    expect(voseoWords('Muy pronto vas a poder aprender.')).toEqual([]);
     // ...and stays silent on ordinary Spanish that happens to end in a stress.
     expect(
       voseoWords('Practicar inglés aquí, así, cuando esté todo listo. Leer más.'),

@@ -123,6 +123,25 @@ describe('ModerationQueueIsland — approve', () => {
     expect(fetch).toHaveBeenCalledWith('/api/admin/actividades/rev-1/aprobar', { method: 'POST' });
   });
 
+  it('shows the confirm button as loading/aria-busy and disables both buttons while approving', async () => {
+    let resolveFetch!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    render(<ModerationQueueIsland lang="es" initialPending={[FIRST_PUBLICATION]} initialReported={[]} />);
+    fireEvent.click(screen.getByTestId('moderation-item-rev-1'));
+    fireEvent.click(screen.getByTestId('moderation-approve-open'));
+    fireEvent.click(screen.getByTestId('moderation-approve-confirm'));
+
+    const confirm = screen.getByTestId('moderation-approve-confirm') as HTMLButtonElement;
+    expect(confirm.getAttribute('aria-busy')).toBe('true');
+    expect(confirm.disabled).toBe(true);
+
+    await waitFor(() => resolveFetch(okJson()));
+  });
+
   it('shows an error and keeps the item when approval fails', async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, json: async () => ({ error: 'approve_failed' }) });
     render(<ModerationQueueIsland lang="es" initialPending={[FIRST_PUBLICATION]} initialReported={[]} />);
@@ -142,7 +161,7 @@ describe('ModerationQueueIsland — reject', () => {
     fireEvent.click(screen.getByTestId('moderation-reject-open'));
     fireEvent.click(screen.getByTestId('moderation-reject-confirm'));
 
-    expect(screen.getByTestId('moderation-reject-error').textContent).toContain('Escribir una nota');
+    expect(screen.getByTestId('moderation-reject-error').textContent).toContain('Escribe una nota');
     expect(fetch).not.toHaveBeenCalled();
   });
 

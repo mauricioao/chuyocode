@@ -47,6 +47,8 @@ import {
 } from '@lib/sanity';
 import { getMostDownloaded } from '@lib/downloads';
 import { publicCachePolicy } from '@lib/cache';
+import { toJsonLd } from '@lib/jsonLd';
+import { canonicalUrl } from '@lib/seo';
 
 // The middleware validates and injects `locals.lang`; fall back to the route
 // param for safety, and 404 if somehow neither is a supported language.
@@ -113,9 +115,32 @@ const reservedRows: EditorialRowData[] = RESERVED_THEMES.map(
 const otherRows: EditorialRowData[] = editorialRows.filter(
   (r) => !RESERVED_THEMES.includes(r.themeTag as (typeof RESERVED_THEMES)[number]),
 );
+
+// JSON-LD (SEO basics pass): Organization + WebSite, home page only.
+// `canonicalUrl` (same helper BaseLayout's own canonical/og:url use) resolves
+// against `site` (astro.config.mjs) and falls back to the literal Netlify
+// domain if `Astro.site` is ever unset, so `url`/`logo` are never dropped.
+const siteHref = canonicalUrl(Astro.site, '/');
+const organizationJsonLd = toJsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'ChuyoCode',
+  url: siteHref,
+  logo: canonicalUrl(Astro.site, '/chuyocode.svg'),
+});
+const websiteJsonLd = toJsonLd({
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'ChuyoCode',
+  url: siteHref,
+});
 ---
 
 <BaseLayout lang={lang} title="ChuyoCode" description={description}>
+  <Fragment slot="head">
+    <script is:inline type="application/ld+json" set:html={organizationJsonLd} />
+    <script is:inline type="application/ld+json" set:html={websiteJsonLd} />
+  </Fragment>
   <div class="flex flex-col">
     {/* --- 1. HeroCarousel — featured billboard, flush to the top so it fills
         below the navbar edge-to-edge and its bottom gradient fades into pure

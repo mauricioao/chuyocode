@@ -125,6 +125,28 @@ describe('Header.astro — UserMenu island (Login step 1b)', () => {
     expect(islandMatch?.[0]).toContain('&quot;lang&quot;:[0,&quot;es&quot;]');
   });
 
+  it('passes UserMenu its own copy, computed server-side from UI_LABELS[lang].auth.userMenu, in Spanish', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    const islandMatch = html.match(/<astro-island[^>]*>/);
+    expect(islandMatch?.[0]).toContain(UI_LABELS.es.auth.userMenu.signIn);
+    expect(islandMatch?.[0]).toContain(UI_LABELS.es.auth.userMenu.signOut);
+  });
+
+  it('passes UserMenu its own copy in English, never the full dictionary', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'en' },
+    });
+    const islandMatch = html.match(/<astro-island[^>]*>/);
+    expect(islandMatch?.[0]).toContain(UI_LABELS.en.auth.userMenu.signIn);
+    expect(islandMatch?.[0]).toContain(UI_LABELS.en.auth.userMenu.signOut);
+    // Not the Spanish copy for an English render.
+    expect(islandMatch?.[0]).not.toContain(UI_LABELS.es.auth.userMenu.signIn);
+  });
+
   it('renders no signed-in-only markup server-side (no dropdown, no sign-out form)', async () => {
     const container = await createContainer();
     const html = await container.renderToString(Header, {

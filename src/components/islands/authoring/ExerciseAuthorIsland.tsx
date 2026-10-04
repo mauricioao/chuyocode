@@ -24,6 +24,7 @@ import ProseBlockEditor from './ProseBlockEditor';
 import MediaBlockEditor from './MediaBlockEditor';
 import RowBlockEditor from './RowBlockEditor';
 import SlotAnswerEditor from './SlotAnswerEditor';
+import SlotExplanationEditor from './SlotExplanationEditor';
 import ExercisePreview from './ExercisePreview';
 import {
   addMediaBlock,
@@ -41,6 +42,7 @@ import {
   setPoolItemText,
   setRowLabel,
   setSlotAnswer,
+  setSlotExplanation,
   setSlotInput,
   setSlotPool,
   type Draft,
@@ -52,7 +54,7 @@ export const COPY = {
     addProse: 'Agregar texto de contexto',
     addMedia: 'Agregar imagen o audio',
     addRow: 'Agregar oración',
-    empty: 'Este ejercicio todavía no tiene partes. Agregar una para empezar.',
+    empty: 'Este ejercicio todavía no tiene partes. Agrega una para empezar.',
     previewHeading: 'Vista previa',
     termsLabel: 'Acepto los términos de publicación (obligatorio en la primera publicación).',
     saveDraft: 'Guardar borrador',
@@ -101,12 +103,21 @@ export interface ExerciseAuthorIslandProps {
    * Until it is provided, both controls render `disabled`.
    */
   onSave?: (input: AuthoringSaveInput) => void;
+  /**
+   * Which action `onSave` is currently in flight for, if any — set by
+   * `ExercisePublishFlow` while its own `POST .../guardar` is pending.
+   * Drives the pressed button's own `loading` spinner/`aria-busy` and
+   * disables BOTH controls meanwhile, so a slow save can't be fired twice
+   * (coherent loading states, item 3). `undefined`/`null` means idle.
+   */
+  saving?: 'draft' | 'publish' | null;
 }
 
 export default function ExerciseAuthorIsland({
   lang,
   initialDraft,
   onSave,
+  saving = null,
 }: ExerciseAuthorIslandProps) {
   const t = copyFor(lang);
   const [draft, setDraft] = useState<Draft>(initialDraft);
@@ -123,6 +134,7 @@ export default function ExerciseAuthorIsland({
   }
 
   function handleSave(publish: boolean) {
+    if (saving) return; // belt-and-braces: the buttons are already disabled while a save is in flight.
     onSave?.({ payload: draftToPayload(draft), blocks: draft.blocks, publish, acceptedTerms });
   }
 
@@ -206,33 +218,42 @@ export default function ExerciseAuthorIsland({
                   onLabelChange={(label) => setDraft((d) => setRowLabel(d, slot.id, label))}
                   onRemove={() => setDraft((d) => removeBlock(d, block.id))}
                   answerEditor={
-                    <SlotAnswerEditor
-                      slot={slot}
-                      lang={lang}
-                      poolItems={slot.pool ? (draft.pools[slot.pool] ?? []) : []}
-                      poolNames={Object.keys(draft.pools)}
-                      onMechanicChange={(input) => setDraft((d) => setSlotInput(d, slot.id, input))}
-                      onPoolNameChange={(poolName) =>
-                        setDraft((d) => setSlotPool(d, slot.id, poolName))
-                      }
-                      onAnswerChange={(answer) => setDraft((d) => setSlotAnswer(d, slot.id, answer))}
-                      onAddPoolItem={(text) =>
-                        setDraft((d) =>
-                          slot.pool ? addPoolItem(d, slot.pool, { id: nextId('opt'), text }) : d,
-                        )
-                      }
-                      onRemovePoolItem={(itemId) =>
-                        setDraft((d) => (slot.pool ? removePoolItem(d, slot.pool, itemId) : d))
-                      }
-                      onSetPoolItemText={(itemId, text) =>
-                        setDraft((d) => (slot.pool ? setPoolItemText(d, slot.pool, itemId, text) : d))
-                      }
-                      onSetPoolItemMedia={(itemId, media) =>
-                        setDraft((d) =>
-                          slot.pool ? setPoolItemMedia(d, slot.pool, itemId, media) : d,
-                        )
-                      }
-                    />
+                    <>
+                      <SlotAnswerEditor
+                        slot={slot}
+                        lang={lang}
+                        poolItems={slot.pool ? (draft.pools[slot.pool] ?? []) : []}
+                        poolNames={Object.keys(draft.pools)}
+                        onMechanicChange={(input) => setDraft((d) => setSlotInput(d, slot.id, input))}
+                        onPoolNameChange={(poolName) =>
+                          setDraft((d) => setSlotPool(d, slot.id, poolName))
+                        }
+                        onAnswerChange={(answer) => setDraft((d) => setSlotAnswer(d, slot.id, answer))}
+                        onAddPoolItem={(text) =>
+                          setDraft((d) =>
+                            slot.pool ? addPoolItem(d, slot.pool, { id: nextId('opt'), text }) : d,
+                          )
+                        }
+                        onRemovePoolItem={(itemId) =>
+                          setDraft((d) => (slot.pool ? removePoolItem(d, slot.pool, itemId) : d))
+                        }
+                        onSetPoolItemText={(itemId, text) =>
+                          setDraft((d) => (slot.pool ? setPoolItemText(d, slot.pool, itemId, text) : d))
+                        }
+                        onSetPoolItemMedia={(itemId, media) =>
+                          setDraft((d) =>
+                            slot.pool ? setPoolItemMedia(d, slot.pool, itemId, media) : d,
+                          )
+                        }
+                      />
+                      <SlotExplanationEditor
+                        slot={slot}
+                        lang={lang}
+                        onExplanationChange={(explanation) =>
+                          setDraft((d) => setSlotExplanation(d, slot.id, explanation))
+                        }
+                      />
+                    </>
                   }
                 />
               );
@@ -259,7 +280,8 @@ export default function ExerciseAuthorIsland({
             type="button"
             variant="outline"
             data-testid="save-draft"
-            disabled={!onSave}
+            disabled={!onSave || !!saving}
+            loading={saving === 'draft'}
             onClick={() => handleSave(false)}
           >
             {t.saveDraft}
@@ -267,7 +289,8 @@ export default function ExerciseAuthorIsland({
           <Button
             type="button"
             data-testid="publish-exercise"
-            disabled={!onSave}
+            disabled={!onSave || !!saving}
+            loading={saving === 'publish'}
             onClick={() => handleSave(true)}
           >
             {t.publish}

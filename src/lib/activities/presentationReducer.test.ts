@@ -2,31 +2,43 @@ import { describe, it, expect } from 'vitest';
 import {
   createPresentationState,
   isCoverSlide,
-  isQuestionSlide,
+  isContentSlide,
   isSummarySlide,
+  isRevealable,
   presentationReducer,
-  questionNumber,
-  questionProgress,
+  slideNumber,
+  slideProgress,
   type PresentationState,
 } from './presentationReducer';
 
-const QUESTION_COUNT = 3;
+const SLIDE_COUNT = 3;
 
 function state(partial: Partial<PresentationState>): PresentationState {
-  return { ...createPresentationState(QUESTION_COUNT), ...partial };
+  return { ...createPresentationState(SLIDE_COUNT), ...partial };
 }
 
 describe('createPresentationState', () => {
-  it('starts on the cover, nothing revealed', () => {
-    expect(createPresentationState(QUESTION_COUNT)).toEqual({
-      questionCount: QUESTION_COUNT,
+  it('starts on the cover, nothing revealed, every slide revealable by default', () => {
+    expect(createPresentationState(SLIDE_COUNT)).toEqual({
+      slideCount: SLIDE_COUNT,
+      revealable: [true, true, true],
       index: 0,
       revealed: false,
     });
   });
 
-  it('never stores a negative question count', () => {
-    expect(createPresentationState(-5).questionCount).toBe(0);
+  it('never stores a negative slide count', () => {
+    expect(createPresentationState(-5).slideCount).toBe(0);
+    expect(createPresentationState(-5).revealable).toEqual([]);
+  });
+
+  it('accepts an explicit revealable flag per slide (the worksheet overview case)', () => {
+    const s = createPresentationState(3, [false, true, true]);
+    expect(s.revealable).toEqual([false, true, true]);
+  });
+
+  it('falls back to all-revealable when the given flags do not match the slide count', () => {
+    expect(createPresentationState(3, [true]).revealable).toEqual([true, true, true]);
   });
 });
 
@@ -38,61 +50,68 @@ describe('presentationReducer — start / restart', () => {
   });
 
   it('is a no-op (same values) already sitting on the cover', () => {
-    const cover = createPresentationState(QUESTION_COUNT);
+    const cover = createPresentationState(SLIDE_COUNT);
     expect(presentationReducer(cover, { type: 'restart' })).toEqual(cover);
   });
 });
 
 describe('presentationReducer — next (the two-step reveal-then-advance)', () => {
-  it('from the cover, advances straight to question 1, unrevealed', () => {
-    const cover = createPresentationState(QUESTION_COUNT);
+  it('from the cover, advances straight to slide 1, unrevealed', () => {
+    const cover = createPresentationState(SLIDE_COUNT);
     expect(presentationReducer(cover, { type: 'next' })).toEqual(state({ index: 1, revealed: false }));
   });
 
-  it('on an unrevealed question, reveals it instead of advancing', () => {
+  it('on an unrevealed, revealable slide, reveals it instead of advancing', () => {
     const q1 = state({ index: 1, revealed: false });
     expect(presentationReducer(q1, { type: 'next' })).toEqual(state({ index: 1, revealed: true }));
   });
 
-  it('on an already-revealed question, advances to the next one, unrevealed', () => {
+  it('on an already-revealed slide, advances to the next one, unrevealed', () => {
     const q1Revealed = state({ index: 1, revealed: true });
     expect(presentationReducer(q1Revealed, { type: 'next' })).toEqual(state({ index: 2, revealed: false }));
   });
 
-  it('advancing past the LAST revealed question lands on the summary', () => {
-    const lastRevealed = state({ index: QUESTION_COUNT, revealed: true });
+  it('advancing past the LAST revealed slide lands on the summary', () => {
+    const lastRevealed = state({ index: SLIDE_COUNT, revealed: true });
     expect(presentationReducer(lastRevealed, { type: 'next' })).toEqual(
-      state({ index: QUESTION_COUNT + 1, revealed: false }),
+      state({ index: SLIDE_COUNT + 1, revealed: false }),
     );
   });
 
   it('is a no-op on the summary', () => {
-    const summary = state({ index: QUESTION_COUNT + 1, revealed: false });
+    const summary = state({ index: SLIDE_COUNT + 1, revealed: false });
     expect(presentationReducer(summary, { type: 'next' })).toEqual(summary);
+  });
+
+  it('advances straight through a NON-revealable slide (a worksheet overview) with a single press', () => {
+    const withOverview = createPresentationState(3, [false, true, true]);
+    const onOverview = { ...withOverview, index: 1 };
+    // No reveal step at all: `revealed` stays false, index moves straight to 2.
+    expect(presentationReducer(onOverview, { type: 'next' })).toEqual({ ...withOverview, index: 2, revealed: false });
   });
 });
 
 describe('presentationReducer — prev', () => {
   it('is a no-op on the cover', () => {
-    const cover = createPresentationState(QUESTION_COUNT);
+    const cover = createPresentationState(SLIDE_COUNT);
     expect(presentationReducer(cover, { type: 'prev' })).toEqual(cover);
   });
 
-  it('steps back one slide and hides the answer again, even if it was revealed', () => {
+  it('steps back one slide and hides the reveal again, even if it was revealed', () => {
     const q2Revealed = state({ index: 2, revealed: true });
     expect(presentationReducer(q2Revealed, { type: 'prev' })).toEqual(state({ index: 1, revealed: false }));
   });
 
-  it('from the summary, steps back to the last question, unrevealed', () => {
-    const summary = state({ index: QUESTION_COUNT + 1, revealed: false });
+  it('from the summary, steps back to the last slide, unrevealed', () => {
+    const summary = state({ index: SLIDE_COUNT + 1, revealed: false });
     expect(presentationReducer(summary, { type: 'prev' })).toEqual(
-      state({ index: QUESTION_COUNT, revealed: false }),
+      state({ index: SLIDE_COUNT, revealed: false }),
     );
   });
 });
 
 describe('presentationReducer — reveal (the explicit "R" shortcut)', () => {
-  it('reveals the current question without advancing', () => {
+  it('reveals the current slide without advancing', () => {
     const q1 = state({ index: 1, revealed: false });
     expect(presentationReducer(q1, { type: 'reveal' })).toEqual(state({ index: 1, revealed: true }));
   });
@@ -103,40 +122,54 @@ describe('presentationReducer — reveal (the explicit "R" shortcut)', () => {
   });
 
   it('is a no-op on the cover', () => {
-    const cover = createPresentationState(QUESTION_COUNT);
+    const cover = createPresentationState(SLIDE_COUNT);
     expect(presentationReducer(cover, { type: 'reveal' })).toEqual(cover);
   });
 
   it('is a no-op on the summary', () => {
-    const summary = state({ index: QUESTION_COUNT + 1, revealed: false });
+    const summary = state({ index: SLIDE_COUNT + 1, revealed: false });
     expect(presentationReducer(summary, { type: 'reveal' })).toEqual(summary);
+  });
+
+  it('is a no-op on a NON-revealable slide (a worksheet overview) — there is nothing to reveal', () => {
+    const withOverview = createPresentationState(3, [false, true, true]);
+    const onOverview = { ...withOverview, index: 1 };
+    expect(presentationReducer(onOverview, { type: 'reveal' })).toEqual(onOverview);
   });
 });
 
 describe('slide predicates', () => {
-  it('classify the cover, each question, and the summary', () => {
-    const cover = createPresentationState(QUESTION_COUNT);
+  it('classify the cover, each content slide, and the summary', () => {
+    const cover = createPresentationState(SLIDE_COUNT);
     const q2 = state({ index: 2 });
-    const summary = state({ index: QUESTION_COUNT + 1 });
+    const summary = state({ index: SLIDE_COUNT + 1 });
 
-    expect([isCoverSlide(cover), isQuestionSlide(cover), isSummarySlide(cover)]).toEqual([true, false, false]);
-    expect([isCoverSlide(q2), isQuestionSlide(q2), isSummarySlide(q2)]).toEqual([false, true, false]);
-    expect([isCoverSlide(summary), isQuestionSlide(summary), isSummarySlide(summary)]).toEqual([
+    expect([isCoverSlide(cover), isContentSlide(cover), isSummarySlide(cover)]).toEqual([true, false, false]);
+    expect([isCoverSlide(q2), isContentSlide(q2), isSummarySlide(q2)]).toEqual([false, true, false]);
+    expect([isCoverSlide(summary), isContentSlide(summary), isSummarySlide(summary)]).toEqual([
       false,
       false,
       true,
     ]);
   });
 
-  it('questionNumber is null off a question slide, 1-based on one', () => {
-    expect(questionNumber(createPresentationState(QUESTION_COUNT))).toBeNull();
-    expect(questionNumber(state({ index: 2 }))).toBe(2);
-    expect(questionNumber(state({ index: QUESTION_COUNT + 1 }))).toBeNull();
+  it('isRevealable is false on the cover/summary, and follows the per-slide flag on a content slide', () => {
+    const withOverview = createPresentationState(3, [false, true, true]);
+    expect(isRevealable(withOverview)).toBe(false); // cover
+    expect(isRevealable({ ...withOverview, index: 1 })).toBe(false); // the overview slide itself
+    expect(isRevealable({ ...withOverview, index: 2 })).toBe(true);
+    expect(isRevealable({ ...withOverview, index: 4 })).toBe(false); // summary
   });
 
-  it('questionProgress clamps to [0, questionCount] for the cover and summary', () => {
-    expect(questionProgress(createPresentationState(QUESTION_COUNT))).toBe(0);
-    expect(questionProgress(state({ index: 2 }))).toBe(2);
-    expect(questionProgress(state({ index: QUESTION_COUNT + 1 }))).toBe(QUESTION_COUNT);
+  it('slideNumber is null off a content slide, 1-based on one', () => {
+    expect(slideNumber(createPresentationState(SLIDE_COUNT))).toBeNull();
+    expect(slideNumber(state({ index: 2 }))).toBe(2);
+    expect(slideNumber(state({ index: SLIDE_COUNT + 1 }))).toBeNull();
+  });
+
+  it('slideProgress clamps to [0, slideCount] for the cover and summary', () => {
+    expect(slideProgress(createPresentationState(SLIDE_COUNT))).toBe(0);
+    expect(slideProgress(state({ index: 2 }))).toBe(2);
+    expect(slideProgress(state({ index: SLIDE_COUNT + 1 }))).toBe(SLIDE_COUNT);
   });
 });

@@ -18,6 +18,7 @@
  * `UI_LABELS` sweep in `i18n.test.ts` cannot reach it.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -25,9 +26,8 @@ import { Input } from '@/components/ui/input';
 const MIN_PASSWORD_LENGTH = 8;
 
 /**
- * This island's own chrome, in both locales. Neutral, impersonal Spanish:
- * infinitives and impersonal prose, no voseo, no second person at all —
- * swept by `findVoseo` from this file's test.
+ * This island's own chrome, in both locales. Neutral Latin-American tuteo,
+ * no voseo — swept by `findVoseo` from this file's test.
  */
 export const COPY = {
   es: {
@@ -36,7 +36,7 @@ export const COPY = {
     submit: 'Guardar contraseña',
     submitting: 'Guardando…',
     success: 'Contraseña actualizada. Ya se puede usar para entrar.',
-    error: 'No se pudo actualizar la contraseña. Intentar de nuevo.',
+    error: 'No se pudo actualizar la contraseña. Inténtalo de nuevo.',
     tooShort: 'La contraseña debe tener al menos 8 caracteres.',
   },
   en: {
@@ -85,9 +85,15 @@ export default function NuevaClaveForm({ lang }: NuevaClaveFormProps) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ password }),
       });
-      setStatus(res.ok ? 'success' : 'error');
+      if (res.ok) {
+        setStatus('success');
+      } else {
+        setStatus('error');
+        toast.error(t.error);
+      }
     } catch {
       setStatus('error');
+      toast.error(t.error);
     }
   }
 
@@ -128,10 +134,10 @@ export default function NuevaClaveForm({ lang }: NuevaClaveFormProps) {
       <Button
         type="submit"
         disabled={pending}
-        aria-busy={pending}
+        loading={pending}
         data-testid="nueva-clave-submit"
       >
-        {pending ? t.submitting : t.submit}
+        {t.submit}
       </Button>
       {status === 'error' && (
         <p role="alert" className="text-sm text-destructive">

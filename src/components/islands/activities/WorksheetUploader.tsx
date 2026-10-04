@@ -20,18 +20,36 @@
  * thumbnail cap at all). Each chosen page becomes its own uploaded image, IN
  * ORDER, so the caller can turn every one into its own worksheet block.
  *
+ * TASK PROGRESS PANEL (coherent loading states, item 4 — fixes the bug
+ * where pressing "Agregar N páginas" silently went back to the empty drop
+ * zone while converting/uploading ran in the background): once pages are
+ * confirmed (or a plain image is picked), `src/lib/activities/uploadTask.ts`
+ * drives one page/item at a time (convert -> upload -> next) and this
+ * component renders `TaskProgress` (`src/components/ui/task-progress.tsx`)
+ * in its place — it NEVER falls back to the drop zone while the task is
+ * running. A PDF opens its document ONCE via `openPdfForConversion` and
+ * converts pages from it one at a time, so cancelling actually stops real
+ * work between pages instead of waiting out a whole-document batch. A
+ * failure keeps the panel up with the reason + "Reintentar" (resumes AT the
+ * failed page — see `uploadTask.ts`'s own header for the keep-uploaded-pages
+ * policy) and "Elegir otro archivo" (back to the drop zone). Cancelling
+ * goes straight back to the drop zone; finishing calls `onComplete` and
+ * does the same.
+ *
  * Thumbnails are rendered as `Blob`s turned into `URL.createObjectURL`
  * strings — revoked (`revokeThumbnailUrls`) whenever a new file is picked,
- * the flow switches away from the thumbnail grid, or this component
- * unmounts, so a creator picking several PDFs in a row never leaks object
- * URLs.
+ * the flow switches away from the thumbnail grid, a file is abandoned via
+ * "Elegir otro archivo", or this component unmounts. The SAME thumbnail
+ * URLs double as the task panel's cheap "current page" preview while that
+ * page converts/uploads — not revoked until the reasons above, so they're
+ * still good at that point.
  *
  * MANUAL/PLAYWRIGHT CHECK for the real canvas/`<img>`/`pdfjs-dist` decoding
  * (jsdom cannot meaningfully run it) — same posture as
  * `imagePipeline.ts`'s own header. Automated tests here mock the pipeline
- * (including `renderPdfThumbnails`) and `fetch`, and cover this component's
- * OWN decisions: routing, thumbnail selection, progress, error mapping, and
- * the shape of what it hands back.
+ * (including `renderPdfThumbnails`/`openPdfForConversion`) and `fetch`, and
+ * cover this component's OWN decisions: routing, thumbnail selection,
+ * progress, error mapping, and the shape of what it hands back.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { UploadSimpleIcon } from '@phosphor-icons/react/dist/ssr/UploadSimple';
@@ -40,14 +58,17 @@ import {
   routeFileType,
   validatePageSelection,
   convertImageToWebp,
-  convertPdfPagesToWebp,
   renderPdfThumbnails,
+  openPdfForConversion,
+  type PdfPageConverter,
   MAX_PDF_PAGES,
   MAX_PDF_THUMBNAIL_PAGES,
   PDF_THUMBNAIL_WIDTH,
 } from '@/lib/activities/imagePipeline';
+import { createUploadTask, type UploadTask, type UploadTaskKind, type UploadTaskState } from '@/lib/activities/uploadTask';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TaskProgress } from '@/components/ui/task-progress';
 
 export interface UploadedImage {
   path: string;
@@ -73,7 +94,9 @@ type Status =
   | { kind: 'loading-thumbnails'; file: File }
   | { kind: 'picking-thumbnails'; file: File; thumbnails: ThumbnailEntry[]; truncated: boolean }
   | { kind: 'picking-pages'; file: File }
-  | { kind: 'uploading'; progress: string }
+  /** A running or failed upload task — see this file's own header. Never idle/done: those transitions go straight back to 'idle' (see `WorksheetUploader`'s `beginTask`). */
+  | { kind: 'task'; task: UploadTaskState; thumbnails: Map<number, string> }
+  /** A failure BEFORE any task could start (unsupported type, invalid page selection, PDF wouldn't even open) — shown inline under the drop zone, not the task panel. */
   | { kind: 'error'; message: string };
 
 /** "1, 2, 3" -> `[1, 2, 3]`, dropping anything that doesn't parse as a whole page number — the text-field fallback's own parsing, unchanged from before this pass. */
@@ -84,11 +107,12 @@ function parsePagesInput(raw: string): number[] {
     .filter((p) => Number.isInteger(p));
 }
 
-async function uploadWebp(blob: Blob): Promise<UploadedImage> {
+async function uploadWebp(blob: Blob, signal?: AbortSignal): Promise<UploadedImage> {
   const res = await fetch('/api/actividades/imagen', {
     method: 'POST',
     headers: { 'content-type': 'image/webp' },
     body: blob,
+    signal,
   });
   const data = (await res.json().catch(() => ({}))) as { path?: string; width?: number; height?: number; error?: string };
   if (!res.ok || !data.path || !data.width || !data.height) {
@@ -97,13 +121,17 @@ async function uploadWebp(blob: Blob): Promise<UploadedImage> {
   return { path: data.path, width: data.width, height: data.height };
 }
 
-/** Uploads every blob, IN ORDER — shared by the image path and both PDF paths (thumbnails and the text-field fallback). */
-async function uploadAll(blobs: Blob[]): Promise<UploadedImage[]> {
-  const images: UploadedImage[] = [];
-  for (const blob of blobs) {
-    images.push(await uploadWebp(blob));
+/** Builds the task panel's stage label, e.g. "Convirtiendo página 2 de 5" / "Optimizando imagen 1 de 1". */
+function stageLabel(t: (typeof UI_LABELS)[Lang]['activities']['worksheet'], state: UploadTaskState): string {
+  if (state.stage === 'preparing') return t.taskPreparingPdf;
+  if (!state.stage) return '';
+  const pageNumber = state.pageNumber ?? 0;
+  if (state.kind === 'pdf') {
+    const prefix = state.stage === 'converting' ? t.taskConvertingPage : t.taskUploadingPage;
+    return `${prefix} ${pageNumber} ${t.taskOf} ${state.total}`;
   }
-  return images;
+  const prefix = state.stage === 'converting' ? t.taskOptimizingImage : t.taskUploadingImage;
+  return `${prefix} ${pageNumber} ${t.taskOf} ${state.total}`;
 }
 
 export default function WorksheetUploader({ lang, onComplete }: WorksheetUploaderProps) {
@@ -114,16 +142,30 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const thumbnailUrlsRef = useRef<string[]>([]);
+  const taskRef = useRef<UploadTask | null>(null);
+  const converterRef = useRef<PdfPageConverter | null>(null);
 
   const revokeThumbnailUrls = useCallback(() => {
     for (const url of thumbnailUrlsRef.current) URL.revokeObjectURL(url);
     thumbnailUrlsRef.current = [];
   }, []);
 
-  // Unmount-only cleanup — every earlier transition (a new file picked, or
-  // leaving the thumbnail grid) already revokes explicitly at that point;
-  // see `revokeThumbnailUrls`'s own callers below.
-  useEffect(() => revokeThumbnailUrls, [revokeThumbnailUrls]);
+  const disposeConverter = useCallback(() => {
+    void converterRef.current?.dispose();
+    converterRef.current = null;
+  }, []);
+
+  // Unmount-only cleanup — every earlier transition (a new file picked,
+  // leaving the thumbnail grid, or abandoning a failed task) already
+  // revokes/disposes explicitly at that point; see those callers below.
+  useEffect(
+    () => () => {
+      taskRef.current?.cancel();
+      disposeConverter();
+      revokeThumbnailUrls();
+    },
+    [disposeConverter, revokeThumbnailUrls],
+  );
 
   const errorMessage = useCallback(
     (code: string): string => {
@@ -133,44 +175,96 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
     [t],
   );
 
-  const handleImageFile = useCallback(
-    async (file: File) => {
-      setStatus({ kind: 'uploading', progress: t.uploadProgress });
-      try {
-        const blob = await convertImageToWebp(file);
-        const image = await uploadWebp(blob);
-        setStatus({ kind: 'idle' });
-        onComplete([image]);
-      } catch (err) {
-        const code = err instanceof Error ? err.message : 'upload_failed';
-        setStatus({ kind: 'error', message: errorMessage(code) });
-      }
+  /** Starts a task and wires its lifecycle — shared by the image path and both PDF paths. */
+  const beginTask = useCallback(
+    (
+      kind: UploadTaskKind,
+      items: number[],
+      thumbnails: Map<number, string>,
+      convertItem: (pageNumber: number, signal: AbortSignal) => Promise<Blob>,
+    ) => {
+      const task = createUploadTask({
+        onStateChange: (state) => {
+          if (state.status === 'cancelled') {
+            disposeConverter();
+            taskRef.current = null;
+            setStatus({ kind: 'idle' });
+            return;
+          }
+          if (state.status === 'done') {
+            disposeConverter();
+            taskRef.current = null;
+            setStatus({ kind: 'idle' });
+            onComplete(state.results);
+            return;
+          }
+          // 'running' or 'error' — the task panel stays up either way,
+          // never falling back to the drop zone (see this file's header).
+          setStatus({ kind: 'task', task: state, thumbnails });
+        },
+        errorMessageFor: (err) => (err instanceof Error ? err.message : 'upload_failed'),
+      });
+      taskRef.current = task;
+      task.start({
+        kind,
+        items,
+        pageNumberFor: (pageNumber) => pageNumber,
+        convertItem,
+        uploadBlob: (blob, signal) => uploadWebp(blob, signal),
+      });
     },
-    [t, errorMessage, onComplete],
+    [onComplete, disposeConverter],
   );
 
-  /** Shared by the thumbnail grid's confirm and the text-field fallback's confirm — only how `pages` was gathered differs. */
+  const handleImageFile = useCallback(
+    (file: File) => {
+      beginTask('image', [1], new Map(), async (_pageNumber, signal) => {
+        if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+        return convertImageToWebp(file);
+      });
+    },
+    [beginTask],
+  );
+
+  /** Shared by the thumbnail grid's confirm and the text-field fallback's confirm — only how `pages` (and `thumbnails`, when available) were gathered differs. */
   const handlePdfPagesConfirm = useCallback(
-    async (file: File, pages: number[]) => {
+    async (file: File, pages: number[], thumbnails: Map<number, string>) => {
       const validated = validatePageSelection(pages);
       if (!validated) {
         setStatus({ kind: 'error', message: errorMessage('pdf_failed') });
         return;
       }
 
-      setStatus({ kind: 'uploading', progress: t.uploadProgress });
+      let converter: PdfPageConverter;
       try {
-        const blobs = await convertPdfPagesToWebp(file, validated);
-        const images = await uploadAll(blobs);
-        setStatus({ kind: 'idle' });
-        onComplete(images);
-      } catch (err) {
-        const code = err instanceof Error ? err.message : 'pdf_failed';
-        setStatus({ kind: 'error', message: errorMessage(code) });
+        converter = await openPdfForConversion(file);
+      } catch {
+        setStatus({ kind: 'error', message: errorMessage('pdf_failed') });
+        return;
       }
+      converterRef.current = converter;
+
+      beginTask('pdf', validated, thumbnails, (pageNumber, signal) => converter.convertPage(pageNumber, signal));
     },
-    [t, errorMessage, onComplete],
+    [errorMessage, beginTask],
   );
+
+  const cancelTask = useCallback(() => {
+    taskRef.current?.cancel();
+  }, []);
+
+  const retryTask = useCallback(() => {
+    taskRef.current?.retry();
+  }, []);
+
+  /** "Elegir otro archivo" — abandons a failed task entirely and goes back to the drop zone. */
+  const chooseAnotherFile = useCallback(() => {
+    taskRef.current?.reset();
+    taskRef.current = null;
+    disposeConverter();
+    revokeThumbnailUrls();
+    setStatus({ kind: 'idle' });
+  }, [disposeConverter, revokeThumbnailUrls]);
 
   const toggleThumbnailPage = useCallback((pageNumber: number) => {
     setSelectedPages((prev) => {
@@ -202,7 +296,7 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
     (file: File) => {
       const kind = routeFileType(file);
       if (kind === 'image') {
-        void handleImageFile(file);
+        handleImageFile(file);
         return;
       }
       if (kind !== 'pdf') {
@@ -332,7 +426,11 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
           type="button"
           data-testid="pdf-thumbnails-confirm"
           disabled={selectedCount === 0}
-          onClick={() => void handlePdfPagesConfirm(file, [...selectedPages].sort((a, b) => a - b))}
+          onClick={() => {
+            const pages = [...selectedPages].sort((a, b) => a - b);
+            const byPage = new Map(thumbnails.map((th) => [th.pageNumber, th.url]));
+            void handlePdfPagesConfirm(file, pages, byPage);
+          }}
         >
           {t.pdfAddPagesPrefix} {selectedCount} {selectedCount === 1 ? t.pdfPageCountOne : t.pdfPageCountMany}
         </Button>
@@ -369,11 +467,36 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
         <Button
           type="button"
           data-testid="pdf-pages-confirm"
-          onClick={() => void handlePdfPagesConfirm(status.file, parsePagesInput(pagesInput))}
+          onClick={() => void handlePdfPagesConfirm(status.file, parsePagesInput(pagesInput), new Map())}
         >
           {t.pdfConfirm}
         </Button>
       </div>
+    );
+  }
+
+  if (status.kind === 'task') {
+    const { task, thumbnails } = status;
+    const thumbnailUrl = task.pageNumber != null ? thumbnails.get(task.pageNumber) : undefined;
+    return (
+      <TaskProgress
+        label={stageLabel(t, task)}
+        progress={task.progress}
+        thumbnailUrl={thumbnailUrl}
+        thumbnailAlt={thumbnailUrl && task.pageNumber != null ? `${t.pdfPageLabel} ${task.pageNumber}` : undefined}
+        cancel={task.status === 'running' ? { label: t.taskCancel, onCancel: cancelTask } : undefined}
+        error={
+          task.status === 'error'
+            ? {
+                message: errorMessage(task.errorMessage ?? 'upload_failed'),
+                retryLabel: t.taskRetry,
+                onRetry: retryTask,
+                chooseAnotherLabel: t.taskChooseAnother,
+                onChooseAnother: chooseAnotherFile,
+              }
+            : undefined
+        }
+      />
     );
   }
 
@@ -414,11 +537,6 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
         {t.uploadButton}
       </Button>
 
-      {status.kind === 'uploading' && (
-        <p role="status" data-testid="uploader-progress" className="text-sm text-muted-foreground">
-          {status.progress}
-        </p>
-      )}
       {status.kind === 'error' && (
         <p role="alert" data-testid="uploader-error" className="text-sm text-destructive">
           {status.message}

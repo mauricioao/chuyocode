@@ -61,10 +61,9 @@ interface Copy {
 }
 
 /**
- * REGISTER (standing project rule): neutral Spanish, no voseo. Instructions use
- * the infinitive — `Intentar`, not `Intentá` — and nothing addresses the reader
- * with a second-person verb, which removes the tú/vos fork instead of picking a
- * side of it. The site is not Argentina-specific.
+ * REGISTER (standing project rule, owner decision 2026-10-04): neutral
+ * Latin-American tuteo, no voseo — `Inténtalo`, never `Intentá`. The site is
+ * not Argentina-specific.
  *
  * Exported for that guard: like `ExerciseIsland`, this island deliberately
  * keeps its copy local rather than importing `UI_LABELS`, so the Astro-side
@@ -79,9 +78,9 @@ export const COPY: Record<'es' | 'en', Copy> = {
     playing: (s) => `Reproduciendo anuncio… ${s}s`,
     validating: 'Validando…',
     success: '¡Desbloqueado! Redirigiendo…',
-    // Statement + infinitive instruction, the same shape the English section
-    // already uses ("Todavía no hay ejercicios … Probar con otro tema.").
-    error: 'No se pudo validar el anuncio. Intentar de nuevo.',
+    // Statement + tú imperative, the same shape the English section already
+    // uses ("Todavía no hay ejercicios … Prueba con otro tema.").
+    error: 'No se pudo validar el anuncio. Inténtalo de nuevo.',
     retry: 'Reintentar',
     close: 'Cerrar',
   },

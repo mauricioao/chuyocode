@@ -31,8 +31,8 @@
  * below simply stop mounting, and the alternate games never write into it.
  */
 import { useMemo } from 'react';
-import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { QuizBlock } from '@/lib/activities/blocks';
 import type { SlotOutcome } from '@/lib/exerciseGrading';
@@ -50,6 +50,7 @@ import {
 } from '@/lib/activities/gameModes';
 import { rendererFor } from '@/components/islands/mechanics/registry';
 import UnavailableRenderer from '@/components/islands/mechanics/UnavailableRenderer';
+import SlotExplanation from '@/components/islands/mechanics/SlotExplanation';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
@@ -172,10 +173,11 @@ export default function QuizBlockPractice({
                 return (
                   <div key={contextBlock.id} className="flex flex-col gap-2">
                     {contextBlock.image && (
-                      <img
+                      <FadeImage
                         src={contextBlock.image}
                         alt={contextBlock.alt ?? ''}
                         className="max-h-64 w-full rounded-md object-contain"
+                        placeholderClassName="h-40 w-full rounded-md"
                       />
                     )}
                     {contextBlock.audio && <audio controls src={contextBlock.audio} className="w-full" />}
@@ -217,13 +219,7 @@ export default function QuizBlockPractice({
                 unlike the worksheet zone: a quiz question already has the
                 room a tiny drawn zone does not). */}
             {slot.explanation && outcome === 'incorrect' && (
-              <div
-                data-testid={`quiz-slot-explanation-${slot.id}`}
-                className="flex items-start gap-1.5 rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground"
-              >
-                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
-                <p>{slot.explanation}</p>
-              </div>
+              <SlotExplanation text={slot.explanation} testId={`quiz-slot-explanation-${slot.id}`} />
             )}
           </div>
         );

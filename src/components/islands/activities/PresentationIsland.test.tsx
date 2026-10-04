@@ -2,16 +2,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
-import type { QuizBlock } from '@/lib/activities/blocks';
+import type { Block } from '@/lib/activities/blocks';
 import PresentationIsland from './PresentationIsland';
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
-const QUIZ_BLOCKS: QuizBlock[] = [
+const QUIZ_BLOCKS: Block[] = [
   {
     id: 'q1',
     type: 'quiz',
@@ -39,13 +40,25 @@ const QUIZ_BLOCKS: QuizBlock[] = [
   },
 ];
 
+/** Two zones, already authored top-to-bottom so reading order matches authored order (ordering itself is covered by `presentationSlides.test.ts`). */
+const WORKSHEET_BLOCK: Block = {
+  id: 'w1',
+  type: 'worksheet',
+  rotation: 0,
+  image: { path: 'activity-images/abc/img-1.webp', width: 1000, height: 1000 },
+  zones: [
+    { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.2, kind: 'text', answers: ['Paris'], explanation: 'It is the capital of France.' },
+    { id: 'z2', x: 0.6, y: 0.6, w: 0.2, h: 0.2, kind: 'text', answers: ['London'] },
+  ],
+};
+
 const BASE_PROPS = {
   lang: 'es' as const,
   title: 'Animales y capitales',
   level: 'A2' as const,
   practiceUrl: '/es/ingles/actividades/abc',
   qrSvg: '<svg data-testid="fake-qr"></svg>',
-  quizBlocks: QUIZ_BLOCKS,
+  blocks: QUIZ_BLOCKS,
 };
 
 function next() {
@@ -77,7 +90,7 @@ describe('PresentationIsland — cover slide', () => {
     expect(cover.textContent).toContain('A2');
     expect(cover.textContent).toContain('2 preguntas');
     expect(screen.getByTestId('presentation-cover-qr')).toBeTruthy();
-    expect(cover.textContent).toContain('Escanear el código');
+    expect(cover.textContent).toContain('Escanea el código');
   });
 
   it('skips the QR block entirely when none was generated', () => {
@@ -89,9 +102,23 @@ describe('PresentationIsland — cover slide', () => {
     render(<PresentationIsland {...BASE_PROPS} level={null} />);
     expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('Sin nivel');
   });
+
+  it('combines quiz and worksheet counts when the activity has both', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK, ...QUIZ_BLOCKS]} />);
+    const cover = screen.getByTestId('presentation-slide-cover');
+    expect(cover.textContent).toContain('2 preguntas');
+    expect(cover.textContent).toContain('1 hoja');
+  });
+
+  it('shows only the worksheet count for a worksheet-only activity', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK]} />);
+    const cover = screen.getByTestId('presentation-slide-cover');
+    expect(cover.textContent).toContain('1 hoja');
+    expect(cover.textContent).not.toContain('pregunta');
+  });
 });
 
-describe('PresentationIsland — the full flow', () => {
+describe('PresentationIsland — the full flow (quiz-only deck)', () => {
   it('walks cover -> q1 (unrevealed) -> q1 (revealed) -> q2 (unrevealed) -> q2 (revealed) -> summary -> restart', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
 
@@ -152,6 +179,107 @@ describe('PresentationIsland — the full flow', () => {
   });
 });
 
+describe('PresentationIsland — the worksheet zoom tour (worksheet-only deck)', () => {
+  it('walks overview (zones numbered) -> zone 1 blank -> reveal shows the answer and explanation -> zone 2 blank -> reveal -> summary', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK]} />);
+
+    // cover -> next shows the overview, both zones numbered, nothing to reveal.
+    next();
+    expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
+    expect(screen.getByTestId('presentation-overview-zone-z1')).toBeTruthy();
+    expect(screen.getByTestId('presentation-overview-zone-z2')).toBeTruthy();
+    expect(screen.getByLabelText('Zona 1')).toBeTruthy();
+    expect(screen.getByLabelText('Zona 2')).toBeTruthy();
+    expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(true);
+
+    // A single "next" advances straight past the overview (never revealable).
+    next();
+    expect(screen.getByTestId('presentation-zone-blank-z1')).toBeTruthy();
+    expect(screen.queryByTestId('presentation-zone-answer-z1')).toBeNull();
+    expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(false);
+
+    // next reveals zone 1's answer + explanation instead of advancing.
+    next();
+    expect(screen.getByTestId('presentation-zone-answer-z1').textContent).toBe('Paris');
+    expect(screen.getByTestId('presentation-zone-explanation-z1').textContent).toContain(
+      'It is the capital of France.',
+    );
+
+    // next NOW advances to zone 2, blank again.
+    next();
+    expect(screen.getByTestId('presentation-zone-blank-z2')).toBeTruthy();
+    expect(screen.queryByTestId('presentation-zone-answer-z2')).toBeNull();
+
+    // zone 2 has no explanation — reveal shows only the answer.
+    next();
+    expect(screen.getByTestId('presentation-zone-answer-z2').textContent).toBe('London');
+    expect(screen.queryByTestId('presentation-zone-explanation-z2')).toBeNull();
+
+    // next advances to the summary.
+    next();
+    expect(screen.getByTestId('presentation-slide-summary')).toBeTruthy();
+  });
+});
+
+describe('PresentationIsland — interleaved worksheet + quiz order', () => {
+  it('visits every slide in exactly the authored block order', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK, ...QUIZ_BLOCKS]} />);
+
+    const progressLabel = () => attr(screen.getByTestId('presentation-progress'), 'aria-label');
+
+    next(); // -> overview (slide 1/5)
+    expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
+    expect(progressLabel()).toBe('Diapositiva 1 de 5');
+
+    next(); // -> zone 1 blank (slide 2/5)
+    expect(screen.getByTestId('presentation-zone-blank-z1')).toBeTruthy();
+    next(); // reveal zone 1
+    expect(screen.getByTestId('presentation-zone-answer-z1')).toBeTruthy();
+
+    next(); // -> zone 2 blank (slide 3/5)
+    expect(screen.getByTestId('presentation-zone-blank-z2')).toBeTruthy();
+    next(); // reveal zone 2
+
+    next(); // -> q1 (slide 4/5), unrevealed
+    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+    expect(progressLabel()).toBe('Diapositiva 4 de 5');
+    next(); // reveal q1
+
+    next(); // -> q2 (slide 5/5)
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+    expect(progressLabel()).toBe('Diapositiva 5 de 5');
+    next(); // reveal q2
+
+    next(); // -> summary
+    expect(screen.getByTestId('presentation-slide-summary')).toBeTruthy();
+  });
+});
+
+describe('PresentationIsland — worksheet camera transitions and prefers-reduced-motion', () => {
+  it('animates the worksheet camera over ~400ms by default', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK]} />);
+    next();
+    const camera = screen.getByTestId('presentation-worksheet-camera');
+    expect(camera.style.transitionDuration).toBe('400ms');
+  });
+
+  it('is instant once mounted under prefers-reduced-motion', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK]} />);
+    next();
+    const camera = screen.getByTestId('presentation-worksheet-camera');
+    expect(camera.style.transitionDuration).toBe('0ms');
+  });
+});
+
 describe('PresentationIsland — keyboard map', () => {
   it.each([['ArrowRight'], [' '], ['PageDown'], ['Enter']])('"%s" advances/reveals like the next button', (key) => {
     render(<PresentationIsland {...BASE_PROPS} />);
@@ -207,6 +335,26 @@ describe('PresentationIsland — the exit control (link, not just Esc)', () => {
   });
 });
 
+describe('PresentationIsland — the editor overlay (onExit, no real practice URL)', () => {
+  it('renders the exit control as a button, not a link, and calls onExit instead of navigating', () => {
+    const onExit = vi.fn();
+    render(<PresentationIsland {...BASE_PROPS} practiceUrl={undefined} qrSvg={null} onExit={onExit} />);
+    expect(screen.queryByRole('link', { name: 'Salir' })).toBeNull();
+    const exitButton = screen.getByRole('button', { name: 'Salir' });
+    fireEvent.click(exitButton);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onExit on Escape instead of navigating', () => {
+    const assign = stubLocationAssign();
+    const onExit = vi.fn();
+    render(<PresentationIsland {...BASE_PROPS} practiceUrl={undefined} qrSvg={null} onExit={onExit} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(assign).not.toHaveBeenCalled();
+  });
+});
+
 describe('PresentationIsland — control bar accessible names', () => {
   it('gives every control a real, labeled button or link', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
@@ -217,30 +365,36 @@ describe('PresentationIsland — control bar accessible names', () => {
     expect(screen.getByRole('link', { name: 'Salir' })).toBeTruthy();
   });
 
-  it('disables "reveal" off a question slide (cover/summary) and enables it on one', () => {
+  it('disables "reveal" off a content slide (cover/summary) and enables it on one', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(true);
     next();
     expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('names the progress readout for assistive tech', () => {
+  it('names the progress readout for assistive tech, generalized to "Diapositiva" (not just quiz questions)', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
-    expect(attr(screen.getByTestId('presentation-progress'), 'aria-label')).toBe('Pregunta 0 de 2');
+    expect(attr(screen.getByTestId('presentation-progress'), 'aria-label')).toBe('Diapositiva 0 de 2');
     next();
-    expect(attr(screen.getByTestId('presentation-progress'), 'aria-label')).toBe('Pregunta 1 de 2');
+    expect(attr(screen.getByTestId('presentation-progress'), 'aria-label')).toBe('Diapositiva 1 de 2');
   });
 });
 
 describe('PresentationIsland — the polite live region', () => {
-  it('announces the cover, each question (with reveal state), and the summary', () => {
+  it('announces the cover, each slide (with reveal state), and the summary', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     const region = () => screen.getByTestId('presentation-live-region');
     expect(region().textContent).toBe('Portada');
     next();
-    expect(region().textContent).toBe('Pregunta 1 de 2');
+    expect(region().textContent).toBe('Diapositiva 1 de 2');
     next();
     expect(region().textContent).toContain('revelada');
+  });
+
+  it('names a worksheet overview slide explicitly (it can never be "revealed")', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK]} />);
+    next();
+    expect(screen.getByTestId('presentation-live-region').textContent).toContain('Vista general de la hoja');
   });
 });
 
@@ -271,8 +425,15 @@ describe('PresentationIsland — control bar idle-hide', () => {
 });
 
 describe('PresentationIsland — SSR/hydration', () => {
-  it('hydrates cleanly against its own server-rendered markup (no React #418)', async () => {
+  it('hydrates cleanly against its own server-rendered markup (no React #418) for a quiz-only deck', async () => {
     const { recoverableErrors } = await renderThenHydrate(() => <PresentationIsland {...BASE_PROPS} />);
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('hydrates cleanly for a deck with a worksheet (the camera layer + reduced-motion hook included)', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => (
+      <PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK, ...QUIZ_BLOCKS]} />
+    ));
     expect(recoverableErrors).toEqual([]);
   });
 });

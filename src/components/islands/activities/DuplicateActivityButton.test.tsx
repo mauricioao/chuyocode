@@ -55,7 +55,7 @@ describe('DuplicateActivityButton', () => {
     fireEvent.click(screen.getByTestId('duplicate-activity-button'));
 
     const error = await screen.findByTestId('duplicate-activity-error');
-    expect(error.textContent).toBe('Se alcanzó el límite diario de duplicados. Intentar mañana.');
+    expect(error.textContent).toBe('Se alcanzó el límite diario de duplicados. Inténtalo mañana.');
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -77,7 +77,7 @@ describe('DuplicateActivityButton', () => {
     fireEvent.click(screen.getByTestId('duplicate-activity-button'));
 
     const error = await screen.findByTestId('duplicate-activity-error');
-    expect(error.textContent).toBe('No se pudo duplicar la actividad. Intentar de nuevo.');
+    expect(error.textContent).toBe('No se pudo duplicar la actividad. Inténtalo de nuevo.');
   });
 
   it('shows "Duplicando…" while the request is in flight', async () => {

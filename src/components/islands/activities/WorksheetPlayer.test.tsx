@@ -25,6 +25,18 @@ describe('WorksheetPlayer', () => {
     expect(img.src).toContain('/img.webp');
   });
 
+  it('fades the image in once it loads, and shows a neutral placeholder instead of the browser glyph on error', () => {
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" />);
+    const img = screen.getByTestId('worksheet-player').querySelector('img') as HTMLImageElement;
+    expect(img.className).toContain('opacity-0');
+    fireEvent.load(img);
+    expect(img.className).toContain('opacity-100');
+
+    fireEvent.error(img);
+    expect(screen.getByTestId('worksheet-player-image-broken')).toBeTruthy();
+    expect(screen.getByTestId('worksheet-player').querySelector('img')).toBeNull();
+  });
+
   it('shows the not-graded notice', () => {
     render(<WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" />);
     expect(screen.getByTestId('worksheet-player').textContent).toContain('no corrige');

@@ -196,6 +196,7 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
               variant="outline"
               data-testid={`course-status-${action.key}`}
               disabled={statusBusy}
+              loading={statusBusy}
               onClick={() => void changeStatus(action.key)}
             >
               {action.label}
@@ -270,8 +271,8 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
           </p>
         )}
         <div>
-          <Button type="submit" data-testid="course-fields-submit" disabled={saving}>
-            {saving ? t.actions.saving : t.actions.save}
+          <Button type="submit" data-testid="course-fields-submit" disabled={saving} loading={saving}>
+            {t.actions.save}
           </Button>
         </div>
       </form>
@@ -302,8 +303,8 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
               />
             )}
           </Field>
-          <Button type="submit" data-testid="course-grant-submit" disabled={granting}>
-            {granting ? t.granting : t.grantButton}
+          <Button type="submit" data-testid="course-grant-submit" disabled={granting} loading={granting}>
+            {t.grantButton}
           </Button>
         </form>
         {grantError && (
@@ -330,9 +331,10 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
                     variant="ghost"
                     data-testid={`course-owner-revoke-${owner.userId}`}
                     disabled={revokingUserId === owner.userId}
+                    loading={revokingUserId === owner.userId}
                     onClick={() => void revoke(owner.userId)}
                   >
-                    {revokingUserId === owner.userId ? t.revoking : t.revoke}
+                    {t.revoke}
                   </Button>
                 </li>
               ))}

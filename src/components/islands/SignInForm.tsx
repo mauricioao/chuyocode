@@ -34,6 +34,7 @@
  * `captchaToken` stays `null` forever, so the request body never carries it.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getTurnstileSiteKey } from '@lib/turnstile';
@@ -42,8 +43,8 @@ import TurnstileWidget from './TurnstileWidget';
 /**
  * This island's own chrome, in both locales.
  *
- * Neutral, impersonal Spanish: infinitives and impersonal prose, no voseo, no
- * second person at all — swept by `findVoseo` from this file's test.
+ * Neutral Latin-American tuteo, no voseo — swept by `findVoseo` from this
+ * file's test.
  */
 export const COPY = {
   es: {
@@ -52,8 +53,8 @@ export const COPY = {
     submit: 'Enviar enlace',
     submitting: 'Enviando…',
     success:
-      'Se envió un enlace de acceso a esa dirección, si corresponde a una cuenta. Revisar la bandeja de entrada y la carpeta de spam.',
-    error: 'No se pudo enviar la solicitud. Intentar de nuevo.',
+      'Se envió un enlace de acceso a esa dirección, si corresponde a una cuenta. Revisa la bandeja de entrada y la carpeta de spam.',
+    error: 'No se pudo enviar la solicitud. Inténtalo de nuevo.',
     captchaPending: 'Esperando verificación…',
     captchaError: 'No pudimos verificar que eres una persona. Inténtalo de nuevo.',
   },
@@ -138,12 +139,18 @@ export default function SignInForm({ lang, next }: SignInFormProps) {
         return;
       }
       const body = (await res.json().catch(() => null)) as SignInResponseBody | null;
-      setStatus(body?.error === 'captcha_failed' ? 'captcha-error' : 'error');
+      if (body?.error === 'captcha_failed') {
+        setStatus('captcha-error');
+      } else {
+        setStatus('error');
+        toast.error(t.error);
+      }
     } catch {
       // Offline or aborted. Same neutral rule: the request did not complete,
       // so the visitor gets the retryable state, never the success one.
       resetCaptcha();
       setStatus('error');
+      toast.error(t.error);
     }
   }
 
@@ -192,11 +199,11 @@ export default function SignInForm({ lang, next }: SignInFormProps) {
       <Button
         type="submit"
         disabled={pending || needsCaptcha}
-        aria-busy={pending}
+        loading={pending}
         aria-describedby={needsCaptcha ? 'signin-captcha-hint' : undefined}
         data-testid="signin-submit"
       >
-        {pending ? t.submitting : t.submit}
+        {t.submit}
       </Button>
       {needsCaptcha && (
         <p id="signin-captcha-hint" className="text-xs text-muted-foreground">

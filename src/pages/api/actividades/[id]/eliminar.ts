@@ -21,28 +21,11 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { isUuid } from '@lib/activities/paths';
 import { createServiceClient } from '@lib/supabase';
 
 const ACTIVITIES_TABLE = 'activities';
-
-interface EliminarResponse {
-  ok?: boolean;
-  error?: string;
-}
-
-function json(body: EliminarResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 let serviceClient: ReturnType<typeof createServiceClient> | null = null;
 function getClient(): ReturnType<typeof createServiceClient> | null {
@@ -57,16 +40,16 @@ function getClient(): ReturnType<typeof createServiceClient> | null {
 
 export const POST: APIRoute = async ({ params, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const id = params.id;
   if (typeof id !== 'string' || !isUuid(id)) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const client = getClient();
   if (!client) {
-    return json({ error: 'delete_unavailable' }, 503);
+    return jsonResponse({ error: 'delete_unavailable' }, 503);
   }
 
   // Ownership enforced IN THE QUERY — same 404-for-both posture as `guardar.ts`.
@@ -80,10 +63,10 @@ export const POST: APIRoute = async ({ params, locals }) => {
 
   if (activityError) {
     console.error('[eliminar] activity fetch failed:', activityError.message);
-    return json({ error: 'delete_failed' }, 500);
+    return jsonResponse({ error: 'delete_failed' }, 500);
   }
   if (!activityData) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const { error: updateError } = await client
@@ -94,8 +77,8 @@ export const POST: APIRoute = async ({ params, locals }) => {
 
   if (updateError) {
     console.error('[eliminar] update failed:', updateError.message);
-    return json({ error: 'delete_failed' }, 500);
+    return jsonResponse({ error: 'delete_failed' }, 500);
   }
 
-  return json({ ok: true }, 200);
+  return jsonResponse({ ok: true }, 200);
 };

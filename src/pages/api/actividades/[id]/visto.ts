@@ -23,40 +23,23 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { isUuid } from '@lib/activities/paths';
 import { recordActivityView } from '@lib/activities/views';
 
-interface VistoResponse {
-  viewCount?: number;
-  error?: string;
-}
-
-function json(body: VistoResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
-
 export const POST: APIRoute = async ({ params, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const id = params.id;
   if (typeof id !== 'string' || !isUuid(id)) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const viewCount = await recordActivityView(user.id, id);
   if (viewCount === null) {
-    return json({ error: 'view_failed' }, 500);
+    return jsonResponse({ error: 'view_failed' }, 500);
   }
 
-  return json({ viewCount }, 200);
+  return jsonResponse({ viewCount }, 200);
 };

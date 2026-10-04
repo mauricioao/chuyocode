@@ -16,6 +16,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
 });
@@ -201,6 +202,16 @@ describe('EditorSideToolbar — save', () => {
   it('disables the save button while saving', () => {
     renderToolbar({ saveDisabled: true, saveState: 'saving' });
     expect((screen.getByTestId('save-button') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the save button as loading/aria-busy while a manual save runs', () => {
+    renderToolbar({ saveDisabled: true, saveState: 'saving' });
+    expect(screen.getByTestId('save-button').getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('does not show the save button as loading when idle/saved/pending', () => {
+    renderToolbar({ saveState: 'saved' });
+    expect(screen.getByTestId('save-button').getAttribute('aria-busy')).toBeNull();
   });
 });
 
@@ -509,12 +520,15 @@ describe('EditorSideToolbar — floating: re-clamp on resize', () => {
 
 /** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport. */
 function stubMobileViewport() {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
 }
 
 describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', () => {
@@ -601,7 +615,7 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
   it('renders BOTH the mobile bottom bar and the desktop rail, gated by CSS `lg:` classes only', () => {
     // Same "no real matchMedia" shape as a true server render — see
     // `useIsDesktop.test.ts`'s own "defaults to true" test.
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
     expect(html).toContain('editor-side-toolbar-mobile');
     expect(html).toContain('editor-side-toolbar"');
@@ -613,7 +627,7 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
   });
 
   it('marks the mobile bar `inert` on the server (matches `useIsDesktop`\'s SSR-safe desktop-first default)', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
     expect(html).toMatch(/class="contents lg:hidden" inert(="")?[^>]*>/);
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);

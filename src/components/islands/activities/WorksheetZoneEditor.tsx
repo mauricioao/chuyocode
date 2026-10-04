@@ -81,6 +81,7 @@ import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
   MAX_ZONE_SPEAK_LENGTH,
@@ -209,6 +210,20 @@ export default function WorksheetZoneEditor({
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // Coherent loading states, item 6: a soft fade-in once the canvas image
+  // actually decodes (the muted canvas background behind it already reads
+  // as a loading surface), and a neutral broken-image placeholder — never
+  // the browser's own glyph — if it fails. Resets whenever `imageUrl`
+  // itself changes so a later block/upload doesn't inherit a stale broken
+  // state. Purely cosmetic: it touches neither `image.width/height` nor any
+  // zone coordinate math, which stays driven by the `image` prop alone.
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageBroken, setImageBroken] = useState(false);
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageBroken(false);
+  }, [imageUrl]);
 
   // Keyboard zone creation (accessibility, Enter/N — see the file header):
   // an `aria-live` announcement, and the pending focus handoff into the
@@ -356,10 +371,9 @@ export default function WorksheetZoneEditor({
   );
 
   // Unified 10%-400% range for every explicit zoom entry point in this
-  // editor (owner-approved design) — `stepZoomInput`/`wheelZoomInput` are
-  // the WIDER-floor siblings of `stepZoom`/`wheelZoom`
-  // (`WorksheetPracticePlayer.tsx` keeps using the narrower, unchanged
-  // originals directly — see `canvasViewport.ts`'s own header on each).
+  // editor (owner-approved design) — `stepZoomInput`/`wheelZoomInput`,
+  // the same pair `WorksheetPracticePlayer.tsx` now uses too (see
+  // `canvasViewport.ts`'s own header on each).
   const handleZoomIn = useCallback(
     () => applyCameraZoom(stepZoomInput(camera.scale, 'in')),
     [applyCameraZoom, camera.scale],
@@ -1369,35 +1383,54 @@ export default function WorksheetZoneEditor({
               willChange: isPanning ? 'transform' : undefined,
             }}
           >
-            <img
-              src={imageUrl}
-              alt=""
-              draggable={false}
-              // Visual-theme pass: a subtle warm shadow so the sheet reads as
-              // a distinct surface on the light Inglés canvas (same
-              // `bg-muted` cream as `.canvas-dots`) — `box-shadow` never
-              // affects the image's own box/dimensions, which this canvas's
-              // pointer math measures directly, and `--shadow-elevation-1`
-              // restates its current (black, effectively invisible-change)
-              // value in `[data-theme="brand"]`/default, so this is a no-op
-              // on dark. No border here on purpose, for the same reason: it
-              // would shrink the image's content box by its own width and
-              // drift it a pixel off the zone-drawing coordinate space.
-              className="pointer-events-none absolute object-contain shadow-elevation-1"
-              style={{
-                top: '50%',
-                left: '50%',
-                width: image.width,
-                height: image.height,
-                // Rotation (creator polish round 2) is a pure CSS transform
-                // around the image's own center — the outer content layer
-                // above is already sized to the ROTATED dimensions
-                // (`displaySize`), so the rotated image exactly fills it.
-                // The camera's own scale/translate lives on that OUTER
-                // layer, so this transform stays rotation-only.
-                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-              }}
-            />
+            {imageBroken ? (
+              <div
+                data-testid="zone-canvas-image-broken"
+                className="absolute flex items-center justify-center bg-muted text-muted-foreground"
+                style={{
+                  top: '50%',
+                  left: '50%',
+                  width: image.width,
+                  height: image.height,
+                  transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                }}
+              >
+                <ImageBrokenIcon aria-hidden="true" size={Math.min(image.width, image.height, 48)} />
+              </div>
+            ) : (
+              <img
+                src={imageUrl}
+                alt=""
+                draggable={false}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageBroken(true)}
+                // Visual-theme pass: a subtle warm shadow so the sheet reads
+                // as a distinct surface on the light Inglés canvas (same
+                // `bg-muted` cream as `.canvas-dots`) — `box-shadow` never
+                // affects the image's own box/dimensions, which this
+                // canvas's pointer math measures directly, and
+                // `--shadow-elevation-1` restates its current (black,
+                // effectively invisible-change) value in
+                // `[data-theme="brand"]`/default, so this is a no-op on
+                // dark. No border here on purpose, for the same reason: it
+                // would shrink the image's content box by its own width and
+                // drift it a pixel off the zone-drawing coordinate space.
+                className={`pointer-events-none absolute object-contain shadow-elevation-1 transition-opacity duration-300 motion-reduce:transition-none ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                style={{
+                  top: '50%',
+                  left: '50%',
+                  width: image.width,
+                  height: image.height,
+                  // Rotation (creator polish round 2) is a pure CSS transform
+                  // around the image's own center — the outer content layer
+                  // above is already sized to the ROTATED dimensions
+                  // (`displaySize`), so the rotated image exactly fills it.
+                  // The camera's own scale/translate lives on that OUTER
+                  // layer, so this transform stays rotation-only.
+                  transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                }}
+              />
+            )}
             {zones.map((zone) => {
               const selected = zone.id === selectedZoneId;
               const style = {

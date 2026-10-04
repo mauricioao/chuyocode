@@ -10,7 +10,7 @@ const LABELS = {
   saveAndLeave: 'Guardar y salir',
   leaveWithoutSaving: 'Salir sin guardar',
   cancel: 'Cancelar',
-  saveError: 'No se pudo guardar. Intentar de nuevo.',
+  saveError: 'No se pudo guardar. Inténtalo de nuevo.',
 };
 
 describe('UnsavedChangesModal', () => {
@@ -71,7 +71,7 @@ describe('UnsavedChangesModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('disables "Guardar y salir" while saving', () => {
+  it('disables "Guardar y salir" and shows it as loading/aria-busy while saving', () => {
     render(
       <UnsavedChangesModal
         open
@@ -83,7 +83,9 @@ describe('UnsavedChangesModal', () => {
         onCancel={() => {}}
       />,
     );
-    expect((screen.getByTestId('unsaved-modal-save-and-leave') as HTMLButtonElement).disabled).toBe(true);
+    const saveAndLeave = screen.getByTestId('unsaved-modal-save-and-leave') as HTMLButtonElement;
+    expect(saveAndLeave.disabled).toBe(true);
+    expect(saveAndLeave.getAttribute('aria-busy')).toBe('true');
   });
 
   it('shows an inline error after a failed save-and-leave, without closing', () => {

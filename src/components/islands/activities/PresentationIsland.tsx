@@ -1,11 +1,14 @@
 /**
- * PresentationIsland — Presentation mode v1 ("Preguntas", presentation mode
- * pass), `/[lang]/ingles/actividades/[id]/presentar`'s one and only island.
+ * PresentationIsland — Presentation mode's one and only island, mounted
+ * BOTH at `/[lang]/ingles/actividades/[id]/presentar` (the real route) AND,
+ * full-screen, inside the editor's own "Ver como presentación" overlay
+ * (`ActivityEditorIsland.tsx`, sprint week 3) — see `onExit`'s own doc below
+ * for the one behavior difference between those two hosts.
  *
  * Teachers project this on a 16:9 screen and drive it from the SAME wireless
  * presenter they already use for slides (PageDown/PageUp), so the whole
  * surface is built around that one constraint: every "next" press either
- * reveals an answer or advances — never both, and never nothing — so a
+ * reveals something or advances — never both, and never nothing — so a
  * presenter who never touches the keyboard can still run the entire class
  * (section 6, `presentationReducer.ts`'s own header).
  *
@@ -21,9 +24,16 @@
  * 1, offsetX: 0, offsetY: 0 }` default, corrected the instant the real
  * viewport is measured.
  *
- * ONLY `quiz` ("Preguntas") BLOCKS EVER APPEAR HERE (`presentationSlides.ts`'s
- * own header) — a worksheet's own image/zones are out of scope for this
- * pass and the route never even sends them to this island.
+ * THE DECK (`presentationSlides.ts`'s own `buildPresentationSlides`): every
+ * `quiz` question AND every presentable `worksheet` page's own
+ * overview+zone slides, interleaved in exactly the activity's authored
+ * block order — the worksheet zoom tour (sprint week 3) extending v1's
+ * quiz-only deck. A worksheet slide renders in its OWN absolutely
+ * positioned layer (`presentation-worksheet-viewport`, sized to the stage's
+ * safe area) rather than the common flex-centered wrapper the cover/
+ * question/summary slides share, since its own camera math
+ * (`presentationCamera.ts`) already computes an exact pixel position/scale
+ * within that box.
  *
  * NOTHING IS STORED, NO REQUEST IS EVER MADE (owner spec, privacy): every
  * prop below is already-fetched, serializable data; the deck, the reducer,
@@ -37,16 +47,22 @@ import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Level } from '@/lib/exerciseTaxonomy';
-import type { QuizBlock } from '@/lib/activities/blocks';
+import type { Block, Zone } from '@/lib/activities/blocks';
+import { imagePreviewUrl } from '@/lib/activities/paths';
+import { rotatedSize } from '@/lib/activities/canvasViewport';
+import { zoneAnswerSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import { getSlotItems, type Payload, type Slot } from '@/lib/exercisePayload';
 import { segmentForInput } from '@/lib/quizQuestionType';
-import { quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import {
   collectPresentationQuestions,
+  collectPresentationWorksheets,
+  buildPresentationSlides,
+  revealableSlides,
   promptFontSize,
-  type PresentationQuestion,
+  type PresentationSlide,
 } from '@/lib/activities/presentationSlides';
 import {
   fitStage,
@@ -54,16 +70,20 @@ import {
   STAGE_HEIGHT,
   STAGE_SAFE_AREA_X,
   STAGE_SAFE_AREA_Y,
+  STAGE_SAFE_WIDTH,
+  STAGE_SAFE_HEIGHT,
   type StageFit,
 } from '@/lib/activities/fitStage';
+import { cameraForPage, cameraForZone, type Size } from '@/lib/activities/presentationCamera';
 import {
   createPresentationState,
   presentationReducer,
   isCoverSlide,
-  isQuestionSlide,
+  isContentSlide,
   isSummarySlide,
-  questionNumber,
-  questionProgress,
+  isRevealable,
+  slideNumber,
+  slideProgress,
   type PresentationAction,
 } from '@/lib/activities/presentationReducer';
 import { cn } from '@/lib/utils';
@@ -72,12 +92,25 @@ export interface PresentationIslandProps {
   lang: Lang;
   title: string;
   level: Level | null;
-  /** The activity's own practice page — Esc, "Exit", and a tap on the cover's QR all resolve here. */
-  practiceUrl: string;
-  /** Server-rendered QR markup for {@link practiceUrl} (`@lib/qr`), or `null` when it could not be encoded — see that module's own header. */
-  qrSvg: string | null;
-  /** Only the activity's OWN `quiz` blocks — see this file's own header. */
-  quizBlocks: QuizBlock[];
+  /** The activity's own blocks, in authored order — both quiz and worksheet; see this file's own header. */
+  blocks: Block[];
+  /**
+   * The activity's own practice page — Esc, "Exit", and a tap on the
+   * cover's QR all resolve here. Omitted for the editor's in-editor
+   * preview, which has no real published URL to send the author to — see
+   * {@link onExit}.
+   */
+  practiceUrl?: string;
+  /** Server-rendered QR markup for {@link practiceUrl} (`@lib/qr`), or `null`/absent when it could not be encoded, or there is none (the editor preview). */
+  qrSvg?: string | null;
+  /**
+   * The editor's own "Ver como presentación" overlay (sprint week 3): when
+   * given, Esc/"Exit"/the cover's QR tap call THIS instead of navigating to
+   * {@link practiceUrl} — the overlay has nothing to navigate away to, it
+   * only needs to close itself and hand focus back to the button that
+   * opened it (the caller's own job, not this component's).
+   */
+  onExit?: () => void;
 }
 
 type PresentCopy = (typeof UI_LABELS)[Lang]['activities']['present'];
@@ -94,24 +127,36 @@ const OPTION_COLOR_CLASSES = ['bg-game-blue', 'bg-game-violet', 'bg-game-orange'
 const CONTROL_BUTTON_CLASS =
   'flex h-11 w-11 flex-none items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30';
 
+/** The worksheet camera's own stage — the safe area inside the 1920x1080 stage, same box every other slide already keeps clear on every edge (`fitStage.ts`'s own header). */
+const WORKSHEET_STAGE: Size = { width: STAGE_SAFE_WIDTH, height: STAGE_SAFE_HEIGHT };
+
+/** ~400ms (owner spec) — the worksheet camera's own transition duration, instant under `prefers-reduced-motion`. */
+const CAMERA_TRANSITION_MS = 400;
+
 export default function PresentationIsland({
   lang,
   title,
   level,
+  blocks,
   practiceUrl,
   qrSvg,
-  quizBlocks,
+  onExit,
 }: PresentationIslandProps) {
   const t = UI_LABELS[lang].activities.present;
   const levelLabels = UI_LABELS[lang].english.levels;
 
-  const questions = useMemo(() => collectPresentationQuestions(quizBlocks), [quizBlocks]);
+  const questions = useMemo(() => collectPresentationQuestions(blocks), [blocks]);
+  const worksheetPages = useMemo(() => collectPresentationWorksheets(blocks), [blocks]);
+  const slides = useMemo(() => buildPresentationSlides(blocks), [blocks]);
+  const revealable = useMemo(() => revealableSlides(slides), [slides]);
+
   const [state, dispatch] = useReducer(
     presentationReducer,
-    questions.length,
-    (questionCount): ReturnType<typeof presentationReducer> =>
-      presentationReducer(createPresentationState(questionCount), { type: 'start' }),
+    slides.length,
+    (slideCount): ReturnType<typeof presentationReducer> =>
+      presentationReducer(createPresentationState(slideCount, revealable), { type: 'start' }),
   );
+  const currentSlide: PresentationSlide | undefined = isContentSlide(state) ? slides[state.index - 1] : undefined;
 
   // ---- Virtual stage fit (resize) — see this file's own header. ----
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -130,7 +175,15 @@ export default function PresentationIsland({
     return () => observer.disconnect();
   }, []);
 
-  // ---- Preload every option/answer image once, on open (owner spec, section 4). ----
+  // ---- prefers-reduced-motion (worksheet camera transitions) — the shared
+  // hook (`usePrefersReducedMotion.ts`'s own header: "new callers should use
+  // this shared copy"); `false` on the server and the client's first paint,
+  // corrected once mounted, same React #418 posture as `fit` above. ----
+  const reducedMotion = usePrefersReducedMotion();
+
+  // ---- Preload every option/answer image AND every worksheet page's own
+  // image once, on open (owner spec, section 4; worksheets added sprint
+  // week 3). ----
   useEffect(() => {
     const urls = new Set<string>();
     for (const question of questions) {
@@ -138,11 +191,14 @@ export default function PresentationIsland({
         if (item.media) urls.add(item.media);
       }
     }
+    for (const page of worksheetPages) {
+      urls.add(imagePreviewUrl(page.image.path));
+    }
     for (const url of urls) {
       const img = new Image();
       img.src = url;
     }
-  }, [questions]);
+  }, [questions, worksheetPages]);
 
   // ---- Fullscreen (Fullscreen API, guarded — section 6). ----
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -203,10 +259,16 @@ export default function PresentationIsland({
     // Runs once, on mount — `showControls` is stable (`useCallback` with no changing deps).
   }, [showControls]);
 
-  // ---- Exit to the practice page (Esc, and the control bar's own "Exit"). ----
+  // ---- Exit — the practice page normally (Esc, and the control bar's own
+  // "Exit"), or `onExit` for the editor's in-editor preview (see this
+  // file's own header on that prop). ----
   const exit = useCallback(() => {
-    window.location.assign(practiceUrl);
-  }, [practiceUrl]);
+    if (onExit) {
+      onExit();
+      return;
+    }
+    if (practiceUrl) window.location.assign(practiceUrl);
+  }, [onExit, practiceUrl]);
 
   // ---- Keyboard map (section 6) — global: a presenter's clicker sends
   // PageDown/PageUp with focus wherever it happens to land, so this listens
@@ -258,23 +320,35 @@ export default function PresentationIsland({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [toggleFullscreen, exit, showControls]);
 
-  // ---- Accessibility: a polite live region announces every slide change (section 7). ----
+  // ---- Accessibility: a polite live region announces every slide change
+  // (section 7; generalized from "Pregunta" to "Diapositiva" once a slide
+  // can also be a worksheet overview/zone — see `t.progressPrefix`'s own
+  // i18n entry). ----
   const announcement = useMemo(() => {
     if (isCoverSlide(state)) return t.liveCover;
     if (isSummarySlide(state)) return t.liveSummary;
-    const base = `${t.progressPrefix} ${questionNumber(state)} ${t.ofLabel} ${state.questionCount}`;
+    const base = `${t.progressPrefix} ${slideNumber(state)} ${t.ofLabel} ${state.slideCount}`;
+    if (currentSlide?.kind === 'worksheet-overview') return `${base} — ${t.liveWorksheetOverview}`;
     return state.revealed ? `${base} — ${t.liveRevealed}` : base;
-  }, [state, t]);
+  }, [state, t, currentSlide]);
 
   const levelLabel = level ? `${level} · ${levelLabels[level]}` : t.noLevel;
-  const questionCountLabel = `${questions.length} ${questions.length === 1 ? t.questionsCountOne : t.questionsCountMany}`;
-  const currentQuestion = isQuestionSlide(state) ? questions[state.index - 1] : undefined;
+  const countLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (questions.length > 0) {
+      parts.push(`${questions.length} ${questions.length === 1 ? t.questionsCountOne : t.questionsCountMany}`);
+    }
+    if (worksheetPages.length > 0) {
+      parts.push(`${worksheetPages.length} ${worksheetPages.length === 1 ? t.worksheetCountOne : t.worksheetCountMany}`);
+    }
+    return parts.join(' · ');
+  }, [questions.length, worksheetPages.length, t]);
 
   return (
     <div
       ref={viewportRef}
       data-testid="presentation-viewport"
-      className="fixed inset-0 overflow-hidden bg-black"
+      className="fixed inset-0 z-[60] overflow-hidden bg-black"
       onPointerMove={showControls}
     >
       <div aria-live="polite" role="status" className="sr-only" data-testid="presentation-live-region">
@@ -296,25 +370,30 @@ export default function PresentationIsland({
           style={{ padding: `${STAGE_SAFE_AREA_Y}px ${STAGE_SAFE_AREA_X}px` }}
         >
           {isCoverSlide(state) && (
-            <CoverSlide
-              title={title}
-              levelLabel={levelLabel}
-              questionCountLabel={questionCountLabel}
-              qrSvg={qrSvg}
-              t={t}
-            />
+            <CoverSlide title={title} levelLabel={levelLabel} countLabel={countLabel} qrSvg={qrSvg ?? null} t={t} />
           )}
-          {currentQuestion && (
-            <QuestionSlide question={currentQuestion} revealed={state.revealed} t={t} />
+          {currentSlide?.kind === 'question' && (
+            <QuestionSlide question={currentSlide} revealed={state.revealed} t={t} />
           )}
           {isSummarySlide(state) && (
-            <SummarySlide
-              questionCountLabel={questionCountLabel}
-              t={t}
-              onRestart={() => dispatch({ type: 'restart' })}
-            />
+            <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
           )}
         </div>
+
+        {(currentSlide?.kind === 'worksheet-overview' || currentSlide?.kind === 'worksheet-zone') && (
+          <div
+            data-testid="presentation-worksheet-viewport"
+            className="absolute overflow-hidden"
+            style={{
+              left: STAGE_SAFE_AREA_X,
+              top: STAGE_SAFE_AREA_Y,
+              width: STAGE_SAFE_WIDTH,
+              height: STAGE_SAFE_HEIGHT,
+            }}
+          >
+            <WorksheetStageLayer slide={currentSlide} revealed={state.revealed} reducedMotion={reducedMotion} t={t} />
+          </div>
+        )}
       </div>
 
       <ControlBar
@@ -324,12 +403,13 @@ export default function PresentationIsland({
         onPrev={() => dispatch({ type: 'prev' })}
         onNext={() => dispatch({ type: 'next' })}
         onReveal={() => dispatch({ type: 'reveal' })}
-        revealDisabled={!isQuestionSlide(state)}
+        revealDisabled={!isRevealable(state)}
         onFullscreen={toggleFullscreen}
         isFullscreen={isFullscreen}
         exitHref={practiceUrl}
-        progress={questionProgress(state)}
-        total={questions.length}
+        onExit={onExit}
+        progress={slideProgress(state)}
+        total={slides.length}
         t={t}
       />
     </div>
@@ -339,13 +419,13 @@ export default function PresentationIsland({
 function CoverSlide({
   title,
   levelLabel,
-  questionCountLabel,
+  countLabel,
   qrSvg,
   t,
 }: {
   title: string;
   levelLabel: string;
-  questionCountLabel: string;
+  countLabel: string;
   qrSvg: string | null;
   t: PresentCopy;
 }) {
@@ -362,7 +442,7 @@ function CoverSlide({
           {title}
         </h1>
         <p style={{ fontSize: 32 }} className="text-muted-foreground">
-          {levelLabel} · {questionCountLabel}
+          {levelLabel} · {countLabel}
         </p>
       </div>
       {qrSvg && (
@@ -396,7 +476,7 @@ function QuestionSlide({
   revealed,
   t,
 }: {
-  question: PresentationQuestion;
+  question: { blockId: string; payload: Payload; slot: Slot };
   revealed: boolean;
   t: PresentCopy;
 }) {
@@ -502,12 +582,166 @@ function QuestionSlide({
   );
 }
 
+/**
+ * The worksheet zoom tour's own stage layer (sprint week 3) — renders the
+ * page image at its own native/rotated pixel size, transformed by whichever
+ * camera the current slide calls for (`cameraForPage` for the overview,
+ * `cameraForZone` for one zone), with that zone's own overlay on top:
+ * every zone numbered on the overview, or one highlighted blank/reveal on a
+ * zone slide. One component for both kinds since they share every bit of
+ * the image+camera rendering, differing only in which overlay they draw.
+ */
+function WorksheetStageLayer({
+  slide,
+  revealed,
+  reducedMotion,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'worksheet-overview' | 'worksheet-zone' }>;
+  revealed: boolean;
+  reducedMotion: boolean;
+  t: PresentCopy;
+}) {
+  const page = rotatedSize(slide.image, slide.rotation);
+  const camera =
+    slide.kind === 'worksheet-overview'
+      ? cameraForPage(page, WORKSHEET_STAGE)
+      : cameraForZone(slide.zone, page, WORKSHEET_STAGE);
+  const imageUrl = imagePreviewUrl(slide.image.path);
+
+  return (
+    <div
+      data-testid="presentation-worksheet-camera"
+      className="absolute left-0 top-0"
+      style={{
+        width: page.width,
+        height: page.height,
+        transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+        transformOrigin: '0 0',
+        transitionProperty: 'transform',
+        transitionDuration: reducedMotion ? '0ms' : `${CAMERA_TRANSITION_MS}ms`,
+        transitionTimingFunction: 'ease-out',
+      }}
+    >
+      <img
+        src={imageUrl}
+        alt=""
+        className="pointer-events-none absolute object-contain"
+        style={{
+          top: '50%',
+          left: '50%',
+          width: slide.image.width,
+          height: slide.image.height,
+          // Rotation is a pure CSS transform around the image's own center
+          // — the outer layer above is already sized to the ROTATED
+          // dimensions (`page`), so the rotated image exactly fills it. The
+          // camera's own scale/translate lives on that OUTER layer, so this
+          // transform stays rotation-only — same split `WorksheetZoneEditor.tsx`'s
+          // own canvas uses (not imported from it — see this module's own
+          // header on `presentationCamera.ts`).
+          transform: `translate(-50%, -50%) rotate(${slide.rotation}deg)`,
+        }}
+      />
+      {slide.kind === 'worksheet-overview'
+        ? slide.zones.map((zone, i) => (
+            <WorksheetOverviewZoneBadge key={zone.id} zone={zone} number={i + 1} t={t} />
+          ))
+        : <WorksheetZoneHighlight zone={slide.zone} revealed={revealed} t={t} />}
+    </div>
+  );
+}
+
+/** One numbered zone outline on the overview slide — see this file's own header. */
+function WorksheetOverviewZoneBadge({ zone, number, t }: { zone: Zone; number: number; t: PresentCopy }) {
+  const style = {
+    left: `${zone.x * 100}%`,
+    top: `${zone.y * 100}%`,
+    width: `${zone.w * 100}%`,
+    height: `${zone.h * 100}%`,
+  };
+  return (
+    <div
+      data-testid={`presentation-overview-zone-${zone.id}`}
+      className="absolute rounded-md border-4 border-primary bg-primary/10"
+      style={style}
+    >
+      <span
+        aria-label={`${t.zoneLabel} ${number}`}
+        className="absolute -left-3 -top-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground shadow-elevation-2"
+      >
+        {number}
+      </span>
+    </div>
+  );
+}
+
+/** One zone's own tour slide: an empty highlighted blank, or — once revealed — the expected answer plus its "¿Por qué?" explanation (D5) if it has one. */
+function WorksheetZoneHighlight({
+  zone,
+  revealed,
+  t,
+}: {
+  zone: Zone;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  const style = {
+    left: `${zone.x * 100}%`,
+    top: `${zone.y * 100}%`,
+    width: `${zone.w * 100}%`,
+    height: `${zone.h * 100}%`,
+  };
+  const answerText = zoneAnswerSummary(zone);
+
+  return (
+    <div data-testid={`presentation-zone-${zone.id}`} className="absolute" style={style}>
+      <div
+        data-testid={`presentation-zone-blank-${zone.id}`}
+        className={cn(
+          'absolute inset-0 rounded-md border-4 bg-primary/15 transition-colors',
+          revealed ? 'border-accent-ink' : 'border-primary',
+        )}
+      />
+      {revealed && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2" style={{ maxWidth: 640 }}>
+            <span
+              style={{ fontSize: 24 }}
+              className="rounded-md bg-background/90 px-3 py-1 font-semibold uppercase tracking-wide text-muted-foreground shadow-elevation-1"
+            >
+              {t.answerLabel}
+            </span>
+            {answerText && (
+              <span
+                data-testid={`presentation-zone-answer-${zone.id}`}
+                style={{ fontSize: promptFontSize(answerText) }}
+                className="rounded-xl bg-background px-6 py-3 text-center font-bold text-accent-ink shadow-elevation-2"
+              >
+                {answerText}
+              </span>
+            )}
+            {zone.explanation && (
+              <p
+                data-testid={`presentation-zone-explanation-${zone.id}`}
+                style={{ fontSize: 24 }}
+                className="rounded-lg bg-background/90 px-4 py-2 text-center text-muted-foreground shadow-elevation-1"
+              >
+                <span className="font-semibold text-foreground">{t.explanationLabel}:</span> {zone.explanation}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummarySlide({
-  questionCountLabel,
+  countLabel,
   t,
   onRestart,
 }: {
-  questionCountLabel: string;
+  countLabel: string;
   t: PresentCopy;
   onRestart: () => void;
 }) {
@@ -517,7 +751,7 @@ function SummarySlide({
       className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-10 text-center"
     >
       <h2 style={{ fontSize: 80 }} className="font-display font-bold text-foreground">
-        {t.summaryTitle} {questionCountLabel}
+        {t.summaryTitle} {countLabel}
       </h2>
       <button
         type="button"
@@ -543,6 +777,7 @@ function ControlBar({
   onFullscreen,
   isFullscreen,
   exitHref,
+  onExit,
   progress,
   total,
   t,
@@ -556,7 +791,10 @@ function ControlBar({
   revealDisabled: boolean;
   onFullscreen: () => void;
   isFullscreen: boolean;
-  exitHref: string;
+  /** The real practice page to exit to, when there is one — see `PresentationIslandProps.practiceUrl`. */
+  exitHref?: string;
+  /** The editor overlay's own close callback — takes priority over `exitHref` when given. See `PresentationIslandProps.onExit`. */
+  onExit?: () => void;
   progress: number;
   total: number;
   t: PresentCopy;
@@ -603,9 +841,21 @@ function ControlBar({
       >
         {isFullscreen ? <ArrowsInIcon aria-hidden="true" size={22} /> : <ArrowsOutIcon aria-hidden="true" size={22} />}
       </button>
-      <a href={exitHref} aria-label={t.exit} data-testid="presentation-exit" className={CONTROL_BUTTON_CLASS}>
-        <XIcon aria-hidden="true" size={22} />
-      </a>
+      {onExit ? (
+        <button
+          type="button"
+          aria-label={t.exit}
+          data-testid="presentation-exit"
+          onClick={onExit}
+          className={CONTROL_BUTTON_CLASS}
+        >
+          <XIcon aria-hidden="true" size={22} />
+        </button>
+      ) : (
+        <a href={exitHref} aria-label={t.exit} data-testid="presentation-exit" className={CONTROL_BUTTON_CLASS}>
+          <XIcon aria-hidden="true" size={22} />
+        </a>
+      )}
     </div>
   );
 }

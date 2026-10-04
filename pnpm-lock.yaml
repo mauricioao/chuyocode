@@ -59,9 +59,6 @@ importers:
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.2.7)
-      lru-cache:
-        specifier: ^11.2.2
-        version: 11.5.2
       lucide-react:
         specifier: ^1.27.0
         version: 1.27.0(react@19.2.7)

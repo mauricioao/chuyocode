@@ -318,7 +318,7 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     });
     const html = await res.text();
     expect(html).toContain('data-testid="guest-banner"');
-    expect(html).toContain('Jugando como invitado');
+    expect(html).toContain('Estás jugando como invitado');
     expect(html).toContain('data-testid="guest-sign-up-link"');
     expect(html).toContain('href="/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc"');
   });
@@ -454,7 +454,7 @@ describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode
     expect(html).toContain('href="/es/ingles/actividades/abc/presentar"');
   });
 
-  it('hides the link for an activity with only worksheet blocks', async () => {
+  it('shows the link for an activity with only worksheet blocks (the worksheet zoom tour, sprint week 3)', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -467,6 +467,30 @@ describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode
           rotation: 0,
           image: { path: 'activity-images/abc/img-1.webp', width: 800, height: 400 },
           zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['cat'] }],
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-present-link"');
+  });
+
+  it('hides the link for an activity with only an EMPTY worksheet block (no zones yet)', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'w1',
+          type: 'worksheet',
+          rotation: 0,
+          image: { path: 'activity-images/abc/img-1.webp', width: 800, height: 400 },
+          zones: [],
         },
       ],
     };

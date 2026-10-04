@@ -80,6 +80,24 @@ describe('ExerciseAuthorIsland', () => {
     });
   });
 
+  it('shows the pressed button as loading and disables both while `saving` is set, never calling onSave again meanwhile', () => {
+    const onSave = vi.fn();
+    render(
+      <ExerciseAuthorIsland lang="en" initialDraft={createEmptyDraft()} onSave={onSave} saving="draft" />,
+    );
+
+    const saveDraft = screen.getByTestId('save-draft') as HTMLButtonElement;
+    const publish = screen.getByTestId('publish-exercise') as HTMLButtonElement;
+    expect(saveDraft.getAttribute('aria-busy')).toBe('true');
+    expect(saveDraft.disabled).toBe(true);
+    expect(publish.disabled).toBe(true);
+    expect(publish.getAttribute('aria-busy')).toBeNull(); // only the PRESSED action shows its own spinner
+
+    fireEvent.click(saveDraft);
+    fireEvent.click(publish);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('includes the accepted-terms checkbox state in the save payload', () => {
     const onSave = vi.fn();
     render(<ExerciseAuthorIsland lang="en" initialDraft={createEmptyDraft()} onSave={onSave} />);
@@ -125,6 +143,34 @@ describe('ExerciseAuthorIsland', () => {
         payload: expect.objectContaining({
           pools: { opts: [{ id: 'opt-3', text: '' }] },
           slots: [expect.objectContaining({ input: 'choice', pool: 'opts' })],
+        }),
+      }),
+    );
+  });
+
+  /**
+   * D5 "¿Por qué?": the new row's optional explanation field flows into the
+   * saved payload, same end-to-end shape the pool-option test above proves
+   * for `SlotAnswerEditor`.
+   */
+  it('wires a new sentence block to its explanation field, through to the saved payload', () => {
+    const onSave = vi.fn();
+    render(<ExerciseAuthorIsland lang="en" initialDraft={createEmptyDraft()} onSave={onSave} />);
+
+    fireEvent.click(screen.getByTestId('add-row-block'));
+
+    const explanationInput = screen
+      .getByTestId('exercise-author-island')
+      .querySelector('textarea[data-testid^="slot-explanation-input-"]') as HTMLTextAreaElement;
+    expect(explanationInput).toBeTruthy();
+
+    fireEvent.change(explanationInput, { target: { value: 'Because it is present tense.' } });
+    fireEvent.click(screen.getByTestId('save-draft'));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          slots: [expect.objectContaining({ explanation: 'Because it is present tense.' })],
         }),
       }),
     );

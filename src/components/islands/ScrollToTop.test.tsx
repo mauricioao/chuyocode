@@ -2,7 +2,14 @@
 import { act, createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { UI_LABELS } from '@/lib/i18n';
 import ScrollToTop from './ScrollToTop';
+
+// `ScrollToTop` now takes its copy as a `labels` prop (see that component's
+// own props doc) instead of resolving it itself from the full dictionary —
+// the same slice `BaseLayout.astro` computes server-side.
+const esLabels = { scrollToTop: UI_LABELS.es.common.scrollToTop };
+const enLabels = { scrollToTop: UI_LABELS.en.common.scrollToTop };
 
 /** Stubs the footer's `getBoundingClientRect()` so `measure()` computes a
  * deterministic `visibleFooterHeight` from it (jsdom's default rect is all
@@ -24,16 +31,19 @@ function setFooterTop(footer: Element, top: number) {
 }
 
 function setReducedMotion(reduce: boolean) {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: query.includes('reduce') ? reduce : false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('reduce') ? reduce : false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
 }
 
 /** `act()`-wrapped: a raw `dispatchEvent` on a native listener (not React's
@@ -80,25 +90,25 @@ afterEach(() => {
 
 describe('ScrollToTop — global mode (window scroll)', () => {
   it('is hidden before scrolling past one viewport', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(true);
   });
 
   it('becomes visible after scrolling past one viewport', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     fireWindowScroll(900);
     expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(false);
   });
 
   it('hides again once scrolled back near the top', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     fireWindowScroll(900);
     fireWindowScroll(100);
     expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(true);
   });
 
   it('stays visible (never hides) once the footer enters the viewport', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     fireWindowScroll(900);
     expect(isHidden(screen.getByTestId('scroll-to-top'))).toBe(false);
 
@@ -110,13 +120,13 @@ describe('ScrollToTop — global mode (window scroll)', () => {
   });
 
   it('sits at its base offset while the footer has not entered the viewport', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     fireWindowScroll(900);
     expect(screen.getByTestId('scroll-to-top').style.bottom).toBe('24px');
   });
 
   it('rides up above the footer, in sync with how much of it is visible', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     const footer = document.querySelector('footer')!;
 
     setFooterTop(footer, 700); // 100px visible -> max(24, 100+16) = 116
@@ -129,7 +139,7 @@ describe('ScrollToTop — global mode (window scroll)', () => {
   });
 
   it('settles back to the base offset once the footer leaves the viewport again', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     const footer = document.querySelector('footer')!;
 
     setFooterTop(footer, 700);
@@ -142,15 +152,15 @@ describe('ScrollToTop — global mode (window scroll)', () => {
   });
 
   it('has the localized accessible label, in Spanish and English', () => {
-    const { unmount } = render(<ScrollToTop lang="es" />);
+    const { unmount } = render(<ScrollToTop labels={esLabels} />);
     expect(screen.getByTestId('scroll-to-top').getAttribute('aria-label')).toBe('Volver arriba');
     unmount();
-    render(<ScrollToTop lang="en" />);
+    render(<ScrollToTop labels={enLabels} />);
     expect(screen.getByTestId('scroll-to-top').getAttribute('aria-label')).toBe('Back to top');
   });
 
   it('scrolls the window to top, smoothly, on click', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     fireWindowScroll(900);
     const scrollToSpy = vi.fn();
     window.scrollTo = scrollToSpy;
@@ -161,7 +171,7 @@ describe('ScrollToTop — global mode (window scroll)', () => {
   });
 
   it('scrolls instantly (no smooth behavior) when the visitor prefers reduced motion', () => {
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     fireWindowScroll(900);
     setReducedMotion(true);
     const scrollToSpy = vi.fn();
@@ -179,7 +189,7 @@ describe('ScrollToTop — circular scroll progress ring (global mode)', () => {
       value: 2400,
       configurable: true,
     });
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     const ring = screen.getByTestId('scroll-progress-ring');
     const circumference = 2 * Math.PI * 18;
     expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(circumference);
@@ -190,7 +200,7 @@ describe('ScrollToTop — circular scroll progress ring (global mode)', () => {
       value: 2400,
       configurable: true,
     });
-    render(<ScrollToTop lang="es" />);
+    render(<ScrollToTop labels={esLabels} />);
     const ring = screen.getByTestId('scroll-progress-ring');
     fireWindowScroll(1600); // (2400 - 800) = 1600 max scroll -> 100%
     expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(0);
@@ -212,7 +222,7 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
     const ref = createRef<HTMLDivElement>();
     (ref as { current: HTMLDivElement }).current = el;
 
-    render(<ScrollToTop lang="es" targetRef={ref} />);
+    render(<ScrollToTop labels={esLabels} targetRef={ref} />);
     expect(isHidden(screen.getByTestId('scroll-to-top-scoped'))).toBe(true);
 
     fireContainerScroll(el, 500);
@@ -228,7 +238,7 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
     const ref = createRef<HTMLDivElement>();
     (ref as { current: HTMLDivElement }).current = el;
 
-    render(<ScrollToTop lang="es" targetRef={ref} />);
+    render(<ScrollToTop labels={esLabels} targetRef={ref} />);
     fireContainerScroll(el, 500);
 
     // Scoped mode never computes a footer-based offset — it keeps its
@@ -244,7 +254,7 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
     const ref = createRef<HTMLDivElement>();
     (ref as { current: HTMLDivElement }).current = el;
 
-    render(<ScrollToTop lang="es" targetRef={ref} />);
+    render(<ScrollToTop labels={esLabels} targetRef={ref} />);
     const windowScrollTo = vi.fn();
     window.scrollTo = windowScrollTo;
 
@@ -259,7 +269,7 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
     const ref = createRef<HTMLDivElement>();
     (ref as { current: HTMLDivElement }).current = el;
 
-    render(<ScrollToTop lang="es" targetRef={ref} />);
+    render(<ScrollToTop labels={esLabels} targetRef={ref} />);
     fireContainerScroll(el, 400); // 400/800 = 50%
 
     const ring = screen.getByTestId('scroll-progress-ring-scoped');

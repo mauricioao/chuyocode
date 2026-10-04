@@ -1,24 +1,35 @@
 /**
  * presentationSlides — pure, zero-I/O helpers that turn an activity's own
- * `blocks` into Presentation mode v1's deck (owner spec, section 4: "one
- * slide per quiz item in order across all Preguntas blocks").
+ * `blocks` into Presentation mode's deck.
  *
- * WORKSHEET BLOCKS ARE NEVER PART OF THIS DECK — presentation mode only
- * plays the `quiz` ("Preguntas") blocks; a worksheet's own image/zones stay
- * off this route entirely, both to keep the deck exactly what section 1
- * describes and so a worksheet zone's answers are never shipped to this
- * route's client bundle for a block that never renders here (`[id]/
- * presentar.astro`'s own header: "only serializable props to the island").
+ * Presentation mode v1 (owner spec, section 4) only ever played `quiz`
+ * ("Preguntas") blocks — a worksheet's own image/zones never reached this
+ * route at all. The "worksheet zoom tour" (sprint week 3) EXTENDS the same
+ * deck to also walk a worksheet's own answer zones, in the SAME authored
+ * block order as everything else: an overview slide (the whole page,
+ * zones numbered — {@link PresentationSlide}'s `'worksheet-overview'`
+ * kind), then one slide per zone in READING order ({@link
+ * orderZonesForReading}, `zoneGeometry.ts`), interleaved with any quiz
+ * question slides exactly as the blocks themselves are ordered. A
+ * worksheet block with no image yet, or no zones at all (an editor
+ * mid-draft empty state), contributes nothing — see
+ * {@link collectPresentationWorksheets}.
  *
- * {@link hasPresentableQuiz} is the SINGLE source of truth for "does this
+ * {@link hasPresentableContent} is the SINGLE source of truth for "does this
  * activity have anything to present" — shared, unchanged, between the
  * practice page's own entry-point gate (`[id].astro`, "Presentar" button)
  * and `presentar.astro`'s own defensive 404 (a direct visit must get the
  * exact same answer the button's own visibility already promised, even
- * though the button already gates the common path).
+ * though the button already gates the common path). {@link hasPresentableQuiz}
+ * stays as its own narrower predicate (quiz questions only) — still correct
+ * and still used on its own (the cover slide's own question count).
  */
-import type { Block } from './blocks';
+import type { Block, ImageRef, Rotation, Zone } from './blocks';
 import type { Payload, Slot } from '../exercisePayload';
+import { orderZonesForReading } from './zoneGeometry';
+import { rotatedSize } from './canvasViewport';
+import { zoneExceedsMaxZoom, type Size } from './presentationCamera';
+import { STAGE_SAFE_WIDTH, STAGE_SAFE_HEIGHT } from './fitStage';
 
 /** One question slide's own data: the slot to show, the payload that resolves its pool (if any), and the block it came from. */
 export interface PresentationQuestion {
@@ -49,6 +60,53 @@ export function hasPresentableQuiz(blocks: readonly Block[]): boolean {
   return collectPresentationQuestions(blocks).length > 0;
 }
 
+/** One worksheet page's own data a presentation slide needs: the block it came from, its image/rotation, and every zone already in READING order (top-to-bottom, left-to-right — `zoneGeometry.ts`'s own `orderZonesForReading`, the same order the practice page's mobile bottom sheet already steps through). */
+export interface PresentationWorksheetPage {
+  blockId: string;
+  name?: string;
+  image: ImageRef;
+  rotation: Rotation;
+  zones: Zone[];
+}
+
+/**
+ * Every worksheet block that can actually be presented — an image AND at
+ * least one zone — in authored order. A block mid-authoring with no image
+ * yet, or with an image but no zones drawn, contributes nothing: there is
+ * nothing a zoom tour could show for it.
+ */
+export function collectPresentationWorksheets(blocks: readonly Block[]): PresentationWorksheetPage[] {
+  const pages: PresentationWorksheetPage[] = [];
+  for (const block of blocks) {
+    if (block.type !== 'worksheet' || !block.image || block.zones.length === 0) continue;
+    pages.push({
+      blockId: block.id,
+      name: block.name,
+      image: block.image,
+      rotation: block.rotation,
+      zones: orderZonesForReading(block.zones),
+    });
+  }
+  return pages;
+}
+
+/** Does this activity have at least one presentable worksheet page (an image with >= 1 zone)? */
+export function hasPresentableWorksheet(blocks: readonly Block[]): boolean {
+  return collectPresentationWorksheets(blocks).length > 0;
+}
+
+/**
+ * Does this activity have ANYTHING presentation mode can show — a quiz
+ * question or a worksheet zone? The broader single source of truth for
+ * "Presentar" visibility and `presentar.astro`'s own defensive 404 — see
+ * this module's own header. Replaces the old quiz-only {@link
+ * hasPresentableQuiz} at both of those call sites now that a worksheet-only
+ * activity is presentable too.
+ */
+export function hasPresentableContent(blocks: readonly Block[]): boolean {
+  return hasPresentableQuiz(blocks) || hasPresentableWorksheet(blocks);
+}
+
 /**
  * The prompt's own type size, in STAGE pixels (owner spec, section 3: "prompt
  * 64-96px (shrink long prompts within that range)"). A short question
@@ -68,4 +126,144 @@ export function promptFontSize(label: string): number {
   if (length >= PROMPT_SHRINK_TO_LENGTH) return PROMPT_FONT_MIN_PX;
   const t = (length - PROMPT_SHRINK_FROM_LENGTH) / (PROMPT_SHRINK_TO_LENGTH - PROMPT_SHRINK_FROM_LENGTH);
   return Math.round(PROMPT_FONT_MAX_PX - t * (PROMPT_FONT_MAX_PX - PROMPT_FONT_MIN_PX));
+}
+
+/**
+ * One slide of the deck, in the SAME authored block order
+ * {@link buildPresentationSlides} walks — a discriminated union so
+ * `PresentationIsland.tsx` can render each kind differently while the
+ * reducer (`presentationReducer.ts`) stays content-agnostic (it only needs
+ * to know how MANY slides there are and which ones are "revealable" —
+ * {@link revealableSlides}).
+ *
+ *  - `'question'` — unchanged from v1: one quiz slot, reveal shows the
+ *    correct option/answer.
+ *  - `'worksheet-overview'` — the whole page, zones numbered, NEVER
+ *    revealable (a plain glance, not a question).
+ *  - `'worksheet-zone'` — one answer zone, in reading order; unrevealed it
+ *    is an empty highlighted blank, revealed it shows the expected answer
+ *    plus the zone's own "¿Por qué?" explanation (if it has one).
+ */
+export type PresentationSlide =
+  | { kind: 'question'; blockId: string; payload: Payload; slot: Slot }
+  | {
+      kind: 'worksheet-overview';
+      blockId: string;
+      name?: string;
+      image: ImageRef;
+      rotation: Rotation;
+      zones: Zone[];
+    }
+  | {
+      kind: 'worksheet-zone';
+      blockId: string;
+      image: ImageRef;
+      rotation: Rotation;
+      zone: Zone;
+      /** 1-based position among THIS page's own zones (reading order) — resets per worksheet block, matching the overview slide's own numbered badges. */
+      zoneIndex: number;
+      zoneCount: number;
+    };
+
+/**
+ * The whole presentation deck's content slides (cover/summary excluded —
+ * those stay index-derived, not data-derived), in authored block order:
+ * each `quiz` block contributes one slide per question, each presentable
+ * `worksheet` block ({@link collectPresentationWorksheets}) contributes one
+ * overview slide followed by one slide per zone in reading order. A block
+ * of either type that contributes nothing (an empty quiz, an imageless or
+ * zoneless worksheet) is simply skipped, same as v1's own `collectPresentationQuestions`.
+ */
+export function buildPresentationSlides(blocks: readonly Block[]): PresentationSlide[] {
+  const slides: PresentationSlide[] = [];
+  for (const block of blocks) {
+    if (block.type === 'quiz') {
+      for (const slot of block.payload.slots) {
+        slides.push({ kind: 'question', blockId: block.id, payload: block.payload, slot });
+      }
+      continue;
+    }
+    if (!block.image || block.zones.length === 0) continue;
+    const zones = orderZonesForReading(block.zones);
+    slides.push({
+      kind: 'worksheet-overview',
+      blockId: block.id,
+      name: block.name,
+      image: block.image,
+      rotation: block.rotation,
+      zones,
+    });
+    zones.forEach((zone, i) => {
+      slides.push({
+        kind: 'worksheet-zone',
+        blockId: block.id,
+        image: block.image!,
+        rotation: block.rotation,
+        zone,
+        zoneIndex: i + 1,
+        zoneCount: zones.length,
+      });
+    });
+  }
+  return slides;
+}
+
+/**
+ * Which of `slides`' own entries support "reveal" at all — parallel array,
+ * same order/length. A `'question'` or `'worksheet-zone'` slide does; a
+ * `'worksheet-overview'` slide (a plain glance at the whole page) never
+ * does, so `presentationReducer.ts`'s own `next`/`reveal` skip straight to
+ * advancing on one instead of waiting for a reveal that can never happen.
+ */
+export function revealableSlides(slides: readonly PresentationSlide[]): boolean[] {
+  return slides.map((slide) => slide.kind !== 'worksheet-overview');
+}
+
+/**
+ * One thing on this activity that would NOT project well — the "Listo para
+ * enviar" checklist's own non-blocking warning (owner spec, sprint week 3):
+ * a quiz prompt long enough that {@link promptFontSize} has already floored
+ * it at {@link PROMPT_FONT_MIN_PX}, or a worksheet zone small enough that
+ * framing it ({@link zoneExceedsMaxZoom}, `presentationCamera.ts`) would
+ * need more than a sane max zoom. Never blocks a submit — see
+ * `SubmitForReviewDialog.tsx`'s own render of this list.
+ */
+export interface ProjectionWarning {
+  blockId: string;
+  /** Present only for a `'worksheet_zone_too_small'` warning. */
+  zoneId?: string;
+  /** Present only for a `'quiz_prompt_too_long'` warning. */
+  slotId?: string;
+  reason: 'quiz_prompt_too_long' | 'worksheet_zone_too_small';
+}
+
+/** The stage a worksheet zone actually gets at presentation time — the safe area inside the 1920x1080 stage (`fitStage.ts`), same box `PresentationIsland.tsx`'s own camera fits a zone into. */
+const PROJECTION_STAGE: Size = { width: STAGE_SAFE_WIDTH, height: STAGE_SAFE_HEIGHT };
+
+/**
+ * Every {@link ProjectionWarning} this activity's content would trigger, in
+ * authored block order (quiz prompts scanned via {@link
+ * collectPresentationQuestions}, worksheet zones via {@link
+ * collectPresentationWorksheets}) — a flat list, since a block can trigger
+ * more than one.
+ */
+export function listProjectionWarnings(blocks: readonly Block[]): ProjectionWarning[] {
+  const warnings: ProjectionWarning[] = [];
+
+  for (const { blockId, slot } of collectPresentationQuestions(blocks)) {
+    if (promptFontSize(slot.label) <= PROMPT_FONT_MIN_PX) {
+      warnings.push({ blockId, slotId: slot.id, reason: 'quiz_prompt_too_long' });
+    }
+  }
+
+  for (const page of collectPresentationWorksheets(blocks)) {
+    const pageSize = rotatedSize(page.image, page.rotation);
+    for (const zone of page.zones) {
+      if (zoneExceedsMaxZoom(zone, pageSize, PROJECTION_STAGE)) {
+        warnings.push({ blockId: page.blockId, zoneId: zone.id, reason: 'worksheet_zone_too_small' });
+      }
+    }
+  }
+
+  return warnings;
 }

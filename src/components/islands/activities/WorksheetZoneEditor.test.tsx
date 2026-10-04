@@ -144,6 +144,22 @@ describe('WorksheetZoneEditor — rendering', () => {
     expect(screen.getByTestId('zone-canvas').querySelector('img')).toBeTruthy();
   });
 
+  it('fades the canvas image in once it loads (coherent loading states, item 6)', () => {
+    render(<Harness />);
+    const img = screen.getByTestId('zone-canvas').querySelector('img') as HTMLImageElement;
+    expect(img.className).toContain('opacity-0');
+    fireEvent.load(img);
+    expect(img.className).toContain('opacity-100');
+  });
+
+  it('shows a neutral broken-image placeholder instead of the browser glyph on error', () => {
+    render(<Harness />);
+    const img = screen.getByTestId('zone-canvas').querySelector('img') as HTMLImageElement;
+    fireEvent.error(img);
+    expect(screen.getByTestId('zone-canvas-image-broken')).toBeTruthy();
+    expect(screen.getByTestId('zone-canvas').querySelector('img')).toBeNull();
+  });
+
   it('renders an existing zone positioned by its fractional rect', () => {
     const zone: Zone = { id: 'z1', x: 0.25, y: 0.1, w: 0.2, h: 0.15, kind: 'text', answers: ['sat'] };
     render(<Harness initialZones={[zone]} />);
@@ -1453,12 +1469,15 @@ describe('WorksheetZoneEditor — state-leak cleanup (blur/pointercancel/lostpoi
 
 /** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport — same pattern `useIsDesktop.test.ts` itself uses. */
 function stubMobileViewport() {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
 }
 
 describe('WorksheetZoneEditor — mobile properties bottom sheet (mobile layout pass)', () => {
@@ -1563,7 +1582,7 @@ describe('WorksheetZoneEditor — no layout flash on the server render (mobile l
   it('renders BOTH the desktop properties column and the mobile sheet on the server, gated by CSS `lg:` classes only', () => {
     // Same "no real matchMedia" shape as a true server render — see
     // `useIsDesktop.test.ts`'s own "defaults to true" test.
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
     // The desktop column is hidden by default, shown only at `lg:` — never
     // visible-by-default DOM/structure for a small screen (the bug this fixes).
@@ -1574,7 +1593,7 @@ describe('WorksheetZoneEditor — no layout flash on the server render (mobile l
   });
 
   it('does not mark the desktop column `inert` on the server (matches the SSR-safe desktop-first default)', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);
   });

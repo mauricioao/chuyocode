@@ -234,6 +234,7 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
               data-testid="delete-dialog-confirm"
               onClick={() => void confirmDelete()}
               disabled={deleteDialog.deleting}
+              loading={deleteDialog.deleting}
             >
               {t.deleteConfirmAccept}
             </Button>

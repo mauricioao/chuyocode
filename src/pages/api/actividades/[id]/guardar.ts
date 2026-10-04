@@ -43,7 +43,7 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { isLevel, type Level } from '@lib/exerciseTaxonomy';
 import { parseBlocks, type Block } from '@lib/activities/blocks';
 import { isOwnUploadPath, isUuid, parseImagePath, IMAGES_BUCKET } from '@lib/activities/paths';
@@ -51,23 +51,6 @@ import { createServiceClient } from '@lib/supabase';
 
 const ACTIVITIES_TABLE = 'activities';
 const ACTIVITY_REVISIONS_TABLE = 'activity_revisions';
-
-interface SaveResponse {
-  ok?: boolean;
-  error?: string;
-}
-
-function json(body: SaveResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 interface SaveInput {
   title: unknown;
@@ -110,16 +93,16 @@ function getClient(): ReturnType<typeof createServiceClient> | null {
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const id = params.id;
   if (typeof id !== 'string' || !isUuid(id)) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const client = getClient();
   if (!client) {
-    return json({ error: 'save_unavailable' }, 503);
+    return jsonResponse({ error: 'save_unavailable' }, 503);
   }
 
   // Ownership enforced IN THE QUERY — see file header for why this 404s
@@ -134,28 +117,28 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (activityError) {
     console.error('[guardar] activity fetch failed:', activityError.message);
-    return json({ error: 'save_failed' }, 500);
+    return jsonResponse({ error: 'save_failed' }, 500);
   }
   if (!activityData) {
-    return notFound();
+    return notFoundResponse();
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   if (!isSaveInput(body)) {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
 
   if (typeof body.title !== 'string') {
-    return json({ error: 'invalid_title' }, 422);
+    return jsonResponse({ error: 'invalid_title' }, 422);
   }
   const title = body.title.trim();
   if (title.length < 1 || title.length > 120) {
-    return json({ error: 'invalid_title' }, 422);
+    return jsonResponse({ error: 'invalid_title' }, 422);
   }
 
   let level: Level | null;
@@ -164,16 +147,16 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   } else if (isLevel(body.level)) {
     level = body.level;
   } else {
-    return json({ error: 'invalid_level' }, 422);
+    return jsonResponse({ error: 'invalid_level' }, 422);
   }
 
   const blocks = parseBlocks(body.blocks, 'draft');
   if (!blocks) {
-    return json({ error: 'invalid_blocks' }, 422);
+    return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
 
   if (!everyImageAllowed(blocks, user.id, id)) {
-    return json({ error: 'invalid_image_path' }, 422);
+    return jsonResponse({ error: 'invalid_image_path' }, 422);
   }
 
   const { data: revisionData, error: revisionFetchError } = await client
@@ -186,7 +169,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (revisionFetchError) {
     console.error('[guardar] revision fetch failed:', revisionFetchError.message);
-    return json({ error: 'save_failed' }, 500);
+    return jsonResponse({ error: 'save_failed' }, 500);
   }
 
   const latestRevision = revisionData as unknown as { id: string; status: string } | null;
@@ -198,7 +181,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       .eq('id', latestRevision.id);
     if (updateRevisionError) {
       console.error('[guardar] revision update failed:', updateRevisionError.message);
-      return json({ error: 'save_failed' }, 500);
+      return jsonResponse({ error: 'save_failed' }, 500);
     }
   } else {
     const { error: insertRevisionError } = await client.from(ACTIVITY_REVISIONS_TABLE).insert({
@@ -209,7 +192,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     });
     if (insertRevisionError) {
       console.error('[guardar] revision insert failed:', insertRevisionError.message);
-      return json({ error: 'save_failed' }, 500);
+      return jsonResponse({ error: 'save_failed' }, 500);
     }
   }
 
@@ -221,8 +204,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (updateActivityError) {
     console.error('[guardar] activity update failed:', updateActivityError.message);
-    return json({ error: 'save_failed' }, 500);
+    return jsonResponse({ error: 'save_failed' }, 500);
   }
 
-  return json({ ok: true }, 200);
+  return jsonResponse({ ok: true }, 200);
 };

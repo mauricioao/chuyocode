@@ -72,6 +72,7 @@ export default function UnsavedChangesModal({
             type="button"
             data-testid="unsaved-modal-save-and-leave"
             disabled={saving}
+            loading={saving}
             onClick={onSaveAndLeave}
           >
             {labels.saveAndLeave}

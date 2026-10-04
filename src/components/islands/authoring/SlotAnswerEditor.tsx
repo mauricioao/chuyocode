@@ -42,7 +42,7 @@ export const COPY = {
     addOption: 'Agregar opción',
     removeOption: 'Quitar esta opción',
     correctAnswer: 'Respuesta correcta',
-    needsPoolName: 'Escribir un nombre de banco para agregar opciones.',
+    needsPoolName: 'Escribe un nombre de banco para agregar opciones.',
   },
   en: {
     mechanicLabel: 'Mechanic type',

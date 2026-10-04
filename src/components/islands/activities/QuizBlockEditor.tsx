@@ -116,7 +116,7 @@ export const COPY = {
     reason: (n: number, reason: ChecklistReason): string => {
       switch (reason) {
         case 'quiz_no_answer':
-          return `Pregunta ${n}: falta marcar la respuesta correcta`;
+          return `Pregunta ${n}: marca la respuesta correcta`;
         case 'quiz_too_few_options':
           return `Pregunta ${n}: agrega al menos 2 opciones`;
         case 'quiz_answer_not_in_pool':

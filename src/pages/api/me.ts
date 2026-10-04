@@ -19,16 +19,11 @@
  * is per-visitor, so there is no anonymous-safe variant worth caching.
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse } from '@lib/apiResponse';
 import { toProfile } from '@lib/profile';
 
 export const GET: APIRoute = async ({ locals }) => {
-  const headers = new Headers({
-    'content-type': 'application/json; charset=utf-8',
-  });
-  markPrivate(headers);
-
   const profile = locals.user ? await toProfile(locals.user) : null;
 
-  return new Response(JSON.stringify({ profile }), { status: 200, headers });
+  return jsonResponse({ profile });
 };

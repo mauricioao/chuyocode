@@ -19,40 +19,28 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { requireRole } from '@lib/roles';
 import { isUuid } from '@lib/activities/paths';
 import { approveRevision } from '@lib/activities/moderation';
-
-function json(body: Record<string, unknown>, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 /** `approveRevision`'s error codes that mean "the request itself was bad", never a server fault. */
 const VALIDATION_ERRORS: ReadonlySet<string> = new Set(['not_pending', 'invalid_blocks', 'foreign_upload']);
 
 export const POST: APIRoute = async ({ params, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const moderator = await requireRole(user, 'moderator');
-  if (!moderator) return notFound();
+  if (!moderator) return notFoundResponse();
 
   const revisionId = params.revisionId;
-  if (typeof revisionId !== 'string' || !isUuid(revisionId)) return notFound();
+  if (typeof revisionId !== 'string' || !isUuid(revisionId)) return notFoundResponse();
 
   const result = await approveRevision(revisionId, moderator.id);
-  if (result.ok) return json({ ok: true }, 200);
+  if (result.ok) return jsonResponse({ ok: true }, 200);
 
-  if (result.error === 'not_found') return notFound();
-  if (VALIDATION_ERRORS.has(result.error)) return json({ error: result.error }, 422);
-  return json({ error: result.error }, 500);
+  if (result.error === 'not_found') return notFoundResponse();
+  if (VALIDATION_ERRORS.has(result.error)) return jsonResponse({ error: result.error }, 422);
+  return jsonResponse({ error: result.error }, 500);
 };

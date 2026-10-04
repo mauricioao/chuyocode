@@ -17,6 +17,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowButton } from '@/components/ui/ArrowButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import { blocksForStep } from '@/lib/exerciseBlocks';
@@ -44,6 +45,7 @@ import {
   TICK_MS,
 } from '@/lib/exerciseStopwatch';
 import UnavailableRenderer from './mechanics/UnavailableRenderer';
+import SlotExplanation from './mechanics/SlotExplanation';
 import { comparatorForRenderable, rendererFor } from './mechanics/registry';
 import { PROMPT_MEASURE } from './mechanics/scale';
 
@@ -122,11 +124,9 @@ interface Copy {
 }
 
 /**
- * REGISTER (standing project rule): neutral Spanish, no voseo. Instructions use
- * the infinitive — `Revisar`, not `Revisá` — and nothing addresses the learner
- * in the second person, which removes the tú/vos fork instead of picking a side
- * of it. The site is not Argentina-specific. Guarded by a test in
- * `ExerciseIsland.test.tsx`.
+ * REGISTER (standing project rule, owner decision 2026-10-04): neutral
+ * Latin-American tuteo, no voseo — `Revisa`, never `Revisá`. The site is not
+ * Argentina-specific. Guarded by a test in `ExerciseIsland.test.tsx`.
  *
  * Exported for that guard: the island deliberately keeps its copy local rather
  * than importing `UI_LABELS`, so this map is the only place the guard can read.
@@ -136,7 +136,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     submit: 'Comprobar',
     // "Partes" is the word the stepper already uses on screen (`stepWord`), so
     // the hint names the same thing the position indicator counts.
-    submitHint: 'Responder todas las partes para comprobar.',
+    submitHint: 'Responde todas las partes para comprobar.',
     selectPlaceholder: 'Elegir una opción',
     retry: 'Intentar de nuevo',
     // The verb alone. The verdict directly above already names which answers
@@ -147,7 +147,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     incorrect: 'Incorrecto',
     unavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
     allCorrect: '¡Todo correcto!',
-    someWrong: 'Revisar las respuestas marcadas.',
+    someWrong: 'Revisa las respuestas marcadas.',
     elapsed: 'Tiempo',
     stepNav: 'Partes del ejercicio',
     stepPrev: 'Anterior',
@@ -574,10 +574,11 @@ export default function ExerciseIsland({
                   className={PROMPT_MEASURE}
                 >
                   {block.image && (
-                    <img
+                    <FadeImage
                       src={block.image}
                       alt={block.alt ?? ''}
                       className="mx-auto max-h-48 w-auto object-contain"
+                      placeholderClassName="h-32 w-full"
                     />
                   )}
                   {block.audio && (
@@ -664,6 +665,15 @@ export default function ExerciseIsland({
               >
                 {outcome === 'correct' ? t.correct : t.incorrect}
               </p>
+            )}
+
+            {/* D5 "¿Por qué?": only once graded AND only while THIS slot is
+                incorrect — never before checking, never for a correct
+                answer. No separate reset: `retry()` nulls `result`, so
+                `outcome` (and therefore this) disappears on its own, the
+                same derived-from-grading rule `slot-feedback` above uses. */}
+            {slot.explanation && outcome === 'incorrect' && (
+              <SlotExplanation text={slot.explanation} testId={`slot-explanation-${slot.id}`} />
             )}
           </div>
         )}

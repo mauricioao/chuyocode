@@ -30,6 +30,13 @@
  * Escape deselects the current zone — the editor's other global keyboard
  * shortcuts are undo (Ctrl/⌘+Z), redo (Ctrl/⌘+Shift+Z or Ctrl+Y) and save
  * (Ctrl/⌘+S).
+ *
+ * "VER COMO PRESENTACIÓN" (worksheet zoom tour, sprint week 3): the header's
+ * own button mounts {@link PresentationIsland} full-screen, straight over
+ * this whole editor, against `history.present`'s CURRENT `blocks` (unsaved
+ * included) — no save, no new route. `PresentationIsland` gets no
+ * `practiceUrl`/`qrSvg` here and an `onExit` instead, which only closes the
+ * overlay and hands focus back to the button (`closePresentationPreview`).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -62,6 +69,7 @@ import WorksheetPlayer from './WorksheetPlayer';
 import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
+import PresentationIsland from './PresentationIsland';
 
 export interface ActivityEditorIslandProps {
   lang: Lang;
@@ -496,6 +504,26 @@ export default function ActivityEditorIsland({
     setSubmitDialog((s) => (s.submitting ? s : { open: false, submitting: false, error: null }));
   }, []);
 
+  // "Ver como presentación" (worksheet zoom tour, sprint week 3): a
+  // full-screen overlay presenting the editor's own CURRENT document —
+  // `doc.blocks` straight from `history.present`, unsaved changes included,
+  // no new route. `PresentationIsland` itself has no idea it is inside an
+  // overlay rather than its own page; `onExit` is what tells it to close
+  // instead of navigating (see that prop's own header there). Focus
+  // restoration on close is THIS component's job (the button that opened
+  // it is the one thing the island itself cannot know about) — a plain
+  // `document.querySelector` on the button's own `data-testid`, same
+  // direct-DOM-focus style `goToBlock`/`handleConfirmSubmit` already use
+  // above, rather than a `Button`-forwarded ref (that shared component is a
+  // bare function component, not `forwardRef`-wrapped).
+  const [showPresentationPreview, setShowPresentationPreview] = useState(false);
+  const openPresentationPreview = useCallback(() => setShowPresentationPreview(true), []);
+  const closePresentationPreview = useCallback(() => {
+    setShowPresentationPreview(false);
+    if (typeof document === 'undefined') return;
+    document.querySelector<HTMLButtonElement>('[data-testid="view-as-presentation-button"]')?.focus();
+  }, []);
+
   // Flushes the CURRENT document first (same direct-fetch shape as
   // `handleSaveAndLeave` — the debounced autosave scheduler is bypassed so
   // the submit sees exactly what is on screen, not whatever it last
@@ -801,6 +829,15 @@ export default function ActivityEditorIsland({
                 </span>
               )}
             </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="view-as-presentation-button"
+              onClick={openPresentationPreview}
+            >
+              {t.viewAsPresentation}
+            </Button>
             <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
               {t.submitForReview}
             </Button>
@@ -921,7 +958,7 @@ export default function ActivityEditorIsland({
             scrolls that container to its top — in the block-list mode, that
             IS the first block, since `BlockList.tsx`'s `<ul>` renders blocks
             in order with nothing else above them. */}
-        <ScrollToTop lang={lang} targetRef={preview ? previewScrollRef : blockListRef} />
+        <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={preview ? previewScrollRef : blockListRef} />
       </div>
 
       <EditorSideToolbar
@@ -958,9 +995,25 @@ export default function ActivityEditorIsland({
         open={submitDialog.open}
         submitting={submitDialog.submitting}
         errorMessage={submitDialog.error}
+        blocks={blocks}
         onConfirm={() => void handleConfirmSubmit()}
         onCancel={closeSubmitDialog}
       />
+
+      {/* "Ver como presentación" (worksheet zoom tour, sprint week 3): the
+          SAME island `presentar.astro` mounts, reused here against the
+          CURRENT in-memory draft — `onExit` closes the overlay instead of
+          navigating anywhere (no `practiceUrl`/`qrSvg`, neither makes sense
+          for an unsaved/unpublished draft). */}
+      {showPresentationPreview && (
+        <PresentationIsland
+          lang={lang}
+          title={title}
+          level={level}
+          blocks={blocks}
+          onExit={closePresentationPreview}
+        />
+      )}
     </div>
   );
 }

@@ -15,6 +15,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+
+const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }));
+
 import SignInForm, { COPY } from './SignInForm';
 
 /** Install a `fetch` stub that resolves with the given ok-ness. */
@@ -131,6 +135,22 @@ describe('SignInForm — submitting', () => {
     await waitFor(() => expect(screen.queryByTestId('signin-form')).toBeNull());
   });
 
+  it('shows the submit button as loading/aria-busy (stable width, label unchanged) while in flight', async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise((resolve) => { release = () => resolve({ ok: true, json: async () => ({}) }); })),
+    );
+    render(<SignInForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.click(submitButton());
+
+    expect(submitButton().getAttribute('aria-busy')).toBe('true');
+    expect(submitButton().textContent).toContain(COPY.es.submit);
+    release?.();
+    await waitFor(() => expect(screen.queryByTestId('signin-form')).toBeNull());
+  });
+
   it('ignores a second submit while the first is still in flight', async () => {
     const fetchMock = stubFetch();
     render(<SignInForm lang="es" />);
@@ -191,6 +211,7 @@ describe('SignInForm — genuine failures', () => {
     );
     // The form stays, so the visitor can try again without retyping.
     expect(screen.getByTestId('signin-form')).toBeTruthy();
+    expect(toastErrorMock).toHaveBeenCalledWith(COPY.es.error);
   });
 
   it('shows the same retryable error when fetch throws (offline)', async () => {
@@ -357,10 +378,10 @@ describe('SignInForm — localization', () => {
   });
 
   it('writes its Spanish in neutral Spanish, with no voseo', () => {
-    // Triangulation: the detector does fire on copy that IS voseo.
+    // Triangulation: the detector does fire on copy that IS voseo. `vas` is
+    // valid tuteo (identical to its voseo form), so only `Revisá` fires.
     expect(voseoWords('Revisá tu correo, vas a recibir un enlace.')).toEqual([
       'Revisá',
-      'vas',
     ]);
     expect(findVoseo(COPY.es)).toEqual([]);
   });

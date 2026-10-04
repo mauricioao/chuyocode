@@ -6,16 +6,19 @@ import Toaster from './Toaster';
 
 function stubMatchMedia(matchesNarrow: boolean) {
   const listeners = new Set<() => void>();
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: matchesNarrow,
-    media: query,
-    onchange: null,
-    addEventListener: (_: string, cb: () => void) => listeners.add(cb),
-    removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: matchesNarrow,
+      media: query,
+      onchange: null,
+      addEventListener: (_: string, cb: () => void) => listeners.add(cb),
+      removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
   return listeners;
 }
 

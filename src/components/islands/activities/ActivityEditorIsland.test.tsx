@@ -9,7 +9,7 @@ const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
   convertImageToWebp: vi.fn(),
   validatePageSelection: vi.fn(),
-  convertPdfPagesToWebp: vi.fn(),
+  openPdfForConversion: vi.fn(),
   renderPdfThumbnails: vi.fn(),
 }));
 vi.mock('@/lib/activities/imagePipeline', async () => {
@@ -21,7 +21,7 @@ vi.mock('@/lib/activities/imagePipeline', async () => {
     routeFileType: pipelineMocks.routeFileType,
     convertImageToWebp: pipelineMocks.convertImageToWebp,
     validatePageSelection: pipelineMocks.validatePageSelection,
-    convertPdfPagesToWebp: pipelineMocks.convertPdfPagesToWebp,
+    openPdfForConversion: pipelineMocks.openPdfForConversion,
     renderPdfThumbnails: pipelineMocks.renderPdfThumbnails,
   };
 });
@@ -515,7 +515,11 @@ describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pa
     // takes the text-field fallback path by having thumbnail rendering fail.
     pipelineMocks.renderPdfThumbnails.mockRejectedValue(new Error('pdf_failed'));
     pipelineMocks.validatePageSelection.mockReturnValue([1, 2]);
-    pipelineMocks.convertPdfPagesToWebp.mockResolvedValue([new Blob(['p1']), new Blob(['p2'])]);
+    pipelineMocks.openPdfForConversion.mockResolvedValue({
+      totalPages: 2,
+      convertPage: vi.fn(async (pageNumber: number) => new Blob([`p${pageNumber}`])),
+      dispose: vi.fn(async () => {}),
+    });
     vi.stubGlobal(
       'fetch',
       vi
@@ -857,7 +861,7 @@ describe('ActivityEditorIsland — submit for review', () => {
 
     expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
     expect(screen.getByTestId('submit-dialog-error').textContent).toContain(
-      'Agregar al menos un bloque',
+      'Agrega al menos un bloque',
     );
     expect(screen.getByTestId('activity-status-badge').textContent).toContain('Borrador');
   });
@@ -922,6 +926,47 @@ describe('ActivityEditorIsland — submit for review', () => {
 
     expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('ActivityEditorIsland — "Ver como presentación" overlay (worksheet zoom tour, sprint week 3)', () => {
+  it('opens a full-screen presentation of the CURRENT draft state, unsaved changes included', () => {
+    renderEditor({ initialTitle: 'Título guardado' });
+    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+
+    // An unsaved title edit — the overlay must reflect THIS, not whatever
+    // was last saved.
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Título sin guardar' } });
+
+    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+    expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
+    expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('Título sin guardar');
+  });
+
+  it('presents the current worksheet/quiz blocks, including a worksheet zone (reusing the SAME island the real route mounts)', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
+    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+    fireEvent.click(screen.getByTestId('presentation-next'));
+    expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
+  });
+
+  it('closes on Escape and returns focus to the button that opened it', () => {
+    renderEditor();
+    const trigger = screen.getByTestId('view-as-presentation-button');
+    fireEvent.click(trigger);
+    expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('closes via the overlay\'s own exit control too (rendered as a button, not a navigation link)', () => {
+    renderEditor();
+    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+    expect(screen.queryByRole('link', { name: 'Salir' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
+    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
   });
 });
 

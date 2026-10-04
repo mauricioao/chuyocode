@@ -36,6 +36,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
@@ -116,6 +117,20 @@ export default function WorksheetPlayer({
   // task's third trigger, load-bearing on touch devices with no real hover).
   const [openExplanationId, setOpenExplanationId] = useState<string | null>(null);
 
+  // Coherent loading states, item 6 — see WorksheetZoneEditor's identical
+  // treatment for the editor's own canvas: a soft fade-in once the image
+  // decodes (the container's `bg-muted` already reads as a loading
+  // surface), and a neutral broken-image placeholder instead of the
+  // browser's own glyph on failure. Purely cosmetic — zones are positioned
+  // against the CONTAINER, not the image itself, so this never touches
+  // their math.
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageBroken, setImageBroken] = useState(false);
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageBroken(false);
+  }, [imageUrl]);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
@@ -162,12 +177,27 @@ export default function WorksheetPlayer({
         className="relative w-full overflow-hidden rounded-lg border border-(--color-field-border) bg-muted shadow-elevation-1"
         style={{ aspectRatio: `${displaySize.width} / ${displaySize.height}` }}
       >
-        <img
-          src={imageUrl}
-          alt=""
-          className={isQuarterTurn ? 'object-contain' : 'absolute inset-0 h-full w-full object-contain'}
-          style={rotatedImageStyle}
-        />
+        {imageBroken ? (
+          <div
+            data-testid="worksheet-player-image-broken"
+            className="absolute inset-0 flex items-center justify-center text-muted-foreground"
+          >
+            <ImageBrokenIcon aria-hidden="true" size={32} />
+          </div>
+        ) : (
+          <img
+            src={imageUrl}
+            alt=""
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageBroken(true)}
+            className={cn(
+              isQuarterTurn ? 'object-contain' : 'absolute inset-0 h-full w-full object-contain',
+              'transition-opacity duration-300 motion-reduce:transition-none',
+              imageLoaded ? 'opacity-100' : 'opacity-0',
+            )}
+            style={rotatedImageStyle}
+          />
+        )}
         {zones.map((zone) => {
           const style = {
             left: `${zone.x * 100}%`,

@@ -24,20 +24,9 @@
  */
 import type { APIRoute } from 'astro';
 import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { isUuid } from '@lib/activities/paths';
 import { recordReport } from '@lib/activities/moderation';
-
-function json(body: Record<string, unknown>, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 function forbidden(): Response {
   const headers = new Headers();
@@ -47,27 +36,27 @@ function forbidden(): Response {
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const id = params.id;
-  if (typeof id !== 'string' || !isUuid(id)) return notFound();
+  if (typeof id !== 'string' || !isUuid(id)) return notFoundResponse();
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   const reason = typeof body === 'object' && body !== null && 'reason' in body ? (body as { reason: unknown }).reason : undefined;
   const details = typeof body === 'object' && body !== null && 'details' in body ? (body as { details: unknown }).details : undefined;
 
   const result = await recordReport(id, user.id, reason, details);
-  if (result.ok) return json({ ok: true, hidden: result.hidden }, 200);
+  if (result.ok) return jsonResponse({ ok: true, hidden: result.hidden }, 200);
 
-  if (result.error === 'not_found') return notFound();
+  if (result.error === 'not_found') return notFoundResponse();
   if (result.error === 'self_report') return forbidden();
   if (result.error === 'invalid_reason' || result.error === 'invalid_details') {
-    return json({ error: result.error }, 422);
+    return jsonResponse({ error: result.error }, 422);
   }
-  return json({ error: result.error }, 500);
+  return jsonResponse({ error: result.error }, 500);
 };

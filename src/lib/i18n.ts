@@ -193,13 +193,13 @@ export const UI_LABELS = {
           user_not_found: 'No se encontró un usuario con ese correo.',
           already_owned: 'Ese usuario ya tiene acceso a este curso.',
           unavailable: 'El servicio no está disponible en este momento.',
-          db_error: 'Ocurrió un error. Intentar de nuevo.',
+          db_error: 'Ocurrió un error. Inténtalo de nuevo.',
           bad_request: 'Solicitud inválida.',
           invalid_duration: 'La duración debe ser un número mayor a cero.',
           invalid_kind: 'Tipo de lección inválido.',
           invalid_content: 'El contenido de la lección no es válido para su tipo.',
           activity_not_live: 'Esa actividad no está publicada todavía.',
-          invalid_order: 'No se pudo reordenar. Volver a intentar.',
+          invalid_order: 'No se pudo reordenar. Vuelve a intentarlo.',
         },
         modules: {
           title: 'Módulos',
@@ -271,7 +271,7 @@ export const UI_LABELS = {
       description:
         'Entrar con correo y contraseña, con Google o con un enlace de acceso.',
       linkInvalid:
-        'Ese enlace no es válido o ya venció. Solicitar uno nuevo con el formulario de abajo.',
+        'Ese enlace no es válido o ya venció. Solicita uno nuevo con el formulario de abajo.',
       signedIn: 'Sesión iniciada.',
       alreadySignedIn: 'Ya hay una sesión iniciada en este navegador.',
       signOut: 'Salir',
@@ -283,7 +283,7 @@ export const UI_LABELS = {
       // `SignInForm.COPY` — see that island's header.
       google: 'Continuar con Google',
       googleUnavailable:
-        'El acceso con Google no está disponible en este momento. Probar con correo y contraseña.',
+        'El acceso con Google no está disponible en este momento. Prueba con correo y contraseña.',
       orDivider: 'o',
       nuevaClave: {
         title: 'Nueva contraseña',
@@ -331,7 +331,7 @@ export const UI_LABELS = {
       start: {
         pageTitle: 'Crear actividad',
         pageDescription: 'Elegir el tipo de contenido para una nueva actividad.',
-        heading: 'Elegir el punto de partida',
+        heading: 'Elige el punto de partida',
         worksheet: {
           title: 'Hoja de trabajo',
           description: 'Sube una hoja o PDF y marca dónde van las respuestas.',
@@ -341,7 +341,7 @@ export const UI_LABELS = {
           description:
             'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
         },
-        createError: 'No se pudo crear la actividad. Intentar de nuevo.',
+        createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
         pageTitle: 'Editar actividad',
@@ -355,10 +355,10 @@ export const UI_LABELS = {
         saving: 'Guardando…',
         saved: 'Cambios guardados',
         unsaved: 'Cambios sin guardar',
-        saveError: 'No se pudo guardar. Intentar de nuevo.',
+        saveError: 'No se pudo guardar. Inténtalo de nuevo.',
         saveRetry: 'Reintentar',
-        unloadWarning: 'Hay cambios sin guardar. Van a perderse si se cierra la página.',
-        blocksEmpty: 'Todavía no hay bloques. Agregar el primero para empezar.',
+        unloadWarning: 'Tienes cambios sin guardar. Vas a perderlos si cierras la página.',
+        blocksEmpty: 'Todavía no hay bloques. Agrega el primero para empezar.',
         // Empty block list (creator polish round 4, owner feedback #3): the
         // list itself always shows the picker right below this line — no
         // separate "+" click needed first (unlike `blocksEmpty` above, which
@@ -419,7 +419,7 @@ export const UI_LABELS = {
         // Inline messages next to the exact block/zone `enviar.ts` points
         // back to on a rejected submit (creator polish round 3, `t.submitErrors`'s
         // sibling, keyed by `findIncompleteBlock`'s own reason codes).
-        incompleteNoImage: 'Esta hoja de trabajo todavía no tiene una imagen. Subir un archivo antes de enviarla.',
+        incompleteNoImage: 'Esta hoja de trabajo todavía no tiene una imagen. Sube un archivo antes de enviarla.',
         incompleteNoZones: 'Esta hoja de trabajo necesita al menos una zona de respuesta.',
         incompleteNoAnswers: 'Esta zona todavía no tiene una respuesta.',
         incompleteTooFewOptions: 'Esta zona de opción múltiple necesita al menos dos opciones.',
@@ -447,23 +447,35 @@ export const UI_LABELS = {
         // same composition pattern as `practice.heartsLabel`'s own callers.
         basedOnPrefix: 'Basado en «',
         basedOnSuffix: '» de la comunidad',
+        // "Ver como presentación" (worksheet zoom tour, sprint week 3): opens
+        // a full-screen overlay presenting the editor's own CURRENT (unsaved
+        // included) blocks — `PresentationIsland` reused, not a new route.
+        viewAsPresentation: 'Ver como presentación',
         // Submit-for-review dialog.
         submitForReview: 'Enviar a revisión',
         submitDialogTitle: 'Enviar esta actividad a revisión',
         submitDialogNote: 'La actividad va a ser revisada por un moderador antes de publicarse.',
+        // Non-blocking projection warnings (sprint week 3): shown above the
+        // rights checkbox in the SAME submit dialog, never disabling
+        // "Enviar" — `listProjectionWarnings` (`presentationSlides.ts`).
+        projectionWarningsHeading: 'Antes de proyectar',
+        projectionWarningQuizPromptTooLong:
+          'Esta pregunta es muy larga para proyectarse bien; intenta acortarla.',
+        projectionWarningWorksheetZoneTooSmall:
+          'Esta zona es muy pequeña para proyectarse bien; hazla más grande.',
         submitRightsLabel: 'Confirmo que tengo el derecho de usar este material.',
         submitConfirm: 'Enviar',
         submitCancel: 'Cancelar',
         submitting: 'Enviando…',
         // Keyed by the endpoint's own reason codes (`enviar.ts`'s header).
         submitErrors: {
-          rights_required: 'Hace falta confirmar el derecho de uso del material.',
-          invalid_title: 'Poner un título antes de enviar la actividad.',
-          no_blocks: 'Agregar al menos un bloque antes de enviar la actividad.',
+          rights_required: 'Debes confirmar que tienes el derecho de usar este material.',
+          invalid_title: 'Pon un título antes de enviar la actividad.',
+          no_blocks: 'Agrega al menos un bloque antes de enviar la actividad.',
           missing_zones: 'Cada hoja de trabajo necesita al menos una zona de respuesta.',
           invalid_blocks: 'El contenido de la actividad no es válido.',
           no_draft: 'No hay cambios nuevos para enviar a revisión.',
-          submit_failed: 'No se pudo enviar la actividad. Intentar de nuevo.',
+          submit_failed: 'No se pudo enviar la actividad. Inténtalo de nuevo.',
         },
       },
       worksheet: {
@@ -484,15 +496,29 @@ export const UI_LABELS = {
         // rendering thumbnails fails and as a manual "type a page number"
         // escape hatch, e.g. past the 40-page thumbnail cap).
         pdfThumbnailsLoading: 'Generando miniaturas…',
-        pdfThumbnailsHint: 'Elegir hasta 10 páginas para agregar como bloques.',
+        pdfThumbnailsHint: 'Elige hasta 10 páginas para agregar como bloques.',
         pdfSelectAll: 'Seleccionar todas',
         pdfSelectedCountLabel: 'seleccionadas',
         pdfAddPagesPrefix: 'Agregar',
         pdfPageCountOne: 'página',
         pdfPageCountMany: 'páginas',
         pdfThumbnailsTruncated:
-          'Este PDF tiene más de 40 páginas: se muestran las primeras 40. Para elegir otra página, usar el número de página.',
+          'Este PDF tiene más de 40 páginas: se muestran las primeras 40. Para elegir otra página, usa el número de página.',
         pdfThumbnailsSwitchToText: 'Elegir por número de página',
+        // Task progress panel (coherent loading states, item 4): replaces
+        // the drop zone entirely while a PDF/image task runs — see
+        // `src/lib/activities/uploadTask.ts` and `WorksheetUploader.tsx`'s
+        // `stageLabel`. Assembled as "<prefix> <i> <taskOf> <n>", e.g.
+        // "Convirtiendo página 2 de 5" / "Optimizando imagen 1 de 1".
+        taskPreparingPdf: 'Preparando el PDF…',
+        taskConvertingPage: 'Convirtiendo página',
+        taskUploadingPage: 'Subiendo página',
+        taskOptimizingImage: 'Optimizando imagen',
+        taskUploadingImage: 'Subiendo',
+        taskOf: 'de',
+        taskCancel: 'Cancelar',
+        taskRetry: 'Reintentar',
+        taskChooseAnother: 'Elegir otro archivo',
         errors: {
           unsupported_media_type: 'Ese tipo de archivo no está admitido.',
           empty_body: 'El archivo está vacío.',
@@ -500,10 +526,10 @@ export const UI_LABELS = {
           not_webp: 'La imagen no pudo procesarse.',
           invalid_dimensions: 'La imagen debe medir entre 200 y 2400 píxeles de lado.',
           upload_limit_reached: 'Se alcanzó el límite de archivos subidos.',
-          upload_failed: 'No se pudo subir el archivo. Intentar de nuevo.',
+          upload_failed: 'No se pudo subir el archivo. Inténtalo de nuevo.',
           pdf_failed: 'No se pudo procesar el PDF.',
         },
-        addZoneHint: 'Dibujar un recuadro sobre la imagen para agregar una respuesta.',
+        addZoneHint: 'Dibuja un recuadro sobre la imagen para agregar una respuesta.',
         zoneKindText: 'Texto',
         zoneKindChoice: 'Opción',
         zoneKindLabel: 'Tipo de respuesta',
@@ -531,7 +557,7 @@ export const UI_LABELS = {
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
         noZonesYet: 'Todavía no hay zonas dibujadas sobre esta imagen.',
-        panelEmpty: 'Dibujar un recuadro sobre la hoja o seleccionar uno para editarlo.',
+        panelEmpty: 'Dibuja un recuadro sobre la hoja o selecciona uno para editarlo.',
         panelEmptyHint:
           'Atajos: V para la herramienta Zona, H para Mano, Enter o N para crear una zona centrada en lo visible, flechas para mover una zona seleccionada, Suprimir para eliminarla, rueda o los botones de abajo para hacer zoom.',
         zoomOut: 'Alejar',
@@ -695,10 +721,10 @@ export const UI_LABELS = {
         // Keyed by the endpoint's own reason codes (`duplicar.ts`'s header).
         duplicateErrors: {
           not_found: 'Esta actividad ya no está disponible.',
-          daily_limit: 'Se alcanzó el límite diario de duplicados. Intentar mañana.',
-          upload_limit: 'No hay espacio para copiar las imágenes de esta actividad. Liberar espacio antes de duplicar.',
-          copy_failed: 'No se pudo duplicar la actividad. Intentar de nuevo.',
-          create_failed: 'No se pudo duplicar la actividad. Intentar de nuevo.',
+          daily_limit: 'Se alcanzó el límite diario de duplicados. Inténtalo mañana.',
+          upload_limit: 'No hay espacio para copiar las imágenes de esta actividad. Libera espacio antes de duplicar.',
+          copy_failed: 'No se pudo duplicar la actividad. Inténtalo de nuevo.',
+          create_failed: 'No se pudo duplicar la actividad. Inténtalo de nuevo.',
         },
         // Credit line (D7): shown once a duplicate gets approved and
         // published, on ITS OWN practice page — the original's page shows
@@ -711,7 +737,7 @@ export const UI_LABELS = {
         // share sheet.
         share: 'Compartir',
         shareTitle: 'Compartir esta actividad',
-        shareHint: 'Escanear el código para abrir la actividad en otro dispositivo.',
+        shareHint: 'Escanea el código para abrir la actividad en otro dispositivo.',
         shareLink: 'Enlace',
         shareCopy: 'Copiar',
         shareCopied: 'Copiado',
@@ -722,11 +748,10 @@ export const UI_LABELS = {
         // Guest play: friendly line shown only to an anonymous visitor,
         // right below the header row — invites them to sign up without
         // blocking anything they can already do (play, check answers,
-        // share, present). IMPERSONAL, no second-person verb (gerund +
-        // infinitive, same register `src/lib/neutralSpanish.ts` enforces
-        // site-wide) — "Estás"/"Creá"/"Crea" all read as a tú/vos pick,
-        // which this codebase avoids at the root instead of choosing a side.
-        guestBanner: 'Jugando como invitado. Crear una cuenta gratis permite dar corazones y crear actividades propias.',
+        // share, present). Neutral Latin-American tuteo, same register
+        // `src/lib/neutralSpanish.ts` enforces site-wide (owner decision,
+        // 2026-10-04) — "Estás"/"Crea"/"tus" address the reader directly.
+        guestBanner: 'Estás jugando como invitado. Crea tu cuenta gratis para dar corazones y crear tus propias actividades.',
         guestSignUp: 'Crear cuenta',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
@@ -754,9 +779,9 @@ export const UI_LABELS = {
         // Keyed by the endpoint's own reason codes (`reportar.ts`'s header).
         errors: {
           self_report: 'No se puede reportar la propia actividad.',
-          invalid_reason: 'Elegir un motivo antes de enviar el reporte.',
+          invalid_reason: 'Elige un motivo antes de enviar el reporte.',
           invalid_details: 'Los detalles son demasiado largos.',
-          report_failed: 'No se pudo enviar el reporte. Intentar de nuevo.',
+          report_failed: 'No se pudo enviar el reporte. Inténtalo de nuevo.',
         },
       },
       // Author's own workspace (`/[lang]/mis-actividades`, PR D "Activities
@@ -783,7 +808,7 @@ export const UI_LABELS = {
         deleteConfirmBody: 'Esta acción no se puede deshacer.',
         deleteConfirmCancel: 'Cancelar',
         deleteConfirmAccept: 'Eliminar',
-        deleteError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
+        deleteError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
       },
       // Public feed (`/[lang]/ingles/actividades`, PR D "Activities
       // practice") — live activities only, newest published first. Under
@@ -849,7 +874,7 @@ export const UI_LABELS = {
         tabReported: 'Reportadas',
         empty: 'No hay actividades pendientes de revisión.',
         emptyReported: 'No hay actividades reportadas.',
-        selectPrompt: 'Elegir un elemento de la lista para revisarlo.',
+        selectPrompt: 'Elige un elemento de la lista para revisarlo.',
         byAuthor: 'Autor',
         submittedAt: 'Enviado',
         firstPublication: 'Primera publicación',
@@ -868,7 +893,7 @@ export const UI_LABELS = {
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
         approving: 'Aprobando…',
-        approveError: 'No se pudo aprobar la actividad. Intentar de nuevo.',
+        approveError: 'No se pudo aprobar la actividad. Inténtalo de nuevo.',
         reject: 'Rechazar',
         rejectDialogTitle: 'Rechazar esta actividad',
         rejectQuickPicksLabel: 'Motivos frecuentes',
@@ -881,20 +906,20 @@ export const UI_LABELS = {
         rejectNoteLabel: 'Nota para el autor',
         rejectNotePlaceholder: 'Explicar qué hay que corregir…',
         rejecting: 'Rechazando…',
-        rejectError: 'No se pudo rechazar la actividad. Intentar de nuevo.',
-        rejectNoteRequired: 'Escribir una nota antes de rechazar.',
+        rejectError: 'No se pudo rechazar la actividad. Inténtalo de nuevo.',
+        rejectNoteRequired: 'Escribe una nota antes de rechazar.',
         reportsLabel: 'Reportes',
         reportDetailsNone: 'Sin detalles adicionales.',
         restore: 'Restaurar',
         restoreConfirmTitle: '¿Restaurar esta actividad?',
         restoreConfirmBody: 'Vuelve a quedar publicada para el público.',
         restoring: 'Restaurando…',
-        restoreError: 'No se pudo restaurar la actividad. Intentar de nuevo.',
+        restoreError: 'No se pudo restaurar la actividad. Inténtalo de nuevo.',
         remove: 'Eliminar',
         removeConfirmTitle: '¿Eliminar esta actividad?',
         removeConfirmBody: 'Esta acción no se puede deshacer.',
         removing: 'Eliminando…',
-        removeError: 'No se pudo eliminar la actividad. Intentar de nuevo.',
+        removeError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
         confirmCancel: 'Cancelar',
         confirmAccept: 'Confirmar',
       },
@@ -924,7 +949,12 @@ export const UI_LABELS = {
         noLevel: 'Sin nivel',
         questionsCountOne: 'pregunta',
         questionsCountMany: 'preguntas',
-        scanHint: 'Escanear el código para abrir esta actividad en el teléfono.',
+        // Worksheet zoom tour (sprint week 3): the cover's own count line
+        // composes this alongside `questionsCountOne/Many` when the
+        // activity has presentable worksheet pages too.
+        worksheetCountOne: 'hoja',
+        worksheetCountMany: 'hojas',
+        scanHint: 'Escanea el código para abrir esta actividad en el teléfono.',
         qrAlt: 'Código QR para abrir esta actividad en un teléfono',
         summaryTitle: '¡Listo!',
         restart: 'Volver a empezar',
@@ -934,14 +964,21 @@ export const UI_LABELS = {
         fullscreenEnter: 'Pantalla completa',
         fullscreenExit: 'Salir de pantalla completa',
         exit: 'Salir',
-        progressPrefix: 'Pregunta',
+        // Generalized from "Pregunta" (worksheet zoom tour, sprint week 3):
+        // the progress readout now also counts a worksheet overview/zone
+        // slide, which "Pregunta 3 de 8" would misname while looking at a
+        // worksheet, not a question.
+        progressPrefix: 'Diapositiva',
         ofLabel: 'de',
         correctBadge: 'Correcta',
         answerLabel: 'Respuesta',
         explanationLabel: 'Por qué',
+        // The worksheet zoom tour's own zone badges/labels (sprint week 3).
+        zoneLabel: 'Zona',
         liveCover: 'Portada',
         liveSummary: 'Resumen',
         liveRevealed: 'Respuesta revelada',
+        liveWorksheetOverview: 'Vista general de la hoja',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -955,11 +992,10 @@ export const UI_LABELS = {
     },
     home: {
       hero: {
-        // Infinitive, matching the register the rest of the site already uses
-        // for actions ("Elegir nivel", "Revisar las respuestas"). It keeps the
-        // headline's rhythm, length and `aprender` keyword intact and changes
-        // only the one thing the rule is about: the direct address.
-        headline: 'Aprender tecnología en tu idioma',
+        // Tuteo imperative, matching the site's neutral Latin-American
+        // register (owner decision, 2026-10-04). Keeps the headline's
+        // rhythm, length and `aprender` keyword intact.
+        headline: 'Aprende tecnología en tu idioma',
         subline:
           'Libros, artículos y cursos de programación pensados para la comunidad latina. Contenido claro, sin atajos, con fundamentos sólidos.',
         primaryCta: 'Explorar libros',
@@ -997,12 +1033,10 @@ export const UI_LABELS = {
       teaser: {
         badge: 'Próximamente',
         title: 'Cursos en camino',
-        // "vas a poder" addressed the reader in the second person. The same
-        // phrasing the English section already uses for a not-yet-available
-        // state ("van a estar disponibles") keeps the promise without it, and
-        // "con nosotros" went with it — "Estamos preparando" already says who.
+        // "vas a poder" is valid tuteo (owner decision, 2026-10-04) — it is
+        // no longer rewritten into the third person to dodge the reader.
         description:
-          'Estamos preparando cursos prácticos de programación. Muy pronto van a estar disponibles para aprender paso a paso.',
+          'Estamos preparando cursos prácticos de programación. Muy pronto vas a poder aprender paso a paso.',
         imageAlt: 'Vista previa de los próximos cursos de programación',
       },
       // The hidden Courses feature itself — catalog (`/[lang]/cursos`) and
@@ -1074,10 +1108,10 @@ export const UI_LABELS = {
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
       // was removed when the section actually shipped.
-      // REGISTER: neutral Spanish, impersonal. Instructions use the infinitive
-      // ("Revisar las respuestas") and descriptions avoid the second person
-      // entirely. The site is not Argentina-specific, so no voseo reaches the
-      // UI — enforced by a guard in `i18n.test.ts`.
+      // REGISTER: neutral Latin-American tuteo. Instructions address the
+      // reader as "tú" ("Revisa las respuestas", "Elige tu nivel"). The site
+      // is not Argentina-specific, so no voseo reaches the UI — enforced by
+      // a guard in `i18n.test.ts`.
       section: {
         // Names the SECTION, not its audience. "Inglés para programadores"
         // described who the section was for, which the visitor already knows by
@@ -1091,14 +1125,13 @@ export const UI_LABELS = {
         // it is the one string here that must stay a full descriptive sentence.
         description:
           'Ejercicios cortos de inglés técnico, organizados por nivel y por punto gramatical, con corrección al instante.',
-        // MAINTAINER-AUTHORED, VERBATIM. "Elige" is TUTEO, and the standing
-        // neutral-Spanish rule bans REGIONAL forms (`Elegí`), not the second
-        // person as a category — so this passes `neutralSpanish.ts` unchanged
-        // and was NOT rewritten into an infinitive to match `chooseLevel`.
-        // Asserted exactly in `i18n.test.ts` so a future "consistency" pass has
-        // to argue with a red test instead of quietly editing the maintainer.
+        // MAINTAINER-AUTHORED, VERBATIM. "Elige" is tuteo, matching the
+        // standing neutral-Spanish rule exactly (tuteo, no voseo) — kept
+        // asserted exactly in `i18n.test.ts` regardless.
         intro: 'Elige un nivel y tema para practicar en el día a día',
-        chooseLevel: 'Elegir nivel',
+        // Matches `hub.levelShortcutTitle` ("Ir directo a tu nivel") and the
+        // English copy's own "Choose your level".
+        chooseLevel: 'Elige tu nivel',
         // The grid under a level lists LANGUAGE POINTS, not settings: someone
         // arriving here wants "conditionals", not "something about airports".
         // This is chrome and localizes; the point NAMES themselves are exercise
@@ -1112,7 +1145,7 @@ export const UI_LABELS = {
           'Todavía no hay ejercicios publicados. Estamos preparando los primeros y van a estar disponibles en unos días.',
         emptyLevel: 'Todavía no hay ejercicios para este nivel.',
         emptyPair:
-          'Todavía no hay ejercicios de este punto gramatical en este nivel. Probar con otro punto.',
+          'Todavía no hay ejercicios de este punto gramatical en este nivel. Prueba con otro punto.',
         // Accessible name for the magnifier filter over the language-point grid.
         // It is the ONLY name that control has: the trigger is an icon and the
         // input carries a blank placeholder so the bar can animate open, so
@@ -1150,15 +1183,15 @@ export const UI_LABELS = {
         // component's test sweeps with `findVoseo` so the neutral-Spanish rule
         // still applies to it. Leaving a stale `like` here would look live.
         //
-        // The share dialog. Impersonal register throughout: the hint is an
-        // infinitive ("Escanear"), never an instruction addressed to a person,
-        // and the button labels are bare verbs and participles.
+        // The share dialog. Tuteo throughout: the hint addresses the reader
+        // directly ("Escanea"), and the button labels are bare verbs and
+        // participles.
         share: 'Compartir',
         shareTitle: 'Compartir este ejercicio',
         // Says what the code is FOR. "Código QR" alone names the object and
         // leaves the teacher to guess that the point is opening it elsewhere.
         shareHint:
-          'Escanear el código para abrir el ejercicio en otro dispositivo.',
+          'Escanea el código para abrir el ejercicio en otro dispositivo.',
         shareLink: 'Enlace',
         shareCopy: 'Copiar',
         shareCopied: 'Copiado',
@@ -1475,9 +1508,13 @@ export const UI_LABELS = {
         reviewNoteLabel: "Reviewer's note",
         basedOnPrefix: 'Based on "',
         basedOnSuffix: '" from the community',
+        viewAsPresentation: 'View as presentation',
         submitForReview: 'Submit for review',
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',
+        projectionWarningsHeading: 'Before you project',
+        projectionWarningQuizPromptTooLong: 'This question is too long to project well; try shortening it.',
+        projectionWarningWorksheetZoneTooSmall: 'This zone is too small to project well; make it bigger.',
         submitRightsLabel: 'I confirm I have the right to use this material.',
         submitConfirm: 'Submit',
         submitCancel: 'Cancel',
@@ -1512,6 +1549,15 @@ export const UI_LABELS = {
         pdfThumbnailsTruncated:
           'This PDF has more than 40 pages: showing the first 40. To pick another page, use the page number field.',
         pdfThumbnailsSwitchToText: 'Choose by page number',
+        taskPreparingPdf: 'Preparing the PDF…',
+        taskConvertingPage: 'Converting page',
+        taskUploadingPage: 'Uploading page',
+        taskOptimizingImage: 'Optimizing image',
+        taskUploadingImage: 'Uploading',
+        taskOf: 'of',
+        taskCancel: 'Cancel',
+        taskRetry: 'Retry',
+        taskChooseAnother: 'Choose another file',
         errors: {
           unsupported_media_type: 'That file type is not supported.',
           empty_body: 'The file is empty.',
@@ -1834,6 +1880,8 @@ export const UI_LABELS = {
         noLevel: 'No level',
         questionsCountOne: 'question',
         questionsCountMany: 'questions',
+        worksheetCountOne: 'sheet',
+        worksheetCountMany: 'sheets',
         scanHint: 'Scan the code to open this activity on a phone.',
         qrAlt: 'QR code to open this activity on a phone',
         summaryTitle: 'All done!',
@@ -1844,14 +1892,16 @@ export const UI_LABELS = {
         fullscreenEnter: 'Full screen',
         fullscreenExit: 'Exit full screen',
         exit: 'Exit',
-        progressPrefix: 'Question',
+        progressPrefix: 'Slide',
         ofLabel: 'of',
         correctBadge: 'Correct',
         answerLabel: 'Answer',
         explanationLabel: 'Why',
+        zoneLabel: 'Zone',
         liveCover: 'Cover',
         liveSummary: 'Summary',
         liveRevealed: 'Answer revealed',
+        liveWorksheetOverview: 'Worksheet overview',
       },
     },
     notFound: {

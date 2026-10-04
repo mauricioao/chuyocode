@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export type LessonKind = 'text' | 'video' | 'activity';
 
@@ -47,7 +48,6 @@ export interface LessonFormProps {
   onSubmit: (values: LessonFormValues) => Promise<{ ok: boolean; error?: string }>;
   onCancel: () => void;
   submitLabel: string;
-  submittingLabel: string;
 }
 
 function activityIdOf(content: Record<string, unknown>): string {
@@ -60,7 +60,6 @@ export default function LessonForm({
   onSubmit,
   onCancel,
   submitLabel,
-  submittingLabel,
 }: LessonFormProps) {
   const t = UI_LABELS[lang].admin.cursos;
   const fieldsT = t.lessons.fields;
@@ -230,7 +229,20 @@ export default function LessonForm({
                   />
                 )}
               </Field>
-              {activitySearching && <p className="text-xs text-muted-foreground">{fieldsT.activitySearching}</p>}
+              {activitySearching && (
+                <ul
+                  className="flex flex-col gap-1"
+                  data-testid="lesson-activity-searching"
+                  aria-busy="true"
+                  aria-label={fieldsT.activitySearching}
+                >
+                  {[0, 1, 2].map((i) => (
+                    <li key={i} className="rounded-md border border-border px-3 py-2">
+                      <Skeleton className="h-4 w-3/4" />
+                    </li>
+                  ))}
+                </ul>
+              )}
               {!activitySearching && activityQuery.trim() !== '' && activityResults.length === 0 && (
                 <p data-testid="lesson-activity-none" className="text-xs text-muted-foreground">
                   {fieldsT.activityNone}
@@ -287,8 +299,8 @@ export default function LessonForm({
       )}
 
       <div className="flex gap-2">
-        <Button type="submit" data-testid="lesson-form-submit" disabled={submitting}>
-          {submitting ? submittingLabel : submitLabel}
+        <Button type="submit" data-testid="lesson-form-submit" disabled={submitting} loading={submitting}>
+          {submitLabel}
         </Button>
         <Button type="button" variant="ghost" data-testid="lesson-form-cancel" onClick={onCancel} disabled={submitting}>
           {t.modules.cancel}

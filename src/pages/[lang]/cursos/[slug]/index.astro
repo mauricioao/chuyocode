@@ -18,6 +18,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import CourseCtaButtons from '@components/courses/CourseCtaButtons.astro';
+import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { requireRole } from '@lib/roles';
 import { getPlan } from '@lib/access';
@@ -82,7 +83,19 @@ const kindLabels = t.lessonKind as Record<string, string>;
 
     <header class="flex flex-col gap-3">
       {course.coverPath && (
-        <img src={course.coverPath} alt="" class="aspect-video w-full rounded-lg object-cover" />
+        <div class="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+          <div class="absolute inset-0 flex items-center justify-center text-muted-foreground" aria-hidden="true">
+            <ImageBrokenIcon size={32} />
+          </div>
+          <img
+            src={course.coverPath}
+            alt=""
+            loading="lazy"
+            class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+            onload="this.classList.remove('opacity-0')"
+            onerror="this.style.display='none'"
+          />
+        </div>
       )}
       {course.subtitle && <p class="text-lg text-muted-foreground">{course.subtitle}</p>}
       {course.level && (

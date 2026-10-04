@@ -55,6 +55,7 @@ import {
   type ScreenReaderInstructions,
 } from '@dnd-kit/core';
 import { Label } from '@/components/ui/label';
+import { FadeImage } from '@/components/ui/fade-image';
 import { cn } from '@/lib/utils';
 import { availableTiles, clearTile, placeTile, placedTile } from '@/lib/exerciseDrop';
 import {
@@ -74,9 +75,10 @@ import type { MechanicRendererProps } from './types';
  * ExerciseIsland.tsx). It is also whole SENTENCES rather than one label, which
  * is why `drop` needs `lang` where the other mechanics only need `placeholder`.
  *
- * REGISTER (standing project rule): neutral Spanish, infinitive, and nothing
- * addressed to the learner in the second person — which removes the tú/vos fork
- * instead of picking a side of it.
+ * REGISTER (standing project rule, owner decision 2026-10-04): neutral
+ * Latin-American tuteo, no voseo. These particular strings stay infinitive —
+ * a keyboard-operation legend read once on focus, not an instruction aimed at
+ * the learner in the moment — which the guard allows either way.
  */
 interface DropCopy {
   /** How to operate the mechanic without a pointer. Read once, on focus. */
@@ -278,7 +280,7 @@ function TileFace({ item }: { item: PoolItem }) {
   if (item.media) {
     // `alt=""` on purpose: the accessible name is carried by the BUTTON, and a
     // duplicate alt would make a screen reader say the tile twice.
-    return <img src={item.media} alt="" className="h-20 w-20 object-contain" />;
+    return <FadeImage src={item.media} alt="" className="h-20 w-20 object-contain" placeholderIconSize={18} />;
   }
   return <span>{tileLabel(item)}</span>;
 }

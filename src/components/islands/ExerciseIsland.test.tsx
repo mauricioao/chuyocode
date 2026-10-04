@@ -36,6 +36,31 @@ const single: Payload = {
   ],
 };
 
+/**
+ * Same shape as {@link single}, but its one slot carries a D5 "¿Por qué?"
+ * explanation — the explanation tests below need a slot that actually HAS
+ * one, to tell "hidden because wrong-but-unexplained" apart from "hidden
+ * because the never-before/never-correct rule hides it anyway".
+ */
+const singleWithExplanation: Payload = {
+  pools: {
+    opts: [
+      { id: 'a', text: 'sit' },
+      { id: 'b', text: 'sits' },
+    ],
+  },
+  slots: [
+    {
+      id: 's1',
+      label: 'The cat ___',
+      input: 'choice',
+      pool: 'opts',
+      answer: ['b'],
+      explanation: 'Third person -s.',
+    },
+  ],
+};
+
 /** Two independent choice slots sharing one pool. */
 const pair: Payload = {
   pools: {
@@ -234,9 +259,16 @@ function submit() {
   fireEvent.click(screen.getByTestId('exercise-submit'));
 }
 
-/** The tiles slot `slotId` currently offers, by accessible name. */
-function tilesIn(slotId: string): string[] {
-  const pool = screen.getByTestId(`drop-pool-${slotId}`);
+/**
+ * The tiles slot `slotId` currently offers, by accessible name.
+ *
+ * ASYNC: `DropRenderer` is loaded behind `React.lazy` (registry.tsx's own
+ * header), so the first drop slot rendered in a test run shows the
+ * `Suspense` fallback until the dynamic import resolves. `findByTestId`
+ * waits for the real pool instead of assuming it is already mounted.
+ */
+async function tilesIn(slotId: string): Promise<string[]> {
+  const pool = await screen.findByTestId(`drop-pool-${slotId}`);
   return Array.from(pool.querySelectorAll('button')).map(
     (button) => button.getAttribute('aria-label') ?? '',
   );
@@ -255,7 +287,9 @@ function tilesIn(slotId: string): string[] {
  * where every rect is zero and collision detection has no geometry to work with.
  */
 async function dropInto(slotId: string, tileName: string) {
-  const pool = screen.getByTestId(`drop-pool-${slotId}`);
+  // `findByTestId`, not `getByTestId`: the pool may still be the lazy
+  // `Suspense` fallback — see `tilesIn`'s own header above.
+  const pool = await screen.findByTestId(`drop-pool-${slotId}`);
   const tile = Array.from(pool.querySelectorAll('button')).find(
     (button) => button.getAttribute('aria-label') === tileName,
   );
@@ -329,6 +363,28 @@ describe('ExerciseIsland — blocks (additive by construction)', () => {
     goToSlot(1);
     expect(screen.queryByTestId('exercise-block-p1')).toBeNull();
     expect(screen.getByRole('img', { name: 'A cat' })).toBeTruthy();
+  });
+
+  it('fades the step media in on load, and shows a neutral placeholder instead of the browser glyph on error', () => {
+    const withBlocks: Payload = {
+      ...pair,
+      blocks: [
+        { kind: 'row', id: 'r1', slotId: 's1' },
+        { kind: 'media', id: 'm1', image: 'https://cdn.test/cat.png', alt: 'A cat' },
+        { kind: 'row', id: 'r2', slotId: 's2' },
+      ],
+    };
+    render(<ExerciseIsland lang="en" payload={withBlocks} />);
+    goToSlot(1);
+
+    const img = screen.getByRole('img', { name: 'A cat' }) as HTMLImageElement;
+    expect(img.className).toContain('opacity-0');
+    fireEvent.load(img);
+    expect(img.className).toContain('opacity-100');
+
+    fireEvent.error(img);
+    expect(screen.getByTestId('fade-image-broken')).toBeTruthy();
+    expect(document.querySelector('img')).toBeNull();
   });
 
   it('never renders a `row` block itself as block markup — only prose/media', () => {
@@ -417,6 +473,58 @@ describe('ExerciseIsland — grading', () => {
 
     expect(screen.queryByTestId('exercise-verdict')).toBeNull();
     expect(screen.queryByTestId('slot-feedback-s1')).toBeNull();
+  });
+});
+
+/**
+ * D5 "¿Por qué?": the explanation note, inline under the question, only
+ * once graded and only while incorrect — same rule, and the same shared
+ * `mechanics/SlotExplanation` component, `QuizBlockPractice` uses for
+ * activities' quiz block.
+ */
+describe('ExerciseIsland — explanation (D5)', () => {
+  it('shows nothing before grading', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sit');
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
+  });
+
+  it('shows nothing for a correct answer', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sits');
+    submit();
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
+  });
+
+  it('shows the explanation inline under the question for an incorrect answer', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sit');
+    submit();
+
+    expect(screen.getByTestId('slot-explanation-s1').textContent).toContain(
+      'Third person -s.',
+    );
+  });
+
+  it('shows nothing for an incorrect answer with no explanation authored', () => {
+    render(<ExerciseIsland lang="en" payload={single} />);
+    choose('sit');
+    submit();
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
+  });
+
+  it('hides again once Corregir clears the wrong answer', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sit');
+    submit();
+    expect(screen.getByTestId('slot-explanation-s1')).toBeTruthy();
+
+    retry();
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
   });
 });
 
@@ -556,7 +664,7 @@ describe('ExerciseIsland — disabled submit hint', () => {
     render(<ExerciseIsland lang="es" payload={single} />);
 
     expect(screen.getByTestId('exercise-submit-hint').textContent).toContain(
-      'Responder todas las partes',
+      'Responde todas las partes',
     );
   });
 });
@@ -696,12 +804,12 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
 });
 
 describe('ExerciseIsland — two drop slots sharing one pool', () => {
-  it('offers the whole pool to both slots before anything is placed', () => {
+  it('offers the whole pool to both slots before anything is placed', async () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
-    expect(tilesIn('olives')).toEqual(['some', 'any', 'much', 'many']);
+    expect(await tilesIn('olives')).toEqual(['some', 'any', 'much', 'many']);
     goToSlot(1);
-    expect(tilesIn('bread')).toEqual(['some', 'any', 'much', 'many']);
+    expect(await tilesIn('bread')).toEqual(['some', 'any', 'much', 'many']);
   });
 
   /**
@@ -719,12 +827,12 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     await dropInto('olives', 'some');
 
     // Gone from the slot that consumed it...
-    expect(tilesIn('olives')).not.toContain('some');
+    expect(await tilesIn('olives')).not.toContain('some');
     // ...and, the part only the island can know, gone from its sibling too.
     // The sibling is a step away and MOUNTS FRESH when the learner reaches it,
     // so this also proves `claimed` is recomputed rather than captured once.
     goToSlot(1);
-    expect(tilesIn('bread')).toEqual(['any', 'much', 'many']);
+    expect(await tilesIn('bread')).toEqual(['any', 'much', 'many']);
   });
 
   it('leaves the rest of the pool alone', async () => {
@@ -735,7 +843,7 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     // Three tiles for one remaining slot: consuming one tile must not look like
     // exhausting the pool.
     goToSlot(1);
-    expect(tilesIn('bread')).toHaveLength(3);
+    expect(await tilesIn('bread')).toHaveLength(3);
   });
 
   it('lets each slot consume a different tile independently', async () => {
@@ -745,9 +853,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     goToSlot(1);
     await dropInto('bread', 'any');
 
-    expect(tilesIn('bread')).toEqual(['much', 'many']);
+    expect(await tilesIn('bread')).toEqual(['much', 'many']);
     goToSlot(0);
-    expect(tilesIn('olives')).toEqual(['much', 'many']);
+    expect(await tilesIn('olives')).toEqual(['much', 'many']);
   });
 
   it('returns a removed tile to BOTH slots', async () => {
@@ -759,9 +867,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     );
 
     // Derived, not stored: nothing names the tile any more, so it is back.
-    expect(tilesIn('olives')).toContain('some');
+    expect(await tilesIn('olives')).toContain('some');
     goToSlot(1);
-    expect(tilesIn('bread')).toContain('some');
+    expect(await tilesIn('bread')).toContain('some');
   });
 
   it('grades both drop slots instead of excluding them from the verdict', async () => {
@@ -826,9 +934,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
 
     // The wrong answer was cleared, so its tile is claimable again — by either
     // slot. A learner who must redo a slot needs its tiles back.
-    expect(tilesIn('olives')).toContain('much');
+    expect(await tilesIn('olives')).toContain('much');
     goToSlot(1);
-    expect(tilesIn('bread')).toContain('much');
+    expect(await tilesIn('bread')).toContain('much');
   });
 });
 
@@ -839,15 +947,19 @@ describe('ExerciseIsland — locale reaches the mechanics', () => {
    * Untested, a Spanish page would narrate its drag-and-drop in English and no
    * automated check would notice.
    */
-  it('narrates a Spanish exercise in Spanish', () => {
+  it('narrates a Spanish exercise in Spanish', async () => {
     render(<ExerciseIsland lang="es" payload={twoDropsOnePool} />);
 
+    // Waits past the lazy `DropRenderer` chunk's Suspense fallback — see
+    // `tilesIn`'s own header above.
+    await screen.findByTestId('drop-pool-olives');
     expect(document.body.textContent).toContain(DROP_COPY.es.instructions);
   });
 
-  it('narrates an English exercise in English', () => {
+  it('narrates an English exercise in English', async () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
+    await screen.findByTestId('drop-pool-olives');
     expect(document.body.textContent).toContain(DROP_COPY.en.instructions);
   });
 });
@@ -1403,26 +1515,29 @@ describe('ExerciseIsland — stepping through the slots', () => {
     return screen.getByTestId('exercise-prev') as HTMLButtonElement;
   }
 
-  /** Install a `matchMedia` stub whose reduced-motion answer we control. */
+  /**
+   * Install a `matchMedia` stub whose reduced-motion answer we control.
+   * jsdom ships NO `matchMedia`, and the island's guard depends on that
+   * absence being the real default — `vi.stubGlobal` plus the file-level
+   * `afterEach`'s `vi.unstubAllGlobals()` restores exactly that absence
+   * after each test, so a regression in that guard can't hide behind a
+   * leftover stub.
+   */
   function stubMatchMedia(reduce: boolean) {
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes('prefers-reduced-motion') ? reduce : false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('prefers-reduced-motion') ? reduce : false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
   }
-
-  afterEach(() => {
-    // jsdom ships NO `matchMedia`, and the island's guard depends on that
-    // absence being the real default. Leaving a stub installed would hide a
-    // regression in exactly the code path the guard exists for.
-    Reflect.deleteProperty(window, 'matchMedia');
-  });
 
   describe('a single-slot exercise', () => {
     /**
