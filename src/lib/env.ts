@@ -23,9 +23,14 @@
  *   - SUPABASE_URL
  *   - SUPABASE_ANON_KEY
  *
- * Optional vars are consumed by later work units (pass gate, rewarded ads):
+ * Optional vars are consumed by later work units (pass gate, rewarded ads,
+ * billing webhooks):
  *   - SUPABASE_SERVICE_ROLE_KEY (server-only pass writes, design decision #3)
  *   - AD_HMAC_SECRET (ad-token signing, design decision #7)
+ *   - PADDLE_WEBHOOK_SECRET (Paddle webhook signature verification,
+ *     `src/lib/billing/paddle.ts`). Unset means Paddle billing is INERT: no
+ *     Paddle account exists yet, and `src/pages/api/webhooks/[provider].ts`
+ *     answers 503 for the `paddle` provider until this is configured.
  */
 
 export interface Env {
@@ -35,6 +40,7 @@ export interface Env {
   SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   AD_HMAC_SECRET: string;
+  PADDLE_WEBHOOK_SECRET: string;
   /** Legal entity (site owner) shown on /legal pages. Optional; empty → fallback. */
   LEGAL_OWNER_NAME: string;
   LEGAL_OWNER_RUC: string;
@@ -57,6 +63,7 @@ export const REQUIRED_ENV_KEYS = [
 export const OPTIONAL_ENV_KEYS = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'AD_HMAC_SECRET',
+  'PADDLE_WEBHOOK_SECRET',
   'LEGAL_OWNER_NAME',
   'LEGAL_OWNER_RUC',
   'LEGAL_OWNER_CITY',
@@ -169,6 +176,7 @@ export function loadEnv(source: EnvSource = defaultEnvSource()): Env {
     // Optional today; empty string until their owning work unit wires them.
     SUPABASE_SERVICE_ROLE_KEY: readString(source, 'SUPABASE_SERVICE_ROLE_KEY'),
     AD_HMAC_SECRET: readString(source, 'AD_HMAC_SECRET'),
+    PADDLE_WEBHOOK_SECRET: readString(source, 'PADDLE_WEBHOOK_SECRET'),
     // Legal entity (optional): empty string falls back to a neutral label.
     LEGAL_OWNER_NAME: readString(source, 'LEGAL_OWNER_NAME'),
     LEGAL_OWNER_RUC: readString(source, 'LEGAL_OWNER_RUC'),
