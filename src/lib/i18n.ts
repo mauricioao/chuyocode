@@ -110,7 +110,7 @@ export const UI_LABELS = {
       soon: 'Pronto',
       switchTo: 'Cambiar a',
     },
-    footer: { terms: 'Términos y Condiciones', privacy: 'Privacidad' },
+    footer: { terms: 'Términos y Condiciones', privacy: 'Privacidad', credits: 'Créditos' },
     // Chrome shared by any page that mounts it (`BackButton`, `ScrollToTop`) —
     // not tied to one section, unlike `english`/`activities`/`legal` below.
     common: {
@@ -259,6 +259,14 @@ export const UI_LABELS = {
       pending: 'Contenido legal pendiente',
       privacyNote:
         'Respetamos tu privacidad. Todavía estamos redactando la versión completa de este documento; mientras tanto, no vendemos ni compartimos tus datos personales con terceros.',
+    },
+    // Credits page (`/[lang]/creditos`, visual-identity decision, 2026-10-04).
+    // The actual license body copy lives in `CreditsContent.astro` (same
+    // pattern as `legal` above: long-form text stays out of this map).
+    credits: {
+      pageTitle: 'Créditos',
+      pageDescription:
+        'Créditos y licencias de los recursos de terceros que usa ChuyoCode.',
     },
     news: { readMore: 'Leer más' },
     article: { back: 'Volver a noticias' },
@@ -1243,7 +1251,7 @@ export const UI_LABELS = {
       soon: 'Soon',
       switchTo: 'Switch to',
     },
-    footer: { terms: 'Terms & Conditions', privacy: 'Privacy' },
+    footer: { terms: 'Terms & Conditions', privacy: 'Privacy', credits: 'Credits' },
     common: {
       back: 'Back',
       backTooltip: 'Back to the previous page',
@@ -1382,6 +1390,14 @@ export const UI_LABELS = {
       pending: 'Legal content pending',
       privacyNote:
         'We respect your privacy. We are still drafting the full version of this document; in the meantime, we do not sell or share your personal data with third parties.',
+    },
+    // Credits page (`/[lang]/creditos`, visual-identity decision, 2026-10-04).
+    // The actual license body copy lives in `CreditsContent.astro` (same
+    // pattern as `legal` above: long-form text stays out of this map).
+    credits: {
+      pageTitle: 'Credits',
+      pageDescription:
+        'Credits and licenses for the third-party resources ChuyoCode uses.',
     },
     news: { readMore: 'Read more' },
     article: { back: 'Back to news' },
