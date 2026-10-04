@@ -15,9 +15,10 @@
  * strict bound (it deliberately re-centers). The OLD desktop model —
  * a plain `zoom` number driving a `width: N%` wrapper inside a horizontally
  * scrolling strip, via the narrower `clampZoom`/`stepZoom` pair — is fully
- * retired here: `stepZoom`/`clampZoom`/`FIT_ZOOM` are now dead in this file
- * (still exported/tested in `canvasViewport.ts` itself, same as `wheelZoom`
- * already was before this pass — see that file's own header).
+ * retired here: `clampZoom`/`FIT_ZOOM` are now dead in this file (`clampZoom`
+ * is still exported/tested in `canvasViewport.ts` itself; `stepZoom` and
+ * `wheelZoom` had no callers left anywhere once this file's own desktop view
+ * switched to `stepZoomInput`/`wheelZoomInput`, and were deleted outright).
  *
  * TWO INTERACTION MODELS, split at `lg` (mobile layout pass, unchanged by
  * this redesign): below `lg`, this mounts `WorksheetPracticePlayerMobile`

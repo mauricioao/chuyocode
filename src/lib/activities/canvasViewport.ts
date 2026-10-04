@@ -8,17 +8,17 @@
  * `WorksheetZoneEditor.test.tsx`'s own header).
  *
  * Two families of exports live here:
- *  - Plain ZOOM helpers (`clampZoom`, `fitZoom`, `stepZoom`, `wheelZoom`,
- *    `contentSize`, `rotatedSize`, …) — a single number. `fitZoom`/`clampZoom`
- *    stay load-bearing (the narrower floor `fitCamera`/`clampCamera` clamp
- *    through — see their own headers) and `rotatedSize` is used everywhere a
- *    rotation exists; `stepZoom`/`wheelZoom` themselves are UNUSED outside
- *    their own tests as of the practice player redesign (`WorksheetPracticePlayer.tsx`'s
- *    desktop view was its last caller — rebuilt on the CAMERA family below,
- *    via `stepZoomInput`/`wheelZoomInput`, same as the editor's own toolbar).
- *    Kept rather than deleted: small, independently pure, already
- *    unit-tested, and cheap to keep in case a future non-camera zoom UI wants
- *    them again.
+ *  - Plain ZOOM helpers (`clampZoom`, `fitZoom`, `stepZoomInput`,
+ *    `wheelZoomInput`, `contentSize`, `rotatedSize`, …) — a single number.
+ *    `fitZoom`/`clampZoom` stay load-bearing (the narrower floor
+ *    `fitCamera`/`clampCamera` clamp through — see their own headers) and
+ *    `rotatedSize` is used everywhere a rotation exists. The original,
+ *    narrower-floor `stepZoom`/`wheelZoom` are gone: superseded by
+ *    `stepZoomInput`/`wheelZoomInput` once `WorksheetPracticePlayer.tsx`'s
+ *    desktop view (their last caller) was rebuilt on the CAMERA family below,
+ *    same as the editor's own toolbar — deleted outright once that redesign
+ *    left them with no callers outside their own tests; git history has them
+ *    if ever needed again.
  *  - The worksheet CREATOR canvas' own bounded CAMERA (`Camera`,
  *    `fitCamera`, `zoomAt`, `panBy`, `clampCamera`, `clampCameraLoose`,
  *    `screenToContentPoint`) —
@@ -95,11 +95,6 @@ export function fitZoom(viewport: Size, content: Size): number {
   return clampZoom(Math.min(viewport.width / content.width, viewport.height / content.height));
 }
 
-/** One step in `direction` from `zoom`, clamped like every other zoom change here. */
-export function stepZoom(zoom: number, direction: 'in' | 'out', step: number = ZOOM_STEP): number {
-  return clampZoom(direction === 'in' ? zoom + step : zoom - step);
-}
-
 /**
  * Wheel-zoom tuning (canvas tools pass): the fraction of the CURRENT zoom
  * applied per accumulated `deltaY` pixel, and the largest zoom-factor change
@@ -111,42 +106,31 @@ export function stepZoom(zoom: number, direction: 'in' | 'out', step: number = Z
 export const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 export const MAX_WHEEL_ZOOM_STEP = 0.5;
 
-/**
- * The new zoom from an accumulated wheel `deltaY` (the caller batches every
- * `wheel` event that lands within the same animation frame into one call
- * here, instead of applying each event immediately — see
- * `WorksheetZoneEditor.tsx`'s wheel listener) applied to `zoom`, clamped like
- * every other zoom change in this module.
- */
-export function wheelZoom(zoom: number, deltaY: number): number {
-  const rawStep = -deltaY * WHEEL_ZOOM_SENSITIVITY * zoom;
-  const step = Math.max(-MAX_WHEEL_ZOOM_STEP, Math.min(MAX_WHEEL_ZOOM_STEP, rawStep));
-  return clampZoom(zoom + step);
-}
-
 /** The content box's rendered CSS pixel size at `zoom` — what the canvas' `style.width/height` are set to. */
 export function contentSize(image: Size, zoom: number): Size {
   return { width: image.width * zoom, height: image.height * zoom };
 }
 
 /**
- * {@link stepZoom}, but clamped to the WIDER `[INPUT_MIN_ZOOM, MAX_ZOOM]`
- * range (10%-400%) instead of `[MIN_ZOOM, MAX_ZOOM]` (canvas camera pass,
+ * One step in `direction` from `zoom`, clamped to the WIDER
+ * `[INPUT_MIN_ZOOM, MAX_ZOOM]` range (10%-400%) instead of the narrower
+ * `[MIN_ZOOM, MAX_ZOOM]` {@link clampZoom} enforces (canvas camera pass,
  * owner-approved design: "unify the −/+ button clamp with the input").
- * `stepZoom` itself stays UNCHANGED — `WorksheetPracticePlayer.tsx` still
- * uses it directly and keeps its own, narrower 25% floor; this is a
- * DIFFERENT/ADDITIONAL export the worksheet CREATOR canvas' own −/+ buttons
- * and wheel/keyboard zoom switch to instead, so every zoom entry point in
- * that one editor agrees on the same floor as its editable % field.
+ * Used by the worksheet CREATOR canvas' own −/+ buttons and wheel/keyboard
+ * zoom, and by `WorksheetPracticePlayer.tsx`, so every zoom entry point
+ * agrees on the same floor as the editable % field.
  */
 export function stepZoomInput(zoom: number, direction: 'in' | 'out', step: number = ZOOM_STEP): number {
   return clampZoomInput(direction === 'in' ? zoom + step : zoom - step);
 }
 
 /**
- * {@link wheelZoom}, but clamped to the wider `[INPUT_MIN_ZOOM, MAX_ZOOM]`
- * range — see {@link stepZoomInput}'s own header for why this is a sibling
- * export rather than a change to `wheelZoom` itself.
+ * The new zoom from an accumulated wheel `deltaY` (the caller batches every
+ * `wheel` event that lands within the same animation frame into one call —
+ * see `WorksheetZoneEditor.tsx`'s wheel listener) applied to `zoom`, clamped
+ * to the wider `[INPUT_MIN_ZOOM, MAX_ZOOM]` range — see
+ * {@link stepZoomInput}'s own header for why this module only keeps the
+ * wider-floor pair now.
  */
 export function wheelZoomInput(zoom: number, deltaY: number): number {
   const rawStep = -deltaY * WHEEL_ZOOM_SENSITIVITY * zoom;

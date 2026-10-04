@@ -8,9 +8,7 @@ import {
   clampZoomInput,
   parseZoomPercentInput,
   fitZoom,
-  stepZoom,
   stepZoomInput,
-  wheelZoom,
   wheelZoomInput,
   contentSize,
   rotatedSize,
@@ -88,21 +86,6 @@ describe('fitZoom', () => {
   });
 });
 
-describe('stepZoom', () => {
-  it('steps in by ZOOM_STEP', () => {
-    expect(stepZoom(1, 'in')).toBe(1 + ZOOM_STEP);
-  });
-
-  it('steps out by ZOOM_STEP', () => {
-    expect(stepZoom(1, 'out')).toBe(1 - ZOOM_STEP);
-  });
-
-  it('clamps at the floor and ceiling', () => {
-    expect(stepZoom(MIN_ZOOM, 'out')).toBe(MIN_ZOOM);
-    expect(stepZoom(MAX_ZOOM, 'in')).toBe(MAX_ZOOM);
-  });
-});
-
 describe('contentSize', () => {
   it('scales the image size by the zoom factor', () => {
     expect(contentSize({ width: 800, height: 400 }, 0.5)).toEqual({ width: 400, height: 200 });
@@ -169,47 +152,14 @@ describe('parseZoomPercentInput', () => {
   });
 });
 
-describe('wheelZoom (batched, proportional wheel zoom)', () => {
-  it('zooms in on a negative deltaY (wheel up / pinch out)', () => {
-    expect(wheelZoom(1, -100)).toBeGreaterThan(1);
-  });
-
-  it('zooms out on a positive deltaY (wheel down / pinch in)', () => {
-    expect(wheelZoom(1, 100)).toBeLessThan(1);
-  });
-
-  it('is a no-op for a zero delta', () => {
-    expect(wheelZoom(1, 0)).toBe(1);
-  });
-
-  it('clamps a huge accumulated delta to at most MAX_WHEEL_ZOOM_STEP of change in one call', () => {
-    const next = wheelZoom(1, -1_000_000);
-    expect(next).toBeLessThanOrEqual(1.5); // MAX_WHEEL_ZOOM_STEP is 0.5
-    expect(next).toBeLessThanOrEqual(MAX_ZOOM);
-  });
-
-  it('never zooms out below MIN_ZOOM even with a huge positive delta', () => {
-    expect(wheelZoom(MIN_ZOOM, 1_000_000)).toBe(MIN_ZOOM);
-  });
-
-  it('scales the step with the CURRENT zoom (proportional, not flat)', () => {
-    const stepAtLowZoom = wheelZoom(0.5, -100) - 0.5;
-    const stepAtHighZoom = wheelZoom(2, -100) - 2;
-    expect(stepAtHighZoom).toBeGreaterThan(stepAtLowZoom);
-  });
-});
-
 describe('stepZoomInput (unified −/+ button clamp, 10%-400% like the editable input)', () => {
-  it('steps in/out by ZOOM_STEP, same as stepZoom in-range', () => {
+  it('steps in/out by ZOOM_STEP', () => {
     expect(stepZoomInput(1, 'in')).toBe(1 + ZOOM_STEP);
     expect(stepZoomInput(1, 'out')).toBe(1 - ZOOM_STEP);
   });
 
-  it('floors at the WIDER 10% input floor, below stepZoom\'s own 25% floor', () => {
-    // stepZoom would stop at MIN_ZOOM (25%); the unified buttons must reach
-    // all the way down to INPUT_MIN_ZOOM (10%) like the editable % field.
+  it('floors at the WIDER 10% input floor, below the toolbar-wide MIN_ZOOM (25%)', () => {
     expect(stepZoomInput(0.15, 'out')).toBe(INPUT_MIN_ZOOM);
-    expect(stepZoom(0.15, 'out')).toBe(MIN_ZOOM); // the OLD/unwidened helper, unchanged
   });
 
   it('caps at the same 400% ceiling', () => {
@@ -217,14 +167,33 @@ describe('stepZoomInput (unified −/+ button clamp, 10%-400% like the editable 
   });
 });
 
-describe('wheelZoomInput (unified wheel clamp, 10%-400%)', () => {
-  it('matches wheelZoom in-range', () => {
-    expect(wheelZoomInput(1, -100)).toBeCloseTo(wheelZoom(1, -100));
+describe('wheelZoomInput (unified, batched, proportional wheel zoom, 10%-400%)', () => {
+  it('zooms in on a negative deltaY (wheel up / pinch out)', () => {
+    expect(wheelZoomInput(1, -100)).toBeGreaterThan(1);
   });
 
-  it('reaches below wheelZoom\'s own 25% floor, down to the wider 10% floor', () => {
+  it('zooms out on a positive deltaY (wheel down / pinch in)', () => {
+    expect(wheelZoomInput(1, 100)).toBeLessThan(1);
+  });
+
+  it('is a no-op for a zero delta', () => {
+    expect(wheelZoomInput(1, 0)).toBe(1);
+  });
+
+  it('clamps a huge accumulated delta to at most MAX_WHEEL_ZOOM_STEP of change in one call', () => {
+    const next = wheelZoomInput(1, -1_000_000);
+    expect(next).toBeLessThanOrEqual(1.5); // MAX_WHEEL_ZOOM_STEP is 0.5
+    expect(next).toBeLessThanOrEqual(MAX_ZOOM);
+  });
+
+  it('scales the step with the CURRENT zoom (proportional, not flat)', () => {
+    const stepAtLowZoom = wheelZoomInput(0.5, -100) - 0.5;
+    const stepAtHighZoom = wheelZoomInput(2, -100) - 2;
+    expect(stepAtHighZoom).toBeGreaterThan(stepAtLowZoom);
+  });
+
+  it('reaches below the toolbar-wide 25% floor, down to the wider 10% floor', () => {
     expect(wheelZoomInput(0.12, 1_000_000)).toBe(INPUT_MIN_ZOOM);
-    expect(wheelZoom(0.12, 1_000_000)).toBe(MIN_ZOOM); // the OLD/unwidened helper, unchanged
   });
 });
 

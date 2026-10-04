@@ -371,10 +371,9 @@ export default function WorksheetZoneEditor({
   );
 
   // Unified 10%-400% range for every explicit zoom entry point in this
-  // editor (owner-approved design) — `stepZoomInput`/`wheelZoomInput` are
-  // the WIDER-floor siblings of `stepZoom`/`wheelZoom`
-  // (`WorksheetPracticePlayer.tsx` keeps using the narrower, unchanged
-  // originals directly — see `canvasViewport.ts`'s own header on each).
+  // editor (owner-approved design) — `stepZoomInput`/`wheelZoomInput`,
+  // the same pair `WorksheetPracticePlayer.tsx` now uses too (see
+  // `canvasViewport.ts`'s own header on each).
   const handleZoomIn = useCallback(
     () => applyCameraZoom(stepZoomInput(camera.scale, 'in')),
     [applyCameraZoom, camera.scale],
