@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "typecheck": "astro check",
     "sanity:deploy": "sanity deploy",
-    "sanity:start": "sanity start"
+    "sanity:start": "sanity start",
+    "images:optimize": "node scripts/optimize-image.mjs"
   },
   "dependencies": {
     "@astrojs/netlify": "^8.2.6",
@@ -63,6 +64,7 @@
     "@types/sanitize-html": "^2.16.2",
     "jsdom": "25",
     "sanity": "^6.5.0",
+    "sharp": "^0.35.5",
     "styled-components": "^6.4.4",
     "typescript": "^5.9.3",
     "vite": "^8.3.2",
