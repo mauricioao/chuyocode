@@ -188,7 +188,7 @@ describe('GET /[lang]/ingles/actividades/[id] — report button (PR E, Moderatio
     expect(html).not.toContain('data-testid="report-activity-button"');
   });
 
-  it('hides it from an anonymous visitor', async () => {
+  it('hides the interactive button from an anonymous visitor, showing a sign-in link instead', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -196,6 +196,19 @@ describe('GET /[lang]/ingles/actividades/[id] — report button (PR E, Moderatio
     });
     const html = await res.text();
     expect(html).not.toContain('data-testid="report-activity-button"');
+    expect(html).toContain('data-testid="activity-report-guest"');
+    expect(html).toContain('href="/es/auth/entrar?next=%2Fes%2Fingles%2Factividades%2Fabc"');
+  });
+
+  it('shows neither the button nor the guest link for the activity\'s own author', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'user-1' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="report-activity-button"');
+    expect(html).not.toContain('data-testid="activity-report-guest"');
   });
 });
 
@@ -226,15 +239,19 @@ describe('GET /[lang]/ingles/actividades/[id] — heart control (Descubrir)', ()
     expect(hasHeartedActivityMock).not.toHaveBeenCalled();
   });
 
-  it('shows a read-only count for an anonymous visitor', async () => {
+  it('shows the count for an anonymous visitor as a link to sign-in, not the inert read-only span', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else', heartCount: 2 };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: null },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="activity-heart-readonly"');
+    expect(html).not.toContain('data-testid="activity-heart-readonly"');
     expect(html).not.toContain('data-testid="activity-heart-button"');
+    expect(html).toContain('data-testid="activity-heart-guest"');
+    expect(html).toContain('2');
+    expect(html).toContain('href="/es/auth/entrar?next=%2Fes%2Fingles%2Factividades%2Fabc"');
+    expect(hasHeartedActivityMock).not.toHaveBeenCalled();
   });
 });
 
@@ -249,7 +266,7 @@ describe('GET /[lang]/ingles/actividades/[id] — "Duplicar" (D7)', () => {
     expect(html).toContain('data-testid="duplicate-activity-button"');
   });
 
-  it('hides it from an anonymous visitor', async () => {
+  it('hides the interactive button from an anonymous visitor, showing a sign-in link instead', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -257,6 +274,8 @@ describe('GET /[lang]/ingles/actividades/[id] — "Duplicar" (D7)', () => {
     });
     const html = await res.text();
     expect(html).not.toContain('data-testid="duplicate-activity-button"');
+    expect(html).toContain('data-testid="activity-duplicate-guest"');
+    expect(html).toContain('href="/es/auth/entrar?next=%2Fes%2Fingles%2Factividades%2Fabc"');
   });
 });
 
@@ -275,14 +294,198 @@ describe('GET /[lang]/ingles/actividades/[id] — "Compartir" (D8)', () => {
     expect(html).toContain(expectedHref.replace(/&/g, '&amp;'));
   });
 
-  it('notes that the recipient needs to sign in', async () => {
+  // Guest play made this route (and its images) reachable without an
+  // account, so the dialog no longer claims the recipient needs to sign in
+  // — that used to be true (the whole route was gated) and no longer is.
+  it('does not claim the recipient needs to sign in', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    expect(html).toContain('iniciar sesión');
+    expect(html).not.toContain('data-testid="exercise-share-note"');
+    expect(html).not.toContain('iniciar sesión');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)', () => {
+  it('renders the friendly guest banner with a sign-up link back to this page', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="guest-banner"');
+    expect(html).toContain('Jugando como invitado');
+    expect(html).toContain('data-testid="guest-sign-up-link"');
+    expect(html).toContain('href="/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc"');
+  });
+
+  it('shows no guest banner for a signed-in visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="guest-banner"');
+  });
+
+  it('renders the English guest banner copy and sign-up label', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/en/ingles/actividades/abc', {
+      params: { lang: 'en', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    // The apostrophe is HTML-entity-escaped by the renderer (`&#39;`).
+    expect(html).toContain('playing as a guest');
+    expect(html).toContain('>Sign up<');
+  });
+
+  it('never mounts the per-user "Ya lo viste" view badge for an anonymous visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('ActivityViewBadge');
+  });
+
+  it('still mounts the view badge island for a signed-in visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('ActivityViewBadge');
+  });
+
+  it('still renders the practice island (playing/checking answers keep working) for a guest', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'w1',
+          type: 'worksheet',
+          rotation: 0,
+          image: { path: 'activity-images/abc/img-1.webp', width: 800, height: 400 },
+          zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['cat'] }],
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="worksheet-player"');
+  });
+
+  it('still renders the Compartir, Imprimir and Presentar entry points for a guest', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'q1',
+          type: 'quiz',
+          payload: {
+            pools: { opts: [{ id: 'a', text: 'x' }] },
+            slots: [{ id: 's1', label: 'x', input: 'choice', pool: 'opts', answer: ['a'] }],
+          },
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="exercise-share"');
+    expect(html).toContain('data-testid="activity-print-link"');
+    expect(html).toContain('data-testid="activity-present-link"');
+  });
+
+  it('404s an anonymous visit to a draft/unpublished activity, same as a missing one', async () => {
+    activityResult.value = null;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode v1)', () => {
+  it('links to the presentation page when the activity has at least one quiz question', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'q1',
+          type: 'quiz',
+          payload: {
+            pools: { opts: [{ id: 'a', text: 'x' }] },
+            slots: [{ id: 's1', label: 'x', input: 'choice', pool: 'opts', answer: ['a'] }],
+          },
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-present-link"');
+    expect(html).toContain('href="/es/ingles/actividades/abc/presentar"');
+  });
+
+  it('hides the link for an activity with only worksheet blocks', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'w1',
+          type: 'worksheet',
+          rotation: 0,
+          image: { path: 'activity-images/abc/img-1.webp', width: 800, height: 400 },
+          zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['cat'] }],
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="activity-present-link"');
+  });
+
+  it('hides the link for an activity with no blocks at all', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="activity-present-link"');
   });
 });
 

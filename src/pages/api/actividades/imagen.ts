@@ -26,6 +26,18 @@
  * response is a 404 — the SAME 404 for "no such path" and "exists but isn't
  * yours", so neither leaks which one it was.
  *
+ * 🔴 THIS IS ALSO THE GUEST-PLAY IMAGE AUTHORIZATION RULE (practice/presentar
+ * pages, `@lib/access`'s `isPublicActivityRoute`): "belongs to a published
+ * activity" IS the `activity-images/…` bucket check above, not a separate
+ * live lookup. A path only ever lands there via `copyToImagesBucket`
+ * (`@lib/activities/storage`), called exclusively from `approveRevision`
+ * when a moderator approves a revision — so the bucket/shape check already
+ * means "a moderator approved this for publication", with no extra database
+ * round trip. This was already true (and already anonymous: this endpoint
+ * is under `/api/`, which the middleware's login gate never covers) before
+ * guest play — it only now matters for a signed-OUT browser tab, not just a
+ * bare HTTP client.
+ *
  * Every response is private/no-store (T7 posture): both verbs read off
  * `locals.user`, and a shared cache serving either to a different visitor
  * would leak identity or content that visitor has no business seeing.

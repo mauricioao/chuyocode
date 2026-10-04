@@ -134,3 +134,54 @@ describe('BaseLayout — visual-theme scope (theme prop)', () => {
     expect(html.match(/data-theme="brand" class="dark contents"/g) ?? []).toHaveLength(4);
   });
 });
+
+// Presentation mode v1 ("Preguntas"): `bare` drops the site chrome (nav
+// progress bar, header, footer, global scroll-to-top) so a page can be
+// exactly its own full-bleed content. Opt-in — every page that omits it
+// keeps every existing chrome wrapper, unchanged (asserted above).
+describe('BaseLayout — bare mode (no site chrome)', () => {
+  it('defaults to the full chrome: omitting `bare` changes nothing', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html.match(/data-theme="brand" class="dark contents"/g) ?? []).toHaveLength(4);
+  });
+
+  it('drops the nav progress bar, header, footer and global scroll-to-top', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', bare: true },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html.match(/data-theme="brand" class="dark contents"/g) ?? []).toHaveLength(0);
+    expect(html).not.toContain('id="nav-progress-bar"');
+    expect(html).not.toContain('<header');
+    expect(html).not.toContain('<footer');
+  });
+
+  it('keeps the skip-link, the toast host, and the slot content inside <main>', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', bare: true },
+      slots: { default: '<div data-testid="bare-content">content</div>' },
+    });
+    expect(html).toContain('skip-link');
+    expect(html).toContain('data-testid="bare-content"');
+    const mainStart = html.indexOf('<main');
+    const contentIndex = html.indexOf('data-testid="bare-content"');
+    expect(contentIndex).toBeGreaterThan(mainStart);
+  });
+
+  it('composes with theme="ingles" (the one current caller, presentar.astro)', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', bare: true, theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).toContain('data-theme="ingles"');
+    expect(html.match(/data-theme="brand" class="dark contents"/g) ?? []).toHaveLength(0);
+  });
+});

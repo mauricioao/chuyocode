@@ -94,7 +94,7 @@ export const UI_LABELS = {
       // catalogue the previous sentence just named — same promise, no verb
       // addressing the reader. `aprender` was already carried by "cursos".
       siteDescription:
-        'ChuyoCode: libros, artículos y cursos de programación para la comunidad latina. Tecnología en tu idioma, con fundamentos sólidos.',
+        'ChuyoCode: inglés y tecnología en tu idioma. Actividades interactivas para docentes y estudiantes, libros y noticias de programación para la comunidad latina.',
       booksDescription:
         'Catálogo de libros de programación y tecnología en español, seleccionados para aprender con fundamentos sólidos.',
       newsDescription:
@@ -685,6 +685,10 @@ export const UI_LABELS = {
         noLevel: 'Sin nivel',
         // "Imprimir" (D6): links to the print-optimized page.
         print: 'Imprimir',
+        // "Presentar" (presentation mode v1): links to the full-screen,
+        // projector-facing deck. Shown only when the activity has at least
+        // one Preguntas (quiz) item — see `[id].astro`'s own `canPresent`.
+        present: 'Presentar',
         check: 'Comprobar',
         retry: 'Reintentar',
         score: 'Puntaje',
@@ -729,10 +733,15 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Descargar QR',
         shareNative: 'Más opciones',
-        // The Inglés section requires sign-in (this whole route is already
-        // gated) — a short muted note so the dialog does not promise a link
-        // that opens for an anonymous visitor.
-        shareSignInNote: 'Quien reciba el enlace va a necesitar iniciar sesión para abrirlo.',
+        // Guest play: friendly line shown only to an anonymous visitor,
+        // right below the header row — invites them to sign up without
+        // blocking anything they can already do (play, check answers,
+        // share, present). IMPERSONAL, no second-person verb (gerund +
+        // infinitive, same register `src/lib/neutralSpanish.ts` enforces
+        // site-wide) — "Estás"/"Creá"/"Crea" all read as a tú/vos pick,
+        // which this codebase avoids at the root instead of choosing a side.
+        guestBanner: 'Jugando como invitado. Crear una cuenta gratis permite dar corazones y crear actividades propias.',
+        guestSignUp: 'Crear cuenta',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -918,6 +927,36 @@ export const UI_LABELS = {
         worksheetLabel: 'Hoja',
         quizLabel: 'Preguntas',
       },
+      // Presentation mode v1 ("Preguntas", presentation mode pass,
+      // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
+      // bare-layout page (no site header/footer/nav, light Inglés theme) —
+      // same reasoning as `print` above — so its copy stays a sibling of
+      // `practice` rather than reusing that section's own vocabulary.
+      present: {
+        pageDescription:
+          'Presentación en pantalla completa de esta actividad de inglés, pensada para proyectar en clase.',
+        noLevel: 'Sin nivel',
+        questionsCountOne: 'pregunta',
+        questionsCountMany: 'preguntas',
+        scanHint: 'Escanear el código para abrir esta actividad en el teléfono.',
+        qrAlt: 'Código QR para abrir esta actividad en un teléfono',
+        summaryTitle: '¡Listo!',
+        restart: 'Volver a empezar',
+        prev: 'Anterior',
+        next: 'Siguiente',
+        reveal: 'Mostrar respuesta',
+        fullscreenEnter: 'Pantalla completa',
+        fullscreenExit: 'Salir de pantalla completa',
+        exit: 'Salir',
+        progressPrefix: 'Pregunta',
+        ofLabel: 'de',
+        correctBadge: 'Correcta',
+        answerLabel: 'Respuesta',
+        explanationLabel: 'Por qué',
+        liveCover: 'Portada',
+        liveSummary: 'Resumen',
+        liveRevealed: 'Respuesta revelada',
+      },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
     // whole page's Spanish out of reach of the neutral-Spanish guard — and that
@@ -948,6 +987,24 @@ export const UI_LABELS = {
         latestArticles: 'Últimas noticias',
         courses: 'Cursos',
         english: 'Inglés para programadores',
+      },
+      // Inglés product section (home redesign: "Inglés en ChuyoCode"). Two
+      // entry points, honest about what exists today: creating an activity
+      // (`/{lang}/crear`) and practicing one (`/{lang}/ingles/actividades`).
+      // Both routes are already login-gated by the middleware.
+      ingles: {
+        heading: 'Inglés en ChuyoCode',
+        intro: 'Actividades interactivas para enseñar y practicar inglés, en español.',
+        teachersLabel: 'Para docentes',
+        teachersTitle: 'Tu ficha, ahora interactiva',
+        teachersBody:
+          'Sube tu ficha o PDF, marca las respuestas y proyéctala en clase. Gratis.',
+        teachersCta: 'Crear mi actividad',
+        learnersLabel: 'Para aprender',
+        learnersTitle: 'Practica a tu ritmo',
+        learnersBody:
+          'Actividades y juegos por nivel, con explicaciones en español cuando te equivocas.',
+        learnersCta: 'Explorar actividades',
       },
     },
     courses: {
@@ -1141,7 +1198,7 @@ export const UI_LABELS = {
   en: {
     meta: {
       siteDescription:
-        'ChuyoCode: books, articles, and programming courses for the Latin community. Learn technology in your own language, with solid foundations.',
+        'ChuyoCode: English and technology in your language. Interactive activities for teachers and students, plus programming books and news for the Latin community.',
       booksDescription:
         'A catalog of programming and technology books curated to help you learn with solid foundations.',
       newsDescription:
@@ -1611,6 +1668,7 @@ export const UI_LABELS = {
         back: 'Back to activities',
         noLevel: 'No level',
         print: 'Print',
+        present: 'Present',
         check: 'Check',
         retry: 'Try again',
         score: 'Score',
@@ -1642,7 +1700,8 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Download QR',
         shareNative: 'More options',
-        shareSignInNote: 'Whoever opens the link will need to sign in first.',
+        guestBanner: "You're playing as a guest. Create a free account to give hearts and make your own activities.",
+        guestSignUp: 'Sign up',
       },
       report: {
         button: 'Report',
@@ -1793,6 +1852,30 @@ export const UI_LABELS = {
         worksheetLabel: 'Sheet',
         quizLabel: 'Questions',
       },
+      present: {
+        pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
+        noLevel: 'No level',
+        questionsCountOne: 'question',
+        questionsCountMany: 'questions',
+        scanHint: 'Scan the code to open this activity on a phone.',
+        qrAlt: 'QR code to open this activity on a phone',
+        summaryTitle: 'All done!',
+        restart: 'Start over',
+        prev: 'Previous',
+        next: 'Next',
+        reveal: 'Show answer',
+        fullscreenEnter: 'Full screen',
+        fullscreenExit: 'Exit full screen',
+        exit: 'Exit',
+        progressPrefix: 'Question',
+        ofLabel: 'of',
+        correctBadge: 'Correct',
+        answerLabel: 'Answer',
+        explanationLabel: 'Why',
+        liveCover: 'Cover',
+        liveSummary: 'Summary',
+        liveRevealed: 'Answer revealed',
+      },
     },
     notFound: {
       title: 'Page not found',
@@ -1815,6 +1898,21 @@ export const UI_LABELS = {
         latestArticles: 'Latest news',
         courses: 'Courses',
         english: 'English for developers',
+      },
+      // Mirrors `es.home.ingles` — see its comment there.
+      ingles: {
+        heading: 'English on ChuyoCode',
+        intro: 'Interactive activities to teach and practice English, explained in Spanish.',
+        teachersLabel: 'For teachers',
+        teachersTitle: 'Your worksheet, now interactive',
+        teachersBody:
+          'Upload your worksheet or PDF, mark the answers and project it in class. Free.',
+        teachersCta: 'Create my activity',
+        learnersLabel: 'For learners',
+        learnersTitle: 'Practice at your own pace',
+        learnersBody:
+          'Activities and games by level, with explanations in Spanish when you get it wrong.',
+        learnersCta: 'Explore activities',
       },
     },
     courses: {

@@ -117,12 +117,16 @@ describe('MisActividadesIsland — share (D8)', () => {
     expect(whatsapp.getAttribute('href')).toBe(LIVE_WITH_PENDING.share!.whatsappHref);
   });
 
-  it('notes that the recipient needs to sign in', async () => {
+  // Guest play made the practice page (and its images) reachable without an
+  // account, so this dialog no longer claims the recipient needs to sign in
+  // — the LIVE activities it shares for are exactly the ones that are now
+  // public.
+  it('does not claim the recipient needs to sign in', async () => {
     render(<MisActividadesIsland lang="es" initialActivities={[LIVE_WITH_PENDING]} />);
     const wrapper = screen.getByTestId(`activity-share-${LIVE_WITH_PENDING.id}`);
     fireEvent.click(wrapper.querySelector('[data-testid="exercise-share"]') as HTMLElement);
-    const note = await screen.findByTestId('exercise-share-note');
-    expect(note.textContent).toContain('iniciar sesión');
+    await screen.findByTestId('qr-svg');
+    expect(screen.queryByTestId('exercise-share-note')).toBeNull();
   });
 });
 

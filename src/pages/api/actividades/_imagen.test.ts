@@ -246,6 +246,33 @@ describe('GET /api/actividades/imagen — public images path', () => {
   });
 });
 
+// Guest play: anonymous visitors on the (now public) practice/presentar
+// pages load worksheet images through this exact endpoint
+// (`imagePreviewUrl`, `@lib/activities/paths`). The authorization rule is
+// "belongs to a published activity" — enforced structurally, not by a live
+// lookup here: a path only ever lands under `activity-images/<activityId>/…`
+// via `copyToImagesBucket`, called exclusively from `approveRevision` at
+// moderation-approval time (see that module's header) — so the bucket/shape
+// check above IS the "published activity" check, with no extra DB round
+// trip and no risk of blocking the moderator's own preview of an
+// already-approved revision for a since-hidden activity.
+describe('GET /api/actividades/imagen — guest play (anonymous, published activity)', () => {
+  it('serves a published activity\'s worksheet image to a fully anonymous caller', async () => {
+    storageMocks.isPublicImagePath.mockReturnValue(true);
+    storageMocks.publicImageUrl.mockReturnValue('https://public.example/activity-images/44444444.../x.webp?redirect=1');
+    const res = await GET(getCtx({ user: null, path: PUBLIC_PATH }));
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://public.example/activity-images/44444444.../x.webp?redirect=1');
+  });
+
+  it('never serves a private (draft/pre-moderation) upload to an anonymous caller, even when shaped like a real path', async () => {
+    storageMocks.isOwnUploadPath.mockReturnValue(false);
+    const res = await GET(getCtx({ user: null, path: OWN_PATH }));
+    expect(res.status).toBe(401);
+    expect(storageMocks.signedReadUrl).not.toHaveBeenCalled();
+  });
+});
+
 describe('GET /api/actividades/imagen — private uploads path', () => {
   it('401s an anonymous request for a private path', async () => {
     const res = await GET(getCtx({ user: null, path: OWN_PATH }));

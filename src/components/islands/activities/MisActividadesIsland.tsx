@@ -190,7 +190,6 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
                     whatsapp: practiceT.shareWhatsapp,
                     downloadQr: practiceT.shareDownloadQr,
                     native: practiceT.shareNative,
-                    note: practiceT.shareSignInNote,
                   }}
                 />
               </div>

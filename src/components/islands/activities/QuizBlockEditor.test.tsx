@@ -197,6 +197,33 @@ describe('QuizBlockEditor — checklist', () => {
   });
 });
 
+describe('QuizBlockEditor — fits the focus block and scrolls inside it', () => {
+  // The expanded block in the editor's desktop focus layout has a fixed height
+  // and clips its overflow, so a long question list or a tall preview was cut
+  // off with no way to reach it. Each column must scroll on its own.
+  const classesOf = (testId: string) => screen.getByTestId(testId).className.split(/\s+/);
+
+  it('joins the height chain with its root and its two-column grid', () => {
+    render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
+    expect(classesOf('quiz-editor-b1')).toEqual(expect.arrayContaining(['flex-1', 'min-h-0']));
+    expect(classesOf('quiz-columns-b1')).toEqual(expect.arrayContaining(['lg:flex-1', 'lg:min-h-0']));
+  });
+
+  it('gives the questions column and the preview column their own vertical scroll on desktop', () => {
+    render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
+    for (const column of ['quiz-col-questions-b1', 'quiz-col-preview-b1']) {
+      expect(classesOf(column)).toEqual(expect.arrayContaining(['lg:min-h-0', 'lg:overflow-y-auto']));
+    }
+  });
+
+  it('lets the empty state scroll inside the block too', () => {
+    render(<Harness initialPayload={EMPTY_PAYLOAD} />);
+    expect(classesOf('quiz-editor-b1')).toEqual(
+      expect.arrayContaining(['flex-1', 'min-h-0', 'lg:overflow-y-auto']),
+    );
+  });
+});
+
 describe('QuizBlockEditor — live preview (items 3 and 8)', () => {
   it('renders no preview or mobile tabs in the empty state', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
