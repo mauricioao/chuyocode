@@ -54,7 +54,7 @@
  */
 import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { ArrowUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowUp';
-import { UI_LABELS, type Lang } from '@/lib/i18n';
+import type { UI_LABELS } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { computeScrollProgress, ringDashOffset } from '@/lib/scrollProgress';
 import { computeFloatingBottomOffset, visibleFooterHeight } from '@/lib/floatingOffset';
@@ -65,7 +65,18 @@ const RING_RADIUS = 18;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export interface ScrollToTopProps {
-  lang: Lang;
+  /**
+   * This island's own copy, computed server-side from
+   * `UI_LABELS[lang].common` (see `BaseLayout.astro` / `ActivityEditorIsland.tsx`)
+   * instead of a `lang` prop this component resolves itself — `ScrollToTop`
+   * is hydrated on EVERY page (`BaseLayout.astro`, `client:load`), so
+   * importing the full `UI_LABELS` dictionary here would ship its entire
+   * es+en copy (every section, every feature) to every visitor just for one
+   * string. Typed off `UI_LABELS` itself (keys only — `Record<..., string>`,
+   * not the `es` literal values themselves) so the two can't drift, while
+   * still accepting either locale's actual string.
+   */
+  labels: Pick<Record<keyof (typeof UI_LABELS)['es']['common'], string>, 'scrollToTop'>;
   /**
    * Ref to a scrollable container to scope this button to (e.g. the
    * activity editor's block list). When omitted, the button tracks WINDOW
@@ -107,8 +118,8 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-export default function ScrollToTop({ lang, targetRef }: ScrollToTopProps) {
-  const label = UI_LABELS[lang].common.scrollToTop;
+export default function ScrollToTop({ labels, targetRef }: ScrollToTopProps) {
+  const label = labels.scrollToTop;
   const scoped = Boolean(targetRef);
 
   const [pastThreshold, setPastThreshold] = useState(false);

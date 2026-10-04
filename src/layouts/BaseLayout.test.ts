@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import BaseLayout from './BaseLayout.astro';
+import { UI_LABELS } from '@lib/i18n';
 import { createContainer } from '@/testSupport/astroContainer';
 
 // `fullHeight` (floating side toolbar pass, owner request: the editor page
@@ -183,5 +184,30 @@ describe('BaseLayout — bare mode (no site chrome)', () => {
     const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
     expect(htmlTag).toContain('data-theme="ingles"');
     expect(html.match(/data-theme="brand" class="dark contents"/g) ?? []).toHaveLength(0);
+  });
+});
+
+// Stop shipping the whole i18n dictionary on every page (perf pass): the
+// global `ScrollToTop` — hydrated on EVERY page — now receives only its own
+// `{ scrollToTop }` string as a plain prop, computed here server-side from
+// `UI_LABELS[lang].common`, instead of importing the full dictionary itself.
+describe('BaseLayout — global ScrollToTop labels (i18n props pass)', () => {
+  it('passes the Spanish scrollToTop label', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).toContain(UI_LABELS.es.common.scrollToTop);
+  });
+
+  it('passes the English scrollToTop label, never the Spanish one', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'en' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).toContain(UI_LABELS.en.common.scrollToTop);
+    expect(html).not.toContain(UI_LABELS.es.common.scrollToTop);
   });
 });

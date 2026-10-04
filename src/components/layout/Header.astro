@@ -56,6 +56,11 @@ const { lang = DEFAULT_LANG } = Astro.props;
 const labels = UI_LABELS[lang].nav;
 const base = `/${lang}`;
 
+// Computed here (server-side) so `UserMenu` — hydrated on EVERY page — only
+// ever receives its own small slice of copy as a plain prop, never the full
+// `UI_LABELS` dictionary. See that component's own header/props doc.
+const userMenuLabels = UI_LABELS[lang].auth.userMenu;
+
 // "Cursos" is deliberately NOT in this list yet: the paid Courses feature
 // (see `0017_courses.sql`) is being built base-first and stays HIDDEN — no
 // nav/hub/menu entry anywhere — until payments actually exist and the
@@ -108,7 +113,7 @@ const navLinks = [
             resolving immediately rather than waiting for the main thread to go
             idle, which would stretch the loading placeholder's flash on a busy
             page with several other islands ahead of it in the idle queue. */}
-        <UserMenu lang={lang} client:load />
+        <UserMenu lang={lang} labels={userMenuLabels} client:load />
 
         {/* Mobile: hamburger button + JS toggle stub. The toggle just flips
             the `hidden` class on the mobile menu; no framework, no island. */}

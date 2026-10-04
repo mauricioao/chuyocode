@@ -112,6 +112,11 @@ const isIngles = theme === 'ingles';
 // forgets to pass its own (decision #7: meta description always present).
 const metaDescription = description ?? UI_LABELS[lang].meta.siteDescription;
 
+// Computed here (server-side) so the global `ScrollToTop` — hydrated on
+// EVERY page — only ever receives the one string it needs as a plain prop,
+// never the full `UI_LABELS` dictionary. See that component's own props doc.
+const scrollToTopLabels = { scrollToTop: UI_LABELS[lang].common.scrollToTop };
+
 // Canonical URL for og:url — resolved from the current request when available.
 const canonicalUrl = Astro.url?.href;
 
@@ -229,7 +234,7 @@ const faviconSvg =
         stage has no page scroll to return from. */}
     {!bare && (
       <div data-theme="brand" class="dark contents">
-        <ScrollToTop client:load lang={lang} />
+        <ScrollToTop client:load labels={scrollToTopLabels} />
       </div>
     )}
 
