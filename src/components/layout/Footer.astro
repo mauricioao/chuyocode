@@ -57,12 +57,17 @@ const secondaryLinks = [
     class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row"
   >
     <p class="text-sm text-muted-foreground">&copy; {currentYear} ChuyoCode</p>
-    <nav class="flex items-center gap-6" aria-label="Secondary">
+    {/* Five links do not fit one row on a phone: the row wraps between
+        links and every label stays on one line (tests/e2e/mobile-overflow). */}
+    <nav
+      class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-end"
+      aria-label="Secondary"
+    >
       {
         secondaryLinks.map((link) => (
           <a
             href={link.href}
-            class="text-sm text-muted-foreground transition-theme duration-theme hover:text-primary"
+            class="whitespace-nowrap text-sm text-muted-foreground transition-theme duration-theme hover:text-primary"
           >
             {link.label}
           </a>
