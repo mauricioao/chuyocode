@@ -9,10 +9,25 @@
  * their own draft/pending work already has the editor's own preview mode
  * (`WorksheetPlayer`'s creator-preview, unchanged from PR B) for that.
  *
- * Under `ingles/**`, so this route is ALREADY gated and marked
- * private/no-store by the middleware — same posture as
- * `/[lang]/ingles/actividades/index.astro`'s own header, no per-page gate
- * or `markPrivate` call needed here.
+ * Under `ingles/**`, so this route is marked private/no-store by the
+ * middleware exactly like every other gated page — same posture as
+ * `/[lang]/ingles/actividades/index.astro`'s own header, no per-page
+ * `markPrivate` call needed here. It is NOT, however, sign-in gated anymore:
+ * `@lib/access`'s `isPublicActivityRoute` carves this route (and its sibling
+ * `presentar.astro`) out of the login wall for guest play (owner-approved —
+ * a teacher's QR/WhatsApp link must not hit a login screen in class). The
+ * `getPublishedActivity` 404 above is what actually protects a non-live
+ * activity from an anonymous visitor — same 404 the author's own non-live
+ * activity already gets, so there is nothing extra to gate here.
+ *
+ * ANONYMOUS VISITOR ("guest"): `user` below is `null`. `canHeart`/`canReport`/
+ * `canDuplicate` were already `false` for a `null` user before this feature
+ * (defensive, since the page used to be unreachable anonymously) — now that
+ * they are reachable in practice, each one grows a GUEST fallback: a plain
+ * link to sign-in (carrying `next` back to this exact page) instead of the
+ * interactive island. `ActivityViewBadge` (the per-user "Ya lo viste" badge)
+ * is skipped entirely for a guest — no island, no `visto` request — and a
+ * short, friendly line invites them to create a free account.
  *
  * ONE FRAMED CARD, `<BaseLayout fullHeight>` (same shape the activity editor
  * already established — `src/pages/[lang]/crear/[id].astro`'s own header):
@@ -38,6 +53,8 @@ import { HeartIcon } from '@phosphor-icons/react/dist/ssr/Heart';
 import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { PrinterIcon } from '@phosphor-icons/react/dist/ssr/Printer';
 import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
+import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
+import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
 import { hasPresentableQuiz } from '@lib/activities/presentationSlides';
@@ -66,17 +83,18 @@ if (!activity) {
 const t = UI_LABELS[lang].activities.practice;
 const levelLabels = UI_LABELS[lang].english.levels;
 
-// Hidden for the activity's own author and for anonymous visitors (this
-// route is already sign-in gated by the middleware, so `user` is expected
-// non-null here — the check stays defensive rather than assumed). The
-// endpoint refuses both cases again server-side (`recordReport`'s header);
-// this only decides whether the island is mounted at all.
+// Hidden for the activity's own author, and for an anonymous visitor (now a
+// real case, not just a defensive one — this route is guest-playable, see
+// file header). The endpoint refuses both cases again server-side
+// (`recordReport`'s header); this only decides whether the island is
+// mounted at all. A `null` user gets its OWN fallback below (a sign-in
+// link), separate from the author's read-only span.
 const user = Astro.locals.user;
 const canReport = user !== null && user.id !== activity.authorId;
 // Same gate as `canReport`: an author cannot heart their own activity
 // either (`toggleActivityHeart`'s own header) — this decides whether the
 // interactive island mounts at all; the read-only count badge covers the
-// author (and the defensive anonymous case) instead.
+// author, and a guest gets its own clickable fallback (below) instead.
 const canHeart = user !== null && user.id !== activity.authorId;
 // One extra indexed lookup (`activity_hearts`'s own primary key), in the
 // same loader as the rest of this page's data — see `hasHeartedActivity`'s
@@ -85,8 +103,21 @@ const hearted = canHeart ? await hasHeartedActivity(activity.id, user!.id) : fal
 
 // "Duplicar y adaptar" (D7): every signed-in visitor, author included — see
 // `DuplicateActivityButton`'s own header for why this gate differs from
-// `canHeart`/`canReport` above.
+// `canHeart`/`canReport` above. `!canDuplicate` is exactly "no user" here
+// (never the author), so its fallback below is unconditionally the guest one.
 const canDuplicate = user !== null;
+
+/**
+ * Guest play: where "sign in to do this" sends an anonymous visitor —
+ * straight back to THIS exact page (`next`) once they are signed in. Built
+ * from `Astro.url`, never from attacker-controlled input, so it skips the
+ * `safeNextPath` guard `entrar.astro` applies to a query-string `next` — this
+ * one is already a same-origin path by construction.
+ */
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const guestSignInHref = `/${lang}/auth/entrar?next=${encodeURIComponent(currentPath)}`;
+/** Same destination, preselecting sign-up — the guest banner's own CTA. */
+const guestSignUpHref = `/${lang}/auth/entrar?mode=signup&next=${encodeURIComponent(currentPath)}`;
 
 /**
  * "Presentar" (presentation mode v1): shown only when there is at least one
@@ -163,7 +194,10 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
               header. */}
           <p class="flex flex-wrap items-center gap-x-1 text-xs text-zinc-400">
             <span>{activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}</span>
-            <ActivityViewBadge client:load lang={lang} activityId={activity.id} />
+            {/* Guest (no `user`): no per-visitor view to record, so the
+                island is not mounted at all — no badge, and no `visto`
+                request fires (see file header). */}
+            {user && <ActivityViewBadge client:load lang={lang} activityId={activity.id} />}
           </p>
           {/* "Duplicar y adaptar" credit line (D7) — only the DUPLICATE's own
               practice page shows this, once published; the original shows
@@ -183,12 +217,25 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
         <div class="flex flex-none items-center gap-3">
           {canHeart ? (
             <HeartButton client:load lang={lang} activityId={activity.id} heartCount={activity.heartCount} hearted={hearted} />
-          ) : (
+          ) : user ? (
             <span class="inline-flex items-center gap-1.5 text-sm text-zinc-400" data-testid="activity-heart-readonly">
               <HeartIcon aria-hidden="true" />
               <span class="sr-only">{heartsLabel(activity.heartCount)}</span>
               <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
             </span>
+          ) : (
+            /* Guest: the count is visible, same as the author's read-only
+               span, but clicking leads to sign-in (`next` back to this
+               page) instead of doing nothing. */
+            <a
+              href={guestSignInHref}
+              class="inline-flex items-center gap-1.5 text-sm text-zinc-400 transition-colors hover:text-foreground"
+              data-testid="activity-heart-guest"
+            >
+              <HeartIcon aria-hidden="true" />
+              <span class="sr-only">{heartsLabel(activity.heartCount)}</span>
+              <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
+            </a>
           )}
           {
             shareQr && (
@@ -210,13 +257,40 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
                   whatsapp: t.shareWhatsapp,
                   downloadQr: t.shareDownloadQr,
                   native: t.shareNative,
-                  note: t.shareSignInNote,
                 }}
               />
             )
           }
-          {canDuplicate && <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />}
-          {canReport && <ReportActivityButton client:load lang={lang} activityId={activity.id} />}
+          {canDuplicate ? (
+            <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />
+          ) : (
+            /* Guest: `canDuplicate` is exactly "no user" here (the author
+               keeps the real button) — a plain link to sign-in instead. */
+            <a
+              href={guestSignInHref}
+              data-testid="activity-duplicate-guest"
+              class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <CopySimpleIcon aria-hidden="true" size={16} />
+              <span>{t.duplicate}</span>
+            </a>
+          )}
+          {canReport ? (
+            <ReportActivityButton client:load lang={lang} activityId={activity.id} />
+          ) : (
+            !user && (
+              /* Guest: the author still sees nothing (cannot report their
+                 own activity) — only a `null` user gets this fallback. */
+              <a
+                href={guestSignInHref}
+                data-testid="activity-report-guest"
+                class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <FlagIcon aria-hidden="true" size={16} />
+                <span>{UI_LABELS[lang].activities.report.button}</span>
+              </a>
+            )
+          )}
           {/* "Presentar" (presentation mode v1): a plain link to the
               full-screen, projector-facing deck — same access rules as this
               page, and hidden entirely when there is nothing to present
@@ -231,9 +305,11 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
               {t.present}
             </a>
           )}
-          {/* "Imprimir" (D6): a plain link to the print-optimized page —
-              same access rules as this page (private/no-store, 404 when not
-              visible), so no extra gate is needed here either. */}
+          {/* "Imprimir" (D6): a plain, unconditional link to the print page
+              — deliberately NOT exempted from the login wall (guest play is
+              scoped to exactly this page and `presentar`, see file header),
+              so a guest clicking this one still lands on sign-in, same as
+              any other gated page. */}
           <a
             href={`/${lang}/ingles/actividades/${activity.id}/imprimir`}
             data-testid="activity-print-link"
@@ -244,6 +320,21 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           </a>
         </div>
       </div>
+
+      {/* Guest banner (owner-approved copy): a small, friendly line inviting
+          an anonymous visitor to create a free account — shown only when
+          there is no `user`, right below the header row. */}
+      {!user && (
+        <p
+          data-testid="guest-banner"
+          class={`flex-none border-b border-border bg-muted/30 text-xs text-muted-foreground ${ROW_PADDING_X} py-2`}
+        >
+          {t.guestBanner}{' '}
+          <a href={guestSignUpHref} data-testid="guest-sign-up-link" class="font-medium text-accent-ink hover:underline">
+            {t.guestSignUp}
+          </a>
+        </p>
+      )}
 
       <ActivityPracticeIsland client:load lang={lang} blocks={activity.blocks} />
     </div>

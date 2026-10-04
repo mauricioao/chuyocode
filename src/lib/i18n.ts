@@ -719,10 +719,15 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Descargar QR',
         shareNative: 'Más opciones',
-        // The Inglés section requires sign-in (this whole route is already
-        // gated) — a short muted note so the dialog does not promise a link
-        // that opens for an anonymous visitor.
-        shareSignInNote: 'Quien reciba el enlace va a necesitar iniciar sesión para abrirlo.',
+        // Guest play: friendly line shown only to an anonymous visitor,
+        // right below the header row — invites them to sign up without
+        // blocking anything they can already do (play, check answers,
+        // share, present). IMPERSONAL, no second-person verb (gerund +
+        // infinitive, same register `src/lib/neutralSpanish.ts` enforces
+        // site-wide) — "Estás"/"Creá"/"Crea" all read as a tú/vos pick,
+        // which this codebase avoids at the root instead of choosing a side.
+        guestBanner: 'Jugando como invitado. Crear una cuenta gratis permite dar corazones y crear actividades propias.',
+        guestSignUp: 'Crear cuenta',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -1672,7 +1677,8 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Download QR',
         shareNative: 'More options',
-        shareSignInNote: 'Whoever opens the link will need to sign in first.',
+        guestBanner: "You're playing as a guest. Create a free account to give hearts and make your own activities.",
+        guestSignUp: 'Sign up',
       },
       report: {
         button: 'Report',
