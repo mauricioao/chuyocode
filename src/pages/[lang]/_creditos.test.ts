@@ -75,6 +75,18 @@ describe('GET /[lang]/creditos — license notices', () => {
     expect(html).toContain('Copyright 2010 The Raleway Project Authors');
   });
 
+  it('carries the ChunkFive SIL OFL copyright notice in both languages', async () => {
+    for (const lang of ['es', 'en'] as const) {
+      const res = await render(`https://chuyocode.test/${lang}/creditos`, {
+        params: { lang },
+        locals: { lang },
+      });
+      const html = await res.text();
+      expect(html).toContain('Copyright (c) 2009, Meredith Mandel');
+      expect(html).toContain('ChunkFive');
+    }
+  });
+
   it('names Open Peeps / Open Doodles as CC0 and not yet in use', async () => {
     const res = await render('https://chuyocode.test/es/creditos', {
       params: { lang: 'es' },
