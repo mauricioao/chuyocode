@@ -1469,12 +1469,15 @@ describe('WorksheetZoneEditor — state-leak cleanup (blur/pointercancel/lostpoi
 
 /** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport — same pattern `useIsDesktop.test.ts` itself uses. */
 function stubMobileViewport() {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
 }
 
 describe('WorksheetZoneEditor — mobile properties bottom sheet (mobile layout pass)', () => {
@@ -1579,7 +1582,7 @@ describe('WorksheetZoneEditor — no layout flash on the server render (mobile l
   it('renders BOTH the desktop properties column and the mobile sheet on the server, gated by CSS `lg:` classes only', () => {
     // Same "no real matchMedia" shape as a true server render — see
     // `useIsDesktop.test.ts`'s own "defaults to true" test.
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
     // The desktop column is hidden by default, shown only at `lg:` — never
     // visible-by-default DOM/structure for a small screen (the bug this fixes).
@@ -1590,7 +1593,7 @@ describe('WorksheetZoneEditor — no layout flash on the server render (mobile l
   });
 
   it('does not mark the desktop column `inert` on the server (matches the SSR-safe desktop-first default)', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);
   });

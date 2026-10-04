@@ -24,7 +24,7 @@ function stubMatchMedia(initialMatches: boolean) {
       listener = null;
     },
   };
-  window.matchMedia = vi.fn().mockReturnValue(mql);
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(mql));
   return {
     change(next: boolean) {
       matches = next;
@@ -35,7 +35,7 @@ function stubMatchMedia(initialMatches: boolean) {
 
 describe('usePrefersReducedMotion', () => {
   it('defaults to false before mount (no matchMedia available yet)', () => {
-    window.matchMedia = undefined as unknown as typeof window.matchMedia;
+    vi.stubGlobal('matchMedia', undefined);
     const { result } = renderHook(() => usePrefersReducedMotion());
     expect(result.current).toBe(false);
   });
@@ -62,10 +62,13 @@ describe('usePrefersReducedMotion', () => {
 
   it('queries the standard prefers-reduced-motion media feature', () => {
     let queried: string | null = null;
-    window.matchMedia = vi.fn().mockImplementation((query: string) => {
-      queried = query;
-      return { matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} };
-    });
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => {
+        queried = query;
+        return { matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} };
+      }),
+    );
     renderHook(() => usePrefersReducedMotion());
     expect(queried).toBe('(prefers-reduced-motion: reduce)');
   });

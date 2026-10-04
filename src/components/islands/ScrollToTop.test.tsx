@@ -24,16 +24,19 @@ function setFooterTop(footer: Element, top: number) {
 }
 
 function setReducedMotion(reduce: boolean) {
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: query.includes('reduce') ? reduce : false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('reduce') ? reduce : false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
 }
 
 /** `act()`-wrapped: a raw `dispatchEvent` on a native listener (not React's
