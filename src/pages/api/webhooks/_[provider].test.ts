@@ -62,7 +62,7 @@ beforeEach(() => {
   loadEnvMock.mockReturnValue({ PADDLE_WEBHOOK_SECRET: 'configured-secret' });
   verifyPaddleSignatureMock.mockReturnValue(true);
   mapPaddleEventMock.mockReturnValue({ recognized: true, event: null });
-  recordBillingEventMock.mockResolvedValue({ ok: true, duplicate: false });
+  recordBillingEventMock.mockResolvedValue({ ok: true, duplicate: false, processed: undefined });
   markBillingEventProcessedMock.mockResolvedValue(undefined);
   applyBillingEventMock.mockResolvedValue({ ok: true });
 });
@@ -163,14 +163,28 @@ describe('POST /api/webhooks/paddle — ledger + apply orchestration', () => {
     expect(mapPaddleEventMock).not.toHaveBeenCalled();
   });
 
-  it('200s a duplicate WITHOUT mapping or applying it again', async () => {
-    recordBillingEventMock.mockResolvedValue({ ok: true, duplicate: true });
+  it('200s a duplicate that was already processed, WITHOUT mapping or applying it again', async () => {
+    recordBillingEventMock.mockResolvedValue({ ok: true, duplicate: true, processed: true });
 
     const res = await POST(ctx('paddle'));
 
     expect(await res.json()).toEqual({ ok: true, duplicate: true });
     expect(mapPaddleEventMock).not.toHaveBeenCalled();
     expect(applyBillingEventMock).not.toHaveBeenCalled();
+  });
+
+  it('re-applies a duplicate that was recorded but never processed (retry recovers from a prior failure)', async () => {
+    recordBillingEventMock.mockResolvedValue({ ok: true, duplicate: true, processed: false });
+    const event = { type: 'subscription.activated', eventId: 'evt_1' };
+    mapPaddleEventMock.mockReturnValue({ recognized: true, event });
+
+    const res = await POST(ctx('paddle'));
+
+    expect(mapPaddleEventMock).toHaveBeenCalledTimes(1);
+    expect(applyBillingEventMock).toHaveBeenCalledWith(event);
+    expect(markBillingEventProcessedMock).toHaveBeenCalledWith('paddle', 'evt_1');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 
   it('marks a recognized-but-unmapped event processed without applying anything', async () => {
@@ -204,15 +218,36 @@ describe('POST /api/webhooks/paddle — ledger + apply orchestration', () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it('does NOT mark processed when apply fails, but still answers 200', async () => {
+  it('200s but does NOT mark processed on a terminal data conflict (retrying cannot help)', async () => {
     mapPaddleEventMock.mockReturnValue({ recognized: true, event: { type: 'subscription.activated' } });
-    applyBillingEventMock.mockResolvedValue({ ok: false, error: 'db_error' });
+    applyBillingEventMock.mockResolvedValue({ ok: false, error: 'provider_ref_conflict' });
 
     const res = await POST(ctx('paddle'));
 
     expect(markBillingEventProcessedMock).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it('500s (so Paddle retries) and does NOT mark processed on a transient/unknown apply failure', async () => {
+    mapPaddleEventMock.mockReturnValue({ recognized: true, event: { type: 'subscription.activated' } });
+    applyBillingEventMock.mockResolvedValue({ ok: false, error: 'db_error' });
+
+    const res = await POST(ctx('paddle'));
+
+    expect(markBillingEventProcessedMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ ok: false, error: 'apply_failed' });
+  });
+
+  it('500s on an unavailable service-role client too (treated as transient/unknown)', async () => {
+    mapPaddleEventMock.mockReturnValue({ recognized: true, event: { type: 'subscription.activated' } });
+    applyBillingEventMock.mockResolvedValue({ ok: false, error: 'unavailable' });
+
+    const res = await POST(ctx('paddle'));
+
+    expect(markBillingEventProcessedMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(500);
   });
 
   it('records the event with the occurred_at carried on the payload', async () => {

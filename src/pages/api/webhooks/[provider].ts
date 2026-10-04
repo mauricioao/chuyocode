@@ -101,29 +101,43 @@ async function handlePaddle(request: Request): Promise<Response> {
     console.error('[webhooks/paddle] failed to record event in the ledger:', eventId);
     return json({ ok: false, error: 'server_error' }, 500);
   }
-  if (recorded.duplicate) {
-    // Already recorded by an earlier delivery — never re-applied.
+  if (recorded.duplicate && recorded.processed) {
+    // Already recorded AND fully applied by an earlier delivery — never re-applied.
     return json({ ok: true, duplicate: true }, 200);
   }
+  // Either a brand-new event, or a duplicate delivery of one whose earlier
+  // attempt never finished (`processed_at` still null) — map and (re)apply.
+  // Every write `applyBillingEvent` can make is itself an idempotent
+  // upsert/delete (see `apply.ts`'s header), so re-running it is always safe.
 
   const mapped = mapPaddleEvent(payload);
   if (mapped.recognized && mapped.event) {
     const applied = await applyBillingEvent(mapped.event);
     if (applied.ok) {
       await markBillingEventProcessed('paddle', eventId);
-    } else {
-      // Recorded but NOT marked processed, on purpose: `processed_at is
-      // null` is exactly the signal an operator needs to find and
-      // reconcile this event by hand. Still 200 — Paddle retrying the same
-      // delivery cannot fix a data problem the retry itself did not cause.
-      console.error('[webhooks/paddle] apply failed for event:', eventId, applied.error);
+      return json({ ok: true }, 200);
     }
-  } else {
-    // Recognized-but-ignored, or genuinely unrecognized: either way there is
-    // nothing to apply, so the ledger row is already in its final state.
-    await markBillingEventProcessed('paddle', eventId);
+    if (applied.error === 'provider_ref_conflict') {
+      // A genuine data conflict: the SAME input fails the SAME way every
+      // time, so asking Paddle to retry cannot help. Left unprocessed on
+      // purpose — `processed_at is null` is exactly the signal an operator
+      // needs to find and reconcile this event by hand.
+      console.error(
+        '[webhooks/paddle] terminal conflict applying event (needs manual reconciliation):',
+        eventId,
+      );
+      return json({ ok: true }, 200);
+    }
+    // Transient/unknown failure (db outage, service-role client
+    // unavailable, …): ask Paddle to retry. Left unprocessed so the retry
+    // re-applies above instead of being short-circuited as a duplicate.
+    console.error('[webhooks/paddle] apply failed for event:', eventId, applied.error);
+    return json({ ok: false, error: 'apply_failed' }, 500);
   }
 
+  // Recognized-but-ignored, or genuinely unrecognized: either way there is
+  // nothing to apply, so the ledger row is already in its final state.
+  await markBillingEventProcessed('paddle', eventId);
   return json({ ok: true }, 200);
 }
 

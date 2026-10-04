@@ -149,11 +149,28 @@ describe('recordBillingEvent', () => {
     expect(result).toEqual({ ok: true, duplicate: false });
   });
 
-  it('reports a duplicate (never a failure) on a unique violation', async () => {
-    const { builder } = terminalBuilder('insert', { error: { code: '23505', message: 'duplicate key' } });
-    fromMock.mockReturnValueOnce(builder);
+  it('reports a duplicate that was already processed (never a failure)', async () => {
+    const { builder: insert } = terminalBuilder('insert', { error: { code: '23505', message: 'duplicate key' } });
+    const { builder: lookup } = selectBuilder({ data: { processed_at: '2024-01-02T00:00:00Z' }, error: null });
+    fromMock.mockReturnValueOnce(insert).mockReturnValueOnce(lookup);
 
-    expect(await recordBillingEvent(input)).toEqual({ ok: true, duplicate: true });
+    expect(await recordBillingEvent(input)).toEqual({ ok: true, duplicate: true, processed: true });
+  });
+
+  it('reports a duplicate that was never processed, so the caller can retry it', async () => {
+    const { builder: insert } = terminalBuilder('insert', { error: { code: '23505', message: 'duplicate key' } });
+    const { builder: lookup } = selectBuilder({ data: { processed_at: null }, error: null });
+    fromMock.mockReturnValueOnce(insert).mockReturnValueOnce(lookup);
+
+    expect(await recordBillingEvent(input)).toEqual({ ok: true, duplicate: true, processed: false });
+  });
+
+  it('treats a duplicate as not-yet-processed when the processed lookup itself fails (safe to retry)', async () => {
+    const { builder: insert } = terminalBuilder('insert', { error: { code: '23505', message: 'duplicate key' } });
+    const { builder: lookup } = selectBuilder({ data: null, error: { message: 'down' } });
+    fromMock.mockReturnValueOnce(insert).mockReturnValueOnce(lookup);
+
+    expect(await recordBillingEvent(input)).toEqual({ ok: true, duplicate: true, processed: false });
   });
 
   it('fails on any other database error', async () => {

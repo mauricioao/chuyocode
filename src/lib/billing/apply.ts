@@ -67,14 +67,57 @@ export interface RecordResult {
   ok: boolean;
   /** True when (provider, event_id) was already in the ledger — the caller must NOT apply the event again. */
   duplicate: boolean;
+  /**
+   * Only meaningful when `duplicate` is true: did the earlier delivery
+   * already finish applying? `false` means the caller SHOULD (re-)apply the
+   * event — either it is brand new, or the earlier attempt never finished
+   * (a retry recovering from a transient failure). Every write
+   * `applyBillingEvent` can make is itself an idempotent upsert/delete (see
+   * this module's header), so re-running it is always safe.
+   */
+  processed?: boolean;
   error?: string;
+}
+
+/**
+ * Reads whether a previously-recorded ledger row already finished applying.
+ * Only called for a (provider, event_id) that just failed to INSERT on a
+ * unique violation, so the row is known to exist — this never races the
+ * insert. Any failure to read it (no client, a database error, no row) is
+ * treated as "not processed": every apply this ledger guards is a safe,
+ * idempotent retry, so defaulting to "retry it" can never cause a duplicate
+ * effect, while defaulting to "skip it" could silently drop a delivery that
+ * never actually succeeded.
+ */
+async function wasBillingEventProcessed(
+  client: SupabaseClient,
+  provider: string,
+  eventId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from(BILLING_EVENTS_TABLE)
+      .select('processed_at')
+      .eq('provider', provider)
+      .eq('event_id', eventId)
+      .maybeSingle();
+
+    if (error || !data) {
+      if (error) console.error('[billing/apply] wasBillingEventProcessed failed:', error.message);
+      return false;
+    }
+    return (data as Record<string, unknown>).processed_at != null;
+  } catch (err) {
+    console.error('[billing/apply] wasBillingEventProcessed threw:', err);
+    return false;
+  }
 }
 
 /**
  * Insert `(provider, event_id)` into the ledger. A unique violation means
  * this exact event was already recorded by an earlier delivery — the caller
- * must treat that as `duplicate: true` and skip applying it again, never as
- * a failure.
+ * gets `duplicate: true` plus whether that earlier delivery already
+ * finished (`processed`), never a failure.
  */
 export async function recordBillingEvent(input: RecordEventInput): Promise<RecordResult> {
   const client = getClient();
@@ -90,7 +133,8 @@ export async function recordBillingEvent(input: RecordEventInput): Promise<Recor
 
     if (error) {
       if (error.code === '23505') {
-        return { ok: true, duplicate: true };
+        const processed = await wasBillingEventProcessed(client, input.provider, input.eventId);
+        return { ok: true, duplicate: true, processed };
       }
       console.error('[billing/apply] recordBillingEvent failed:', error.message);
       return { ok: false, duplicate: false, error: 'db_error' };
