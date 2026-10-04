@@ -276,6 +276,116 @@ describe('POST /api/auth/password — reset', () => {
   });
 });
 
+describe('POST /api/auth/password — captchaToken (Turnstile)', () => {
+  it('signin: forwards a valid token as options.captchaToken', async () => {
+    await POST(ctx({ action: 'signin', email: EMAIL, password: 'correct-horse', captchaToken: 'tok-abc' }));
+
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: EMAIL,
+      password: 'correct-horse',
+      options: { captchaToken: 'tok-abc' },
+    });
+  });
+
+  it('signin: calls Supabase exactly as today when no token is sent', async () => {
+    await POST(ctx({ action: 'signin', email: EMAIL, password: 'correct-horse' }));
+
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: EMAIL,
+      password: 'correct-horse',
+    });
+  });
+
+  it('signin: drops an oversized token instead of forwarding it', async () => {
+    const tooLong = 'a'.repeat(2049);
+    await POST(ctx({ action: 'signin', email: EMAIL, password: 'correct-horse', captchaToken: tooLong }));
+
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: EMAIL,
+      password: 'correct-horse',
+    });
+  });
+
+  it('signin: maps a captcha rejection to a distinct error code', async () => {
+    signInWithPasswordMock.mockResolvedValueOnce({
+      data: { session: null },
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const res = await POST(
+      ctx({ action: 'signin', email: EMAIL, password: 'correct-horse', captchaToken: 'bad-tok' }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'captcha_failed' });
+  });
+
+  it('signup: forwards a valid token inside options', async () => {
+    await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', captchaToken: 'tok-abc' }),
+    );
+
+    const call = signUpMock.mock.calls.at(-1)?.[0];
+    expect(call.options.captchaToken).toBe('tok-abc');
+  });
+
+  it('signup: maps a captcha rejection to a distinct error code instead of the uniform body', async () => {
+    signUpMock.mockResolvedValueOnce({
+      data: { session: null },
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', captchaToken: 'bad-tok' }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'captcha_failed' });
+  });
+
+  it('reset: forwards a valid token alongside redirectTo', async () => {
+    await POST(ctx({ action: 'reset', email: EMAIL, captchaToken: 'tok-abc' }));
+
+    const call = resetPasswordForEmailMock.mock.calls.at(-1);
+    expect(call?.[1].captchaToken).toBe('tok-abc');
+  });
+
+  it('reset: maps a captcha rejection to a distinct error code instead of the uniform body', async () => {
+    resetPasswordForEmailMock.mockResolvedValueOnce({
+      data: {},
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const res = await POST(ctx({ action: 'reset', email: EMAIL, captchaToken: 'bad-tok' }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'captcha_failed' });
+  });
+
+  it('reset: the captcha_failed mapping stays identical for an address with no account (T3)', async () => {
+    resetPasswordForEmailMock.mockResolvedValue({
+      data: {},
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const known = await POST(ctx({ action: 'reset', email: EMAIL, captchaToken: 'bad-tok' }));
+    const unknown = await POST(
+      ctx({ action: 'reset', email: 'never-registered@chuyo.test', captchaToken: 'bad-tok' }),
+    );
+
+    expect(await unknown.json()).toEqual(await known.json());
+    expect(unknown.status).toBe(known.status);
+  });
+
+  it('every action keeps flushing the session cookie on a captcha_failed response', async () => {
+    signInWithPasswordMock.mockResolvedValueOnce({
+      data: { session: null },
+      error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
+    });
+    const res = await POST(
+      ctx({ action: 'signin', email: EMAIL, password: 'correct-horse', captchaToken: 'bad-tok' }),
+    );
+
+    expect(res.headers.getSetCookie()).toEqual([SESSION_COOKIE]);
+  });
+});
+
 describe('POST /api/auth/password — response shape', () => {
   it('keeps every answer out of every cache', async () => {
     const res = await POST(ctx({ action: 'reset', email: EMAIL }));

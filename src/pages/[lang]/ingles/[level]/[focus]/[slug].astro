@@ -161,7 +161,7 @@ if (exercise.topic) {
 }
 ---
 
-<BaseLayout lang={lang} title={heading} description={t.description}>
+<BaseLayout lang={lang} title={heading} description={t.description} theme="ingles">
   {/* WHY `max-w-6xl` (72rem) AND NOT SOMETHING NARROWER OR WIDER.
       `max-w-3xl` (48rem) is an ARTICLE measure, and an exercise is not an
       article: at that width a display-scale prompt and a two-column tile grid
@@ -343,7 +343,7 @@ if (exercise.topic) {
         <section class="flex flex-col gap-4 border-t border-border pt-8">
           {/* `text-2xl`, and the peek arithmetic above budgets exactly one
               32px line for it. A taller heading eats the card sliver. */}
-          <h2 class="text-2xl font-bold tracking-tight text-accent">
+          <h2 class="text-2xl font-bold tracking-tight text-accent-ink">
             {relatedHeading}
           </h2>
 

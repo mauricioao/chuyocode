@@ -11,64 +11,60 @@
  * hardcoded, so this stays correct across environments.
  *
  * ONE LIST, THREE CALL SITES: the authoring media block editor
- * (`MediaBlockEditor.tsx`) refuses to accept anything else, the structural
- * validator (`exerciseValidator.ts`) rejects it at publish time with
- * `media_url_not_allowed`, and this is the single place either would have
- * to change.
+ * (`MediaBlockEditor.tsx`) checks a value against the STATIC list only (see
+ * that component's own comment), the structural validator
+ * (`exerciseValidator.ts`) rejects it at publish time with
+ * `media_url_not_allowed` against the full, Supabase-aware list, and this
+ * module plus {@link "./exerciseMedia.server"} are the only two places
+ * either would have to change.
  *
- * Lazy and fail-safe: `loadEnv()` is called only when a host is actually
- * needed, never at import time, so importing this module can never throw —
- * a module-load-time failure here would take down the validator and every
- * page that imports it transitively. An unreadable `SUPABASE_URL` simply
- * means the allow-list falls back to `cdn.sanity.io` alone.
+ * PURE — NO `env` IMPORT, ON PURPOSE. `MediaBlockEditor.tsx` is a hydrated
+ * client island, so this module sits in its bundle; `./env` reads
+ * `SUPABASE_SERVICE_ROLE_KEY`/`AD_HMAC_SECRET` and must never be reachable
+ * from there (`src/lib/build/serverOnlyModules.ts` fails the build if it
+ * is). The Supabase-aware host list — the one piece that needs `env` —
+ * lives in {@link "./exerciseMedia.server"}, a server-only sibling built on
+ * top of this module's pure {@link mediaHostsFor}.
  */
-import { loadEnv } from './env';
 
 /** Always allowed — the site's existing Sanity media CDN. */
 export const STATIC_ALLOWED_MEDIA_HOSTS = ['cdn.sanity.io'] as const;
 
-let cachedHosts: readonly string[] | null = null;
-
-/** The Supabase project's own host (its storage host, same origin as the API), or `null`. */
-function supabaseStorageHost(): string | null {
+/**
+ * {@link STATIC_ALLOWED_MEDIA_HOSTS} plus the Supabase project's own host
+ * (its storage host, same origin as the API) when `supabaseUrl` parses to
+ * one. Pure and synchronous: obtaining `supabaseUrl` (from `env` on the
+ * server, or not at all on the client) is the caller's job — see
+ * {@link "./exerciseMedia.server"}'s `serverAllowedMediaHosts`.
+ */
+export function mediaHostsFor(supabaseUrl: string | undefined): readonly string[] {
+  if (!supabaseUrl) return STATIC_ALLOWED_MEDIA_HOSTS;
   try {
-    const hostname = new URL(loadEnv().SUPABASE_URL).hostname;
-    return hostname.length > 0 ? hostname : null;
+    const hostname = new URL(supabaseUrl).hostname;
+    return hostname.length > 0
+      ? [...STATIC_ALLOWED_MEDIA_HOSTS, hostname]
+      : STATIC_ALLOWED_MEDIA_HOSTS;
   } catch {
-    return null;
+    return STATIC_ALLOWED_MEDIA_HOSTS;
   }
 }
 
 /**
- * The full allow-list, computed once and cached: {@link STATIC_ALLOWED_MEDIA_HOSTS}
- * plus the Supabase storage host when it can be derived.
- */
-export function allowedMediaHosts(): readonly string[] {
-  if (cachedHosts) return cachedHosts;
-  const supabaseHost = supabaseStorageHost();
-  cachedHosts = supabaseHost
-    ? [...STATIC_ALLOWED_MEDIA_HOSTS, supabaseHost]
-    : STATIC_ALLOWED_MEDIA_HOSTS;
-  return cachedHosts;
-}
-
-/**
  * Is `value` an acceptable authored media URL? `https:` only, and its host
- * must be in {@link allowedMediaHosts}. An unparsable string is never
- * allowed — the same fail-closed instinct `parseBlock`'s https-only check
- * uses one level down.
+ * must be in `hosts` (default {@link STATIC_ALLOWED_MEDIA_HOSTS} — the
+ * client's effective allow-list, since it has no access to `SUPABASE_URL`).
+ * An unparsable string is never allowed — the same fail-closed instinct
+ * `parseBlock`'s https-only check uses one level down.
  */
-export function isAllowedMediaUrl(value: string): boolean {
+export function isAllowedMediaUrl(
+  value: string,
+  hosts: readonly string[] = STATIC_ALLOWED_MEDIA_HOSTS,
+): boolean {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     return false;
   }
-  return url.protocol === 'https:' && allowedMediaHosts().includes(url.hostname);
-}
-
-/** Test isolation: the host list is cached across calls in the same module instance. */
-export function resetMediaHostsCache(): void {
-  cachedHosts = null;
+  return url.protocol === 'https:' && hosts.includes(url.hostname);
 }

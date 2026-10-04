@@ -513,3 +513,114 @@ describe('gating private sections', () => {
     expect(res.headers.has('cache-control')).toBe(false);
   });
 });
+
+// Security headers (work unit 4): every exit point the middleware can
+// produce or pass through must carry them — see `src/lib/securityHeaders.ts`
+// for why this cannot be left to Netlify's static `_headers` file (no
+// prerendered pages exist on this SSR-on-Functions site).
+describe('security headers on every response', () => {
+  /** Assert the baseline set `applySecurityHeaders` always sets. */
+  function expectSecurityHeaders(res: Response) {
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+    expect(res.headers.has('content-security-policy-report-only')).toBe(true);
+  }
+
+  it('carries the headers on a normal page response', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/libros');
+    const res = await result;
+
+    expect(res.status).toBe(200);
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on an API JSON response', async () => {
+    armSession(signedIn('user-api'));
+    next.mockImplementationOnce(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    const { result } = run('/api/reacciones/abc');
+    const res = await result;
+
+    await expect(res.json()).resolves.toEqual({ ok: true });
+    expect(res.headers.get('content-type')).toBe('application/json');
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on the gate\'s own 303 (built with new Response)', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/es/auth/entrar?next=%2Fes%2Fingles');
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on the root redirect', async () => {
+    const { result } = run('/');
+    const res = await result;
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe('/es/');
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on the static-asset passthrough (no session work)', async () => {
+    const { result } = run('/favicon.ico');
+    const res = await result;
+
+    expect(res.status).toBe(200);
+    expect(createSessionClient).not.toHaveBeenCalled();
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on the invalid-lang 404', async () => {
+    const { result } = run('/fr/libros');
+    const res = await result;
+
+    expect(res.status).toBe(404);
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on an immutable Response.redirect() returned by next()', async () => {
+    armSession(signedIn('user-immutable'));
+    const upstream = Response.redirect('https://chuyocode.test/es/destino', 302);
+    // Sanity check on the premise: Response.redirect() really is immutable
+    // here, so this test actually exercises the rebuild-and-copy fallback
+    // (`withSecurityHeaders`) instead of a plain in-place `headers.set()`.
+    expect(() => upstream.headers.set('x-probe', '1')).toThrow();
+    next.mockImplementationOnce(async () => upstream);
+
+    const { result } = run('/es/libros');
+    const res = await result;
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://chuyocode.test/es/destino');
+    expectSecurityHeaders(res);
+  });
+
+  it('does not overwrite a header a downstream route already set', async () => {
+    armSession(anonymous());
+    next.mockImplementationOnce(
+      async () =>
+        new Response('OK', {
+          status: 200,
+          headers: { 'referrer-policy': 'no-referrer' },
+        }),
+    );
+
+    const { result } = run('/es/libros');
+    const res = await result;
+
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    // The rest are still applied — only the pre-set one is preserved.
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+  });
+});

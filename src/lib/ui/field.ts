@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
  * `fieldHeight`.
  */
 export const fieldBase =
-  'flex w-full min-w-0 rounded-(--radius-field) border border-(--color-field-border) bg-(--color-field) px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-(--transition-duration-control) ease-(--ease-control) placeholder:text-muted-foreground hover:border-(--color-field-border-hover) focus-visible:border-accent focus-visible:ring-3 focus-visible:ring-(--color-field-ring) disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20';
+  'flex w-full min-w-0 rounded-(--radius-field) border border-(--color-field-border) bg-(--color-field) px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-(--transition-duration-control) ease-(--ease-control) placeholder:text-muted-foreground hover:border-(--color-field-border-hover) focus-visible:border-accent-ink focus-visible:ring-3 focus-visible:ring-(--color-field-ring) disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20';
 
 /**
  * Height axis, separate from `fieldBase` so a caller can opt out entirely

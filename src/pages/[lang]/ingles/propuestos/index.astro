@@ -90,13 +90,13 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
   return [
     badgeVariants({ variant: isActive ? 'default' : 'outline' }),
     'h-auto gap-2 rounded-full px-4 py-2 text-sm',
-    isEmpty ? 'opacity-60' : 'hover:border-accent hover:text-accent',
+    isEmpty ? 'opacity-60' : 'hover:border-accent-ink hover:text-accent-ink',
     isActive ? 'font-semibold shadow-elevation-1' : '',
   ].join(' ');
 }
 ---
 
-<BaseLayout lang={lang} title={t.section.title} description={t.section.description}>
+<BaseLayout lang={lang} title={t.section.title} description={t.section.description} theme="ingles">
   <section class="reveal mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
       <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.section.title}</PageTitle>
@@ -203,7 +203,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
                 >
                   <a
                     href={`/${lang}/ingles/${activeLevel}/${entry.focus}`}
-                    class="flex h-full flex-col gap-2 rounded-lg border border-border bg-surface-soft p-5 transition-colors hover:border-accent focus-visible:border-accent"
+                    class="flex h-full flex-col gap-2 rounded-lg border border-border bg-surface-soft p-5 transition-colors hover:border-accent-ink focus-visible:border-accent-ink"
                   >
                     {/* English in every locale: the focus is exercise data, not
                         chrome (docs/exercise-model.md, "Authoring rules"). */}

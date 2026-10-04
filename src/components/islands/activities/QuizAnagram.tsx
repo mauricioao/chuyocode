@@ -189,7 +189,7 @@ export default function QuizAnagram({ lang, items, seed }: QuizAnagramProps) {
               disabled={used || status !== 'playing'}
               onClick={() => placeTile(tile.id)}
               className={cn(
-                'flex size-11 items-center justify-center rounded-md border-2 border-border bg-surface-soft text-lg font-bold uppercase text-zinc-100 transition-opacity hover:border-accent/60',
+                'flex size-11 items-center justify-center rounded-md border-2 border-border bg-surface-soft text-lg font-bold uppercase text-zinc-100 transition-opacity hover:border-accent-ink/60',
                 used && 'opacity-0',
               )}
             >

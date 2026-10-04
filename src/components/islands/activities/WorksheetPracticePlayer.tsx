@@ -84,6 +84,33 @@ import WorksheetPracticePlayerMobile from './WorksheetPracticePlayerMobile';
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
 /**
+ * Same short distance threshold `DropRenderer.tsx`/`authoring/BlockList.tsx`
+ * use to tell a plain click from a drag — reused here to tell a click on an
+ * answer input from a pan, both in px, both pointer types (mouse and touch
+ * report through the same `PointerEvent.clientX/Y`, so no per-type branch is
+ * needed).
+ */
+const CLICK_MOVE_THRESHOLD_PX = 4;
+
+/**
+ * The nearest answer control under `target`, or `null` when the press did
+ * not land on one. Used only to decide whether a press-and-release while the
+ * hand tool is on should switch back to writing (see `handlePointerDown`/
+ * `handlePointerUp` below) — never to decide whether to pan, which stays a
+ * plain "is the hand tool active" check regardless of what is underneath.
+ */
+function closestAnswerInput(
+  target: EventTarget | null,
+): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null {
+  if (!(target instanceof Element)) return null;
+  // Explicit type argument: `closest`'s own overloads only narrow the
+  // return type for a SINGLE known tag name, not this comma-separated list.
+  return target.closest<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'input, textarea, select',
+  );
+}
+
+/**
  * A worksheet block known to carry a real image — every block practice ever
  * renders, since only a LIVE revision reaches here and `'submit'`-mode
  * parsing never lets an imageless one through (`blocks.ts`'s own
@@ -129,6 +156,18 @@ function DesktopWorksheetCamera({
   const cameraRef = useRef<Camera>(IDENTITY_CAMERA);
   const dragRef = useRef<{ startClientX: number; startClientY: number; startCamera: Camera } | null>(null);
   const spaceHeldRef = useRef(false);
+  // Armed only when the hand tool is toggled ON (not the temporary
+  // Space-hold — see `handlePointerDown`) and the press landed on an answer
+  // input: a release that never passed `CLICK_MOVE_THRESHOLD_PX` resolves as
+  // a click on that exact input, not a pan. `pointerId`-scoped so a second
+  // pointer going down mid-pan (unlikely, but pointer events allow it)
+  // cannot resolve the wrong press.
+  const clickCandidateRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+  } | null>(null);
 
   const [camera, setCamera] = useState<Camera>(IDENTITY_CAMERA);
   const [fitMode, setFitMode] = useState(true);
@@ -254,6 +293,14 @@ function DesktopWorksheetCamera({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }, []);
 
+  // Declared before the handlers below that call it (`handlePointerUp`,
+  // `cancelPan`): both list it as a `useCallback` dependency, which is
+  // evaluated immediately, so it must already be initialized.
+  const endPan = useCallback(() => {
+    dragRef.current = null;
+    setIsPanning(false);
+  }, []);
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button === 1) {
@@ -262,12 +309,54 @@ function DesktopWorksheetCamera({
         return;
       }
       if (e.button !== 0) return;
-      if (effectiveTool === 'hand') startPan(e);
+      if (effectiveTool === 'hand') {
+        // Toggled-on hand only (never the temporary Space-hold): a press
+        // landing on an answer input might turn out to be a plain click,
+        // which `handlePointerUp` resolves into "switch to writing" once it
+        // knows the release never passed the move threshold below.
+        const target = !spaceHeld && closestAnswerInput(e.target);
+        if (target) {
+          clickCandidateRef.current = {
+            pointerId: e.pointerId,
+            startClientX: e.clientX,
+            startClientY: e.clientY,
+            target,
+          };
+        }
+        startPan(e);
+        return;
+      }
       // "none" tool: a left-drag is left alone entirely — clicking into a
       // zone's own input/select underneath focuses it normally.
     },
-    [effectiveTool, startPan],
+    [effectiveTool, spaceHeld, startPan],
   );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const candidate = clickCandidateRef.current;
+      clickCandidateRef.current = null;
+      if (candidate && candidate.pointerId === e.pointerId) {
+        const dx = e.clientX - candidate.startClientX;
+        const dy = e.clientY - candidate.startClientY;
+        if (Math.hypot(dx, dy) < CLICK_MOVE_THRESHOLD_PX) {
+          // A click, not a pan: hand off, straight back to writing in the
+          // input the student actually pressed.
+          endPan();
+          setTool('none');
+          candidate.target.focus();
+          return;
+        }
+      }
+      endPan();
+    },
+    [endPan],
+  );
+
+  const cancelPan = useCallback(() => {
+    clickCandidateRef.current = null;
+    endPan();
+  }, [endPan]);
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -275,6 +364,13 @@ function DesktopWorksheetCamera({
       if (!drag) return;
       const dx = e.clientX - drag.startClientX;
       const dy = e.clientY - drag.startClientY;
+      // Once a press has moved past the click threshold it stays a pan for
+      // the rest of this gesture, even if the pointer drifts back near its
+      // start before release — `handlePointerUp` then simply finds no
+      // candidate left to resolve as a click.
+      if (clickCandidateRef.current && Math.hypot(dx, dy) >= CLICK_MOVE_THRESHOLD_PX) {
+        clickCandidateRef.current = null;
+      }
       // LOOSE bound (Bug 2): see `applyZoom`'s own note above.
       const next = panBy(drag.startCamera, dx, dy, { image: displaySize, viewport: viewportSize() }, clampCameraLoose);
       cameraRef.current = next;
@@ -282,11 +378,6 @@ function DesktopWorksheetCamera({
     },
     [displaySize, viewportSize],
   );
-
-  const endPan = useCallback(() => {
-    dragRef.current = null;
-    setIsPanning(false);
-  }, []);
 
   return (
     <>
@@ -297,9 +388,9 @@ function DesktopWorksheetCamera({
         onKeyDown={handleViewportKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={endPan}
-        onPointerCancel={endPan}
-        onLostPointerCapture={endPan}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={cancelPan}
+        onLostPointerCapture={cancelPan}
         className={cn(
           'canvas-dots relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-muted focus-visible:outline-none',
           effectiveTool === 'hand' && (isPanning ? 'cursor-grabbing' : 'cursor-grab'),

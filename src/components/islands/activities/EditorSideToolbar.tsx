@@ -584,7 +584,7 @@ export default function EditorSideToolbar({
         aria-label={t.dockToolbar}
         title={t.dockToolbar}
         onClick={dock}
-        className="glass-floating fixed z-40 flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="glass-floating fixed z-40 flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ left: ghostPosition.x, top: ghostPosition.y }}
       >
         <PushPinIcon aria-hidden="true" />
@@ -602,7 +602,7 @@ export default function EditorSideToolbar({
         // dragged free it IS a floating control.
         docked
           ? 'fixed top-1/2 right-3 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
-          : 'glass-floating fixed z-40 flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-white/10 shadow-(--shadow-floating)'
+          : 'glass-floating fixed z-40 flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)'
       }
       style={docked ? undefined : { left: position.x, top: position.y }}
     >

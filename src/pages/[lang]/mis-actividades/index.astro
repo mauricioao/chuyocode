@@ -71,7 +71,7 @@ const activities: MisActividadesActivity[] = rawActivities.map((activity) => {
 });
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
   <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
     <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
     <MisActividadesIsland client:load lang={lang} initialActivities={activities} />
