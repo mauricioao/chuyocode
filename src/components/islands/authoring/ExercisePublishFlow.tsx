@@ -34,13 +34,13 @@ export const COPY = {
   es: {
     saved: 'Guardado como borrador.',
     published: (url: string) => `Publicado. Ver el ejercicio: ${url}`,
-    termsRequired: 'Aceptá los términos de publicación para publicar por primera vez.',
+    termsRequired: 'Acepta los términos de publicación para publicar por primera vez.',
     invalidTransition: 'Este ejercicio no se puede publicar desde su estado actual.',
-    slugCollision: 'No se pudo resolver un slug único para este ejercicio. Probá de nuevo.',
+    slugCollision: 'No se pudo resolver un slug único para este ejercicio. Prueba de nuevo.',
     exerciseRemoved: 'Este ejercicio fue eliminado y ya no se puede editar.',
-    forbidden: 'No tenés permiso para editar este ejercicio.',
+    forbidden: 'No tienes permiso para editar este ejercicio.',
     notFound: 'Este ejercicio no existe.',
-    genericError: 'Ocurrió un error al guardar. Intentá de nuevo.',
+    genericError: 'Ocurrió un error al guardar. Inténtalo de nuevo.',
     saving: 'Guardando…',
   },
   en: {

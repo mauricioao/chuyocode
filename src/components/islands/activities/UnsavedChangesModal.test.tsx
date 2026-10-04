@@ -10,7 +10,7 @@ const LABELS = {
   saveAndLeave: 'Guardar y salir',
   leaveWithoutSaving: 'Salir sin guardar',
   cancel: 'Cancelar',
-  saveError: 'No se pudo guardar. Intentar de nuevo.',
+  saveError: 'No se pudo guardar. Inténtalo de nuevo.',
 };
 
 describe('UnsavedChangesModal', () => {

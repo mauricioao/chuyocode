@@ -123,11 +123,9 @@ interface Copy {
 }
 
 /**
- * REGISTER (standing project rule): neutral Spanish, no voseo. Instructions use
- * the infinitive — `Revisar`, not `Revisá` — and nothing addresses the learner
- * in the second person, which removes the tú/vos fork instead of picking a side
- * of it. The site is not Argentina-specific. Guarded by a test in
- * `ExerciseIsland.test.tsx`.
+ * REGISTER (standing project rule, owner decision 2026-10-04): neutral
+ * Latin-American tuteo, no voseo — `Revisa`, never `Revisá`. The site is not
+ * Argentina-specific. Guarded by a test in `ExerciseIsland.test.tsx`.
  *
  * Exported for that guard: the island deliberately keeps its copy local rather
  * than importing `UI_LABELS`, so this map is the only place the guard can read.
@@ -137,7 +135,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     submit: 'Comprobar',
     // "Partes" is the word the stepper already uses on screen (`stepWord`), so
     // the hint names the same thing the position indicator counts.
-    submitHint: 'Responder todas las partes para comprobar.',
+    submitHint: 'Responde todas las partes para comprobar.',
     selectPlaceholder: 'Elegir una opción',
     retry: 'Intentar de nuevo',
     // The verb alone. The verdict directly above already names which answers
@@ -148,7 +146,7 @@ export const COPY: Record<'es' | 'en', Copy> = {
     incorrect: 'Incorrecto',
     unavailable: 'Esta parte del ejercicio todavía no se puede resolver aquí.',
     allCorrect: '¡Todo correcto!',
-    someWrong: 'Revisar las respuestas marcadas.',
+    someWrong: 'Revisa las respuestas marcadas.',
     elapsed: 'Tiempo',
     stepNav: 'Partes del ejercicio',
     stepPrev: 'Anterior',

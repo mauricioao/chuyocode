@@ -21,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 export const COPY = {
   es: {
-    label: 'Enunciado (usar ___ para el espacio en blanco)',
+    label: 'Enunciado (usa ___ para el espacio en blanco)',
     remove: 'Quitar esta parte del ejercicio',
     gapBefore: 'Antes del espacio:',
     gapAfter: 'Después del espacio:',

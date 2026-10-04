@@ -75,9 +75,10 @@ import type { MechanicRendererProps } from './types';
  * ExerciseIsland.tsx). It is also whole SENTENCES rather than one label, which
  * is why `drop` needs `lang` where the other mechanics only need `placeholder`.
  *
- * REGISTER (standing project rule): neutral Spanish, infinitive, and nothing
- * addressed to the learner in the second person — which removes the tú/vos fork
- * instead of picking a side of it.
+ * REGISTER (standing project rule, owner decision 2026-10-04): neutral
+ * Latin-American tuteo, no voseo. These particular strings stay infinitive —
+ * a keyboard-operation legend read once on focus, not an instruction aimed at
+ * the learner in the moment — which the guard allows either way.
  */
 interface DropCopy {
   /** How to operate the mechanic without a pointer. Read once, on focus. */

@@ -40,9 +40,9 @@ export function reactionEndpoint(exerciseId: string): string {
 }
 
 /**
- * This island's own chrome, in both locales. Neutral, impersonal Spanish —
- * infinitives, no voseo — swept by `findVoseo` from this file's own test,
- * exactly like `LikeButton.COPY` and `SignInForm.COPY`.
+ * This island's own chrome, in both locales. Neutral Latin-American tuteo,
+ * no voseo — swept by `findVoseo` from this file's own test, exactly like
+ * `LikeButton.COPY` and `SignInForm.COPY`.
  */
 export const COPY = {
   es: {

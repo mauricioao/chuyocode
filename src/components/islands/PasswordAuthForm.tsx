@@ -61,8 +61,8 @@ export const COPY = {
     signInError: 'Correo o contraseña incorrectos.',
     tooShort: 'La contraseña debe tener al menos 8 caracteres.',
     signUpSent:
-      'Se envió un correo de confirmación a esa dirección, si corresponde a una cuenta nueva. Revisar la bandeja de entrada y la carpeta de spam.',
-    genericError: 'No se pudo completar la solicitud. Intentar de nuevo.',
+      'Se envió un correo de confirmación a esa dirección, si corresponde a una cuenta nueva. Revisa la bandeja de entrada y la carpeta de spam.',
+    genericError: 'No se pudo completar la solicitud. Inténtalo de nuevo.',
     forgotPassword: '¿Olvidaste la contraseña?',
     resetSubmit: 'Enviar instrucciones',
     resetSubmitting: 'Enviando…',

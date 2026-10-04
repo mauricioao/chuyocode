@@ -861,7 +861,7 @@ describe('ActivityEditorIsland — submit for review', () => {
 
     expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
     expect(screen.getByTestId('submit-dialog-error').textContent).toContain(
-      'Agregar al menos un bloque',
+      'Agrega al menos un bloque',
     );
     expect(screen.getByTestId('activity-status-badge').textContent).toContain('Borrador');
   });

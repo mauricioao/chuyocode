@@ -423,7 +423,7 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
 
     expect(await screen.findByTestId('task-progress-error')).toHaveProperty(
       'textContent',
-      'No se pudo subir el archivo. Intentar de nuevo.',
+      'No se pudo subir el archivo. Inténtalo de nuevo.',
     );
     expect(screen.queryByTestId('task-progress-cancel')).toBeNull();
     expect(screen.queryByTestId('worksheet-uploader')).toBeNull(); // never falls back while blocked on an error either

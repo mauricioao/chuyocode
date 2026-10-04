@@ -61,7 +61,7 @@ const COPY = {
     taskProgressCancel: 'Cancelar',
     taskProgressRetry: 'Reintentar',
     taskProgressChooseAnother: 'Elegir otro archivo',
-    taskProgressErrorMessage: 'No se pudo subir el archivo. Intentar de nuevo.',
+    taskProgressErrorMessage: 'No se pudo subir el archivo. Inténtalo de nuevo.',
     images: 'Imágenes (carga y error)',
     imageLoaded: 'Con fundido al cargar',
     imageBroken: 'Imagen rota (placeholder neutral)',

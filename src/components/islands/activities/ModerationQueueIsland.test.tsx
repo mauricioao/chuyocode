@@ -161,7 +161,7 @@ describe('ModerationQueueIsland — reject', () => {
     fireEvent.click(screen.getByTestId('moderation-reject-open'));
     fireEvent.click(screen.getByTestId('moderation-reject-confirm'));
 
-    expect(screen.getByTestId('moderation-reject-error').textContent).toContain('Escribir una nota');
+    expect(screen.getByTestId('moderation-reject-error').textContent).toContain('Escribe una nota');
     expect(fetch).not.toHaveBeenCalled();
   });
 
