@@ -6,14 +6,14 @@ import { test, expect, type Page } from '@playwright/test';
  * `aria-current="true"` (see that component) specifically so these flows can
  * observe REAL state — not poke at Embla's internal, unqueryable index — for
  * behavior unit tests cannot exercise under jsdom: real `setInterval`
- * advance, pause on hover, reduced-motion disabling autoplay, and dot-click
- * jump (Embla's scroll physics need real layout jsdom does not provide —
- * see HeroCarouselIsland.test.tsx's own header).
+ * advance, pause on hover and reduced-motion disabling autoplay (Embla's
+ * scroll physics need real layout jsdom does not provide — see
+ * HeroCarouselIsland.test.tsx's own header).
  *
  * The hero's slide count depends on CMS content (Sanity `getHeroItems`), so
  * every test here skips gracefully with fewer than 2 slides: 0 means the
  * `.astro` wrapper never mounts the carousel at all (placeholder only), 1
- * means the island renders statically (no autoplay, no indicator dots) —
+ * means the island renders statically (no autoplay) —
  * neither case has anything to advance between.
  */
 
@@ -155,27 +155,5 @@ test.describe('HeroCarousel reduced motion', () => {
     // Autoplay is disabled entirely under reduced motion — no timer starts.
     await page.waitForTimeout(interval + 1500);
     expect(await activeIndex(page)).toBe(before);
-  });
-});
-
-test.describe('HeroCarousel indicators', () => {
-  test('clicking an indicator dot jumps directly to that slide', async ({
-    page,
-  }) => {
-    await page.goto(HOME);
-    await waitForHeroHydration(page);
-    test.skip((await slideCount(page)) < 2, SKIP_REASON);
-
-    const dots = page.locator('[data-hero-dot]');
-    const dotCount = await dots.count();
-    test.skip(dotCount < 2, SKIP_REASON);
-
-    // Jump to the last dot; the matching slide becomes active immediately.
-    const target = dotCount - 1;
-    await dots.nth(target).click();
-
-    await expect
-      .poll(() => activeIndex(page), { timeout: 1000 })
-      .toBe(target);
   });
 });

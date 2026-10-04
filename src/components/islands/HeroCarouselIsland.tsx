@@ -32,7 +32,6 @@ import {
   type CarouselApi,
 } from '@/components/ui/carousel';
 import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 /** One resolved image: everything an <img> needs, computed server-side. */
 export interface HeroImage {
@@ -216,40 +215,6 @@ export default function HeroCarouselIsland({
           </CarouselItem>
         ))}
       </CarouselContent>
-
-      {/* Indicator dots: only when there is more than one slide to jump
-          between (same condition as autoplay — a single slide has nothing
-          to navigate to). Real, labeled buttons so keyboard/screen-reader
-          users can jump directly to a slide, not just swipe or wait.
-          Anchored to the TOP of the hero, not the bottom: the row below the
-          hero deliberately overlaps its bottom edge (`-mt-28`/`-mt-44` in
-          `[lang]/index.astro`, the "shademanga" overlap look), which would
-          cover bottom-anchored dots. `ring-black/40` keeps them legible with
-          no scrim up there (the scrim only darkens the bottom half). */}
-      {!isStatic && (
-        <div
-          className="absolute inset-x-0 top-4 z-20 flex items-center justify-center gap-2 sm:top-6"
-          data-hero-dots
-        >
-          {slides.map((slide, index) => (
-            <button
-              key={slide.id ?? index}
-              type="button"
-              className={cn(
-                'h-2.5 w-2.5 rounded-full outline-none ring-1 ring-black/40 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                index === selectedIndex
-                  ? 'bg-white'
-                  : 'bg-white/40 hover:bg-white/70',
-              )}
-              data-hero-dot
-              data-index={index}
-              aria-current={index === selectedIndex ? 'true' : undefined}
-              aria-label={`Ir a la diapositiva ${index + 1}`}
-              onClick={() => api?.scrollTo(index)}
-            />
-          ))}
-        </div>
-      )}
     </Carousel>
   );
 }
