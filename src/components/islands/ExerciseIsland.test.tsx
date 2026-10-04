@@ -36,6 +36,31 @@ const single: Payload = {
   ],
 };
 
+/**
+ * Same shape as {@link single}, but its one slot carries a D5 "¿Por qué?"
+ * explanation — the explanation tests below need a slot that actually HAS
+ * one, to tell "hidden because wrong-but-unexplained" apart from "hidden
+ * because the never-before/never-correct rule hides it anyway".
+ */
+const singleWithExplanation: Payload = {
+  pools: {
+    opts: [
+      { id: 'a', text: 'sit' },
+      { id: 'b', text: 'sits' },
+    ],
+  },
+  slots: [
+    {
+      id: 's1',
+      label: 'The cat ___',
+      input: 'choice',
+      pool: 'opts',
+      answer: ['b'],
+      explanation: 'Third person -s.',
+    },
+  ],
+};
+
 /** Two independent choice slots sharing one pool. */
 const pair: Payload = {
   pools: {
@@ -448,6 +473,58 @@ describe('ExerciseIsland — grading', () => {
 
     expect(screen.queryByTestId('exercise-verdict')).toBeNull();
     expect(screen.queryByTestId('slot-feedback-s1')).toBeNull();
+  });
+});
+
+/**
+ * D5 "¿Por qué?": the explanation note, inline under the question, only
+ * once graded and only while incorrect — same rule, and the same shared
+ * `mechanics/SlotExplanation` component, `QuizBlockPractice` uses for
+ * activities' quiz block.
+ */
+describe('ExerciseIsland — explanation (D5)', () => {
+  it('shows nothing before grading', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sit');
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
+  });
+
+  it('shows nothing for a correct answer', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sits');
+    submit();
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
+  });
+
+  it('shows the explanation inline under the question for an incorrect answer', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sit');
+    submit();
+
+    expect(screen.getByTestId('slot-explanation-s1').textContent).toContain(
+      'Third person -s.',
+    );
+  });
+
+  it('shows nothing for an incorrect answer with no explanation authored', () => {
+    render(<ExerciseIsland lang="en" payload={single} />);
+    choose('sit');
+    submit();
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
+  });
+
+  it('hides again once Corregir clears the wrong answer', () => {
+    render(<ExerciseIsland lang="en" payload={singleWithExplanation} />);
+    choose('sit');
+    submit();
+    expect(screen.getByTestId('slot-explanation-s1')).toBeTruthy();
+
+    retry();
+
+    expect(screen.queryByTestId('slot-explanation-s1')).toBeNull();
   });
 });
 
