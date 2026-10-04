@@ -70,91 +70,75 @@ async function render(
   });
 }
 
-describe('GET /[lang]/ — Inglés section (es)', () => {
-  it('renders the section heading, intro and both cards', async () => {
+describe('GET /[lang]/ — Inglés banner', () => {
+  const cases = [
+    {
+      lang: 'es',
+      label: 'Inglés · English',
+      title: 'Aprende y enseña inglés jugando',
+      intro: 'Actividades interactivas para enseñar y practicar inglés, en español.',
+      teachersCta: 'Crear mi actividad',
+      learnersCta: 'Explorar actividades',
+      note: 'Crear y jugar es gratis.',
+    },
+    {
+      lang: 'en',
+      label: 'English · Inglés',
+      title: 'Learn and teach English through play',
+      intro: 'Interactive activities to teach and practice English, explained in Spanish.',
+      teachersCta: 'Create my activity',
+      learnersCta: 'Explore activities',
+      note: 'Creating and playing is free.',
+    },
+  ] as const;
+
+  for (const c of cases) {
+    it(`renders the copy and both entry points (${c.lang})`, async () => {
+      const res = await render(`https://chuyocode.test/${c.lang}/`, {
+        params: { lang: c.lang },
+        locals: { lang: c.lang },
+      });
+      expect(res.status).toBe(200);
+      const html = await res.text();
+
+      for (const text of [c.label, c.title, c.intro, c.note, c.teachersCta, c.learnersCta]) {
+        expect(html).toContain(text);
+      }
+      expect(html).toMatch(/<h2[^>]*id="home-ingles-heading"[^>]*>/);
+      expect(html).toContain(`href="/${c.lang}/crear"`);
+      expect(html).toContain(`href="/${c.lang}/ingles/actividades"`);
+    });
+  }
+
+  it('scopes the light Inglés palette to the banner only', async () => {
     const res = await render('https://chuyocode.test/es/', {
       params: { lang: 'es' },
       locals: { lang: 'es' },
     });
-    expect(res.status).toBe(200);
     const html = await res.text();
-
-    expect(html).toContain('Inglés en ChuyoCode');
-    expect(html).toContain(
-      'Actividades interactivas para enseñar y practicar inglés, en español.',
-    );
-
-    expect(html).toContain('Para docentes');
-    expect(html).toContain('Tu ficha, ahora interactiva');
-    expect(html).toContain(
-      'Sube tu ficha o PDF, marca las respuestas y proyéctala en clase. Gratis.',
-    );
-
-    expect(html).toContain('Para aprender');
-    expect(html).toContain('Practica a tu ritmo');
-    expect(html).toContain(
-      'Actividades y juegos por nivel, con explicaciones en español cuando te equivocas.',
-    );
+    expect(html).toMatch(/<section[^>]*data-testid="home-ingles-section"[^>]*data-theme="ingles"/);
+    expect(html).not.toMatch(/<html[^>]*data-theme="ingles"/);
   });
 
-  it('renders both CTAs with the correct hrefs', async () => {
+  it('serves the art as lazy, art-directed AVIF and WebP with a reserved box', async () => {
     const res = await render('https://chuyocode.test/es/', {
       params: { lang: 'es' },
       locals: { lang: 'es' },
     });
     const html = await res.text();
 
-    expect(html).toContain('data-testid="home-ingles-cta-crear"');
-    expect(html).toContain('href="/es/crear"');
-    expect(html).toContain('Crear mi actividad');
+    expect(html).toContain('ingles-banner-v1-desktop-1920.avif 1920w');
+    expect(html).toContain('ingles-banner-v1-desktop-1920.webp 1920w');
+    expect(html).toContain('ingles-banner-v1-mobile-1080.avif 1080w');
+    expect(html).toContain('ingles-banner-v1-mobile-1080.webp 1080w');
+    expect(html).toMatch(/<source[^>]*media="\(min-width: 768px\)"[^>]*type="image\/avif"/);
 
-    expect(html).toContain('data-testid="home-ingles-cta-actividades"');
-    expect(html).toContain('href="/es/ingles/actividades"');
-    expect(html).toContain('Explorar actividades');
-  });
-});
-
-describe('GET /[lang]/ — Inglés section (en)', () => {
-  it('renders the section heading, intro and both cards', async () => {
-    const res = await render('https://chuyocode.test/en/', {
-      params: { lang: 'en' },
-      locals: { lang: 'en' },
-    });
-    expect(res.status).toBe(200);
-    const html = await res.text();
-
-    expect(html).toContain('English on ChuyoCode');
-    expect(html).toContain(
-      'Interactive activities to teach and practice English, explained in Spanish.',
-    );
-
-    expect(html).toContain('For teachers');
-    expect(html).toContain('Your worksheet, now interactive');
-    expect(html).toContain(
-      'Upload your worksheet or PDF, mark the answers and project it in class. Free.',
-    );
-
-    expect(html).toContain('For learners');
-    expect(html).toContain('Practice at your own pace');
-    expect(html).toContain(
-      'Activities and games by level, with explanations in Spanish when you get it wrong.',
-    );
-  });
-
-  it('renders both CTAs with the correct hrefs', async () => {
-    const res = await render('https://chuyocode.test/en/', {
-      params: { lang: 'en' },
-      locals: { lang: 'en' },
-    });
-    const html = await res.text();
-
-    expect(html).toContain('data-testid="home-ingles-cta-crear"');
-    expect(html).toContain('href="/en/crear"');
-    expect(html).toContain('Create my activity');
-
-    expect(html).toContain('data-testid="home-ingles-cta-actividades"');
-    expect(html).toContain('href="/en/ingles/actividades"');
-    expect(html).toContain('Explore activities');
+    const img = html.match(/<img[^>]*data-testid="home-ingles-banner-image"[^>]*>/)?.[0] ?? '';
+    expect(img).toContain('loading="lazy"');
+    expect(img).toContain('decoding="async"');
+    expect(img).toContain('alt=""');
+    expect(img).toContain('width="1536"');
+    expect(img).toContain('height="2752"');
   });
 });
 
@@ -162,7 +146,7 @@ describe('GET /[lang]/ — public cache safety', () => {
   // The home page applies `publicCachePolicy()` on the assumption its markup
   // is byte-identical for every visitor (see `src/lib/httpCache.ts` and
   // `src/pages/[lang]/auth/entrar.astro`'s header for the hazard this guards
-  // against). The new Inglés section must not break that invariant: it reads
+  // against). The Inglés banner must not break that invariant: it reads
   // no `Astro.locals.user`, only localized copy and plain links.
   it('renders byte-identical HTML for an anonymous and a signed-in visitor', async () => {
     const resAnon = await render('https://chuyocode.test/es/', {
