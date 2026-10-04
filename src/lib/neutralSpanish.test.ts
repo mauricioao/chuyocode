@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   NON_VOSEO_ACCENTED_WORDS,
   SECOND_PERSON_WORDS,
+  VOSEO_AS_PRESENT_WORDS,
   findVoseo,
   flattenCopy,
   voseoWords,
@@ -38,20 +39,33 @@ describe('voseoWords — rule 1: voseo imperatives (final stressed á/é/í)', (
   });
 });
 
-describe('voseoWords — rule 2: vos present indicative (final stressed ás/és/ís)', () => {
+describe('voseoWords — rule 2: vos present indicative of -er/-ir verbs (final stressed és/ís)', () => {
   it('fires on the forms the accent-final rule structurally cannot see', () => {
-    expect(voseoWords('La página que buscás no existe.')).toEqual(['buscás']);
     for (const word of ['querés', 'podés', 'tenés', 'venís', 'sabés']) {
       expect(voseoWords(word)).toEqual([word]);
     }
   });
 });
 
+describe('voseoWords — rule 4: curated voseo -ás presents of -ar verbs', () => {
+  it('fires on the curated list, even though rule 2 never tests á', () => {
+    expect(voseoWords('La página que buscás no existe.')).toEqual(['buscás']);
+    for (const word of VOSEO_AS_PRESENT_WORDS) {
+      expect(voseoWords(word)).toEqual([word]);
+    }
+  });
+
+  it('does not swallow the future tense, which shares the same -ás/-rás shape', () => {
+    // `mirás` (voseo present of "mirar") and `verás` (future of "ver") both end
+    // in `rás` — only the curated list, not a suffix pattern, can tell them
+    // apart. This is the test that would fail if rule 2 ever grew `á` back.
+    expect(voseoWords('mirás')).toEqual(['mirás']);
+    expect(voseoWords('verás')).toEqual([]);
+  });
+});
+
 describe('voseoWords — rule 3: unaccented second-person markers', () => {
   it('fires on the words that carry no written accent at all', () => {
-    expect(voseoWords('Muy pronto vas a poder aprender paso a paso.')).toEqual([
-      'vas',
-    ]);
     expect(voseoWords('Si sos parte de la comunidad')).toEqual(['sos']);
     expect(voseoWords('Registrate para continuar')).toEqual(['Registrate']);
   });
@@ -60,6 +74,14 @@ describe('voseoWords — rule 3: unaccented second-person markers', () => {
     // `nosotros` contains `vos`; `pasos` contains `sos`. A substring rule would
     // make the guard unusable and it would be "fixed" by deleting the guard.
     expect(voseoWords('nosotros damos pasos firmes')).toEqual([]);
+  });
+
+  it('no longer treats `vas` as a marker — it is valid tuteo', () => {
+    // "¿Vas a practicar?" is second-person `ir`, identical in tuteo and
+    // voseo. Flagging it would fail copy that is already correct.
+    expect(voseoWords('Muy pronto vas a poder aprender paso a paso.')).toEqual(
+      [],
+    );
   });
 });
 
@@ -77,6 +99,7 @@ describe('voseoWords — the allowlist', () => {
     // A guard whose allowlist swallowed a real imperative would pass forever.
     for (const word of NON_VOSEO_ACCENTED_WORDS) {
       expect(SECOND_PERSON_WORDS).not.toContain(word);
+      expect(VOSEO_AS_PRESENT_WORDS).not.toContain(word);
     }
     expect(NON_VOSEO_ACCENTED_WORDS).not.toContain('elegí');
     expect(NON_VOSEO_ACCENTED_WORDS).not.toContain('revisá');
@@ -90,6 +113,32 @@ describe('voseoWords — the allowlist', () => {
     expect(voseoWords('Aprender tecnología en tu idioma con tus tiempos')).toEqual(
       [],
     );
+  });
+});
+
+describe('voseoWords — neutral Latin-American tuteo, SITE-WIDE policy', () => {
+  // Owner decision (2026-10-04): Spanish UI copy is tuteo, not impersonal.
+  // This guard's only job is to keep voseo and other regionalisms out — it
+  // does not police tuteo vs. an occasional impersonal infinitive.
+
+  it('passes ordinary tuteo sentences', () => {
+    for (const sentence of [
+      'Estás jugando como invitado.',
+      'Revisa tu correo.',
+      'Podrás crear tus actividades.',
+      '¿Vas a practicar?',
+      'Inténtalo de nuevo.',
+    ]) {
+      expect(voseoWords(sentence)).toEqual([]);
+    }
+  });
+
+  it('fails ordinary voseo sentences', () => {
+    expect(voseoWords('Revisá tu correo')).toEqual(['Revisá']);
+    expect(voseoWords('¿Podés entrar?')).toEqual(['Podés']);
+    expect(voseoWords('Tenés que registrarte')).toEqual(['Tenés']);
+    expect(voseoWords('Registrate gratis')).toEqual(['Registrate']);
+    expect(voseoWords('vos sabés')).toEqual(['vos', 'sabés']);
   });
 });
 
