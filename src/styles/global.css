@@ -54,6 +54,22 @@
   --color-accent-ink: #facc15;
   --color-accent-ink-hover: #eab308;
 
+  /* Game-mechanic accent set (presentation mode v1, "Preguntas"): four
+   * saturated hues for the A/B/C/D option cards on the presentation stage
+   * (`PresentationIsland.tsx`), used as FILLS with white text at the
+   * stage's large option size (36-48px) — never at body-copy size. White on
+   * each of these four clears WCAG's 3:1 AA-LARGE-TEXT threshold (checked:
+   * blue 4.20:1, violet 4.23:1, orange 3.82:1, pink 3.84:1) but not all of
+   * them clear the stricter 4.5:1 normal-text threshold, which is why this
+   * set is reserved for large presentation-stage text and never used as a
+   * body-copy foreground. Flat palette entries (like `--color-accent`
+   * above), not a semantic role, so they carry no dark/light-scope
+   * override — this feature always runs under `theme="ingles"`. */
+  --color-game-blue: #1c7ed6;
+  --color-game-violet: #8b5cf6;
+  --color-game-orange: #c46c08;
+  --color-game-pink: #e44487;
+
   /* Display face for headings (decision #1). Raleway Variable loads via
    * fonts.css; the system-sans stack is the swap fallback. */
   --font-display: 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
