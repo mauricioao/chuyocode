@@ -40,6 +40,32 @@ describe('verifyPaddleSignature', () => {
     expect(verifyPaddleSignature({ header, rawBody: BODY, secret: SECRET, nowMs })).toBe(false);
   });
 
+  it('accepts when the FIRST of two h1 candidates matches (secret rotation sends more than one h1)', () => {
+    const nowMs = 1_700_000_000_000;
+    const ts = Math.floor(nowMs / 1000);
+    const validH1 = createHmac('sha256', SECRET).update(`${ts}:${BODY}`).digest('hex');
+    const header = `ts=${ts};h1=${validH1};h1=${'0'.repeat(64)}`;
+
+    expect(verifyPaddleSignature({ header, rawBody: BODY, secret: SECRET, nowMs })).toBe(true);
+  });
+
+  it('accepts when the SECOND of two h1 candidates matches (secret rotation sends more than one h1)', () => {
+    const nowMs = 1_700_000_000_000;
+    const ts = Math.floor(nowMs / 1000);
+    const validH1 = createHmac('sha256', SECRET).update(`${ts}:${BODY}`).digest('hex');
+    const header = `ts=${ts};h1=${'0'.repeat(64)};h1=${validH1}`;
+
+    expect(verifyPaddleSignature({ header, rawBody: BODY, secret: SECRET, nowMs })).toBe(true);
+  });
+
+  it('rejects when NEITHER of two h1 candidates matches', () => {
+    const nowMs = 1_700_000_000_000;
+    const ts = Math.floor(nowMs / 1000);
+    const header = `ts=${ts};h1=${'0'.repeat(64)};h1=${'1'.repeat(64)}`;
+
+    expect(verifyPaddleSignature({ header, rawBody: BODY, secret: SECRET, nowMs })).toBe(false);
+  });
+
   it('rejects the wrong secret', () => {
     const nowMs = 1_700_000_000_000;
     const header = sign(Math.floor(nowMs / 1000), BODY, 'a-different-secret');

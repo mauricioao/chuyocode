@@ -22,6 +22,10 @@
  * with the notification destination's secret and hex-encoded; Paddle's own
  * documented Node example compares with `timingSafeEqual`, and "the default
  * tolerance between the timestamp and the current time is five seconds."
+ * The docs also note that "during secret rotation, more than one `h1` is
+ * returned while secrets are rotated out" — the header's own grammar is a
+ * `;`-separated list of `key=value` pairs, so this codebase parses that as a
+ * repeated `h1=` pair and accepts the request if ANY candidate matches.
  *
  * EVENT MAPPING — see the PR description for the full table. Summary:
  *   - subscription.activated / subscription.trialing -> SubscriptionStateEvent
@@ -67,13 +71,20 @@ export const PADDLE_TIMESTAMP_TOLERANCE_SECONDS = 5;
 
 interface ParsedSignature {
   ts: string;
-  h1: string;
+  /**
+   * Every `h1` candidate the header carried, in header order. Normally one —
+   * but Paddle's own docs say "during secret rotation, more than one `h1` is
+   * returned while secrets are rotated out", so the header can repeat the
+   * `h1=` pair (the same `;`-separated `key=value` grammar as `ts`). ANY
+   * candidate matching is a valid signature.
+   */
+  h1: string[];
 }
 
-/** Splits a `Paddle-Signature` header (`ts=...;h1=...`) into its parts. `null` for anything malformed. */
+/** Splits a `Paddle-Signature` header (`ts=...;h1=...`, possibly with more than one `h1`) into its parts. `null` for anything malformed. */
 function parseSignatureHeader(header: string): ParsedSignature | null {
   let ts: string | null = null;
-  let h1: string | null = null;
+  const h1: string[] = [];
 
   for (const part of header.split(';')) {
     const eq = part.indexOf('=');
@@ -81,10 +92,10 @@ function parseSignatureHeader(header: string): ParsedSignature | null {
     const key = part.slice(0, eq).trim();
     const value = part.slice(eq + 1).trim();
     if (key === 'ts') ts = value;
-    if (key === 'h1') h1 = value;
+    if (key === 'h1') h1.push(value);
   }
 
-  if (!ts || !h1) return null;
+  if (!ts || h1.length === 0) return null;
   return { ts, h1 };
 }
 
@@ -100,13 +111,14 @@ export interface VerifyPaddleSignatureParams {
 }
 
 /**
- * Verifies a Paddle webhook signature exactly as documented: parse `ts`/`h1`,
- * recompute `HMAC-SHA256(` `${ts}:${rawBody}` `, secret)` as hex, compare
- * against `h1` in constant time, and reject a timestamp more than
- * {@link PADDLE_TIMESTAMP_TOLERANCE_SECONDS} away from now (replay/staleness
- * protection, either direction). Fails closed (`false`) for every malformed
- * input — missing header, missing secret, unparsable header, non-numeric
- * `ts`.
+ * Verifies a Paddle webhook signature exactly as documented: parse `ts` and
+ * every `h1` candidate, recompute `HMAC-SHA256(` `${ts}:${rawBody}` `,
+ * secret)` as hex, and accept if ANY `h1` candidate matches it in constant
+ * time (secret rotation sends more than one; see {@link ParsedSignature}).
+ * Also rejects a timestamp more than {@link PADDLE_TIMESTAMP_TOLERANCE_SECONDS}
+ * away from now (replay/staleness protection, either direction). Fails
+ * closed (`false`) for every malformed input — missing header, missing
+ * secret, unparsable header, non-numeric `ts`.
  */
 export function verifyPaddleSignature(params: VerifyPaddleSignatureParams): boolean {
   const { header, rawBody, secret } = params;
@@ -122,11 +134,15 @@ export function verifyPaddleSignature(params: VerifyPaddleSignatureParams): bool
   if (Math.abs(nowSeconds - tsSeconds) > PADDLE_TIMESTAMP_TOLERANCE_SECONDS) return false;
 
   const expectedHex = createHmac('sha256', secret).update(`${parsed.ts}:${rawBody}`).digest('hex');
-
   const expectedBuf = Buffer.from(expectedHex, 'utf8');
-  const actualBuf = Buffer.from(parsed.h1, 'utf8');
-  if (expectedBuf.length !== actualBuf.length) return false;
-  return timingSafeEqual(expectedBuf, actualBuf);
+
+  // Each candidate is compared in constant time (same length check as
+  // before, now per-candidate); ANY match accepts the request.
+  return parsed.h1.some((candidate) => {
+    const candidateBuf = Buffer.from(candidate, 'utf8');
+    if (expectedBuf.length !== candidateBuf.length) return false;
+    return timingSafeEqual(expectedBuf, candidateBuf);
+  });
 }
 
 /** Outcome of mapping one Paddle webhook payload. */
