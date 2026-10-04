@@ -12,7 +12,9 @@ vi.mock('@lib/sanity', () => ({
   getRowsByTheme: vi.fn(async () => []),
   getSpotlights: vi.fn(async () => []),
   themeTitle: (slug: string) => slug,
-  RESERVED_THEMES: [],
+  // Matches the real constant; with `getRowsByTheme` resolving to `[]` by
+  // default no reserved row renders, so only the order test below adds one.
+  RESERVED_THEMES: ['recomendados'],
 }));
 
 vi.mock('@lib/downloads', () => ({
@@ -20,6 +22,38 @@ vi.mock('@lib/downloads', () => ({
 }));
 
 import HomePage from './index.astro';
+import { getRowsByTheme } from '@lib/sanity';
+
+describe('GET /[lang]/ — section order', () => {
+  it('places the Inglés section right below "Libros Recomendados"', async () => {
+    vi.mocked(getRowsByTheme).mockResolvedValueOnce([
+      {
+        themeTag: 'recomendados',
+        items: [
+          {
+            _id: 'book-1',
+            kind: 'book',
+            title: 'Libro de prueba',
+            slug: 'libro-de-prueba',
+            href: '/es/libros/libro-de-prueba',
+            asset: null,
+          },
+        ],
+      },
+    ] as unknown as Awaited<ReturnType<typeof getRowsByTheme>>);
+
+    const res = await render('https://chuyocode.test/es/', {
+      params: { lang: 'es' },
+      locals: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    const recommendedAt = html.indexOf('Libro de prueba');
+    const inglesAt = html.indexOf('data-testid="home-ingles-section"');
+    expect(recommendedAt).toBeGreaterThan(-1);
+    expect(inglesAt).toBeGreaterThan(recommendedAt);
+  });
+});
 
 /** Render the home page with route params + middleware locals. */
 async function render(

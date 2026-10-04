@@ -160,15 +160,26 @@ const websiteJsonLd = toJsonLd({
         underneath; each row child re-enables `pointer-events-auto` so cards
         stay fully interactive. --- */}
     <div class="pointer-events-none relative z-10 -mt-28 flex flex-col gap-12 pt-8 [&>*]:pointer-events-auto sm:-mt-44 sm:gap-16 sm:pt-12">
+      {/* --- Reserved editorial rows FIRST ("Libros Recomendados"). The first
+          one is the row that overlaps the hero. Title via themeTitle() (override
+          map + generic hyphen→space capitalize). Empty reserved themes never
+          reach here — getRowsByTheme only returns themes that have items. -- */}
+      {
+        reservedRows.map((row, i) => (
+          <div class="reveal" style={`--reveal-delay:${(i + 1) * 40}ms`}>
+            <EditorialRow title={themeTitle(row.themeTag)} items={row.items} />
+          </div>
+        ))
+      }
+
       {/* --- Inglés — the main product, two entry points (create an activity /
-          explore activities). FIRST in this list so it reads as "directly
-          after the hero", before any Libros/Noticias content, while still
-          sitting at the top of the shademanga overlap band like every other
-          first-row content does. Zero session-dependent content: only
-          localized copy and plain links, so the page stays byte-identical for
-          every visitor (see `description`/`inglesT` above and
-          `publicCachePolicy()` below). --------------------------------- */}
-      <div class="reveal" style="--reveal-delay:40ms">
+          explore activities). Owner decision (2026-10-04): it sits right BELOW
+          "Libros Recomendados" (which keeps riding over the hero), and will
+          become a full-width image banner once the artwork exists. Zero
+          session-dependent content: only localized copy and plain links, so
+          the page stays byte-identical for every visitor (see
+          `description`/`inglesT` above and `publicCachePolicy()` below). -- */}
+      <div class="reveal" style="--reveal-delay:80ms">
         <section aria-labelledby="home-ingles-heading" data-testid="home-ingles-section">
           <SectionHeading
             id="home-ingles-heading"
@@ -217,18 +228,6 @@ const websiteJsonLd = toJsonLd({
           </div>
         </section>
       </div>
-
-      {/* --- Reserved editorial rows FIRST ("Libros Recomendados"). The first
-          one is the row that overlaps the hero. Title via themeTitle() (override
-          map + generic hyphen→space capitalize). Empty reserved themes never
-          reach here — getRowsByTheme only returns themes that have items. -- */}
-      {
-        reservedRows.map((row, i) => (
-          <div class="reveal" style={`--reveal-delay:${(i + 1) * 40}ms`}>
-            <EditorialRow title={themeTitle(row.themeTag)} items={row.items} />
-          </div>
-        ))
-      }
 
       {/* --- "Más vistos" — automatic numbered "top 10" chart by real download
           count (RankedRow, framed showcase box with thicker side padding).
