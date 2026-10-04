@@ -13,10 +13,20 @@
  * success toast gets the accent-colored `CheckCircle` (filled), matching the
  * editor's own autosave "saved" icon (`SaveStatusIndicator.tsx`) instead of
  * sonner's default green check.
+ *
+ * PENDING TOAST (account deletion's own "redirect to home with a
+ * confirmation toast"): a success that is immediately followed by a HARD
+ * navigation (`window.location.assign`, `DeleteAccountDialog`) tears this
+ * whole tree down before any toast fired just before it could ever render.
+ * `readAndClearPendingToast` (`@/lib/pendingToast`) is the one-shot
+ * `sessionStorage` relay the WRITER uses instead — this is the one, global
+ * place that relay is read back, on every mount, so it fires on whichever
+ * page the navigation actually landed on.
  */
 import { useEffect, useState } from 'react';
-import { Toaster as SonnerToaster } from 'sonner';
+import { Toaster as SonnerToaster, toast } from 'sonner';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { readAndClearPendingToast } from '@/lib/pendingToast';
 
 const NARROW_QUERY = '(max-width: 640px)';
 
@@ -30,6 +40,11 @@ export default function Toaster() {
     update();
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    const message = readAndClearPendingToast();
+    if (message) toast.success(message);
   }, []);
 
   return (

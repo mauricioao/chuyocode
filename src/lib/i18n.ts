@@ -312,6 +312,22 @@ export const UI_LABELS = {
         // placement/chrome rule as `createActivity`/`myActivities`.
         moderation: 'Moderación',
         signOut: 'Cerrar sesión',
+        // Account deletion (owner decision, 2026-10-04). Flat keys, not a
+        // nested object — `UserMenu`'s own `labels` prop is typed
+        // `Record<keyof UI_LABELS['es']['auth']['userMenu'], string>`
+        // (every value a leaf string), the same reason this whole map has
+        // no nested objects anywhere else.
+        deleteAccount: 'Eliminar mi cuenta',
+        deleteAccountDialogTitle: 'Eliminar tu cuenta',
+        // Owner-authored copy, verbatim.
+        deleteAccountDialogBody:
+          'Tus actividades publicadas seguirán disponibles para la comunidad a nombre de ChuyoCode. Tus borradores, tus corazones y los datos de tu cuenta se eliminarán. Esta acción no se puede deshacer.',
+        deleteAccountConfirmLabel: 'Escribe ELIMINAR para confirmar',
+        deleteAccountConfirmWord: 'ELIMINAR',
+        deleteAccountCancel: 'Cancelar',
+        deleteAccountButton: 'Eliminar mi cuenta',
+        deleteAccountSuccessToast: 'Tu cuenta se eliminó correctamente.',
+        deleteAccountErrorGeneric: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo.',
       },
     },
     // Authoring pages (`/[lang]/crear/*`, slice 15). UNLINKED routes — no nav
@@ -1401,6 +1417,16 @@ export const UI_LABELS = {
         myActivities: 'My activities',
         moderation: 'Moderation',
         signOut: 'Sign out',
+        deleteAccount: 'Delete my account',
+        deleteAccountDialogTitle: 'Delete your account',
+        deleteAccountDialogBody:
+          'Your published activities will stay available to the community under the ChuyoCode name. Your drafts, hearts and account data will be deleted. This action cannot be undone.',
+        deleteAccountConfirmLabel: 'Type DELETE to confirm',
+        deleteAccountConfirmWord: 'DELETE',
+        deleteAccountCancel: 'Cancel',
+        deleteAccountButton: 'Delete my account',
+        deleteAccountSuccessToast: 'Your account was deleted.',
+        deleteAccountErrorGeneric: 'Could not delete your account. Try again.',
       },
     },
     authoring: {

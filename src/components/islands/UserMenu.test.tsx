@@ -409,6 +409,20 @@ describe('UserMenu — dropdown', () => {
     ).toBeTruthy();
   });
 
+  it('offers "Eliminar mi cuenta" in the dropdown, which opens the delete-account dialog', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" labels={esLabels} />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const entry = screen.getByTestId('user-menu-delete-account');
+    expect(entry.getAttribute('role')).toBe('menuitem');
+    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.deleteAccount);
+    expect(screen.queryByTestId('delete-account-dialog')).toBeNull();
+
+    fireEvent.click(entry);
+    expect(screen.getByTestId('delete-account-dialog')).toBeTruthy();
+  });
+
   it('closes on Escape', async () => {
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" labels={esLabels} />);
@@ -526,6 +540,19 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
 
     // The top-bar avatar+dropdown still renders too — the portal is ADDITIVE.
     expect(screen.getByTestId('user-menu-trigger')).toBeTruthy();
+  });
+
+  it('portals "Eliminar mi cuenta" too, which opens the delete-account dialog', async () => {
+    const slot = withMobileMenuSlot();
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" labels={esLabels} />);
+
+    const entry = await screen.findByTestId('mobile-account-delete-account');
+    expect(slot.contains(entry)).toBe(true);
+    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.deleteAccount);
+
+    fireEvent.click(entry);
+    expect(screen.getByTestId('delete-account-dialog')).toBeTruthy();
   });
 
   it('signed in as a moderator: portals the moderación entry with its pending-count badge', async () => {
