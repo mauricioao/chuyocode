@@ -9,6 +9,10 @@ import {
 const SECRET = 'pdl_ntfset_test_secret';
 const BODY = '{"event_id":"evt_1","event_type":"subscription.activated"}';
 
+/** `custom_data.userId`/`courseId` must be real UUIDs (ChuyoCode's own ids) — see `mapPaddleEvent — unrecognized input`. */
+const VALID_USER_ID = '11111111-1111-1111-1111-111111111111';
+const VALID_COURSE_ID = '22222222-2222-2222-2222-222222222222';
+
 /** Builds a real `Paddle-Signature` header value the way Paddle itself does. */
 function sign(ts: number, body: string, secret = SECRET): string {
   const h1 = createHmac('sha256', secret).update(`${ts}:${body}`).digest('hex');
@@ -127,7 +131,7 @@ describe('mapPaddleEvent — subscriptions', () => {
         id: 'sub_123',
         customer_id: 'ctm_123',
         current_billing_period: { starts_at: '2024-04-12T10:18:47Z', ends_at: '2024-05-12T10:18:47Z' },
-        custom_data: { userId: 'user-1' },
+        custom_data: { userId: VALID_USER_ID },
         ...data,
       },
     };
@@ -144,7 +148,7 @@ describe('mapPaddleEvent — subscriptions', () => {
         eventType: 'subscription.activated',
         occurredAt: '2024-04-12T10:18:49.658605Z',
         type: 'subscription.activated',
-        userId: 'user-1',
+        userId: VALID_USER_ID,
         providerRef: 'sub_123',
         providerCustomerRef: 'ctm_123',
         status: 'active',
@@ -162,6 +166,15 @@ describe('mapPaddleEvent — subscriptions', () => {
 
   it('leaves subscription.activated unmapped when custom_data.userId is missing', () => {
     const payload = subscriptionPayload('subscription.activated', { status: 'active', custom_data: null });
+
+    expect(mapPaddleEvent(payload)).toEqual({ recognized: true, event: null });
+  });
+
+  it('leaves subscription.activated unmapped when custom_data.userId is not a UUID', () => {
+    const payload = subscriptionPayload('subscription.activated', {
+      status: 'active',
+      custom_data: { userId: 'not-a-uuid' },
+    });
 
     expect(mapPaddleEvent(payload)).toEqual({ recognized: true, event: null });
   });
@@ -230,7 +243,7 @@ describe('mapPaddleEvent — transactions', () => {
         id: 'txn_123',
         subscription_id: null,
         customer_id: 'ctm_123',
-        custom_data: { userId: 'user-1', courseId: 'course-1' },
+        custom_data: { userId: VALID_USER_ID, courseId: VALID_COURSE_ID },
         details: { totals: { total: '1999', currency_code: 'USD' } },
       },
     };
@@ -243,13 +256,45 @@ describe('mapPaddleEvent — transactions', () => {
         eventType: 'transaction.completed',
         occurredAt: '2024-04-12T10:18:49Z',
         type: 'purchase.completed',
-        userId: 'user-1',
-        courseId: 'course-1',
+        userId: VALID_USER_ID,
+        courseId: VALID_COURSE_ID,
         providerRef: 'txn_123',
         amountCents: 1999,
         currency: 'USD',
       },
     });
+  });
+
+  it('leaves a one-time transaction.completed unmapped when custom_data.userId is not a UUID', () => {
+    const payload = {
+      event_id: 'evt_x',
+      event_type: 'transaction.completed',
+      occurred_at: null,
+      data: {
+        id: 'txn_999',
+        subscription_id: null,
+        custom_data: { userId: 'not-a-uuid', courseId: VALID_COURSE_ID },
+        details: { totals: { total: '500', currency_code: 'USD' } },
+      },
+    };
+
+    expect(mapPaddleEvent(payload)).toEqual({ recognized: true, event: null });
+  });
+
+  it('leaves a one-time transaction.completed unmapped when custom_data.courseId is not a UUID', () => {
+    const payload = {
+      event_id: 'evt_y',
+      event_type: 'transaction.completed',
+      occurred_at: null,
+      data: {
+        id: 'txn_888',
+        subscription_id: null,
+        custom_data: { userId: VALID_USER_ID, courseId: 'not-a-uuid' },
+        details: { totals: { total: '500', currency_code: 'USD' } },
+      },
+    };
+
+    expect(mapPaddleEvent(payload)).toEqual({ recognized: true, event: null });
   });
 
   it('leaves a subscription-linked transaction.completed unmapped (entitlement already covered)', () => {

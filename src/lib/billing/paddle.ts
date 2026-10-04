@@ -165,6 +165,22 @@ function asId(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/** RFC 4122 shape (8-4-4-4-12 hex), case-insensitive — matches a Postgres/Supabase `uuid` column. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A syntactically valid UUID string, or `null`. Used ONLY for
+ * `custom_data.userId`/`courseId` (see {@link readCustomData}): unlike
+ * `asId`, which accepts any of PADDLE's own id formats (`sub_...`,
+ * `txn_...`, never UUIDs), these two are CHUYOCODE's own ids, always UUIDs
+ * (Supabase `uuid` primary keys) — a value that is not even shaped like one
+ * is never trusted, and the event is left unmapped rather than resolving an
+ * arbitrary client-influenced string to a user or course.
+ */
+function asUuid(value: unknown): string | null {
+  return typeof value === 'string' && UUID_PATTERN.test(value) ? value : null;
+}
+
 /** Any string (including `''`), or `null` — for fields where "absent" and "empty" are both just "no value". */
 function asNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -174,11 +190,22 @@ function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Reads `data.custom_data.{userId,courseId}` — the ONLY place a user/course is ever resolved from. */
+/**
+ * Reads `data.custom_data.{userId,courseId}` — the ONLY place a user/course
+ * is ever resolved from. Both must be real UUIDs (`asUuid`), not just any
+ * non-empty string — an id that is not even shaped like one of ours is
+ * never trusted, and the caller treats a `null` the same as "missing".
+ *
+ * 🔴 WHEN CHECKOUT CREATION IS BUILT: `custom_data.userId` must be set
+ * SERVER-SIDE from the authenticated session that starts checkout — never
+ * taken from client input. This is the only identity this module trusts;
+ * a forged `userId` here would let one visitor grant premium access (or a
+ * course purchase) to a different, arbitrary account.
+ */
 function readCustomData(data: Record<string, unknown>): { userId: string | null; courseId: string | null } {
   const custom = asRecord(data.custom_data);
   if (!custom) return { userId: null, courseId: null };
-  return { userId: asId(custom.userId), courseId: asId(custom.courseId) };
+  return { userId: asUuid(custom.userId), courseId: asUuid(custom.courseId) };
 }
 
 function readCurrentPeriodEnd(data: Record<string, unknown>): string | null {
