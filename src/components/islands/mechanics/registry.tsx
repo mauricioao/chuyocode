@@ -8,13 +8,47 @@
  * Dispatch is PER SLOT, not per exercise, which is what lets one exercise mix
  * mechanics and what makes an unknown `input` degrade that slot alone.
  */
+import { Suspense, lazy } from 'react';
 import type { Comparator } from '@/lib/exerciseGrading';
 import { comparatorFor } from '@/lib/exerciseGrading';
+import { Skeleton } from '@/components/ui/skeleton';
 import ChoiceRenderer from './ChoiceRenderer';
-import DropRenderer from './DropRenderer';
 import SelectRenderer from './SelectRenderer';
 import TextRenderer from './TextRenderer';
-import type { MechanicRenderer } from './types';
+import type { MechanicRenderer, MechanicRendererProps } from './types';
+
+const LazyDropRenderer = lazy(() => import('./DropRenderer'));
+
+/**
+ * `drop` is the only mechanic that needs `@dnd-kit` (~69 kB / 23 kB gzip),
+ * which every other curated exercise — most slots are `choice`/`select`/`text`
+ * — paid for anyway, since this registry used to import all four renderers
+ * eagerly in one module. `React.lazy` defers that import to the first exercise
+ * that actually has a `drop` slot; the `Suspense` boundary lives HERE rather
+ * than at each call site (`ExerciseIsland.tsx`, `QuizBlockPractice.tsx`), so
+ * `rendererFor('drop')` still hands back one ordinary component callers drop
+ * into JSX exactly like the other three, with no caller change. The fallback
+ * mirrors `DropRenderer`'s own shape (a prompt line, a row of pool tiles)
+ * instead of `null`, so the chunk loading in does not visibly snap the layout.
+ */
+function DropRendererLazy(props: MechanicRendererProps) {
+  return (
+    <Suspense
+      fallback={
+        <div aria-hidden="true" className="flex flex-col gap-3">
+          <Skeleton className="h-5 w-3/4" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-9 w-20" />
+            <Skeleton className="h-9 w-20" />
+            <Skeleton className="h-9 w-20" />
+          </div>
+        </div>
+      }
+    >
+      <LazyDropRenderer {...props} />
+    </Suspense>
+  );
+}
 
 /**
  * `slot.input` -> renderer. One line per shipped mechanic.
@@ -24,7 +58,7 @@ import type { MechanicRenderer } from './types';
  */
 const MECHANICS: Record<string, MechanicRenderer> = {
   choice: ChoiceRenderer,
-  drop: DropRenderer,
+  drop: DropRendererLazy,
   select: SelectRenderer,
   text: TextRenderer,
 };

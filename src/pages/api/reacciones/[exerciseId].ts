@@ -28,26 +28,19 @@
  * (design §2, threat matrix T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse } from '@lib/apiResponse';
 import { isExerciseId } from '@lib/likes';
 import { isValidReaction, upsertReaction, type ReactionInput } from '@lib/reactions';
-
-interface ReactionResponse {
-  ok: boolean;
-}
-
-function json(body: ReactionResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   // T3: no session, no reaction — checked BEFORE any other guard so an
   // anonymous request never even reveals whether the id or body was valid.
+  // Body shape is `{ ok: false }`, not the shared `requireUser()`'s
+  // `{ error: 'unauthorized' }` — kept exactly as this route always
+  // answered it.
   const user = locals.user;
   if (!user) {
-    return json({ ok: false }, 401);
+    return jsonResponse({ ok: false }, 401);
   }
 
   // A string that cannot be a uuid can never match a row (same reasoning as
@@ -56,6 +49,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   // `exercise_reactions`, not by an extra query here.
   const exerciseId = params.exerciseId;
   if (!isExerciseId(exerciseId)) {
+    // No `markPrivate` here, same as this route always answered it — the
+    // shared `notFoundResponse()` would add a `cache-control` header this
+    // exact response has never carried.
     return new Response(null, { status: 404, statusText: 'Not Found' });
   }
 
@@ -63,16 +59,16 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   try {
     body = await request.json();
   } catch {
-    return json({ ok: false }, 400);
+    return jsonResponse({ ok: false }, 400);
   }
 
   if (!isValidReaction(body)) {
-    return json({ ok: false }, 400);
+    return jsonResponse({ ok: false }, 400);
   }
 
   const reaction: ReactionInput =
     body.kind === 'dislike' ? { kind: 'dislike', reason: body.reason } : { kind: 'like' };
 
   const ok = await upsertReaction(user.id, exerciseId, reaction);
-  return json({ ok }, 200);
+  return jsonResponse({ ok }, 200);
 };

@@ -28,22 +28,11 @@
  * and content.
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, requireUser } from '@lib/apiResponse';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { parseBlocks, type Block } from '@lib/activities/blocks';
 import { isOwnUploadPath } from '@lib/activities/paths';
 import { createActivity } from '@lib/activities/activities';
-
-interface CreateResponse {
-  id?: string;
-  error?: string;
-}
-
-function json(body: CreateResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
 
 interface CreateInput {
   lang: unknown;
@@ -69,21 +58,21 @@ function everyImageOwnedByCaller(blocks: Block[], userId: string): boolean {
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   if (!isCreateInput(body)) {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
 
   const lang: Lang | null = isValidLang(body.lang) ? body.lang : null;
   if (!lang) {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
 
   // `'draft'` (creator polish round 4, owner feedback #2, "first block
@@ -93,11 +82,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // already uses for every later autosave.
   const blocks = parseBlocks(body.blocks, 'draft');
   if (!blocks) {
-    return json({ error: 'invalid_blocks' }, 422);
+    return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
 
   if (!everyImageOwnedByCaller(blocks, user.id)) {
-    return json({ error: 'invalid_image_path' }, 422);
+    return jsonResponse({ error: 'invalid_image_path' }, 422);
   }
 
   const id = await createActivity(user.id, {
@@ -106,8 +95,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     blocks,
   });
   if (!id) {
-    return json({ error: 'create_failed' }, 500);
+    return jsonResponse({ error: 'create_failed' }, 500);
   }
 
-  return json({ id }, 200);
+  return jsonResponse({ id }, 200);
 };

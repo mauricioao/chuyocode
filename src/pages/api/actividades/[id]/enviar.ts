@@ -49,7 +49,7 @@
  * Every response is private/no-store (T7).
  */
 import type { APIRoute } from 'astro';
-import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { UI_LABELS } from '@lib/i18n';
 import { parseBlocks, findIncompleteBlock } from '@lib/activities/blocks';
 import { isUuid } from '@lib/activities/paths';
@@ -62,27 +62,6 @@ const ACTIVITY_REVISIONS_TABLE = 'activity_revisions';
 const PLACEHOLDER_TITLES: ReadonlySet<string> = new Set(
   (['es', 'en'] as const).map((lang): string => UI_LABELS[lang].activities.untitledTitle),
 );
-
-interface EnviarResponse {
-  ok?: boolean;
-  error?: string;
-  /** Present only on `error: 'incomplete'` — see the file header. */
-  blockId?: string;
-  zoneId?: string | null;
-  reason?: string;
-}
-
-function json(body: EnviarResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function notFound(): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status: 404, statusText: 'Not Found', headers });
-}
 
 interface EnviarInput {
   acceptedRights: unknown;
@@ -106,16 +85,16 @@ function getClient(): ReturnType<typeof createServiceClient> | null {
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const id = params.id;
   if (typeof id !== 'string' || !isUuid(id)) {
-    return notFound();
+    return notFoundResponse();
   }
 
   const client = getClient();
   if (!client) {
-    return json({ error: 'submit_unavailable' }, 503);
+    return jsonResponse({ error: 'submit_unavailable' }, 503);
   }
 
   // Ownership enforced IN THE QUERY — same 404-for-both posture as `guardar.ts`.
@@ -129,10 +108,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (activityError) {
     console.error('[enviar] activity fetch failed:', activityError.message);
-    return json({ error: 'submit_failed' }, 500);
+    return jsonResponse({ error: 'submit_failed' }, 500);
   }
   if (!activityData) {
-    return notFound();
+    return notFoundResponse();
   }
   const activity = activityData as unknown as { id: string; title: string; status: string };
 
@@ -140,13 +119,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   if (!isEnviarInput(body)) {
-    return json({ error: 'bad_request' }, 400);
+    return jsonResponse({ error: 'bad_request' }, 400);
   }
   if (body.acceptedRights !== true) {
-    return json({ error: 'rights_required' }, 422);
+    return jsonResponse({ error: 'rights_required' }, 422);
   }
 
   const { data: revisionData, error: revisionFetchError } = await client
@@ -159,42 +138,42 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (revisionFetchError) {
     console.error('[enviar] revision fetch failed:', revisionFetchError.message);
-    return json({ error: 'submit_failed' }, 500);
+    return jsonResponse({ error: 'submit_failed' }, 500);
   }
   if (!revisionData) {
     // Every activity gets a first draft revision at creation time
     // (`createActivity`) — a missing one is a broken invariant, not a
     // request the caller can fix.
     console.error('[enviar] no revision found for activity id:', id);
-    return json({ error: 'submit_failed' }, 500);
+    return jsonResponse({ error: 'submit_failed' }, 500);
   }
   const revision = revisionData as unknown as { id: string; status: string; blocks: unknown };
 
   // Idempotent: a second submit while one is already pending changes nothing.
   if (revision.status === 'pending_review') {
-    return json({ ok: true }, 200);
+    return jsonResponse({ ok: true }, 200);
   }
   if (revision.status !== 'draft') {
     // approved / rejected / superseded, with no edit since — there is
     // nothing new for a moderator to look at.
-    return json({ error: 'no_draft' }, 422);
+    return jsonResponse({ error: 'no_draft' }, 422);
   }
 
   const title = activity.title.trim();
   if (title.length === 0 || PLACEHOLDER_TITLES.has(title)) {
-    return json({ error: 'invalid_title' }, 422);
+    return jsonResponse({ error: 'invalid_title' }, 422);
   }
 
   const blocks = parseBlocks(revision.blocks, 'draft');
   if (!blocks) {
-    return json({ error: 'invalid_blocks' }, 422);
+    return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
   if (blocks.length === 0) {
-    return json({ error: 'no_blocks' }, 422);
+    return jsonResponse({ error: 'no_blocks' }, 422);
   }
   const incomplete = findIncompleteBlock(blocks);
   if (incomplete) {
-    return json(
+    return jsonResponse(
       { error: 'incomplete', blockId: incomplete.blockId, zoneId: incomplete.zoneId, reason: incomplete.reason },
       422,
     );
@@ -207,7 +186,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (revisionUpdateError) {
     console.error('[enviar] revision update failed:', revisionUpdateError.message);
-    return json({ error: 'submit_failed' }, 500);
+    return jsonResponse({ error: 'submit_failed' }, 500);
   }
 
   if (activity.status === 'draft' || activity.status === 'rejected') {
@@ -219,11 +198,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
     if (activityUpdateError) {
       console.error('[enviar] activity update failed:', activityUpdateError.message);
-      return json({ error: 'submit_failed' }, 500);
+      return jsonResponse({ error: 'submit_failed' }, 500);
     }
   }
   // `live` stays live — the published revision keeps serving while the
   // fresh pending one awaits review (0011 migration's own lifecycle rule).
 
-  return json({ ok: true }, 200);
+  return jsonResponse({ ok: true }, 200);
 };

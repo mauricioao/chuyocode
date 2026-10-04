@@ -234,9 +234,16 @@ function submit() {
   fireEvent.click(screen.getByTestId('exercise-submit'));
 }
 
-/** The tiles slot `slotId` currently offers, by accessible name. */
-function tilesIn(slotId: string): string[] {
-  const pool = screen.getByTestId(`drop-pool-${slotId}`);
+/**
+ * The tiles slot `slotId` currently offers, by accessible name.
+ *
+ * ASYNC: `DropRenderer` is loaded behind `React.lazy` (registry.tsx's own
+ * header), so the first drop slot rendered in a test run shows the
+ * `Suspense` fallback until the dynamic import resolves. `findByTestId`
+ * waits for the real pool instead of assuming it is already mounted.
+ */
+async function tilesIn(slotId: string): Promise<string[]> {
+  const pool = await screen.findByTestId(`drop-pool-${slotId}`);
   return Array.from(pool.querySelectorAll('button')).map(
     (button) => button.getAttribute('aria-label') ?? '',
   );
@@ -255,7 +262,9 @@ function tilesIn(slotId: string): string[] {
  * where every rect is zero and collision detection has no geometry to work with.
  */
 async function dropInto(slotId: string, tileName: string) {
-  const pool = screen.getByTestId(`drop-pool-${slotId}`);
+  // `findByTestId`, not `getByTestId`: the pool may still be the lazy
+  // `Suspense` fallback — see `tilesIn`'s own header above.
+  const pool = await screen.findByTestId(`drop-pool-${slotId}`);
   const tile = Array.from(pool.querySelectorAll('button')).find(
     (button) => button.getAttribute('aria-label') === tileName,
   );
@@ -718,12 +727,12 @@ describe('ExerciseIsland — mixed mechanics in one exercise', () => {
 });
 
 describe('ExerciseIsland — two drop slots sharing one pool', () => {
-  it('offers the whole pool to both slots before anything is placed', () => {
+  it('offers the whole pool to both slots before anything is placed', async () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
-    expect(tilesIn('olives')).toEqual(['some', 'any', 'much', 'many']);
+    expect(await tilesIn('olives')).toEqual(['some', 'any', 'much', 'many']);
     goToSlot(1);
-    expect(tilesIn('bread')).toEqual(['some', 'any', 'much', 'many']);
+    expect(await tilesIn('bread')).toEqual(['some', 'any', 'much', 'many']);
   });
 
   /**
@@ -741,12 +750,12 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     await dropInto('olives', 'some');
 
     // Gone from the slot that consumed it...
-    expect(tilesIn('olives')).not.toContain('some');
+    expect(await tilesIn('olives')).not.toContain('some');
     // ...and, the part only the island can know, gone from its sibling too.
     // The sibling is a step away and MOUNTS FRESH when the learner reaches it,
     // so this also proves `claimed` is recomputed rather than captured once.
     goToSlot(1);
-    expect(tilesIn('bread')).toEqual(['any', 'much', 'many']);
+    expect(await tilesIn('bread')).toEqual(['any', 'much', 'many']);
   });
 
   it('leaves the rest of the pool alone', async () => {
@@ -757,7 +766,7 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     // Three tiles for one remaining slot: consuming one tile must not look like
     // exhausting the pool.
     goToSlot(1);
-    expect(tilesIn('bread')).toHaveLength(3);
+    expect(await tilesIn('bread')).toHaveLength(3);
   });
 
   it('lets each slot consume a different tile independently', async () => {
@@ -767,9 +776,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     goToSlot(1);
     await dropInto('bread', 'any');
 
-    expect(tilesIn('bread')).toEqual(['much', 'many']);
+    expect(await tilesIn('bread')).toEqual(['much', 'many']);
     goToSlot(0);
-    expect(tilesIn('olives')).toEqual(['much', 'many']);
+    expect(await tilesIn('olives')).toEqual(['much', 'many']);
   });
 
   it('returns a removed tile to BOTH slots', async () => {
@@ -781,9 +790,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
     );
 
     // Derived, not stored: nothing names the tile any more, so it is back.
-    expect(tilesIn('olives')).toContain('some');
+    expect(await tilesIn('olives')).toContain('some');
     goToSlot(1);
-    expect(tilesIn('bread')).toContain('some');
+    expect(await tilesIn('bread')).toContain('some');
   });
 
   it('grades both drop slots instead of excluding them from the verdict', async () => {
@@ -848,9 +857,9 @@ describe('ExerciseIsland — two drop slots sharing one pool', () => {
 
     // The wrong answer was cleared, so its tile is claimable again — by either
     // slot. A learner who must redo a slot needs its tiles back.
-    expect(tilesIn('olives')).toContain('much');
+    expect(await tilesIn('olives')).toContain('much');
     goToSlot(1);
-    expect(tilesIn('bread')).toContain('much');
+    expect(await tilesIn('bread')).toContain('much');
   });
 });
 
@@ -861,15 +870,19 @@ describe('ExerciseIsland — locale reaches the mechanics', () => {
    * Untested, a Spanish page would narrate its drag-and-drop in English and no
    * automated check would notice.
    */
-  it('narrates a Spanish exercise in Spanish', () => {
+  it('narrates a Spanish exercise in Spanish', async () => {
     render(<ExerciseIsland lang="es" payload={twoDropsOnePool} />);
 
+    // Waits past the lazy `DropRenderer` chunk's Suspense fallback — see
+    // `tilesIn`'s own header above.
+    await screen.findByTestId('drop-pool-olives');
     expect(document.body.textContent).toContain(DROP_COPY.es.instructions);
   });
 
-  it('narrates an English exercise in English', () => {
+  it('narrates an English exercise in English', async () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
+    await screen.findByTestId('drop-pool-olives');
     expect(document.body.textContent).toContain(DROP_COPY.en.instructions);
   });
 });

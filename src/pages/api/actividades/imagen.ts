@@ -44,6 +44,7 @@
  */
 import type { APIRoute } from 'astro';
 import { markPrivate } from '@lib/httpCache';
+import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { requireRole } from '@lib/roles';
 import {
   isOwnUploadPath,
@@ -61,25 +62,6 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MIN_DIMENSION_PX = 200;
 const MAX_DIMENSION_PX = 2400;
 
-interface UploadResponse {
-  path?: string;
-  width?: number;
-  height?: number;
-  error?: string;
-}
-
-function json(body: UploadResponse, status: number): Response {
-  const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  markPrivate(headers);
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-function empty(status: number): Response {
-  const headers = new Headers();
-  markPrivate(headers);
-  return new Response(null, { status, headers });
-}
-
 function redirect(location: string): Response {
   const headers = new Headers({ location });
   markPrivate(headers);
@@ -90,29 +72,29 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Checked before anything else, same rule as every identity-gated write in
   // this codebase (`guardar.ts`, `reacciones/[exerciseId].ts`).
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const contentType = (request.headers.get('content-type') ?? '').toLowerCase();
   if (!contentType.startsWith('image/webp')) {
-    return json({ error: 'unsupported_media_type' }, 415);
+    return jsonResponse({ error: 'unsupported_media_type' }, 415);
   }
 
   const buffer = await request.arrayBuffer();
   if (buffer.byteLength === 0) {
-    return json({ error: 'empty_body' }, 400);
+    return jsonResponse({ error: 'empty_body' }, 400);
   }
   if (buffer.byteLength > MAX_UPLOAD_BYTES) {
-    return json({ error: 'payload_too_large' }, 413);
+    return jsonResponse({ error: 'payload_too_large' }, 413);
   }
 
   const bytes = new Uint8Array(buffer);
   if (!hasWebpMagic(bytes)) {
-    return json({ error: 'not_webp' }, 422);
+    return jsonResponse({ error: 'not_webp' }, 422);
   }
 
   const dimensions = readWebpDimensions(bytes);
   if (!dimensions) {
-    return json({ error: 'not_webp' }, 422);
+    return jsonResponse({ error: 'not_webp' }, 422);
   }
   const { width, height } = dimensions;
   if (
@@ -121,7 +103,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     width < MIN_DIMENSION_PX ||
     height < MIN_DIMENSION_PX
   ) {
-    return json({ error: 'invalid_dimensions' }, 422);
+    return jsonResponse({ error: 'invalid_dimensions' }, 422);
   }
 
   // FAILS CLOSED: a count we could not read is treated as "at the cap", same
@@ -129,42 +111,42 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // the per-user limit.
   const uploadCount = await countUserUploads(user.id);
   if (uploadCount === null || uploadCount >= MAX_UPLOADS_PER_USER) {
-    return json({ error: 'upload_limit_reached' }, 429);
+    return jsonResponse({ error: 'upload_limit_reached' }, 429);
   }
 
   const id = crypto.randomUUID();
   const path = await uploadToUploadsBucket(user.id, id, bytes);
   if (!path) {
-    return json({ error: 'upload_failed' }, 500);
+    return jsonResponse({ error: 'upload_failed' }, 500);
   }
 
-  return json({ path, width, height }, 200);
+  return jsonResponse({ path, width, height }, 200);
 };
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const path = new URL(request.url).searchParams.get('path');
-  if (!path) return json({ error: 'bad_request' }, 400);
+  if (!path) return jsonResponse({ error: 'bad_request' }, 400);
 
   // Already public — no identity check needed at all, moderator or not.
   if (isPublicImagePath(path)) {
     const url = publicImageUrl(path);
-    if (!url) return empty(404);
+    if (!url) return notFoundResponse();
     return redirect(url);
   }
 
   const user = locals.user;
-  if (!user) return json({ error: 'unauthorized' }, 401);
+  if (!user) return requireUser();
 
   const isOwner = isOwnUploadPath(path, user.id);
   const isModerator = !isOwner && (await requireRole(user, 'moderator')) !== null;
   if (!isOwner && !isModerator) {
     // Same response whether the path is malformed, does not exist, or
     // exists but belongs to someone else — never leak which one it was.
-    return empty(404);
+    return notFoundResponse();
   }
 
   const signedUrl = await signedReadUrl(path);
-  if (!signedUrl) return empty(404);
+  if (!signedUrl) return notFoundResponse();
 
   return redirect(signedUrl);
 };
