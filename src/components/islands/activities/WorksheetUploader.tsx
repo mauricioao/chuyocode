@@ -516,10 +516,10 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
       onDragLeave={() => setDragActive(false)}
       onDrop={handleDrop}
       className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-theme duration-theme ${
-        dragActive ? 'border-primary bg-primary/5' : 'border-border'
+        dragActive ? 'border-accent-ink bg-primary/5' : 'border-border'
       }`}
     >
-      <UploadSimpleIcon weight="duotone" size={48} className="text-primary" aria-hidden="true" />
+      <UploadSimpleIcon weight="duotone" size={48} className="text-accent-ink" aria-hidden="true" />
       <p className="text-sm font-medium text-foreground">
         {dragActive ? t.uploadDragActive : t.uploadTitle}
       </p>

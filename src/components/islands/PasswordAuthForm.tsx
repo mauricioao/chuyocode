@@ -14,9 +14,10 @@
  * a wrong password AND for an address with no account.
  *
  * `signup` and `reset` stay uniform, mirroring the endpoint: both always
- * show {@link COPY.signUpSent} / {@link COPY.resetSent} on a completed
- * request, never branching on what the response body actually says (the
- * body is uniform too, so there is nothing to branch on) — the neutral
+ * show a neutral confirmation on a completed request — {@link COPY.signUpSent}
+ * for `signup`, the {@link COPY.resetSentHeading}/{@link COPY.resetSentBody}
+ * card for `reset` — never branching on what the response body actually says
+ * (the body is uniform too, so there is nothing to branch on) — the neutral
  * outcome is the whole point, same rule as `SignInForm`'s header. The one
  * signal this form DOES read from the body is `signedIn` on `signup`, which
  * is a PROJECT-WIDE setting (email confirmation disabled), never a
@@ -24,11 +25,25 @@
  *
  * COPY IS LOCAL, exported and swept by this file's own test, same rule as
  * `SignInForm.COPY`.
+ *
+ * 🔴 TURNSTILE IS INERT UNTIL `PUBLIC_TURNSTILE_SITE_KEY` IS SET. `siteKey`
+ * below is `null` when unset (`@lib/turnstile`'s whole point), and every
+ * piece of this feature is gated on it: no `<TurnstileWidget>` renders (so
+ * its effect never loads Cloudflare's script), the submit button is never
+ * held disabled waiting for a token, and `captchaToken` stays `null` forever
+ * so the request body never carries the field — see the `needsCaptcha`/
+ * `captchaToken ? { captchaToken } : {}` lines below. One widget serves all
+ * three modes (signin/signup/reset all need a token per the file header's
+ * Supabase facts), so it mounts once with the form and is never remounted
+ * on `switchMode`.
  */
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { EnvelopeSimpleIcon } from '@phosphor-icons/react/dist/ssr/EnvelopeSimple';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { getTurnstileSiteKey } from '@lib/turnstile';
+import TurnstileWidget from './TurnstileWidget';
 
 /** Kept in sync with `MIN_PASSWORD_LENGTH` in `@lib/authValidation`. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -51,11 +66,15 @@ export const COPY = {
     forgotPassword: '¿Olvidaste la contraseña?',
     resetSubmit: 'Enviar instrucciones',
     resetSubmitting: 'Enviando…',
-    resetSent:
-      'Se enviaron instrucciones para restablecer la contraseña a esa dirección, si corresponde a una cuenta. Revisar la bandeja de entrada y la carpeta de spam.',
+    resetSentHeading: 'Revisa tu correo',
+    resetSentBody:
+      'Si {email} tiene una cuenta, te llegará un enlace para cambiar la contraseña. Mira también en spam.',
+    backToSignInFromReset: 'Volver a ingresar',
     backToSignIn: 'Volver a entrar',
     switchToSignUp: '¿Aún no tienes una cuenta? ¿Qué esperas?',
-    switchToSignIn: '¿Ya hay una cuenta? Entrar',
+    switchToSignIn: '¿Te acordaste de tu cuenta? Ingresar',
+    captchaPending: 'Esperando verificación…',
+    captchaError: 'No pudimos verificar que eres una persona. Inténtalo de nuevo.',
   },
   en: {
     emailLabel: 'Email address',
@@ -74,11 +93,15 @@ export const COPY = {
     forgotPassword: 'Forgot your password?',
     resetSubmit: 'Send instructions',
     resetSubmitting: 'Sending…',
-    resetSent:
-      'Password reset instructions were sent to that address, if it has an account. Check your inbox and spam folder.',
+    resetSentHeading: 'Check your email',
+    resetSentBody:
+      "If {email} has an account, you'll get a link to reset your password. Check your spam folder too.",
+    backToSignInFromReset: 'Back to sign in',
     backToSignIn: 'Back to sign in',
     switchToSignUp: "Don't have an account yet? What are you waiting for?",
-    switchToSignIn: 'Already have an account? Sign in',
+    switchToSignIn: 'Remembered your account? Sign in',
+    captchaPending: 'Waiting for verification…',
+    captchaError: "We couldn't verify you're human. Please try again.",
   },
 } as const;
 
@@ -110,11 +133,12 @@ export interface PasswordAuthFormProps {
 }
 
 type Mode = 'signin' | 'signup' | 'reset';
-type Status = 'idle' | 'pending' | 'error' | 'sent' | 'too-short';
+type Status = 'idle' | 'pending' | 'error' | 'captcha-error' | 'sent' | 'too-short';
 
 interface PasswordResponseBody {
   ok: boolean;
   signedIn?: boolean;
+  error?: string;
 }
 
 export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAuthFormProps) {
@@ -122,8 +146,14 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<Status>('idle');
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const t = copyFor(lang);
   const pending = status === 'pending';
+  // `null` while unset (`@lib/turnstile`'s header): see this file's own
+  // header for why every captcha-related line below is gated on it.
+  const siteKey = getTurnstileSiteKey();
+  const needsCaptcha = siteKey !== null && captchaToken === null;
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);
@@ -133,6 +163,17 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
 
   function goTo(destination: string) {
     window.location.assign(destination);
+  }
+
+  /**
+   * Tokens are single-use (Turnstile): clear the stale one and bump the
+   * widget's reset signal together, so the submit button goes back to
+   * "waiting for verification" immediately rather than staying enabled with
+   * a token Supabase will no longer accept.
+   */
+  function resetCaptcha() {
+    setCaptchaToken(null);
+    setCaptchaResetSignal((n) => n + 1);
   }
 
   async function submit() {
@@ -154,12 +195,20 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
           lang,
           ...(mode !== 'reset' ? { password } : {}),
           ...(mode === 'signup' && next ? { next } : {}),
+          ...(captchaToken ? { captchaToken } : {}),
         }),
       });
+      // Every attempt, success or failure (see this file's header).
+      resetCaptcha();
 
       if (!res.ok) {
-        setStatus('error');
-        toast.error(mode === 'signin' ? t.signInError : t.genericError);
+        const errorBody = (await res.json().catch(() => null)) as PasswordResponseBody | null;
+        if (errorBody?.error === 'captcha_failed') {
+          setStatus('captcha-error');
+        } else {
+          setStatus('error');
+          toast.error(mode === 'signin' ? t.signInError : t.genericError);
+        }
         return;
       }
 
@@ -178,15 +227,47 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       // anything the response body says beyond `signedIn` above.
       setStatus('sent');
     } catch {
+      resetCaptcha();
       setStatus('error');
       toast.error(mode === 'signin' ? t.signInError : t.genericError);
     }
   }
 
   if (status === 'sent') {
+    if (mode === 'reset') {
+      // `{email}` is a plain split marker, not markup — the two halves of
+      // the sentence around the bolded address the visitor typed.
+      const [sentBodyBefore, sentBodyAfter] = t.resetSentBody.split('{email}');
+      return (
+        <div
+          role="status"
+          data-testid="password-reset-sent"
+          className="flex flex-col gap-3 rounded-(--radius-card) border border-border bg-card p-4 text-card-foreground"
+        >
+          <div className="flex items-center gap-2">
+            <EnvelopeSimpleIcon aria-hidden="true" className="size-6 text-accent" />
+            <h2 className="text-lg font-semibold text-foreground">{t.resetSentHeading}</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {sentBodyBefore}
+            <strong className="font-semibold text-foreground">{email}</strong>
+            {sentBodyAfter}
+          </p>
+          <button
+            type="button"
+            onClick={() => switchMode('signin')}
+            className="self-start text-sm font-medium text-accent hover:text-accent-hover hover:underline"
+            data-testid="password-reset-back-to-signin"
+          >
+            {t.backToSignInFromReset}
+          </button>
+        </div>
+      );
+    }
+
     return (
       <p role="status" data-testid="password-auth-sent">
-        {mode === 'reset' ? t.resetSent : t.signUpSent}
+        {t.signUpSent}
       </p>
     );
   }
@@ -237,18 +318,38 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
         </>
       )}
 
+      {siteKey && (
+        <TurnstileWidget
+          siteKey={siteKey}
+          language={lang}
+          onToken={setCaptchaToken}
+          resetSignal={captchaResetSignal}
+        />
+      )}
+
       <Button
         type="submit"
-        disabled={pending}
+        disabled={pending || needsCaptcha}
         loading={pending}
+        aria-describedby={needsCaptcha ? 'password-auth-captcha-hint' : undefined}
         data-testid="password-auth-submit"
       >
         {submitLabel}
       </Button>
 
+      {needsCaptcha && (
+        <p id="password-auth-captcha-hint" className="text-xs text-muted-foreground">
+          {t.captchaPending}
+        </p>
+      )}
       {status === 'error' && (
         <p role="alert" className="text-sm text-destructive">
           {mode === 'signin' ? t.signInError : t.genericError}
+        </p>
+      )}
+      {status === 'captcha-error' && (
+        <p role="alert" className="text-sm text-destructive">
+          {t.captchaError}
         </p>
       )}
       {status === 'too-short' && (

@@ -11,7 +11,12 @@
  * helper instead of repeating the three-import dance.
  */
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
-import { getContainerRenderer } from '@astrojs/react';
+// @astrojs/react 6+ moved this helper to a dedicated entrypoint — see
+// https://docs.astro.build/en/reference/container-reference/
+// ("container-renderer entrypoint" section): every official integration now
+// exposes getContainerRenderer() from `<package>/container-renderer`, not
+// its package root.
+import { getContainerRenderer } from '@astrojs/react/container-renderer';
 import { loadRenderers } from 'astro:container';
 
 export async function createContainer(): Promise<

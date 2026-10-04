@@ -85,7 +85,7 @@ const weeklyPick = topActivityOfWeek(
 );
 ---
 
-<BaseLayout lang={lang} title={t.title} description={t.description}>
+<BaseLayout lang={lang} title={t.title} description={t.description} theme="ingles">
   <section class="reveal mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
       <PageTitle lang={lang} backHref={`/${lang}`}>{t.title}</PageTitle>
@@ -161,7 +161,7 @@ const weeklyPick = topActivityOfWeek(
                 href={`/${lang}/ingles/propuestos?nivel=${level}`}
                 class={[
                   badgeVariants({ variant: 'outline' }),
-                  'h-auto gap-1 rounded-full bg-surface-soft px-4 py-2 text-sm hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  'h-auto gap-1 rounded-full bg-surface-soft px-4 py-2 text-sm hover:border-accent-ink hover:text-accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 ].join(' ')}
               >
                 {`${level} · ${levelLabels[level]}`}

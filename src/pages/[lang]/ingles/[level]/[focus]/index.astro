@@ -65,6 +65,7 @@ const backHref = `/${lang}/ingles/propuestos?nivel=${level}`;
   lang={lang}
   title={`${focusName} · ${level}`}
   description={t.section.description}
+  theme="ingles"
 >
   <section class="reveal mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
@@ -88,7 +89,7 @@ const backHref = `/${lang}/ingles/propuestos?nivel=${level}`;
           <p class="text-zinc-300">{t.section.emptyPair}</p>
           <a
             href={backHref}
-            class="text-sm font-semibold text-accent hover:text-accent-hover"
+            class="text-sm font-semibold text-accent-ink hover:text-accent-ink-hover"
           >
             {t.section.chooseLevel}
           </a>

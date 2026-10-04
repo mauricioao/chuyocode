@@ -403,7 +403,7 @@ export default function BlockList({
                       {expanded ? <CaretDownIcon aria-hidden="true" /> : <CaretRightIcon aria-hidden="true" />}
                     </Button>
 
-                    <span className="shrink-0 text-primary" aria-hidden="true">
+                    <span className="shrink-0 text-accent-ink" aria-hidden="true">
                       {worksheet ? (
                         <ImageIcon weight="duotone" size={18} />
                       ) : (

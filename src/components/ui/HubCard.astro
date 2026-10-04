@@ -60,11 +60,16 @@ const { href, title, description, count = null, tone = 'sky' } = Astro.props;
 const TONE_CLASSES: Record<'sky' | 'violet', { backdrop: string; iconTile: string }> = {
   sky: {
     backdrop: 'from-accent/15 via-sky-500/10 to-transparent',
-    iconTile: 'bg-sky-500/15 text-sky-300 group-hover:bg-sky-500/25',
+    // `ingles:` (global.css `@custom-variant ingles`) — the light Inglés hub
+    // is the only caller of this card, and the pastel `sky-300`/`violet-300`
+    // icon (tuned for a dark tile) has poor contrast against this same tile
+    // tinted over a near-white card, so it steps to a darker shade ONLY in
+    // that scope. Dark pages (none currently use this card) are unaffected.
+    iconTile: 'bg-sky-500/15 text-sky-300 ingles:text-sky-700 group-hover:bg-sky-500/25',
   },
   violet: {
     backdrop: 'from-accent/15 via-violet-500/10 to-transparent',
-    iconTile: 'bg-violet-500/15 text-violet-300 group-hover:bg-violet-500/25',
+    iconTile: 'bg-violet-500/15 text-violet-300 ingles:text-violet-700 group-hover:bg-violet-500/25',
   },
 };
 const toneClasses = TONE_CLASSES[tone];
@@ -75,7 +80,7 @@ const accessibleName = count ? `${title} — ${count}` : title;
 <a
   href={href}
   aria-label={accessibleName}
-  class="group relative mx-auto flex w-full max-w-xs flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border border-border bg-surface-soft p-6 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:scale-[1.02] hover:border-accent focus-visible:-translate-y-1 focus-visible:scale-[1.02] focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:aspect-square sm:max-w-none motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 motion-reduce:focus-visible:translate-y-0 motion-reduce:focus-visible:scale-100"
+  class="group relative mx-auto flex w-full max-w-xs flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border border-border bg-surface-soft p-6 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:scale-[1.02] hover:border-accent-ink focus-visible:-translate-y-1 focus-visible:scale-[1.02] focus-visible:border-accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:aspect-square sm:max-w-none motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 motion-reduce:focus-visible:translate-y-0 motion-reduce:focus-visible:scale-100"
 >
   <span
     aria-hidden="true"
@@ -94,7 +99,7 @@ const accessibleName = count ? `${title} — ${count}` : title;
   <span class="relative z-10 text-sm text-zinc-400">{description}</span>
   {
     count && (
-      <span class="relative z-10 text-xs font-semibold tracking-wide text-accent tabular-nums">
+      <span class="relative z-10 text-xs font-semibold tracking-wide text-accent-ink tabular-nums">
         {count}
       </span>
     )

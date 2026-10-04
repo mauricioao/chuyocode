@@ -1405,7 +1405,18 @@ export default function WorksheetZoneEditor({
                 draggable={false}
                 onLoad={() => setImageLoaded(true)}
                 onError={() => setImageBroken(true)}
-                className={`pointer-events-none absolute object-contain transition-opacity duration-300 motion-reduce:transition-none ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                // Visual-theme pass: a subtle warm shadow so the sheet reads
+                // as a distinct surface on the light Inglés canvas (same
+                // `bg-muted` cream as `.canvas-dots`) — `box-shadow` never
+                // affects the image's own box/dimensions, which this
+                // canvas's pointer math measures directly, and
+                // `--shadow-elevation-1` restates its current (black,
+                // effectively invisible-change) value in
+                // `[data-theme="brand"]`/default, so this is a no-op on
+                // dark. No border here on purpose, for the same reason: it
+                // would shrink the image's content box by its own width and
+                // drift it a pixel off the zone-drawing coordinate space.
+                className={`pointer-events-none absolute object-contain shadow-elevation-1 transition-opacity duration-300 motion-reduce:transition-none ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 style={{
                   top: '50%',
                   left: '50%',
@@ -1446,7 +1457,7 @@ export default function WorksheetZoneEditor({
                   className={`absolute rounded border-2 ${
                     effectiveTool === 'hand' ? canvasCursorClass : 'cursor-move'
                   } ${
-                    selected ? 'border-primary bg-primary/20' : 'border-accent/70 bg-accent/10'
+                    selected ? 'border-accent-ink bg-primary/20' : 'border-accent-ink/70 bg-accent/10'
                   } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
                   style={style}
                 >
@@ -1477,7 +1488,7 @@ export default function WorksheetZoneEditor({
               <div
                 data-testid="zone-draft"
                 aria-hidden="true"
-                className="pointer-events-none absolute rounded border-2 border-dashed border-primary bg-primary/10"
+                className="pointer-events-none absolute rounded border-2 border-dashed border-accent-ink bg-primary/10"
                 style={{
                   left: `${draftRect.x * 100}%`,
                   top: `${draftRect.y * 100}%`,

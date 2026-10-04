@@ -179,7 +179,7 @@ export default function QuizFlashcards({ lang, items, seed }: QuizFlashcardsProp
           <div
             data-testid="flashcard-back"
             aria-hidden={!flipped}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-accent bg-accent/10 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-accent-ink bg-accent/10 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
           >
             <p className="text-lg font-semibold text-zinc-100 sm:text-xl">{current.answer}</p>
             {current.explanation && (

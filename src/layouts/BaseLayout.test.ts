@@ -75,3 +75,62 @@ describe('BaseLayout — navigation transitions (navigation-without-flicker PR)'
     expect(html).toContain('data-astro-transition-persist');
   });
 });
+
+// Visual-theme pass ("dark brand, light product"): `theme="ingles"` is the
+// one switch every Inglés route flips. Omitted (every other page, unchanged)
+// keeps `<html class="dark">`; given, `<html>` gets `data-theme="ingles"`
+// instead and drops `dark` — see `src/styles/global.css`'s own header for
+// the two scopes this drives. Either way, the header/footer/nav progress
+// bar/global scroll-to-top stay wrapped in their OWN `data-theme="brand"` +
+// `class="dark"` scope, so they are forced dark regardless of the page.
+describe('BaseLayout — visual-theme scope (theme prop)', () => {
+  it('defaults <html> to the dark scope: class="dark", no data-theme', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).toContain('class="scroll-smooth dark"');
+    expect(htmlTag).not.toContain('data-theme');
+  });
+
+  it('theme="ingles" swaps <html> to data-theme="ingles" and drops the dark class', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).toContain('data-theme="ingles"');
+    expect(htmlTag).toContain('class="scroll-smooth"');
+    // Not just absent from a longer class list — no `dark` token at all.
+    expect(htmlTag).not.toMatch(/class="[^"]*\bdark\b[^"]*"/);
+  });
+
+  it('wraps the header, footer, nav progress bar and global scroll-to-top in the brand scope, even on a theme="ingles" page', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+    });
+    const brandWrappers = html.match(/data-theme="brand" class="dark contents"/g) ?? [];
+    // Nav progress bar, header, footer, global scroll-to-top — exactly four.
+    expect(brandWrappers).toHaveLength(4);
+    // Each wrapper actually precedes the chrome it protects, in document order.
+    expect(html.indexOf('data-theme="brand"')).toBeLessThan(html.indexOf('id="nav-progress-bar"'));
+    expect(html.indexOf('data-theme="brand"', html.indexOf('id="nav-progress-bar"'))).toBeLessThan(
+      html.indexOf('<header'),
+    );
+    expect(html.indexOf('data-theme="brand"', html.indexOf('<header'))).toBeLessThan(html.indexOf('<footer'));
+  });
+
+  it('still wraps the chrome in the brand scope on an ordinary (non-Inglés) page', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html.match(/data-theme="brand" class="dark contents"/g) ?? []).toHaveLength(4);
+  });
+});

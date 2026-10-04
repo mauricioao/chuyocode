@@ -113,7 +113,7 @@ const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`${activity.title
 const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null;
 ---
 
-<BaseLayout lang={lang} title={activity.title} description={t.pageDescription} fullHeight>
+<BaseLayout lang={lang} title={activity.title} description={t.pageDescription} fullHeight theme="ingles">
   <section class="mx-auto flex w-full max-w-5xl flex-col px-4 py-4 sm:px-6 sm:py-6 lg:h-full lg:min-h-0 lg:py-6">
     {/* THE card: everything below is inside it, one bordered/rounded
         surface at `lg:` — same shape as the activity editor's own card
@@ -139,7 +139,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           data-back-button
           aria-label={t.back}
           title={t.back}
-          class="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeftIcon size={20} aria-hidden="true" />
         </a>
@@ -161,7 +161,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
             <p class="text-xs text-zinc-400" data-testid="activity-based-on">
               {sourceHref ? (
                 <>
-                  {t.basedOnPrefix}<a href={sourceHref} class="text-accent hover:underline">{activity.source.title}</a>{t.basedOnSuffix}
+                  {t.basedOnPrefix}<a href={sourceHref} class="text-accent-ink hover:underline">{activity.source.title}</a>{t.basedOnSuffix}
                 </>
               ) : (
                 <>{t.basedOnPrefix}{activity.source.title}{t.basedOnSuffix}</>

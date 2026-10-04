@@ -50,7 +50,9 @@ export interface MediaBlockEditorProps {
   onRemove: () => void;
 }
 
-/** Is `value` acceptable to COMMIT — empty (clears the field) or allow-listed. */
+/** Is `value` acceptable to COMMIT — empty (clears the field) or allow-listed.
+ * Checked against the STATIC host list only (no `SUPABASE_URL` in the
+ * browser); `exerciseValidator.ts`'s server-side check is authoritative. */
 function isCommittable(value: string): boolean {
   return value === '' || isAllowedMediaUrl(value);
 }

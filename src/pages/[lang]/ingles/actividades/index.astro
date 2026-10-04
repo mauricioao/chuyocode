@@ -201,7 +201,7 @@ if (orden !== 'recientes') {
 if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWithoutFilter('novistas') });
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
   <section class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
       <PageTitle lang={lang} backHref={`/${lang}/ingles`}>
@@ -246,7 +246,7 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
                 <a
                   href={chip.href}
                   data-testid={`filter-chip-${chip.key}`}
-                  class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-zinc-300 hover:border-accent hover:text-accent"
+                  class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-zinc-300 hover:border-accent-ink hover:text-accent-ink"
                 >
                   {chip.label} <span aria-hidden="true">&times;</span>
                 </a>
@@ -262,7 +262,7 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
         <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
           <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
           {anyFilterActive && (
-            <a href={basePath} class="text-sm font-medium text-accent hover:underline">
+            <a href={basePath} class="text-sm font-medium text-accent-ink hover:underline">
               {t.clearFilters}
             </a>
           )}

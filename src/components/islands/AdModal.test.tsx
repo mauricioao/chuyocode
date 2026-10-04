@@ -4,9 +4,15 @@
  *
  * Verifies the rewarded-ads unlock flow:
  *  - the modal + ad placeholder + Watch CTA render,
- *  - clicking Watch starts the 3s countdown,
- *  - completion POSTs to /api/validar-anuncio and shows the success state,
- *  - a non-ok response shows the error state with a retry,
+ *  - clicking Watch first POSTs /api/anuncio/inicio (arms the start cookie),
+ *    THEN starts the 3s countdown — never the other way around (see
+ *    `AdModal.tsx`'s `startAd` header on the race a fire-and-forget start call
+ *    would risk in production),
+ *  - a failed/erroring start call goes straight to the error state, with no
+ *    countdown and no call to /api/validar-anuncio,
+ *  - countdown completion POSTs /api/validar-anuncio (no body) and shows the
+ *    success state,
+ *  - a non-ok validate response shows the error state with a retry,
  *  - copy is localized (es/en).
  *
  * Fake timers drive the countdown; fetch and location.reload are stubbed so the
@@ -17,6 +23,9 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
 import AdModal, { AD_DURATION_SECONDS, COPY } from './AdModal';
 
+const START_URL = '/api/anuncio/inicio';
+const VALIDATE_URL = '/api/validar-anuncio';
+
 /** Stub window.location.reload so the success path does not navigate. */
 function stubReload() {
   const reload = vi.fn();
@@ -25,6 +34,49 @@ function stubReload() {
     value: { ...window.location, reload },
   });
   return reload;
+}
+
+/**
+ * Stub global fetch to route by URL: `/api/anuncio/inicio` resolves with
+ * `startOk`, `/api/validar-anuncio` resolves with `validateResult` (or
+ * rejects, when `validateResult` is an Error).
+ */
+function stubFetch(options: {
+  startOk?: boolean;
+  startThrows?: boolean;
+  validateResult?: { ok: boolean; body: { ok: boolean; error?: string } } | Error;
+}) {
+  const { startOk = true, startThrows = false, validateResult } = options;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === START_URL) {
+      if (startThrows) {
+        throw new Error('network down');
+      }
+      return { ok: startOk, json: async () => ({ ok: startOk }) };
+    }
+    if (url === VALIDATE_URL) {
+      if (validateResult instanceof Error) {
+        throw validateResult;
+      }
+      const result = validateResult ?? { ok: true, body: { ok: true } };
+      return { ok: result.ok, json: async () => result.body };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+/** Click the Watch CTA and flush the awaited `/inicio` call it fires first. */
+async function clickWatch(label: string) {
+  fireEvent.click(screen.getByText(label));
+  // `startAd` awaits the start-call promise before arming the countdown —
+  // flush that microtask chain so the interval actually exists afterward.
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
 }
 
 /** Advance the fake countdown to completion, flushing pending microtasks. */
@@ -72,12 +124,14 @@ describe('AdModal', () => {
     expect(screen.getByText('Watch ad to unlock')).toBeTruthy();
   });
 
-  it('starts a countdown when Watch is clicked', () => {
+  it('POSTs /api/anuncio/inicio before starting the countdown when Watch is clicked', async () => {
+    const fetchMock = stubFetch({});
     render(<AdModal lang="en" />);
 
-    fireEvent.click(screen.getByText('Watch ad to unlock'));
+    await clickWatch('Watch ad to unlock');
 
-    // Countdown begins at the full duration.
+    expect(fetchMock).toHaveBeenCalledWith(START_URL, { method: 'POST' });
+    // Countdown begins at the full duration only AFTER the start call resolved.
     expect(screen.getByTestId('ad-status').textContent).toContain(
       String(AD_DURATION_SECONDS),
     );
@@ -88,39 +142,50 @@ describe('AdModal', () => {
     expect(screen.getByTestId('ad-status').textContent).toContain(
       String(AD_DURATION_SECONDS - 1),
     );
+    // The countdown completing is what triggers validate — not yet reached.
+    expect(fetchMock).not.toHaveBeenCalledWith(VALIDATE_URL, expect.anything());
+  });
+
+  it('shows the error state immediately when the start call returns non-ok, with no countdown and no validate call', async () => {
+    const fetchMock = stubFetch({ startOk: false });
+    render(<AdModal lang="en" />);
+
+    await clickWatch('Watch ad to unlock');
+
+    expect(screen.getByTestId('ad-error')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith(VALIDATE_URL, expect.anything());
+  });
+
+  it('shows the error state immediately when the start call rejects (network failure)', async () => {
+    const fetchMock = stubFetch({ startThrows: true });
+    render(<AdModal lang="en" />);
+
+    await clickWatch('Watch ad to unlock');
+
+    expect(screen.getByTestId('ad-error')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith(VALIDATE_URL, expect.anything());
   });
 
   it('reaches the success state and reloads after a successful validation', async () => {
     const reload = stubReload();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubFetch({ validateResult: { ok: true, body: { ok: true } } });
 
     render(<AdModal lang="es" />);
-    fireEvent.click(screen.getByText('Ver anuncio para desbloquear'));
+    await clickWatch('Ver anuncio para desbloquear');
 
     await runCountdown();
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/validar-anuncio',
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(fetchMock).toHaveBeenCalledWith(VALIDATE_URL, { method: 'POST' });
     expect(screen.getByTestId('ad-success')).toBeTruthy();
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
   it('shows the error state when validation returns non-ok', async () => {
     stubReload();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ ok: false, error: 'Invalid token' }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    stubFetch({ validateResult: { ok: false, body: { ok: false, error: 'Invalid ad session' } } });
 
     render(<AdModal lang="en" />);
-    fireEvent.click(screen.getByText('Watch ad to unlock'));
+    await clickWatch('Watch ad to unlock');
 
     await runCountdown();
 
@@ -128,13 +193,12 @@ describe('AdModal', () => {
     expect(screen.getByText('Retry')).toBeTruthy();
   });
 
-  it('shows the error state on a network failure', async () => {
+  it('shows the error state on a network failure during validation', async () => {
     stubReload();
-    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
-    vi.stubGlobal('fetch', fetchMock);
+    stubFetch({ validateResult: new Error('network down') });
 
     render(<AdModal lang="en" />);
-    fireEvent.click(screen.getByText('Watch ad to unlock'));
+    await clickWatch('Watch ad to unlock');
 
     await runCountdown();
 

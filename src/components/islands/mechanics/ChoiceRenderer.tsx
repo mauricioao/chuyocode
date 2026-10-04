@@ -43,8 +43,8 @@ import type { MechanicRendererProps } from './types';
  */
 const TILE =
   'flex min-h-20 items-center gap-4 rounded-lg border-2 border-border bg-surface-soft p-4 transition-colors sm:p-5 ' +
-  'has-data-[state=checked]:border-accent has-data-[state=checked]:bg-accent/10 ' +
-  'has-[:focus-visible]:border-accent';
+  'has-data-[state=checked]:border-accent-ink has-data-[state=checked]:bg-accent/10 ' +
+  'has-[:focus-visible]:border-accent-ink';
 
 export default function ChoiceRenderer({
   slot,

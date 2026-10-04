@@ -58,8 +58,8 @@ describe('ExerciseCard.astro — link and title', () => {
 
   it('keeps the hover and focus affordances the other cards use', async () => {
     const html = await render(baseProps);
-    expect(html).toContain('hover:border-accent');
-    expect(html).toContain('focus-visible:border-accent');
+    expect(html).toContain('hover:border-accent-ink');
+    expect(html).toContain('focus-visible:border-accent-ink');
   });
 });
 

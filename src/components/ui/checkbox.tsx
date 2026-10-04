@@ -22,7 +22,7 @@ function Checkbox({
       className={cn(
         'peer flex size-5 shrink-0 items-center justify-center rounded-[min(var(--radius-field),6px)] border border-(--color-field-border) bg-(--color-field) outline-none transition-[border-color,box-shadow] duration-(--transition-duration-control) ease-(--ease-control)',
         'hover:border-(--color-field-border-hover)',
-        'focus-visible:border-accent focus-visible:ring-3 focus-visible:ring-(--color-field-ring)',
+        'focus-visible:border-accent-ink focus-visible:ring-3 focus-visible:ring-(--color-field-ring)',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20',
         'data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',

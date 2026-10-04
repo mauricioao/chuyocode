@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import netlify from '@astrojs/netlify';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
+import { serverOnlyModules } from './src/lib/build/serverOnlyModules.ts';
 
 // ChuyoCode runs in SSR mode: every gated page verifies the access cookie per
 // request against Supabase, so static output is not an option (design
@@ -46,7 +47,10 @@ export default defineConfig({
   vite: {
     // Tailwind 4 plugs into Vite directly (replaced the @astrojs/tailwind
     // integration). It reads the `@theme` block in src/styles/global.css.
-    plugins: [tailwindcss()],
+    // `serverOnlyModules()` fails the build if a server-only module (secret
+    // names/values, see its own header comment) is reachable from the
+    // client bundle.
+    plugins: [tailwindcss(), serverOnlyModules()],
     // Keep server-only secrets (service role, HMAC) out of the client bundle.
     ssr: {
       noExternal: ['@sanity/client'],
