@@ -104,6 +104,27 @@ describe('POST /api/csp-report', () => {
     },
   );
 
+  it('strips every control and line-separator character a crafted report carries', async () => {
+    const warn = spyOnWarn();
+    // ANSI escapes can rewrite a terminal tailing the logs; U+2028/U+2029 and
+    // NEL split records in log shippers that treat them as line breaks.
+    const res = await POST(
+      ctx(
+        legacyRequest({
+          ...LEGACY_REPORT,
+          'effective-directive': 'script-src\u001b[2K\u001b[1G\u2028[csp-report] forged',
+          'blocked-uri': 'not-a-url\u2029\u007f\u009bline',
+          disposition: 'report\u0085fake',
+        }),
+      ),
+    );
+
+    expect(res.status).toBe(204);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/);
+    warn.mockRestore();
+  });
+
   it('never logs an ambient Cookie header even when the browser sends one', async () => {
     const warn = spyOnWarn();
     const req = legacyRequest(LEGACY_REPORT, {

@@ -133,12 +133,14 @@ function fromReportingApiBody(body: unknown): RawFields | null {
 }
 
 /**
- * Make an attacker-controlled string safe to put in ONE log line: strip
- * newlines/control characters (otherwise a crafted field value could forge
- * additional fake log lines) and cap the length.
+ * Make an attacker-controlled string safe to put in ONE log line: replace
+ * every C0/C1 control character, DEL and the Unicode line/paragraph
+ * separators (otherwise a crafted field value could forge additional fake
+ * log lines, split records in a log shipper, or inject terminal escapes into
+ * whoever tails the logs) and cap the length.
  */
 function sanitizeForLog(value: string, maxLength: number): string {
-  const flattened = value.replace(/[\r\n\t\0]+/g, ' ').trim();
+  const flattened = value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').trim();
   return flattened.length > maxLength ? `${flattened.slice(0, maxLength)}…` : flattened;
 }
 
