@@ -702,6 +702,21 @@ describe('getPublishedActivities', () => {
     expect(result.activities[0].viewTotal).toBe(33);
   });
 
+  it('never filters by author_id — a ChuyoCode-owned activity (NULL author, 0020 account deletion transfer) is listed like any other', async () => {
+    awaitResults.push({
+      data: [
+        { id: 'a1', title: 'Transferida', level: null, block_count: 1, published_at: null, published_revision_id: PUBLISHED_REVISION_ID },
+      ],
+      error: null,
+      count: 1,
+    });
+    awaitResults.push({ data: [], error: null });
+    const result = await getPublishedActivities({ level: null, page: 1 });
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].id).toBe('a1');
+    expect(eqMock).not.toHaveBeenCalledWith('author_id', expect.anything());
+  });
+
   it('marks viewedByViewer for activities the caller has already opened', async () => {
     awaitResults.push({
       data: [
@@ -956,6 +971,16 @@ describe('getPublishedActivity', () => {
       error: null,
     });
     expect(await getPublishedActivity(ACTIVITY_ID)).toBeNull();
+  });
+
+  it('treats a NULL author_id as owned by ChuyoCode, not malformed (0020 account deletion transfer) — does not 404', async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { id: ACTIVITY_ID, title: 'Transferida', level: null, author_id: null, activity_revisions: { blocks: SOME_BLOCKS } },
+      error: null,
+    });
+    const result = await getPublishedActivity(ACTIVITY_ID);
+    expect(result).not.toBeNull();
+    expect(result?.authorId).toBeNull();
   });
 
   it('returns the activity + published blocks on success (object-shaped embed)', async () => {

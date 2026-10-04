@@ -669,8 +669,17 @@ export interface PublishedActivity {
    * hide the "Reportar" button from the activity's own author — reporting
    * one's own activity is refused server-side too (`recordReport`'s own
    * header), this is only the UI-level courtesy of not offering it.
+   *
+   * `null` means the activity is owned by ChuyoCode itself — its original
+   * author deleted their account and this PUBLISHED activity was
+   * transferred rather than deleted (`transfer_and_purge_user`,
+   * `supabase/migrations/0020_account_deletion.sql#1`). Every caller must
+   * treat `null` as "nobody owns this": a signed-in visitor is NEVER the
+   * author of a `null`-owned activity, so `user.id !== authorId` already
+   * does the right thing unchanged (a real id is never `=== null`) — the
+   * practice page's `canReport`/`canHeart` gates need no special case.
    */
-  authorId: string;
+  authorId: string | null;
   /** Denormalized "gustadas" counter (`0014_activity_discovery.sql`). */
   heartCount: number;
   /** Denormalized "vistas" counter (`0014_activity_discovery.sql`). */
@@ -720,7 +729,16 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
 
     const row = data as unknown as Record<string, unknown>;
     if (typeof row.title !== 'string') return null;
-    if (typeof row.author_id !== 'string' || row.author_id.length === 0) return null;
+    // `author_id` is nullable since the 0020 migration: NULL means "owned by
+    // ChuyoCode" (the original author's account was deleted and this
+    // PUBLISHED activity was transferred, never deleted — see
+    // `PublishedActivity.authorId`'s own doc). A non-null value must still be
+    // a non-empty string; anything else (including a missing/undefined key)
+    // is a malformed boundary row, same fail-safe posture as before.
+    if (row.author_id !== null && (typeof row.author_id !== 'string' || row.author_id.length === 0)) {
+      return null;
+    }
+    const authorId: string | null = row.author_id === null ? null : row.author_id;
 
     // A `belongs-to` embed (the FK lives on `activities`) comes back as a
     // single object, not an array — but this is still a boundary read, so
@@ -743,7 +761,7 @@ export async function getPublishedActivity(id: string): Promise<PublishedActivit
       title: row.title,
       level: isLevel(row.level) ? row.level : null,
       blocks,
-      authorId: row.author_id,
+      authorId,
       heartCount: typeof row.heart_count === 'number' ? row.heart_count : 0,
       viewTotal: typeof row.view_total === 'number' ? row.view_total : 0,
       source,
