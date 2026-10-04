@@ -80,7 +80,7 @@ export interface PresentationIslandProps {
   quizBlocks: QuizBlock[];
 }
 
-type PresentCopy = (typeof UI_LABELS)['es']['activities']['present'];
+type PresentCopy = (typeof UI_LABELS)[Lang]['activities']['present'];
 
 /** How long the control bar stays up after the last pointer move/focus, before fading out (section 6: "hides after ~2s"). */
 const IDLE_HIDE_MS = 2000;
