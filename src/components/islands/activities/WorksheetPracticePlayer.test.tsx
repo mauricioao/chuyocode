@@ -252,6 +252,51 @@ describe('WorksheetPracticePlayer — pan (Mano tool / Space / middle-drag)', ()
   });
 });
 
+describe('WorksheetPracticePlayer — hand tool click-to-write on an answer blank', () => {
+  it('turns the Mano tool off and focuses the blank on a plain click while the tool is on', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-tool-hand'));
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+
+    firePointer(input, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(input, 'pointerup', 500, 250, { button: 0 });
+
+    expect(screen.getByTestId('practice-tool-hand').getAttribute('aria-pressed')).toBe('false');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('keeps the Mano tool on and leaves the blank unfocused once the press drags past the click threshold', () => {
+    mockViewportRect();
+    renderPlayer();
+    fireEvent.click(screen.getByTestId('practice-tool-hand'));
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    const before = content().style.transform;
+
+    firePointer(input, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(input, 'pointermove', 400, 200, { button: 0 });
+    firePointer(input, 'pointerup', 400, 200, { button: 0 });
+
+    expect(screen.getByTestId('practice-tool-hand').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement).not.toBe(input);
+    expect(content().style.transform).not.toBe(before);
+  });
+
+  it('does not switch tools on a Space-held click (temporary pan only, same as today)', () => {
+    mockViewportRect();
+    renderPlayer();
+    const viewport = screen.getByTestId('practice-camera-viewport');
+    fireEvent.keyDown(viewport, { key: ' ' });
+    const input = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+
+    firePointer(input, 'pointerdown', 500, 250, { button: 0 });
+    firePointer(input, 'pointerup', 500, 250, { button: 0 });
+
+    expect(screen.getByTestId('practice-tool-hand').getAttribute('aria-pressed')).toBe('false');
+    expect(document.activeElement).not.toBe(input);
+  });
+});
+
 describe('WorksheetPracticePlayer — free panning (Bug 2, loose camera bound)', () => {
   it('pans away from center at FIT scale once the Mano tool is active (clampCameraLoose, not the strict/locked clampCamera)', () => {
     mockViewportRect();
