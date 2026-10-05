@@ -124,4 +124,25 @@ test.describe('INGLÉS (immersive) mode — guest-play activity page, phone view
     await page.locator('main').dispatchEvent('pointerdown');
     await expect.poll(() => headerHidden(page), { timeout: 2000 }).toBe(true);
   });
+
+  test('an invisible footer never catches a tap', async ({ page }) => {
+    const path = await findInglesActivityPath(page);
+    test.skip(path === null, 'Need at least one published activity for a real guest-play id');
+
+    await page.goto(path!);
+    expect(await footerVisible(page)).toBe(false);
+
+    // On a phone the hidden footer can sit inside the viewport; a tap where
+    // its first link is must reach the page, never the invisible link.
+    const hit = await page.evaluate(() => {
+      document.querySelector('astro-dev-toolbar')?.remove();
+      const link = document.querySelector('[data-chrome-footer] a') as HTMLElement;
+      const box = link.getBoundingClientRect();
+      if (box.top >= window.innerHeight) return 'off-screen';
+      const target = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return target?.closest('[data-chrome-footer]') ? 'footer' : 'page';
+    });
+    test.skip(hit === 'off-screen', 'Footer is below the fold on this activity');
+    expect(hit).toBe('page');
+  });
 });

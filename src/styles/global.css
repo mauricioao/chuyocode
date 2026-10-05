@@ -683,8 +683,12 @@ html[data-chrome-js] [data-chrome-footer] {
   transition: opacity 220ms var(--ease-control);
   opacity: 1;
 }
+/* `pointer-events: none` too: on a short page or a phone the hidden footer
+ * can sit inside the viewport, and an invisible link must never catch a tap.
+ * Keyboard focus still reaches the links (focus reveals the footer). */
 html[data-chrome-js][data-footer-visible='false'] [data-chrome-footer] {
   opacity: 0;
+  pointer-events: none;
 }
 
 /* INGLÉS (immersive) mode only: the header floats OVER the content (fixed,
