@@ -41,6 +41,25 @@ function signedIn(id: string) {
   return { data: { user: { id } }, error: null };
 }
 
+/**
+ * A `getUser()` outcome: an authenticated caller who has ALSO already
+ * recorded age/legal consent (`@lib/ageConsent#hasRecordedConsent`). Tests
+ * that are about the LOGIN gate, not the consent gate, use this so a bare
+ * `signedIn()` can keep meaning exactly what it already means everywhere
+ * else: signed in, nothing more assumed.
+ */
+function signedInWithConsent(id: string) {
+  return {
+    data: {
+      user: {
+        id,
+        app_metadata: { ageConsent: { acceptedAt: '2026-10-04T00:00:00.000Z', version: 'v1' } },
+      },
+    },
+    error: null,
+  };
+}
+
 /** A `getUser()` outcome: no valid session, or one Supabase rejected. */
 function anonymous(error: unknown = null) {
   return { data: { user: null }, error };
@@ -443,18 +462,21 @@ describe('gating private sections', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('lets a signed-in visitor through to a gated ingles path', async () => {
-    armSession(signedIn('user-9'));
+  it('lets a signed-in, consented visitor through to a gated ingles path', async () => {
+    armSession(signedInWithConsent('user-9'));
     const { result, locals } = run('/es/ingles');
     const res = await result;
 
     expect(next).toHaveBeenCalledOnce();
     expect(res.status).toBe(200);
-    expect(locals.user).toEqual({ id: 'user-9' });
+    expect(locals.user).toEqual({
+      id: 'user-9',
+      app_metadata: { ageConsent: { acceptedAt: '2026-10-04T00:00:00.000Z', version: 'v1' } },
+    });
   });
 
-  it('lets a signed-in visitor through to a gated cursos path', async () => {
-    armSession(signedIn('user-11'));
+  it('lets a signed-in, consented visitor through to a gated cursos path', async () => {
+    armSession(signedInWithConsent('user-11'));
     const { result } = run('/es/cursos/react-basico');
     const res = await result;
 
@@ -463,7 +485,7 @@ describe('gating private sections', () => {
   });
 
   it('marks a gated response private/no-store even once it passes through', async () => {
-    armSession(signedIn('user-10'));
+    armSession(signedInWithConsent('user-10'));
     const { result } = run('/es/ingles');
     const res = await result;
 
@@ -511,6 +533,140 @@ describe('gating private sections', () => {
     expect(res.status).toBe(200);
     expect(next).toHaveBeenCalledOnce();
     expect(res.headers.has('cache-control')).toBe(false);
+  });
+});
+
+// Age/legal consent gate (Ley N° 29733, `@lib/ageConsent`). Runs AFTER the
+// login gate above: an anonymous visitor to a gated ingles/cursos path still
+// gets the entrar redirect from that block first (this gate never even sees
+// them, since it only ever fires for a signed-in `locals.user`). Scope is
+// broader than login-gated sections — `crear`/`mis-actividades`/`admin` are
+// signed-in-only in intent but the LOGIN gate never enforces them at the
+// middleware level (`@lib/access`'s own header) — the consent gate still
+// must catch a signed-in, non-consented visitor there.
+describe('age consent gate', () => {
+  it('redirects a signed-in visitor with no recorded consent away from a gated ingles path', async () => {
+    armSession(signedIn('user-20'));
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/consentimiento?next=%2Fes%2Fingles',
+    );
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('carries the original query string in next, safely encoded', async () => {
+    armSession(signedIn('user-21'));
+    const { result } = run('/es/ingles?nivel=B1');
+    const res = await result;
+
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/consentimiento?next=%2Fes%2Fingles%3Fnivel%3DB1',
+    );
+  });
+
+  it('redirects a signed-in visitor with no recorded consent away from cursos, in en', async () => {
+    armSession(signedIn('user-22'));
+    const { result } = run('/en/cursos/react-basics');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/en/auth/consentimiento?next=%2Fen%2Fcursos%2Freact-basics',
+    );
+  });
+
+  it('redirects away from a signed-in-only section the login gate itself never enforces (crear)', async () => {
+    armSession(signedIn('user-23'));
+    const { result } = run('/es/crear');
+    const res = await result;
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/es/auth/consentimiento?next=%2Fes%2Fcrear');
+  });
+
+  it('redirects away from mis-actividades', async () => {
+    armSession(signedIn('user-24'));
+    const { result } = run('/es/mis-actividades');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/consentimiento?next=%2Fes%2Fmis-actividades',
+    );
+  });
+
+  it('flushes a buffered session cookie onto the consent redirect too', async () => {
+    const { pendingCookies } = armSession(signedIn('user-25'));
+    pendingCookies.push('sb-x-auth-token=cleared; Path=/; Max-Age=0');
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(res.headers.getSetCookie()).toEqual([
+      'sb-x-auth-token=cleared; Path=/; Max-Age=0',
+    ]);
+  });
+
+  it('lets a signed-in visitor WITH recorded consent through to crear untouched', async () => {
+    armSession(signedInWithConsent('user-26'));
+    const { result } = run('/es/crear');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('never redirects an anonymous visitor (the login gate, not this one, owns that)', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/crear');
+    const res = await result;
+
+    // No login gate exists for `crear` today, and this gate only ever
+    // fires for a signed-in `locals.user` — an anonymous visitor reaches
+    // the page itself, which decides for itself what an anonymous visit
+    // looks like.
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it.each([
+    ['/es/', 'home'],
+    ['/es/libros', 'libros'],
+    ['/es/noticias', 'noticias'],
+    ['/es/creditos', 'creditos'],
+    ['/es/premium', 'premium'],
+    ['/es/legal/terms', 'legal'],
+    ['/es/auth/entrar', 'the sign-in page'],
+    ['/es/auth/consentimiento', 'the consent screen itself (no loop)'],
+  ])('leaves %s (%s) reachable for a signed-in visitor with no recorded consent', async (pathname) => {
+    armSession(signedIn('user-27'));
+    const { result } = run(pathname);
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('never redirects an /api/* request regardless of consent', async () => {
+    armSession(signedIn('user-28'));
+    const { result } = run('/api/auth/signout');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('leaves the guest-play practice page reachable for a signed-in visitor with no recorded consent', async () => {
+    armSession(signedIn('user-29'));
+    const { result } = run('/es/ingles/actividades/abc123');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
   });
 });
 
