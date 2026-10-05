@@ -275,12 +275,21 @@ const faviconSvg =
     </a>
     {/* Brand chrome (visual-theme pass) — see the note on the progress bar
         above. `contents` keeps `Header`'s own `sticky top-0` working exactly
-        as if this wrapper were not there. BARE mode drops it. */}
-    {!bare && (
-      <div data-theme="brand" class="dark contents">
-        <Header lang={lang} />
-      </div>
-    )}
+        as if this wrapper were not there. BARE mode drops it.
+
+        INGLÉS (owner spec 2026-10-05): the header/footer stop being forced
+        dark brand chrome here — they render INSIDE the page's own light
+        `[data-theme="ingles"]` scope instead (no wrapper at all), so
+        `Header`'s `ingles` branch picks up the light palette via the same
+        semantic tokens every other Inglés surface already uses. Every other
+        page is completely unaffected — this branch only ever runs when
+        `isIngles` is true. */}
+    {!bare &&
+      (isIngles ? <Header lang={lang} ingles /> : (
+        <div data-theme="brand" class="dark contents">
+          <Header lang={lang} />
+        </div>
+      ))}
     {/* Cleaner transitions (navigation-without-flicker PR): ONLY the main
         content cross-fades on navigation, a quick ~150ms — matches
         `Header`/`Footer` being excluded (persisted / `animate="none"`), so
@@ -293,12 +302,14 @@ const faviconSvg =
       <slot />
     </main>
     {/* Brand chrome (visual-theme pass) — see the nav progress bar's own
-        note above. BARE mode drops it. */}
-    {!bare && (
-      <div data-theme="brand" class="dark contents">
-        <Footer lang={lang} />
-      </div>
-    )}
+        note above. BARE mode drops it. INGLÉS: same unwrapped treatment as
+        the header above — see that block's own comment. */}
+    {!bare &&
+      (isIngles ? <Footer lang={lang} ingles /> : (
+        <div data-theme="brand" class="dark contents">
+          <Footer lang={lang} />
+        </div>
+      ))}
 
     {/* Global "back to top" button (site-wide). `client:load` like
         `UserMenu` — always-relevant chrome, not below-the-fold content —
