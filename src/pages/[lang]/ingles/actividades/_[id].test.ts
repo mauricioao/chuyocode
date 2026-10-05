@@ -602,3 +602,74 @@ describe('GET /[lang]/ingles/actividades/[id] — "Basado en" credit line (D7)',
     expect(html).not.toContain('href="/es/ingles/actividades/orig-1"');
   });
 });
+
+// T2 (practice page action bar redesign): Compartir/Duplicar/Reportar/
+// Presentar/Imprimir became icon buttons, each with an accessible name
+// (`aria-label`, never only the native `title`) and a hover/focus tooltip
+// (`role="tooltip"`, wired via `aria-describedby`) carrying that same label.
+describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with tooltips (T2)', () => {
+  it('Presentar and Imprimir (plain Astro links) carry an accessible name and a linked tooltip', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'q1',
+          type: 'quiz',
+          payload: {
+            pools: { opts: [{ id: 'a', text: 'x' }] },
+            slots: [{ id: 's1', label: 'x', input: 'choice', pool: 'opts', answer: ['a'] }],
+          },
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('aria-label="Presentar"');
+    expect(html).toContain('aria-describedby="action-present-tooltip"');
+    expect(html).toContain('id="action-present-tooltip"');
+
+    expect(html).toContain('aria-label="Imprimir"');
+    expect(html).toContain('aria-describedby="action-print-tooltip"');
+    expect(html).toContain('id="action-print-tooltip"');
+
+    expect(html).toContain('role="tooltip"');
+  });
+
+  it('the Duplicar/Reportar guest fallback links also carry an accessible name and a linked tooltip', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="activity-duplicate-guest"');
+    expect(html).toContain('aria-label="Duplicar"');
+    expect(html).toContain('aria-describedby="action-duplicate-guest-tooltip"');
+
+    expect(html).toContain('data-testid="activity-report-guest"');
+    expect(html).toContain('aria-label="Reportar"');
+    expect(html).toContain('aria-describedby="action-report-guest-tooltip"');
+  });
+
+  it('Compartir (ShareDialog) renders icon-only with iconOnly, keeping the share dialog itself unchanged', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="exercise-share"');
+    // The island receives `iconOnly: true` as a prop (server-rendered island
+    // payload), not visible text next to the icon in the static markup.
+    expect(html).toContain('&quot;iconOnly&quot;:[0,true]');
+  });
+});
