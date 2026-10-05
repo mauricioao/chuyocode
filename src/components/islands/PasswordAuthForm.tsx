@@ -42,8 +42,15 @@ import { toast } from 'sonner';
 import { EnvelopeSimpleIcon } from '@phosphor-icons/react/dist/ssr/EnvelopeSimple';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UI_LABELS, type Lang } from '@lib/i18n';
 import { getTurnstileSiteKey } from '@lib/turnstile';
+import AgeConsentCheckbox from './AgeConsentCheckbox';
 import TurnstileWidget from './TurnstileWidget';
+
+/** Resolve a `Lang` from an arbitrary prop string, same rule as `copyFor` below. */
+function uiLang(lang: string): Lang {
+  return lang === 'en' ? 'en' : 'es';
+}
 
 /** Kept in sync with `MIN_PASSWORD_LENGTH` in `@lib/authValidation`. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -148,17 +155,29 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
   const [status, setStatus] = useState<Status>('idle');
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
+  // Age/legal consent (Ley N° 29733, `@lib/ageConsent`): required ONLY for
+  // sign-up — `submit()`'s `signup` body always carries whatever this holds,
+  // and the server re-checks it regardless (never trust the client).
+  const [consentChecked, setConsentChecked] = useState(false);
   const t = copyFor(lang);
+  const consentCopy = UI_LABELS[uiLang(lang)].auth.consent;
   const pending = status === 'pending';
   // `null` while unset (`@lib/turnstile`'s header): see this file's own
   // header for why every captcha-related line below is gated on it.
   const siteKey = getTurnstileSiteKey();
   const needsCaptcha = siteKey !== null && captchaToken === null;
+  // Same "disable + explain" posture as `needsCaptcha` above, not a
+  // `submit()`-level guard: a real browser can never reach `submit()` with
+  // this true (no enabled submit button to click or implicitly activate via
+  // Enter), and a test that respects the disabled button simulates the
+  // checkbox like any other required field instead.
+  const needsConsent = mode === 'signup' && !consentChecked;
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);
     setStatus('idle');
     setPassword('');
+    setConsentChecked(false);
   }
 
   function goTo(destination: string) {
@@ -195,6 +214,10 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
           lang,
           ...(mode !== 'reset' ? { password } : {}),
           ...(mode === 'signup' && next ? { next } : {}),
+          // Never trust the client: the server re-checks this regardless
+          // (`password.ts`'s `signup` action), same as every other field
+          // here — this is what lets it be sent at all.
+          ...(mode === 'signup' ? { consent: consentChecked } : {}),
           ...(captchaToken ? { captchaToken } : {}),
         }),
       });
@@ -318,6 +341,17 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
         </>
       )}
 
+      {mode === 'signup' && (
+        <AgeConsentCheckbox
+          lang={lang}
+          id="password-auth-consent"
+          checked={consentChecked}
+          onChange={setConsentChecked}
+          disabled={pending}
+          data-testid="password-auth-consent-checkbox"
+        />
+      )}
+
       {siteKey && (
         <TurnstileWidget
           siteKey={siteKey}
@@ -329,9 +363,15 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
 
       <Button
         type="submit"
-        disabled={pending || needsCaptcha}
+        disabled={pending || needsCaptcha || needsConsent}
         loading={pending}
-        aria-describedby={needsCaptcha ? 'password-auth-captcha-hint' : undefined}
+        aria-describedby={
+          needsCaptcha
+            ? 'password-auth-captcha-hint'
+            : needsConsent
+              ? 'password-auth-consent-hint'
+              : undefined
+        }
         data-testid="password-auth-submit"
       >
         {submitLabel}
@@ -340,6 +380,11 @@ export default function PasswordAuthForm({ lang, next, initialMode }: PasswordAu
       {needsCaptcha && (
         <p id="password-auth-captcha-hint" className="text-xs text-muted-foreground">
           {t.captchaPending}
+        </p>
+      )}
+      {needsConsent && (
+        <p id="password-auth-consent-hint" className="text-xs text-muted-foreground">
+          {consentCopy.checkboxHint}
         </p>
       )}
       {status === 'error' && (
