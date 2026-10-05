@@ -34,18 +34,28 @@
  * literally the first element of whatever row a page puts it in — e.g.
  * `PageTitle`'s title row — so it stays "aligned with the content
  * container's top edge" for free, no separate positioning math needed per
- * page) until scrolling would carry it above `lg:top-20` (roughly the site
- * header's own height plus a gap), at which point it pins there instead of
- * scrolling out of view — see `Header.astro`'s `sticky top-0` (~4rem tall).
- * `lg:-ml-12` is what actually moves it OUTSIDE the content column into that
- * gutter: a negative left margin needs no knowledge of which `max-w-*` a
- * given page's own container happens to use (they differ — `max-w-3xl`
- * through `max-w-6xl` across the site), because it is relative to wherever
- * this element already sits in ITS OWN row, not to the viewport. `lg:z-30`
- * keeps it above ordinary content while staying below the header (`z-40`).
- * A `relative`/`overflow-hidden` ancestor between it and the viewport would
- * clip or reposition this — none of the current callers have one on the row
- * `BackButton` itself sits in.
+ * page) until scrolling would carry it above `lg:top-(--chrome-header-offset)`,
+ * at which point it pins there instead of scrolling out of view — see
+ * `Header.astro`'s `sticky top-0` (~4rem tall). `lg:-ml-12` is what actually
+ * moves it OUTSIDE the content column into that gutter: a negative left
+ * margin needs no knowledge of which `max-w-*` a given page's own container
+ * happens to use (they differ — `max-w-3xl` through `max-w-6xl` across the
+ * site), because it is relative to wherever this element already sits in ITS
+ * OWN row, not to the viewport. `lg:z-30` keeps it above ordinary content
+ * while staying below the header (`z-40`). A `relative`/`overflow-hidden`
+ * ancestor between it and the viewport would clip or reposition this — none
+ * of the current callers have one on the row `BackButton` itself sits in.
+ *
+ * `--chrome-header-offset` (chrome-visibility feature) REPLACES the old
+ * literal `top-20`: that was already only an approximation of "the header's
+ * own height plus a gap" (see `global.css`'s `:root` default, which keeps
+ * that exact 5rem value for no-JS/JS-failed visitors), and now that the
+ * header can hide itself on scroll, a fixed offset would either leave a gap
+ * above this button once the header slides away, or let the header overlap
+ * it once shown again. `src/lib/chromeVisibility.ts`'s `initChromeVisibility`
+ * keeps this custom property in sync with the header's CURRENT contribution
+ * to the top of the page (its real rendered height while visible, `0` while
+ * hidden/overlaying) plus that same small gap.
  */
 import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@lib/i18n';
@@ -71,7 +81,7 @@ const t = UI_LABELS[lang].common;
     'hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(250_204_21/0.4),0_8px_24px_-6px_rgb(250_204_21/0.35)]',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-    'lg:sticky lg:top-20 lg:z-30 lg:-ml-12',
+    'lg:sticky lg:top-(--chrome-header-offset) lg:z-30 lg:-ml-12',
     className,
   ]}
 >

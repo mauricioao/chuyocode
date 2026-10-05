@@ -166,7 +166,14 @@ describe('PasswordAuthForm — sign in (default mode)', () => {
     fireEvent.click(submitButton());
 
     expect(submitButton().hasAttribute('disabled')).toBe(true);
-    release?.();
+    // Flushed inside `act()`: releasing the mock settles `await fetch(...)`
+    // inside the component, which keeps running (another `setStatus` call)
+    // after this test's own synchronous body already returned — otherwise
+    // that update lands with no enclosing `act()` and React warns.
+    await act(async () => {
+      release?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
   });
 
   it('shows the submit button as loading/aria-busy (stable width, label unchanged) while in flight', async () => {
@@ -183,7 +190,12 @@ describe('PasswordAuthForm — sign in (default mode)', () => {
 
     expect(submitButton().getAttribute('aria-busy')).toBe('true');
     expect(submitButton().textContent).toContain(COPY.es.signInSubmit);
-    release?.();
+    // See the previous test: flushed inside `act()` so the component's
+    // post-`await fetch(...)` state update isn't left dangling outside it.
+    await act(async () => {
+      release?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
   });
 });
 

@@ -648,3 +648,85 @@ h3 {
   background-image: radial-gradient(var(--color-canvas-dot) 1px, transparent 1px);
   background-size: 16px 16px;
 }
+
+/* --- Smart header/footer visibility (chrome-visibility feature) ---------- *
+ * Rules live in `src/lib/chromeVisibility.ts`; this is only the CSS those
+ * rules drive, keyed off attributes that module (and the no-flash inline
+ * script in `BaseLayout.astro`) sets on `<html>` — never on the header/
+ * footer elements' own `[data-theme="brand"]` wrapper, which is
+ * `display: contents` and so cannot itself be positioned/transformed/faded
+ * (see that wrapper's own comment in `BaseLayout.astro`). `[data-chrome-
+ * header]`/`[data-chrome-footer]` (set directly on the real `<header>`/
+ * `<footer>`, see those files) are what these selectors actually reach.
+ *
+ * PROGRESSIVE ENHANCEMENT: every rule below is gated behind `[data-chrome-
+ * js]`. No JS / JS failed means that attribute is never set, none of this
+ * activates, and the header/footer render with only their ordinary
+ * (always-visible) classes — exactly as before this feature. */
+:root {
+  /* Default (pre-JS) BackButton offset — the exact literal value `top-20`
+   * used to be, so a no-JS/JS-failed visitor sees the identical position
+   * `initChromeVisibility` otherwise keeps in sync (see that module's own
+   * header and `BackButton.astro`'s). */
+  --chrome-header-offset: 5rem;
+}
+
+html[data-chrome-js] [data-chrome-header] {
+  transition: transform 220ms var(--ease-control);
+  transform: translateY(0);
+}
+html[data-chrome-js][data-header-visible='false'] [data-chrome-header] {
+  transform: translateY(-100%);
+}
+
+html[data-chrome-js] [data-chrome-footer] {
+  transition: opacity 220ms var(--ease-control);
+  opacity: 1;
+}
+/* `pointer-events: none` too: on a short page or a phone the hidden footer
+ * can sit inside the viewport, and an invisible link must never catch a tap.
+ * Keyboard focus still reaches the links (focus reveals the footer). */
+html[data-chrome-js][data-footer-visible='false'] [data-chrome-footer] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* INGLÉS (immersive) mode only: the header floats OVER the content (fixed,
+ * not sticky) once JS has picked the mode, so hiding it leaves no empty
+ * band at the top — see `chromeVisibility.ts`'s own header. Pre-JS/JS-failed
+ * keeps the ordinary `sticky` from `Header.astro` (gated behind the SAME
+ * `[data-chrome-js]` progressive-enhancement attribute as every rule above). */
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-chrome-js] [data-chrome-header],
+  html[data-chrome-js] [data-chrome-footer] {
+    transition: none;
+  }
+}
+
+/* `fullHeight` pages (owner decision — see `BaseLayout.astro`'s own
+ * `fullHeight` prop doc): at `lg:` and up the page itself never scrolls and
+ * `<main>` is already bounded by the header/footer (that same prop's
+ * `lg:h-dvh`/`lg:min-h-0` pair), so TODAY's behavior there is kept —
+ * chrome always visible, never overlaid — and the rules above are
+ * neutralized at that breakpoint specifically. Below `lg:` these pages
+ * scroll normally and the ordinary rules above apply unchanged. `!important`
+ * is deliberate and scoped to exactly these four declarations: this has to
+ * win over the attribute-driven rules above regardless of their own (higher)
+ * selector specificity, in both directions (visible or hidden). */
+@media (min-width: 1024px) {
+  html[data-full-height] [data-chrome-header] {
+    position: sticky !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  html[data-full-height] [data-chrome-footer] {
+    opacity: 1 !important;
+  }
+}

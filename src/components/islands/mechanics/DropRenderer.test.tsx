@@ -22,6 +22,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { PoolItem, Slot } from '@/lib/exercisePayload';
 import DropRenderer, { DROP_COPY } from './DropRenderer';
 
@@ -421,5 +422,22 @@ describe('DropRenderer wiring', () => {
     // Falling through is the honest outcome: there is nothing to focus, and the
     // island's effect already tolerates a slot that registers no control.
     expect(focusRef.mock.calls.every(([node]) => node === null)).toBe(true);
+  });
+});
+
+describe('DropRenderer — hydration', () => {
+  /**
+   * This `DndContext` already passes `id={`dnd-${slot.id}`}` (see its own
+   * component comment, which documents the exact module-level-counter
+   * mismatch `QuizBlockEditor.tsx` had before its fix). Locked in here so a
+   * future edit that drops that `id` prop fails a test instead of only
+   * surfacing as a console warning in CI logs — see `hydrationHarness.tsx`.
+   */
+  it('does not log a console error or recoverable hydration error', async () => {
+    const { recoverableErrors, consoleErrors } = await renderThenHydrate(() => (
+      <DropRenderer slot={slot} items={items} value={[]} onChange={vi.fn()} lang="en" />
+    ));
+    expect(recoverableErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 });

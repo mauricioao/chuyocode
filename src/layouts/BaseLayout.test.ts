@@ -321,3 +321,68 @@ describe('BaseLayout — global ScrollToTop labels (i18n props pass)', () => {
     expect(html).not.toContain(UI_LABELS.es.common.scrollToTop);
   });
 });
+
+// Chrome-visibility feature (smart header/footer): this suite only covers
+// what MUST be right in the server-rendered HTML — the hooks
+// `src/lib/chromeVisibility.ts` needs, and the no-flash inline head script.
+// The actual show/hide RULES are unit-tested in that module's own
+// `chromeVisibility.test.ts`; real browser behavior is Playwright's
+// `tests/e2e/chrome-visibility.spec.ts`. Astro's container renderer never
+// executes JavaScript, so none of the runtime-only attributes
+// (`data-chrome-js`/`data-chrome-mode`/`data-header-visible`/
+// `data-footer-visible`) are expected to appear here — only the SSR inputs
+// that script derives them from.
+describe('BaseLayout — chrome-visibility SSR hooks', () => {
+  it('tags the real <header>/<footer> elements so CSS/JS can find and animate them', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    const headerOpenTag = html.slice(html.indexOf('<header'), html.indexOf('>', html.indexOf('<header')) + 1);
+    const footerOpenTag = html.slice(html.indexOf('<footer'), html.indexOf('>', html.indexOf('<footer')) + 1);
+    expect(headerOpenTag).toContain('data-chrome-header');
+    expect(footerOpenTag).toContain('data-chrome-footer');
+  });
+
+  it('renders the synchronous no-flash head script before any body content', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+    });
+    // A classic (non-module) inline script — never deferred past first paint.
+    expect(html).toMatch(/<script>(?!\s*import)[\s\S]*?data-chrome-js[\s\S]*?<\/script>/);
+    expect(html.indexOf('data-chrome-js')).toBeLessThan(html.indexOf('<body'));
+  });
+
+  it('omits data-full-height by default (normal document flow)', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).not.toContain('data-full-height');
+  });
+
+  it('sets data-full-height on <html> when fullHeight is passed — the lg: "keep today\'s behavior" CSS hook', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', fullHeight: true },
+      slots: { default: '<div>content</div>' },
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).toContain('data-full-height');
+  });
+
+  it('bare pages are unaffected: no header/footer at all, so neither chrome marker exists to animate', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', bare: true, theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).not.toContain('data-chrome-header');
+    expect(html).not.toContain('data-chrome-footer');
+  });
+});

@@ -46,6 +46,7 @@
 import type { APIRoute } from 'astro';
 import { loadEnv } from '@lib/env';
 import { markPrivate } from '@lib/httpCache';
+import { readBodyCapped } from '@lib/http/readBodyCapped';
 import { applyBillingEvent, markBillingEventProcessed, recordBillingEvent } from '@lib/billing/apply';
 import { mapPaddleEvent, PADDLE_SIGNATURE_HEADER, verifyPaddleSignature } from '@lib/billing/paddle';
 
@@ -101,19 +102,17 @@ async function handlePaddle(request: Request): Promise<Response> {
   // multi-megabyte attacker-controlled body for signature verification
   // (and then JSON-parsing it) is wasted CPU for a payload that is never
   // going to be a genuine Paddle webhook (Paddle's own bodies are small
-  // JSON). Content-Length is checked FIRST so an honestly-declared oversized
-  // body is rejected without reading it at all; the ACTUAL read length is
-  // checked right after, since Content-Length can be absent or simply wrong.
-  const declaredLength = Number(request.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  // JSON). `readBodyCapped` checks Content-Length FIRST, so an
+  // honestly-declared oversized body is rejected without reading it at
+  // all; otherwise it reads the EXACT bytes Paddle signed as a stream,
+  // cancelling it the instant the actual count exceeds MAX_BODY_BYTES
+  // rather than buffering all of it first (Content-Length can be absent or
+  // simply wrong either way).
+  const bodyResult = await readBodyCapped(request, MAX_BODY_BYTES);
+  if (!bodyResult.ok) {
     return json({ ok: false, error: 'payload_too_large' }, 413);
   }
-
-  // Read the EXACT bytes Paddle signed, before any parsing.
-  const rawBody = await request.text();
-  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
-    return json({ ok: false, error: 'payload_too_large' }, 413);
-  }
+  const rawBody = bodyResult.text;
 
   const header = request.headers.get(PADDLE_SIGNATURE_HEADER);
 

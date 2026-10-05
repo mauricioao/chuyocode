@@ -23,6 +23,7 @@ import { act } from 'react';
 import type { ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
+import { vi } from 'vitest';
 
 export interface BrowserGlobalsOptions {
   /** `matchMedia(query).matches` for the client/hydration pass. Defaults to always `false` (narrow viewport, no reduced-motion preference) when omitted. */
@@ -39,7 +40,15 @@ export interface BrowserGlobalsOptions {
 
 function installClientGlobals(options: BrowserGlobalsOptions): void {
   const matches = options.matches ?? (() => false);
-  window.matchMedia = ((query: string) => ({
+  // `vi.stubGlobal`, not a raw `window.matchMedia =` assignment: this
+  // harness is called from many test files, and several of them have no
+  // `afterEach(() => vi.unstubAllGlobals())` of their own (they never
+  // expected to need one) — a plain assignment would otherwise leak this
+  // fake `matchMedia` into whatever test runs next in the same file. A
+  // stub is restored automatically by `unstubGlobals: true`
+  // (vitest.jsdom.config.ts) before each test, same as every other global
+  // callers stub with `vi.stubGlobal` themselves.
+  vi.stubGlobal('matchMedia', (query: string) => ({
     matches: matches(query),
     media: query,
     onchange: null,
@@ -48,7 +57,7 @@ function installClientGlobals(options: BrowserGlobalsOptions): void {
     addEventListener: () => {},
     removeEventListener: () => {},
     dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
+  }));
 
   window.sessionStorage.clear();
   for (const [key, value] of Object.entries(options.sessionStorage ?? {})) {
@@ -89,6 +98,20 @@ function installClientGlobals(options: BrowserGlobalsOptions): void {
 export interface HydrationCheckResult {
   /** Every error React's `onRecoverableError` reported while hydrating — empty means a clean hydration (no #418). */
   recoverableErrors: unknown[];
+  /**
+   * Every `console.error` call made while hydrating, args as given.
+   *
+   * NOT redundant with {@link HydrationCheckResult.recoverableErrors}: an
+   * attribute-only mismatch (e.g. a dnd-kit `aria-describedby` minted from a
+   * module-level counter that disagrees between the server and client pass)
+   * is something React patches in place rather than escalating to
+   * `onRecoverableError` — so it never appears there. React still reports it
+   * with `console.error("Warning: An error occurred during hydration...")` /
+   * "...didn't match the client properties", which is why a hydration test
+   * must check BOTH: `recoverableErrors` for a mismatch React could not
+   * patch, this for one it patched silently.
+   */
+  consoleErrors: unknown[][];
   /** The server-rendered HTML, for assertions on what the server actually sent. */
   html: string;
   container: HTMLDivElement;
@@ -123,13 +146,23 @@ export async function renderThenHydrate(
   document.body.appendChild(container);
 
   const recoverableErrors: unknown[] = [];
-  await act(async () => {
-    hydrateRoot(container, element(), {
-      onRecoverableError: (error) => {
-        recoverableErrors.push(error);
-      },
+  const consoleErrors: unknown[][] = [];
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    consoleErrors.push(args);
+    originalConsoleError(...args);
+  };
+  try {
+    await act(async () => {
+      hydrateRoot(container, element(), {
+        onRecoverableError: (error) => {
+          recoverableErrors.push(error);
+        },
+      });
     });
-  });
+  } finally {
+    console.error = originalConsoleError;
+  }
 
   // Detach right away (a caller can still inspect the returned `container`
   // node itself, just no longer attached to `document`) — this harness is
@@ -139,5 +172,5 @@ export async function renderThenHydrate(
   // after it in the same run.
   container.remove();
 
-  return { recoverableErrors, html, container };
+  return { recoverableErrors, consoleErrors, html, container };
 }
