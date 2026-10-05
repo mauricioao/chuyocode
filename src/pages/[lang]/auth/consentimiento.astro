@@ -1,0 +1,84 @@
+---
+/**
+ * Localized age/legal consent screen (Login step 2, Ley N° 29733;
+ * `TermsContent.astro` §2 / `PrivacyContent.astro` §4). Reached ONLY through
+ * `src/middleware.ts`'s consent gate (`@lib/ageConsent#isConsentExemptPath`):
+ * a signed-in visitor with no recorded consent — Google sign-in, any other
+ * account that predates this feature, anyone — lands here, once, before a
+ * signed-in-only section, with a safe `next` carrying them onward.
+ *
+ * Three branches, in order:
+ *  1. Anonymous visitor (direct/bookmarked visit, or a session that expired
+ *     between the gate's redirect and this request): 303 to `entrar`, with
+ *     the ORIGINAL `next` — never a pointer back to THIS page. `entrar`'s own
+ *     `safeNextPath` call refuses a `next` that targets an `/auth/...` page
+ *     (its own default, loop guard), so routing through here-as-a-next would
+ *     silently fall back to home after sign-in; going straight to the real
+ *     destination sidesteps that and still ends up in the same place, because
+ *     the gate asks again on the next signed-in-only request if consent is
+ *     still missing.
+ *  2. Already consented (bookmarked/retried URL, or Google linked to an
+ *     email account that already has one): 303 straight to `next` — no dead
+ *     end, no re-asking.
+ *  3. Signed in, not yet consented: render the form.
+ *
+ * 🔴 NEVER PUBLICLY CACHEABLE (T7, same rule as `entrar.astro`): every branch
+ * above reads `Astro.locals.user`, so the response differs by visitor.
+ *
+ * Light visual scope (`theme="ingles"`, the only light scope this layout
+ * has — see `BaseLayout.astro`'s own header) rather than the site-wide dark
+ * default, per the approved design.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import ConsentForm from '@components/islands/ConsentForm';
+import { hasRecordedConsent } from '@lib/ageConsent';
+import { safeNextPath } from '@lib/authRedirect';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+markPrivate(Astro.response.headers);
+
+const next = safeNextPath(Astro.url.searchParams.get('next'));
+const user = Astro.locals.user;
+
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    statusText: 'See Other',
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(next)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+if (hasRecordedConsent(user)) {
+  return new Response(null, {
+    status: 303,
+    statusText: 'See Other',
+    headers: {
+      Location: next,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const t = UI_LABELS[lang].auth.consent;
+---
+
+<BaseLayout lang={lang} theme="ingles" title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-12 sm:py-16">
+    <PageTitle lang={lang} backHref={`/${lang}/`}>{t.pageTitle}</PageTitle>
+    <p class="text-sm text-muted-foreground">{t.pageDescription}</p>
+    <ConsentForm client:load lang={lang} next={next} />
+  </section>
+</BaseLayout>
