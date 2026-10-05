@@ -129,10 +129,14 @@ const bookJsonLd = toJsonLd({
     </div>
 
     <div class="flex flex-1 flex-col gap-4">
-      <h1 class="text-3xl font-bold tracking-tight text-zinc-100 sm:text-4xl">
+      <h1 class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
         {book.title}
       </h1>
-      <p class="text-lg text-zinc-400">{t.by} {book.author}</p>
+      <p class="text-lg text-muted-foreground">{t.by} {book.author}</p>
+      {/* `zinc-300` kept literal (theme-remap-cleanup): this page is never
+          rendered under `[data-theme="ingles"]` (no `theme="ingles"` on this
+          `BaseLayout` call), so the raw Tailwind step was never affected by
+          the remap and needs no semantic token. */}
       <p class="leading-relaxed text-zinc-300">{book.description}</p>
 
       {/* Pass-gated PDF section (spec 3). Fail-closed: default is locked. */}
@@ -164,7 +168,7 @@ const bookJsonLd = toJsonLd({
             {t.download}
           </a>
         ) : hasPass && !hasPdf ? (
-          <div class="mt-4 rounded-lg border border-surface-muted bg-surface-muted/40 p-4 text-center text-sm font-medium text-zinc-400">
+          <div class="mt-4 rounded-lg border border-surface-muted bg-surface-muted/40 p-4 text-center text-sm font-medium text-muted-foreground">
             {t.noPdf}
           </div>
         ) : (

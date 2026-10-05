@@ -153,6 +153,9 @@ describe('PresentationIsland — the full flow (quiz-only deck)', () => {
     const summary = screen.getByTestId('presentation-slide-summary');
     expect(summary.textContent).toContain('¡Listo!');
     expect(summary.textContent).toContain('2 preguntas');
+    // Emoji sticker accent (visual-identity decision, 2026-10-04).
+    const emojiImg = screen.getByTestId('presentation-summary-emoji').querySelector('img') as HTMLImageElement;
+    expect(emojiImg.getAttribute('src')).toContain('trophy');
 
     // Restart returns to the cover.
     fireEvent.click(screen.getByTestId('presentation-restart'));

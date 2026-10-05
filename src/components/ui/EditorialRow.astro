@@ -61,7 +61,7 @@ const hasItems = items.length > 0;
 // Arrow wiring only (scroll works without JS). Idempotent: guards against a
 // double-bind if the script runs twice (initial load + astro:after-swap). The
 // source lives in a frontmatter constant injected via set:html because Astro
-// does not evaluate `{}` expressions inside <script> content.
+// does not evaluate `{}` expressions inside a script element's content.
 const ARROW_SCRIPT = `
 (function () {
   var rows = document.querySelectorAll('[data-editorial-row]');

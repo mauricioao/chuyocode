@@ -214,7 +214,7 @@ export default function WorksheetPlayer({
           const isCorrect = isGraded ? practice!.results![zone.id] : undefined;
           const gradedClassName = isGraded
             ? isCorrect
-              ? 'border-emerald-500 ring-2 ring-emerald-500/50'
+              ? 'border-success-strong ring-2 ring-success-strong/50'
               : 'border-destructive ring-2 ring-destructive/50'
             : 'border-border';
           const statusLabel = isGraded ? (isCorrect ? t.correct : t.incorrect) : undefined;
@@ -371,7 +371,7 @@ export default function WorksheetPlayer({
                     onClick={() =>
                       setOpenExplanationId((prev) => (prev === zone.id ? null : zone.id))
                     }
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-amber-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-hint shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                   >
                     <LightbulbIcon aria-hidden="true" weight="fill" />
                   </button>

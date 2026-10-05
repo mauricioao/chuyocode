@@ -1,0 +1,53 @@
+---
+/**
+ * Credits page — `/[lang]/creditos` (visual-identity decision, 2026-10-04).
+ *
+ * Site-wide brand page acknowledging the third-party resources ChuyoCode
+ * bundles or displays (Microsoft Fluent Emoji, Phosphor Icons, the Raleway
+ * typeface, Open Peeps / Open Doodles, the home's Inglés banner
+ * illustration), each with its license — see `CreditsContent.astro`'s own
+ * header for how every claim was verified.
+ *
+ * Same shape as `/[lang]/legal/[page]` (`PageTitle` + a dedicated content
+ * component, default DARK brand look — no `theme="ingles"`, unlike the
+ * English product's own pages), except:
+ *  - it is a single static route, not a `[page]`-style allow-list; and
+ *  - it is PUBLICLY CACHEABLE, like the home page: this response never reads
+ *    `Astro.locals.user` and is byte-identical for every visitor at each
+ *    language variant (`publicCachePolicy`, `@lib/cache.ts`).
+ *
+ * Indexable (no noindex meta): `creditos` is not in `@lib/seo.ts#isNoindexPath`'s
+ * `NOINDEX_SECTIONS`, so `BaseLayout` already leaves it out of that list —
+ * nothing extra to opt in here. Listed in `/sitemap.xml`'s static entries
+ * (`src/pages/sitemap.xml.ts`).
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import CreditsContent from '@components/legal/CreditsContent.astro';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { publicCachePolicy } from '@lib/cache';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// Public edge cache — same policy as the home page: byte-identical markup
+// for every visitor at each language variant.
+const cacheHeaders = publicCachePolicy();
+for (const [name, value] of Object.entries(cacheHeaders)) {
+  Astro.response.headers.set(name, value);
+}
+
+const t = UI_LABELS[lang].credits;
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription}>
+  <section class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:py-12">
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+    <CreditsContent lang={lang} />
+  </section>
+</BaseLayout>

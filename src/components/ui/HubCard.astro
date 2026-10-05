@@ -19,8 +19,9 @@
  * (different secondary hue). `tone` picks from Tailwind's built-in palette
  * (`sky-500`/`violet-500`) rather than a new `--color-*` token — the
  * `@theme` block in `global.css` is additive, not a full palette override,
- * so these classes resolve exactly like the `emerald-*` ones already used
- * across the activity quiz islands (e.g. `QuizOpenBox.tsx`).
+ * so these classes resolve the same raw Tailwind shade everywhere, in both
+ * themes — unlike a semantic role (`text-success`, `text-accent-ink`, …),
+ * which this pair deliberately is not (see `ingles:` below).
  *
  * The icon is a named slot so the caller decides which Phosphor icon to
  * render (typically `weight="duotone"`, unhydrated — a framework component
@@ -95,8 +96,8 @@ const accessibleName = count ? `${title} — ${count}` : title;
   >
     <slot name="icon" />
   </span>
-  <span class="relative z-10 text-lg font-semibold text-zinc-100 sm:text-xl">{title}</span>
-  <span class="relative z-10 text-sm text-zinc-400">{description}</span>
+  <span class="relative z-10 text-lg font-semibold text-foreground sm:text-xl">{title}</span>
+  <span class="relative z-10 text-sm text-muted-foreground">{description}</span>
   {
     count && (
       <span class="relative z-10 text-xs font-semibold tracking-wide text-accent-ink tabular-nums">

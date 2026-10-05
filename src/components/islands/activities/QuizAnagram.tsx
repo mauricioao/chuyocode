@@ -152,7 +152,7 @@ export default function QuizAnagram({ lang, items, seed }: QuizAnagramProps) {
         {t.anagramCounterPrefix} {wordIndex + 1} {t.anagramCounterOf} {items.length}
       </span>
 
-      <p className="flex items-center gap-2 text-center text-base text-zinc-100">
+      <p className="flex items-center gap-2 text-center text-base text-foreground">
         {current.prompt}
         <SpeakButton text={current.prompt} lang={lang} compact />
       </p>
@@ -167,9 +167,9 @@ export default function QuizAnagram({ lang, items, seed }: QuizAnagramProps) {
               data-testid={`anagram-slot-${slotIndex}`}
               className={cn(
                 'flex size-11 items-center justify-center rounded-md border-2 text-lg font-bold uppercase',
-                status === 'correct' && 'border-emerald-500 bg-emerald-500/10 text-emerald-300',
+                status === 'correct' && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
                 status === 'wrong' && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
-                status === 'playing' && 'border-border bg-surface-soft text-zinc-100',
+                status === 'playing' && 'border-border bg-surface-soft text-foreground',
               )}
             >
               {tile?.letter ?? ''}
@@ -189,7 +189,7 @@ export default function QuizAnagram({ lang, items, seed }: QuizAnagramProps) {
               disabled={used || status !== 'playing'}
               onClick={() => placeTile(tile.id)}
               className={cn(
-                'flex size-11 items-center justify-center rounded-md border-2 border-border bg-surface-soft text-lg font-bold uppercase text-zinc-100 transition-opacity hover:border-accent-ink/60',
+                'flex size-11 items-center justify-center rounded-md border-2 border-border bg-surface-soft text-lg font-bold uppercase text-foreground transition-opacity hover:border-accent-ink/60',
                 used && 'opacity-0',
               )}
             >

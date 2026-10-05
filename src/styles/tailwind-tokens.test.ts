@@ -111,6 +111,51 @@ describe('site-wide pointer cursor', () => {
   });
 });
 
+// Theme-debt guard (theme-remap-cleanup): a theme scope used to re-declare a
+// few raw Tailwind default-palette steps (`--color-zinc-100`, `--color-
+// emerald-500`, …) so existing `text-zinc-*`/`text-emerald-*`/`text-amber-*`
+// call sites would silently resolve to a DIFFERENT colour depending on which
+// scope they rendered under — "zinc-300" secretly meaning "muted ink" inside
+// Inglés. Call sites now use a semantic token (`text-muted-foreground`,
+// `text-success`, `text-hint`, …) instead, so this asserts the remap never
+// comes back: a literal Tailwind palette utility must mean the same, single
+// colour everywhere, in every scope.
+describe('no raw Tailwind palette color is re-declared inside a theme scope (theme-debt guard)', () => {
+  // Tailwind's default color families (the ones a bare `--color-<family>-<n>`
+  // step could belong to) — same list the feature's own task spec guards.
+  const DEFAULT_PALETTE_FAMILIES = [
+    'slate', 'gray', 'zinc', 'neutral', 'stone', 'red', 'orange', 'amber', 'yellow',
+    'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet',
+    'purple', 'fuchsia', 'pink', 'rose',
+  ];
+  const PALETTE_VAR = new RegExp(`--color-(?:${DEFAULT_PALETTE_FAMILIES.join('|')})-\\d+\\s*:`);
+
+  /** Pulls one top-level `selector { ... }` block's raw body out of the CSS
+   * text (same brace-depth approach `ingles-theme-contrast.test.ts` uses). */
+  function themeScopeBlock(selector: string): string {
+    const needle = `${selector} {`;
+    const start = css.indexOf(needle);
+    if (start === -1) throw new Error(`block not found: ${selector}`);
+    let depth = 0;
+    let i = start + needle.length - 1; // position of the opening '{'
+    for (; i < css.length; i++) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    return css.slice(start + needle.length, i);
+  }
+
+  it.each([`[data-theme='brand']`, `[data-theme='ingles']`])(
+    'never re-declares a raw Tailwind default-palette variable inside %s',
+    (selector) => {
+      expect(themeScopeBlock(selector)).not.toMatch(PALETTE_VAR);
+    },
+  );
+});
+
 // Creator polish round 3: a scrollbar appearing/disappearing (e.g. the
 // activity editor's block list) used to steal ~15px and reflow the canvas
 // and properties panel sideways. Fixed with a reserved scrollbar gutter at

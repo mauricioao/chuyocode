@@ -1,0 +1,315 @@
+---
+/**
+ * CreditsContent — Credits/licenses body (es/en) for /[lang]/creditos.
+ *
+ * Site-wide brand page (design decision, 2026-10-04): acknowledges the
+ * third-party resources ChuyoCode bundles or displays, with their licenses.
+ * Same structural pattern as `TermsContent.astro`/`PrivacyContent.astro`
+ * (one `legal-prose` wrapper, a `lang` branch, no `UI_LABELS` bloat for
+ * long-form body copy) — see those files' own headers.
+ *
+ * Every license claim below was verified directly against the installed
+ * package/asset source rather than assumed:
+ *  - Fluent Emoji: `LICENSE` at github.com/microsoft/fluentui-emoji (MIT,
+ *    "Copyright (c) Microsoft Corporation.").
+ *  - Phosphor Icons: `node_modules/@phosphor-icons/react/package.json`
+ *    + its `LICENSE` (MIT, "Copyright (c) 2020 Phosphor Icons").
+ *  - Raleway: `node_modules/@fontsource-variable/raleway/LICENSE`
+ *    (SIL Open Font License 1.1, "Copyright 2010 The Raleway Project
+ *    Authors"), self-hosted per `src/styles/fonts.css`'s own header.
+ *  - Open Peeps / Open Doodles: openpeeps.com / opendoodles.com (CC0) — by
+ *    Pablo Stanley. NOT YET USED in this codebase (owner decision,
+ *    2026-10-04 visual-identity note): named honestly as reserved for when
+ *    they are, rather than implying they are already on the site.
+ */
+import type { Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const isEs = lang === 'es';
+---
+
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/creditos` route (no `theme="ingles"`), so the raw
+    Tailwind step was never affected by the removed remap. */}
+<div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
+  {
+    isEs ? (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Microsoft Fluent Emoji
+          </h2>
+          <p>
+            Los pequeños emojis 3D ("stickers") que acompañan algunos momentos del
+            producto de Inglés vienen del set{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://github.com/microsoft/fluentui-emoji"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Fluent Emoji
+            </a>{' '}
+            de Microsoft. Licencia MIT — Copyright (c) Microsoft Corporation.{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver la licencia
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Phosphor Icons
+          </h2>
+          <p>
+            Los íconos de la interfaz vienen de{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://phosphoricons.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Phosphor Icons
+            </a>
+            . Licencia MIT — Copyright (c) 2020 Phosphor Icons.{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://github.com/phosphor-icons/react/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver la licencia
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Tipografía Raleway
+          </h2>
+          <p>
+            El texto de los títulos usa Raleway, autohospedada en el sitio a través
+            del paquete <code>@fontsource-variable/raleway</code> (sin depender de
+            Google Fonts). Licencia SIL Open Font License 1.1 — Copyright 2010 The
+            Raleway Project Authors.{' '}
+            <a
+              class="text-primary hover:underline"
+              href="http://scripts.sil.org/OFL"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver la licencia
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Tipografía ChunkFive
+          </h2>
+          <p>
+            Los ejercicios usan ChunkFive como tipografía de presentación,
+            autohospedada en el sitio junto con su licencia. Licencia SIL Open Font
+            License 1.1 — Copyright (c) 2009, Meredith Mandel, con el nombre de
+            fuente reservado "Chunk".{' '}
+            <a
+              class="text-primary hover:underline"
+              href="http://scripts.sil.org/OFL"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver la licencia
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Open Peeps / Open Doodles
+          </h2>
+          <p>
+            Ilustraciones de personas dibujadas a mano, de Pablo Stanley (
+            <a
+              class="text-primary hover:underline"
+              href="https://www.openpeeps.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Peeps
+            </a>{' '}
+            y{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://www.opendoodles.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Doodles
+            </a>
+            ), licencia CC0 (dominio público). Todavía no se usan en el sitio;
+            quedan acreditadas aquí para cuando se usen.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Ilustración del banner de Inglés
+          </h2>
+          <p>
+            La ilustración del banner de Inglés en la portada fue generada con IA
+            (Google Flow) para ChuyoCode.
+          </p>
+        </section>
+      </>
+    ) : (
+      <>
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Microsoft Fluent Emoji
+          </h2>
+          <p>
+            The small 3D emoji "stickers" accenting a few moments of the English
+            product come from Microsoft's{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://github.com/microsoft/fluentui-emoji"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Fluent Emoji
+            </a>{' '}
+            set. MIT License — Copyright (c) Microsoft Corporation.{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View the license
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Phosphor Icons
+          </h2>
+          <p>
+            Interface icons come from{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://phosphoricons.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Phosphor Icons
+            </a>
+            . MIT License — Copyright (c) 2020 Phosphor Icons.{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://github.com/phosphor-icons/react/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View the license
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Raleway typeface
+          </h2>
+          <p>
+            Heading text uses Raleway, self-hosted via the{' '}
+            <code>@fontsource-variable/raleway</code> package (no Google Fonts
+            dependency). SIL Open Font License 1.1 — Copyright 2010 The Raleway
+            Project Authors.{' '}
+            <a
+              class="text-primary hover:underline"
+              href="http://scripts.sil.org/OFL"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View the license
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            ChunkFive typeface
+          </h2>
+          <p>
+            Exercises use ChunkFive as their display face, self-hosted together
+            with its license. SIL Open Font License 1.1 — Copyright (c) 2009,
+            Meredith Mandel, with Reserved Font Name "Chunk".{' '}
+            <a
+              class="text-primary hover:underline"
+              href="http://scripts.sil.org/OFL"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View the license
+            </a>
+            .
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Open Peeps / Open Doodles
+          </h2>
+          <p>
+            Hand-drawn people illustrations by Pablo Stanley (
+            <a
+              class="text-primary hover:underline"
+              href="https://www.openpeeps.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Peeps
+            </a>{' '}
+            and{' '}
+            <a
+              class="text-primary hover:underline"
+              href="https://www.opendoodles.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Doodles
+            </a>
+            ), CC0 licensed (public domain). Not in use on the site yet; credited
+            here for when they are.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            Inglés banner illustration
+          </h2>
+          <p>
+            The home page's Inglés banner illustration was generated with AI
+            (Google Flow) for ChuyoCode.
+          </p>
+        </section>
+      </>
+    )
+  }
+</div>

@@ -44,6 +44,72 @@ describe('Footer.astro — legal links', () => {
   });
 });
 
+// Premium pricing page link (owner decision 2026-10-04) — footer only, never
+// the header (that stays untouched by this change).
+describe('Footer.astro — Premium link', () => {
+  it('links to /[lang]/premium in es', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('href="/es/premium"');
+    expect(html).toContain(escapeHtml(UI_LABELS.es.footer.premium));
+  });
+
+  it('links to /[lang]/premium in en', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'en' },
+    });
+    expect(html).toContain('href="/en/premium"');
+    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.premium));
+  });
+});
+
+// Refund Policy link (third legal document, RefundsContent.astro). The
+// `reembolsos` slug is deliberately the SAME in both languages — see
+// `legal/[page].astro`'s own `LEGAL_PAGES` comment.
+describe('Footer.astro — Refunds link', () => {
+  it('links to /[lang]/legal/reembolsos in es', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('href="/es/legal/reembolsos"');
+    expect(html).toContain(escapeHtml(UI_LABELS.es.footer.reembolsos));
+  });
+
+  it('links to /[lang]/legal/reembolsos in en', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'en' },
+    });
+    expect(html).toContain('href="/en/legal/reembolsos"');
+    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.reembolsos));
+  });
+});
+
+// Credits page link (visual-identity decision, 2026-10-04).
+describe('Footer.astro — credits link', () => {
+  it('links to /[lang]/creditos next to the legal links', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    expect(html).toContain('href="/es/creditos"');
+    expect(html).toContain(UI_LABELS.es.footer.credits);
+  });
+
+  it('localizes the credits link label and base path for en', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'en' },
+    });
+    expect(html).toContain('href="/en/creditos"');
+    expect(html).toContain(UI_LABELS.en.footer.credits);
+  });
+});
+
 // SEO basics pass: the copyright year used to be a hardcoded "2026" literal
 // in the markup — it would have gone stale the moment the calendar turned.
 // Pinning the system clock to a year that is NOT today's proves the value is

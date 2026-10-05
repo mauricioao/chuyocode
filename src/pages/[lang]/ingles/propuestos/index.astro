@@ -30,6 +30,7 @@ import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import SearchFilter from '@components/ui/SearchFilter.astro';
 import SectionHeading from '@components/ui/SectionHeading.astro';
+import Emoji from '@components/ui/Emoji.astro';
 import { badgeVariants } from '@components/ui/badge';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { FOCUS_LABELS } from '@lib/exerciseTaxonomy';
@@ -100,7 +101,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
   <section class="reveal mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:py-12">
     <header class="flex flex-col gap-3">
       <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.section.title}</PageTitle>
-      <p class="max-w-2xl text-lg text-zinc-300">{t.section.intro}</p>
+      <p class="max-w-2xl text-lg text-muted-foreground">{t.section.intro}</p>
     </header>
 
     <nav aria-label={t.section.chooseLevel}>
@@ -141,7 +142,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
 
     <section class="mt-10 flex flex-col gap-4">
       <div class="flex items-center justify-between gap-4">
-        <h2 class="text-xl font-semibold text-zinc-100">{t.section.focusesTitle}</h2>
+        <h2 class="text-xl font-semibold text-foreground">{t.section.focusesTitle}</h2>
         {
           /* Same placement and shape as the books catalog: the magnifier sits on
              the heading row it filters, so the control and its target read as
@@ -166,13 +167,15 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
              2. this level has no language points yet, but other levels do
              3. handled by the listing route: a real pair with nothing in it */
         totalPublished === 0 ? (
-          <p class="rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
-            {t.section.empty}
-          </p>
+          <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground">
+            <Emoji name="llama" size={48} />
+            <p>{t.section.empty}</p>
+          </div>
         ) : focuses.length === 0 ? (
-          <p class="rounded-lg border border-border bg-surface-soft p-6 text-zinc-300">
-            {t.section.emptyLevel}
-          </p>
+          <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground">
+            <Emoji name="llama" size={48} />
+            <p>{t.section.emptyLevel}</p>
+          </div>
         ) : (
           <>
             {/* Filter empty state — the FOURTH fact this screen can report, and
@@ -185,7 +188,7 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
               id="focuses-no-results"
               hidden
               aria-live="polite"
-              class="rounded-lg border border-border bg-surface-soft p-6 text-zinc-300"
+              class="rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground"
             >
               {t.section.focusesNoResults}
             </p>
@@ -207,10 +210,10 @@ function chipClass(isActive: boolean, isEmpty: boolean): string {
                   >
                     {/* English in every locale: the focus is exercise data, not
                         chrome (docs/exercise-model.md, "Authoring rules"). */}
-                    <span class="text-lg font-semibold text-zinc-100">
+                    <span class="text-lg font-semibold text-foreground">
                       {FOCUS_LABELS[entry.focus]}
                     </span>
-                    <span class="text-sm text-zinc-400 tabular-nums">
+                    <span class="text-sm text-muted-foreground tabular-nums">
                       {countLabel(entry.count)}
                     </span>
                   </a>

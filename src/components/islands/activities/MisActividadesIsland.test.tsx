@@ -54,6 +54,12 @@ describe('MisActividadesIsland — empty state', () => {
     const cta = screen.getByText('Crear actividad');
     expect(cta.getAttribute('href')).toBe('/es/crear');
   });
+
+  it('shows the llama emoji sticker next to the empty message', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[]} />);
+    const img = screen.getByTestId('mis-actividades-empty').querySelector('img') as HTMLImageElement;
+    expect(img.getAttribute('src')).toContain('llama');
+  });
 });
 
 describe('MisActividadesIsland — listing', () => {

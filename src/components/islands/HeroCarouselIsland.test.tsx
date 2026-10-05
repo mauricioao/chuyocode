@@ -115,3 +115,33 @@ describe('HeroCarouselIsland', () => {
     expect(screen.getByText('Libro 1')).toBeTruthy();
   });
 });
+
+// The active slide must be OBSERVABLE (assistive tech, e2e) via
+// `aria-current`, not left inside Embla's own internal, unqueryable state —
+// see tests/e2e/hero-carousel.spec.ts for the real-browser autoplay/hover/
+// reduced-motion coverage this attribute now makes possible.
+describe('HeroCarouselIsland — active slide state', () => {
+  it('exposes the configured interval for e2e to read (not hardcoded)', () => {
+    render(
+      <HeroCarouselIsland slides={[slide(1), slide(2)]} interval={1234} />,
+    );
+    expect(
+      document.querySelector('[data-hero-carousel]')?.getAttribute('data-interval'),
+    ).toBe('1234');
+  });
+
+  it('marks only the first slide as aria-current on mount', () => {
+    render(<HeroCarouselIsland slides={[slide(1), slide(2), slide(3)]} />);
+    const items = document.querySelectorAll('[data-hero-slide]');
+    expect(items[0]?.getAttribute('aria-current')).toBe('true');
+    expect(items[1]?.getAttribute('aria-current')).toBeNull();
+    expect(items[2]?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('marks the lone slide of a static carousel as current', () => {
+    render(<HeroCarouselIsland slides={[slide(1)]} />);
+    expect(
+      document.querySelector('[data-hero-slide]')?.getAttribute('aria-current'),
+    ).toBe('true');
+  });
+});

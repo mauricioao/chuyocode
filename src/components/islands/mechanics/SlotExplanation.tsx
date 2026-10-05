@@ -31,7 +31,7 @@ export default function SlotExplanation({ text, testId }: SlotExplanationProps) 
       role="status"
       className="flex items-start gap-1.5 rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground"
     >
-      <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
+      <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
       <p>{text}</p>
     </div>
   );

@@ -24,7 +24,7 @@ describe('QuizHangman', () => {
     render(<QuizHangman lang="es" items={items} />);
     fireEvent.click(screen.getByTestId('hangman-key-C'));
     expect(screen.getByTestId('hangman-letter-0').textContent).toBe('C');
-    expect(screen.getByTestId('hangman-key-C').className).toContain('border-emerald-500');
+    expect(screen.getByTestId('hangman-key-C').className).toContain('border-success-strong');
     expect(screen.getByTestId('hangman-key-C').hasAttribute('disabled')).toBe(true);
   });
 

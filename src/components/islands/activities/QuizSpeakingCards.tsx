@@ -114,15 +114,15 @@ export default function QuizSpeakingCards({ lang, items, seed }: QuizSpeakingCar
         data-testid="speaking-card"
         className="flex min-h-56 w-full max-w-md flex-col items-center justify-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center transition-all duration-[350ms] ease-out starting:-translate-x-10 starting:rotate-6 starting:opacity-0 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:starting:translate-x-0 motion-reduce:starting:rotate-0"
       >
-        <p className="text-lg font-semibold text-zinc-100 sm:text-xl">{current.prompt}</p>
+        <p className="text-lg font-semibold text-foreground sm:text-xl">{current.prompt}</p>
         <SpeakButton text={current.prompt} lang={lang} />
 
         {revealed ? (
           <div data-testid="speaking-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3">
-            <p className="text-lg font-semibold text-zinc-100">{current.answer}</p>
+            <p className="text-lg font-semibold text-foreground">{current.answer}</p>
             {current.explanation && (
               <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-amber-400" />
+                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
                 <p>{current.explanation}</p>
               </div>
             )}

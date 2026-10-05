@@ -124,10 +124,10 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
     const isWrong = (side === 'prompt' && wrongPair?.promptId === id) || (side === 'answer' && wrongPair?.answerId === id);
     return cn(
       'min-h-11 w-full rounded-md border-2 px-3 py-2.5 text-left text-sm font-medium transition-colors sm:text-base',
-      isMatched && 'border-emerald-500 bg-emerald-500/10 text-emerald-300',
+      isMatched && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
       isWrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
-      !isMatched && !isWrong && isSelected && 'border-accent-ink bg-accent/10 text-zinc-100',
-      !isMatched && !isWrong && !isSelected && 'border-border bg-surface-soft text-zinc-100 hover:border-accent-ink/60',
+      !isMatched && !isWrong && isSelected && 'border-accent-ink bg-accent/10 text-foreground',
+      !isMatched && !isWrong && !isSelected && 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60',
     );
   }
 
@@ -150,7 +150,7 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
       </div>
 
       {completed ? (
-        <p data-testid="matching-completed" className="text-center text-lg font-medium text-emerald-300">
+        <p data-testid="matching-completed" className="text-center text-lg font-medium text-success-strong-foreground">
           {t.matchCompletedPrefix} {formatElapsed(elapsed)}!
         </p>
       ) : (

@@ -8,9 +8,19 @@
  * stays out of source control while still rendering publicly (required by Peru's
  * Ley 29733: the data controller must be identified on the site).
  *
- * DISCLAIMER: this is a solid industry-standard structure aligned with AdSense
- * requirements and Ley 29733, NOT a lawyer-reviewed document. Have it reviewed
- * by a legal professional before relying on it in production.
+ * Covers the whole live service as of this draft: the Spanish-first English
+ * platform (accounts via Google or Supabase email+password, community
+ * activities and curated exercises, guest play, Premium pricing), the
+ * pre-existing books/news catalog and its ad-rewarded download access, and
+ * account deletion (`src/lib/accountDeletion.ts` / migration 0020) — see that
+ * module and migration for the exact data-layer behavior section 8 describes.
+ *
+ * DISCLAIMER: this is a solid industry-standard structure aligned with
+ * Ley 29733 and the facts verified in the codebase at drafting time, NOT a
+ * lawyer-reviewed document. Have it reviewed by a legal professional (and
+ * confirmed by the owner — see the open points in this change's own report)
+ * before relying on it in production, especially before Premium payments go
+ * live.
  */
 import type { Lang } from '@lib/i18n';
 
@@ -27,8 +37,12 @@ interface Props {
 const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
   Astro.props;
 const isEs = lang === 'es';
+const refundsHref = `/${lang}/legal/reembolsos`;
 ---
 
+{/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
+    renders on the dark `/legal/[page]` route (no `theme="ingles"`), so the
+    raw Tailwind step was never affected by the removed remap. */}
 <div class="legal-prose flex flex-col gap-6 leading-relaxed text-zinc-300">
   <p class="text-sm text-zinc-500">
     {isEs ? 'Última actualización:' : 'Last updated:'} {updated}
@@ -38,16 +52,23 @@ const isEs = lang === 'es';
     isEs ? (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            1. Identificación del titular
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            1. Quiénes somos y qué ofrece el Sitio
           </h2>
           <p>
             Este sitio web ChuyoCode (en adelante, "el Sitio") es operado por{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, con RUC N° <strong class="text-zinc-100">{ownerRuc}</strong></>}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, con RUC N° <strong class="text-foreground">{ownerRuc}</strong></>}
             {ownerCity && <>, domiciliado en {ownerCity}, Perú</>} (en adelante,
-            "el Titular"). Para cualquier consulta relacionada con estos términos
-            puedes escribir a{' '}
+            "el Titular"). El Sitio es una plataforma en español para aprender
+            y practicar inglés: actividades de la comunidad creadas a partir de
+            hojas de trabajo (imágenes o páginas de PDF) y conjuntos de
+            preguntas jugables como juego, ejercicios curados con explicaciones
+            «¿Por qué?» y modo presentación; además de un catálogo público de
+            libros y noticias de programación y tecnología. Al acceder o usar
+            el Sitio, declaras haber leído, entendido y aceptado estos
+            Términos; si no estás de acuerdo, debes abstenerte de usarlo. Para
+            cualquier consulta puedes escribir a{' '}
             {ownerEmail ? (
               <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
                 {ownerEmail}
@@ -60,108 +81,238 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            2. Objeto y aceptación
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            2. Cuentas de usuario y menores de edad
           </h2>
           <p>
-            Los presentes Términos y Condiciones regulan el acceso y uso del
-            Sitio, cuyo fin es ofrecer contenido educativo sobre programación,
-            tecnología e informática, incluyendo libros, artículos de noticias y,
-            en el futuro, cursos. Al acceder o utilizar el Sitio, el usuario
-            declara haber leído, entendido y aceptado estos Términos. Si no está
-            de acuerdo, debe abstenerse de utilizar el Sitio.
+            Puedes crear una cuenta con tu cuenta de Google o con tu correo y
+            una contraseña, a través de Supabase Auth. Si entras con Google,
+            guardamos el correo y el nombre/avatar público que Google nos
+            entrega; si usas correo y contraseña, guardamos el correo que nos
+            das. Para protegerte de registros automatizados, el inicio de
+            sesión, el registro y el restablecimiento de contraseña usan el
+            desafío Cloudflare Turnstile.
+          </p>
+          <p>
+            Conforme a la Ley N° 29733, tratar datos personales de un menor de
+            14 años requiere el consentimiento previo de su padre, madre o
+            apoderado: si tienes menos de 14 años, necesitas ese consentimiento
+            para crear una cuenta. Esto no te impide participar: puedes jugar
+            las actividades que tu profesor comparta contigo mediante un
+            enlace, sin necesidad de ninguna cuenta (ver sección siguiente).
+          </p>
+          <p>
+            Eres responsable de mantener tus credenciales seguras y de la
+            actividad que ocurra en tu cuenta.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            3. Descripción del servicio
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            3. Juego como invitado
           </h2>
           <p>
-            El Sitio pone a disposición del usuario contenido de consulta y, en
-            algunos casos, la descarga de materiales (por ejemplo, archivos PDF).
-            El acceso a determinadas descargas puede requerir la visualización
-            previa de publicidad, que otorga acceso temporal sin fricción por un
-            período limitado. El Titular puede modificar, suspender o discontinuar
-            cualquier funcionalidad del Sitio en cualquier momento.
+            Cualquier persona con el enlace puede jugar una actividad
+            publicada y su modo presentación sin crear una cuenta. No
+            guardamos ningún dato sobre quien juega como invitado: ni su
+            identidad, ni una vista a su nombre, ni un "me gusta" suyo.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            4. Propiedad intelectual
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            4. Contenido que publicas y licencia que otorgas
           </h2>
           <p>
-            Las marcas, logotipos, diseño y elementos propios del Sitio pertenecen
-            al Titular o se utilizan bajo licencia. El contenido de terceros
-            (libros, portadas, textos de noticias) pertenece a sus respectivos
-            autores o titulares de derechos y se muestra con fines informativos y
-            educativos. El usuario se compromete a no reproducir, distribuir ni
-            explotar dicho contenido fuera de lo permitido por la ley aplicable.
+            Debes ser el autor o tener los derechos necesarios sobre todo lo
+            que subas; al enviar tu actividad a revisión te pedimos que lo
+            confirmes expresamente. Mientras una imagen o página que subes está
+            pendiente de revisión se guarda en un almacenamiento privado; si se
+            aprueba, se copia a un almacenamiento público para poder mostrarla
+            a cualquier visitante o invitado.
+          </p>
+          <p>
+            Todo lo que se publica pasa primero por moderación: nadie más que
+            tú puede verlo hasta que se apruebe. Una vez publicado, cualquier
+            otra persona puede reportarlo si incumple estos Términos o la ley;
+            revisamos los reportes y podemos ocultar o retirar el contenido.
+          </p>
+          <p>
+            Al publicar una actividad o un ejercicio curado, le otorgas a
+            ChuyoCode (el Titular) una licencia no exclusiva, mundial y
+            gratuita para alojarlo, mostrarlo, distribuirlo y adaptarlo (por
+            ejemplo, a distintos modos de juego o al modo presentación). Esta
+            licencia sigue vigente mientras el contenido permanezca publicado,
+            incluso después de que elimines tu cuenta (ver "Eliminación de tu
+            cuenta" más abajo): el contenido ya publicado debe seguir
+            funcionando para cualquiera que tenga el enlace.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            5. Publicidad y acceso recompensado
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            5. Niveles, interacciones y corrección de ejercicios
           </h2>
           <p>
-            El Sitio se financia mediante publicidad, incluyendo redes de terceros
-            como Google. El usuario puede acceder a un modo de navegación sin
-            interrupciones publicitarias por un período determinado tras
-            visualizar un anuncio, o continuar con publicidad por cada interacción
-            de descarga. El Titular no se responsabiliza por el contenido de los
-            anuncios de terceros ni por los sitios a los que estos enlacen.
+            Los niveles MCER que mostramos junto a los ejercicios y actividades
+            son una estimación orientativa, no una certificación oficial.
+            Puedes marcar con un "me gusta" las actividades o ejercicios que
+            disfrutes; el contador público de vistas suma como máximo una
+            vista por usuario cada 30 minutos, para que recargar la página no
+            lo infle. Las respuestas que das en los ejercicios se califican en
+            tu propio navegador; nunca se envían a nuestros servidores ni se
+            almacenan.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            6. Conducta del usuario
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            6. Libros y noticias; acceso mediante publicidad
           </h2>
           <p>
-            El usuario se compromete a utilizar el Sitio conforme a la ley, la
-            buena fe y estos Términos. Queda prohibido: (a) intentar vulnerar la
-            seguridad del Sitio o sus mecanismos de acceso; (b) automatizar
-            descargas o eludir los controles de publicidad; (c) usar el Sitio para
-            fines ilícitos; y (d) afectar el funcionamiento normal del servicio.
+            El Sitio también ofrece un catálogo de libros y noticias de
+            programación y tecnología de consulta pública, y la descarga de
+            ciertos materiales (por ejemplo, archivos PDF). El acceso a esas
+            descargas puede requerir ver antes un anuncio publicitario, lo que
+            te da acceso temporal sin fricción por un período limitado; el
+            Titular puede modificar, suspender o discontinuar esta
+            funcionalidad en cualquier momento. El Sitio se financia en parte
+            mediante publicidad de redes de terceros, principalmente Google; el
+            Titular no se responsabiliza por el contenido de los anuncios de
+            terceros ni por los sitios a los que estos enlacen.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            7. Exención de responsabilidad
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            7. Premium: precios y pagos
           </h2>
           <p>
-            El Sitio y su contenido se ofrecen "tal cual". El Titular no garantiza
-            que el contenido esté libre de errores ni que el servicio sea
-            ininterrumpido. En la máxima medida permitida por la ley, el Titular no
-            será responsable por daños directos o indirectos derivados del uso o la
-            imposibilidad de uso del Sitio.
+            Premium es una suscripción opcional de pago. Los precios de
+            lanzamiento son US$12 al año, US$2,99 al mes, y un precio fundador
+            de US$9,99 al año de por vida para los primeros 200 suscriptores;
+            están en dólares estadounidenses y pueden aplicarse impuestos según
+            tu país. La suscripción se renueva automáticamente hasta que la
+            canceles; puedes cancelarla cuando quieras y conservas el acceso
+            hasta el final del período ya pagado.
+          </p>
+          <p>
+            Los pagos de Premium todavía no están activos. Cuando se activen,
+            se procesarán a través de Paddle, que actúa como comerciante
+            registrado ("Merchant of Record"): Paddle te vende la suscripción,
+            emite tu comprobante, cobra los impuestos que correspondan, y es
+            quien recibe y procesa los datos de tu pago — nosotros nunca
+            vemos ni almacenamos los datos de tu tarjeta. Puedes ver las
+            condiciones para pedir un reembolso en nuestra{' '}
+            <a class="text-primary hover:underline" href={refundsHref}>
+              Política de reembolsos
+            </a>
+            .
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            8. Enlaces a terceros
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            8. Eliminación de tu cuenta
+          </h2>
+          <p>
+            Puedes eliminar tu cuenta en cualquier momento desde sus ajustes,
+            escribiendo la palabra de confirmación que se te pida. Al
+            eliminarla:
+          </p>
+          <ul class="ml-5 flex list-disc flex-col gap-2">
+            <li>
+              Tus actividades y ejercicios que nunca llegaron a publicarse, tus
+              "me gusta", tu historial personal de vistas y tus archivos
+              privados subidos se eliminan por completo.
+            </li>
+            <li>
+              Tus actividades y ejercicios ya publicados siguen disponibles
+              para la comunidad, ahora atribuidos a "ChuyoCode" según la
+              licencia de la sección 4; conservamos únicamente el identificador
+              interno de tu cuenta anterior, nunca tu nombre ni tu correo, solo
+              como constancia de procedencia.
+            </li>
+            <li>
+              Los reportes que hayas presentado se conservan como historial de
+              moderación, pero se elimina tu identidad como quien los reportó.
+            </li>
+            <li>
+              Cualquier suscripción Premium o compra de curso activa se cancela
+              y su registro se elimina junto con tu cuenta (el procesador de
+              pagos conserva sus propios comprobantes de forma independiente,
+              cuando los pagos estén activos).
+            </li>
+            <li>Se cierra tu sesión y la eliminación no se puede deshacer.</li>
+          </ul>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            9. Propiedad intelectual
+          </h2>
+          <p>
+            Las marcas, el logotipo, el diseño y los demás elementos propios
+            del Sitio pertenecen al Titular o se usan bajo licencia. El
+            contenido de terceros (libros, portadas, textos de noticias)
+            pertenece a sus respectivos autores y se muestra con fines
+            informativos y educativos; no debes reproducirlo, distribuirlo ni
+            explotarlo más allá de lo que permite la ley aplicable. El
+            contenido que tú mismo publicas (actividades, ejercicios,
+            explicaciones) se rige por la sección 4, no por esta.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            10. Conducta del usuario
+          </h2>
+          <p>
+            Te comprometes a usar el Sitio conforme a la ley, la buena fe y
+            estos Términos. Está prohibido: (a) intentar vulnerar la seguridad
+            del Sitio o sus mecanismos de acceso; (b) automatizar descargas o
+            eludir los controles de publicidad; (c) subir contenido que no sea
+            tuyo o sobre el que no tengas los derechos necesarios; (d)
+            suplantar a otra persona o hacerte pasar por el Titular; (e) usar
+            el Sitio para fines ilícitos; y (f) afectar el funcionamiento
+            normal del servicio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            11. Exención de responsabilidad
+          </h2>
+          <p>
+            El Sitio y su contenido se ofrecen "tal cual". El Titular no
+            garantiza que el contenido esté libre de errores ni que el
+            servicio sea ininterrumpido. En la máxima medida permitida por la
+            ley, el Titular no será responsable por daños directos o
+            indirectos derivados del uso o la imposibilidad de uso del Sitio.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            12. Enlaces a terceros
           </h2>
           <p>
             El Sitio puede contener enlaces a sitios de terceros. El Titular no
             controla ni asume responsabilidad por el contenido, políticas o
-            prácticas de dichos sitios. El acceso a ellos es responsabilidad del
-            usuario.
+            prácticas de dichos sitios. El acceso a ellos es responsabilidad
+            del usuario.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            9. Modificaciones, ley aplicable y jurisdicción
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            13. Modificaciones, ley aplicable y jurisdicción
           </h2>
           <p>
             El Titular puede modificar estos Términos en cualquier momento; los
-            cambios rigen desde su publicación en el Sitio. Estos Términos se rigen
-            por las leyes de la República del Perú. Cualquier controversia se
-            someterá a los jueces y tribunales competentes de{' '}
+            cambios rigen desde su publicación en el Sitio. Estos Términos se
+            rigen por las leyes de la República del Perú. Cualquier
+            controversia se someterá a los jueces y tribunales competentes de{' '}
             {ownerCity || 'Lima'}, Perú, salvo disposición legal imperativa en
             contrario.
           </p>
@@ -170,15 +321,22 @@ const isEs = lang === 'es';
     ) : (
       <>
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            1. Site owner
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            1. Who we are and what the Site offers
           </h2>
           <p>
             This ChuyoCode website (the "Site") is operated by{' '}
-            <strong class="text-zinc-100">{ownerName}</strong>
-            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-zinc-100">{ownerRuc}</strong></>}
-            {ownerCity && <>, based in {ownerCity}, Peru</>} (the "Owner"). For any
-            question regarding these terms, you may contact{' '}
+            <strong class="text-foreground">{ownerName}</strong>
+            {ownerRuc && <>, Tax ID (RUC) No. <strong class="text-foreground">{ownerRuc}</strong></>}
+            {ownerCity && <>, based in {ownerCity}, Peru</>} (the "Owner"). The
+            Site is a Spanish-first platform to learn and practice English:
+            community activities built from worksheets (uploaded images or PDF
+            pages) and question sets playable as a game, curated exercises
+            with "Why?" explanations, and a presentation mode; plus a public
+            catalog of programming and technology books and news. By accessing
+            or using the Site, you confirm that you have read, understood, and
+            accepted these Terms; if you disagree, you must refrain from using
+            it. For any question, you may contact{' '}
             {ownerEmail ? (
               <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
                 {ownerEmail}
@@ -191,106 +349,230 @@ const isEs = lang === 'es';
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            2. Purpose and acceptance
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            2. User accounts and minors
           </h2>
           <p>
-            These Terms &amp; Conditions govern access to and use of the Site,
-            whose purpose is to provide educational content about programming,
-            technology, and IT — including books, news articles, and, in the
-            future, courses. By accessing or using the Site, you confirm that you
-            have read, understood, and accepted these Terms. If you disagree, you
-            must refrain from using the Site.
+            You can create an account with your Google account, or with your
+            email and a password, through Supabase Auth. If you sign in with
+            Google, we store the email and the public name/avatar Google gives
+            us; if you use email and password, we store the email you give us.
+            To protect against automated sign-ups, sign-in, sign-up, and
+            password reset all use the Cloudflare Turnstile challenge.
+          </p>
+          <p>
+            Under Peru's Law No. 29733, processing the personal data of a
+            minor under 14 requires the prior consent of a parent or guardian:
+            if you are under 14, you need that consent to create an account.
+            This does not stop you from taking part: you can play activities
+            your teacher shares with you by link, with no account needed (see
+            the next section).
+          </p>
+          <p>
+            You are responsible for keeping your credentials secure and for
+            any activity on your account.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            3. Service description
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            3. Guest play
           </h2>
           <p>
-            The Site offers reference content and, in some cases, downloadable
-            materials (for example, PDF files). Access to certain downloads may
-            require first viewing an advertisement, which grants friction-free
-            temporary access for a limited period. The Owner may modify, suspend,
-            or discontinue any Site feature at any time.
+            Anyone with the link can play a published activity and its
+            presentation mode without creating an account. We store no data
+            about a guest player at all: no identity, no view recorded under
+            their name, no "like" of theirs.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            4. Intellectual property
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            4. Content you publish and the license you grant
           </h2>
           <p>
-            The Site's own trademarks, logos, design, and elements belong to the
-            Owner or are used under license. Third-party content (books, covers,
-            news text) belongs to its respective authors or rights holders and is
-            shown for informational and educational purposes. You agree not to
-            reproduce, distribute, or exploit such content beyond what applicable
-            law permits.
+            You must be the author of, or hold the necessary rights to,
+            everything you upload; when you submit your activity for review we
+            ask you to expressly confirm this. While an image or PDF page you
+            upload is pending review, it is kept in private storage; once
+            approved, it is copied to public storage so it can be shown to any
+            visitor or guest.
+          </p>
+          <p>
+            Everything published goes through moderation first: no one but you
+            can see it until it is approved. Once published, anyone else can
+            report it if it breaches these Terms or the law; we review reports
+            and may hide or remove the content.
+          </p>
+          <p>
+            By publishing an activity or a curated exercise, you grant
+            ChuyoCode (the Owner) a non-exclusive, worldwide, royalty-free
+            license to host, display, distribute, and adapt it (for example,
+            to different game modes or to presentation mode). This license
+            stays in effect for as long as the content remains published, even
+            after you delete your account (see "Deleting your account" below):
+            published content must keep working for anyone who already has the
+            link.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            5. Advertising and rewarded access
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            5. Levels, interactions, and exercise grading
           </h2>
           <p>
-            The Site is funded through advertising, including third-party networks
-            such as Google. You may access an ad-free browsing mode for a set
-            period after viewing an ad, or continue with advertising per download
-            interaction. The Owner is not responsible for the content of
+            The CEFR levels shown next to exercises and activities are an
+            orientation estimate, not an official certification. You can
+            "like" activities or exercises you enjoy; the public view counter
+            adds at most one view per user every 30 minutes, so refreshing the
+            page does not inflate it. The answers you give in exercises are
+            graded in your own browser; they are never sent to or stored on
+            our servers.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            6. Books and news; ad-based download access
+          </h2>
+          <p>
+            The Site also offers a public-reference catalog of programming and
+            technology books and news, and the download of certain materials
+            (for example, PDF files). Access to those downloads may require
+            first viewing an advertisement, which grants friction-free
+            temporary access for a limited period; the Owner may modify,
+            suspend, or discontinue this feature at any time. The Site is
+            partly funded through advertising from third-party networks,
+            mainly Google; the Owner is not responsible for the content of
             third-party ads or the sites they link to.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            6. User conduct
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            7. Premium: pricing and payments
           </h2>
           <p>
-            You agree to use the Site in accordance with the law, good faith, and
-            these Terms. It is prohibited to: (a) attempt to breach the Site's
-            security or access mechanisms; (b) automate downloads or bypass ad
-            controls; (c) use the Site for unlawful purposes; and (d) disrupt the
-            normal operation of the service.
+            Premium is an optional paid subscription. Launch prices are
+            US$12/year, US$2.99/month, and a founder price of US$9.99/year for
+            life for the first 200 subscribers; prices are in US dollars and
+            taxes may apply depending on your country. The subscription
+            renews automatically until you cancel it; you can cancel anytime
+            and keep access until the end of the period you already paid for.
+          </p>
+          <p>
+            Premium payments are not active yet. Once enabled, they will be
+            processed through Paddle, which acts as the Merchant of Record:
+            Paddle sells you the subscription, issues your receipt, collects
+            any applicable taxes, and is the one that receives and processes
+            your payment data — we never see or store your card data. You can
+            find the conditions for requesting a refund in our{' '}
+            <a class="text-primary hover:underline" href={refundsHref}>
+              Refund Policy
+            </a>
+            .
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            7. Disclaimer
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            8. Deleting your account
+          </h2>
+          <p>
+            You can delete your account at any time from its settings, by
+            typing the requested confirmation word. When you do:
+          </p>
+          <ul class="ml-5 flex list-disc flex-col gap-2">
+            <li>
+              Your activities and exercises that were never published, your
+              "likes", your personal view history, and your private uploads
+              are deleted entirely.
+            </li>
+            <li>
+              Your already-published activities and exercises remain available
+              to the community, now attributed to "ChuyoCode" under the
+              license in section 4; we keep only your prior account's internal
+              identifier, never your name or email, solely as a record of
+              provenance.
+            </li>
+            <li>
+              Any reports you filed are kept as moderation history, but your
+              identity as the reporter is removed.
+            </li>
+            <li>
+              Any active Premium subscription or course purchase is cancelled
+              and its record is deleted along with your account (the payment
+              processor keeps its own receipts independently, once payments
+              are active).
+            </li>
+            <li>You are signed out, and the deletion cannot be undone.</li>
+          </ul>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            9. Intellectual property
+          </h2>
+          <p>
+            The Site's own trademarks, logo, design, and other elements belong
+            to the Owner or are used under license. Third-party content
+            (books, covers, news text) belongs to its respective authors and is
+            shown for informational and educational purposes; you must not
+            reproduce, distribute, or exploit it beyond what applicable law
+            permits. Content you publish yourself (activities, exercises,
+            explanations) is governed by section 4, not by this one.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            10. User conduct
+          </h2>
+          <p>
+            You agree to use the Site in accordance with the law, good faith,
+            and these Terms. It is prohibited to: (a) attempt to breach the
+            Site's security or access mechanisms; (b) automate downloads or
+            bypass ad controls; (c) upload content that is not yours or that
+            you do not hold the necessary rights to; (d) impersonate another
+            person or the Owner; (e) use the Site for unlawful purposes; and
+            (f) disrupt the normal operation of the service.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            11. Disclaimer
           </h2>
           <p>
             The Site and its content are provided "as is". The Owner does not
-            guarantee that the content is error-free or that the service will be
-            uninterrupted. To the maximum extent permitted by law, the Owner shall
-            not be liable for direct or indirect damages arising from the use of,
-            or inability to use, the Site.
+            guarantee that the content is error-free or that the service will
+            be uninterrupted. To the maximum extent permitted by law, the
+            Owner shall not be liable for direct or indirect damages arising
+            from the use of, or inability to use, the Site.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            8. Third-party links
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            12. Third-party links
           </h2>
           <p>
             The Site may contain links to third-party sites. The Owner does not
-            control and assumes no responsibility for the content, policies, or
-            practices of such sites. Accessing them is your responsibility.
+            control and assumes no responsibility for the content, policies,
+            or practices of such sites. Accessing them is your responsibility.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
-          <h2 class="font-display text-xl font-semibold text-zinc-100">
-            9. Changes, governing law, and jurisdiction
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            13. Changes, governing law, and jurisdiction
           </h2>
           <p>
-            The Owner may modify these Terms at any time; changes take effect upon
-            publication on the Site. These Terms are governed by the laws of the
-            Republic of Peru. Any dispute shall be submitted to the competent
-            courts of {ownerCity || 'Lima'}, Peru, unless a mandatory legal
-            provision states otherwise.
+            The Owner may modify these Terms at any time; changes take effect
+            upon publication on the Site. These Terms are governed by the laws
+            of the Republic of Peru. Any dispute shall be submitted to the
+            competent courts of {ownerCity || 'Lima'}, Peru, unless a mandatory
+            legal provision states otherwise.
           </p>
         </section>
       </>

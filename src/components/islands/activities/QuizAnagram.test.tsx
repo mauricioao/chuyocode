@@ -46,7 +46,7 @@ describe('QuizAnagram', () => {
   it('marks every slot green and offers "Siguiente palabra" once spelled correctly', () => {
     render(<QuizAnagram lang="es" items={items} seed="block-1" />);
     clickInOrder(3); // C-A-T, in order
-    expect(screen.getByTestId('anagram-slot-0').className).toContain('border-emerald-500');
+    expect(screen.getByTestId('anagram-slot-0').className).toContain('border-success-strong');
     expect(screen.getByTestId('anagram-next')).toBeTruthy();
     expect(screen.getByTestId('anagram-live-region').textContent).toBe('¡Correcto!');
   });

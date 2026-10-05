@@ -110,7 +110,13 @@ export const UI_LABELS = {
       soon: 'Pronto',
       switchTo: 'Cambiar a',
     },
-    footer: { terms: 'Términos y Condiciones', privacy: 'Privacidad' },
+    footer: {
+      terms: 'Términos y Condiciones',
+      privacy: 'Privacidad',
+      premium: 'Premium',
+      reembolsos: 'Reembolsos',
+      credits: 'Créditos',
+    },
     // Chrome shared by any page that mounts it (`BackButton`, `ScrollToTop`) —
     // not tied to one section, unlike `english`/`activities`/`legal` below.
     common: {
@@ -255,10 +261,22 @@ export const UI_LABELS = {
       },
     },
     legal: {
-      titles: { terms: 'Términos y condiciones', privacy: 'Política de privacidad' },
+      titles: {
+        terms: 'Términos y condiciones',
+        privacy: 'Política de privacidad',
+        reembolsos: 'Política de reembolsos',
+      },
       pending: 'Contenido legal pendiente',
       privacyNote:
         'Respetamos tu privacidad. Todavía estamos redactando la versión completa de este documento; mientras tanto, no vendemos ni compartimos tus datos personales con terceros.',
+    },
+    // Credits page (`/[lang]/creditos`, visual-identity decision, 2026-10-04).
+    // The actual license body copy lives in `CreditsContent.astro` (same
+    // pattern as `legal` above: long-form text stays out of this map).
+    credits: {
+      pageTitle: 'Créditos',
+      pageDescription:
+        'Créditos y licencias de los recursos de terceros que usa ChuyoCode.',
     },
     news: { readMore: 'Leer más' },
     article: { back: 'Volver a noticias' },
@@ -1085,6 +1103,97 @@ export const UI_LABELS = {
         activityUnavailable: 'Esta actividad ya no está disponible.',
       },
     },
+    // Premium pricing page (`/[lang]/premium`, owner decision 2026-10-04).
+    // Payments are not live yet (Paddle pending): every purchase CTA uses
+    // `comingSoon` below and is NOT a working checkout — shared by the two
+    // paid plan cards and the comparison table's Premium-only rows.
+    // `comparison.rows` mirrors the Free/Premium feature lists from the same
+    // decision, in the same order; `faq` mirrors the owner's own four
+    // questions, the refund one phrased as instructed since there is no
+    // `/[lang]/legal/reembolsos` page yet (`legal/[page].astro`'s own
+    // `LEGAL_PAGES` allow-list: `terms`/`privacy` only).
+    premium: {
+      label: 'Premium',
+      title: 'Premium desde US$1 al mes',
+      intro:
+        'Una sola membresía para llevar tu progreso, tu nivel y tus actividades privadas a todos lados. Mientras terminamos de activar los pagos, todo lo de hoy sigue gratis.',
+      priceDisclaimer: 'Precios en dólares (US$). Pueden aplicar impuestos de tu país.',
+      comingSoon: 'Próximamente',
+      recommendedBadge: 'Recomendado',
+      plans: {
+        free: {
+          name: 'Free',
+          price: 'US$0',
+          note: 'Para siempre.',
+          cta: 'Empieza gratis',
+        },
+        annual: {
+          name: 'Anual',
+          price: 'US$12/año',
+          note: 'Equivale a US$1 al mes.',
+        },
+        monthly: {
+          name: 'Mensual',
+          price: 'US$2,99/mes',
+          note: 'Paga mes a mes.',
+        },
+      },
+      founderNote:
+        'Precio fundador: US$9,99 al año, de por vida, para los primeros 200 suscriptores.',
+      comparison: {
+        heading: 'Free vs. Premium',
+        featureHeader: 'Qué incluye',
+        freeHeader: 'Free',
+        premiumHeader: 'Premium',
+        rows: [
+          { feature: 'Crear actividades', free: 'Sí, sin límite por ahora', premium: 'Sí' },
+          { feature: 'Todos los modos de juego', free: 'Sí', premium: 'Sí' },
+          { feature: 'Modo presentación', free: 'Sí', premium: 'Sí' },
+          { feature: 'Compartir por enlace, QR o WhatsApp', free: 'Sí', premium: 'Sí' },
+          { feature: 'Imprimir', free: 'Sí', premium: 'Sin marca de agua (Próximamente)' },
+          { feature: 'Juego como invitado para tus alumnos', free: 'Sí', premium: 'Sí' },
+          { feature: 'Ejercicios curados con explicaciones «¿Por qué?»', free: 'Sí', premium: 'Sí' },
+          { feature: 'Progreso guardado en este dispositivo', free: 'Próximamente', premium: 'Próximamente' },
+          { feature: 'Progreso sincronizado y repaso de errores', free: '—', premium: 'Próximamente' },
+          { feature: 'Nivel MCER estimado con certificado verificable', free: '—', premium: 'Próximamente' },
+          { feature: 'Actividades y colecciones privadas por unidad', free: '—', premium: 'Próximamente' },
+          { feature: 'Reportes de clase', free: '—', premium: 'Próximamente' },
+          { feature: 'Voces naturales', free: '—', premium: 'Próximamente' },
+          { feature: 'Práctica de speaking con IA (con tope mensual)', free: '—', premium: 'Próximamente' },
+          { feature: 'Cursos incluidos', free: '—', premium: 'Próximamente' },
+        ],
+      },
+      faq: {
+        heading: 'Preguntas frecuentes',
+        items: [
+          {
+            q: '¿Cuándo podré pagar?',
+            a: 'Todavía estamos activando los pagos. En cuanto estén listos, vas a poder suscribirte desde esta misma página.',
+            link: null,
+          },
+          {
+            q: '¿Puedo cancelar cuando quiera?',
+            a: 'Sí, vas a poder cancelar cuando quieras, sin permanencia mínima.',
+            link: null,
+          },
+          {
+            // Owner decision 2026-10-04 (refund proposal): full refund within
+            // 14 days of the first payment or of a renewal not used since —
+            // see `RefundsContent.astro`/`legal/reembolsos` for the full
+            // policy, now that that page exists (`legal/[page].astro`'s
+            // `LEGAL_PAGES` allow-list).
+            q: '¿Hay reembolso?',
+            a: 'Sí: tienes 14 días desde tu primer pago (o desde una renovación, si no usaste Premium después) para pedir el reembolso completo. Lee el detalle en nuestra',
+            link: { href: '/legal/reembolsos', label: 'política de reembolsos' },
+          },
+          {
+            q: '¿Qué pasa con mis actividades si no pago?',
+            a: 'Siguen siendo tuyas y gratis. Free no tiene fecha de vencimiento.',
+            link: null,
+          },
+        ],
+      },
+    },
     english: {
       // Copy for the HUB route `/[lang]/ingles` (two cards: curated exercises
       // vs. community activities). Kept separate from `section` below, which
@@ -1243,7 +1352,13 @@ export const UI_LABELS = {
       soon: 'Soon',
       switchTo: 'Switch to',
     },
-    footer: { terms: 'Terms & Conditions', privacy: 'Privacy' },
+    footer: {
+      terms: 'Terms & Conditions',
+      privacy: 'Privacy',
+      premium: 'Premium',
+      reembolsos: 'Refunds',
+      credits: 'Credits',
+    },
     common: {
       back: 'Back',
       backTooltip: 'Back to the previous page',
@@ -1378,10 +1493,22 @@ export const UI_LABELS = {
       },
     },
     legal: {
-      titles: { terms: 'Terms and conditions', privacy: 'Privacy policy' },
+      titles: {
+        terms: 'Terms and conditions',
+        privacy: 'Privacy policy',
+        reembolsos: 'Refund policy',
+      },
       pending: 'Legal content pending',
       privacyNote:
         'We respect your privacy. We are still drafting the full version of this document; in the meantime, we do not sell or share your personal data with third parties.',
+    },
+    // Credits page (`/[lang]/creditos`, visual-identity decision, 2026-10-04).
+    // The actual license body copy lives in `CreditsContent.astro` (same
+    // pattern as `legal` above: long-form text stays out of this map).
+    credits: {
+      pageTitle: 'Credits',
+      pageDescription:
+        'Credits and licenses for the third-party resources ChuyoCode uses.',
     },
     news: { readMore: 'Read more' },
     article: { back: 'Back to news' },
@@ -1994,6 +2121,84 @@ export const UI_LABELS = {
         lockedTitle: 'This lesson is paid content',
         lockedBody: 'Go Premium or buy this course for life to watch it.',
         activityUnavailable: 'This activity is no longer available.',
+      },
+    },
+    // Mirrors `es.premium` — see its comment there.
+    premium: {
+      label: 'Premium',
+      title: 'Premium from US$1 a month',
+      intro:
+        'One membership to carry your progress, your level, and your private activities everywhere. While we finish wiring up payments, everything you have today stays free.',
+      priceDisclaimer: 'Prices in US dollars (US$). Taxes may apply in your country.',
+      comingSoon: 'Coming soon',
+      recommendedBadge: 'Recommended',
+      plans: {
+        free: {
+          name: 'Free',
+          price: 'US$0',
+          note: 'Forever.',
+          cta: 'Start for free',
+        },
+        annual: {
+          name: 'Annual',
+          price: 'US$12/year',
+          note: 'That is US$1 a month.',
+        },
+        monthly: {
+          name: 'Monthly',
+          price: 'US$2.99/month',
+          note: 'Pay month to month.',
+        },
+      },
+      founderNote: 'Founder price: US$9.99 a year, for life, for the first 200 subscribers.',
+      comparison: {
+        heading: 'Free vs. Premium',
+        featureHeader: "What's included",
+        freeHeader: 'Free',
+        premiumHeader: 'Premium',
+        rows: [
+          { feature: 'Create activities', free: 'Yes, no limit for now', premium: 'Yes' },
+          { feature: 'All game modes', free: 'Yes', premium: 'Yes' },
+          { feature: 'Presentation mode', free: 'Yes', premium: 'Yes' },
+          { feature: 'Share by link, QR, or WhatsApp', free: 'Yes', premium: 'Yes' },
+          { feature: 'Print', free: 'Yes', premium: 'No watermark (coming soon)' },
+          { feature: 'Guest play for your students', free: 'Yes', premium: 'Yes' },
+          { feature: 'Curated exercises with Why? explanations', free: 'Yes', premium: 'Yes' },
+          { feature: 'Progress saved on this device', free: 'Coming soon', premium: 'Coming soon' },
+          { feature: 'Synced progress and mistake review', free: '—', premium: 'Coming soon' },
+          { feature: 'CEFR level estimate with a verifiable certificate', free: '—', premium: 'Coming soon' },
+          { feature: 'Private activities and collections by unit', free: '—', premium: 'Coming soon' },
+          { feature: 'Class reports', free: '—', premium: 'Coming soon' },
+          { feature: 'Natural voices', free: '—', premium: 'Coming soon' },
+          { feature: 'AI speaking practice (with a monthly cap)', free: '—', premium: 'Coming soon' },
+          { feature: 'Courses included', free: '—', premium: 'Coming soon' },
+        ],
+      },
+      faq: {
+        heading: 'Frequently asked questions',
+        items: [
+          {
+            q: 'When can I pay?',
+            a: "We're still activating payments. As soon as they're ready, you'll be able to subscribe right from this page.",
+            link: null,
+          },
+          {
+            q: 'Can I cancel anytime?',
+            a: "Yes, you'll be able to cancel anytime, with no minimum commitment.",
+            link: null,
+          },
+          {
+            // Mirrors `es.premium.faq.items` — see its comment there.
+            q: 'Is there a refund?',
+            a: 'Yes: you have 14 days from your first payment (or from a renewal, if you did not use Premium after it) to request a full refund. Read the details in our',
+            link: { href: '/legal/reembolsos', label: 'refund policy' },
+          },
+          {
+            q: 'What happens to my activities if I do not pay?',
+            a: 'They stay yours and free. Free has no expiration date.',
+            link: null,
+          },
+        ],
       },
     },
     english: {

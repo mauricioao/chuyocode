@@ -60,7 +60,7 @@ export default function ChoiceRenderer({
   return (
     <fieldset className="flex flex-col gap-4" disabled={disabled}>
       <legend
-        className={`mb-4 ${PROMPT_SCALE} ${PROMPT_MEASURE} font-semibold text-zinc-100`}
+        className={`mb-4 ${PROMPT_SCALE} ${PROMPT_MEASURE} font-semibold text-foreground`}
       >
         {slot.label}
       </legend>
@@ -102,7 +102,7 @@ export default function ChoiceRenderer({
                   folds that control into its own accessible name. */}
               <Label
                 htmlFor={inputId}
-                className="flex-1 cursor-pointer text-lg font-medium text-zinc-100 sm:text-xl"
+                className="flex-1 cursor-pointer text-lg font-medium text-foreground sm:text-xl"
               >
                 {item.text ?? item.id}
               </Label>

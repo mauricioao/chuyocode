@@ -16,7 +16,7 @@
  * so those properties are verified by hand — a CSS-class assertion would only
  * pin the implementation, never the appearance.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
 // env.ts reads import.meta.env — stub it before any module that calls loadEnv().
@@ -264,6 +264,19 @@ describe('ingles/index.astro (hub)', () => {
   });
 
   describe('"Para ti hoy" strip', () => {
+    // The page picks with the real clock (`new Date()`), and the weekly slot
+    // only counts activities published in the last 7 days: pin the clock so
+    // the fixtures' fixed `publishedAt` dates never age out of that window
+    // (unpinned, this suite expired on its own on 2026-10-05 UTC).
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-01T12:00:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('is absent entirely when there are no live community activities', async () => {
       getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
 
@@ -478,9 +491,13 @@ describe('ingles/propuestos/index.astro (curated exercises)', () => {
     getExerciseFacetRows.mockResolvedValue([]);
 
     const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
 
     expect(res.status).toBe(200);
     expect(getExerciseFacetRows).toHaveBeenCalledTimes(1);
+    // "Nothing published anywhere" is the one empty state with its own emoji
+    // sticker accent (visual-identity decision, 2026-10-04).
+    expect(html).toContain('/images/emoji/llama-v1-64.webp');
   });
 
   it('headlines the screen with the section, not with its audience', async () => {
@@ -617,6 +634,8 @@ describe('ingles/propuestos/index.astro (curated exercises)', () => {
       expect(html).not.toContain('chu-search');
       expect(html).not.toContain('id="focuses-no-results"');
       expect(html).toContain('Todavía no hay ejercicios para este nivel.');
+      // Emoji sticker accent (visual-identity decision, 2026-10-04).
+      expect(html).toContain('/images/emoji/llama-v1-64.webp');
     });
 
     it('keeps the filter free of any island or framework runtime', async () => {
@@ -841,6 +860,8 @@ describe('ingles/[level]/[focus]/index.astro (listing)', () => {
     // dead end.
     expect(html).toContain('Todavía no hay ejercicios');
     expect(html).toContain('href="/es/ingles/propuestos?nivel=B1"');
+    // Emoji sticker accent (visual-identity decision, 2026-10-04).
+    expect(html).toContain('/images/emoji/llama-v1-64.webp');
   });
 
   it('returns 200 in English', async () => {

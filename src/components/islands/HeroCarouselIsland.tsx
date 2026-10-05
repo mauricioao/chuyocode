@@ -29,6 +29,7 @@ import {
   Carousel,
   CarouselContent,
   CarouselItem,
+  type CarouselApi,
 } from '@/components/ui/carousel';
 import { buttonVariants } from '@/components/ui/button';
 
@@ -104,13 +105,35 @@ export default function HeroCarouselIsland({
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [isStatic, reduceMotion]);
 
+  // Track which slide is active so it can be exposed to assistive tech (and
+  // to tests/e2e) via `aria-current`, instead of leaving it only inside
+  // Embla's internal, unobservable state. `api` arrives one render after
+  // mount (via Carousel's `setApi`), so `selectedIndex` starts at 0 (the
+  // slide Embla always mounts on) and is kept in sync by `select`/`reInit`.
+  const [api, setApi] = React.useState<CarouselApi>();
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!api) return;
+    const onSelect = () => setSelectedIndex(api.selectedScrollSnap());
+    onSelect();
+    api.on('select', onSelect);
+    api.on('reInit', onSelect);
+    return () => {
+      api.off('select', onSelect);
+      api.off('reInit', onSelect);
+    };
+  }, [api]);
+
   return (
     <Carousel
       className="hero-carousel w-full"
       opts={{ loop: !isStatic }}
       plugins={plugins}
+      setApi={setApi}
       aria-label="Featured content"
       data-hero-carousel
+      data-interval={interval}
     >
       <CarouselContent className="ml-0">
         {slides.map((slide, index) => (
@@ -119,6 +142,7 @@ export default function HeroCarouselIsland({
             className="pl-0"
             data-hero-slide
             data-index={index}
+            aria-current={index === selectedIndex ? 'true' : undefined}
           >
             <div className="relative h-[88vh] min-h-[520px] w-full overflow-hidden">
               {/* Full-bleed backdrop + LQIP blur-up placeholder behind it. */}
@@ -170,7 +194,7 @@ export default function HeroCarouselIsland({
                     {slide.title}
                   </h2>
                   {slide.tagline && (
-                    <p className="max-w-prose font-display text-sm font-medium text-zinc-100 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)] sm:text-base">
+                    <p className="max-w-prose font-display text-sm font-medium text-foreground [text-shadow:0_1px_8px_rgba(0,0,0,0.8)] sm:text-base">
                       {slide.tagline}
                     </p>
                   )}

@@ -2,9 +2,10 @@
 /**
  * Legal page (design decision #9 / File Changes; spec 5: localized routing).
  *
- * A single dynamic route backs both legal documents the Footer links to:
- *   - `/[lang]/legal/terms`   -> Terms & Conditions   (TermsContent)
- *   - `/[lang]/legal/privacy` -> Privacy Policy + Cookies (PrivacyContent)
+ * A single dynamic route backs all three legal documents the Footer links to:
+ *   - `/[lang]/legal/terms`      -> Terms & Conditions       (TermsContent)
+ *   - `/[lang]/legal/privacy`    -> Privacy Policy + Cookies (PrivacyContent)
+ *   - `/[lang]/legal/reembolsos` -> Refund Policy            (RefundsContent)
  *
  * The `[page]` segment is validated against a small allow-list; anything else
  * 404s (SSR mode — see astro.config.mjs). The real localized copy lives in the
@@ -15,13 +16,19 @@
  * personal data required on the page by Ley 29733 renders publicly WITHOUT being
  * hardcoded into source control. Every field is optional and fails safe: an unset
  * value falls back to a neutral label ("ChuyoCode") so the page never breaks.
+ *
+ * Public edge cache: content depends only on `lang` (and the env-sourced
+ * owner identity), never on `Astro.locals.user` — see `publicCachePolicy()`
+ * below, same policy as the home and Premium pages.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import PageTitle from '@components/ui/PageTitle.astro';
 import TermsContent from '@components/legal/TermsContent.astro';
 import PrivacyContent from '@components/legal/PrivacyContent.astro';
+import RefundsContent from '@components/legal/RefundsContent.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { loadEnv } from '@lib/env';
+import { publicCachePolicy } from '@lib/cache';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -31,8 +38,16 @@ if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-/** Legal documents this route serves. Segment -> UI_LABELS.legal.titles key. */
-const LEGAL_PAGES = ['terms', 'privacy'] as const;
+/**
+ * Legal documents this route serves. Segment -> UI_LABELS.legal.titles key.
+ *
+ * `reembolsos` (Refund Policy) deliberately keeps its Spanish slug in BOTH
+ * languages — same convention every other page segment under `[lang]`
+ * already follows (`/libros`, `/noticias`, `/ingles`, `/mis-actividades`...):
+ * the `[lang]` segment is the only thing that switches between locales, page
+ * SEGMENTS never do.
+ */
+const LEGAL_PAGES = ['terms', 'privacy', 'reembolsos'] as const;
 type LegalPage = (typeof LEGAL_PAGES)[number];
 
 const page = Astro.params.page;
@@ -64,6 +79,7 @@ const ownerEmail = env.LEGAL_OWNER_EMAIL;
 const LAST_UPDATED: Record<LegalPage, string> = {
   terms: '2026-10-04',
   privacy: '2026-10-04',
+  reembolsos: '2026-10-04',
 };
 
 // Localized, same display format as before — only the underlying date is
@@ -77,6 +93,15 @@ const updated = new Date(`${LAST_UPDATED[legalPage]}T00:00:00Z`).toLocaleDateStr
   lang === 'en' ? 'en-US' : 'es-PE',
   { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' },
 );
+
+// Public edge cache: every legal document is byte-identical for every
+// visitor of a given `lang` (content depends only on `lang` and the env-
+// sourced owner identity, never on `Astro.locals.user`) — same policy as the
+// home and Premium pages (`publicCachePolicy`, `@lib/cache.ts`).
+const cacheHeaders = publicCachePolicy();
+for (const [name, value] of Object.entries(cacheHeaders)) {
+  Astro.response.headers.set(name, value);
+}
 ---
 
 <BaseLayout lang={lang} title={title}>
@@ -93,8 +118,17 @@ const updated = new Date(`${LAST_UPDATED[legalPage]}T00:00:00Z`).toLocaleDateStr
           ownerEmail={ownerEmail}
           updated={updated}
         />
-      ) : (
+      ) : legalPage === 'privacy' ? (
         <PrivacyContent
+          lang={lang}
+          ownerName={ownerName}
+          ownerRuc={ownerRuc}
+          ownerCity={ownerCity}
+          ownerEmail={ownerEmail}
+          updated={updated}
+        />
+      ) : (
+        <RefundsContent
           lang={lang}
           ownerName={ownerName}
           ownerRuc={ownerRuc}

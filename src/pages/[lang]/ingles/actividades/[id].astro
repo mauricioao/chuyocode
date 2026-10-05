@@ -194,7 +194,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
               renders nothing until its own client fetch resolves, and bakes
               its own leading "· " separator in — see that component's own
               header. */}
-          <p class="flex flex-wrap items-center gap-x-1 text-xs text-zinc-400">
+          <p class="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
             <span>{activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel}</span>
             {/* Guest (no `user`): no per-visitor view to record, so the
                 island is not mounted at all — no badge, and no `visto`
@@ -205,7 +205,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
               practice page shows this, once published; the original shows
               nothing extra. */}
           {activity.source && (
-            <p class="text-xs text-zinc-400" data-testid="activity-based-on">
+            <p class="text-xs text-muted-foreground" data-testid="activity-based-on">
               {sourceHref ? (
                 <>
                   {t.basedOnPrefix}<a href={sourceHref} class="text-accent-ink hover:underline">{activity.source.title}</a>{t.basedOnSuffix}
@@ -220,7 +220,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           {canHeart ? (
             <HeartButton client:load lang={lang} activityId={activity.id} heartCount={activity.heartCount} hearted={hearted} />
           ) : user ? (
-            <span class="inline-flex items-center gap-1.5 text-sm text-zinc-400" data-testid="activity-heart-readonly">
+            <span class="inline-flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="activity-heart-readonly">
               <HeartIcon aria-hidden="true" />
               <span class="sr-only">{heartsLabel(activity.heartCount)}</span>
               <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
@@ -231,7 +231,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
                page) instead of doing nothing. */
             <a
               href={guestSignInHref}
-              class="inline-flex items-center gap-1.5 text-sm text-zinc-400 transition-colors hover:text-foreground"
+              class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
               data-testid="activity-heart-guest"
             >
               <HeartIcon aria-hidden="true" />
