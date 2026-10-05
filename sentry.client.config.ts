@@ -20,9 +20,10 @@
  * `dataCollection` (NOT the older, removed `sendDefaultPii` boolean — this
  * SDK's `Options` type has no such field, verified against the installed
  * @sentry/core@11.4.0 types) is this version's own, more granular
- * replacement: `cookies: false` drops cookies entirely, and `httpHeaders`'
- * `deny` list drops just the Authorization/Proxy-Authorization pair while
- * still collecting other, non-sensitive request headers. Every other
+ * replacement: `userInfo: false` keeps the visitor's IP address out (it
+ * defaults to true), `cookies: false` drops cookies entirely, and
+ * `httpHeaders`' `deny` list drops just the cookie/authorization headers
+ * while still collecting other, non-sensitive request headers. Every other
  * `dataCollection` category is left at its documented default.
  * `scrubSensitiveRequestData` is a defense-in-depth backstop for the same
  * two categories, shared with sentry.server.config.ts.
@@ -37,7 +38,11 @@ if (dsn) {
     dsn,
     tracesSampleRate: 0,
     dataCollection: {
+      // `userInfo` defaults to true, which attaches the visitor's IP address.
+      userInfo: false,
       cookies: false,
+      // A top-level `{ deny }` applies to both request and response headers
+      // (`resolveHttpHeaders` in @sentry/core's resolveDataCollectionOptions).
       httpHeaders: { deny: ['cookie', 'set-cookie', 'authorization', 'proxy-authorization'] },
     },
     beforeSend(event) {

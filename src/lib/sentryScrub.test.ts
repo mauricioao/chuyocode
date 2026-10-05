@@ -63,4 +63,19 @@ describe('scrubSensitiveRequestData', () => {
       referer: 'https://chuyocode.test/',
     });
   });
+
+  it("removes the visitor's IP address, email and username from event.user", () => {
+    const event = {
+      user: { id: 'user-1', ip_address: '203.0.113.7', email: 'a@b.test', username: 'ana' },
+    };
+
+    scrubSensitiveRequestData(event);
+
+    expect(event.user).toEqual({ id: 'user-1' });
+  });
+
+  it('tolerates a missing or non-object user', () => {
+    expect(() => scrubSensitiveRequestData({})).not.toThrow();
+    expect(() => scrubSensitiveRequestData({ user: 'nope' })).not.toThrow();
+  });
 });

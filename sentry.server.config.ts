@@ -22,7 +22,12 @@ if (dsn) {
     dsn,
     tracesSampleRate: 0,
     dataCollection: {
+      // `userInfo` defaults to true, which attaches the visitor's IP address
+      // (read from the request headers on the server).
+      userInfo: false,
       cookies: false,
+      // A top-level `{ deny }` applies to both request and response headers
+      // (`resolveHttpHeaders` in @sentry/core's resolveDataCollectionOptions).
       httpHeaders: { deny: ['cookie', 'set-cookie', 'authorization', 'proxy-authorization'] },
     },
     beforeSend(event) {

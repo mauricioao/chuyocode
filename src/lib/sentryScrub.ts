@@ -1,14 +1,16 @@
 /**
- * Scrub cookies and the Authorization/Proxy-Authorization headers from a
- * Sentry event before it is sent.
+ * Scrub cookies, the Authorization/Proxy-Authorization headers and the
+ * visitor's identity (IP address, email, username) from a Sentry event
+ * before it is sent.
  *
- * Defense in depth alongside `sendDefaultPii: false` (set in
- * `sentry.client.config.ts` / `sentry.server.config.ts`): that flag already
- * keeps Sentry from attaching cookies/IP by default, but does not promise
- * that NOTHING upstream (a captured breadcrumb, a future SDK default change)
- * ever attaches a request's headers or cookies to an event. This mutates
- * `event.request` in place so it is safe to call unconditionally from both
- * `beforeSend` and `beforeSendTransaction`.
+ * Defense in depth alongside the `dataCollection` options set in
+ * `sentry.client.config.ts` / `sentry.server.config.ts` (`cookies: false`,
+ * `userInfo: false`, a header deny-list): those keep the SDK from attaching
+ * that data, but do not promise that NOTHING upstream (a captured
+ * breadcrumb, a future SDK default change — `userInfo` defaults to `true`)
+ * ever does. This mutates `event.request` and `event.user` in place so it is
+ * safe to call unconditionally from both `beforeSend` and
+ * `beforeSendTransaction`.
  *
  * Loosely typed (`Record<string, unknown>`), not against `@sentry/astro`'s
  * own event types: those are internal-ish and have been renamed across
@@ -31,7 +33,16 @@ function scrubHeaders(headers: unknown): void {
   }
 }
 
+const SENSITIVE_USER_FIELDS = ['ip_address', 'email', 'username'];
+
 export function scrubSensitiveRequestData(event: Record<string, unknown>): void {
+  const user = event['user'];
+  if (user && typeof user === 'object') {
+    for (const field of SENSITIVE_USER_FIELDS) {
+      delete (user as Record<string, unknown>)[field];
+    }
+  }
+
   const request = event['request'];
   if (!request || typeof request !== 'object') return;
   const req = request as Record<string, unknown>;
