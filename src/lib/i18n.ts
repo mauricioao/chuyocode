@@ -307,6 +307,28 @@ export const UI_LABELS = {
         title: 'Nueva contraseña',
         description: 'Elegir una nueva contraseña para la cuenta.',
       },
+      // Age/legal consent (Ley N° 29733 §2/§4, owner-approved wording,
+      // `@lib/ageConsent`). Read directly by TWO client islands, not just
+      // server-rendered page chrome — `PasswordAuthForm`'s sign-up checkbox
+      // and the standalone consent screen's `ConsentForm` — so the
+      // legally-approved sentence and its two legal links live in exactly
+      // ONE place instead of two local COPY maps drifting apart. Same
+      // precedent as `userMenu` below, already read by a client island.
+      // `sentence` carries two placeholders, `{terms}` and `{privacy}`,
+      // replaced with `termsLinkText`/`privacyLinkText` as the two embedded
+      // links (`AgeConsentCheckbox`) — never translate the markers.
+      consent: {
+        pageTitle: 'Confirma tu edad',
+        pageDescription: 'Antes de continuar, confirma lo siguiente.',
+        sentence:
+          'Tengo 14 años o más, o cuento con el consentimiento de mi padre, madre o apoderado. Acepto los {terms} y la {privacy}.',
+        termsLinkText: 'Términos',
+        privacyLinkText: 'Política de privacidad',
+        checkboxHint: 'Marca la casilla para continuar.',
+        continue: 'Continuar',
+        continuing: 'Continuando…',
+        genericError: 'No se pudo completar la solicitud. Inténtalo de nuevo.',
+      },
       // Copy for `UserMenu` (Login step 1b), the header's client-only
       // identity chip. Local to no island's own COPY map — see that
       // component's header for why this slice keeps it here instead.
@@ -1527,6 +1549,18 @@ export const UI_LABELS = {
       nuevaClave: {
         title: 'New password',
         description: 'Choose a new password for the account.',
+      },
+      consent: {
+        pageTitle: 'Confirm your age',
+        pageDescription: 'Before continuing, confirm the following.',
+        sentence:
+          "I am 14 years old or older, or I have the consent of my father, mother or guardian. I accept the {terms} and the {privacy}.",
+        termsLinkText: 'Terms',
+        privacyLinkText: 'Privacy Policy',
+        checkboxHint: 'Check the box to continue.',
+        continue: 'Continue',
+        continuing: 'Continuing…',
+        genericError: 'Could not complete the request. Try again.',
       },
       userMenu: {
         signIn: 'Sign in',

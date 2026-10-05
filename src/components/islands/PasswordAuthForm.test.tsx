@@ -3,9 +3,10 @@
  * PasswordAuthForm tests — email + password sign-in, sign-up and reset
  * (`POST /api/auth/password`).
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { findVoseo, voseoWords } from '@/lib/neutralSpanish';
+import { UI_LABELS } from '@lib/i18n';
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }));
@@ -40,6 +41,19 @@ function submitButton(): HTMLElement {
   return screen.getByTestId('password-auth-submit');
 }
 
+function consentCheckbox(): HTMLElement {
+  return screen.getByTestId('password-auth-consent-checkbox');
+}
+
+// jsdom has no ResizeObserver; `Checkbox` (Radix, via `AgeConsentCheckbox`,
+// rendered in sign-up mode) reads one via `@radix-ui/react-use-size` — same
+// stub precedent as `LessonForm.test.tsx`/`WorksheetZoneEditor.test.tsx`.
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 function scriptTags(): NodeListOf<HTMLScriptElement> {
   return document.head.querySelectorAll('script[src*="challenges.cloudflare.com"]');
 }
@@ -64,6 +78,10 @@ function stubTurnstileGlobal() {
   (window as unknown as { turnstile?: unknown }).turnstile = { render, remove, reset };
   return { render, remove, reset };
 }
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', MockResizeObserver);
+});
 
 afterEach(() => {
   cleanup();
@@ -213,18 +231,20 @@ describe('PasswordAuthForm — switching to sign up', () => {
     fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
     fireEvent.change(emailInput(), { target: { value: 'nuevo@example.com' } });
     fireEvent.change(passwordInput(), { target: { value: 'short' } });
+    fireEvent.click(consentCheckbox());
     fireEvent.click(screen.getByRole('button', { name: COPY.es.signUpSubmit }));
 
     expect(screen.getByRole('alert').textContent).toBe(COPY.es.tooShort);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('POSTs action=signup and shows the uniform confirmation message', async () => {
+  it('POSTs action=signup with consent:true and shows the uniform confirmation message', async () => {
     const fetchMock = stubFetch({ ok: true, signedIn: false });
     render(<PasswordAuthForm lang="es" next="/es/ingles" />);
     fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
     fireEvent.change(emailInput(), { target: { value: 'nuevo@example.com' } });
     fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(consentCheckbox());
     fireEvent.click(screen.getByRole('button', { name: COPY.es.signUpSubmit }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -237,6 +257,7 @@ describe('PasswordAuthForm — switching to sign up', () => {
           lang: 'es',
           password: 'correcto-caballo-1',
           next: '/es/ingles',
+          consent: true,
         }),
       }),
     );
@@ -252,9 +273,65 @@ describe('PasswordAuthForm — switching to sign up', () => {
     fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
     fireEvent.change(emailInput(), { target: { value: 'nuevo@example.com' } });
     fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(consentCheckbox());
     fireEvent.click(screen.getByRole('button', { name: COPY.es.signUpSubmit }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/es/'));
+  });
+});
+
+describe('PasswordAuthForm — sign-up age/legal consent (Ley N° 29733)', () => {
+  it('renders the consent checkbox only in sign-up mode', () => {
+    render(<PasswordAuthForm lang="es" />);
+    expect(screen.queryByTestId('password-auth-consent-checkbox')).toBeNull();
+
+    fireEvent.click(screen.getByText(COPY.es.switchToSignUp));
+    expect(screen.getByTestId('password-auth-consent-checkbox')).toBeTruthy();
+  });
+
+  it('never renders in reset mode', () => {
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.click(screen.getByText(COPY.es.forgotPassword));
+    expect(screen.queryByTestId('password-auth-consent-checkbox')).toBeNull();
+  });
+
+  it('starts unchecked, holding submit disabled with a hint, in sign-up mode', () => {
+    render(<PasswordAuthForm lang="es" initialMode="signup" />);
+
+    expect(consentCheckbox().getAttribute('data-state')).toBe('unchecked');
+    expect(submitButton().hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(UI_LABELS.es.auth.consent.checkboxHint)).toBeTruthy();
+  });
+
+  it('enables submit once checked, and hides the hint', () => {
+    render(<PasswordAuthForm lang="es" initialMode="signup" />);
+    fireEvent.click(consentCheckbox());
+
+    expect(submitButton().hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByText(UI_LABELS.es.auth.consent.checkboxHint)).toBeNull();
+  });
+
+  it('links Términos/Política de privacidad to the legal pages', () => {
+    render(<PasswordAuthForm lang="es" initialMode="signup" />);
+
+    const links = screen.getAllByRole('link');
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/es/legal/terms',
+      '/es/legal/privacy',
+    ]);
+  });
+
+  it('never sends consent for sign-in or reset (server never expects the field there)', async () => {
+    const fetchMock = stubFetch({ ok: true });
+    stubLocation();
+    render(<PasswordAuthForm lang="es" />);
+    fireEvent.change(emailInput(), { target: { value: 'lector@example.com' } });
+    fireEvent.change(passwordInput(), { target: { value: 'correcto-caballo-1' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('consent');
   });
 });
 
