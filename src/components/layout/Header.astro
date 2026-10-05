@@ -52,18 +52,36 @@
  * `aria-expanded` on the hamburger button below and on `UserMenu`'s own
  * trigger is also how that script detects "a menu inside the header is
  * open" (one MutationObserver, no extra wiring needed here).
+ *
+ * INGLÉS "BLOCKS" VARIANT (owner spec 2026-10-05, town.com-style): the
+ * `ingles` prop switches this SAME component to a second, independent
+ * markup branch below — a row of separate bordered/rounded blocks (logo,
+ * nav, account; mobile collapses the nav block into the hamburger's own
+ * block) instead of one full-width dark bar — rendered ONLY by
+ * `BaseLayout.astro` when `theme="ingles"`, and only ever inside the page's
+ * own light `[data-theme="ingles"]` scope (no `[data-theme="brand"] dark`
+ * wrapper there — see that file's own header). Every OTHER page keeps the
+ * original branch below, byte-for-byte unchanged. Both branches share
+ * `data-chrome-header` (and the hamburger's `#mobile-menu-button`/
+ * `#mobile-menu` ids, and the toggle script at the bottom), so
+ * `chromeVisibility.ts` and the mobile-menu stub need no branching of their
+ * own — only the CSS consequence of `data-header-visible` differs by mode
+ * (`global.css`'s own `[data-chrome-mode]` split).
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
 import UserMenu from '@components/islands/UserMenu';
 
 interface Props {
   lang?: Lang;
+  /** Owner spec 2026-10-05: renders the INGLÉS "blocks" layout instead of the default dark bar. Defaults to `false` — every existing call site is unaffected. */
+  ingles?: boolean;
 }
 
-const { lang = DEFAULT_LANG } = Astro.props;
+const { lang = DEFAULT_LANG, ingles = false } = Astro.props;
 
 const labels = UI_LABELS[lang].nav;
 const base = `/${lang}`;
+const inglesHref = `${base}/ingles`;
 
 // Computed here (server-side) so `UserMenu` — hydrated on EVERY page — only
 // ever receives its own small slice of copy as a plain prop, never the full
@@ -78,59 +96,82 @@ const userMenuLabels = UI_LABELS[lang].auth.userMenu;
 const navLinks = [
   { href: `${base}/libros`, label: labels.books },
   { href: `${base}/noticias`, label: labels.news },
-  { href: `${base}/ingles`, label: labels.englishLink },
+  { href: inglesHref, label: labels.englishLink },
 ];
 ---
 
-<header
-  data-chrome-header
-  class="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur transition-theme duration-theme"
-  transition:persist
-  transition:animate="none"
->
-  <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
-    {/* Masthead: small logo image (left) + wordmark (right), vertically
-        centered. `/logo.svg` is intentionally absent for now — it renders as a
-        broken-image placeholder until the real asset lands in `public/`. */}
-    <a
-      href={`${base}/`}
-      class="flex items-center gap-2 text-xl font-bold tracking-tight text-primary hover:text-primary/80"
-    >
-      <img src="/chuyocode.svg" alt="ChuyoCode" class="h-8 w-8 object-contain" />
-      <span>ChuyoCode</span>
-    </a>
+{ingles ? (
+  /* INGLÉS "blocks" branch (owner spec 2026-10-05) — see the file header's
+     own note. `data-chrome-header` sits on THIS root so it is also the grid
+     container `global.css`'s `[data-chrome-mode='ingles']` rules collapse/
+     expand; `data-chrome-collapse` marks the ONE child that wraps every bit
+     of content, which is what that same CSS clips to zero height. */
+  <header data-chrome-header transition:persist transition:animate="none">
+    <div data-chrome-collapse>
+      <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+        {/* Logo block: the word "Inglés" (display font) over a small "by
+            ChuyoCode" byline, standing in for the owner's own AI-generated
+            lettering until that asset exists — see the comment right above
+            the fallback <span> below for the one-line swap. Links to the
+            Inglés hub; `aria-label` fixes the accessible name regardless of
+            which of the two (image or fallback) is currently rendered. */}
+        <a
+          href={inglesHref}
+          aria-label="Inglés by ChuyoCode"
+          class="flex flex-none flex-col items-start gap-1 rounded-card border border-border bg-card px-4 py-2 shadow-elevation-1 transition-theme duration-theme hover:border-accent-ink"
+        >
+          {/* IMAGE SLOT — once the owner drops the real lettering at
+              `/images/brand/ingles-wordmark-v1.webp`, swap the fallback
+              <span> below for:
+                <img src="/images/brand/ingles-wordmark-v1.webp" alt="Inglés" class="h-7 w-auto sm:h-8" />
+              — a one-line change, nothing else in this block depends on it. */}
+          <span class="font-display text-2xl leading-none font-extrabold tracking-tight text-foreground sm:text-3xl">
+            Inglés
+          </span>
+          <span class="flex items-center gap-1 text-[11px] leading-none font-medium text-muted-foreground">
+            by
+            <img src="/chuyocode.svg" alt="" class="h-3 w-3" />
+            ChuyoCode
+          </span>
+        </a>
 
-    {/* Right side of the bar: primary nav next to the account area (logo
-        stays left, above). */}
-    <div class="flex items-center gap-6" data-header-actions>
-      <nav class="hidden items-center gap-6 md:flex" aria-label="Primary">
-        {
-          navLinks.map((link) => (
-            <a
-              href={link.href}
-              class="text-sm font-medium text-muted-foreground transition-theme duration-theme hover:text-primary"
-            >
-              {link.label}
-            </a>
-          ))
-        }
-      </nav>
+        {/* Nav block: Libros · Noticias · Inglés, desktop only (mobile gets
+            the same three links inside the hamburger's own block panel
+            below). This render ONLY ever happens on an Inglés page (the
+            `ingles` prop), so "Inglés" is always the current section. */}
+        <nav
+          class="hidden items-center gap-1 rounded-card border border-border bg-card px-2 py-2 md:flex"
+          aria-label="Primary"
+        >
+          {
+            navLinks.map((link) => {
+              const current = link.href === inglesHref;
+              return (
+                <a
+                  href={link.href}
+                  aria-current={current ? 'page' : undefined}
+                  class={[
+                    'rounded-pill px-3 py-1.5 text-sm font-medium transition-theme duration-theme',
+                    current ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent-ink',
+                  ].join(' ')}
+                >
+                  {link.label}
+                </a>
+              );
+            })
+          }
+        </nav>
 
-      <div class="flex items-center gap-3">
-        {/* Account chip — visible at every breakpoint, signed in or not. See
-            the file header: client-only, never server-rendered from
-            `Astro.locals.user`. `client:load` over `client:idle` so it starts
-            resolving immediately rather than waiting for the main thread to go
-            idle, which would stretch the loading placeholder's flash on a busy
-            page with several other islands ahead of it in the idle queue. */}
-        <UserMenu lang={lang} labels={userMenuLabels} client:load />
+        {/* Account block — same `UserMenu` island as the SITE branch. */}
+        <div class="flex flex-none items-center gap-3 rounded-card border border-border bg-card px-3 py-2 shadow-elevation-1" data-header-actions>
+          <UserMenu lang={lang} labels={userMenuLabels} client:load />
+        </div>
 
-        {/* Mobile: hamburger button + JS toggle stub. The toggle just flips
-            the `hidden` class on the mobile menu; no framework, no island. */}
+        {/* Mobile menu-button block (replaces the nav block below `md:`). */}
         <button
           type="button"
           id="mobile-menu-button"
-          class="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-primary md:hidden"
+          class="inline-flex flex-none items-center justify-center rounded-card border border-border bg-card p-2 text-muted-foreground shadow-elevation-1 transition-theme duration-theme hover:text-accent-ink md:hidden"
           aria-label="Toggle navigation menu"
           aria-controls="mobile-menu"
           aria-expanded="false"
@@ -147,33 +188,127 @@ const navLinks = [
           </svg>
         </button>
       </div>
-    </div>
-  </div>
 
-  <nav
-    id="mobile-menu"
-    class="hidden flex-col gap-2 border-t border-border px-4 py-3 md:hidden"
-    aria-label="Mobile"
+      {/* Mobile menu panel — styled as its OWN block, same radius/border/
+          surface as the row above (owner spec: "mobile menu panel styled
+          the same way"). */}
+      <nav
+        id="mobile-menu"
+        class="mx-4 mb-4 hidden flex-col gap-2 rounded-card border border-border bg-card px-4 py-3 md:hidden"
+        aria-label="Mobile"
+      >
+        {
+          navLinks.map((link) => {
+            const current = link.href === inglesHref;
+            return (
+              <a
+                href={link.href}
+                aria-current={current ? 'page' : undefined}
+                class={['py-1 text-sm font-medium', current ? 'text-accent-ink' : 'text-muted-foreground hover:text-accent-ink'].join(' ')}
+              >
+                {link.label}
+              </a>
+            );
+          })
+        }
+        <div id="mobile-menu-account" class="flex flex-col gap-2 border-t border-border pt-2" />
+      </nav>
+    </div>
+  </header>
+) : (
+  <header
+    data-chrome-header
+    class="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur transition-theme duration-theme"
+    transition:persist
+    transition:animate="none"
   >
-    {
-      navLinks.map((link) => (
-        <a
-          href={link.href}
-          class="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
-        >
-          {link.label}
-        </a>
-      ))
-    }
-    {/* Account entries (Ingresar / Crear actividad / Mis actividades /
-        Moderación / Cerrar sesión) — empty here on purpose, this panel must
-        stay byte-identical for every visitor (see the file header's 🔴
-        note). `UserMenu` (already mounted above, client-only) portals its
-        own account actions into this exact slot once it knows who is signed
-        in — see that component's own header. */}
-    <div id="mobile-menu-account" class="flex flex-col gap-2 border-t border-border pt-2" />
-  </nav>
-</header>
+    <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4">
+      {/* Masthead: small logo image (left) + wordmark (right), vertically
+          centered. `/logo.svg` is intentionally absent for now — it renders as a
+          broken-image placeholder until the real asset lands in `public/`. */}
+      <a
+        href={`${base}/`}
+        class="flex items-center gap-2 text-xl font-bold tracking-tight text-primary hover:text-primary/80"
+      >
+        <img src="/chuyocode.svg" alt="ChuyoCode" class="h-8 w-8 object-contain" />
+        <span>ChuyoCode</span>
+      </a>
+
+      {/* Right side of the bar: primary nav next to the account area (logo
+          stays left, above). */}
+      <div class="flex items-center gap-6" data-header-actions>
+        <nav class="hidden items-center gap-6 md:flex" aria-label="Primary">
+          {
+            navLinks.map((link) => (
+              <a
+                href={link.href}
+                class="text-sm font-medium text-muted-foreground transition-theme duration-theme hover:text-primary"
+              >
+                {link.label}
+              </a>
+            ))
+          }
+        </nav>
+
+        <div class="flex items-center gap-3">
+          {/* Account chip — visible at every breakpoint, signed in or not. See
+              the file header: client-only, never server-rendered from
+              `Astro.locals.user`. `client:load` over `client:idle` so it starts
+              resolving immediately rather than waiting for the main thread to go
+              idle, which would stretch the loading placeholder's flash on a busy
+              page with several other islands ahead of it in the idle queue. */}
+          <UserMenu lang={lang} labels={userMenuLabels} client:load />
+
+          {/* Mobile: hamburger button + JS toggle stub. The toggle just flips
+              the `hidden` class on the mobile menu; no framework, no island. */}
+          <button
+            type="button"
+            id="mobile-menu-button"
+            class="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-primary md:hidden"
+            aria-label="Toggle navigation menu"
+            aria-controls="mobile-menu"
+            aria-expanded="false"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <nav
+      id="mobile-menu"
+      class="hidden flex-col gap-2 border-t border-border px-4 py-3 md:hidden"
+      aria-label="Mobile"
+    >
+      {
+        navLinks.map((link) => (
+          <a
+            href={link.href}
+            class="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      {/* Account entries (Ingresar / Crear actividad / Mis actividades /
+          Moderación / Cerrar sesión) — empty here on purpose, this panel must
+          stay byte-identical for every visitor (see the file header's 🔴
+          note). `UserMenu` (already mounted above, client-only) portals its
+          own account actions into this exact slot once it knows who is signed
+          in — see that component's own header. */}
+      <div id="mobile-menu-account" class="flex flex-col gap-2 border-t border-border pt-2" />
+    </nav>
+  </header>
+)}
 
 <script is:inline data-astro-rerun>
   // Hamburger toggle stub: flips the mobile menu visibility + aria-expanded.

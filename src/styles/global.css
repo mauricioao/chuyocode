@@ -671,41 +671,66 @@ h3 {
   --chrome-header-offset: 5rem;
 }
 
-html[data-chrome-js] [data-chrome-header] {
+/* SITE mode only (owner spec 2026-10-05 moved INGLÉS to its own "blocks"
+ * rules below): the header slides/overlays, the footer fades — both keep
+ * their own space in flow throughout (only the header ever overlays). */
+html[data-chrome-js][data-chrome-mode='site'] [data-chrome-header] {
   transition: transform 220ms var(--ease-control);
   transform: translateY(0);
 }
-html[data-chrome-js][data-header-visible='false'] [data-chrome-header] {
+html[data-chrome-js][data-chrome-mode='site'][data-header-visible='false'] [data-chrome-header] {
   transform: translateY(-100%);
 }
 
-html[data-chrome-js] [data-chrome-footer] {
+html[data-chrome-js][data-chrome-mode='site'] [data-chrome-footer] {
   transition: opacity 220ms var(--ease-control);
   opacity: 1;
 }
 /* `pointer-events: none` too: on a short page or a phone the hidden footer
  * can sit inside the viewport, and an invisible link must never catch a tap.
  * Keyboard focus still reaches the links (focus reveals the footer). */
-html[data-chrome-js][data-footer-visible='false'] [data-chrome-footer] {
+html[data-chrome-js][data-chrome-mode='site'][data-footer-visible='false'] [data-chrome-footer] {
   opacity: 0;
   pointer-events: none;
 }
 
-/* INGLÉS (immersive) mode only: the header floats OVER the content (fixed,
- * not sticky) once JS has picked the mode, so hiding it leaves no empty
- * band at the top — see `chromeVisibility.ts`'s own header. Pre-JS/JS-failed
- * keeps the ordinary `sticky` from `Header.astro` (gated behind the SAME
- * `[data-chrome-js]` progressive-enhancement attribute as every rule above). */
-html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+/* --- INGLÉS "blocks" chrome (owner spec 2026-10-05) ----------------------- *
+ * Both bars are ordinary blocks in normal document flow — NEVER a floating/
+ * fixed overlay (that was last night's rule, SITE-only now, above) — that
+ * collapse to ZERO height (no space taken) and expand IN FLOW, pushing
+ * surrounding content, via the CSS grid "0fr/1fr" animated-height technique:
+ * the bar itself is the grid container (`grid-template-rows` is what
+ * animates) and `[data-chrome-collapse]` is its ONE child spanning the row,
+ * clipped while collapsing so nothing of its content is reachable/visible
+ * at zero height. `Header.astro`/`Footer.astro`'s own INGLÉS markup is what
+ * carries that one wrapper — see those files' own comments. */
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header],
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-footer] {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms var(--ease-control);
+}
+html[data-chrome-js][data-chrome-mode='ingles'][data-header-visible='true'] [data-chrome-header],
+html[data-chrome-js][data-chrome-mode='ingles'][data-footer-visible='true'] [data-chrome-footer] {
+  grid-template-rows: 1fr;
+}
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
+  overflow: hidden;
+}
+
+/* The one INGLÉS header transition that must NOT animate: collapsing once it
+ * has fully scrolled out of view, compensated in the same tick by a matching
+ * scroll adjustment so nothing visibly jumps (`chromeVisibility.ts`'s own
+ * `measureAndDispatchScroll`, which sets/clears this attribute). */
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome-instant] {
+  transition-duration: 0ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-chrome-js] [data-chrome-header],
-  html[data-chrome-js] [data-chrome-footer] {
+  html[data-chrome-js] [data-chrome-footer],
+  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header],
+  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-footer] {
     transition: none;
   }
 }
@@ -713,20 +738,27 @@ html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
 /* `fullHeight` pages (owner decision — see `BaseLayout.astro`'s own
  * `fullHeight` prop doc): at `lg:` and up the page itself never scrolls and
  * `<main>` is already bounded by the header/footer (that same prop's
- * `lg:h-dvh`/`lg:min-h-0` pair), so TODAY's behavior there is kept —
- * chrome always visible, never overlaid — and the rules above are
- * neutralized at that breakpoint specifically. Below `lg:` these pages
- * scroll normally and the ordinary rules above apply unchanged. `!important`
- * is deliberate and scoped to exactly these four declarations: this has to
- * win over the attribute-driven rules above regardless of their own (higher)
- * selector specificity, in both directions (visible or hidden). */
+ * `lg:h-dvh`/`lg:min-h-0` pair). SITE keeps TODAY's behavior there — chrome
+ * always visible, never overlaid — so the rules above are neutralized at
+ * that breakpoint specifically; below `lg:` these pages scroll normally and
+ * the ordinary rules above apply unchanged. `!important` is deliberate and
+ * scoped to exactly these four declarations: this has to win over the
+ * attribute-driven rules above regardless of their own (higher) selector
+ * specificity, in both directions (visible or hidden).
+ *
+ * INGLÉS is explicitly EXCLUDED from this override now (owner spec
+ * 2026-10-05: "the owner wants the editor and the player to get the full
+ * viewport") — both current `fullHeight` pages (the activity editor, the
+ * practice player) are INGLÉS pages, so the pull-to-reveal/collapse rules
+ * above now run at `lg:` too, same as every other width, instead of being
+ * pinned permanently visible there. */
 @media (min-width: 1024px) {
-  html[data-full-height] [data-chrome-header] {
+  html[data-full-height]:not([data-chrome-mode='ingles']) [data-chrome-header] {
     position: sticky !important;
     transform: none !important;
     opacity: 1 !important;
   }
-  html[data-full-height] [data-chrome-footer] {
+  html[data-full-height]:not([data-chrome-mode='ingles']) [data-chrome-footer] {
     opacity: 1 !important;
   }
 }

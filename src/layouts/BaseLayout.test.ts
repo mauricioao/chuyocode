@@ -109,21 +109,34 @@ describe('BaseLayout — visual-theme scope (theme prop)', () => {
     expect(htmlTag).not.toMatch(/class="[^"]*\bdark\b[^"]*"/);
   });
 
-  it('wraps the header, footer, nav progress bar and global scroll-to-top in the brand scope, even on a theme="ingles" page', async () => {
+  it('still wraps the nav progress bar and global scroll-to-top in the brand scope on a theme="ingles" page', async () => {
     const container = await createContainer();
     const html = await container.renderToString(BaseLayout, {
       props: { lang: 'es', theme: 'ingles' },
       slots: { default: '<div>content</div>' },
     });
+    // Nav progress bar + global scroll-to-top — the header/footer blocks
+    // (below) are the one exception now (owner spec 2026-10-05).
     const brandWrappers = html.match(/data-theme="brand" class="dark contents"/g) ?? [];
-    // Nav progress bar, header, footer, global scroll-to-top — exactly four.
-    expect(brandWrappers).toHaveLength(4);
-    // Each wrapper actually precedes the chrome it protects, in document order.
+    expect(brandWrappers).toHaveLength(2);
     expect(html.indexOf('data-theme="brand"')).toBeLessThan(html.indexOf('id="nav-progress-bar"'));
-    expect(html.indexOf('data-theme="brand"', html.indexOf('id="nav-progress-bar"'))).toBeLessThan(
-      html.indexOf('<header'),
-    );
-    expect(html.indexOf('data-theme="brand"', html.indexOf('<header'))).toBeLessThan(html.indexOf('<footer'));
+  });
+
+  // Owner spec 2026-10-05: the Inglés header/footer stop being forced dark
+  // brand chrome — they render inside the page's own light scope instead, so
+  // their semantic tokens (bg-card, border-border, …) resolve to the light
+  // Inglés palette instead of being overridden back to dark.
+  it('renders the header/footer WITHOUT the brand/dark wrapper on a theme="ingles" page, passing the ingles prop through', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).not.toMatch(/data-theme="brand" class="dark contents">\s*<header/);
+    expect(html).not.toMatch(/data-theme="brand" class="dark contents">\s*<footer/);
+    // The Inglés branch's own accessible logo-block link is the simplest
+    // unambiguous signal that `ingles` actually reached `Header`.
+    expect(html).toContain('aria-label="Inglés by ChuyoCode"');
   });
 
   it('still wraps the chrome in the brand scope on an ordinary (non-Inglés) page', async () => {

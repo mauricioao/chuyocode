@@ -18,6 +18,17 @@
       "@styles/*": ["src/styles/*"]
     }
   },
-  "include": [".astro/types.d.ts", "src/**/*", "tests/**/*"],
+  "include": [
+    ".astro/types.d.ts",
+    "src/**/*",
+    "tests/**/*",
+    "sentry.client.config.ts",
+    "sentry.server.config.ts",
+    "vitest.config.ts",
+    "vitest.node.config.ts",
+    "vitest.jsdom.config.ts",
+    "vitest.astro.config.ts",
+    "vitest.aliases.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }
