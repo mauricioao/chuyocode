@@ -1331,6 +1331,39 @@ export const UI_LABELS = {
           'Para seguir practicando',
         ],
       },
+      // Placement-test draft (`/[lang]/ingles/nivel`, hidden route, never
+      // linked). ~30 multiple-choice items, A1 to B2; the result lives only
+      // in this browser's `localStorage` (`@lib/placement/storage.ts`) — no
+      // server round trip. See that page's own header for the full picture.
+      placement: {
+        pageTitle: 'Nivel de inglés',
+        pageDescription:
+          'Un test de opción múltiple para descubrir tu nivel aproximado de inglés, de A1 a B2.',
+        intro: {
+          title: 'Nivel de inglés',
+          description:
+            'Responde 30 preguntas de opción múltiple para descubrir tu nivel aproximado, de A1 a B2. No hay límite de tiempo.',
+          start: 'Comenzar el test',
+          lastResultPrefix: 'Tu último resultado:',
+        },
+        // Composed at the call site as "<progressPrefix> 3 <progressOf> 30",
+        // same convention as `present.progressPrefix`/`present.ofLabel`.
+        progressPrefix: 'Pregunta',
+        progressOf: 'de',
+        next: 'Siguiente',
+        // Counts as wrong (reduces guessing) — never shown as a hint.
+        dontKnow: 'No lo sé',
+        result: {
+          title: '¡Listo!',
+          estimatedLabel: 'Tu nivel estimado',
+          estimatedNone: 'Todavía no alcanzas el nivel A1',
+          recommendedLabel: 'Nivel recomendado para practicar',
+          recommendedAboveB2: 'B2 o superior',
+          breakdownTitle: 'Resultado por nivel',
+          retry: 'Repetir el test',
+          practiceCta: 'Practicar este nivel',
+        },
+      },
     },
   },
   en: {
@@ -2266,6 +2299,32 @@ export const UI_LABELS = {
           'You might also like',
           'Keep practising',
         ],
+      },
+      placement: {
+        pageTitle: 'English level test',
+        pageDescription:
+          'A multiple-choice test to find your approximate English level, from A1 to B2.',
+        intro: {
+          title: 'English level test',
+          description:
+            'Answer 30 multiple-choice questions to find your approximate level, from A1 to B2. No time limit.',
+          start: 'Start the test',
+          lastResultPrefix: 'Your last result:',
+        },
+        progressPrefix: 'Question',
+        progressOf: 'of',
+        next: 'Next',
+        dontKnow: "I don't know",
+        result: {
+          title: 'Done!',
+          estimatedLabel: 'Your estimated level',
+          estimatedNone: "You haven't reached A1 yet",
+          recommendedLabel: 'Recommended level to practise',
+          recommendedAboveB2: 'B2 or higher',
+          breakdownTitle: 'Result by level',
+          retry: 'Retake the test',
+          practiceCta: 'Practise this level',
+        },
       },
     },
   },

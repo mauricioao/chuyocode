@@ -1,0 +1,43 @@
+---
+/**
+ * Placement test — DRAFT, hidden route `/[lang]/ingles/nivel` (SSR).
+ *
+ * HIDDEN ON PURPOSE, same posture as `/[lang]/ingles/aventura` (see that
+ * route's own header): no nav/hub/footer entry, never listed in
+ * `src/pages/sitemap.xml.ts` (a static entry list — this route is simply
+ * never added to it), noindex via the generic `ingles/**` rule
+ * (`@lib/seo.ts#isNoindexPath`) — nothing extra to opt into here.
+ *
+ * Under `ingles/**`, so this route is ALREADY sign-in gated and marked
+ * private/no-store by the middleware (`@lib/access`'s `GATED_SECTIONS`) — no
+ * per-page gate or `markPrivate` call needed, same posture as
+ * `/[lang]/ingles/actividades/index.astro`'s own header.
+ *
+ * ~30 multiple-choice items, A1 to B2 (`@/content/placement/items`). The
+ * whole test runs CLIENT-SIDE in `PlacementIsland`: no Supabase, no new
+ * table, no network call at all — the result lives only in this browser's
+ * `localStorage` (`@/lib/placement/storage.ts`). For the owner to try before
+ * deciding whether to launch the real feature.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import PlacementIsland from '@components/islands/placement/PlacementIsland';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+const t = UI_LABELS[lang].english.placement;
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
+  <section class="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+    <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.pageTitle}</PageTitle>
+    <PlacementIsland client:load lang={lang} />
+  </section>
+</BaseLayout>
