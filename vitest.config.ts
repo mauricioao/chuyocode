@@ -17,5 +17,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     projects: ['./vitest.node.config.ts', './vitest.jsdom.config.ts', './vitest.astro.config.ts'],
+    // `silent` is workspace-wide (Vitest's `NonProjectOptions`), so it can only
+    // be set here, never inside a `defineProject()` config. `'passed-only'`
+    // (Vitest 5+) keeps a passing run's console output out of the log — a
+    // single real CI failure used to be buried under console noise from
+    // thousands of unrelated passing tests; a failing test's console output
+    // still prints, which is the only case it is actually useful for.
+    silent: 'passed-only',
   },
 });

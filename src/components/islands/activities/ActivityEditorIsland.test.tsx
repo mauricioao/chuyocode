@@ -26,10 +26,44 @@ vi.mock('@/lib/activities/imagePipeline', async () => {
   };
 });
 
+const realLocation = window.location;
+
+beforeEach(() => {
+  // The navigation-guard tests below (`handleLeaveWithoutSaving`/
+  // `handleSaveAndLeave`) really do assign `window.location.href` on
+  // success, same as a real "leave this page" would — jsdom refuses to
+  // redefine any property of the real `Location` object (it throws
+  // "Cannot redefine property", by design, mirroring a real browser's
+  // cross-origin protections) AND has no real navigation implementation
+  // either way, so an un-stubbed assignment logs `Error: Not implemented:
+  // navigation (except hash changes)` even though every one of those tests
+  // already passes (nothing here asserts on `location.href`'s resulting
+  // value). `window.location` ITSELF (unlike its own properties) is a
+  // plain, configurable accessor on `window` — swapping in a `URL`, which
+  // reparses on a `.href`/`.hash` write instead of trying to navigate, is
+  // the standard jsdom workaround for this. Reads (origin/pathname/search)
+  // stay correct: this app's jsdom URL is fixed for the whole run, and real
+  // navigation never actually completes today either way.
+  const stubbedLocation = Object.assign(new URL(realLocation.href), {
+    assign: vi.fn(),
+    replace: vi.fn(),
+    reload: vi.fn(),
+    ancestorOrigins: realLocation.ancestorOrigins,
+  }) as unknown as Location;
+  delete (window as unknown as { location?: unknown }).location;
+  // Cast through `window`, not the value: `lib.dom.d.ts` types
+  // `Window.location`'s setter as `string & Location` (it also accepts a
+  // bare string, shorthand for navigating there), which a `Location`-shaped
+  // object alone never satisfies.
+  (window as unknown as { location: Location }).location = stubbedLocation;
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  delete (window as unknown as { location?: unknown }).location;
+  (window as unknown as { location: Location }).location = realLocation;
   // A handful of "open the first block on entry" tests set this to exercise
   // hash-targeting — reset unconditionally so a later test never inherits a
   // leftover hash, even if one of those failed before its own cleanup line.
@@ -66,6 +100,29 @@ function mockRect(el: Element, box: { left?: number; top?: number; width: number
       return {};
     },
   });
+}
+
+/**
+ * A real same-origin `<a>`, appended to `document.body` and clickable via
+ * `fireEvent.click` — what the navigation-guard tests below need to prove
+ * the component's own `click`/`preventDefault` wiring, without jsdom's
+ * `Error: Not implemented: navigation (except hash changes)` (jsdom has no
+ * real navigation; clicking an un-prevented same-origin link makes it try
+ * anyway, and later log the failure — see https://github.com/jsdom/jsdom/issues/2112).
+ *
+ * The extra listener is a SAFETY NET, not a second assertion: it runs at the
+ * link itself, which only fires AFTER the component's own `document`-level
+ * CAPTURING listener already decided whether to call `preventDefault()` —
+ * so it never changes `event.defaultPrevented`/`fireEvent.click`'s return
+ * value for a click the component already prevented, only for one it (by
+ * design) lets through, which none of these tests assert the outcome of.
+ */
+function createInternalLink(href = '/es/libros'): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.href = href;
+  link.addEventListener('click', (e) => e.preventDefault());
+  document.body.appendChild(link);
+  return link;
 }
 
 /**
@@ -572,9 +629,7 @@ describe('ActivityEditorIsland — undo/redo', () => {
 describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
   it('does not show the modal for an internal link click when nothing is dirty', () => {
     renderEditor();
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     fireEvent.click(link, { button: 0 });
     expect(screen.queryByTestId('unsaved-changes-modal')).toBeFalsy();
     link.remove();
@@ -584,9 +639,7 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
     renderEditor();
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
 
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     const event = fireEvent.click(link, { button: 0 });
     expect(event).toBe(false); // preventDefault() was called
     expect(screen.getByTestId('unsaved-changes-modal')).toBeTruthy();
@@ -596,9 +649,7 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
   it('"Cancelar" closes the modal without navigating', () => {
     renderEditor();
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     fireEvent.click(link, { button: 0 });
 
     fireEvent.click(screen.getByTestId('unsaved-modal-cancel'));
@@ -612,9 +663,7 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
     renderEditor();
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
 
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     fireEvent.click(link, { button: 0 });
 
     await act(async () => {
@@ -630,9 +679,7 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
     renderEditor();
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
 
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     fireEvent.click(link, { button: 0 });
 
     await act(async () => {
@@ -647,9 +694,7 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
   it('ignores a modifier-clicked or middle-clicked link (browser default handles it)', () => {
     renderEditor();
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     fireEvent.click(link, { button: 0, ctrlKey: true });
     expect(screen.queryByTestId('unsaved-changes-modal')).toBeNull();
     link.remove();
@@ -673,9 +718,7 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
 describe('ActivityEditorIsland — Bug 3, no double "unsaved changes" prompt', () => {
   function openModalWhileDirty() {
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
-    const link = document.createElement('a');
-    link.href = '/es/libros';
-    document.body.appendChild(link);
+    const link = createInternalLink();
     fireEvent.click(link, { button: 0 });
     return link;
   }

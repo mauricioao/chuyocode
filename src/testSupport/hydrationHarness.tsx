@@ -23,6 +23,7 @@ import { act } from 'react';
 import type { ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
+import { vi } from 'vitest';
 
 export interface BrowserGlobalsOptions {
   /** `matchMedia(query).matches` for the client/hydration pass. Defaults to always `false` (narrow viewport, no reduced-motion preference) when omitted. */
@@ -39,7 +40,15 @@ export interface BrowserGlobalsOptions {
 
 function installClientGlobals(options: BrowserGlobalsOptions): void {
   const matches = options.matches ?? (() => false);
-  window.matchMedia = ((query: string) => ({
+  // `vi.stubGlobal`, not a raw `window.matchMedia =` assignment: this
+  // harness is called from many test files, and several of them have no
+  // `afterEach(() => vi.unstubAllGlobals())` of their own (they never
+  // expected to need one) — a plain assignment would otherwise leak this
+  // fake `matchMedia` into whatever test runs next in the same file. A
+  // stub is restored automatically by `unstubGlobals: true`
+  // (vitest.jsdom.config.ts) before each test, same as every other global
+  // callers stub with `vi.stubGlobal` themselves.
+  vi.stubGlobal('matchMedia', (query: string) => ({
     matches: matches(query),
     media: query,
     onchange: null,
@@ -48,7 +57,7 @@ function installClientGlobals(options: BrowserGlobalsOptions): void {
     addEventListener: () => {},
     removeEventListener: () => {},
     dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
+  }));
 
   window.sessionStorage.clear();
   for (const [key, value] of Object.entries(options.sessionStorage ?? {})) {
