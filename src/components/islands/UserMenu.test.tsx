@@ -493,6 +493,33 @@ describe('UserMenu — dropdown', () => {
   });
 });
 
+// T1 (owner screenshot bug): INGLÉS's `[data-chrome-collapse]` wrapper is
+// permanently `overflow: hidden` — a requirement of its own 0fr/1fr
+// collapse-to-zero-height animation (`global.css`'s chrome-visibility
+// section), not something this component can ask it to relax — so a
+// descendant that visually overflows it (the dropdown's own height) gets
+// clipped. The fix portals the dropdown to `document.body`, outside any such
+// ancestor, regardless of which header variant (INGLÉS or SITE) mounts it.
+describe('UserMenu — dropdown is never clipped by an overflow-hidden chrome ancestor (T1)', () => {
+  it('portals the open dropdown outside any ancestor marked data-chrome-collapse', async () => {
+    stubMe(PASSWORD_PROFILE);
+    const clipper = document.createElement('div');
+    clipper.setAttribute('data-chrome-collapse', '');
+    document.body.appendChild(clipper);
+
+    try {
+      render(<UserMenu lang="es" labels={esLabels} />, { container: clipper });
+      fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+      const dropdown = screen.getByTestId('user-menu-dropdown');
+      expect(clipper.contains(dropdown)).toBe(false);
+      expect(document.body.contains(dropdown)).toBe(true);
+    } finally {
+      clipper.remove();
+    }
+  });
+});
+
 describe('UserMenu — localization', () => {
   it('writes its Spanish in neutral Spanish, with no voseo', () => {
     expect(findVoseo(UI_LABELS.es.auth.userMenu)).toEqual([]);

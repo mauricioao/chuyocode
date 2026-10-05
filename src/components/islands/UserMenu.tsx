@@ -83,7 +83,7 @@
  * that element isn't found (an older layout, or a test rendering this
  * component in isolation) — the top-bar rendering is entirely unaffected.
  */
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SignInIcon } from '@phosphor-icons/react/dist/ssr/SignIn';
 // Sign-up entry hidden for now; users register from the sign-in page. Kept
@@ -97,6 +97,20 @@ import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache, clearMeCache } from '@/lib/meCache';
 import { AUTH_ERROR_PARAM, AUTH_SIGNED_IN, AUTH_SIGNED_OUT } from '@/lib/authRedirect';
 import DeleteAccountDialog from './DeleteAccountDialog';
+
+/**
+ * `useLayoutEffect` only runs (synchronously, pre-paint) in a real browser;
+ * Astro's actual Node SSR has no `window` at all (see `hydrationHarness.tsx`'s
+ * own header — the established convention this codebase already uses for
+ * every browser-only read), so aliasing to `useEffect` there avoids React's
+ * "useLayoutEffect does nothing on the server" warning without changing
+ * behavior: the positioning effect below only ever runs once `open` is true,
+ * which never happens during a server render anyway.
+ */
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/** Gap (px) between the trigger and the portaled dropdown below it — the pixel equivalent of the old `mt-2` Tailwind utility this replaces. */
+const MENU_GAP_PX = 8;
 
 /** The id `Header.astro`'s `#mobile-menu` panel reserves for this island's portaled account entries — see the file header. */
 export const MOBILE_MENU_ACCOUNT_SLOT_ID = 'mobile-menu-account';
@@ -181,6 +195,15 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  // T1 (owner screenshot bug): the dropdown below is portaled to
+  // `document.body` (see the return statement's own comment) so INGLÉS's
+  // `[data-chrome-collapse]` — permanently `overflow: hidden`, a requirement
+  // of its own 0fr/1fr collapse-to-zero-height animation, not something this
+  // component can opt out of — never clips it. A portaled node can no longer
+  // rely on CSS `absolute` positioning against its original DOM ancestor,
+  // hence the measured coordinates below.
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuCoords, setMenuCoords] = useState({ top: 0, right: 0 });
 
   // Applies the cached `/api/me` answer (or clears a stale one right after
   // an auth redirect) the moment this component actually mounts on the
@@ -250,6 +273,30 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
 
   const close = useCallback(() => setOpen(false), []);
 
+  // Measures the trigger's viewport position so the portaled dropdown (see
+  // the return statement) can be positioned with `position: fixed` — right-
+  // aligned under the trigger, the same visual spot the old `absolute
+  // right-0 top-full` rule placed it, now computed in JS because the panel no
+  // longer shares a DOM ancestor with the trigger to position against.
+  // Re-measures on resize/scroll while open: INGLÉS's header is an ordinary
+  // in-flow block (never fixed/sticky — owner spec), so page scroll moves it.
+  const updateMenuCoords = useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMenuCoords({ top: rect.bottom + MENU_GAP_PX, right: Math.max(0, window.innerWidth - rect.right) });
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!open) return undefined;
+    updateMenuCoords();
+    window.addEventListener('resize', updateMenuCoords);
+    window.addEventListener('scroll', updateMenuCoords, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuCoords);
+      window.removeEventListener('scroll', updateMenuCoords, true);
+    };
+  }, [open, updateMenuCoords]);
+
   useEffect(() => {
     if (!open) return undefined;
 
@@ -257,7 +304,10 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
       if (event.key === 'Escape') close();
     }
     function onPointerDown(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const insideTrigger = containerRef.current?.contains(target) ?? false;
+      const insideMenu = menuRef.current?.contains(target) ?? false;
+      if (!insideTrigger && !insideMenu) {
         close();
       }
     }
@@ -430,84 +480,89 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
         )}
       </button>
 
-      {open && (
-        <div
-          id={menuId}
-          role="menu"
-          data-testid="user-menu-dropdown"
-          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-md border border-border bg-background p-3 shadow-lg"
-        >
-          <p className="truncate text-sm font-medium text-foreground">{profile.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
-          <span className="mt-2 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            {profile.plan === 'premium' ? t.planPremium : t.planFree}
-          </span>
-          <a
-            href={`/${lang}/crear`}
-            role="menuitem"
-            data-testid="user-menu-create-activity"
-            className="mt-3 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            data-testid="user-menu-dropdown"
+            style={{ position: 'fixed', top: menuCoords.top, right: menuCoords.right }}
+            className="z-50 w-56 rounded-md border border-border bg-background p-3 shadow-lg"
           >
-            {t.createActivity}
-          </a>
-          <a
-            href={`/${lang}/mis-actividades`}
-            role="menuitem"
-            data-testid="user-menu-my-activities"
-            className="block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
-          >
-            {t.myActivities}
-          </a>
-          {profile.isModerator && (
+            <p className="truncate text-sm font-medium text-foreground">{profile.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+            <span className="mt-2 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {profile.plan === 'premium' ? t.planPremium : t.planFree}
+            </span>
             <a
-              href={`/${lang}/admin/actividades`}
+              href={`/${lang}/crear`}
               role="menuitem"
-              data-testid="user-menu-moderation"
-              className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+              data-testid="user-menu-create-activity"
+              className="mt-3 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
             >
-              <span>{t.moderation}</span>
-              {profile.moderationPendingCount > 0 && (
-                <span
-                  data-testid="user-menu-moderation-badge"
-                  className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground"
-                >
-                  {profile.moderationPendingCount}
-                </span>
-              )}
+              {t.createActivity}
             </a>
-          )}
-          <form
-            method="POST"
-            action="/api/auth/signout"
-            data-astro-reload
-            className="mt-1"
-            onSubmit={() => clearMeCache()}
-          >
-            <button
-              type="submit"
+            <a
+              href={`/${lang}/mis-actividades`}
               role="menuitem"
-              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+              data-testid="user-menu-my-activities"
+              className="block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
             >
-              {t.signOut}
-            </button>
-          </form>
-          <DeleteAccountDialog
-            lang={lang}
-            labels={t}
-            renderTrigger={(onOpen) => (
-              <button
-                type="button"
+              {t.myActivities}
+            </a>
+            {profile.isModerator && (
+              <a
+                href={`/${lang}/admin/actividades`}
                 role="menuitem"
-                data-testid="user-menu-delete-account"
-                onClick={onOpen}
-                className="mt-1 w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
+                data-testid="user-menu-moderation"
+                className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
               >
-                {t.deleteAccount}
-              </button>
+                <span>{t.moderation}</span>
+                {profile.moderationPendingCount > 0 && (
+                  <span
+                    data-testid="user-menu-moderation-badge"
+                    className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground"
+                  >
+                    {profile.moderationPendingCount}
+                  </span>
+                )}
+              </a>
             )}
-          />
-        </div>
-      )}
+            <form
+              method="POST"
+              action="/api/auth/signout"
+              data-astro-reload
+              className="mt-1"
+              onSubmit={() => clearMeCache()}
+            >
+              <button
+                type="submit"
+                role="menuitem"
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+              >
+                {t.signOut}
+              </button>
+            </form>
+            <DeleteAccountDialog
+              lang={lang}
+              labels={t}
+              renderTrigger={(onOpen) => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="user-menu-delete-account"
+                  onClick={onOpen}
+                  className="mt-1 w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
+                >
+                  {t.deleteAccount}
+                </button>
+              )}
+            />
+          </div>,
+          document.body,
+        )}
       {mobilePortal}
     </div>
   );
