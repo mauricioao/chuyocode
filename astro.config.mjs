@@ -1,8 +1,19 @@
 import { defineConfig } from 'astro/config';
 import netlify from '@astrojs/netlify';
 import react from '@astrojs/react';
+import sentry from '@sentry/astro';
 import tailwindcss from '@tailwindcss/vite';
 import { serverOnlyModules } from './src/lib/build/serverOnlyModules.ts';
+
+// INERT until the owner sets a DSN (same pattern as Turnstile/Paddle in
+// this repo — see src/lib/turnstile.ts / src/lib/env.ts's own headers).
+// `PUBLIC_SENTRY_DSN` is a public, build-time var: Astro loads `.env` into
+// `process.env` before this file runs, same as Netlify's build environment.
+// Unset here means the `sentryAstro()` integration below is never added to
+// `integrations` at all — not just configured to no-op — so neither its
+// client runtime (sentry.client.config.ts) nor its server runtime
+// (sentry.server.config.ts) is ever bundled into either build graph.
+const sentryDsn = process.env.PUBLIC_SENTRY_DSN?.trim();
 
 // ChuyoCode runs in SSR mode: every gated page verifies the access cookie per
 // request against Supabase, so static output is not an option (design
@@ -38,6 +49,18 @@ export default defineConfig({
   integrations: [
     // React powers the islands only (AdModal).
     react(),
+    // Runtime options (dsn, tracesSampleRate, …) live in
+    // sentry.client.config.ts / sentry.server.config.ts instead (the only
+    // place they can go as of @sentry/astro v11 — passing them here is
+    // silently ignored). `org`/`project`/`authToken` stay unset: that is
+    // what would turn on source-map upload at build time, which this task
+    // deliberately does not wire up. `telemetry: false` because the
+    // underlying sentry-vite-plugin sends build-time usage telemetry to
+    // Sentry by default — observed directly in `pnpm build`'s own output
+    // ("[sentry-vite-plugin] Info: Sending telemetry...") — independently
+    // of authToken/source maps; nothing about this integration should talk
+    // to Sentry at build time while it is otherwise this minimal.
+    ...(sentryDsn ? [sentry({ telemetry: false })] : []),
   ],
   // Locale routing (spec 5). `prefixDefaultLocale: true` means the default
   // locale (es) is always URL-prefixed (`/es/…`), never served unprefixed.

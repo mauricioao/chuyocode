@@ -48,7 +48,12 @@ const REPORT_ONLY_CSP = [
   // Supabase REST/Auth/Storage calls (fetch/XHR from the browser client).
   // No `wss://` — grepped: nothing in this codebase uses Supabase Realtime
   // (`.channel(`) today, so there is nothing to allow a websocket for yet.
-  "connect-src 'self' https://*.supabase.co",
+  // Sentry's ingest endpoint (error reporting, `sentry.client.config.ts`):
+  // allowed unconditionally, same as every other directive here — it is
+  // simply unused while PUBLIC_SENTRY_DSN is unset. Both known SaaS ingest
+  // host shapes are covered: the plain `o<id>.ingest.sentry.io` and the
+  // regionalized `o<id>.ingest.<region>.sentry.io` (today: us, de).
+  "connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
   // Exercise audio playback streams from Sanity assets and Supabase storage.
   "media-src 'self' https://cdn.sanity.io https://*.supabase.co",
   // Course/news embeds (YouTube nocookie, Vimeo) and Turnstile's widget iframe.

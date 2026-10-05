@@ -54,6 +54,13 @@ describe('applySecurityHeaders', () => {
       expect(csp).not.toContain('wss://');
     });
 
+    it("allows Sentry's ingest endpoint (both SaaS host shapes) in connect-src", () => {
+      const csp = reportOnly();
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/\*\.ingest\.sentry\.io/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/\*\.ingest\.us\.sentry\.io/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/\*\.ingest\.de\.sentry\.io/);
+    });
+
     it('allows Supabase Storage, the Sanity image CDN, and Google account avatars in img-src', () => {
       const csp = reportOnly();
       // Scoped to the img-src directive specifically (not just "appears
