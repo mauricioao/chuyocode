@@ -16,7 +16,7 @@
  * so those properties are verified by hand — a CSS-class assertion would only
  * pin the implementation, never the appearance.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
 // env.ts reads import.meta.env — stub it before any module that calls loadEnv().
@@ -264,6 +264,19 @@ describe('ingles/index.astro (hub)', () => {
   });
 
   describe('"Para ti hoy" strip', () => {
+    // The page picks with the real clock (`new Date()`), and the weekly slot
+    // only counts activities published in the last 7 days: pin the clock so
+    // the fixtures' fixed `publishedAt` dates never age out of that window
+    // (unpinned, this suite expired on its own on 2026-10-05 UTC).
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-01T12:00:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('is absent entirely when there are no live community activities', async () => {
       getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
 
