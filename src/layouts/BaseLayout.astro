@@ -38,6 +38,28 @@
  *    complete no-op: every page, including one that passes it, keeps
  *    ordinary scrolling on a narrow screen. The activity editor
  *    (`src/pages/[lang]/crear/[id].astro`) is the first user of this.
+ *  - "Smart" header/footer visibility (chrome-visibility feature):
+ *    `src/lib/chromeVisibility.ts` owns every rule (scroll-direction header,
+ *    reveal-at-the-bottom footer, the stricter "immersive" behavior on
+ *    Inglés pages); this file only provides the two things that MUST run
+ *    server-side / before first paint:
+ *      1. A tiny classic (non-module) `is:inline` script, early in `<head>`,
+ *         that reads the `data-theme` attribute already on `<html>` (see
+ *         `isIngles` below) and tags `<html>` with the SAME attributes
+ *         `initChromeVisibility` keeps in sync afterwards — so an Inglés
+ *         page's header/footer start hidden with NO flash of them being
+ *         visible first. It is deliberately NOT the real module (which
+ *         would defer past first paint); the few lines it duplicates are
+ *         kept intentionally tiny so there is almost nothing to drift.
+ *      2. `data-full-height` on `<html>`, mirroring the `fullHeight` prop:
+ *         `global.css` uses it to keep TODAY's behavior (chrome always
+ *         visible) at `lg:` and up on a `fullHeight` page, where the page
+ *         itself never scrolls and the header/footer already bound
+ *         `<main>` — see that file's own comment (owner decision).
+ *    `initChromeVisibility()` (the body script element below) does the rest:
+ *    every page gets `data-chrome-js` once it runs, which is what gates the
+ *    new CSS on — no JS / JS failed means the header/footer stay fully
+ *    visible exactly as before this feature.
  */
 import { ClientRouter, fade } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
@@ -151,10 +173,29 @@ const faviconSvg =
 <html
   lang={lang}
   data-theme={isIngles ? 'ingles' : undefined}
+  data-full-height={fullHeight ? '' : undefined}
   class:list={['scroll-smooth', !isIngles && 'dark']}
 >
   <head>
     <meta charset="utf-8" />
+    {/* Chrome-visibility no-flash gate (see this file's own header): a
+        classic, synchronous script element — NOT a module, which would
+        defer past first paint — so an Inglés page's header/footer are
+        already tagged hidden before the browser paints anything. Mirrors
+        `createInitialChromeState`/`initChromeVisibility` in
+        `src/lib/chromeVisibility.ts`, which re-derive and keep these same
+        attributes in sync from here on (including across View Transitions
+        navigations) — this element's only job is the very first paint. */}
+    <script is:inline>
+      (function () {
+        var html = document.documentElement;
+        var ingles = html.getAttribute('data-theme') === 'ingles';
+        html.setAttribute('data-chrome-js', '');
+        html.setAttribute('data-chrome-mode', ingles ? 'ingles' : 'site');
+        html.setAttribute('data-header-visible', ingles ? 'false' : 'true');
+        html.setAttribute('data-footer-visible', 'false');
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
 
@@ -290,6 +331,7 @@ const faviconSvg =
     <script>
       import { initReveals } from '@lib/reveal';
       import { initBackButtons } from '@lib/backNavigation';
+      import { initChromeVisibility } from '@lib/chromeVisibility';
 
       const run = () => initReveals();
 
@@ -306,6 +348,12 @@ const faviconSvg =
       // the whole session — `document` survives View Transitions swaps, so
       // (unlike reveals) this needs no re-init on `astro:after-swap`.
       initBackButtons();
+
+      // Smart header/footer visibility (chrome-visibility feature): binds
+      // its own listeners exactly once and re-picks the mode on every page
+      // entry (including View Transitions) internally — see that module's
+      // own header.
+      initChromeVisibility();
     </script>
   </body>
 </html>

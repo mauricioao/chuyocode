@@ -43,6 +43,15 @@
  * on it implicitly. There is no active-nav-link state to update on
  * navigation (no `aria-current` styling exists yet) — nothing else here
  * needs an `astro:page-load` listener today.
+ *
+ * SMART VISIBILITY (chrome-visibility feature): `data-chrome-header` is the
+ * hook `src/lib/chromeVisibility.ts` and `global.css` use to find and
+ * animate THIS element specifically — not the `[data-theme="brand"]`
+ * `contents` wrapper `BaseLayout.astro` renders around it, which (being
+ * `display: contents`) cannot itself be positioned, transformed or faded.
+ * `aria-expanded` on the hamburger button below and on `UserMenu`'s own
+ * trigger is also how that script detects "a menu inside the header is
+ * open" (one MutationObserver, no extra wiring needed here).
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
 import UserMenu from '@components/islands/UserMenu';
@@ -74,6 +83,7 @@ const navLinks = [
 ---
 
 <header
+  data-chrome-header
   class="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur transition-theme duration-theme"
   transition:persist
   transition:animate="none"

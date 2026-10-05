@@ -24,6 +24,14 @@
  * Cleaner transitions (navigation-without-flicker PR): `transition:animate
  * ="none"` excludes the footer from the page's fade animation — only
  * `<main>` (`BaseLayout.astro`) cross-fades on navigation.
+ *
+ * SMART VISIBILITY (chrome-visibility feature): `data-chrome-footer` is the
+ * hook `src/lib/chromeVisibility.ts` and `global.css` use to fade this
+ * element in/out — see `Header.astro`'s own matching note for why it has to
+ * sit on the real `<footer>` rather than the `display:contents` wrapper
+ * around it. Unlike the header, this element has no `transition:persist`
+ * (a fresh copy renders on every navigation), so the wiring script never
+ * caches a reference to it — it is re-queried whenever needed instead.
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
 
@@ -50,6 +58,7 @@ const secondaryLinks = [
 ---
 
 <footer
+  data-chrome-footer
   class="border-t border-border bg-card transition-theme duration-theme"
   transition:animate="none"
 >
