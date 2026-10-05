@@ -96,11 +96,14 @@ export function defaultHreflangAlternate(
  *  - `mis-actividades` — the author's own workspace (same posture as `crear`).
  *  - `admin`           — moderator-only.
  *  - `auth`            — sign-in/sign-up/reset flows.
+ *  - `perfil`          — the signed-in visitor's own account settings (T3);
+ *    same posture as `mis-actividades` — per-visitor content with nothing
+ *    for a search engine to index.
  *
  * `ingles` is handled separately in {@link isNoindexPath} because PART of it
  * (guest play) is public.
  */
-const NOINDEX_SECTIONS = ['cursos', 'crear', 'mis-actividades', 'admin', 'auth'] as const;
+const NOINDEX_SECTIONS = ['cursos', 'crear', 'mis-actividades', 'admin', 'auth', 'perfil'] as const;
 
 /**
  * Shape-only check for the two guest-play activity routes — a LOCAL copy of

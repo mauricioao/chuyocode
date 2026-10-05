@@ -34,6 +34,7 @@ const { hasRoleMock, pendingCountMock } = vi.hoisted(() => ({
 vi.mock('./roles', () => ({ hasRole: hasRoleMock }));
 vi.mock('./activities/moderation', () => ({ getPendingModerationCount: pendingCountMock }));
 
+import { DISPLAY_NAME_METADATA_KEY } from './displayName';
 import { toProfile } from './profile';
 
 /**
@@ -58,6 +59,16 @@ beforeEach(() => {
 });
 
 describe('toProfile — name', () => {
+  // T3 (Perfil page): the visitor's OWN choice always wins, even over
+  // Google's own metadata — a later Google re-sign-in must never silently
+  // revert a name the visitor explicitly set.
+  it('prefers the visitor\'s own display_name over Google metadata', async () => {
+    const profile = await toProfile(
+      user({ user_metadata: { [DISPLAY_NAME_METADATA_KEY]: 'Mi Nombre', full_name: 'Juan Perez' } }),
+    );
+    expect(profile.name).toBe('Mi Nombre');
+  });
+
   it('prefers user_metadata.full_name (Google-shaped)', async () => {
     const profile = await toProfile(
       user({ user_metadata: { full_name: 'Juan Perez', picture: '' } }),

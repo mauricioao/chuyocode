@@ -96,7 +96,6 @@ import { cn } from '@/lib/utils';
 import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache, clearMeCache } from '@/lib/meCache';
 import { AUTH_ERROR_PARAM, AUTH_SIGNED_IN, AUTH_SIGNED_OUT } from '@/lib/authRedirect';
-import DeleteAccountDialog from './DeleteAccountDialog';
 
 /**
  * `useLayoutEffect` only runs (synchronously, pre-paint) in a real browser;
@@ -376,20 +375,16 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
             {t.signOut}
           </button>
         </form>
-        <DeleteAccountDialog
-          lang={lang}
-          labels={t}
-          renderTrigger={(onOpen) => (
-            <button
-              type="button"
-              data-testid="mobile-account-delete-account"
-              onClick={onOpen}
-              className="w-full py-1 text-left text-sm font-medium text-destructive"
-            >
-              {t.deleteAccount}
-            </button>
-          )}
-        />
+        {/* T3: links to the signed-in visitor's own account settings
+            (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which moved to
+            that page's own "Zona de peligro" section. */}
+        <a
+          href={`/${lang}/perfil`}
+          data-testid="mobile-account-profile"
+          className="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
+        >
+          {t.profile}
+        </a>
       </>
     );
   }
@@ -545,21 +540,17 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
                 {t.signOut}
               </button>
             </form>
-            <DeleteAccountDialog
-              lang={lang}
-              labels={t}
-              renderTrigger={(onOpen) => (
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-testid="user-menu-delete-account"
-                  onClick={onOpen}
-                  className="mt-1 w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
-                >
-                  {t.deleteAccount}
-                </button>
-              )}
-            />
+            {/* T3: links to the signed-in visitor's own account settings
+                (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which
+                moved to that page's own "Zona de peligro" section. */}
+            <a
+              href={`/${lang}/perfil`}
+              role="menuitem"
+              data-testid="user-menu-profile"
+              className="mt-1 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+            >
+              {t.profile}
+            </a>
           </div>,
           document.body,
         )}

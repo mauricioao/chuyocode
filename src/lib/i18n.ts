@@ -329,6 +329,11 @@ export const UI_LABELS = {
         // "Moderation"), shown only for `profile.isModerator`. Same
         // placement/chrome rule as `createActivity`/`myActivities`.
         moderation: 'Moderación',
+        // Links to the signed-in visitor's own account settings
+        // (`/[lang]/perfil`, T3) — replaces the "Eliminar mi cuenta" entry
+        // that used to live directly in this menu; see that page's own
+        // "Zona de peligro" section for where it moved to.
+        profile: 'Perfil',
         signOut: 'Cerrar sesión',
         // Account deletion (owner decision, 2026-10-04). Flat keys, not a
         // nested object — `UserMenu`'s own `labels` prop is typed
@@ -347,6 +352,45 @@ export const UI_LABELS = {
         deleteAccountSuccessToast: 'Tu cuenta se eliminó correctamente.',
         deleteAccountErrorGeneric: 'No se pudo eliminar tu cuenta. Inténtalo de nuevo.',
       },
+    },
+    // Perfil page (`/[lang]/perfil`, T3, owner decision 2026-10-05): the
+    // signed-in visitor's own account settings — display name, password
+    // (email/password accounts only), plan, and "Eliminar mi cuenta" (moved
+    // here from the user menu — reuses `auth.userMenu`'s own
+    // delete-account copy, not duplicated here).
+    profile: {
+      pageTitle: 'Perfil',
+      pageDescription: 'Gestiona tu nombre, tu contraseña y tu cuenta.',
+      nameSectionTitle: 'Nombre',
+      nameLabel: 'Nombre para mostrar',
+      nameSaveButton: 'Guardar',
+      nameSaving: 'Guardando…',
+      nameSuccessToast: 'Tu nombre se actualizó.',
+      nameErrorGeneric: 'No se pudo actualizar tu nombre. Inténtalo de nuevo.',
+      nameErrorInvalid: 'Escribe un nombre válido (1 a 60 caracteres, sin caracteres de control).',
+      emailSectionTitle: 'Correo electrónico',
+      emailReadOnlyNote:
+        'Para cambiar tu correo electrónico necesitamos verificarlo primero — todavía no está disponible.',
+      passwordSectionTitle: 'Contraseña',
+      currentPasswordLabel: 'Contraseña actual',
+      newPasswordLabel: 'Contraseña nueva',
+      confirmNewPasswordLabel: 'Confirmar contraseña nueva',
+      passwordSaveButton: 'Cambiar contraseña',
+      passwordSaving: 'Cambiando…',
+      passwordSuccessToast: 'Tu contraseña se actualizó.',
+      passwordErrorGeneric: 'No se pudo cambiar tu contraseña. Inténtalo de nuevo.',
+      passwordErrorInvalidCurrent: 'La contraseña actual no es correcta.',
+      passwordErrorMismatch: 'Las contraseñas nuevas no coinciden.',
+      // Mirrors `MIN_PASSWORD_LENGTH` (`src/lib/authValidation.ts`) — a
+      // plain string, not a template, same simplicity as every other label
+      // in this file; keep both in sync if that constant ever changes.
+      passwordErrorTooShort: 'Usa al menos 8 caracteres.',
+      passwordErrorReauthRequired: 'Por tu seguridad, vuelve a iniciar sesión y prueba de nuevo.',
+      passwordErrorSamePassword: 'La contraseña nueva debe ser diferente de la actual.',
+      passwordGoogleOnlyNote: 'Iniciaste sesión con Google, así que no tienes una contraseña que cambiar aquí.',
+      planSectionTitle: 'Plan',
+      planUpgradeLink: 'Conoce Premium',
+      dangerZoneTitle: 'Zona de peligro',
     },
     // Authoring pages (`/[lang]/crear/*`, slice 15). UNLINKED routes — no nav
     // entry anywhere (slice 18). Static page chrome only; the interactive
@@ -1537,6 +1581,7 @@ export const UI_LABELS = {
         createActivity: 'Create activity',
         myActivities: 'My activities',
         moderation: 'Moderation',
+        profile: 'Profile',
         signOut: 'Sign out',
         deleteAccount: 'Delete my account',
         deleteAccountDialogTitle: 'Delete your account',
@@ -1549,6 +1594,36 @@ export const UI_LABELS = {
         deleteAccountSuccessToast: 'Your account was deleted.',
         deleteAccountErrorGeneric: 'Could not delete your account. Try again.',
       },
+    },
+    profile: {
+      pageTitle: 'Profile',
+      pageDescription: 'Manage your name, password and account.',
+      nameSectionTitle: 'Name',
+      nameLabel: 'Display name',
+      nameSaveButton: 'Save',
+      nameSaving: 'Saving…',
+      nameSuccessToast: 'Your name was updated.',
+      nameErrorGeneric: 'Could not update your name. Try again.',
+      nameErrorInvalid: 'Enter a valid name (1 to 60 characters, no control characters).',
+      emailSectionTitle: 'Email',
+      emailReadOnlyNote: 'Changing your email needs a verification step first — not available yet.',
+      passwordSectionTitle: 'Password',
+      currentPasswordLabel: 'Current password',
+      newPasswordLabel: 'New password',
+      confirmNewPasswordLabel: 'Confirm new password',
+      passwordSaveButton: 'Change password',
+      passwordSaving: 'Changing…',
+      passwordSuccessToast: 'Your password was updated.',
+      passwordErrorGeneric: 'Could not change your password. Try again.',
+      passwordErrorInvalidCurrent: 'Your current password is incorrect.',
+      passwordErrorMismatch: 'The new passwords do not match.',
+      passwordErrorTooShort: 'Use at least 8 characters.',
+      passwordErrorReauthRequired: 'For your security, sign in again and retry.',
+      passwordErrorSamePassword: 'Your new password must be different from the current one.',
+      passwordGoogleOnlyNote: 'You signed in with Google, so there is no password to change here.',
+      planSectionTitle: 'Plan',
+      planUpgradeLink: 'Discover Premium',
+      dangerZoneTitle: 'Danger zone',
     },
     authoring: {
       newTitle: 'Create exercise',
