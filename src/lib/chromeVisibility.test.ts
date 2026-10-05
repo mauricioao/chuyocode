@@ -4,6 +4,7 @@ import {
   createInitialChromeState,
   reduceChromeVisibility,
   UP_SHOW_THRESHOLD_PX,
+  PULL_SHOW_THRESHOLD_PX,
   FOOTER_DWELL_MS,
   type ChromeState,
   type ChromeEvent,
@@ -17,6 +18,7 @@ interface ScrollOverrides {
   viewportHeight?: number;
   docHeight?: number;
   headerHeight?: number;
+  headerBottom?: number;
   footerTop?: number;
   now?: number;
 }
@@ -29,6 +31,10 @@ function scroll(y: number, overrides: ScrollOverrides = {}): ChromeEvent {
     viewportHeight: overrides.viewportHeight ?? VIEWPORT,
     docHeight: overrides.docHeight ?? DOC_HEIGHT,
     headerHeight: overrides.headerHeight ?? HEADER_HEIGHT,
+    // The header's live `getBoundingClientRect().bottom` — realistically
+    // `headerHeight - y` (its document top is always 0), overridable so
+    // INGLÉS's "fully scrolled out of view" tests can set it directly.
+    headerBottom: overrides.headerBottom ?? (overrides.headerHeight ?? HEADER_HEIGHT) - y,
     // Far below the viewport by default (footer nowhere near view).
     footerTop: overrides.footerTop ?? (overrides.docHeight ?? DOC_HEIGHT) - y,
     now: overrides.now ?? 0,
@@ -101,31 +107,71 @@ describe('SITE mode — header', () => {
   });
 });
 
-describe('INGLÉS mode — header', () => {
+describe('INGLÉS mode — header (owner spec 2026-10-05: blocks, pull-to-reveal)', () => {
   it('starts hidden even AT the top (no "always visible at top" rule)', () => {
     const state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
     expect(state.headerVisible).toBe(false);
   });
 
-  it('scrolling down hides it (after it was shown some other way)', () => {
-    let state = reduceAll(createInitialChromeState('ingles'), [scroll(0)]);
-    state = reduceChromeVisibility(state, { type: 'focusIn', region: 'header' });
-    expect(state.headerVisible).toBe(true);
-    state = reduceChromeVisibility(state, scroll(300));
+  it('a plain scroll up through the page (never reaching an at-top pull) never reveals it — removed (owner spec)', () => {
+    // Scrolling from the middle back up to the very top is a "casual scroll
+    // that merely reaches the top" (owner spec) — SITE's old generic
+    // cumulative-upward-scroll rule no longer applies here at all.
+    let state = reduceAll(createInitialChromeState('ingles'), [scroll(500)]);
+    state = reduceChromeVisibility(state, scroll(500 - 8));
+    expect(state.headerVisible).toBe(false);
+    state = reduceChromeVisibility(state, scroll(0));
     expect(state.headerVisible).toBe(false);
   });
 
-  it('a cumulative upward scroll of >= 8px shows it, with no top-pin special case', () => {
-    let state = reduceAll(createInitialChromeState('ingles'), [scroll(500)]);
-    state = reduceChromeVisibility(state, scroll(500 - 8));
+  it('collapses once it has fully scrolled out of view (after it was shown some other way)', () => {
+    let state = reduceAll(createInitialChromeState('ingles'), [scroll(0)]);
+    state = reduceChromeVisibility(state, { type: 'focusIn', region: 'header' });
     expect(state.headerVisible).toBe(true);
 
-    // Scrolling on up to the very top keeps it visible (still an upward
-    // delta) but does not PIN it — one pixel back down hides it immediately,
-    // unlike SITE mode's top zone.
-    state = reduceChromeVisibility(state, scroll(0));
+    // Still (at least partly) within the viewport — not out of view yet —
+    // stays visible even though this is a downward move.
+    state = reduceChromeVisibility(state, scroll(40, { headerBottom: HEADER_HEIGHT - 40 }));
     expect(state.headerVisible).toBe(true);
-    state = reduceChromeVisibility(state, scroll(5));
+
+    // Now fully scrolled past it (`headerBottom <= 0`) — collapses. The DOM
+    // wiring compensates the scroll position for this exact transition so it
+    // never visibly jumps (see `measureAndDispatchScroll`'s own comment) —
+    // not observable from the pure reducer, which only owns the RULE.
+    state = reduceChromeVisibility(state, scroll(300, { headerBottom: -10 }));
+    expect(state.headerVisible).toBe(false);
+  });
+});
+
+describe('INGLÉS mode — header reveal needs an accumulated pull past the top (owner spec 2026-10-05)', () => {
+  it('a single small wheel attempt at the top does not reveal it (below the threshold)', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -30 });
+    expect(state.headerVisible).toBe(false);
+  });
+
+  it(`reveals once the accumulated pull reaches ${PULL_SHOW_THRESHOLD_PX}px, even across several small attempts`, () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -(PULL_SHOW_THRESHOLD_PX - 10) });
+    expect(state.headerVisible).toBe(false);
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -10 });
+    expect(state.headerVisible).toBe(true);
+  });
+
+  it('a downward attempt at the top cancels whatever partial pull was in progress', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -(PULL_SHOW_THRESHOLD_PX - 5) });
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: 10 }); // a push back down
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -5 }); // only 5px since the reset
+    expect(state.headerVisible).toBe(false);
+  });
+
+  it('leaving the top resets the partial pull (a casual scroll away and back does not carry it over)', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -(PULL_SHOW_THRESHOLD_PX - 10) });
+    state = reduceChromeVisibility(state, scroll(50)); // scrolls away from the top
+    state = reduceChromeVisibility(state, scroll(0)); // and back to it
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -10 }); // only the post-reset 10px
     expect(state.headerVisible).toBe(false);
   });
 });
@@ -214,12 +260,43 @@ describe('footer — reveal at the bottom (both modes share this rule)', () => {
   });
 });
 
+describe('footer — the ~1s bottom dwell is SITE only now (owner spec 2026-10-05: removed for INGLÉS)', () => {
+  it('never auto-reveals on dwell alone in INGLÉS mode, however long it waits', () => {
+    let state = reduceChromeVisibility(
+      createInitialChromeState('ingles'),
+      scroll(DOC_HEIGHT - VIEWPORT, { footerTop: VIEWPORT - 10, now: 0 }),
+    );
+    expect(state.footerVisible).toBe(false);
+    state = reduceChromeVisibility(state, { type: 'tick', now: FOOTER_DWELL_MS });
+    expect(state.footerVisible).toBe(false);
+    state = reduceChromeVisibility(state, { type: 'tick', now: FOOTER_DWELL_MS * 10 });
+    expect(state.footerVisible).toBe(false);
+  });
+
+  it('a page too short to scroll still gets the footer via a downward push attempt, just never from dwelling', () => {
+    let state = reduceChromeVisibility(
+      createInitialChromeState('ingles'),
+      scroll(0, { docHeight: 500, footerTop: 300, now: 0 }),
+    );
+    state = reduceChromeVisibility(state, { type: 'tick', now: FOOTER_DWELL_MS });
+    expect(state.footerVisible).toBe(false);
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: 40 });
+    expect(state.footerVisible).toBe(true);
+  });
+});
+
 describe('wheelAttempt — pages that cannot scroll (and the top/bottom edges of any page)', () => {
-  it.each(['site', 'ingles'] as const)('an upward attempt at the top shows the header (%s mode)', (mode) => {
-    let state = reduceChromeVisibility(createInitialChromeState(mode), scroll(0, { docHeight: 400 }));
-    if (mode === 'ingles') expect(state.headerVisible).toBe(false);
+  it('SITE mode: a single upward attempt at the top shows the header immediately', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('site'), scroll(0, { docHeight: 400 }));
     state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -30 });
     expect(state.headerVisible).toBe(true);
+  });
+
+  it('INGLÉS mode: a single upward attempt at the top is not enough on its own (needs the accumulated pull — see its own describe block)', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0, { docHeight: 400 }));
+    expect(state.headerVisible).toBe(false);
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -30 });
+    expect(state.headerVisible).toBe(false);
   });
 
   it('a downward attempt away from the top/bottom does nothing', () => {
@@ -230,16 +307,32 @@ describe('wheelAttempt — pages that cannot scroll (and the top/bottom edges of
   });
 });
 
-describe('topEdgeHover — desktop mouse near the top edge', () => {
-  it('shows the header when at the top', () => {
-    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
-    expect(state.headerVisible).toBe(false);
-    state = reduceChromeVisibility(state, { type: 'topEdgeHover' });
+describe('topEdgeHover — desktop mouse near the top edge (SITE only)', () => {
+  // SITE's own "visible at/near the top" scroll pin (see the SITE header
+  // describe block above) already guarantees `headerVisible` whenever
+  // `atTop` is true, so there is no reachable SITE state where this event
+  // itself is the thing that flips it — it is a no-op by construction, kept
+  // here (rather than asserted as a no-op fallacy) as an explicit regression
+  // guard: it must never THROW or otherwise misbehave when dispatched at
+  // the top in SITE mode, and must still do nothing away from the top.
+  it('is a no-op at the top in SITE mode (the top pin already covers it — see "SITE mode — header")', () => {
+    const state = reduceChromeVisibility(createInitialChromeState('site'), { type: 'topEdgeHover' });
     expect(state.headerVisible).toBe(true);
   });
 
   it('does nothing away from the top', () => {
-    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(400));
+    // Two scroll events: the first only calibrates (see "scroll — the first
+    // reading after pageEnter" describe block below), the second actually
+    // registers the downward move that hides it.
+    let state = reduceAll(createInitialChromeState('site'), [scroll(0), scroll(400)]);
+    expect(state.headerVisible).toBe(false);
+    state = reduceChromeVisibility(state, { type: 'topEdgeHover' });
+    expect(state.headerVisible).toBe(false);
+  });
+
+  it('removed for INGLÉS (owner spec 2026-10-05): only an at-top wheel/touch pull reveals it there', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
+    expect(state.headerVisible).toBe(false);
     state = reduceChromeVisibility(state, { type: 'topEdgeHover' });
     expect(state.headerVisible).toBe(false);
   });
