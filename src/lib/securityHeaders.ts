@@ -61,7 +61,11 @@ const REPORT_ONLY_CSP = [
   // Supabase's own /auth/v1/authorize, which 303s on to accounts.google.com.
   "form-action 'self' https://*.supabase.co https://accounts.google.com",
   "frame-ancestors 'self'",
-  'upgrade-insecure-requests',
+  // NOT `upgrade-insecure-requests` here: CSP3 §6.2 (and MDN) say browsers
+  // ignore that directive entirely in a Report-Only policy and log a
+  // console error about it on every single page load. It belongs in the
+  // ENFORCED policy (`applySecurityHeaders`'s `content-security-policy`
+  // header, below) once this one is enforced instead of report-only.
   // Both travel together, pointed at the SAME endpoint: `report-to` is the
   // modern Reporting API directive (Chromium only), `report-uri` is the
   // legacy one every browser still honors (Firefox/Safari never shipped

@@ -101,7 +101,11 @@ describe('applySecurityHeaders', () => {
       expect(csp).toContain("object-src 'none'");
       expect(csp).toContain("base-uri 'self'");
       expect(csp).toContain("frame-ancestors 'self'");
-      expect(csp).toContain('upgrade-insecure-requests');
+      // NOT here: browsers ignore `upgrade-insecure-requests` in a
+      // Report-Only policy and log a console error about it on every page.
+      // It belongs in the enforced `content-security-policy` header once
+      // this policy is enforced instead of report-only (see securityHeaders.ts).
+      expect(csp).not.toContain('upgrade-insecure-requests');
       expect(csp).toContain("worker-src 'self'");
     });
 
