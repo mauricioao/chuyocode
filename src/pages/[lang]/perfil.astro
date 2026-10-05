@@ -1,0 +1,150 @@
+---
+/**
+ * Perfil — `/[lang]/perfil` (SSR, T3, owner decision 2026-10-05): the
+ * signed-in visitor's own account settings. Gated the same way
+ * Inglés/Cursos are (`@lib/access`'s `GATED_SECTIONS` now includes
+ * `perfil`) — middleware redirects an anonymous visitor to sign-in before
+ * this page ever runs — PLUS the same defensive per-page redirect
+ * `mis-actividades/index.astro` uses, so this page is independently correct
+ * even outside the real middleware pipeline (and testable as such).
+ * `noindex` via `@lib/seo`'s `NOINDEX_SECTIONS` (same list addition).
+ *
+ * Linked from `UserMenu`'s own dropdown/mobile entries as "Perfil", in place
+ * of "Eliminar mi cuenta" (owner: that entry "hurts the eye" sitting
+ * directly in the menu) — that flow moved to this page's own bottom
+ * "Zona de peligro" section (`ProfileDangerZone`), reusing
+ * `DeleteAccountDialog` and `POST /api/cuenta/eliminar` completely
+ * unchanged.
+ *
+ * Same visual language as the Inglés pages: `theme="ingles"` (light,
+ * bordered blocks), semantic tokens only (`border-border`, `bg-card`,
+ * `text-foreground`/`text-muted-foreground`, `rounded-card`,
+ * `shadow-elevation-1`) — no raw colors.
+ *
+ * Sections, each its own bordered block:
+ *  - Nombre     — `ProfileNameForm` (editable; `POST /api/cuenta/nombre`).
+ *  - Correo     — read-only (changing it needs a verification flow this
+ *    pass does not build).
+ *  - Contraseña — `ProfilePasswordForm` for an account with an email/
+ *    password identity; a short note instead for a Google-only one (the
+ *    server independently re-checks the same gate, never trusting this
+ *    page's own choice of which island to mount).
+ *  - Plan       — Free/Premium, read-only, linking to `/[lang]/premium`.
+ *  - Zona de peligro — `ProfileDangerZone` (delete account), calm
+ *    outline-only styling until the dialog actually opens.
+ */
+import BaseLayout from '@layouts/BaseLayout.astro';
+import PageTitle from '@components/ui/PageTitle.astro';
+import ProfileNameForm from '@components/islands/ProfileNameForm';
+import ProfilePasswordForm from '@components/islands/ProfilePasswordForm';
+import ProfileDangerZone from '@components/islands/ProfileDangerZone';
+import { markPrivate } from '@lib/httpCache';
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { toProfile } from '@lib/profile';
+
+const routeLang = Astro.params.lang;
+const lang: Lang | undefined =
+  Astro.locals.lang ?? (isValidLang(routeLang) ? routeLang : undefined);
+
+if (!lang) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+// This response varies by `Astro.locals.user` and must never reach a shared
+// cache — set BEFORE the gate, same as `mis-actividades/index.astro`'s own
+// header's "defense in depth" note (middleware ALSO marks every gated
+// section private; this covers the page independently too).
+markPrivate(Astro.response.headers);
+
+const user = Astro.locals.user;
+if (!user) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: `/${lang}/auth/entrar?next=${encodeURIComponent(Astro.url.pathname)}`,
+      'cache-control': 'private, no-store',
+    },
+  });
+}
+
+const t = UI_LABELS[lang].profile;
+const userMenuLabels = UI_LABELS[lang].auth.userMenu;
+
+const profile = await toProfile(user);
+// Google-only accounts carry exactly one identity, `provider: 'google'` —
+// never an `email` one — so there is no password to change here. The
+// server (`/api/cuenta/contrasena.ts`) independently re-checks the same
+// thing; this only decides which island/note this page mounts.
+const hasPasswordIdentity = (user.identities ?? []).some((identity) => identity.provider === 'email');
+---
+
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
+  <section class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+
+    <section
+      data-testid="profile-name-section"
+      class="rounded-card border border-border bg-card p-4 shadow-elevation-1 sm:p-6"
+    >
+      <h2 class="text-lg font-semibold text-foreground">{t.nameSectionTitle}</h2>
+      <div class="mt-4">
+        <ProfileNameForm client:load lang={lang} initialName={profile.name} />
+      </div>
+    </section>
+
+    <section
+      data-testid="profile-email-section"
+      class="rounded-card border border-border bg-card p-4 shadow-elevation-1 sm:p-6"
+    >
+      <h2 class="text-lg font-semibold text-foreground">{t.emailSectionTitle}</h2>
+      <p class="mt-2 text-sm text-foreground" data-testid="profile-email-value">{profile.email}</p>
+      <p class="mt-1 text-xs text-muted-foreground">{t.emailReadOnlyNote}</p>
+    </section>
+
+    <section
+      data-testid="profile-password-section"
+      class="rounded-card border border-border bg-card p-4 shadow-elevation-1 sm:p-6"
+    >
+      <h2 class="text-lg font-semibold text-foreground">{t.passwordSectionTitle}</h2>
+      <div class="mt-4">
+        {
+          hasPasswordIdentity ? (
+            <ProfilePasswordForm client:load lang={lang} />
+          ) : (
+            <p data-testid="profile-password-google-only" class="text-sm text-muted-foreground">
+              {t.passwordGoogleOnlyNote}
+            </p>
+          )
+        }
+      </div>
+    </section>
+
+    <section
+      data-testid="profile-plan-section"
+      class="rounded-card border border-border bg-card p-4 shadow-elevation-1 sm:p-6"
+    >
+      <h2 class="text-lg font-semibold text-foreground">{t.planSectionTitle}</h2>
+      <div class="mt-3 flex items-center justify-between gap-3">
+        <span
+          data-testid="profile-plan-badge"
+          class="inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+        >
+          {profile.plan === 'premium' ? userMenuLabels.planPremium : userMenuLabels.planFree}
+        </span>
+        <a href={`/${lang}/premium`} data-testid="profile-plan-link" class="text-sm font-medium text-accent-ink hover:underline">
+          {t.planUpgradeLink}
+        </a>
+      </div>
+    </section>
+
+    <section
+      data-testid="profile-danger-zone"
+      class="rounded-card border border-destructive/30 bg-card p-4 shadow-elevation-1 sm:p-6"
+    >
+      <h2 class="text-lg font-semibold text-foreground">{t.dangerZoneTitle}</h2>
+      <div class="mt-4">
+        <ProfileDangerZone client:load lang={lang} />
+      </div>
+    </section>
+  </section>
+</BaseLayout>

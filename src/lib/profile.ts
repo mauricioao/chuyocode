@@ -15,6 +15,7 @@ import type { User } from '@supabase/supabase-js';
 import { getPlan, type Plan } from './access';
 import { hasRole } from './roles';
 import { getPendingModerationCount } from './activities/moderation';
+import { DISPLAY_NAME_METADATA_KEY } from './displayName';
 
 /** The normalized shape every signed-in-aware surface reads. */
 export interface Profile {
@@ -40,12 +41,19 @@ function emailLocalPart(email: string): string {
 }
 
 /**
- * Resolve a display name: Google's `full_name`, then `name` (also Google —
- * some flows populate this one instead), then the email local part for an
- * account with no metadata at all (email + password, magic link).
+ * Resolve a display name: the visitor's OWN choice ({@link DISPLAY_NAME_METADATA_KEY},
+ * Perfil page, T3 — see `./displayName.ts`'s own header for why that key
+ * and its validation live in a separate, zero-import module) first, then
+ * Google's `full_name`, then `name` (also
+ * Google — some flows populate this one instead), then the email local part
+ * for an account with no metadata at all (email + password, magic link).
  */
 function nameFrom(user: User): string {
   const meta = user.user_metadata ?? {};
+  const displayName = meta[DISPLAY_NAME_METADATA_KEY];
+  if (typeof displayName === 'string' && displayName.trim() !== '') {
+    return displayName.trim();
+  }
   const fullName = meta.full_name;
   if (typeof fullName === 'string' && fullName.trim() !== '') {
     return fullName.trim();

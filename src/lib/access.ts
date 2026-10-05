@@ -21,8 +21,17 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from './supabase';
 
-/** Section slugs that require login (and later, a subscription). */
-const GATED_SECTIONS = ['ingles', 'cursos'] as const;
+/**
+ * Section slugs that require login (and later, a subscription).
+ *
+ * `perfil` (T3, owner decision 2026-10-05) is signed-in-only but NEVER part
+ * of the later paid-subscription rule the comment above describes — a
+ * visitor's own account settings are not gated content. It is listed here
+ * anyway (rather than a per-page redirect like `/[lang]/crear`) specifically
+ * so the middleware's generic redirect-before-render covers it in the one
+ * place no page can forget, same reasoning as `ingles`/`cursos`.
+ */
+const GATED_SECTIONS = ['ingles', 'cursos', 'perfil'] as const;
 
 /**
  * Does this path belong to a gated section?

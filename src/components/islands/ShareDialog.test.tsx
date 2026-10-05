@@ -295,6 +295,32 @@ describe('ShareDialog — WhatsApp / QR download / native share / note (D8)', ()
   });
 });
 
+// T2 (practice page action bar redesign): `iconOnly` renders the trigger as
+// an icon button whose accessible name AND tooltip are both `labels.trigger`
+// — every other call site (`[slug].astro`, `MisActividadesIsland`) omits the
+// prop and keeps the default icon+visible-text trigger, covered above.
+describe('ShareDialog — iconOnly trigger (T2)', () => {
+  it('renders an icon button whose accessible name and tooltip are both labels.trigger, opening the same dialog', async () => {
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} iconOnly />);
+
+    const trigger = screen.getByTestId('exercise-share');
+    expect(trigger.getAttribute('aria-label')).toBe('Compartir');
+    const tooltip = trigger.querySelector('[role="tooltip"]');
+    expect(tooltip?.textContent).toBe('Compartir');
+    expect(trigger.getAttribute('aria-describedby')).toBe(tooltip?.id);
+
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+  });
+
+  it('defaults to the icon+visible-text trigger when iconOnly is omitted', () => {
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} />);
+    const trigger = screen.getByTestId('exercise-share');
+    expect(trigger.textContent).toContain('Compartir');
+    expect(trigger.getAttribute('aria-label')).toBeNull();
+  });
+});
+
 describe('ShareDialog — hydration (Bug 1, React error #418)', () => {
   it('does not report a recoverable hydration error', async () => {
     const { recoverableErrors } = await renderThenHydrate(() => (

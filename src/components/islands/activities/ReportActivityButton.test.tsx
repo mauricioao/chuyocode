@@ -18,6 +18,17 @@ describe('ReportActivityButton — closed by default', () => {
     expect(screen.queryByTestId('report-activity-button')).not.toBeNull();
     expect(screen.queryByTestId('report-activity-dialog')).toBeNull();
   });
+
+  // T2 (practice page action bar redesign): icon-only trigger, the label as
+  // its accessible name, and a hover/focus tooltip carrying that same label.
+  it('is an icon button whose accessible name and tooltip are both "Reportar"', () => {
+    render(<ReportActivityButton lang="es" activityId={ACTIVITY_ID} />);
+    const button = screen.getByTestId('report-activity-button');
+    expect(button.getAttribute('aria-label')).toBe('Reportar');
+    const tooltip = button.querySelector('[role="tooltip"]');
+    expect(tooltip?.textContent).toBe('Reportar');
+    expect(button.getAttribute('aria-describedby')).toBe(tooltip?.id);
+  });
 });
 
 describe('ReportActivityButton — the dialog', () => {

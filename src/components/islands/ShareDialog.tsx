@@ -22,12 +22,13 @@
  * company with no relationship to this site and make the dialog depend on their
  * uptime.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { WhatsappLogoIcon } from '@phosphor-icons/react/dist/ssr/WhatsappLogo';
 import { QrCodeIcon } from '@phosphor-icons/react/dist/ssr/QrCode';
 import { ShareNetworkIcon } from '@phosphor-icons/react/dist/ssr/ShareNetwork';
 import { Button } from '@/components/ui/button';
+import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 import {
   Dialog,
   DialogContent,
@@ -99,6 +100,15 @@ export interface ShareDialogProps {
    * renders — a filename with no label would be a silent no-op button.
    */
   downloadFileName?: string;
+  /**
+   * Practice page action-bar redesign (T2): renders the trigger as an
+   * icon-only button (Phosphor `ShareNetworkIcon`) with a hover/focus
+   * tooltip — `labels.trigger` as both its `aria-label` and the tooltip
+   * text — instead of the default icon-plus-visible-text button. Every
+   * OTHER call site (`[slug].astro`, `MisActividadesIsland`) omits this and
+   * is completely unaffected — defaults to `false`.
+   */
+  iconOnly?: boolean;
 }
 
 /**
@@ -129,7 +139,15 @@ function ShareActionIcon({
   );
 }
 
-export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFileName }: ShareDialogProps) {
+export default function ShareDialog({
+  url,
+  qr,
+  labels,
+  whatsappHref,
+  downloadFileName,
+  iconOnly = false,
+}: ShareDialogProps) {
+  const tooltipId = useId();
   const [copied, setCopied] = useState(false);
   const [canCopy, setCanCopy] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
@@ -197,23 +215,40 @@ export default function ShareDialog({ url, qr, labels, whatsappHref, downloadFil
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" data-testid="exercise-share">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        {iconOnly ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            data-testid="exercise-share"
+            aria-label={labels.trigger}
+            aria-describedby={tooltipId}
+            className={ICON_TOOLTIP_TRIGGER_CLASS}
           >
-            {SHARE_PATHS.map((d) => (
-              <path key={d} d={d} />
-            ))}
-          </svg>
-          {labels.trigger}
-        </Button>
+            <ShareNetworkIcon aria-hidden="true" size={16} />
+            <span role="tooltip" id={tooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+              {labels.trigger}
+            </span>
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm" data-testid="exercise-share">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              {SHARE_PATHS.map((d) => (
+                <path key={d} d={d} />
+              ))}
+            </svg>
+            {labels.trigger}
+          </Button>
+        )}
       </DialogTrigger>
 
       <DialogContent>
