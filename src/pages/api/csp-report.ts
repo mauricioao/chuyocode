@@ -55,6 +55,7 @@
 import type { APIRoute } from 'astro';
 import { jsonResponse } from '@lib/apiResponse';
 import { markPrivate } from '@lib/httpCache';
+import { readBodyCapped } from '@lib/http/readBodyCapped';
 
 /**
  * Generous for a CSP report (a single legacy report is a few hundred bytes;
@@ -234,19 +235,16 @@ function noContent(): Response {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  // An honestly-declared oversized body is rejected before it is read at
-  // all — same guard shape as `src/pages/api/webhooks/[provider].ts`.
-  const declaredLength = Number(request.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  // `readBodyCapped` rejects an honestly-declared oversized body before
+  // reading it at all (same guard shape as
+  // `src/pages/api/webhooks/[provider].ts`), and otherwise streams the
+  // actual body, cancelling the instant it exceeds MAX_BODY_BYTES rather
+  // than buffering the whole thing first.
+  const bodyResult = await readBodyCapped(request, MAX_BODY_BYTES);
+  if (!bodyResult.ok) {
     return jsonResponse({ error: 'payload_too_large' }, 413);
   }
-
-  const rawBody = await request.text();
-  // Content-Length can be absent or simply wrong — the actual read length is
-  // the real guard.
-  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
-    return jsonResponse({ error: 'payload_too_large' }, 413);
-  }
+  const rawBody = bodyResult.text;
 
   const contentType = (request.headers.get('content-type') ?? '').toLowerCase();
   const reports = extractReports(contentType, rawBody);

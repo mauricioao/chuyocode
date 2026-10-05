@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { defineProject } from 'vitest/config';
-import { testAliases } from './vitest.aliases';
-import { splitTestFiles } from './src/testSupport/vitestProjectSplit';
+import { testAliases } from './vitest.aliases.ts';
+import { splitTestFiles } from './src/testSupport/vitestProjectSplit.ts';
 
 // Plain Node unit tests: no DOM, no `.astro` rendering. Deliberately does
 // NOT wrap in Astro's `getViteConfig()` — that plugin pipeline (Tailwind,

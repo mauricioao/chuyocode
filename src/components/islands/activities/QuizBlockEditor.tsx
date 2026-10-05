@@ -48,7 +48,7 @@
  * never a blocking overlay. Only the first card is ever wrapped (`index ===
  * 0`), so adding a 2nd+ question never grows a 2nd tour.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -234,6 +234,14 @@ export default function QuizBlockEditor({
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
+  // Several QuizBlockEditor instances can be mounted on one page (one per
+  // expanded quiz block in BlockList.tsx), so this must NOT be a fixed
+  // string — same reasoning DropRenderer.tsx documents at its own
+  // `DndContext`: dnd-kit's auto-generated id is a module-level counter that
+  // disagrees between the server render and the client hydration of a
+  // long-lived SSR process. `useId()` is stable across both passes AND
+  // unique per instance on one page, which a fixed string could not be.
+  const dndId = useId();
   const [mobileTab, setMobileTab] = useState<'questions' | 'preview'>('questions');
   const debouncedPayload = useDebouncedValue(payload, 300);
   const tips = useFirstRunTips(FIRST_RUN_TIPS_KEY, FIRST_RUN_TIPS_STEPS);
@@ -382,7 +390,7 @@ export default function QuizBlockEditor({
         </div>
       ) : (
         <>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
               <ul data-testid={`quiz-question-list-${blockId}`} className="flex flex-col gap-3">
                 {questions.map((question, index) => {

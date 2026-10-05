@@ -48,7 +48,12 @@ const REPORT_ONLY_CSP = [
   // Supabase REST/Auth/Storage calls (fetch/XHR from the browser client).
   // No `wss://` — grepped: nothing in this codebase uses Supabase Realtime
   // (`.channel(`) today, so there is nothing to allow a websocket for yet.
-  "connect-src 'self' https://*.supabase.co",
+  // Sentry's ingest endpoint (error reporting, `sentry.client.config.ts`):
+  // allowed unconditionally, same as every other directive here — it is
+  // simply unused while PUBLIC_SENTRY_DSN is unset. Both known SaaS ingest
+  // host shapes are covered: the plain `o<id>.ingest.sentry.io` and the
+  // regionalized `o<id>.ingest.<region>.sentry.io` (today: us, de).
+  "connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
   // Exercise audio playback streams from Sanity assets and Supabase storage.
   "media-src 'self' https://cdn.sanity.io https://*.supabase.co",
   // Course/news embeds (YouTube nocookie, Vimeo) and Turnstile's widget iframe.
@@ -61,7 +66,11 @@ const REPORT_ONLY_CSP = [
   // Supabase's own /auth/v1/authorize, which 303s on to accounts.google.com.
   "form-action 'self' https://*.supabase.co https://accounts.google.com",
   "frame-ancestors 'self'",
-  'upgrade-insecure-requests',
+  // NOT `upgrade-insecure-requests` here: CSP3 §6.2 (and MDN) say browsers
+  // ignore that directive entirely in a Report-Only policy and log a
+  // console error about it on every single page load. It belongs in the
+  // ENFORCED policy (`applySecurityHeaders`'s `content-security-policy`
+  // header, below) once this one is enforced instead of report-only.
   // Both travel together, pointed at the SAME endpoint: `report-to` is the
   // modern Reporting API directive (Chromium only), `report-uri` is the
   // legacy one every browser still honors (Firefox/Safari never shipped

@@ -54,6 +54,13 @@ describe('applySecurityHeaders', () => {
       expect(csp).not.toContain('wss://');
     });
 
+    it("allows Sentry's ingest endpoint (both SaaS host shapes) in connect-src", () => {
+      const csp = reportOnly();
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/\*\.ingest\.sentry\.io/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/\*\.ingest\.us\.sentry\.io/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/\*\.ingest\.de\.sentry\.io/);
+    });
+
     it('allows Supabase Storage, the Sanity image CDN, and Google account avatars in img-src', () => {
       const csp = reportOnly();
       // Scoped to the img-src directive specifically (not just "appears
@@ -101,7 +108,11 @@ describe('applySecurityHeaders', () => {
       expect(csp).toContain("object-src 'none'");
       expect(csp).toContain("base-uri 'self'");
       expect(csp).toContain("frame-ancestors 'self'");
-      expect(csp).toContain('upgrade-insecure-requests');
+      // NOT here: browsers ignore `upgrade-insecure-requests` in a
+      // Report-Only policy and log a console error about it on every page.
+      // It belongs in the enforced `content-security-policy` header once
+      // this policy is enforced instead of report-only (see securityHeaders.ts).
+      expect(csp).not.toContain('upgrade-insecure-requests');
       expect(csp).toContain("worker-src 'self'");
     });
 
