@@ -89,6 +89,20 @@ function installClientGlobals(options: BrowserGlobalsOptions): void {
 export interface HydrationCheckResult {
   /** Every error React's `onRecoverableError` reported while hydrating — empty means a clean hydration (no #418). */
   recoverableErrors: unknown[];
+  /**
+   * Every `console.error` call made while hydrating, args as given.
+   *
+   * NOT redundant with {@link HydrationCheckResult.recoverableErrors}: an
+   * attribute-only mismatch (e.g. a dnd-kit `aria-describedby` minted from a
+   * module-level counter that disagrees between the server and client pass)
+   * is something React patches in place rather than escalating to
+   * `onRecoverableError` — so it never appears there. React still reports it
+   * with `console.error("Warning: An error occurred during hydration...")` /
+   * "...didn't match the client properties", which is why a hydration test
+   * must check BOTH: `recoverableErrors` for a mismatch React could not
+   * patch, this for one it patched silently.
+   */
+  consoleErrors: unknown[][];
   /** The server-rendered HTML, for assertions on what the server actually sent. */
   html: string;
   container: HTMLDivElement;
@@ -123,13 +137,23 @@ export async function renderThenHydrate(
   document.body.appendChild(container);
 
   const recoverableErrors: unknown[] = [];
-  await act(async () => {
-    hydrateRoot(container, element(), {
-      onRecoverableError: (error) => {
-        recoverableErrors.push(error);
-      },
+  const consoleErrors: unknown[][] = [];
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    consoleErrors.push(args);
+    originalConsoleError(...args);
+  };
+  try {
+    await act(async () => {
+      hydrateRoot(container, element(), {
+        onRecoverableError: (error) => {
+          recoverableErrors.push(error);
+        },
+      });
     });
-  });
+  } finally {
+    console.error = originalConsoleError;
+  }
 
   // Detach right away (a caller can still inspect the returned `container`
   // node itself, just no longer attached to `document`) — this harness is
@@ -139,5 +163,5 @@ export async function renderThenHydrate(
   // after it in the same run.
   container.remove();
 
-  return { recoverableErrors, html, container };
+  return { recoverableErrors, consoleErrors, html, container };
 }

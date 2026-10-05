@@ -319,15 +319,39 @@ describe('QuizBlockEditor — incomplete pointer', () => {
 
 describe('QuizBlockEditor — hydration (useFirstRunTips reads localStorage, item 6)', () => {
   it('does not report a recoverable hydration error when the tour has never been seen', async () => {
-    const { recoverableErrors } = await renderThenHydrate(() => <Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    const { recoverableErrors, consoleErrors } = await renderThenHydrate(() => (
+      <Harness initialPayload={ONE_QUESTION_PAYLOAD} />
+    ));
     expect(recoverableErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 
   it('does not report a recoverable hydration error when the tour was already dismissed', async () => {
-    const { recoverableErrors } = await renderThenHydrate(
+    const { recoverableErrors, consoleErrors } = await renderThenHydrate(
       () => <Harness initialPayload={ONE_QUESTION_PAYLOAD} />,
       { localStorage: { 'chuyo:quiz-editor-tips-v1': '1' } },
     );
     expect(recoverableErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+
+  /**
+   * THE REGRESSION THIS GUARDS (bug found via CI log 2026-10-05): with no
+   * explicit `id` on this component's `<DndContext>`, dnd-kit mints
+   * `aria-describedby` from a module-level counter that disagrees between
+   * the "server" pass and the client hydration pass below — React patches
+   * the attribute silently (so `recoverableErrors` stayed empty and this
+   * `describe` block kept "passing") but still logs
+   * `console.error("Warning: ...didn't match the client properties...")`.
+   * Two questions render two `SortableQuestionCard`s, which is what actually
+   * exercises the DndContext/SortableContext pair below — the empty-state
+   * tests above never mount it at all.
+   */
+  it('does not log a console error for a mismatched DndContext aria-describedby', async () => {
+    const { recoverableErrors, consoleErrors } = await renderThenHydrate(() => (
+      <Harness initialPayload={TWO_QUESTION_PAYLOAD} />
+    ));
+    expect(recoverableErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 });

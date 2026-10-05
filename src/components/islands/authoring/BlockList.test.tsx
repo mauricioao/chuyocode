@@ -15,6 +15,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import BlockList, { type BlockListItem } from './BlockList';
 
 interface Item extends BlockListItem {
@@ -146,5 +147,27 @@ describe('BlockList', () => {
 
     expect(onChange).toHaveBeenCalledWith('before after');
     expect(onReorder).not.toHaveBeenCalled();
+  });
+});
+
+describe('BlockList — hydration', () => {
+  /**
+   * This `DndContext` already passes a fixed `id="authoring-block-list"`
+   * (one `BlockList` per page — see its own component comment), unlike
+   * `QuizBlockEditor.tsx`'s equivalent before its fix. Locked in here so a
+   * future edit that drops that `id` prop fails a test instead of only
+   * surfacing as a console warning in CI logs — see `hydrationHarness.tsx`.
+   */
+  it('does not log a console error or recoverable hydration error', async () => {
+    const { recoverableErrors, consoleErrors } = await renderThenHydrate(() => (
+      <BlockList
+        items={ITEMS}
+        onReorder={vi.fn()}
+        handleLabelFor={(item) => `Move: ${item.label}`}
+        renderItem={(item) => <p>{item.label}</p>}
+      />
+    ));
+    expect(recoverableErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 });
