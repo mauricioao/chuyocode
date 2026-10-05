@@ -748,6 +748,11 @@ describe('WorksheetZoneEditor — camera coordinate conversion at scale != 1 wit
   });
 
   it('moves an existing zone by the correct fraction through the same scaled, offset camera', () => {
+    // A zone move is now batched behind ONE `requestAnimationFrame` per frame
+    // (canvas tools pass — see `WorksheetZoneEditor.tsx`'s own Performance
+    // note): this single pointermove needs it flushed synchronously, same as
+    // the wheel-zoom tests above.
+    stubSyncRaf();
     const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
     render(<Harness initialZones={[zone]} />);
     const viewport = screen.getByTestId('zone-viewport');
@@ -1057,9 +1062,15 @@ describe('WorksheetZoneEditor — editable zoom % input', () => {
 });
 
 describe('WorksheetZoneEditor — history commit flag (creator polish round 2)', () => {
-  it('marks every pointermove frame of a zone move as non-committing, then commits once on pointerup', () => {
-    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
-    const calls: Array<{ commit?: boolean }> = [];
+  /**
+   * Shared by the tests below: a zone (`z1`), already selected (so its
+   * resize handles exist — see `HANDLES.map` in the component, only
+   * rendered `{selected && ...}`), wired exactly like `ActivityEditorIsland.tsx`
+   * wires it in the real app — every `onZonesChange` call recorded (its
+   * `opts` AND the resulting zones array) before feeding it back into state.
+   */
+  function renderTrackedZone(zone: Zone) {
+    const calls: Array<{ opts: { commit?: boolean }; zones: Zone[] }> = [];
     function Wrapper() {
       const [zones, setZones] = useState<Zone[]>([zone]);
       return (
@@ -1070,7 +1081,7 @@ describe('WorksheetZoneEditor — history commit flag (creator polish round 2)',
           zones={zones}
           selectedZoneId="z1"
           onZonesChange={(next, opts) => {
-            calls.push(opts ?? {});
+            calls.push({ opts: opts ?? {}, zones: next });
             setZones(next);
           }}
           onSelectZone={() => {}}
@@ -1078,19 +1089,84 @@ describe('WorksheetZoneEditor — history commit flag (creator polish round 2)',
       );
     }
     render(<Wrapper />);
-    const el = screen.getByTestId('zone-z1');
     mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
+    return calls;
+  }
+
+  it('batches many pointermove frames of a zone move into a single onZonesChange call per animation frame', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
+    const raf = stubQueuedRaf();
+    const calls = renderTrackedZone(zone);
+    const el = screen.getByTestId('zone-z1');
 
     firePointer(el, 'pointerdown', 20, 10);
+    firePointer(el, 'pointermove', 25, 10);
     firePointer(el, 'pointermove', 30, 10);
+    firePointer(el, 'pointermove', 40, 10); // three moves, same simulated frame
+
+    // Still batched — nothing has flushed yet. The old, pre-batching code
+    // called `onZonesChange` once PER pointermove instead (3 calls here).
+    expect(calls.length).toBe(0);
+
+    raf.flush(); // the ONE animation frame these three moves share
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].opts).toEqual({ commit: false });
+    // Only the LATEST candidate rect survives the batch, not an intermediate one.
+    const moved = calls[0].zones.find((z) => z.id === 'z1')!;
+    expect(moved.x).toBeCloseTo(0.1 + (40 - 20) / IMAGE.width);
+
+    firePointer(el, 'pointerup', 40, 10);
+
+    // ...and exactly ONE more call (pointerup) commits, same as before batching.
+    expect(calls.length).toBe(2);
+    expect(calls[1].opts).toEqual({ commit: true });
+  });
+
+  it('pointerup flushes a still-pending frame synchronously — the last pointer position is never lost', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
+    // Queued, never flushed by hand: this animation frame never gets a
+    // chance to fire on its own before the gesture ends — only `endDrag`
+    // (via pointerup) may still apply it.
+    stubQueuedRaf();
+    const calls = renderTrackedZone(zone);
+    const el = screen.getByTestId('zone-z1');
+
+    firePointer(el, 'pointerdown', 20, 10);
     firePointer(el, 'pointermove', 40, 10);
     firePointer(el, 'pointerup', 40, 10);
 
-    expect(calls.length).toBeGreaterThanOrEqual(3);
-    // Every pointermove frame is non-committing...
-    expect(calls.slice(0, -1).every((c) => c.commit === false)).toBe(true);
-    // ...and exactly the LAST call (pointerup) commits.
-    expect(calls.at(-1)).toEqual({ commit: true });
+    // The move was never lost: pointerup forced the pending frame through
+    // synchronously, THEN sealed it — not zero updates, not a stale
+    // pre-move commit.
+    expect(calls.length).toBe(2);
+    expect(calls[0].opts).toEqual({ commit: false });
+    expect(calls[1].opts).toEqual({ commit: true });
+    const expectedX = 0.1 + (40 - 20) / IMAGE.width;
+    expect(calls.at(-1)!.zones.find((z) => z.id === 'z1')!.x).toBeCloseTo(expectedX);
+    // The rendered DOM reflects the exact final geometry too, not just the recorded call.
+    expect(parseFloat(screen.getByTestId('zone-z1').style.left)).toBeCloseTo(expectedX * 100);
+  });
+
+  it('batches resize pointermoves the same way, into a single onZonesChange call', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.2, kind: 'text', answers: ['x'] };
+    const raf = stubQueuedRaf();
+    const calls = renderTrackedZone(zone);
+    const handle = screen.getByTestId('handle-z1-se');
+
+    firePointer(handle, 'pointerdown', 20, 10);
+    firePointer(handle, 'pointermove', 25, 15);
+    firePointer(handle, 'pointermove', 30, 20); // same simulated frame
+
+    expect(calls.length).toBe(0);
+
+    raf.flush();
+    expect(calls.length).toBe(1);
+    expect(calls[0].opts).toEqual({ commit: false });
+
+    firePointer(handle, 'pointerup', 30, 20);
+    expect(calls.length).toBe(2);
+    expect(calls[1].opts).toEqual({ commit: true });
   });
 });
 

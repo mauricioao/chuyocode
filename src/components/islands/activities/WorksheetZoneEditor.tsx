@@ -45,6 +45,16 @@
  * listener below, already established before this pass). The drag commits
  * its FINAL camera into state synchronously on pointerup/cancel, canceling
  * any still-pending frame, so the camera is never left one frame stale.
+ * A zone MOVE/RESIZE drag follows the exact same shape (`moveFrameRef`):
+ * every pointermove only computes the candidate rect and stores it in a
+ * ref — never an `onZonesChange` call, which was previously one full
+ * zones-array re-render per pixel — and ONE `requestAnimationFrame` per
+ * frame flushes it through `onZonesChange({ commit: false })`. `endDrag`
+ * flushes that same pending rect SYNCHRONOUSLY on pointerup/cancel (and
+ * returns the flushed zones, since the `zones` prop closure the caller
+ * already holds cannot possibly reflect a flush that just happened), so the
+ * drag's LAST pointer position is never lost even if it ends before the
+ * next paint would otherwise have flushed it.
  *
  * PROPERTIES PANEL IS ALWAYS RENDERED, fixed width, whether or not a zone is
  * selected — with no zone selected it shows a quiet empty state instead of
@@ -276,6 +286,55 @@ export default function WorksheetZoneEditor({
   // `endDrag` on pointerup/cancel to commit the final position even if a
   // frame is still pending.
   const panFrameRef = useRef<{ id: number | null; target: Camera | null }>({ id: null, target: null });
+
+  // `zones`/`onZonesChange` are PROPS, kept in sync every render the same
+  // way `cameraRef` is above — so `flushPendingMoveFrame` below (reachable
+  // from `endDrag`, which MUST stay referentially stable: see its own
+  // comment and the mount-only window-blur effect further down that depends
+  // on that stability) can always apply the latest candidate rect against
+  // the CURRENT zones/callback, never a stale one closed over at mount.
+  const zonesRef = useRef(zones);
+  zonesRef.current = zones;
+  const onZonesChangeRef = useRef(onZonesChange);
+  onZonesChangeRef.current = onZonesChange;
+
+  // A pending zone move/resize frame — same shape/reasoning as `panFrameRef`
+  // above: the LATEST candidate rect from a still-in-flight pointermove
+  // batch (for ONE zone at a time — a drag only ever touches one), and the
+  // `requestAnimationFrame` id flushing it. Flushed (and cleared) by
+  // `flushPendingMoveFrame`, which both the frame's own callback and
+  // `endDrag` call.
+  const moveFrameRef = useRef<{ id: number | null; zoneId: string | null; rect: Rect | null }>({
+    id: null,
+    zoneId: null,
+    rect: null,
+  });
+
+  // Applies whatever zone move/resize frame is still pending RIGHT NOW,
+  // synchronously — used by the frame's own `requestAnimationFrame`
+  // callback (the normal case) AND by `endDrag` (pointerup/cancel ending the
+  // drag before that callback ever got to run). Cancelling an id whose
+  // callback is the one currently calling this is a documented no-op, so
+  // reusing this from inside that same callback is safe. Returns the
+  // flushed zones array so `endDrag`'s own caller (`handlePointerUp`) can
+  // seal the FINAL commit against it — its own `zones` closure cannot
+  // reflect a flush that only just happened, since calling `onZonesChange`
+  // (a prop, presumably a parent `setState`) never updates that closure
+  // mid-call. Returns `undefined` when nothing was pending.
+  const flushPendingMoveFrame = useCallback((): Zone[] | undefined => {
+    const pending = moveFrameRef.current;
+    if (pending.id != null) {
+      cancelAnimationFrame(pending.id);
+      pending.id = null;
+    }
+    const { zoneId, rect } = pending;
+    if (!zoneId || !rect) return undefined;
+    pending.zoneId = null;
+    pending.rect = null;
+    const next = zonesRef.current.map((z) => (z.id === zoneId ? { ...z, ...rect } : z));
+    onZonesChangeRef.current(next, { commit: false });
+    return next;
+  }, []);
 
   // Space temporarily forces the hand tool regardless of the selected one —
   // see the file header. Every pointer handler below branches on THIS, never
@@ -523,7 +582,8 @@ export default function WorksheetZoneEditor({
       window.removeEventListener('keyup', onWindowKeyUp);
       window.removeEventListener('blur', onWindowBlur);
     };
-    // `endDrag` is declared below with `useCallback([])` (stable identity),
+    // `endDrag` is declared below as a REFERENTIALLY STABLE `useCallback`
+    // (its only dep, `flushPendingMoveFrame`, is itself `useCallback([])`),
     // so it is safe to reference here without adding it to the deps array
     // and re-subscribing every render — matches this effect's original,
     // mount-only shape.
@@ -588,7 +648,7 @@ export default function WorksheetZoneEditor({
   // cancel the first finger's action the exact same way (see
   // `handleTouchGesturePointerDown` below and `touchGesture.ts`'s own
   // header: "no history entry" for that case).
-  const endDrag = useCallback(() => {
+  const endDrag = useCallback((): Zone[] | undefined => {
     const drag = dragRef.current;
     dragRef.current = null;
     setDraftRect(null);
@@ -611,7 +671,12 @@ export default function WorksheetZoneEditor({
         setFitMode(false);
       }
     }
-  }, []);
+    // Same guarantee for a zone move/resize — see the file header's
+    // Performance note and `flushPendingMoveFrame`'s own comment. A no-op
+    // (returns `undefined`) whenever the ending drag wasn't a move/resize,
+    // or one that never got far enough to have a frame pending.
+    return flushPendingMoveFrame();
+  }, [flushPendingMoveFrame]);
 
   /**
    * Mobile layout pass — the touch multi-pointer GATE every `onPointerDown`
@@ -786,14 +851,26 @@ export default function WorksheetZoneEditor({
       const dx = (point.x - drag.start.x) / displaySize.width;
       const dy = (point.y - drag.start.y) / displaySize.height;
 
-      if (drag.kind === 'move') {
-        // Live frame: no undo step per pixel — see `ZonesChangeOptions`.
-        updateZoneRect(drag.zoneId, moveRect(drag.original, dx, dy), { commit: false });
-      } else if (drag.kind === 'resize') {
-        updateZoneRect(drag.zoneId, resizeRect(drag.original, drag.handle, dx, dy), { commit: false });
+      if (drag.kind === 'move' || drag.kind === 'resize') {
+        // BATCHED PER ANIMATION FRAME (see the file header's Performance
+        // note) — never an `onZonesChange` call here directly any more:
+        // that was one full zones-array re-render per pixel of pointer
+        // movement. Only the LATEST candidate rect is kept; at most one
+        // `requestAnimationFrame` is ever in flight for this drag, same
+        // shape as the pan branch above. No undo step per frame either way
+        // — see `ZonesChangeOptions`.
+        const rect =
+          drag.kind === 'move' ? moveRect(drag.original, dx, dy) : resizeRect(drag.original, drag.handle, dx, dy);
+        moveFrameRef.current.zoneId = drag.zoneId;
+        moveFrameRef.current.rect = rect;
+        if (moveFrameRef.current.id == null) {
+          moveFrameRef.current.id = requestAnimationFrame(() => {
+            flushPendingMoveFrame();
+          });
+        }
       }
     },
-    [pointFromEvent, updateZoneRect, displaySize, viewportSize, viewportPointFromEvent],
+    [pointFromEvent, flushPendingMoveFrame, displaySize, viewportSize, viewportPointFromEvent],
   );
 
   const handlePointerUp = useCallback(
@@ -823,13 +900,19 @@ export default function WorksheetZoneEditor({
         }
       }
 
-      endDrag();
+      // `endDrag` flushes any still-pending move/resize frame synchronously
+      // (see its own comment) and hands back the result — the LAST pointer
+      // position is never lost even when this pointerup arrives before the
+      // next paint would otherwise have flushed it.
+      const flushed = endDrag();
       // Seal a move/resize gesture into exactly ONE undo step now that it is
-      // done — every pointermove frame during it was a `commit: false`
-      // live update (see `handlePointerMove`); `zones` here already holds
-      // the final position from the last of those.
+      // done — every batched frame during it was a `commit: false` live
+      // update (see `handlePointerMove`). `flushed` (just-applied above) is
+      // the final position when a frame was still pending; otherwise an
+      // earlier frame already flushed it and `zones` itself is already
+      // current — `flushed` is only ever `undefined` there, never stale.
       if (drag && (drag.kind === 'move' || drag.kind === 'resize')) {
-        onZonesChange(zones, { commit: true });
+        onZonesChange(flushed ?? zones, { commit: true });
         return;
       }
       if (!drag || drag.kind !== 'draw') return;
