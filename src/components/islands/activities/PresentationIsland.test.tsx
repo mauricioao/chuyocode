@@ -320,7 +320,13 @@ describe('PresentationIsland — keyboard map', () => {
 
   it('does not double-dispatch when Enter/Space activates a focused control-bar button', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
-    screen.getByTestId('presentation-next').focus();
+    // `.focus()` synchronously fires the control bar's `onFocus` handler
+    // (`setControlsVisible`), so — same as the idle-hide describe block
+    // below — it must be wrapped in `act()` itself; it is not an event
+    // `fireEvent` wraps for us.
+    act(() => {
+      screen.getByTestId('presentation-next').focus();
+    });
     fireEvent.keyDown(screen.getByTestId('presentation-next'), { key: 'Enter' });
     // The native click (fired by the button's own onClick, simulated via a
     // real click below) is what advances — the global listener must not

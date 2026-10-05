@@ -46,7 +46,15 @@ describe('initBackButtons', () => {
     vi.restoreAllMocks();
   });
 
-  function renderBackLink(href = '/es/ingles'): HTMLAnchorElement {
+  // A same-document hash href (not a real app route): when a test's click is
+  // left unprevented, jsdom's own default `<a>` activation behaviour runs —
+  // real cross-document navigation is "not implemented" in jsdom and logs an
+  // `Error: Not implemented: navigation (except hash changes)` straight to
+  // stderr. A hash-only href resolves to the same document (the one real
+  // navigation jsdom DOES implement), so the unprevented-click tests below
+  // exercise the exact same default-action path with no noise, with no
+  // assertion relying on the href's actual value.
+  function renderBackLink(href = '#'): HTMLAnchorElement {
     const link = document.createElement('a');
     link.href = href;
     link.setAttribute(BACK_BUTTON_ATTR, '');
@@ -122,7 +130,11 @@ describe('initBackButtons', () => {
 
     initBackButtons();
     const other = document.createElement('a');
-    other.href = '/es/libros';
+    // Hash href — see `renderBackLink`'s own comment: this click is never
+    // intercepted (no `BACK_BUTTON_ATTR`), so jsdom runs its real `<a>`
+    // activation behaviour; a hash keeps that on the one navigation path
+    // jsdom actually implements.
+    other.href = '#';
     document.body.appendChild(other);
     other.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
 
