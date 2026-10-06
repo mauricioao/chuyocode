@@ -1315,6 +1315,11 @@ export const UI_LABELS = {
         weeklyPickLabel: 'Lo más querido de la semana',
         // Heading over the CEFR quick-jump row.
         levelShortcutTitle: 'Ir directo a tu nivel',
+        // Minimized-windows tray (owner feedback 2026-10-06): a slot next to
+        // the levels dock, `@lib/ui/minimizedWindows`'s own `<nav>` and each
+        // chip's "×" button.
+        trayLabel: 'Ventanas minimizadas',
+        trayRemoveLabel: 'Quitar de la bandeja',
         // "Desktop" redesign PART 1 (owner spec 2026-10-06, item B): the
         // hub-only "by ChuyoCode" header link's accessible name + tooltip.
         backToChuyoCode: 'Regresar a ChuyoCode',
@@ -2436,6 +2441,8 @@ export const UI_LABELS = {
         todayTitle: 'For you today',
         weeklyPickLabel: 'Most loved this week',
         levelShortcutTitle: 'Jump to your level',
+        trayLabel: 'Minimized windows',
+        trayRemoveLabel: 'Remove from tray',
         backToChuyoCode: 'Back to ChuyoCode',
         greetingNamed: 'Hi, {name}.',
         greetingFallback: 'Hi.',

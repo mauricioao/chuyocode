@@ -52,6 +52,9 @@ export interface DeskSceneLabels {
   widgetsLabel: string;
   weatherUnavailable: string;
   levelShortcutTitle: string;
+  /** Minimized-windows tray (owner feedback 2026-10-06): the tray `<nav>`'s own accessible name, and the accessible name of each chip's "×" button. */
+  trayLabel: string;
+  trayRemoveLabel: string;
 }
 
 export interface DeskSceneData {

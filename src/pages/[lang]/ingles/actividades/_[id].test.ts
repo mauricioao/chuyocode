@@ -502,6 +502,26 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     expect(html).toContain('ActivityViewBadge');
   });
 
+  it('the window carries the activity id as its own minimize-to-tray id for a signed-in visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/<section[^>]*data-desk-window[^>]*data-tray-id="abc"[^>]*>/);
+  });
+
+  it('a guest window carries no tray id (no desk/tray behind a guest)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-tray-id');
+  });
+
   it('still renders the practice island (playing/checking answers keep working) for a guest', async () => {
     activityResult.value = {
       id: 'abc',

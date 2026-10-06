@@ -167,6 +167,8 @@ const deskLabels = desk && {
   widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
   weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
   levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
+  trayLabel: UI_LABELS[lang].english.hub.trayLabel,
+  trayRemoveLabel: UI_LABELS[lang].english.hub.trayRemoveLabel,
 };
 
 /**
@@ -237,6 +239,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
     minimizeLabel={t.windowMinimize}
     fullScreenLabel={t.windowFullScreen}
     forceFullScreen={isGuest}
+    trayId={isGuest ? null : activity.id}
     slot="overlay"
   >
     <Fragment slot="actions">

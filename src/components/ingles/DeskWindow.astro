@@ -13,10 +13,14 @@
  * Both "close" (red) and "minimize" (yellow) are plain `<a href={closeHref}>`
  * anchors, not buttons — same no-JS-first posture as `BackButton.astro`:
  * a visitor with scripting disabled still lands on the desk (or the
- * ChuyoCode home for a guest), just without the `history.back()` nicety
- * `@lib/ui/deskWindow.ts#initDeskWindow` layers on top once it runs. "Full
- * screen" (green) has no meaningful no-JS behaviour (there is no state to
- * toggle without a script) and stays a real `<button>`.
+ * ChuyoCode home for a guest) either way. Once `@lib/ui/deskWindow.ts
+ * #initDeskWindow` runs, the two diverge (owner feedback 2026-10-06): red
+ * still prefers `history.back()` and drops any tray chip for this activity;
+ * yellow REALLY minimizes — it remembers this window as a chip in the
+ * desk's own tray (`@lib/ui/minimizedWindows`), plays a short "shrink down"
+ * animation, then does a plain navigation to the hub. "Full screen" (green)
+ * has no meaningful no-JS behaviour (there is no state to toggle without a
+ * script) and stays a real `<button>`.
  *
  * RENDERED THROUGH `BaseLayout.astro`'s `overlay` SLOT (bugfix, 2026-10-06):
  * `[id].astro` passes this whole component (veil + dialog) with
@@ -59,6 +63,15 @@ interface Props {
    * script running. The green light still toggles from there normally.
    */
   forceFullScreen?: boolean;
+  /**
+   * Minimize-to-tray (owner feedback 2026-10-06): the activity id the yellow
+   * light remembers as a tray chip on the desk (`@lib/ui/minimizedWindows`).
+   * `null`/omitted for a GUEST — no desk/tray renders behind a guest's
+   * window (see the `forceFullScreen` doc above), so the yellow light there
+   * just falls back to doing exactly what the red one does
+   * (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`).
+   */
+  trayId?: string | null;
 }
 
 const {
@@ -70,6 +83,7 @@ const {
   minimizeLabel,
   fullScreenLabel,
   forceFullScreen = false,
+  trayId = null,
 } = Astro.props;
 ---
 
@@ -79,6 +93,7 @@ const {
   id="desk-window"
   data-desk-window
   data-close-target={closeHref}
+  data-tray-id={trayId ?? undefined}
   data-fullscreen={forceFullScreen ? 'true' : undefined}
   role="dialog"
   aria-modal="true"
@@ -100,7 +115,7 @@ const {
       ></a>
       <a
         href={closeHref}
-        data-desk-window-close
+        data-desk-window-minimize
         aria-label={minimizeLabel}
         title={minimizeLabel}
         class="h-3.5 w-3.5 rounded-full bg-pop-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -141,7 +156,8 @@ const {
     const windowEl = document.getElementById('desk-window');
     const closeTarget = windowEl?.getAttribute('data-close-target');
     if (windowEl && closeTarget) {
-      initDeskWindow(windowEl, closeTarget);
+      const trayId = windowEl.getAttribute('data-tray-id');
+      initDeskWindow(windowEl, closeTarget, trayId);
     }
   };
 

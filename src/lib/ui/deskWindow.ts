@@ -14,6 +14,7 @@
  * and defer to them. Anything that could silently be WRONG belongs in a pure
  * function, never inlined into a listener nobody can assert on directly.
  */
+import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
 
 const FULLSCREEN_STORAGE_KEY = 'ingles-desk-window-fullscreen';
 const ORIGIN_STORAGE_KEY = 'ingles-desk-window-origin';
@@ -24,8 +25,15 @@ const RETURN_FOCUS_STORAGE_KEY = 'ingles-desk-window-return-focus';
  * later visit. */
 const ORIGIN_MAX_AGE_MS = 5000;
 
+/** How long the "minimize" CSS animation (`.ingles-window--minimizing`,
+ * `global.css`) runs before the actual navigation fires — long enough to
+ * read as a real minimize, short enough that it never feels like a stuck
+ * click. Skipped entirely under `prefers-reduced-motion: reduce`. */
+const MINIMIZE_ANIMATION_MS = 180;
+
 export const DESK_WINDOW_ATTR = {
   close: 'data-desk-window-close',
+  minimize: 'data-desk-window-minimize',
   fullscreen: 'data-desk-window-fullscreen',
   opener: 'data-desk-window-open',
 } as const;
@@ -239,11 +247,15 @@ export function applyDeskWindowReturnFocus(doc: Document = document, win: Window
  * Window-side: wires the three "traffic light" buttons, Escape, and initial
  * focus. `windowEl` is the `role="dialog"` element itself; `closeTargetPath`
  * is the hub (signed-in) or the ChuyoCode home (guest) — see
- * {@link resolveCloseAction}.
+ * {@link resolveCloseAction}. `trayId` is the activity id the yellow light
+ * minimizes TO a tray chip for — `null` for a guest (no desk/tray behind a
+ * guest's window, see `DeskWindow.astro`'s own header), in which case the
+ * yellow light just falls back to doing exactly what the red one does.
  */
 export function initDeskWindow(
   windowEl: HTMLElement,
   closeTargetPath: string,
+  trayId: string | null = null,
   doc: Document = document,
   win: Window = window,
 ): void {
@@ -268,7 +280,11 @@ export function initDeskWindow(
     fullscreenButton.setAttribute('aria-pressed', 'true');
   }
 
+  // Closing for good (red light / Escape) drops any tray chip this activity
+  // may have left behind from an earlier minimize — owner spec: "closing
+  // (red) removes any chip for that activity".
   function close(): void {
+    if (trayId) removeMinimizedWindow(trayId, win.sessionStorage);
     const action = resolveCloseAction(doc.referrer, win.location.origin, win.history.length, closeTargetPath);
     if (action.kind === 'back') {
       win.history.back();
@@ -277,19 +293,73 @@ export function initDeskWindow(
     }
   }
 
-  // The close/minimize lights are plain `<a href={closeHref}>` anchors (see
+  function prefersReducedMotion(): boolean {
+    try {
+      return win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  // Minimizing (yellow light) — owner feedback 2026-10-06, replacing the old
+  // behaviour where it just did exactly what the red light does: remember
+  // this window as a tray chip (`@lib/ui/minimizedWindows`, the desk's own
+  // dock reads it on mount), play a short "shrinking down" animation
+  // (`.ingles-window--minimizing`, `global.css`, skipped entirely under
+  // `prefers-reduced-motion: reduce`), THEN navigate to the hub — always a
+  // plain `href` navigation, never `history.back()`: minimizing is "put this
+  // aside", not "go back", and the chip's own reopen (a fresh navigation TO
+  // this same URL) should feel symmetrical with how it got there. A guest
+  // (`trayId === null`, no desk/tray behind their window) falls back to
+  // `close()` outright — there is nowhere for a chip to live.
+  function minimize(): void {
+    if (!trayId) {
+      close();
+      return;
+    }
+
+    const titleEl = doc.getElementById(windowEl.getAttribute('aria-labelledby') ?? '');
+    const title = titleEl?.textContent?.trim() ?? '';
+    addMinimizedWindow(
+      { id: trayId, title, href: `${win.location.pathname}${win.location.search}`, thumbnail: null, t: Date.now() },
+      win.sessionStorage,
+    );
+
+    const navigate = () => {
+      win.location.href = closeTargetPath;
+    };
+
+    if (prefersReducedMotion()) {
+      navigate();
+      return;
+    }
+    windowEl.classList.add('ingles-window--minimizing');
+    win.setTimeout(navigate, MINIMIZE_ANIMATION_MS);
+  }
+
+  // The traffic lights are plain `<a href={closeHref}>` anchors (see
   // `DeskWindow.astro`'s own header on why) — this progressive-enhancement
   // click handler intercepts only a plain, unmodified left click (same guard
   // `backNavigation.ts#initBackButtons` uses) so Ctrl/Cmd/Shift-click and a
   // middle-click still open the hub normally, in a new tab. A plain click
   // calls `preventDefault` FIRST: without it, the anchor's own default
-  // navigation to `closeHref` would race the `history.back()` branch below.
+  // navigation to `closeHref` would race the `history.back()`/animation
+  // branches above.
   windowEl.querySelectorAll<HTMLElement>(`[${DESK_WINDOW_ATTR.close}]`).forEach((button) => {
     button.addEventListener('click', (event) => {
       if (event.defaultPrevented || !(event instanceof MouseEvent) || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       close();
+    });
+  });
+
+  windowEl.querySelectorAll<HTMLElement>(`[${DESK_WINDOW_ATTR.minimize}]`).forEach((button) => {
+    button.addEventListener('click', (event) => {
+      if (event.defaultPrevented || !(event instanceof MouseEvent) || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      minimize();
     });
   });
 
