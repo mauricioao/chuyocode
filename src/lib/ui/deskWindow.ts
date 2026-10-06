@@ -31,6 +31,23 @@ export const DESK_WINDOW_ATTR = {
 } as const;
 
 /**
+ * Every focusable element inside `container`, in DOM order — the focus
+ * trap's own bounds below, and a pure/zero-DOM-event function so the
+ * selector itself stays unit-testable without wiring up real keyboard
+ * events. Deliberately simple: the one element this could wrongly include —
+ * the "Más" overflow menu's own `<input type="checkbox">` trigger
+ * (`[id].astro`) — is always genuinely focusable/operable regardless of
+ * whether its panel is currently open, so no extra visibility filtering is
+ * needed here.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function focusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+}
+
+/**
  * Where the close/minimize "traffic lights" should send the visitor.
  *
  * Both lights do the exact same thing (owner spec: "closing the window
@@ -289,6 +306,40 @@ export function initDeskWindow(
     if (event.key === 'Escape' && !event.defaultPrevented) close();
   });
 
-  const firstFocusable = windowEl.querySelector<HTMLElement>(`[${DESK_WINDOW_ATTR.close}]`);
-  firstFocusable?.focus();
+  // Focus trap (bugfix, 2026-10-06): Tab/Shift+Tab cycle among the dialog's
+  // OWN focusable elements only, never escaping to the rest of the page.
+  // `inert` on the header/footer/desk (`BaseLayout.astro`/`DeskScene.astro`)
+  // already removes every one of THEIR elements from the tab order, so this
+  // is mostly a safety net for browsers/assistive tech that do not honour
+  // `inert` for sequential focus navigation — but it also fixes the one case
+  // `inert` cannot: wrapping Tab past the dialog's OWN last element (or
+  // Shift+Tab past its first) back around to the other end, instead of
+  // leaving the page/document entirely.
+  windowEl.addEventListener('keydown', (event) => {
+    if (event.key !== 'Tab' || event.defaultPrevented) return;
+    const elements = focusableElements(windowEl);
+    if (elements.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = elements[0];
+    const last = elements[elements.length - 1];
+    const active = doc.activeElement;
+    if (event.shiftKey) {
+      if (active === first || active === windowEl) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+
+  // INITIAL FOCUS lands on the dialog element itself, never the red light —
+  // see `DeskWindow.astro`'s own header for why (no focus ring flashes on a
+  // pointer visit). `outline-none` on the element keeps it invisible even
+  // for a keyboard visit; the very next Tab reaches the red light exactly as
+  // before, via the trap above.
+  windowEl.focus();
 }

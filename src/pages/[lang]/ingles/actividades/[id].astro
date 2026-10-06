@@ -67,6 +67,7 @@ import { PrinterIcon } from '@phosphor-icons/react/dist/ssr/Printer';
 import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
 import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
+import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity } from '@lib/activities/activities';
 import { hasPresentableContent } from '@lib/activities/presentationSlides';
@@ -236,6 +237,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
     minimizeLabel={t.windowMinimize}
     fullScreenLabel={t.windowFullScreen}
     forceFullScreen={isGuest}
+    slot="overlay"
   >
     <Fragment slot="actions">
       {canHeart ? (
@@ -285,79 +287,121 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           />
         )
       }
-      {canDuplicate ? (
-        <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />
-      ) : (
-        /* Guest: `canDuplicate` is exactly "no user" here (the author
-           keeps the real button) — a plain link to sign-in instead. */
-        <a
-          href={guestSignInHref}
-          data-testid="activity-duplicate-guest"
-          aria-label={t.duplicate}
-          aria-describedby="action-duplicate-guest-tooltip"
-          class={ICON_TOOLTIP_TRIGGER_CLASS}
+      {/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below
+          `desk:` the title bar has no room for six 44px/36px icon buttons in
+          one row (owner report: it used to wrap into a tall second row) —
+          a plain checkbox + `<label>` CSS-only disclosure, collapsed by
+          default, NO JS REQUIRED (same no-JS-first posture as the traffic
+          lights — `DeskWindow.astro`'s own header). The checkbox itself
+          carries the real accessible name/state (`aria-label`, native
+          checked/unchecked) and stays in the tab order (`sr-only`, never
+          `hidden` — a screen-reader/keyboard user still reaches it); the
+          `<label>` is its purely visual "⋯" trigger, `peer-focus-visible:*`
+          below gives it a visible focus ring whenever the invisible
+          checkbox itself is keyboard-focused. At `desk:` and up the trigger
+          is hidden and the panel ALWAYS renders as a plain row instead of
+          the dropdown (`global.css`'s own `[data-desk-window-more]` rule).
+          Everything inside keeps exactly the same conditional logic,
+          markup and ids as before this fix (there is still only ONE copy
+          of each action) — only the wrapping elements are new. */}
+      <div class="relative" data-desk-window-more>
+        <input
+          type="checkbox"
+          id="desk-window-more-toggle"
+          class="peer sr-only"
+          aria-label={t.windowMore}
+          aria-controls="desk-window-more-content"
+        />
+        <label
+          for="desk-window-more-toggle"
+          data-testid="activity-window-more-trigger"
+          class={`${ICON_TOOLTIP_TRIGGER_CLASS} desk:hidden cursor-pointer peer-focus-visible:outline-none peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50`}
         >
-          <CopySimpleIcon aria-hidden="true" size={16} />
-          <span role="tooltip" id="action-duplicate-guest-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
-            {t.duplicate}
+          <DotsThreeIcon aria-hidden="true" size={18} weight="bold" />
+          <span role="tooltip" id="action-more-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+            {t.windowMore}
           </span>
-        </a>
-      )}
-      {canReport ? (
-        <ReportActivityButton client:load lang={lang} activityId={activity.id} />
-      ) : (
-        !user && (
-          /* Guest: the author still sees nothing (cannot report their
-             own activity) — only a `null` user gets this fallback. */
+        </label>
+        <div
+          id="desk-window-more-content"
+          data-desk-window-more-content
+          class="hidden absolute right-0 top-full z-10 mt-2 w-max flex-col items-stretch gap-1 rounded-lg border border-border bg-background p-1.5 shadow-elevation-2 peer-checked:flex desk:static desk:mt-0 desk:flex desk:w-auto desk:flex-row desk:items-center desk:gap-3 desk:border-0 desk:bg-transparent desk:p-0 desk:shadow-none"
+        >
+          {canDuplicate ? (
+            <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />
+          ) : (
+            /* Guest: `canDuplicate` is exactly "no user" here (the author
+               keeps the real button) — a plain link to sign-in instead. */
+            <a
+              href={guestSignInHref}
+              data-testid="activity-duplicate-guest"
+              aria-label={t.duplicate}
+              aria-describedby="action-duplicate-guest-tooltip"
+              class={ICON_TOOLTIP_TRIGGER_CLASS}
+            >
+              <CopySimpleIcon aria-hidden="true" size={16} />
+              <span role="tooltip" id="action-duplicate-guest-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {t.duplicate}
+              </span>
+            </a>
+          )}
+          {canReport ? (
+            <ReportActivityButton client:load lang={lang} activityId={activity.id} />
+          ) : (
+            !user && (
+              /* Guest: the author still sees nothing (cannot report their
+                 own activity) — only a `null` user gets this fallback. */
+              <a
+                href={guestSignInHref}
+                data-testid="activity-report-guest"
+                aria-label={UI_LABELS[lang].activities.report.button}
+                aria-describedby="action-report-guest-tooltip"
+                class={ICON_TOOLTIP_TRIGGER_CLASS}
+              >
+                <FlagIcon aria-hidden="true" size={16} />
+                <span role="tooltip" id="action-report-guest-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                  {UI_LABELS[lang].activities.report.button}
+                </span>
+              </a>
+            )
+          )}
+          {/* "Presentar" (presentation mode v1): a plain link to the
+              full-screen, projector-facing deck — same access rules as this
+              page, and hidden entirely when there is nothing to present
+              (`canPresent`, above). */}
+          {canPresent && (
+            <a
+              href={`/${lang}/ingles/actividades/${activity.id}/presentar`}
+              data-testid="activity-present-link"
+              aria-label={t.present}
+              aria-describedby="action-present-tooltip"
+              class={ICON_TOOLTIP_TRIGGER_CLASS}
+            >
+              <PresentationIcon aria-hidden="true" size={16} />
+              <span role="tooltip" id="action-present-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {t.present}
+              </span>
+            </a>
+          )}
+          {/* "Imprimir" (D6): a plain, unconditional link to the print page
+              — deliberately NOT exempted from the login wall (guest play is
+              scoped to exactly this page and `presentar`, see file header),
+              so a guest clicking this one still lands on sign-in, same as
+              any other gated page. */}
           <a
-            href={guestSignInHref}
-            data-testid="activity-report-guest"
-            aria-label={UI_LABELS[lang].activities.report.button}
-            aria-describedby="action-report-guest-tooltip"
+            href={`/${lang}/ingles/actividades/${activity.id}/imprimir`}
+            data-testid="activity-print-link"
+            aria-label={t.print}
+            aria-describedby="action-print-tooltip"
             class={ICON_TOOLTIP_TRIGGER_CLASS}
           >
-            <FlagIcon aria-hidden="true" size={16} />
-            <span role="tooltip" id="action-report-guest-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
-              {UI_LABELS[lang].activities.report.button}
+            <PrinterIcon aria-hidden="true" size={16} />
+            <span role="tooltip" id="action-print-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+              {t.print}
             </span>
           </a>
-        )
-      )}
-      {/* "Presentar" (presentation mode v1): a plain link to the
-          full-screen, projector-facing deck — same access rules as this
-          page, and hidden entirely when there is nothing to present
-          (`canPresent`, above). */}
-      {canPresent && (
-        <a
-          href={`/${lang}/ingles/actividades/${activity.id}/presentar`}
-          data-testid="activity-present-link"
-          aria-label={t.present}
-          aria-describedby="action-present-tooltip"
-          class={ICON_TOOLTIP_TRIGGER_CLASS}
-        >
-          <PresentationIcon aria-hidden="true" size={16} />
-          <span role="tooltip" id="action-present-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
-            {t.present}
-          </span>
-        </a>
-      )}
-      {/* "Imprimir" (D6): a plain, unconditional link to the print page
-          — deliberately NOT exempted from the login wall (guest play is
-          scoped to exactly this page and `presentar`, see file header),
-          so a guest clicking this one still lands on sign-in, same as
-          any other gated page. */}
-      <a
-        href={`/${lang}/ingles/actividades/${activity.id}/imprimir`}
-        data-testid="activity-print-link"
-        aria-label={t.print}
-        aria-describedby="action-print-tooltip"
-        class={ICON_TOOLTIP_TRIGGER_CLASS}
-      >
-        <PrinterIcon aria-hidden="true" size={16} />
-        <span role="tooltip" id="action-print-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
-          {t.print}
-        </span>
-      </a>
+        </div>
+      </div>
     </Fragment>
 
     {/* Per-visitor view count + "Basado en" credit line — plain rows

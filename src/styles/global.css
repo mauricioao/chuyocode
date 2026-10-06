@@ -903,11 +903,30 @@ html[data-desk-behind] main {
  * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.veil` /
  * `.window`. Tailwind utilities express the box itself (`DeskWindow.astro`'s
  * own classes); only the one-shot open animation and the two OS-preference
- * fallbacks need hand-written CSS, same posture as `.ingles-glass` above. */
+ * fallbacks need hand-written CSS, same posture as `.ingles-glass` above.
+ *
+ * STACKING FIX (PART 6a bugfix, 2026-10-06): both the veil and the window
+ * itself now render through `BaseLayout.astro`'s `overlay` slot — the LAST
+ * thing in `<body>`, after the footer, outside `<main>` — instead of inside
+ * the default slot. That alone stops the footer from painting over the
+ * window (it used to inherit `<main>`'s own stacking context, created by its
+ * `transition:animate`-driven `view-transition-name`, which trapped the
+ * window's `z-30` UNDER the footer — a later DOM sibling with no stacking
+ * context of its own always wins ties like that). Moving the markup is not
+ * enough on its own, though: `Header` (`z-40`, `sticky`) and
+ * `NavProgressBar` (`z-50`, `fixed`) are explicit, non-auto z-indexed
+ * stacking contexts of their own — being LAST in the document does not beat
+ * them, only an equal-or-higher z-index does. `z-50` here ties
+ * `NavProgressBar`'s own value; the tie resolves by DOM order (this slot is
+ * always last), so the window wins. It deliberately stays AT 50, not above
+ * it: a Radix dialog opened FROM WITHIN the window (`ShareDialog`'s own
+ * `DialogContent`) portals to `document.body` at the SAME `z-50` and mounts
+ * later still, so it keeps nesting correctly on top of the window — going
+ * any higher here would bury that nested dialog instead. */
 .ingles-window-veil {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 49;
   background: rgb(243 244 246 / 0.55);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
@@ -951,6 +970,23 @@ html[data-desk-behind] main {
 .ingles-window[data-fullscreen='true'] {
   inset: 0 !important;
   border-radius: 0 !important;
+}
+
+/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below `desk:`
+ * the title bar has no room for six 44px/36px icon buttons in one row
+ * (owner report: it used to wrap into a tall second row) — a plain
+ * checkbox + `<label>` CSS-only disclosure (`[id].astro`'s own markup:
+ * `peer`/`peer-checked:flex`), collapsed by default, NO JS REQUIRED (same
+ * no-JS-first posture as the traffic lights, `DeskWindow.astro`'s own
+ * header). At `desk:` and up the trigger is hidden (`desk:hidden`) and the
+ * panel must ALWAYS render as a plain row instead, regardless of the
+ * checkbox — `!important` here is what wins that over `peer-checked:flex`
+ * needing the box to stay CHECKED below `desk:`, same posture
+ * `.ingles-window[data-fullscreen='true']` already takes above. */
+@media (min-width: 1100px) {
+  [data-desk-window-more] > [data-desk-window-more-content] {
+    display: flex !important;
+  }
 }
 
 /* The one INGLÉS header transition that must NOT animate: collapsing once it

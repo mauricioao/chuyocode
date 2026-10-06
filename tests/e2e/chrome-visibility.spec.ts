@@ -213,7 +213,19 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
       expect(await footerExpanded(page)).toBe(true);
     });
 
-    test('the footer catches a real tap on its own links — it is never hidden/off-screen behind a collapse', async ({
+    // "Desktop" redesign PART 6a bugfix (owner report, 2026-10-06, superseding
+    // this test's old "the footer catches a real tap" premise): this page now
+    // opens as a true MODAL window (`role="dialog"` `aria-modal="true"`) that
+    // reliably paints ABOVE every other page element, including the footer
+    // (`DeskWindow.astro`/`BaseLayout.astro`'s own `overlay` slot fix) — and
+    // the footer is `inert` for as long as that window is open
+    // (`BaseLayout.astro`'s `hasOverlay`). A tap at the footer's own on-screen
+    // position must therefore resolve to the window/veil covering it, never
+    // to the footer itself — the OPPOSITE of what this test used to assert,
+    // back when the footer wrongly painted over the window (the very bug this
+    // fix closes: a student could not reach "Comprobar" because the footer
+    // sat on top of it).
+    test('the footer never catches a tap while the window is open — the window covers it, "expanded" or not', async ({
       page,
     }) => {
       const path = await findInglesActivityPath(page);
@@ -230,10 +242,17 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
         const box = link.getBoundingClientRect();
         if (box.top >= window.innerHeight || box.height < 1) return 'off-screen';
         const target = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-        return target?.closest('[data-chrome-footer]') ? 'footer' : 'page';
+        return target?.closest('[data-chrome-footer]') ? 'footer' : 'window';
       });
       test.skip(hit === 'off-screen', 'Footer is below the fold on this activity');
-      expect(hit).toBe('footer');
+      expect(hit).toBe('window');
+
+      // The footer is unreachable by keyboard too, while the window is open.
+      const footerInert = await page.evaluate(() => {
+        const footer = document.querySelector('[data-chrome-footer]');
+        return footer ? footer.closest('[inert]') != null : false;
+      });
+      expect(footerInert).toBe(true);
     });
 
     // "Desktop" redesign PART 6a (owner spec 2026-10-06, superseding this

@@ -866,6 +866,11 @@ export const UI_LABELS = {
         windowClose: 'Cerrar',
         windowMinimize: 'Minimizar',
         windowFullScreen: 'Pantalla completa',
+        // "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below
+        // the `desk:` breakpoint, Duplicar/Reportar/Presentar/Imprimir move
+        // behind this one trigger so the title bar's actions fit one row —
+        // see `DeskWindow.astro`'s own header.
+        windowMore: 'Más',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -2070,6 +2075,7 @@ export const UI_LABELS = {
         windowClose: 'Close',
         windowMinimize: 'Minimize',
         windowFullScreen: 'Full screen',
+        windowMore: 'More',
       },
       report: {
         button: 'Report',

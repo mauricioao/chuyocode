@@ -27,9 +27,25 @@
  * remaining content height, never past its own clipped edges.
  */
 
-/** The trigger's own box — a ≥44px (`size-11`) touch target, matching `variant="outline" size="icon-lg"` from `@/components/ui/button` (the house icon-button look) wherever a caller renders a plain element instead of that shared component. `group` + `relative` are load-bearing: the bubble below anchors to, and reveals on hover/focus of, exactly this element. */
+/**
+ * The trigger's own box — a ≥44px (`size-11`) touch target, matching
+ * `variant="outline" size="icon-lg"` from `@/components/ui/button` (the
+ * house icon-button look) wherever a caller renders a plain element instead
+ * of that shared component. `group` + `relative` are load-bearing: the
+ * bubble below anchors to, and reveals on hover/focus of, exactly this
+ * element.
+ *
+ * PART 6a phone layout fix (owner spec 2026-10-06): every caller of this
+ * class lives in the practice page's own window title bar, which has no
+ * room for six 44px squares below the `desk:` breakpoint — `size-9` (36px)
+ * there, back to the full `size-11` touch target at `desk:` and up where
+ * the title bar has the width to spare. The narrower size is a deliberate,
+ * scoped trade against the usual ≥44px touch-target guideline (every
+ * trigger still carries its own tooltip + `aria-label`, so the ACCESSIBLE
+ * NAME never shrinks, only the hit box).
+ */
 export const ICON_TOOLTIP_TRIGGER_CLASS =
-  'group relative inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+  'group relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 desk:size-11';
 
 /** The tooltip bubble itself — a sibling/child of the trigger, shown via `group-hover`/`group-focus-within` (never `group-focus`, which would skip touch/click focus-without-:focus-visible-support edge cases this codebase already favors elsewhere — see `WorksheetPlayer`'s own explanation popover). */
 export const ICON_TOOLTIP_BUBBLE_CLASS =

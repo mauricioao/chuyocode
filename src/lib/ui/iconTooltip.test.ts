@@ -19,9 +19,10 @@ describe('iconTooltip', () => {
     expect(ICON_TOOLTIP_BUBBLE_CLASS).toContain('max-w-[min(12rem,calc(100vw-2rem))]');
   });
 
-  it('the trigger is a real group root (load-bearing for the bubble above) and a >=44px touch target', () => {
+  it('the trigger is a real group root (load-bearing for the bubble above), compact below `desk:` (PART 6a phone layout fix) and a full >=44px touch target at `desk:` and up', () => {
     expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('group');
     expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('relative');
-    expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('size-11');
+    expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('size-9');
+    expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('desk:size-11');
   });
 });

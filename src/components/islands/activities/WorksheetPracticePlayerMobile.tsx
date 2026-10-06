@@ -226,13 +226,23 @@ export default function WorksheetPracticePlayerMobile({
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div
         ref={viewportRef}
         data-testid="practice-mobile-viewport"
-        className="canvas-dots relative w-full overflow-hidden rounded-lg bg-muted"
+        className="canvas-dots relative min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-muted"
         style={{
-          aspectRatio: `${displaySize.width} / ${displaySize.height}`,
+          // Bugfix (PART 6a phone layout fix, 2026-10-06): this viewport used
+          // to size itself from the worksheet's own `aspectRatio` (shrink to
+          // fit WIDTH, whatever height that left), which is why it left a
+          // large empty gap below it inside the window's now fixed-height
+          // body. `min-h-0 flex-1` above fills the actual space between the
+          // title bar and the footer instead — the exact same approach the
+          // DESKTOP camera viewport (`WorksheetPracticePlayer.tsx`'s own
+          // `practice-camera-viewport`) already uses. `fitCamera`'s own
+          // `ResizeObserver` (below) already recomputes the image's scale
+          // from whatever box size this ends up with, so nothing else here
+          // needs to change for the sheet to still fit correctly.
           // See the file header's "Gesture ownership": at fit scale, a
           // single finger is left to the browser's own vertical scroll;
           // once zoomed in, this component owns the whole gesture.

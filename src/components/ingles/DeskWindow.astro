@@ -17,6 +17,23 @@
  * `@lib/ui/deskWindow.ts#initDeskWindow` layers on top once it runs. "Full
  * screen" (green) has no meaningful no-JS behaviour (there is no state to
  * toggle without a script) and stays a real `<button>`.
+ *
+ * RENDERED THROUGH `BaseLayout.astro`'s `overlay` SLOT (bugfix, 2026-10-06):
+ * `[id].astro` passes this whole component (veil + dialog) with
+ * `slot="overlay"` — the layout's own LAST element in `<body>`, after the
+ * footer, outside `<main>` — never the default slot. See `global.css`'s own
+ * `.ingles-window-veil` comment for why: rendering inside `<main>` let the
+ * footer paint OVER the dialog (a stacking-context trap, not a z-index
+ * problem by itself), and `z-50` here only matters once the markup already
+ * sits outside that trap.
+ *
+ * INITIAL FOCUS lands on the dialog element itself (`tabindex="-1"`,
+ * `outline-none` — never visibly focus-ringed, this is a container, not a
+ * control), not the red light: focusing a traffic light first showed a
+ * focus ring on it even for a pointer visit, which this dialog never wants
+ * on open. A keyboard user's very next Tab reaches the red light exactly as
+ * before (`initDeskWindow`'s own focus trap, `@lib/ui/deskWindow.ts`, keeps
+ * Tab/Shift+Tab cycling inside here).
  */
 import type { Lang } from '@lib/i18n';
 import { ROW_PADDING_X } from '@lib/ui/layout';
@@ -66,9 +83,13 @@ const {
   role="dialog"
   aria-modal="true"
   aria-labelledby={titleId}
-  class="ingles-window fixed inset-0 z-30 flex flex-col overflow-hidden rounded-none bg-card desk:inset-x-16 desk:top-16 desk:bottom-8 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
+  tabindex="-1"
+  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-16 desk:top-16 desk:bottom-8 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
 >
-  <div class={`flex flex-none flex-wrap items-center gap-4 border-b border-border ${ROW_PADDING_X} py-3`}>
+  <div
+    data-testid="desk-window-titlebar"
+    class={`flex flex-none flex-nowrap items-center gap-4 border-b border-border ${ROW_PADDING_X} py-3`}
+  >
     <div class="flex items-center gap-2">
       <a
         href={closeHref}
@@ -93,12 +114,12 @@ const {
         class="h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       ></button>
     </div>
-    <div class="flex min-w-0 items-baseline gap-2.5">
-      <b id={titleId} class="truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
+    <div class="flex min-w-0 flex-1 items-baseline gap-2.5">
+      <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
         {title}
       </b>
       {levelChip && (
-        <span class="whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43]">
+        <span class="shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43]">
           {levelChip}
         </span>
       )}

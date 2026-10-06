@@ -159,6 +159,17 @@ const {
 
 const isIngles = theme === 'ingles';
 
+/**
+ * PART 6a bugfix (owner spec 2026-10-06): does this page pass anything into
+ * the `overlay` slot below — the practice page's own `DeskWindow`, rendered
+ * with `slot="overlay"` (`[id].astro`'s own header) rather than the default
+ * slot, so it paints OUTSIDE `<main>` and after the footer (see that slot's
+ * own comment). While it does, the header/footer sit BEHIND the window's own
+ * veil and must be `inert` — unreachable by keyboard/AT, same posture
+ * `DeskScene.astro`'s own `inert` prop already gives the desk.
+ */
+const hasOverlay = Astro.slots.has('overlay');
+
 // "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
 // the hub is the ONE Inglés page whose header stays always visible and
 // whose footer gets scroll-snap — `chromeVisibility.ts`/`global.css` key off
@@ -325,9 +336,9 @@ const faviconSvg =
         page is completely unaffected — this branch only ever runs when
         `isIngles` is true. */}
     {!bare &&
-      (isIngles ? <Header lang={lang} ingles /> : (
+      (isIngles ? <Header lang={lang} ingles inert={hasOverlay} /> : (
         <div data-theme="brand" class="dark contents">
-          <Header lang={lang} />
+          <Header lang={lang} inert={hasOverlay} />
         </div>
       ))}
     {/* Cleaner transitions (navigation-without-flicker PR): ONLY the main
@@ -345,9 +356,9 @@ const faviconSvg =
         note above. BARE mode drops it. INGLÉS: same unwrapped treatment as
         the header above — see that block's own comment. */}
     {!bare &&
-      (isIngles ? <Footer lang={lang} ingles /> : (
+      (isIngles ? <Footer lang={lang} ingles inert={hasOverlay} /> : (
         <div data-theme="brand" class="dark contents">
-          <Footer lang={lang} />
+          <Footer lang={lang} inert={hasOverlay} />
         </div>
       ))}
 
@@ -423,5 +434,16 @@ const faviconSvg =
       // own header.
       initChromeVisibility();
     </script>
+
+    {/* Overlay slot (PART 6a bugfix, 2026-10-06) — the LAST thing in
+        `<body>`, after the footer and every other chrome piece above,
+        outside `<main>` entirely. Today's one caller is the practice page's
+        own `DeskWindow` (`[id].astro`, `slot="overlay"`): rendering it here
+        instead of in the default slot is what stops the footer from
+        painting OVER the window (see `global.css`'s own
+        `.ingles-window-veil` comment for the stacking-context mechanics).
+        Nothing else currently uses this slot, so it is a no-op everywhere
+        else. */}
+    <slot name="overlay" />
   </body>
 </html>

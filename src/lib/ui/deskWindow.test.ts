@@ -1,5 +1,19 @@
+// @vitest-environment jsdom
+//
+// Only `focusableElements` below needs a real DOM (`document.createElement`)
+// — every other describe block in this file is pure/zero-DOM, same as
+// before. The pragma routes the WHOLE file to the jsdom Vitest project
+// (`src/testSupport/vitestProjectSplit.ts`); splitting it into two files
+// just to keep the rest on the cheaper `node` project is not worth the
+// churn for one new describe block.
 import { describe, it, expect } from 'vitest';
-import { resolveCloseAction, shouldStartFullScreen, readFullScreenPreference, writeFullScreenPreference } from './deskWindow';
+import {
+  resolveCloseAction,
+  shouldStartFullScreen,
+  readFullScreenPreference,
+  writeFullScreenPreference,
+  focusableElements,
+} from './deskWindow';
 
 describe('resolveCloseAction', () => {
   const origin = 'https://chuyocode.test';
@@ -89,5 +103,28 @@ describe('readFullScreenPreference / writeFullScreenPreference', () => {
       },
     };
     expect(() => writeFullScreenPreference(true, storage)).not.toThrow();
+  });
+});
+
+describe('focusableElements', () => {
+  it('finds links, buttons and explicit tabindex in DOM order, skipping disabled controls and tabindex="-1"', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <a href="/a">link</a>
+      <button disabled>disabled</button>
+      <button>button</button>
+      <div tabindex="-1">not tabbable</div>
+      <div tabindex="0">tabbable div</div>
+      <input disabled />
+      <input />
+    `;
+    const found = focusableElements(container);
+    expect(found.map((el) => el.tagName)).toEqual(['A', 'BUTTON', 'DIV', 'INPUT']);
+  });
+
+  it('returns an empty array when nothing inside is focusable', () => {
+    const container = document.createElement('div');
+    container.innerHTML = '<p>plain text</p>';
+    expect(focusableElements(container)).toEqual([]);
   });
 });
