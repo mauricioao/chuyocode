@@ -36,8 +36,10 @@
  * 6. success                                         -> 200 { ok:true }
  * ```
  *
- * Accepts ONLY a JSON body — same `request.json()` try/catch posture as
- * `eliminar.ts`/`nombre.ts`, never a separate `content-type` header check.
+ * Accepts ONLY `application/json`, checked on the `content-type` header
+ * before parsing (a cross-site form can post `text/plain` with a JSON-shaped
+ * body, which `request.json()` parses) — same guard as `nombre.ts` and
+ * `src/pages/api/auth/consentimiento.ts`.
  *
  * Every response is private/no-store (T7); never echoes either password
  * back, and only ever logs `error.code`/`error.message`, never the request
@@ -59,6 +61,11 @@ function respond(body: unknown, status: number, session?: SessionClient): Respon
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
   if (!user) return requireUser();
+
+  const contentType = request.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return respond({ ok: false, error: 'bad_request' }, 400);
+  }
 
   let body: { currentPassword?: unknown; newPassword?: unknown };
   try {

@@ -16,12 +16,11 @@
  * 4. success                                        -> 200 { ok:true, name:<normalized> }
  * ```
  *
- * Accepts ONLY a JSON body: `request.json()` throws for anything a
- * cross-site form could actually submit (`text/plain`,
- * `application/x-www-form-urlencoded`) and that throw maps to the same 400
- * `invalid_name` a malformed JSON body gets — same posture as
- * `eliminar.ts`'s own `confirmation_required` catch, not a separate
- * `content-type` header check.
+ * Accepts ONLY `application/json`, checked on the `content-type` header
+ * before parsing: a cross-site form can post `text/plain` with a JSON-shaped
+ * body, which `request.json()` parses without complaint. Anything else maps
+ * to the same 400 `invalid_name` a malformed JSON body gets (same guard as
+ * `src/pages/api/auth/consentimiento.ts`).
  *
  * Every response is private/no-store (T7) — it is read off `locals.user`
  * and `updateUser` may rotate the session.
@@ -42,6 +41,11 @@ function respond(body: unknown, status: number, session?: SessionClient): Respon
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
   if (!user) return requireUser();
+
+  const contentType = request.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return respond({ ok: false, error: 'invalid_name' }, 400);
+  }
 
   let body: { name?: unknown };
   try {

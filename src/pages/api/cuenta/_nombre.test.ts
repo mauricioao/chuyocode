@@ -63,6 +63,19 @@ describe('POST /api/cuenta/nombre — validation', () => {
     expect(updateUserMock).not.toHaveBeenCalled();
   });
 
+  it('400s a text/plain body even when it is JSON-shaped (cross-site form)', async () => {
+    // request.json() parses this happily; only the content-type tells it apart.
+    const request = new Request('https://chuyocode.com/api/cuenta/nombre', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ name: 'Pwned' }),
+    });
+    const res = await POST({ request, locals: { user: USER } } as unknown as Parameters<typeof POST>[0]);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'invalid_name' });
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
   it('400s an empty name', async () => {
     const res = await POST(ctx({ name: '' }));
     expect(res.status).toBe(400);

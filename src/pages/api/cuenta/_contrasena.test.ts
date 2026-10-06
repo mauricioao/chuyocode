@@ -77,6 +77,20 @@ describe('POST /api/cuenta/contrasena — validation', () => {
     expect(signInWithPasswordMock).not.toHaveBeenCalled();
   });
 
+  it('400s a text/plain body even when it is JSON-shaped (cross-site form)', async () => {
+    // request.json() parses this happily; only the content-type tells it apart.
+    const request = new Request('https://chuyocode.com/api/cuenta/contrasena', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ currentPassword: 'old-password1', newPassword: 'new-password1' }),
+    });
+    const res = await POST({ request, locals: { user: PASSWORD_USER } } as unknown as Parameters<typeof POST>[0]);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'bad_request' });
+    expect(signInWithPasswordMock).not.toHaveBeenCalled();
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
   it('400s a missing currentPassword', async () => {
     const res = await POST(ctx({ newPassword: 'new-password1' }));
     expect(res.status).toBe(400);
