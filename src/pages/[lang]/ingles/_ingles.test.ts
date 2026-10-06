@@ -68,6 +68,8 @@ import EntryPage from './index.astro';
 import PropuestosPage from './propuestos/index.astro';
 import ListingPage from './[level]/[focus]/index.astro';
 import DetailPage from './[level]/[focus]/[slug].astro';
+import { DESK_HELPER_TIPS, pickDailyTipIndex } from '@/content/deskHelperTips';
+import { CHARACTERS } from '@/content/characters';
 
 type PageComponent = Parameters<
   Awaited<ReturnType<typeof createContainer>>['renderToResponse']
@@ -340,6 +342,76 @@ describe('ingles/index.astro (hub)', () => {
       expect(tileFor('B2').match(/bg-pop-sky/g)).toHaveLength(4);
       expect(tileFor('C1').match(/bg-pop-violet/g)).toHaveLength(5);
       expect(tileFor('C2').match(/bg-pop-violet/g)).toHaveLength(6);
+    });
+  });
+
+  describe('desk helper ("desktop" redesign PART 5)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function todaysTip() {
+      const index = pickDailyTipIndex(new Date(), DESK_HELPER_TIPS.length);
+      return DESK_HELPER_TIPS[index];
+    }
+
+    it('renders the landmark and the character image with a decorative (empty) alt', async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('aria-label="Ayuda"');
+      const tip = todaysTip();
+      expect(html).toContain(`/images/characters/${tip.character}-v2-128.webp`);
+      expect(html).toMatch(/<img[^>]+data-desk-helper-img[^>]+alt=""/);
+    });
+
+    it("renders today's tip bubble, in Spanish, naming the speaking character", async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      const tip = todaysTip();
+      expect(html).toContain(CHARACTERS[tip.character].alt.es);
+      expect(html).toContain(tip.es);
+      expect(html).toContain('aria-label="Ayuda de');
+    });
+
+    it('renders the same tip in English, translating only the surrounding chrome', async () => {
+      const res = await renderPage(EntryPage, { lang: 'en' }, { lang: 'en' });
+      const html = await res.text();
+
+      const tip = todaysTip();
+      expect(html).toContain(tip.en);
+      expect(html).toContain('Another tip');
+      expect(html).toContain('aria-label="Close help"');
+    });
+
+    it('gives "Otro tip" and the close button accessible names', async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toContain('id="desk-helper-next"');
+      expect(html).toContain('Otro tip');
+      expect(html).toContain('aria-label="Cerrar ayuda"');
+    });
+
+    it('starts open on the server render, so a no-JS visitor still sees the tip', async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).toMatch(/id="desk-helper-avatar"[^>]+aria-expanded="true"/);
+    });
+
+    it('never renders on the curated-exercises picker (hub-only scope)', async () => {
+      getExerciseFacetRows.mockResolvedValue([]);
+      const res = await renderPage(PropuestosPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      expect(html).not.toContain('id="desk-helper"');
     });
   });
 

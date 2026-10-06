@@ -1324,6 +1324,14 @@ export const UI_LABELS = {
         playerPause: 'Pausar',
         playerUnavailable: 'Audio no disponible en este dispositivo',
         arrangeDesktop: 'Ordenar escritorio',
+        // "Desktop" redesign PART 5 (owner spec 2026-10-06): the floating
+        // character "helper" with a grammar-tip speech bubble, bottom-left
+        // of the hub only. `{name}` is replaced with the speaking
+        // character's own display name (`@/content/characters`).
+        helperLandmarkLabel: 'Ayuda',
+        helperAvatarLabel: 'Ayuda de {name}',
+        helperOtherTip: 'Otro tip',
+        helperClose: 'Cerrar ayuda',
       },
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
@@ -2413,6 +2421,10 @@ export const UI_LABELS = {
         playerPause: 'Pause',
         playerUnavailable: 'Audio not available on this device',
         arrangeDesktop: 'Arrange desktop',
+        helperLandmarkLabel: 'Help',
+        helperAvatarLabel: 'Help from {name}',
+        helperOtherTip: 'Another tip',
+        helperClose: 'Close help',
       },
       section: {
         // Matches the Spanish move: name the section, not its audience.
