@@ -762,6 +762,20 @@ h3 {
   z-index: 2;
 }
 
+/* Owner-reported bug: the clock's hover tooltip ("It's quarter to ten.") is
+ * positioned BELOW the clock (`DeskClockWidget.astro`'s own `[data-clock-
+ * say]`), which spills into the next widget's own box — the weather widget,
+ * later in DOM order, painted on top at the SAME base `z-index: 2` above,
+ * hiding the label behind it. Raising the hovered/focused widget's own
+ * stacking context (never the dragging level, which stays visually "lifted
+ * off the desk" above everything) is enough to keep its tooltip above every
+ * sibling widget without needing JS. `focus-within` carries the same raise
+ * for keyboard users tabbing onto the widget, not only pointer hover. */
+[data-desk-widget]:hover,
+[data-desk-widget]:focus-within {
+  z-index: 3;
+}
+
 [data-desk-widget].is-dragging {
   z-index: 4;
   box-shadow:
