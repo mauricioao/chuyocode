@@ -52,16 +52,32 @@ function tickClock(clock: Element): void {
   clock.removeAttribute('aria-hidden');
 }
 
-/** Only rebuilds the month grid when the calendar day actually changes (once a day, not once a second). */
-let lastRenderedDateKey = '';
+/**
+ * Only rebuilds the month grid when the calendar day actually changes (once
+ * a day, not once a second) — tracked PER ELEMENT (a data attribute), never
+ * at module level.
+ *
+ * A module-level `lastRenderedDateKey` (the previous shape of this guard) is
+ * a real bug once an Astro `ClientRouter` navigation is in play: navigating
+ * away from the hub and back swaps in a brand-new, server-rendered EMPTY
+ * calendar shell (no `transition:persist` on it), but the module itself
+ * keeps running in the same browser tab, so `lastRenderedDateKey` still
+ * holds the PREVIOUS visit's date key. The guard above then compares the
+ * (unchanged) date key against that stale memory, matches, and returns
+ * early — leaving the fresh shell showing only its static `S M T W T F S`
+ * header, with no weekday, number or grid ever painted in. Keying off the
+ * element's own attribute instead means a brand-new element (no attribute
+ * yet) always renders at least once, exactly like a first-ever visit.
+ */
+const CALENDAR_DATE_KEY_ATTR = 'data-calendar-date-key';
 
 function renderCalendar(calendar: Element, now: Date): void {
   const day = now.getDate();
   const month = now.getMonth();
   const year = now.getFullYear();
   const dateKey = `${year}-${month}-${day}`;
-  if (dateKey === lastRenderedDateKey) return;
-  lastRenderedDateKey = dateKey;
+  if (calendar.getAttribute(CALENDAR_DATE_KEY_ATTR) === dateKey) return;
+  calendar.setAttribute(CALENDAR_DATE_KEY_ATTR, dateKey);
 
   const dayNameEl = calendar.querySelector('[data-calendar-day]');
   if (dayNameEl) dayNameEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -93,10 +109,27 @@ function renderCalendar(calendar: Element, now: Date): void {
 }
 
 /**
+ * The one tick interval this module ever runs, across every call —
+ * `index.astro`'s own script calls `initDeskWidgets` both immediately AND
+ * on every `astro:page-load` (which also fires for the very first load, see
+ * that file's own comment), and each call used to start its OWN
+ * `setInterval`, stacking one more tick loop per call forever: every widget
+ * on the page would then re-render (and `tickClock`'s DOM writes run) once
+ * per STACKED interval per second, each extra one wasted work tied to
+ * elements an earlier call queried, not necessarily the ones currently on
+ * screen. Clearing the previous interval before starting a new one keeps
+ * exactly one alive, always driven by the CURRENT call's own elements.
+ */
+let tickIntervalId: ReturnType<typeof setInterval> | undefined;
+
+/**
  * Wires both widgets, if present on the page, and starts their one shared
  * 1-second tick (the clock's hands move every second; the calendar only
  * actually re-renders on a day change — see {@link renderCalendar}).
- * Safe to call on a page with neither widget (both lookups are optional).
+ * Safe to call on a page with neither widget (both lookups are optional),
+ * and safe to call more than once (re-reads the DOM fresh each time, same
+ * posture as `initDeskDrag`/`initDeskHelper` — see {@link tickIntervalId}
+ * for why only one tick loop ever survives a re-init).
  */
 export function initDeskWidgets(doc: Document = document): void {
   const clock = doc.getElementById('desk-clock');
@@ -110,5 +143,7 @@ export function initDeskWidgets(doc: Document = document): void {
   }
 
   tick();
-  setInterval(tick, 1000);
+
+  if (tickIntervalId !== undefined) clearInterval(tickIntervalId);
+  tickIntervalId = setInterval(tick, 1000);
 }

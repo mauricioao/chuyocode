@@ -164,4 +164,37 @@ describe('initDeskDrag — arrange reset', () => {
     expect(clock.style.top).toBe('10px');
     expect(seen).toContain(false);
   });
+
+  // Regression test (same class of bug as the calendar going empty after a
+  // navigation, see `deskWidgets.test.ts`): `document` is never replaced by
+  // an `astro:page-load` navigation, unlike the widgets themselves — a
+  // document-level reset listener added on every `initDeskDrag` call used
+  // to stack one more copy per call, forever. A single dispatched reset
+  // event would then fire every stacked copy, each pushing its own
+  // `visible: false` announcement — this asserts exactly one survives.
+  it('re-initializing after a navigation does not stack duplicate reset listeners', () => {
+    initDeskDrag(document);
+
+    // Simulate the hub's own re-init on a client-side navigation back to
+    // itself: the desk section's markup is entirely replaced with a fresh
+    // (unmoved) shell, same as a real `astro:page-load` re-render.
+    setDom();
+    initDeskDrag(document);
+
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+    clock.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(localStorage.getItem(DESK_DRAG_STORAGE_KEY)).not.toBeNull();
+
+    const seen: boolean[] = [];
+    document.addEventListener(DESK_ARRANGE_VISIBILITY_EVENT, (e) => seen.push((e as CustomEvent<{ visible: boolean }>).detail.visible));
+
+    document.dispatchEvent(new CustomEvent(DESK_ARRANGE_RESET_EVENT));
+
+    // A stacked second listener would push `false` twice for this single
+    // dispatched event.
+    expect(seen.filter((v) => v === false)).toHaveLength(1);
+    expect(localStorage.getItem(DESK_DRAG_STORAGE_KEY)).toBeNull();
+    expect(clock.style.left).toBe('20px');
+    expect(clock.style.top).toBe('10px');
+  });
 });

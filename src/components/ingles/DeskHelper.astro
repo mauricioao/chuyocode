@@ -86,9 +86,9 @@ const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
     aria-expanded="true"
     aria-controls="desk-helper-bubble"
     aria-label={defaultAvatarLabel}
-    class="relative block h-16 w-16 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-[124px] desk:w-[124px] desk:rounded-none desk:border-0 desk:bg-transparent"
+    class="relative block h-16 w-16 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-24 desk:w-24"
   >
-    <picture class="block h-full w-full overflow-hidden rounded-full desk:overflow-visible desk:rounded-none">
+    <picture class="block h-full w-full overflow-hidden rounded-full">
       <source data-desk-helper-avif type="image/avif" srcset={characterSrcSet(defaultTip.character, 'avif')} />
       <source data-desk-helper-webp type="image/webp" srcset={characterSrcSet(defaultTip.character, 'webp')} />
       <img
@@ -98,7 +98,7 @@ const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
         width="124"
         height="124"
         decoding="async"
-        class="-ml-1 mt-0.5 block h-[72px] w-[72px] desk:ml-0 desk:mt-0 desk:h-[124px] desk:w-[124px]"
+        class="-ml-1 mt-0.5 block h-[72px] w-[72px] desk:h-28 desk:w-28"
       />
     </picture>
   </button>
@@ -108,7 +108,7 @@ const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
     data-desk-helper-bubble
     role="status"
     aria-live="polite"
-    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground before:absolute before:-bottom-[11px] before:left-[18px] before:h-[18px] before:w-[18px] before:rotate-[35deg] before:skew-x-[-10deg] before:border-r-2 before:border-b-2 before:border-foreground before:bg-card before:content-[''] [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[104px] desk:max-w-[290px] desk:text-[13.5px]"
+    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground before:absolute before:-bottom-[11px] before:left-[18px] before:h-[18px] before:w-[18px] before:rotate-[35deg] before:skew-x-[-10deg] before:border-r-2 before:border-b-2 before:border-foreground before:bg-card before:content-[''] [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
   >
     <b data-desk-helper-name class="mb-0.5 block font-semibold">{defaultName}</b>
     <span data-desk-helper-tip set:html={defaultHtml} />
