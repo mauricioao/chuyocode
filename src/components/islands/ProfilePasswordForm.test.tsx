@@ -12,6 +12,10 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  // Same teardown as `SignInForm.test.tsx`: the Turnstile stub and script tag
+  // live outside React's tree, so `cleanup()` never removes them.
+  delete (window as unknown as { turnstile?: unknown }).turnstile;
+  scriptTags().forEach((el) => el.remove());
 });
 
 function scriptTags(): NodeListOf<HTMLScriptElement> {
@@ -200,10 +204,9 @@ describe('ProfilePasswordForm — Turnstile, site key configured', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: false, error: 'invalid_current_password' }) }),
     );
+    const { render: renderMock, reset: resetMock } = stubTurnstileGlobal();
     render(<ProfilePasswordForm lang="es" />);
 
-    const { render: renderMock, reset: resetMock } = stubTurnstileGlobal();
-    scriptTags()[0].dispatchEvent(new Event('load'));
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     act(() => {
       renderMock.mock.calls[0][1].callback('tok-abc');
@@ -229,10 +232,9 @@ describe('ProfilePasswordForm — Turnstile, site key configured', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: false, error: 'captcha_failed' }) }),
     );
+    const { render: renderMock } = stubTurnstileGlobal();
     render(<ProfilePasswordForm lang="es" />);
 
-    const { render: renderMock } = stubTurnstileGlobal();
-    scriptTags()[0].dispatchEvent(new Event('load'));
     await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
     act(() => {
       renderMock.mock.calls[0][1].callback('tok-abc');
