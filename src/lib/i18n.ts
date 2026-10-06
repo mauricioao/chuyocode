@@ -858,6 +858,19 @@ export const UI_LABELS = {
         // 2026-10-04) — "Estás"/"Crea"/"tus" address the reader directly.
         guestBanner: 'Estás jugando como invitado. Crea tu cuenta gratis para dar corazones y crear tus propias actividades.',
         guestSignUp: 'Crear cuenta',
+        // "Desktop" redesign PART 6a (owner spec 2026-10-06): the practice
+        // page opens as a WINDOW over the desk — see `DeskWindow.astro`'s own
+        // header. The three "traffic light" buttons' accessible names; close
+        // and minimize do the exact same thing (both return to the desk),
+        // same posture as the approved mockup's own shared `data-close`.
+        windowClose: 'Cerrar',
+        windowMinimize: 'Minimizar',
+        windowFullScreen: 'Pantalla completa',
+        // "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below
+        // the `desk:` breakpoint, Duplicar/Reportar/Presentar/Imprimir move
+        // behind this one trigger so the title bar's actions fit one row —
+        // see `DeskWindow.astro`'s own header.
+        windowMore: 'Más',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -2059,6 +2072,10 @@ export const UI_LABELS = {
         shareNative: 'More options',
         guestBanner: "You're playing as a guest. Create a free account to give hearts and make your own activities.",
         guestSignUp: 'Sign up',
+        windowClose: 'Close',
+        windowMinimize: 'Minimize',
+        windowFullScreen: 'Full screen',
+        windowMore: 'More',
       },
       report: {
         button: 'Report',

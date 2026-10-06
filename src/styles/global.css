@@ -889,10 +889,104 @@ html[data-chrome-hub][data-chrome-js][data-chrome-mode='ingles'] [data-chrome-co
  * (from its `transition:animate`) is one, and so is the scroll-reveal
  * `.reveal` wrapper (which the hub no longer uses): with either in place
  * Chrome shows the greeting SHARP through the widgets instead of blurred.
- * On the hub only, `<main>` drops its name and page changes use the root
- * cross-fade instead. */
-html[data-chrome-hub] main {
+ * On the hub, and on any OTHER page that renders the desk behind something
+ * else (`data-desk-behind` — "desktop" redesign PART 6a, the practice
+ * page's own window, `BaseLayout.astro`'s own `deskBehind` prop), `<main>`
+ * drops its name and page changes use the root cross-fade instead. */
+html[data-chrome-hub] main,
+html[data-desk-behind] main {
   view-transition-name: none;
+}
+
+/* ── Desk window ("desktop" redesign PART 6a, owner spec 2026-10-06) ───────
+ * The practice page renders as a WINDOW over the desk — approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.veil` /
+ * `.window`. Tailwind utilities express the box itself (`DeskWindow.astro`'s
+ * own classes); only the one-shot open animation and the two OS-preference
+ * fallbacks need hand-written CSS, same posture as `.ingles-glass` above.
+ *
+ * STACKING FIX (PART 6a bugfix, 2026-10-06): both the veil and the window
+ * itself now render through `BaseLayout.astro`'s `overlay` slot — the LAST
+ * thing in `<body>`, after the footer, outside `<main>` — instead of inside
+ * the default slot. That alone stops the footer from painting over the
+ * window (it used to inherit `<main>`'s own stacking context, created by its
+ * `transition:animate`-driven `view-transition-name`, which trapped the
+ * window's `z-30` UNDER the footer — a later DOM sibling with no stacking
+ * context of its own always wins ties like that). Moving the markup is not
+ * enough on its own, though: `Header` (`z-40`, `sticky`) and
+ * `NavProgressBar` (`z-50`, `fixed`) are explicit, non-auto z-indexed
+ * stacking contexts of their own — being LAST in the document does not beat
+ * them, only an equal-or-higher z-index does. `z-50` here ties
+ * `NavProgressBar`'s own value; the tie resolves by DOM order (this slot is
+ * always last), so the window wins. It deliberately stays AT 50, not above
+ * it: a Radix dialog opened FROM WITHIN the window (`ShareDialog`'s own
+ * `DialogContent`) portals to `document.body` at the SAME `z-50` and mounts
+ * later still, so it keeps nesting correctly on top of the window — going
+ * any higher here would bury that nested dialog instead. */
+.ingles-window-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: rgb(243 244 246 / 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* `prefers-reduced-transparency` (same fallback posture as `.ingles-glass`). */
+@media (prefers-reduced-transparency: reduce) {
+  .ingles-window-veil {
+    background: var(--color-surface-soft);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@keyframes ingles-window-open {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ingles-window {
+  transform-origin: var(--ingles-window-from, 50% 50%);
+  animation: ingles-window-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingles-window {
+    animation: none;
+  }
+}
+
+/* Full screen (green light), remembered per browser — forces the full-bleed
+ * sheet regardless of the `desk:` breakpoint's own inset. `!important`
+ * because it must win over the SAME-specificity Tailwind utility classes
+ * that set the desktop inset, regardless of stylesheet order. */
+.ingles-window[data-fullscreen='true'] {
+  inset: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below `desk:`
+ * the title bar has no room for six 44px/36px icon buttons in one row
+ * (owner report: it used to wrap into a tall second row) — a plain
+ * checkbox + `<label>` CSS-only disclosure (`[id].astro`'s own markup:
+ * `peer`/`peer-checked:flex`), collapsed by default, NO JS REQUIRED (same
+ * no-JS-first posture as the traffic lights, `DeskWindow.astro`'s own
+ * header). At `desk:` and up the trigger is hidden (`desk:hidden`) and the
+ * panel must ALWAYS render as a plain row instead, regardless of the
+ * checkbox — `!important` here is what wins that over `peer-checked:flex`
+ * needing the box to stay CHECKED below `desk:`, same posture
+ * `.ingles-window[data-fullscreen='true']` already takes above. */
+@media (min-width: 1100px) {
+  [data-desk-window-more] > [data-desk-window-more-content] {
+    display: flex !important;
+  }
 }
 
 /* The one INGLÉS header transition that must NOT animate: collapsing once it

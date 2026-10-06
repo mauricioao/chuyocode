@@ -1,0 +1,154 @@
+---
+/**
+ * DeskWindow — the practice page renders as a WINDOW over the Inglés desk
+ * ("desktop" redesign PART 6a, owner spec 2026-10-06, approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.veil` /
+ * `.window` / `.titlebar` / `.lights` / `.wactions`). Owner's own words on
+ * the refinement that makes this possible without losing real URLs: "la
+ * dirección cambia por detrás, pero vos nunca salís del escritorio" — this
+ * component is purely the SHELL (veil, lights, title, chip, an `actions`
+ * slot, a body slot); the page behind it decides whether a desk renders at
+ * all (`DeskScene.astro`, signed-in only — see `[id].astro`'s own header).
+ *
+ * Both "close" (red) and "minimize" (yellow) are plain `<a href={closeHref}>`
+ * anchors, not buttons — same no-JS-first posture as `BackButton.astro`:
+ * a visitor with scripting disabled still lands on the desk (or the
+ * ChuyoCode home for a guest), just without the `history.back()` nicety
+ * `@lib/ui/deskWindow.ts#initDeskWindow` layers on top once it runs. "Full
+ * screen" (green) has no meaningful no-JS behaviour (there is no state to
+ * toggle without a script) and stays a real `<button>`.
+ *
+ * RENDERED THROUGH `BaseLayout.astro`'s `overlay` SLOT (bugfix, 2026-10-06):
+ * `[id].astro` passes this whole component (veil + dialog) with
+ * `slot="overlay"` — the layout's own LAST element in `<body>`, after the
+ * footer, outside `<main>` — never the default slot. See `global.css`'s own
+ * `.ingles-window-veil` comment for why: rendering inside `<main>` let the
+ * footer paint OVER the dialog (a stacking-context trap, not a z-index
+ * problem by itself), and `z-50` here only matters once the markup already
+ * sits outside that trap.
+ *
+ * INITIAL FOCUS lands on the dialog element itself (`tabindex="-1"`,
+ * `outline-none` — never visibly focus-ringed, this is a container, not a
+ * control), not the red light: focusing a traffic light first showed a
+ * focus ring on it even for a pointer visit, which this dialog never wants
+ * on open. A keyboard user's very next Tab reaches the red light exactly as
+ * before (`initDeskWindow`'s own focus trap, `@lib/ui/deskWindow.ts`, keeps
+ * Tab/Shift+Tab cycling inside here).
+ */
+import type { Lang } from '@lib/i18n';
+import { ROW_PADDING_X } from '@lib/ui/layout';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  titleId?: string;
+  /** e.g. "A2 · Básico" — omitted entirely when the activity has no level. */
+  levelChip?: string | null;
+  /** The hub (signed-in) or the ChuyoCode home (guest) — see `[id].astro`'s own header. */
+  closeHref: string;
+  closeLabel: string;
+  minimizeLabel: string;
+  fullScreenLabel: string;
+  /**
+   * PART 6a (owner spec 2026-10-06): true for a GUEST (no desk behind the
+   * window — a guest cannot see the gated hub at all). The window opens full
+   * screen (inset 0, no radius) rather than the normal desktop-inset window,
+   * so there is no plain-background gap at the edges revealing the page's
+   * own footer underneath. Server-rendered (no-JS-first, same posture as
+   * `BackButton.astro`): a guest's full-screen start never depends on a
+   * script running. The green light still toggles from there normally.
+   */
+  forceFullScreen?: boolean;
+}
+
+const {
+  title,
+  titleId = 'desk-window-title',
+  levelChip = null,
+  closeHref,
+  closeLabel,
+  minimizeLabel,
+  fullScreenLabel,
+  forceFullScreen = false,
+} = Astro.props;
+---
+
+<div class="ingles-window-veil" aria-hidden="true"></div>
+
+<section
+  id="desk-window"
+  data-desk-window
+  data-close-target={closeHref}
+  data-fullscreen={forceFullScreen ? 'true' : undefined}
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby={titleId}
+  tabindex="-1"
+  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-16 desk:top-16 desk:bottom-8 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
+>
+  <div
+    data-testid="desk-window-titlebar"
+    class={`flex flex-none flex-nowrap items-center gap-4 border-b border-border ${ROW_PADDING_X} py-3`}
+  >
+    <div class="flex items-center gap-2">
+      <a
+        href={closeHref}
+        data-desk-window-close
+        aria-label={closeLabel}
+        title={closeLabel}
+        class="h-3.5 w-3.5 rounded-full bg-pop-red focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      ></a>
+      <a
+        href={closeHref}
+        data-desk-window-close
+        aria-label={minimizeLabel}
+        title={minimizeLabel}
+        class="h-3.5 w-3.5 rounded-full bg-pop-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      ></a>
+      <button
+        type="button"
+        data-desk-window-fullscreen
+        aria-label={fullScreenLabel}
+        title={fullScreenLabel}
+        aria-pressed={forceFullScreen ? 'true' : 'false'}
+        class="h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      ></button>
+    </div>
+    <div class="flex min-w-0 flex-1 items-baseline gap-2.5">
+      <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
+        {title}
+      </b>
+      {levelChip && (
+        <span class="shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43]">
+          {levelChip}
+        </span>
+      )}
+    </div>
+    <div class="ml-auto flex flex-none items-center gap-3">
+      <slot name="actions" />
+    </div>
+  </div>
+
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <slot />
+  </div>
+</section>
+
+<script>
+  import { initDeskWindow } from '@lib/ui/deskWindow';
+
+  const run = () => {
+    const windowEl = document.getElementById('desk-window');
+    const closeTarget = windowEl?.getAttribute('data-close-target');
+    if (windowEl && closeTarget) {
+      initDeskWindow(windowEl, closeTarget);
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  document.addEventListener('astro:page-load', run);
+</script>

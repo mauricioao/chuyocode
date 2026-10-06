@@ -131,6 +131,19 @@ interface Props {
    * `fullHeight` body/main classes.
    */
   bare?: boolean;
+  /**
+   * "Desktop" redesign PART 6a (owner spec 2026-10-06): true on a page that
+   * renders the Inglés desk (`DeskScene.astro`) BEHIND something else — so
+   * far, only the practice page's window, for a signed-in visitor. Widens
+   * the existing hub-only `html[data-chrome-hub] main { view-transition-
+   * name: none; }` rule (`global.css`) to this page too: without it, the
+   * desk widgets' frosted glass (`.ingles-glass`) would show the greeting
+   * SHARP through them instead of blurred, same Chrome quirk that rule's own
+   * comment documents for the hub. Defaults to `false` (every existing
+   * page, including the hub itself, which already matches via
+   * `data-chrome-hub`).
+   */
+  deskBehind?: boolean;
 }
 
 const {
@@ -141,9 +154,21 @@ const {
   fullHeight = false,
   theme,
   bare = false,
+  deskBehind = false,
 } = Astro.props;
 
 const isIngles = theme === 'ingles';
+
+/**
+ * PART 6a bugfix (owner spec 2026-10-06): does this page pass anything into
+ * the `overlay` slot below — the practice page's own `DeskWindow`, rendered
+ * with `slot="overlay"` (`[id].astro`'s own header) rather than the default
+ * slot, so it paints OUTSIDE `<main>` and after the footer (see that slot's
+ * own comment). While it does, the header/footer sit BEHIND the window's own
+ * veil and must be `inert` — unreachable by keyboard/AT, same posture
+ * `DeskScene.astro`'s own `inert` prop already gives the desk.
+ */
+const hasOverlay = Astro.slots.has('overlay');
 
 // "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
 // the hub is the ONE Inglés page whose header stays always visible and
@@ -192,6 +217,7 @@ const faviconSvg =
   data-theme={isIngles ? 'ingles' : undefined}
   data-full-height={fullHeight ? '' : undefined}
   data-chrome-hub={isInglesHub ? '' : undefined}
+  data-desk-behind={deskBehind ? '' : undefined}
   class:list={['scroll-smooth', !isIngles && 'dark']}
 >
   <head>
@@ -310,9 +336,9 @@ const faviconSvg =
         page is completely unaffected — this branch only ever runs when
         `isIngles` is true. */}
     {!bare &&
-      (isIngles ? <Header lang={lang} ingles /> : (
+      (isIngles ? <Header lang={lang} ingles inert={hasOverlay} /> : (
         <div data-theme="brand" class="dark contents">
-          <Header lang={lang} />
+          <Header lang={lang} inert={hasOverlay} />
         </div>
       ))}
     {/* Cleaner transitions (navigation-without-flicker PR): ONLY the main
@@ -330,9 +356,9 @@ const faviconSvg =
         note above. BARE mode drops it. INGLÉS: same unwrapped treatment as
         the header above — see that block's own comment. */}
     {!bare &&
-      (isIngles ? <Footer lang={lang} ingles /> : (
+      (isIngles ? <Footer lang={lang} ingles inert={hasOverlay} /> : (
         <div data-theme="brand" class="dark contents">
-          <Footer lang={lang} />
+          <Footer lang={lang} inert={hasOverlay} />
         </div>
       ))}
 
@@ -375,6 +401,7 @@ const faviconSvg =
       import { initReveals } from '@lib/reveal';
       import { initBackButtons } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
+      import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
 
       const run = () => initReveals();
 
@@ -392,11 +419,31 @@ const faviconSvg =
       // (unlike reveals) this needs no re-init on `astro:after-swap`.
       initBackButtons();
 
+      // "Desktop" redesign PART 6a: captures a `[data-desk-window-open]`
+      // folder's own rect just before navigation, for the practice window's
+      // scale-in — site-wide (like `initBackButtons`) since the desk only
+      // ever renders under Inglés, and the attribute selector simply never
+      // matches elsewhere. Self-guards against double-wiring on its own
+      // (`@lib/ui/deskWindow.ts`'s own header), so it is safe to call here
+      // unconditionally, once per session.
+      initDeskWindowOpeners();
+
       // Smart header/footer visibility (chrome-visibility feature): binds
       // its own listeners exactly once and re-picks the mode on every page
       // entry (including View Transitions) internally — see that module's
       // own header.
       initChromeVisibility();
     </script>
+
+    {/* Overlay slot (PART 6a bugfix, 2026-10-06) — the LAST thing in
+        `<body>`, after the footer and every other chrome piece above,
+        outside `<main>` entirely. Today's one caller is the practice page's
+        own `DeskWindow` (`[id].astro`, `slot="overlay"`): rendering it here
+        instead of in the default slot is what stops the footer from
+        painting OVER the window (see `global.css`'s own
+        `.ingles-window-veil` comment for the stacking-context mechanics).
+        Nothing else currently uses this slot, so it is a no-op everywhere
+        else. */}
+    <slot name="overlay" />
   </body>
 </html>

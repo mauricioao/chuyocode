@@ -57,9 +57,16 @@ interface Props {
   lang?: Lang;
   /** Owner spec 2026-10-05: renders the INGLÉS bordered panel instead of the default dark bar. Defaults to `false` — every existing call site is unaffected. */
   ingles?: boolean;
+  /**
+   * PART 6a bugfix (owner spec 2026-10-06): true while the practice page's
+   * window sits open over this page — see `Header.astro`'s own matching
+   * `inert` prop doc. Defaults to `false` — every existing call site is
+   * unaffected.
+   */
+  inert?: boolean;
 }
 
-const { lang = DEFAULT_LANG, ingles = false } = Astro.props;
+const { lang = DEFAULT_LANG, ingles = false, inert = false } = Astro.props;
 
 const labels = UI_LABELS[lang].footer;
 const base = `/${lang}`;
@@ -85,6 +92,7 @@ const secondaryLinks = [
      Inglés footer is no longer a collapsible grid item at all. */
   <footer
     data-chrome-footer
+    inert={inert}
     class="border-t border-border bg-card transition-theme duration-theme"
     transition:animate="none"
   >
@@ -113,6 +121,7 @@ const secondaryLinks = [
 ) : (
   <footer
     data-chrome-footer
+    inert={inert}
     class="border-t border-border bg-card transition-theme duration-theme"
     transition:animate="none"
   >

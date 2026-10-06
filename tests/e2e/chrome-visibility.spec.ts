@@ -213,7 +213,19 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
       expect(await footerExpanded(page)).toBe(true);
     });
 
-    test('the footer catches a real tap on its own links — it is never hidden/off-screen behind a collapse', async ({
+    // "Desktop" redesign PART 6a bugfix (owner report, 2026-10-06, superseding
+    // this test's old "the footer catches a real tap" premise): this page now
+    // opens as a true MODAL window (`role="dialog"` `aria-modal="true"`) that
+    // reliably paints ABOVE every other page element, including the footer
+    // (`DeskWindow.astro`/`BaseLayout.astro`'s own `overlay` slot fix) — and
+    // the footer is `inert` for as long as that window is open
+    // (`BaseLayout.astro`'s `hasOverlay`). A tap at the footer's own on-screen
+    // position must therefore resolve to the window/veil covering it, never
+    // to the footer itself — the OPPOSITE of what this test used to assert,
+    // back when the footer wrongly painted over the window (the very bug this
+    // fix closes: a student could not reach "Comprobar" because the footer
+    // sat on top of it).
+    test('the footer never catches a tap while the window is open — the window covers it, "expanded" or not', async ({
       page,
     }) => {
       const path = await findInglesActivityPath(page);
@@ -230,35 +242,37 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
         const box = link.getBoundingClientRect();
         if (box.top >= window.innerHeight || box.height < 1) return 'off-screen';
         const target = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-        return target?.closest('[data-chrome-footer]') ? 'footer' : 'page';
+        return target?.closest('[data-chrome-footer]') ? 'footer' : 'window';
       });
       test.skip(hit === 'off-screen', 'Footer is below the fold on this activity');
-      expect(hit).toBe('footer');
+      expect(hit).toBe('window');
+
+      // The footer is unreachable by keyboard too, while the window is open.
+      const footerInert = await page.evaluate(() => {
+        const footer = document.querySelector('[data-chrome-footer]');
+        return footer ? footer.closest('[inert]') != null : false;
+      });
+      expect(footerInert).toBe(true);
     });
 
-    test('tabbing into the header expands it', async ({ page }) => {
+    // "Desktop" redesign PART 6a (owner spec 2026-10-06, superseding this
+    // test's old "tabbing into the header expands it" premise): this page
+    // now opens as a MODAL window over the desk (`DeskWindow.astro`), and
+    // `@lib/ui/deskWindow.ts#initDeskWindow` moves focus into it on open —
+    // correct accessibility posture for a modal dialog owning its own focus,
+    // not a regression. Tabbing from the top of the document no longer
+    // reaches the header AT ALL on this page (it starts already inside the
+    // window), so the header-reveal-via-tab affordance that still applies to
+    // every other Inglés page simply does not apply here anymore.
+    test('focus moves into the window on open, not the header, now that this page opens as a modal window', async ({ page }) => {
       const path = await findInglesActivityPath(page);
       test.skip(path === null, 'Need at least one published activity for a real guest-play id');
 
       await page.goto(path!);
-      expect(await headerHidden(page)).toBe(true);
-
-      // Walk focus forward from the top of the document until it lands
-      // somewhere inside the header (the skip-link is the first stop, the
-      // logo-block link the next one).
-      for (let i = 0; i < 15; i++) {
-        await page.keyboard.press('Tab');
-        const insideHeader = await page.evaluate(
-          (sel) => document.activeElement?.closest(sel) != null,
-          HEADER_SELECTOR,
-        );
-        if (insideHeader) break;
-      }
-      // `expect.poll`, not a plain `expect` — same reasoning as SITE mode's
-      // own tab test above: focus reaches the header almost immediately
-      // here (it is the second or third stop), well before the 220ms CSS
-      // transition would otherwise have had time to elapse.
-      await expect.poll(() => headerHidden(page), { timeout: 2000 }).toBe(false);
+      const insideWindow = await page.evaluate(
+        () => document.activeElement?.closest('[data-desk-window]') != null,
+      );
+      expect(insideWindow).toBe(true);
     });
   });
 }
