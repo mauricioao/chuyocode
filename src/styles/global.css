@@ -726,15 +726,28 @@ h3 {
   padding: 1px 0;
 }
 
+/* `inline-flex` + `line-height: 1` centres the digits themselves (an
+ * `inline-grid`/`place-items: center` box still centers the glyph's EM box,
+ * which is taller than the digits actually drawn in it, reading as
+ * off-centre — the owner-reported bug). `min-width` (not a fixed `width`)
+ * plus horizontal padding is what then lets a two-digit day (30, 31) widen
+ * the pill instead of overflowing a box sized for one digit; `height` stays
+ * fixed so the grid row itself never jumps between single- and two-digit
+ * days. Tabular numerals keep every digit the same width, so the pill does
+ * not visibly wobble from one day to the next. */
 .ingles-calendar-today {
-  display: inline-grid;
-  place-items: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
   background: var(--foreground);
   color: var(--card);
   font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Draggable desk widgets ("desktop" redesign PART 4, `@lib/ui/deskDrag`)
