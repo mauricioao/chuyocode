@@ -347,8 +347,15 @@ const faviconSvg =
         renders straight into the page's own (possibly light) content and
         must NOT be forced dark, which is why this wrapper lives here and not
         inside `ScrollToTop.tsx` itself. BARE mode drops it — a presentation
-        stage has no page scroll to return from. */}
-    {!bare && (
+        stage has no page scroll to return from.
+
+        HUB EXCLUDED ("desktop" redesign PART 4, owner feedback): the hub is
+        one screen plus the footer (scroll-snap between the two, PART 1),
+        and the floating button overlapped the levels dock on phones — with
+        no long page to scroll back up FROM, it has no job to do there
+        either. Every other Inglés page (and every non-Inglés page) keeps
+        it unchanged. */}
+    {!bare && !isInglesHub && (
       <div data-theme="brand" class="dark contents">
         <ScrollToTop client:load labels={scrollToTopLabels} />
       </div>
