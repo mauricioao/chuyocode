@@ -815,6 +815,11 @@ export const UI_LABELS = {
         viewedFirstTime: 'Primera vez',
         viewedBefore: 'Ya lo viste',
         viewedTimesMany: 'veces',
+        // Title-bar eye icon's accessible name (owner feedback 2026-10-06,
+        // `ActivityViewBadge`'s own header) — same count-phrase shape as
+        // `heartsOne`/`heartsMany` below.
+        viewsOne: 'vista',
+        viewsMany: 'vistas',
         // "Corazón" toggle (Descubrir/discovery). Two names, one per
         // direction — same reasoning as `LikeButton`'s own `COPY`: the
         // action the press performs, not the current state (`aria-pressed`
@@ -2052,6 +2057,8 @@ export const UI_LABELS = {
         viewedFirstTime: 'First time',
         viewedBefore: "You've seen this",
         viewedTimesMany: 'times',
+        viewsOne: 'view',
+        viewsMany: 'views',
         heartAdd: 'Heart',
         heartRemove: 'Remove heart',
         heartsOne: 'heart',

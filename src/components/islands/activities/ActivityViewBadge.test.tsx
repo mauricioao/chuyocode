@@ -23,24 +23,31 @@ describe('ActivityViewBadge', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/actividades/act-1/visto', { method: 'POST' });
   });
 
-  it('shows "Primera vez" for a first view (count 1)', async () => {
+  it('renders the eye icon with the visible count and an accessible name with no "already viewed" note for a first view', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ viewCount: 1 }) }),
     );
     render(<ActivityViewBadge lang="es" activityId="act-1" />);
     await waitFor(() => expect(screen.getByTestId('activity-view-badge')).toBeTruthy());
-    expect(screen.getByTestId('activity-view-badge').textContent).toBe('· Primera vez');
+    const badge = screen.getByTestId('activity-view-badge');
+    expect(badge.textContent).toBe('1');
+    expect(badge.getAttribute('aria-label')).toBe('1 vista');
+    expect(badge.getAttribute('title')).toBeNull();
   });
 
-  it('shows "Ya lo viste · N veces" for a returning view', async () => {
+  it('notes "Ya lo viste" in the tooltip/aria (never as visible text) for a returning view', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ viewCount: 4 }) }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ viewCount: 23 }) }),
     );
     render(<ActivityViewBadge lang="es" activityId="act-1" />);
     await waitFor(() => expect(screen.getByTestId('activity-view-badge')).toBeTruthy());
-    expect(screen.getByTestId('activity-view-badge').textContent).toBe('· Ya lo viste · 4 veces');
+    const badge = screen.getByTestId('activity-view-badge');
+    // Visible text is only the number — never a "· Ya lo viste · N veces" strip.
+    expect(badge.textContent).toBe('23');
+    expect(badge.getAttribute('aria-label')).toBe('23 vistas');
+    expect(badge.getAttribute('title')).toBe('Ya lo viste');
   });
 
   it('renders nothing when the request fails', async () => {
@@ -64,7 +71,9 @@ describe('ActivityViewBadge', () => {
     );
     render(<ActivityViewBadge lang="en" activityId="act-1" />);
     await waitFor(() => expect(screen.getByTestId('activity-view-badge')).toBeTruthy());
-    expect(screen.getByTestId('activity-view-badge').textContent).toContain("You've seen this");
+    const badge = screen.getByTestId('activity-view-badge');
+    expect(badge.getAttribute('aria-label')).toBe('2 views');
+    expect(badge.getAttribute('title')).toBe("You've seen this");
   });
 });
 
