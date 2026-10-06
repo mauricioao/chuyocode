@@ -98,7 +98,29 @@ export function initDeskDrag(doc: Document = document): void {
   if (!desk.style.position) desk.style.position = 'relative';
 
   let positions = parseStoredPositions(safeGet(DESK_DRAG_STORAGE_KEY));
-  const defaults = new Map<string, Position>();
+
+  // Every widget's own grid-flow box, measured in ONE pass BEFORE any of
+  // them is touched — switching even the FIRST widget to `position:
+  // absolute` removes it from the grid, which reflows every widget that
+  // still comes after it (the row/column it vacated collapses). Measuring
+  // widget-by-widget, interleaved with placing each one, would read each
+  // later widget's box AFTER that reflow already happened — stacking every
+  // widget near the same spot instead of their real default positions.
+  // This snapshot is also what RESET replays later: once a widget is
+  // absolute, its grid-flow box can never be re-measured from the DOM again.
+  const defaults = new Map<string, { pos: Position; size: Size }>();
+  {
+    const deskRect = desk.getBoundingClientRect();
+    for (const widget of widgets) {
+      const id = widget.getAttribute('data-desk-widget');
+      if (!id) continue;
+      const rect = widget.getBoundingClientRect();
+      defaults.set(id, {
+        pos: { x: rect.left - deskRect.left, y: rect.top - deskRect.top },
+        size: { w: rect.width, h: rect.height },
+      });
+    }
+  }
 
   function deskSize(): Size {
     const rect = desk!.getBoundingClientRect();
@@ -106,14 +128,10 @@ export function initDeskDrag(doc: Document = document): void {
   }
 
   function placeAbsolute(widget: HTMLElement, id: string): void {
-    const deskRect = desk!.getBoundingClientRect();
-    if (!defaults.has(id)) {
-      const rect = widget.getBoundingClientRect();
-      defaults.set(id, { x: rect.left - deskRect.left, y: rect.top - deskRect.top });
-    }
-    const size = sizeOf(widget);
-    const desired = positions[id] ?? defaults.get(id)!;
-    const clamped = clampPosition(desired, size, { w: deskRect.width, h: deskRect.height });
+    const fallback = defaults.get(id);
+    const size = fallback?.size ?? sizeOf(widget);
+    const desired = positions[id] ?? fallback?.pos ?? { x: 0, y: 0 };
+    const clamped = clampPosition(desired, size, deskSize());
 
     widget.style.position = 'absolute';
     widget.style.margin = '0';
