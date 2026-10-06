@@ -175,9 +175,14 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
               aria-hidden="true"
               class="absolute inset-x-3 top-[30%] block h-[3px] rounded-sm bg-muted shadow-[0_9px_0_var(--muted),0_18px_0_var(--muted)]"
             ></span>
-          </span>
-          <span class="absolute -right-1.5 -bottom-1 grid h-7 w-7 place-items-center rounded-full bg-pop-sky-deep text-lg font-bold leading-none text-white">
-            +
+            {/* The "+" sits on the sheet's own corner, so it stays attached at
+                every size. */}
+            <span
+              aria-hidden="true"
+              class="absolute -right-3 -bottom-2.5 grid h-7 w-7 place-items-center rounded-full bg-pop-sky-deep text-lg font-bold leading-none text-white shadow-[0_1px_3px_rgb(28_28_30_/_0.2)]"
+            >
+              +
+            </span>
           </span>
         </span>
         <span class="text-[13px] font-semibold text-foreground">{createActivityLabel}</span>
