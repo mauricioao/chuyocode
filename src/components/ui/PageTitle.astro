@@ -12,6 +12,15 @@
  * used to add `font-display` explicitly (crear, mis-actividades, legal,
  * auth) lose nothing — `global.css` already applies the display face to
  * every `h1`/`h2`/`h3` unconditionally, so that class was redundant.
+ *
+ * INK, NOT LINK BLUE, UNDER INGLÉS ("desktop" redesign PART 3): the white-
+ * desk palette's `--color-accent-ink` is a BLUE (`#1b6fa8`, used for actual
+ * links/focus), so a bare `text-accent-ink` title on that theme reads as a
+ * clickable link rather than a heading. `ingles:text-foreground` (the
+ * `@custom-variant ingles` from `global.css`) overrides to the theme's ink
+ * foreground on Inglés pages only — every brand/site page (the variant's
+ * selector never matches there) keeps the amber `text-accent-ink` exactly
+ * as before.
  */
 import BackButton from '@components/ui/BackButton.astro';
 import type { Lang } from '@lib/i18n';
@@ -29,7 +38,7 @@ const { lang, backHref, class: className } = Astro.props;
 <div class:list={['flex items-center justify-between gap-4', className]}>
   <div class="flex items-center gap-3">
     <BackButton lang={lang} href={backHref} class="mr-1" />
-    <h1 class="text-3xl font-bold tracking-tight text-accent-ink sm:text-4xl">
+    <h1 class="text-3xl font-bold tracking-tight text-accent-ink ingles:text-foreground sm:text-4xl">
       <slot />
     </h1>
   </div>

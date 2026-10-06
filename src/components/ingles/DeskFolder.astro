@@ -1,0 +1,88 @@
+---
+/**
+ * DeskFolder — one "desktop icon" folder on the Inglés desk hub's right-edge
+ * column ("desktop" redesign PART 3, approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.folder`).
+ *
+ * Two layered-SVG looks, both reusing the SAME two gradients
+ * (`#desk-folder-back`/`#desk-folder-front`, defined ONCE by `index.astro`
+ * and referenced here by id — `url(#…)` resolves against the whole
+ * document, not per-component, so there is no point duplicating the
+ * `<defs>` per folder):
+ *
+ *  - Plain (`peekSrc` omitted): back path, a full-height front rect, and
+ *    one centered emoji icon — "Ejercicios propuestos" / "Actividades de la
+ *    comunidad".
+ *  - Peek (`peekSrc` set): back path only, then the daily pick's thumbnail
+ *    peeking out ROTATED -7deg, THEN a SHORTENED front rect on top of it
+ *    (so the photo reads as tucked between the back and a shorter flap),
+ *    then the star icon lower down — "Para ti hoy" only. Mirrors the
+ *    mockup's own layer order exactly (`index.html` lines ~511-524).
+ */
+import Emoji from '@components/ui/Emoji.astro';
+import type { EmojiName } from '@lib/emoji';
+
+interface Props {
+  href: string;
+  label: string;
+  meta: string | null;
+  icon: EmojiName;
+  /** Set only for the "Para ti hoy" peek variant. */
+  peekSrc?: string | null;
+}
+
+const { href, label, meta, icon, peekSrc = null } = Astro.props;
+const hasPeek = peekSrc !== null;
+const BACK_PATH =
+  'M8 14a6 6 0 0 1 6-6h30l8 8h54a6 6 0 0 1 6 6v62a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z';
+---
+
+<a
+  href={href}
+  class="folder group grid w-full justify-items-center gap-1.5 rounded-2xl px-2 py-2 text-center transition-colors hover:bg-pop-sky/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:w-[148px]"
+>
+  <figure class="relative m-0 h-[77px] w-24 desk:h-24 desk:w-[120px]">
+    <svg
+      viewBox="0 0 120 96"
+      aria-hidden="true"
+      class="absolute inset-0 h-full w-full drop-shadow-[0_2px_3px_rgb(28_28_30_/_0.12)]"
+    >
+      <path d={BACK_PATH} fill="url(#desk-folder-back)" />
+      {
+        !hasPeek && (
+          <>
+            <rect x="8" y="26" width="104" height="62" rx="7" fill="url(#desk-folder-front)" />
+            <rect x="8.5" y="26.5" width="103" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.55" />
+          </>
+        )
+      }
+    </svg>
+    {
+      hasPeek && (
+        <img
+          src={peekSrc}
+          alt=""
+          class="peek absolute left-[25%] top-[2px] h-2/3 w-[48%] -rotate-[7deg] rounded-sm border border-border bg-card object-cover object-top shadow-[0_2px_6px_rgb(28_28_30_/_0.12)]"
+        />
+      )
+    }
+    {
+      hasPeek && (
+        <svg viewBox="0 0 120 96" aria-hidden="true" class="absolute inset-0 h-full w-full">
+          <rect x="8" y="40" width="104" height="48" rx="7" fill="url(#desk-folder-front)" />
+          <rect x="8.5" y="40.5" width="103" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.55" />
+        </svg>
+      )
+    }
+    <Emoji
+      name={icon}
+      size={hasPeek ? 30 : 36}
+      class:list={[
+        'absolute left-1/2 -translate-x-1/2 -translate-y-1/2',
+        hasPeek ? 'top-[67%]' : 'top-[56%]',
+      ]}
+    />
+  </figure>
+  <span class="label text-[13px] font-semibold text-foreground">{label}</span>
+  {meta && <span class="meta -mt-1 text-xs text-muted-foreground">{meta}</span>}
+</a>

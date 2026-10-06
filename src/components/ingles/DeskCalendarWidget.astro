@@ -1,0 +1,30 @@
+---
+/**
+ * DeskCalendarWidget — the desk hub's iOS-style calendar ("desktop" redesign
+ * PART 3, approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.calendar`).
+ *
+ * SERVER renders only the SHELL: the 160×160 glass tile and the static
+ * weekday-initials header row (`S M T W T F S`, Sunday-first, locale-
+ * independent on purpose — same "English chrome" posture as every other
+ * Inglés widget). The uppercase weekday name, the big date number, and the
+ * month grid (today circled in ink) all depend on the VISITOR's own
+ * browser timezone, so they are left empty here and filled in by
+ * `initDeskWidgets` (`@lib/ui/deskWidgets`) — see `DeskClockWidget.astro`'s
+ * own header for why that split exists.
+ */
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+---
+
+<div id="desk-calendar" class="ingles-glass aspect-square w-full max-w-40 p-3.5 pt-3.5 pb-3 desk:h-40 desk:w-40 desk:max-w-none" aria-hidden="true">
+  <div data-calendar-day class="text-[10.5px] font-bold tracking-[0.04em] text-[#ff3b30] uppercase"></div>
+  <div data-calendar-num class="mt-px mb-[7px] text-[26px] leading-none font-medium text-foreground"></div>
+  <table class="w-full border-collapse text-center text-[8.6px] text-muted-foreground [font-variant-numeric:tabular-nums]">
+    <thead>
+      <tr>
+        {WEEKDAY_INITIALS.map((d) => <th class="pb-0.5 font-semibold text-muted-foreground/70">{d}</th>)}
+      </tr>
+    </thead>
+    <tbody data-calendar-grid></tbody>
+  </table>
+</div>

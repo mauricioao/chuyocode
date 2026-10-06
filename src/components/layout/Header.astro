@@ -126,7 +126,12 @@ const navLinks = [
      of content, which is what that same CSS clips to zero height. */
   <header data-chrome-header transition:persist transition:animate="none">
     <div data-chrome-collapse>
-      <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+      {/* "Desktop" redesign PART 3 (owner spec 2026-10-06): full width, no
+          `max-w-6xl` centered panel — the same ~28px/16px side gutters as
+          the desk itself (`index.astro`'s own `px-4 desk:px-7`), so the
+          header's logo/account row lines up with the desk's own left/right
+          edges on every Inglés page, not just the hub. */}
+      <div class="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-4 desk:px-7">
         {/* Logo block: the word "Inglés" (display font) over a small "by
             ChuyoCode" byline, standing in for the owner's own AI-generated
             lettering until that asset exists — see the comment right above

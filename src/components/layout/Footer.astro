@@ -88,7 +88,10 @@ const secondaryLinks = [
     class="border-t border-border bg-card transition-theme duration-theme"
     transition:animate="none"
   >
-    <div class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row">
+    {/* "Desktop" redesign PART 3 (owner spec 2026-10-06): same full-width,
+        gutter-matched treatment as the header above — see that file's own
+        matching note. */}
+    <div class="flex w-full flex-col items-center justify-between gap-4 px-4 py-6 desk:px-7 sm:flex-row">
       <p class="text-sm font-bold text-muted-foreground">&copy; {currentYear} ChuyoCode</p>
       <nav
         class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-end"
