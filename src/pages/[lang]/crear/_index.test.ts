@@ -54,7 +54,10 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     expect(html).toContain('data-testid="picker-worksheet"');
     expect(html).toContain('data-testid="picker-questions"');
     expect(html).toContain('data-back-button');
-    expect(html).toContain('href="/es"');
+    // Bugfix 2026-10-06: used to go to the ChuyoCode home instead of the
+    // Inglés hub (this page's actual logical parent, reachable from the
+    // hub's own "Crear actividad" tile).
+    expect(html).toContain('href="/es/ingles"');
   });
 
   it('is never publicly cacheable', async () => {

@@ -16,42 +16,31 @@ import {
 } from './deskWindow';
 
 describe('resolveCloseAction', () => {
-  const origin = 'https://chuyocode.test';
   const hub = '/es/ingles';
 
-  it('prefers history.back() when the previous page is exactly the close target, same origin', () => {
-    const action = resolveCloseAction('https://chuyocode.test/es/ingles', origin, 2, hub);
+  it('prefers history.back() when the previous SCREEN this visitor saw is exactly the close target', () => {
+    const action = resolveCloseAction('/es/ingles', 2, hub);
     expect(action).toEqual({ kind: 'back' });
   });
 
   it('falls back to a plain href when there is no previous history entry', () => {
-    const action = resolveCloseAction('https://chuyocode.test/es/ingles', origin, 1, hub);
+    const action = resolveCloseAction('/es/ingles', 1, hub);
     expect(action).toEqual({ kind: 'href', href: hub });
   });
 
-  it('falls back to a plain href when the referrer is a different path', () => {
-    const action = resolveCloseAction('https://chuyocode.test/es/ingles/actividades', origin, 2, hub);
+  it('falls back to a plain href when the previous screen was a different path', () => {
+    const action = resolveCloseAction('/es/ingles/actividades', 2, hub);
     expect(action).toEqual({ kind: 'href', href: hub });
   });
 
-  it('falls back to a plain href when the referrer is cross-origin', () => {
-    const action = resolveCloseAction('https://other.test/es/ingles', origin, 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href when there is no referrer at all (direct visit)', () => {
-    const action = resolveCloseAction('', origin, 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href on a malformed referrer, never throws', () => {
-    const action = resolveCloseAction('not a url', origin, 2, hub);
+  it('falls back to a plain href when the previous screen is unknown (null — no tracked path, no usable referrer)', () => {
+    const action = resolveCloseAction(null, 2, hub);
     expect(action).toEqual({ kind: 'href', href: hub });
   });
 
   it('resolves the guest close target (ChuyoCode home) the exact same way', () => {
     const home = '/es/';
-    const action = resolveCloseAction('https://chuyocode.test/es/', origin, 2, home);
+    const action = resolveCloseAction('/es/', 2, home);
     expect(action).toEqual({ kind: 'back' });
   });
 });

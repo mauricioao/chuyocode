@@ -15,6 +15,7 @@
  * function, never inlined into a listener nobody can assert on directly.
  */
 import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
+import { readTrackedPreviousPath, resolvePreviousPath } from '../backNavigation';
 
 const FULLSCREEN_STORAGE_KEY = 'ingles-desk-window-fullscreen';
 const ORIGIN_STORAGE_KEY = 'ingles-desk-window-origin';
@@ -62,33 +63,34 @@ export function focusableElements(container: HTMLElement): HTMLElement[] {
  * returns to the desk"): navigate to `targetPath` — the signed-in visitor's
  * Inglés hub, or the ChuyoCode home for a guest (whose hub would only ask
  * them to sign in). When the browser ALREADY has `targetPath` as the
- * immediately previous history entry (same-origin referrer, at least one
- * earlier entry), `history.back()` is preferred over a fresh navigation to
- * the same place — it is what lets the desk's `transition:persist`-ed DOM
- * come back exactly as it was, and feels like "back" rather than a forward
- * navigation that happens to land on the same URL.
+ * immediately previous SCREEN this visitor actually saw, `history.back()`
+ * is preferred over a fresh navigation to the same place — it is what lets
+ * the desk's `transition:persist`-ed DOM come back exactly as it was, and
+ * feels like "back" rather than a forward navigation that happens to land
+ * on the same URL.
  *
- * @param referrer - `document.referrer`.
- * @param currentOrigin - `window.location.origin`.
+ * `previousPath` — bugfix, 2026-10-06, same root cause as
+ * `backNavigation.ts`'s own header: this used to take `document.referrer`
+ * directly, which Astro's `<ClientRouter>` never updates after a tab's
+ * first client-side navigation, so a visitor who entered the practice page
+ * via several client-side hops never got the `history.back()` treatment
+ * here even when the hub genuinely WAS the immediately previous screen.
+ * Callers resolve this the same way `initBackButtons` does —
+ * `resolvePreviousPath(readTrackedPreviousPath(...), doc.referrer, ...)`
+ * (`backNavigation.ts`) — so both back-navigation surfaces share one source
+ * of truth.
+ *
+ * @param previousPath - The screen this visitor actually just saw, resolved by `resolvePreviousPath` (`@lib/backNavigation`) — `null` when unknown.
  * @param historyLength - `window.history.length`.
  * @param targetPath - The close target's own pathname (e.g. `/es/ingles` or `/es/`).
  */
 export function resolveCloseAction(
-  referrer: string,
-  currentOrigin: string,
+  previousPath: string | null,
   historyLength: number,
   targetPath: string,
 ): { kind: 'back' } | { kind: 'href'; href: string } {
-  if (historyLength > 1 && referrer) {
-    try {
-      const referrerUrl = new URL(referrer);
-      if (referrerUrl.origin === currentOrigin && referrerUrl.pathname === targetPath) {
-        return { kind: 'back' };
-      }
-    } catch {
-      // A malformed `document.referrer` (some privacy extensions blank it to
-      // a non-URL string rather than "") falls through to the plain href.
-    }
+  if (historyLength > 1 && previousPath === targetPath) {
+    return { kind: 'back' };
   }
   return { kind: 'href', href: targetPath };
 }
@@ -285,7 +287,8 @@ export function initDeskWindow(
   // (red) removes any chip for that activity".
   function close(): void {
     if (trayId) removeMinimizedWindow(trayId, win.sessionStorage);
-    const action = resolveCloseAction(doc.referrer, win.location.origin, win.history.length, closeTargetPath);
+    const previousPath = resolvePreviousPath(readTrackedPreviousPath(win.sessionStorage), doc.referrer, win.location.origin);
+    const action = resolveCloseAction(previousPath, win.history.length, closeTargetPath);
     if (action.kind === 'back') {
       win.history.back();
     } else {

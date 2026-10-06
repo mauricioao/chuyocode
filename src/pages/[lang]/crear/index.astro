@@ -57,7 +57,12 @@ const t = UI_LABELS[lang].activities.start;
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
   <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-    <PageTitle lang={lang} backHref={`/${lang}`}>{t.pageTitle}</PageTitle>
+    {/* Bugfix, 2026-10-06 (owner report: back went to the ChuyoCode home
+        instead of the Inglés hub): this page is Inglés-area
+        (`@lib/backNavigation.ts`'s own `INGLES_AREA_ROOTS` lists `crear`,
+        reachable from the hub's own "Crear actividad" tile) — its logical
+        parent is the hub, never the ChuyoCode home. */}
+    <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.pageTitle}</PageTitle>
     <ActivityStartIsland client:load lang={lang} />
   </section>
 </BaseLayout>

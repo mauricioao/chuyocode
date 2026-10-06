@@ -399,7 +399,7 @@ const faviconSvg =
         Transitions swap so `.reveal` elements on the incoming page animate. */}
     <script>
       import { initReveals } from '@lib/reveal';
-      import { initBackButtons } from '@lib/backNavigation';
+      import { initBackButtons, trackPageVisit } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
       import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
 
@@ -413,6 +413,17 @@ const faviconSvg =
 
       // Re-run after client-side navigations (View Transitions safety).
       document.addEventListener('astro:after-swap', run);
+
+      // Back-navigation bugfix (2026-10-06, `@lib/backNavigation.ts`'s own
+      // header): records "the screen this visitor actually just saw" in
+      // `sessionStorage`, since `document.referrer` goes permanently stale
+      // after this tab's first client-side navigation. Runs on first load
+      // AND every `astro:page-load` (unlike `initBackButtons` below, this
+      // one must re-run per page — it is per-VISIT state, not a one-time
+      // listener bind).
+      const trackVisit = () => trackPageVisit(`${window.location.pathname}${window.location.search}`);
+      trackVisit();
+      document.addEventListener('astro:page-load', trackVisit);
 
       // `BackButton`'s progressive enhancement: ONE delegated listener for
       // the whole session — `document` survives View Transitions swaps, so

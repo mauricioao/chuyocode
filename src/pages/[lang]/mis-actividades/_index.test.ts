@@ -93,14 +93,14 @@ describe('GET /[lang]/mis-actividades — signed-in visitor', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  it('renders a back button to home, beside the title', async () => {
+  it('renders a back button to the Inglés hub, beside the title (bugfix 2026-10-06: used to go to the ChuyoCode home instead)', async () => {
     const res = await render('https://chuyocode.test/es/mis-actividades', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
     expect(html).toContain('data-back-button');
-    expect(html).toContain('href="/es"');
+    expect(html).toContain('href="/es/ingles"');
   });
 });
 
