@@ -42,6 +42,8 @@ export const EMOJI_NAMES = [
   // "Actividades de la comunidad" and the "Para ti hoy" folder's star.
   'busts-in-silhouette',
   'glowing-star',
+  // Desk hub "Frase del día" player cover ("desktop" redesign PART 4).
+  'headphone',
 ] as const;
 
 export type EmojiName = (typeof EMOJI_NAMES)[number];
