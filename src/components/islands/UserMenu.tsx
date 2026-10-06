@@ -343,6 +343,17 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
     const { profile } = state;
     return (
       <>
+        {/* T3: links to the signed-in visitor's own account settings
+            (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which moved to
+            that page's own "Zona de peligro" section. Owner spec: "Perfil"
+            is the FIRST entry, "Cerrar sesión" always last. */}
+        <a
+          href={`/${lang}/perfil`}
+          data-testid="mobile-account-profile"
+          className="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
+        >
+          {t.profile}
+        </a>
         <a href={`/${lang}/crear`} data-testid="mobile-account-create-activity" className="py-1 text-sm font-medium text-muted-foreground hover:text-primary">
           {t.createActivity}
         </a>
@@ -375,16 +386,6 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
             {t.signOut}
           </button>
         </form>
-        {/* T3: links to the signed-in visitor's own account settings
-            (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which moved to
-            that page's own "Zona de peligro" section. */}
-        <a
-          href={`/${lang}/perfil`}
-          data-testid="mobile-account-profile"
-          className="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
-        >
-          {t.profile}
-        </a>
       </>
     );
   }
@@ -491,11 +492,23 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
             <span className="mt-2 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
               {profile.plan === 'premium' ? t.planPremium : t.planFree}
             </span>
+            {/* T3: links to the signed-in visitor's own account settings
+                (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which
+                moved to that page's own "Zona de peligro" section. Owner
+                spec: "Perfil" is the FIRST menu item, "Cerrar sesión" last. */}
+            <a
+              href={`/${lang}/perfil`}
+              role="menuitem"
+              data-testid="user-menu-profile"
+              className="mt-3 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+            >
+              {t.profile}
+            </a>
             <a
               href={`/${lang}/crear`}
               role="menuitem"
               data-testid="user-menu-create-activity"
-              className="mt-3 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
+              className="mt-1 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
             >
               {t.createActivity}
             </a>
@@ -540,17 +553,6 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
                 {t.signOut}
               </button>
             </form>
-            {/* T3: links to the signed-in visitor's own account settings
-                (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which
-                moved to that page's own "Zona de peligro" section. */}
-            <a
-              href={`/${lang}/perfil`}
-              role="menuitem"
-              data-testid="user-menu-profile"
-              className="mt-1 block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
-            >
-              {t.profile}
-            </a>
           </div>,
           document.body,
         )}

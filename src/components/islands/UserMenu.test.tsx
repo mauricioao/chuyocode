@@ -425,6 +425,41 @@ describe('UserMenu — dropdown', () => {
     expect(screen.queryByTestId('delete-account-dialog')).toBeNull();
   });
 
+  // Owner spec: "Perfil" is the FIRST menu item, "Cerrar sesión" always
+  // last — asserted through the actual rendered DOM order (`getAllByRole`
+  // returns elements in document order), not just each entry's own
+  // presence, which the tests above already cover.
+  it('orders the menu items: Perfil, Crear actividad, Mis actividades, Cerrar sesión', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" labels={esLabels} />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const names = screen.getAllByRole('menuitem').map((item) => item.textContent?.trim());
+
+    expect(names).toEqual([
+      UI_LABELS.es.auth.userMenu.profile,
+      UI_LABELS.es.auth.userMenu.createActivity,
+      UI_LABELS.es.auth.userMenu.myActivities,
+      UI_LABELS.es.auth.userMenu.signOut,
+    ]);
+  });
+
+  it('puts the moderation link between Mis actividades and Cerrar sesión for a moderator', async () => {
+    stubMe(MODERATOR_PROFILE);
+    render(<UserMenu lang="es" labels={esLabels} />);
+    fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+    const names = screen.getAllByRole('menuitem').map((item) => item.textContent?.trim());
+
+    expect(names).toEqual([
+      UI_LABELS.es.auth.userMenu.profile,
+      UI_LABELS.es.auth.userMenu.createActivity,
+      UI_LABELS.es.auth.userMenu.myActivities,
+      expect.stringContaining(UI_LABELS.es.auth.userMenu.moderation),
+      UI_LABELS.es.auth.userMenu.signOut,
+    ]);
+  });
+
   it('closes on Escape', async () => {
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" labels={esLabels} />);
@@ -594,6 +629,26 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
     const moderation = await screen.findByTestId('mobile-account-moderation');
     expect(moderation.getAttribute('href')).toBe('/es/admin/actividades');
     expect(screen.getByTestId('mobile-account-moderation-badge').textContent).toBe('4');
+  });
+
+  // Owner spec, same order as the top-bar dropdown: "Perfil" first, "Cerrar
+  // sesión" last — asserted through the actual rendered DOM order inside
+  // the portaled slot.
+  it('orders the portaled entries: Perfil, Crear actividad, Mis actividades, Cerrar sesión', async () => {
+    const slot = withMobileMenuSlot();
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" labels={esLabels} />);
+
+    await screen.findByTestId('mobile-account-profile');
+    const testIds = Array.from(slot.children).map((child) => child.getAttribute('data-testid'));
+
+    expect(testIds).toEqual([
+      'mobile-account-profile',
+      'mobile-account-create-activity',
+      'mobile-account-my-activities',
+      null, // the sign-out <form> wraps its <button>, so it carries no data-testid itself
+    ]);
+    expect(slot.children[3]?.querySelector('[data-testid="mobile-account-signout"]')).toBeTruthy();
   });
 
   it('portals nothing while still loading (avoids a flash of empty-state content)', () => {
