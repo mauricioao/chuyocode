@@ -725,6 +725,12 @@ html[data-chrome-js][data-chrome-mode='ingles'][data-header-visible='true'] [dat
 html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
   overflow: hidden;
 }
+/* The hub's header never collapses, so nothing needs clipping there — and
+ * clipping would cut the logo's "Regresar a ChuyoCode" tooltip, which hangs
+ * below the header. */
+html[data-chrome-hub][data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
+  overflow: visible;
+}
 
 /* The one INGLÉS header transition that must NOT animate: collapsing once it
  * has fully scrolled out of view, compensated in the same tick by a matching
