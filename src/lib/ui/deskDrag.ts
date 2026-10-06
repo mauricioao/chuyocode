@@ -34,6 +34,19 @@
  * own header for the `CustomEvent` contract this module both listens to
  * (`DESK_ARRANGE_RESET_EVENT`, from the header icon) and dispatches
  * (`DESK_ARRANGE_VISIBILITY_EVENT`, to it).
+ *
+ * RE-INIT ACROSS NAVIGATIONS (same class of bug as `deskWidgets.ts`'s own
+ * calendar fix): `index.astro`'s own script calls `initDeskDrag` both
+ * immediately AND on every `astro:page-load`, and `document` itself is
+ * NEVER replaced by a navigation (unlike the widgets, which re-query a
+ * fresh DOM each call). A document-level `DESK_ARRANGE_RESET_EVENT`
+ * listener added on every call would therefore stack one more copy per
+ * call, forever — a real listener leak, and each stale copy would still
+ * try to act on an EARLIER call's now-detached widgets. The reset listener
+ * is wired at most ONCE per `doc` (tracked below); it always reads the
+ * LATEST call's widgets/positions through {@link stateByDoc}, which every
+ * call overwrites, so a reset after a re-init still resets the widgets
+ * actually on screen.
  */
 import {
   clampPosition,
@@ -87,6 +100,25 @@ function sizeOf(el: HTMLElement): Size {
   return { w: rect.width, h: rect.height };
 }
 
+/**
+ * The current call's own widgets, live persisted positions and how to reset
+ * them — see this file's own header ("RE-INIT ACROSS NAVIGATIONS"). A fresh
+ * object is created and OVERWRITTEN into {@link stateByDoc} on every
+ * `initDeskDrag` call for a given `doc`; `placeAbsolute`/`persist` close
+ * over this exact object (mutating `positions` in place, never reassigning
+ * a separate local variable), so the one shared reset listener — looked up
+ * at reset time, never captured in its own closure — mutates the SAME
+ * `positions` the current call's drag/keyboard handlers already read from.
+ */
+interface DragState {
+  widgets: HTMLElement[];
+  positions: Record<string, Position>;
+  placeAbsolute: (widget: HTMLElement, id: string) => void;
+}
+
+const stateByDoc = new WeakMap<Document, DragState>();
+const wiredDocs = new WeakSet<Document>();
+
 /** Wires drag + keyboard for every `[data-desk-widget]` inside the first `[data-desk]` ancestor, if any — a no-op below the `desk:` breakpoint, on a page with no desk, or with no widgets. Safe to call more than once (re-reads the DOM fresh each time); the hub page's own script calls it once per load/navigation, same as `initDeskWidgets`. */
 export function initDeskDrag(doc: Document = document): void {
   if (typeof matchMedia !== 'function' || !matchMedia(DESK_BREAKPOINT_QUERY).matches) return;
@@ -97,7 +129,14 @@ export function initDeskDrag(doc: Document = document): void {
 
   if (!desk.style.position) desk.style.position = 'relative';
 
-  let positions = parseStoredPositions(safeGet(DESK_DRAG_STORAGE_KEY));
+  // This call's own mutable state — see {@link DragState}'s own header for
+  // why `placeAbsolute`/`persist` below read and write `state.positions`
+  // instead of a plain local variable. `placeAbsolute` itself is assigned
+  // once it is defined, a few lines down.
+  const state = {
+    widgets,
+    positions: parseStoredPositions(safeGet(DESK_DRAG_STORAGE_KEY)),
+  } as DragState;
 
   // Every widget's own grid-flow box, measured in ONE pass BEFORE any of
   // them is touched — switching even the FIRST widget to `position:
@@ -130,7 +169,7 @@ export function initDeskDrag(doc: Document = document): void {
   function placeAbsolute(widget: HTMLElement, id: string): void {
     const fallback = defaults.get(id);
     const size = fallback?.size ?? sizeOf(widget);
-    const desired = positions[id] ?? fallback?.pos ?? { x: 0, y: 0 };
+    const desired = state.positions[id] ?? fallback?.pos ?? { x: 0, y: 0 };
     const clamped = clampPosition(desired, size, deskSize());
 
     widget.style.position = 'absolute';
@@ -142,10 +181,11 @@ export function initDeskDrag(doc: Document = document): void {
     widget.style.left = `${clamped.x}px`;
     widget.style.top = `${clamped.y}px`;
   }
+  state.placeAbsolute = placeAbsolute;
 
   function persist(id: string, pos: Position): void {
-    positions = { ...positions, [id]: pos };
-    safeSet(DESK_DRAG_STORAGE_KEY, serializePositions(positions));
+    state.positions = { ...state.positions, [id]: pos };
+    safeSet(DESK_DRAG_STORAGE_KEY, serializePositions(state.positions));
     dispatchArrangeVisibility(true, doc);
   }
 
@@ -219,29 +259,41 @@ export function initDeskDrag(doc: Document = document): void {
     wireWidget(widget);
   }
 
-  dispatchArrangeVisibility(Object.keys(positions).length > 0, doc);
+  dispatchArrangeVisibility(Object.keys(state.positions).length > 0, doc);
 
-  doc.addEventListener(DESK_ARRANGE_RESET_EVENT, () => {
-    positions = {};
-    safeRemove(DESK_DRAG_STORAGE_KEY);
-    const reducedMotion = prefersReducedMotion();
+  // Overwritten on every call — see this file's own header. The shared
+  // reset listener below (wired at most once) always looks this up AT
+  // RESET TIME, so it acts on whichever call's widgets/positions are
+  // actually current right now, never a stale earlier call's detached ones.
+  stateByDoc.set(doc, state);
 
-    for (const widget of widgets) {
-      const id = widget.getAttribute('data-desk-widget');
-      if (!id) continue;
-      if (!reducedMotion) {
-        widget.style.transition = SETTLE_TRANSITION;
-        widget.addEventListener(
-          'transitionend',
-          () => {
-            widget.style.transition = '';
-          },
-          { once: true },
-        );
+  if (!wiredDocs.has(doc)) {
+    wiredDocs.add(doc);
+    doc.addEventListener(DESK_ARRANGE_RESET_EVENT, () => {
+      const latest = stateByDoc.get(doc);
+      if (!latest) return;
+
+      latest.positions = {};
+      safeRemove(DESK_DRAG_STORAGE_KEY);
+      const reducedMotion = prefersReducedMotion();
+
+      for (const widget of latest.widgets) {
+        const id = widget.getAttribute('data-desk-widget');
+        if (!id) continue;
+        if (!reducedMotion) {
+          widget.style.transition = SETTLE_TRANSITION;
+          widget.addEventListener(
+            'transitionend',
+            () => {
+              widget.style.transition = '';
+            },
+            { once: true },
+          );
+        }
+        latest.placeAbsolute(widget, id);
       }
-      placeAbsolute(widget, id);
-    }
 
-    dispatchArrangeVisibility(false, doc);
-  });
+      dispatchArrangeVisibility(false, doc);
+    });
+  }
 }
