@@ -110,6 +110,54 @@ describe('Footer.astro — credits link', () => {
   });
 });
 
+// "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item A):
+// the Inglés footer became a full-width bar carrying every item the footer
+// has today, with a bold copyright line. The SITE branch (default `ingles`
+// prop, every test above) is unaffected.
+describe('Footer.astro — Inglés full-width bar (desktop redesign PART 1, item A)', () => {
+  it('renders a full-width bar — no rounded/bordered floating panel, no page-margin inset wrapper', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es', ingles: true },
+    });
+    const footerOpenTag = html.slice(html.indexOf('<footer'), html.indexOf('>', html.indexOf('<footer')) + 1);
+    expect(footerOpenTag).toContain('border-t');
+    expect(footerOpenTag).not.toContain('rounded-card');
+    expect(html).not.toContain('data-chrome-collapse');
+  });
+
+  it('renders the bold copyright line', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es', ingles: true },
+    });
+    // `[^>]*` (not just `""`) between the class attribute and the tag's own
+    // closing `>`: the container renderer may add its own extra attributes
+    // (e.g. `data-astro-source-file`) after `class="..."`.
+    expect(html).toMatch(/<p class="[^"]*font-bold[^"]*"[^>]*>&copy;/);
+  });
+
+  it('carries every item the SITE footer has today: Premium, legal links, credits', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es', ingles: true },
+    });
+    expect(html).toContain('href="/es/premium"');
+    expect(html).toContain('href="/es/legal/terms"');
+    expect(html).toContain('href="/es/legal/privacy"');
+    expect(html).toContain('href="/es/legal/reembolsos"');
+    expect(html).toContain('href="/es/creditos"');
+  });
+
+  it('still carries data-chrome-footer, for the (now non-collapsing) chrome-visibility hook', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es', ingles: true },
+    });
+    expect(html).toContain('data-chrome-footer');
+  });
+});
+
 // SEO basics pass: the copyright year used to be a hardcoded "2026" literal
 // in the markup — it would have gone stale the moment the calendar turned.
 // Pinning the system clock to a year that is NOT today's proves the value is

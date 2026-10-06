@@ -52,10 +52,18 @@ describe('createInitialChromeState', () => {
     expect(state.footerVisible).toBe(false);
   });
 
-  it('INGLÉS mode starts with BOTH the header and the footer hidden (no flash)', () => {
+  it('INGLÉS mode (non-hub) starts with the header hidden (no flash) but the footer already visible ("desktop" redesign PART 1, item C: clean footer scroll)', () => {
     const state = createInitialChromeState('ingles');
     expect(state.headerVisible).toBe(false);
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
+    expect(state.isHub).toBe(false);
+  });
+
+  it('INGLÉS HUB starts with BOTH the header and the footer already visible — no flash of either being hidden (item C)', () => {
+    const state = createInitialChromeState('ingles', true);
+    expect(state.headerVisible).toBe(true);
+    expect(state.footerVisible).toBe(true);
+    expect(state.isHub).toBe(true);
   });
 });
 
@@ -176,6 +184,35 @@ describe('INGLÉS mode — header reveal needs an accumulated pull past the top 
   });
 });
 
+// "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
+// the Inglés HUB turns every pull-to-reveal/collapse header rule above OFF
+// — its header starts, and always stays, visible.
+describe('INGLÉS HUB — header is always visible, never pull-to-reveal, never collapses', () => {
+  it('starts visible at the top (unlike a non-hub INGLÉS page)', () => {
+    const state = reduceChromeVisibility(createInitialChromeState('ingles', true), scroll(0));
+    expect(state.headerVisible).toBe(true);
+  });
+
+  it('a wheel pull past the top is a no-op — it is already visible', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles', true), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: -(PULL_SHOW_THRESHOLD_PX + 50) });
+    expect(state.headerVisible).toBe(true);
+  });
+
+  it('never collapses even once fully scrolled out of view', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles', true), scroll(0));
+    expect(state.headerVisible).toBe(true);
+    state = reduceChromeVisibility(state, scroll(300, { headerBottom: -10 }));
+    expect(state.headerVisible).toBe(true);
+  });
+
+  it('a tap on the page content does not hide it (narrowed by item C to non-hub pages only)', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles', true), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'contentPointerDown' });
+    expect(state.headerVisible).toBe(true);
+  });
+});
+
 describe('footer — reveal at the bottom (both modes share this rule)', () => {
   it('is hidden by default, away from the bottom', () => {
     const state = reduceChromeVisibility(createInitialChromeState('site'), scroll(0));
@@ -260,26 +297,54 @@ describe('footer — reveal at the bottom (both modes share this rule)', () => {
   });
 });
 
-describe('footer — the ~1s bottom dwell is SITE only now (owner spec 2026-10-05: removed for INGLÉS)', () => {
-  it('never auto-reveals on dwell alone in INGLÉS mode, however long it waits', () => {
+// "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C,
+// "clean footer scroll") REPLACED the Inglés footer's old hide/pull-reveal
+// behavior entirely: it is always in normal flow, at its ordinary height,
+// never collapsed/hidden/half-shown/faded, in BOTH Inglés sub-modes — no
+// dwell, no wheel-triggered reveal, no re-collapsing once scrolled past it
+// (that is now exclusively a SITE thing, see the dwell describe block
+// above).
+describe('footer — always visible in INGLÉS, both sub-modes ("desktop" redesign PART 1, item C: clean footer scroll)', () => {
+  it('is already visible on page entry, both hub and non-hub — no dwell, no flash', () => {
+    expect(createInitialChromeState('ingles').footerVisible).toBe(true);
+    expect(createInitialChromeState('ingles', true).footerVisible).toBe(true);
+  });
+
+  it('stays visible however long a dwell at the bottom runs (no dwell rule applies to INGLÉS)', () => {
     let state = reduceChromeVisibility(
       createInitialChromeState('ingles'),
       scroll(DOC_HEIGHT - VIEWPORT, { footerTop: VIEWPORT - 10, now: 0 }),
     );
-    expect(state.footerVisible).toBe(false);
-    state = reduceChromeVisibility(state, { type: 'tick', now: FOOTER_DWELL_MS });
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
     state = reduceChromeVisibility(state, { type: 'tick', now: FOOTER_DWELL_MS * 10 });
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
   });
 
-  it('a page too short to scroll still gets the footer via a downward push attempt, just never from dwelling', () => {
+  it('stays visible even once fully scrolled out of view (unlike SITE, it never re-collapses)', () => {
+    let state = reduceChromeVisibility(
+      createInitialChromeState('ingles'),
+      scroll(DOC_HEIGHT - VIEWPORT, { footerTop: VIEWPORT - 10 }),
+    );
+    expect(state.footerVisible).toBe(true);
+    // Scrolled all the way back up: the footer's top edge is now below the
+    // viewport entirely (fully out of view) — SITE would reset this to
+    // `false`; INGLÉS never does.
+    state = reduceChromeVisibility(state, scroll(0, { footerTop: VIEWPORT + 50 }));
+    expect(state.footerVisible).toBe(true);
+  });
+
+  it('a tap on the page content no longer hides it (only the header, non-hub — see contentPointerDown below)', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'contentPointerDown' });
+    expect(state.footerVisible).toBe(true);
+  });
+
+  it('a page too short to scroll still has the footer visible from the start, with or without a push attempt', () => {
     let state = reduceChromeVisibility(
       createInitialChromeState('ingles'),
       scroll(0, { docHeight: 500, footerTop: 300, now: 0 }),
     );
-    state = reduceChromeVisibility(state, { type: 'tick', now: FOOTER_DWELL_MS });
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
     state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: 40 });
     expect(state.footerVisible).toBe(true);
   });
@@ -299,11 +364,11 @@ describe('wheelAttempt — pages that cannot scroll (and the top/bottom edges of
     expect(state.headerVisible).toBe(false);
   });
 
-  it('a downward attempt away from the top/bottom does nothing', () => {
+  it('a downward attempt away from the top/bottom changes nothing (header stays hidden, footer stays visible)', () => {
     let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(400));
     state = reduceChromeVisibility(state, { type: 'wheelAttempt', deltaY: 30 });
     expect(state.headerVisible).toBe(false);
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
   });
 });
 
@@ -338,17 +403,20 @@ describe('topEdgeHover — desktop mouse near the top edge (SITE only)', () => {
   });
 });
 
-describe('contentPointerDown — INGLÉS-only "tap content to hide both"', () => {
-  it('hides both the header and the footer in INGLÉS mode', () => {
+// "Desktop" redesign PART 1 scope extension (item C) narrowed this rule to
+// "hides the header" (never the footer anymore — it is always visible, see
+// its own describe block above) and "only on a non-hub Inglés page" (the
+// hub's header never hides either — see the hub describe block below).
+describe('contentPointerDown — INGLÉS-only "tap content to hide the header" (narrowed by item C)', () => {
+  it('hides the header on a non-hub INGLÉS page, but leaves the (always-visible) footer alone', () => {
     let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
     state = reduceChromeVisibility(state, { type: 'focusIn', region: 'header' });
-    state = reduceChromeVisibility(state, { type: 'focusIn', region: 'footer' });
     expect(state.headerVisible).toBe(true);
     expect(state.footerVisible).toBe(true);
 
     state = reduceChromeVisibility(state, { type: 'contentPointerDown' });
     expect(state.headerVisible).toBe(false);
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
   });
 
   it('does nothing in SITE mode (no rule requires it there)', () => {
@@ -377,7 +445,11 @@ describe('focusIn — keyboard focus never leaves chrome invisible', () => {
     let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(500));
     state = reduceChromeVisibility(state, { type: 'focusIn', region: 'other' });
     expect(state.headerVisible).toBe(false);
-    expect(state.footerVisible).toBe(false);
+    // The footer starts (and stays) visible in INGLÉS mode regardless
+    // ("desktop" redesign PART 1, item C: clean footer scroll) — this
+    // assertion just confirms an unrelated focus event does not somehow
+    // flip it.
+    expect(state.footerVisible).toBe(true);
   });
 });
 
@@ -414,19 +486,35 @@ describe('menuOpen — the mobile/account menu pins the header visible', () => {
 });
 
 describe('pageEnter — mode switches on a View Transitions navigation', () => {
-  it('entering INGLÉS hides the header, even if it was visible on the previous (SITE) page', () => {
+  it('entering INGLÉS (non-hub) hides the header, even if it was visible on the previous (SITE) page — but the footer is already visible (item C)', () => {
     let state = reduceChromeVisibility(createInitialChromeState('site'), scroll(0));
     expect(state.headerVisible).toBe(true);
-    state = reduceChromeVisibility(state, { type: 'pageEnter', mode: 'ingles' });
+    state = reduceChromeVisibility(state, { type: 'pageEnter', mode: 'ingles', isHub: false });
     expect(state.headerVisible).toBe(false);
-    expect(state.footerVisible).toBe(false);
+    expect(state.footerVisible).toBe(true);
+  });
+
+  it('entering the INGLÉS hub shows the header immediately too (item C)', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('site'), scroll(0));
+    state = reduceChromeVisibility(state, { type: 'pageEnter', mode: 'ingles', isHub: true });
+    expect(state.headerVisible).toBe(true);
+    expect(state.footerVisible).toBe(true);
+    expect(state.isHub).toBe(true);
   });
 
   it('leaving INGLÉS (back to SITE) shows the header again', () => {
     let state = reduceChromeVisibility(createInitialChromeState('ingles'), scroll(0));
     expect(state.headerVisible).toBe(false);
-    state = reduceChromeVisibility(state, { type: 'pageEnter', mode: 'site' });
+    state = reduceChromeVisibility(state, { type: 'pageEnter', mode: 'site', isHub: false });
     expect(state.headerVisible).toBe(true);
+  });
+
+  it('navigating from the hub to a non-hub INGLÉS page drops isHub and re-hides the header', () => {
+    let state = reduceChromeVisibility(createInitialChromeState('ingles', true), scroll(0));
+    expect(state.headerVisible).toBe(true);
+    state = reduceChromeVisibility(state, { type: 'pageEnter', mode: 'ingles', isHub: false });
+    expect(state.isHub).toBe(false);
+    expect(state.headerVisible).toBe(false);
   });
 });
 

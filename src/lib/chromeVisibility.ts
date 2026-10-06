@@ -2,7 +2,11 @@
  * chromeVisibility — the "smart" header/footer visibility feature (owner
  * spec: scroll-direction header + reveal-at-the-bottom footer for SITE;
  * owner spec 2026-10-05: hidden-by-default "blocks" in normal flow,
- * revealed only by a deliberate pull/push past an edge, for INGLÉS).
+ * revealed only by a deliberate pull/push past an edge, for INGLÉS;
+ * "desktop" redesign PART 1 scope extension, owner spec 2026-10-06, item C:
+ * "clean footer scroll" REPLACED the Inglés footer's own hide/reveal
+ * behavior below with the footer simply always in normal flow — see that
+ * item's own section further down).
  *
  * Split the same way `backNavigation.ts`/`reveal.ts` are: a pure state
  * machine ({@link reduceChromeVisibility}, fully unit-testable, no DOM) and a
@@ -19,36 +23,33 @@
  * TWO MODES, picked per page from `<html data-theme="ingles">` (BaseLayout's
  * `theme` prop; see that file's own header):
  *
- *  - SITE — every other page. UNCHANGED by the 2026-10-05 pass below. The
- *    header is always visible at/near the top; scrolling down hides it, a
- *    small cumulative scroll up (~8px, {@link UP_SHOW_THRESHOLD_PX}) shows it
- *    again; a desktop mouse hover near the top edge
- *    ({@link TOP_EDGE_HOVER_PX}) also reveals it (unscrollable-page
- *    fallback); the footer reveals at the bottom after a ~1s dwell
- *    ({@link FOOTER_DWELL_MS}) or an extra push past it.
+ *  - SITE — every other page. UNCHANGED by the 2026-10-05 pass below, and by
+ *    item C. The header is always visible at/near the top; scrolling down
+ *    hides it, a small cumulative scroll up (~8px,
+ *    {@link UP_SHOW_THRESHOLD_PX}) shows it again; a desktop mouse hover near
+ *    the top edge ({@link TOP_EDGE_HOVER_PX}) also reveals it
+ *    (unscrollable-page fallback); the footer reveals at the bottom after a
+ *    ~1s dwell ({@link FOOTER_DWELL_MS}) or an extra push past it.
  *
- *  - INGLÉS (owner spec 2026-10-05, "blocks", town.com-style) — both bars
- *    start HIDDEN and COLLAPSED (zero height, no space taken) on every page
- *    entry. They are ordinary blocks in normal document flow now — NEVER a
- *    floating/fixed overlay — that EXPAND IN FLOW (animated height, see
- *    `global.css`'s own `[data-chrome-mode='ingles']` rules), pushing
- *    surrounding content:
- *      - The header reveals ONLY while at the very top AND the visitor
- *        keeps pulling further (an upward wheel/touch "pull" past the top
- *        that can't scroll any further — {@link PULL_SHOW_THRESHOLD_PX}).
- *        There is no "always visible near the top" pin and no generic
- *        mid-page upward-scroll reveal (both SITE-only now), and no
- *        top-edge mouse hover reveal either (also SITE-only now).
- *      - The footer reveals the same way SITE's "push a little further"
- *        case always worked (shared rule, kept): at the very bottom, an
- *        extra downward wheel/touch attempt. The ~1s dwell auto-reveal is
- *        SITE-only now — INGLÉS never reveals the footer just by waiting.
- *      - Both collapse again once fully scrolled out of view, and on a tap/
+ *  - INGLÉS (owner spec 2026-10-05, "blocks", town.com-style; header rules
+ *    below narrowed by item C to "every Inglés page EXCEPT the hub") — the
+ *    header starts HIDDEN and COLLAPSED (zero height, no space taken) on
+ *    every page entry. It is an ordinary block in normal document flow —
+ *    NEVER a floating/fixed overlay — that EXPANDS IN FLOW (animated
+ *    height, see `global.css`'s own `[data-chrome-mode='ingles']` rules),
+ *    pushing surrounding content:
+ *      - It reveals ONLY while at the very top AND the visitor keeps
+ *        pulling further (an upward wheel/touch "pull" past the top that
+ *        can't scroll any further — {@link PULL_SHOW_THRESHOLD_PX}). There
+ *        is no "always visible near the top" pin and no generic mid-page
+ *        upward-scroll reveal (both SITE-only now), and no top-edge mouse
+ *        hover reveal either (also SITE-only now).
+ *      - It collapses again once fully scrolled out of view, and on a tap/
  *        click on the page content (`contentPointerDown`, unchanged).
- *        Collapsing the HEADER this way would otherwise visibly shift
- *        whatever the visitor is currently reading by the header's own
- *        height — `measureAndDispatchScroll` compensates the scroll
- *        position in the same tick so nothing jumps (see its own comment).
+ *        Collapsing it this way would otherwise visibly shift whatever the
+ *        visitor is currently reading by the header's own height —
+ *        `measureAndDispatchScroll` compensates the scroll position in the
+ *        same tick so nothing jumps (see its own comment).
  *      - A wheel/touch "pull" only counts if the browser did not already
  *        consume it (`defaultPrevented` — e.g. canvas zoom in the worksheet
  *        player/editor) and no scrollable ancestor under the pointer can
@@ -57,6 +58,35 @@
  *        INGLÉS pages too: `global.css` no longer pins them "always visible"
  *        at `lg:` — this behavior now runs at every width, same as every
  *        other INGLÉS page.
+ *
+ *  - INGLÉS HUB ONLY ("desktop" redesign PART 1 scope extension, item C):
+ *    `ChromeState.isHub` (from `<html data-chrome-hub>`, set server-side by
+ *    `BaseLayout.astro` — see that file's own header) turns the pull-to-
+ *    reveal/collapse header rules above OFF entirely: the header starts, and
+ *    always stays, visible — it holds the logo and the avatar in the new
+ *    "desktop" design (owner spec), so it must never disappear. It is still
+ *    an ordinary in-flow block (not fixed/sticky), so it scrolls out of the
+ *    viewport the normal way when the visitor scrolls down to the footer —
+ *    it just never COLLAPSES (zero-height) while doing so.
+ *
+ *  - INGLÉS FOOTER, EVERY PAGE ("desktop" redesign PART 1 scope extension,
+ *    item C, "clean footer scroll" — REPLACES the 2026-10-05 hide/pull-
+ *    reveal footer rules the hub/non-hub split above never applied to
+ *    begin with): the footer is simply always in normal flow, at the end of
+ *    the page, fully visible — never collapsed, hidden, half-shown or
+ *    faded. `footerVisible` therefore starts (and stays) `true` for BOTH
+ *    Inglés sub-modes; `global.css` no longer gives `[data-chrome-footer]`
+ *    any grid-collapse rule under `[data-chrome-mode='ingles']` at all. On
+ *    the HUB specifically, whose content is one screen tall, `global.css`
+ *    additionally adds CSS scroll-snap (keyed off `[data-chrome-hub]`
+ *    directly, no JS dependency) so the page rests at either natural
+ *    extreme — top (the hub's own one-screen content) or bottom (the footer
+ *    fully visible) — "si se baja se mira completo, si se sube se mira toda
+ *    la pantalla" (owner's words). Snap is scoped to the hub alone on
+ *    purpose: a long Inglés page (the practice player, the editor, a long
+ *    activity list) must never fight a visitor trying to read partway down
+ *    it. `prefers-reduced-motion: reduce` drops the snap entirely (plain,
+ *    un-snapped scrolling) — see `global.css`'s own rule.
  *
  * Shared by both modes, unchanged: keyboard focus entering a collapsed bar
  * always reveals it (never leaves a focused element invisible), and an open
@@ -67,7 +97,9 @@
  * head script, for the very first paint) sets on `<html>` — see
  * `global.css`'s own header for the exact selectors. No JS / JS failed means
  * none of that CSS activates, so the header/footer render fully visible,
- * in normal flow, exactly as their own ordinary (non-JS) markup.
+ * in normal flow, exactly as their own ordinary (non-JS) markup. The hub's
+ * scroll-snap is the one exception that needs no JS at all — its attribute
+ * is server-rendered (see item C above).
  */
 
 // ---------------------------------------------------------------------------
@@ -80,13 +112,23 @@ export interface ChromeState {
   mode: ChromeMode;
   headerVisible: boolean;
   footerVisible: boolean;
+  /**
+   * INGLÉS only ("desktop" redesign PART 1 scope extension, item C): true
+   * only on the Inglés hub — see `<html data-chrome-hub>`,
+   * `BaseLayout.astro`'s own header. Turns the pull-to-reveal/collapse
+   * header rules off entirely (the hub's header always stays visible) and
+   * is otherwise unused — the footer no longer has hub-specific rules of
+   * its own; it is always visible in BOTH Inglés sub-modes (see this
+   * module's own header).
+   */
+  isHub: boolean;
   /** True while the mobile menu or the account dropdown is open — pins the header visible. */
   menuOpen: boolean;
   /** The last measured scroll position, or `null` right after a `pageEnter` (next `scroll` only calibrates). */
   lastY: number | null;
   /** SITE only: cumulative upward scroll delta (px) since the last downward move — compared against {@link UP_SHOW_THRESHOLD_PX}. */
   upAccum: number;
-  /** INGLÉS only: cumulative upward wheel/touch "pull" (px) while already at the top — compared against {@link PULL_SHOW_THRESHOLD_PX}. */
+  /** INGLÉS, non-hub only: cumulative upward wheel/touch "pull" (px) while already at the top — compared against {@link PULL_SHOW_THRESHOLD_PX}. */
   pullAccum: number;
   atTop: boolean;
   atBottom: boolean;
@@ -95,7 +137,7 @@ export interface ChromeState {
 }
 
 export type ChromeEvent =
-  | { type: 'pageEnter'; mode: ChromeMode }
+  | { type: 'pageEnter'; mode: ChromeMode; isHub: boolean }
   | {
       type: 'scroll';
       y: number;
@@ -135,13 +177,20 @@ export const FOOTER_DWELL_MS = 1000;
  */
 export const PULL_SHOW_THRESHOLD_PX = 80;
 
-export function createInitialChromeState(mode: ChromeMode = 'site'): ChromeState {
+export function createInitialChromeState(mode: ChromeMode = 'site', isHub = false): ChromeState {
   return {
     mode,
     // SITE defaults to visible (today's expectation); INGLÉS starts hidden
-    // on every page entry, even at the top — the task's own "no flash" rule.
-    headerVisible: mode === 'site',
-    footerVisible: false,
+    // on every page entry, even at the top — the task's own "no flash" rule
+    // — EXCEPT the hub, whose header always starts (and stays) visible
+    // (item C).
+    headerVisible: mode === 'site' || isHub,
+    // "Desktop" redesign PART 1 scope extension (item C, "clean footer
+    // scroll"): the Inglés footer is simply always in normal flow — never
+    // collapsed/hidden/faded — in EITHER Inglés sub-mode. Only SITE still
+    // starts hidden and reveals via the dwell/push rules below.
+    footerVisible: mode === 'ingles',
+    isHub,
     menuOpen: false,
     lastY: null,
     upAccum: 0,
@@ -160,7 +209,7 @@ function withMenuGuard(state: ChromeState, headerVisible: boolean): boolean {
 export function reduceChromeVisibility(state: ChromeState, event: ChromeEvent): ChromeState {
   switch (event.type) {
     case 'pageEnter':
-      return createInitialChromeState(event.mode);
+      return createInitialChromeState(event.mode, event.isHub);
 
     case 'scroll':
       return reduceScroll(state, event);
@@ -174,11 +223,13 @@ export function reduceChromeVisibility(state: ChromeState, event: ChromeEvent): 
         if (state.atTop && event.deltaY < 0) {
           next = { ...next, headerVisible: withMenuGuard(next, true) };
         }
-      } else if (state.atTop) {
-        // INGLÉS (owner spec 2026-10-05): the header needs a DELIBERATE,
-        // accumulated pull past the top — a single small attempt (e.g.
-        // scroll-momentum settling right at the edge) must not count on its
-        // own; see {@link PULL_SHOW_THRESHOLD_PX}'s own comment.
+      } else if (!state.isHub && state.atTop) {
+        // INGLÉS, non-hub (owner spec 2026-10-05): the header needs a
+        // DELIBERATE, accumulated pull past the top — a single small
+        // attempt (e.g. scroll-momentum settling right at the edge) must
+        // not count on its own; see {@link PULL_SHOW_THRESHOLD_PX}'s own
+        // comment. The HUB skips this whole branch (item C): its header is
+        // already always visible, nothing to pull-reveal.
         if (event.deltaY < 0) {
           const pullAccum = state.pullAccum + -event.deltaY;
           next =
@@ -190,9 +241,11 @@ export function reduceChromeVisibility(state: ChromeState, event: ChromeEvent): 
           next = { ...next, pullAccum: 0 };
         }
       }
-      // The footer's "push a little further past the bottom" reveal is the
-      // one rule both modes still share unchanged (owner spec 2026-10-05).
-      if (state.atBottom && event.deltaY > 0) {
+      // SITE only now: the footer's "push a little further past the
+      // bottom" reveal. "Desktop" redesign PART 1 scope extension (item C):
+      // the Inglés footer is always visible already (both sub-modes), so
+      // there is nothing left for this rule to do there.
+      if (state.mode === 'site' && state.atBottom && event.deltaY > 0) {
         next = { ...next, footerVisible: true };
       }
       return next;
@@ -207,10 +260,13 @@ export function reduceChromeVisibility(state: ChromeState, event: ChromeEvent): 
         : state;
 
     case 'contentPointerDown':
-      // INGLÉS-only rule (owner spec): a tap/click on <main> hides both. No
-      // rule asks for this in SITE mode.
-      return state.mode === 'ingles'
-        ? { ...state, headerVisible: withMenuGuard(state, false), footerVisible: false }
+      // INGLÉS, non-hub only (owner spec 2026-10-05, narrowed by item C): a
+      // tap/click on <main> hides the header. No rule asks for this in SITE
+      // mode; the HUB's header never hides (item C); the footer is never
+      // hidden by this (or any) rule anymore in either Inglés sub-mode
+      // (item C, "clean footer scroll").
+      return state.mode === 'ingles' && !state.isHub
+        ? { ...state, headerVisible: withMenuGuard(state, false) }
         : state;
 
     case 'focusIn':
@@ -280,13 +336,13 @@ function reduceScroll(state: ChromeState, event: Extract<ChromeEvent, { type: 's
     if (y <= headerHeight) {
       headerVisible = true;
     }
-  } else {
-    // INGLÉS (owner spec 2026-10-05): no generic scroll-direction reveal and
-    // no "near the top" pin — revealing is ONLY the deliberate at-top pull
-    // (`wheelAttempt`, see the reducer's own case). A scroll that merely
-    // REACHES the top shows nothing by itself; leaving the top cancels any
-    // pull already in progress, same as a casual scroll down and back up
-    // never carrying "credit" over to a later pull.
+  } else if (!state.isHub) {
+    // INGLÉS, non-hub (owner spec 2026-10-05): no generic scroll-direction
+    // reveal and no "near the top" pin — revealing is ONLY the deliberate
+    // at-top pull (`wheelAttempt`, see the reducer's own case). A scroll
+    // that merely REACHES the top shows nothing by itself; leaving the top
+    // cancels any pull already in progress, same as a casual scroll down
+    // and back up never carrying "credit" over to a later pull.
     if (!atTop) {
       pullAccum = 0;
     }
@@ -298,20 +354,32 @@ function reduceScroll(state: ChromeState, event: Extract<ChromeEvent, { type: 's
       headerVisible = false;
     }
   }
+  // INGLÉS HUB ("desktop" redesign PART 1 scope extension, item C): neither
+  // branch above runs — the header started visible (see
+  // `createInitialChromeState`) and nothing in this reducer ever turns it
+  // back off; it simply scrolls out of (and back into) the viewport like
+  // any other in-flow block as the visitor scrolls toward the footer.
 
+  // "Desktop" redesign PART 1 scope extension (item C, "clean footer
+  // scroll"): SITE keeps its own dwell-driven reveal/re-collapse below,
+  // UNCHANGED. The Inglés footer (both sub-modes) is always visible already
+  // (`createInitialChromeState`) and this reducer never touches it again —
+  // no dwell clock, no re-collapsing once scrolled past it.
   let footerVisible = state.footerVisible;
   let footerDwellStart = state.footerDwellStart;
 
-  if (atBottom && !state.atBottom) {
-    footerDwellStart = now; // just arrived — start the dwell clock (SITE only consumes this)
-  } else if (!atBottom) {
-    footerDwellStart = null;
-  }
+  if (state.mode === 'site') {
+    if (atBottom && !state.atBottom) {
+      footerDwellStart = now; // just arrived — start the dwell clock
+    } else if (!atBottom) {
+      footerDwellStart = null;
+    }
 
-  if (footerFullyOutOfView && footerVisible) {
-    // Scrolled all the way back past it — the next visit to the bottom
-    // should animate in again from scratch.
-    footerVisible = false;
+    if (footerFullyOutOfView && footerVisible) {
+      // Scrolled all the way back past it — the next visit to the bottom
+      // should animate in again from scratch.
+      footerVisible = false;
+    }
   }
 
   return {
@@ -350,6 +418,14 @@ export const HEADER_OFFSET_VAR = '--chrome-header-offset';
  * every OTHER transition (revealing, tap-to-collapse) keeps animating.
  */
 export const CHROME_INSTANT_ATTR = 'data-chrome-instant';
+/**
+ * "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item
+ * C): server-rendered by `BaseLayout.astro` (true only on the Inglés hub) —
+ * this module only ever READS it (`detectHub`), never writes it; it never
+ * changes for the life of a page view. `global.css` also reads it directly
+ * for the hub's scroll-snap rules, with no JS dependency at all.
+ */
+export const CHROME_HUB_ATTR = 'data-chrome-hub';
 /** Approximates today's literal `top-20` gap below the ~4rem header once JS takes over the offset. */
 const HEADER_OFFSET_GAP_PX = 16;
 /** How often `tick` is dispatched while waiting out the footer's dwell — well under the ~1s window so the reveal never feels late. */
@@ -357,6 +433,15 @@ const DWELL_TICK_MS = 150;
 
 function detectMode(doc: Document): ChromeMode {
   return doc.documentElement.getAttribute('data-theme') === 'ingles' ? 'ingles' : 'site';
+}
+
+/**
+ * "Desktop" redesign PART 1 scope extension (item C): reads the attribute
+ * `BaseLayout.astro` already set server-side — see {@link CHROME_HUB_ATTR}'s
+ * own comment for why this module never re-derives it from the URL itself.
+ */
+function detectHub(doc: Document): boolean {
+  return doc.documentElement.hasAttribute(CHROME_HUB_ATTR);
 }
 
 /**
@@ -417,7 +502,7 @@ export function initChromeVisibility(doc: Document = document, win: Window = win
   wired = true;
 
   const html = doc.documentElement;
-  let state = createInitialChromeState(detectMode(doc));
+  let state = createInitialChromeState(detectMode(doc), detectHub(doc));
   let frameScheduled = false;
 
   function apply(): void {
@@ -442,18 +527,17 @@ export function initChromeVisibility(doc: Document = document, win: Window = win
   }
 
   /**
-   * Dispatches a `wheelAttempt`, then handles the one INGLÉS-only DOM side
-   * effect that reducer cannot own itself: once the footer reveals this way
-   * (at the very bottom, pushed a little further), the document just grew
-   * taller by the footer's own height but the visitor's viewport does not
-   * move on its own — "the page scrolls so it becomes visible" (owner spec).
+   * Dispatches a `wheelAttempt`. Used to carry one INGLÉS-only DOM side
+   * effect for the footer's old "push past the bottom" reveal — removed by
+   * the "desktop" redesign PART 1 scope extension (item C, "clean footer
+   * scroll"): the Inglés footer is simply always in normal flow now, so
+   * there is no hidden→visible transition left to compensate for. Kept as
+   * its own function (rather than calling `dispatch` directly from the
+   * wheel/touch listeners below) only because SITE may grow a matching
+   * side effect again later — it is currently a plain pass-through.
    */
   function dispatchWheelAttempt(deltaY: number): void {
-    const wasFooterVisible = state.footerVisible;
     dispatch({ type: 'wheelAttempt', deltaY });
-    if (state.mode === 'ingles' && !wasFooterVisible && state.footerVisible) {
-      win.requestAnimationFrame(() => win.scrollTo(0, doc.documentElement.scrollHeight));
-    }
   }
 
   function measureAndDispatchScroll(): void {
@@ -466,20 +550,25 @@ export function initChromeVisibility(doc: Document = document, win: Window = win
     const headerHeight = headerRect?.height ?? 0;
     const headerBottom = headerRect?.bottom ?? Number.POSITIVE_INFINITY;
 
-    // INGLÉS only: this exact reading is about to make the reducer collapse
-    // an already-revealed header that has fully scrolled out of view (see
-    // `reduceScroll`'s own `headerFullyOutOfView` check) — predicted here
-    // with the SAME condition so the DOM side effects below can bracket the
-    // dispatch. Collapsing it the ordinary (animated) way would let the
-    // content below visibly shift up by the header's own height while the
-    // visitor is scrolled well past it and not looking at it at all, so THIS
-    // one transition skips the animation (`CHROME_INSTANT_ATTR`) and
-    // compensates the scroll position in the same tick instead (owner spec:
-    // "compensate the scroll position... so nothing visibly jumps"). Every
-    // other header transition (revealing via an at-top pull, collapsing via
-    // a tap on the content) stays the normal animated kind, because the
-    // visitor is already looking at the header when those happen.
-    const willCollapseOutOfView = state.mode === 'ingles' && state.headerVisible && headerBottom <= 0;
+    // INGLÉS, non-hub only: this exact reading is about to make the reducer
+    // collapse an already-revealed header that has fully scrolled out of
+    // view (see `reduceScroll`'s own `headerFullyOutOfView` check) —
+    // predicted here with the SAME condition so the DOM side effects below
+    // can bracket the dispatch. Collapsing it the ordinary (animated) way
+    // would let the content below visibly shift up by the header's own
+    // height while the visitor is scrolled well past it and not looking at
+    // it at all, so THIS one transition skips the animation
+    // (`CHROME_INSTANT_ATTR`) and compensates the scroll position in the
+    // same tick instead (owner spec: "compensate the scroll position... so
+    // nothing visibly jumps"). Every other header transition (revealing via
+    // an at-top pull, collapsing via a tap on the content) stays the normal
+    // animated kind, because the visitor is already looking at the header
+    // when those happen. The HUB is excluded ("desktop" redesign PART 1
+    // scope extension, item C): its header never collapses, so `headerBottom
+    // <= 0` there is just the ordinary, un-compensated "scrolled past an
+    // in-flow block" — no instant/compensated transition applies.
+    const willCollapseOutOfView =
+      state.mode === 'ingles' && !state.isHub && state.headerVisible && headerBottom <= 0;
     if (willCollapseOutOfView && header) {
       header.setAttribute(CHROME_INSTANT_ATTR, '');
     }
@@ -508,7 +597,7 @@ export function initChromeVisibility(doc: Document = document, win: Window = win
   }
 
   function handlePageEnter(): void {
-    dispatch({ type: 'pageEnter', mode: detectMode(doc) });
+    dispatch({ type: 'pageEnter', mode: detectMode(doc), isHub: detectHub(doc) });
     measureAndDispatchScroll();
   }
 

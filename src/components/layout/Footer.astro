@@ -34,11 +34,22 @@
  * caches a reference to it — it is re-queried whenever needed instead.
  *
  * INGLÉS "BLOCKS" VARIANT (owner spec 2026-10-05, town.com-style): the
- * `ingles` prop renders the SAME copyright + secondary links as one bordered/
- * rounded panel block inside the page margins, instead of a full-width dark
- * bar — see `Header.astro`'s own matching note for why this lives as a
- * second branch of the SAME component rather than a separate file. Every
- * OTHER page keeps the original branch, byte-for-byte unchanged.
+ * `ingles` prop renders the SAME copyright + secondary links — see
+ * `Header.astro`'s own matching note for why this lives as a second branch
+ * of the SAME component rather than a separate file. Every OTHER page keeps
+ * the original branch, byte-for-byte unchanged.
+ *
+ * PART 1 of the "desktop" redesign (owner spec 2026-10-06, scope extension
+ * item A) REPLACED the original bordered/rounded "panel inside the page
+ * margins" look above with a full-width bar — edge to edge, `border-t` +
+ * `bg-card` resolving to the light Inglés palette, same shape as the SITE
+ * branch below — carrying every item the footer always has (same
+ * `secondaryLinks`, same copyright line, now bold). `data-chrome-footer`
+ * stays directly on the `<footer>`; there is no `data-chrome-collapse`
+ * wrapper anymore either — see "clean footer scroll" in
+ * `chromeVisibility.ts`'s own header for why the Inglés footer no longer
+ * collapses/animates at all, in either branch's CSS consequence
+ * (`global.css`'s own chrome-visibility section).
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
 
@@ -67,38 +78,33 @@ const secondaryLinks = [
 ---
 
 {ingles ? (
-  /* INGLÉS panel branch (owner spec 2026-10-05) — `data-chrome-footer`
-     stays on this outer element (the grid container `global.css`'s
-     `[data-chrome-mode='ingles']` rules collapse/expand) and `data-chrome-
-     collapse` marks its one grid-item child, clipped to zero height while
-     collapsed. NEITHER of those two carries its own padding/margin —
-     `overflow: hidden` only clips a DESCENDANT's box, never the box's own
-     padding, so a grid container/item with its own padding could never
-     actually reach zero height. The page-margin padding (so the panel sits
-     "inside the page margins" rather than edge-to-edge) lives one level
-     deeper instead, on this plain inner div. */
-  <footer data-chrome-footer transition:animate="none">
-    <div data-chrome-collapse>
-      <div class="mx-auto w-full max-w-6xl px-4 pb-6 sm:pb-8">
-        <div class="flex w-full flex-col items-center justify-between gap-4 rounded-card border border-border bg-card px-6 py-6 shadow-elevation-1 sm:flex-row">
-          <p class="text-sm text-muted-foreground">&copy; {currentYear} ChuyoCode</p>
-          <nav
-            class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-end"
-            aria-label="Secondary"
-          >
-            {
-              secondaryLinks.map((link) => (
-                <a
-                  href={link.href}
-                  class="whitespace-nowrap text-sm text-muted-foreground transition-theme duration-theme hover:text-accent-ink"
-                >
-                  {link.label}
-                </a>
-              ))
-            }
-          </nav>
-        </div>
-      </div>
+  /* INGLÉS full-width bar (PART 1 scope extension, item A) — same shape as
+     the SITE branch below (`border-t` + `bg-card`, full width, no rounded/
+     floating panel), just the light Inglés palette + the bold copyright. No
+     `data-chrome-collapse` wrapper: see this file's own header for why the
+     Inglés footer is no longer a collapsible grid item at all. */
+  <footer
+    data-chrome-footer
+    class="border-t border-border bg-card transition-theme duration-theme"
+    transition:animate="none"
+  >
+    <div class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row">
+      <p class="text-sm font-bold text-muted-foreground">&copy; {currentYear} ChuyoCode</p>
+      <nav
+        class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-end"
+        aria-label="Secondary"
+      >
+        {
+          secondaryLinks.map((link) => (
+            <a
+              href={link.href}
+              class="whitespace-nowrap text-sm text-muted-foreground transition-theme duration-theme hover:text-accent-ink"
+            >
+              {link.label}
+            </a>
+          ))
+        }
+      </nav>
     </div>
   </footer>
 ) : (

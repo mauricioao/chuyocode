@@ -694,24 +694,32 @@ html[data-chrome-js][data-chrome-mode='site'][data-footer-visible='false'] [data
   pointer-events: none;
 }
 
-/* --- INGLÉS "blocks" chrome (owner spec 2026-10-05) ----------------------- *
- * Both bars are ordinary blocks in normal document flow — NEVER a floating/
- * fixed overlay (that was last night's rule, SITE-only now, above) — that
- * collapse to ZERO height (no space taken) and expand IN FLOW, pushing
- * surrounding content, via the CSS grid "0fr/1fr" animated-height technique:
- * the bar itself is the grid container (`grid-template-rows` is what
- * animates) and `[data-chrome-collapse]` is its ONE child spanning the row,
- * clipped while collapsing so nothing of its content is reachable/visible
- * at zero height. `Header.astro`/`Footer.astro`'s own INGLÉS markup is what
- * carries that one wrapper — see those files' own comments. */
-html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header],
-html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-footer] {
+/* --- INGLÉS "blocks" chrome (owner spec 2026-10-05; narrowed to the HEADER
+ * ONLY, non-hub, by the "desktop" redesign PART 1 scope extension, owner
+ * spec 2026-10-06, item C — "clean footer scroll") -------------------------
+ * The header is an ordinary block in normal document flow — NEVER a
+ * floating/fixed overlay (that was last night's rule, SITE-only now, above)
+ * — that collapses to ZERO height (no space taken) and expands IN FLOW,
+ * pushing surrounding content, via the CSS grid "0fr/1fr" animated-height
+ * technique: the bar itself is the grid container (`grid-template-rows` is
+ * what animates) and `[data-chrome-collapse]` is its ONE child spanning the
+ * row, clipped while collapsing so nothing of its content is
+ * reachable/visible at zero height. `Header.astro`'s own INGLÉS markup is
+ * what carries that one wrapper — see that file's own comment.
+ *
+ * The FOOTER no longer has any rule here at all (item C): it is always in
+ * normal flow, at its ordinary height, in both Inglés sub-modes — no grid,
+ * no collapse, no `[data-chrome-collapse]` wrapper (`Footer.astro` no
+ * longer renders one). `[data-header-visible='true']` already covers the
+ * hub too: `chromeVisibility.ts`'s `createInitialChromeState` starts (and
+ * keeps) it `true` there, so this same rule is what keeps the hub's header
+ * expanded — no separate hub selector needed. */
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 220ms var(--ease-control);
 }
-html[data-chrome-js][data-chrome-mode='ingles'][data-header-visible='true'] [data-chrome-header],
-html[data-chrome-js][data-chrome-mode='ingles'][data-footer-visible='true'] [data-chrome-footer] {
+html[data-chrome-js][data-chrome-mode='ingles'][data-header-visible='true'] [data-chrome-header] {
   grid-template-rows: 1fr;
 }
 html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
@@ -721,16 +729,43 @@ html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
 /* The one INGLÉS header transition that must NOT animate: collapsing once it
  * has fully scrolled out of view, compensated in the same tick by a matching
  * scroll adjustment so nothing visibly jumps (`chromeVisibility.ts`'s own
- * `measureAndDispatchScroll`, which sets/clears this attribute). */
+ * `measureAndDispatchScroll`, which sets/clears this attribute). Never fires
+ * on the hub — its header never collapses (item C) — so this is a no-op
+ * there in practice. */
 html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome-instant] {
   transition-duration: 0ms;
+}
+
+/* --- Inglés hub: clean footer scroll + scroll-snap ("desktop" redesign
+ * PART 1 scope extension, owner spec 2026-10-06, item C) -------------------
+ * `[data-chrome-hub]` is server-rendered by `BaseLayout.astro` (no JS
+ * dependency — see that file's own header) — true ONLY for the hub, whose
+ * content is one screen tall. Two snap points at the page's own natural
+ * scroll extremes: `[data-chrome-header]` (start) is the TOP (the hub's own
+ * header + one-screen content, both always visible there); `[data-chrome-
+ * footer]` (end) is the BOTTOM (the footer fully visible) — "si se baja se
+ * mira completo, si se sube se mira toda la pantalla" (owner's words).
+ * `proximity`, not `mandatory`: a gentle rest at either end, never a forced
+ * jump mid-scroll. Deliberately scoped to the hub alone — a long Inglés
+ * page (the practice player, the editor, a long activity list) must never
+ * fight a visitor trying to read partway down it. Reduced motion drops the
+ * snap entirely, in favor of plain, un-snapped scrolling. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-chrome-hub] {
+    scroll-snap-type: y proximity;
+  }
+  html[data-chrome-hub] [data-chrome-header] {
+    scroll-snap-align: start;
+  }
+  html[data-chrome-hub] [data-chrome-footer] {
+    scroll-snap-align: end;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-chrome-js] [data-chrome-header],
   html[data-chrome-js] [data-chrome-footer],
-  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header],
-  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-footer] {
+  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
     transition: none;
   }
 }

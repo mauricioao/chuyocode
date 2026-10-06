@@ -204,3 +204,128 @@ describe('Header.astro — mobile menu account slot (mobile layout pass)', () =>
     expect(slotIdx).toBeLessThan(mobileMenuCloseIdx);
   });
 });
+
+// "Desktop" redesign PART 1 (owner spec 2026-10-06): the Inglés branch
+// (`ingles` prop) drops its own Libros/Noticias/Inglés nav (desktop AND
+// mobile) and the bordered/padded box around the account control. The SITE
+// branch above is completely unaffected by any test in this block — every
+// one of them passes `ingles: true` explicitly.
+describe('Header.astro — Inglés chrome (desktop redesign PART 1)', () => {
+  it('renders no primary nav at all — Libros/Noticias/Inglés are gone, desktop and mobile', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+    });
+    expect(html).not.toContain('aria-label="Primary"');
+    expect(html).not.toContain(UI_LABELS.es.nav.books);
+    expect(html).not.toContain(UI_LABELS.es.nav.news);
+  });
+
+  it('renders no mobile hamburger button or panel — nothing is left for it to hold', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+    });
+    expect(html).not.toContain('id="mobile-menu-button"');
+    expect(html).not.toContain('id="mobile-menu"');
+    expect(html).not.toContain('id="mobile-menu-account"');
+  });
+
+  it('keeps the logo block pointing at the Inglés hub', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+    });
+    expect(html).toContain('href="/es/ingles"');
+  });
+
+  it('drops the bordered/padded box around the account control, but still mounts UserMenu', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+    });
+    // The exact opening tag of the account wrapper that carries
+    // `data-header-actions` — not just a nearby character window, which
+    // could accidentally pick up the (still-bordered, unaffected) logo
+    // block's own classes right before it.
+    const match = html.match(/<div class="([^"]*)"[^>]*\sdata-header-actions\b[^>]*>/);
+    expect(match).not.toBeNull();
+    const wrapperClasses = match![1];
+    expect(wrapperClasses).not.toMatch(/\bborder\b/);
+    expect(wrapperClasses).not.toContain('bg-card');
+    expect(wrapperClasses).not.toContain('shadow-elevation-1');
+    expect(wrapperClasses).not.toContain('px-3');
+    expect(wrapperClasses).not.toContain('py-2');
+    expect(html).toContain('astro-island');
+  });
+
+  it('still mounts exactly one UserMenu island, with the same props as the SITE branch', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+    });
+    const matches = html.match(/astro-island/g) ?? [];
+    expect(matches.length).toBeGreaterThan(0);
+    const islandMatch = html.match(/<astro-island[^>]*>/);
+    expect(islandMatch?.[0]).toContain('&quot;lang&quot;:[0,&quot;es&quot;]');
+  });
+});
+
+// "Desktop" redesign PART 1 scope extension, item B: ONLY the hub splits its
+// logo block into two separate links (no nested anchors) so the byline can
+// link back to the ChuyoCode home. Every other Inglés page keeps the
+// original single link, byline as plain text.
+describe('Header.astro — Inglés logo block, hub vs. other pages (item B)', () => {
+  it('on the hub: "Inglés" and the "by ChuyoCode" byline are two separate links, never nested', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+      request: new Request('https://chuyocode.test/es/ingles'),
+    });
+    expect(html).toContain('aria-label="Inglés"');
+    expect(html).toContain(UI_LABELS.es.english.hub.backToChuyoCode);
+    // The byline anchor's href is the ChuyoCode home, not the hub.
+    const bylineIdx = html.indexOf(UI_LABELS.es.english.hub.backToChuyoCode);
+    const anchorStart = html.lastIndexOf('<a', bylineIdx);
+    const anchorTag = html.slice(anchorStart, html.indexOf('>', anchorStart) + 1);
+    expect(anchorTag).toContain('href="/es/"');
+    // Not nested: the "Inglés" anchor fully closes before the byline anchor
+    // opens.
+    const inglesAnchorIdx = html.indexOf('aria-label="Inglés"');
+    const inglesAnchorClose = html.indexOf('</a>', inglesAnchorIdx);
+    const bylineAnchorOpen = html.indexOf('<a', inglesAnchorClose);
+    expect(inglesAnchorClose).toBeGreaterThan(-1);
+    expect(bylineAnchorOpen).toBeGreaterThan(inglesAnchorClose);
+  });
+
+  it('on the hub: the byline has an accessible tooltip wired via aria-describedby', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+      request: new Request('https://chuyocode.test/es/ingles'),
+    });
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain('id="header-back-to-chuyocode-tooltip"');
+    expect(html).toContain('aria-describedby="header-back-to-chuyocode-tooltip"');
+  });
+
+  it('on the hub in English: the byline reads "Back to ChuyoCode"', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'en', ingles: true },
+      request: new Request('https://chuyocode.test/en/ingles'),
+    });
+    expect(html).toContain(UI_LABELS.en.english.hub.backToChuyoCode);
+  });
+
+  it('on any other Inglés page: the logo stays one single link, byline as plain text', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es', ingles: true },
+      request: new Request('https://chuyocode.test/es/ingles/propuestos'),
+    });
+    expect(html).toContain('aria-label="Inglés by ChuyoCode"');
+    expect(html).not.toContain(UI_LABELS.es.english.hub.backToChuyoCode);
+    expect(html).not.toContain('role="tooltip"');
+  });
+});
