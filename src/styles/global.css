@@ -737,6 +737,25 @@ h3 {
   font-weight: 700;
 }
 
+/* --- Draggable desk widgets ("desktop" redesign PART 4, `@lib/ui/deskDrag`)
+ * `z-index` only takes effect once `deskDrag` switches a widget to
+ * `position: absolute` (it is a no-op on the normal grid-flow item every
+ * widget starts as) — this is what then keeps every widget rendering ABOVE
+ * the centred greeting text, so the frosted glass shows over the title the
+ * instant a widget is dragged across it. `.is-dragging` (toggled for the
+ * duration of a drag only) bumps both further, matching the approved
+ * mockup's own `.desk.free .widget.dragging` treatment. */
+[data-desk-widget] {
+  z-index: 2;
+}
+
+[data-desk-widget].is-dragging {
+  z-index: 4;
+  box-shadow:
+    0 2px 4px rgb(28 28 30 / 0.08),
+    0 18px 40px rgb(28 28 30 / 0.14);
+}
+
 /* --- Dotted work-surface background (canvas polish) ----------------------
  * A subtle Figma/Miro-style dot grid for every canvas VIEWPORT — the
  * practice player's worksheet camera (desktop AND mobile) and the editor's

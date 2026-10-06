@@ -101,6 +101,16 @@ const inglesHref = `${base}/ingles`;
 const isHub = ingles && isInglesHubPath(Astro.url.pathname);
 const backToChuyoCodeLabel = UI_LABELS[lang].english.hub.backToChuyoCode;
 
+// "Desktop" redesign PART 4 (owner spec 2026-10-06): the "Ordenar escritorio"/
+// "Arrange desktop" icon, HUB ONLY — `@lib/ui/deskDrag`'s own script (the
+// hub page's) un-hides it once a widget has actually been moved, and hides
+// it again on "desk:arrange-reset" (see the script block at this file's
+// bottom, and `@lib/ui/deskArrange`'s own header for the event contract).
+// Rendered `hidden` by default so there is no flash of it showing before
+// that script runs, and so a visitor who never dragged anything never sees
+// it at all.
+const arrangeDesktopLabel = UI_LABELS[lang].english.hub.arrangeDesktop;
+
 // Computed here (server-side) so `UserMenu` — hydrated on EVERY page — only
 // ever receives its own small slice of copy as a plain prop, never the full
 // `UI_LABELS` dictionary. See that component's own header/props doc.
@@ -213,7 +223,38 @@ const navLinks = [
             either; `UserMenu`'s own dropdown already works (and is already
             reachable) at every breakpoint on its own, portaled to
             `document.body` — see that component's own header. */}
-        <div class="flex flex-none items-center" data-header-actions>
+        <div class="flex flex-none items-center gap-1" data-header-actions>
+          {isHub && (
+            /* "Ordenar escritorio"/"Arrange desktop" — a minimal ghost icon
+               button (no border/background at rest, matching the mockup's
+               own `.icon-btn`), left of the account control. `hidden` until
+               `@lib/ui/deskDrag` finds a saved widget position; `max-desk:hidden`
+               is a defensive belt-and-suspenders (phones never run the drag
+               system at all, so the button should never show there even if
+               something else forgot to check). */
+            <button
+              type="button"
+              id="desk-arrange-button"
+              hidden
+              aria-label={arrangeDesktopLabel}
+              aria-describedby="header-arrange-tooltip"
+              class="group relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-theme hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 max-desk:hidden"
+            >
+              {/* Phosphor "SquaresFour", regular weight, 256×256 viewBox —
+                  path copied verbatim from
+                  `node_modules/@phosphor-icons/react/dist/defs/SquaresFour.es.js`
+                  (MIT licensed, credited on `/[lang]/creditos`), same
+                  "copy the geometry, skip the React import" posture
+                  `@lib/skillIcons.ts` already documents for its own icons —
+                  this header branch renders no React at all today. */}
+              <svg viewBox="0 0 256 256" class="h-[19px] w-[19px]" aria-hidden="true" fill="currentColor">
+                <path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z" />
+              </svg>
+              <span role="tooltip" id="header-arrange-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {arrangeDesktopLabel}
+              </span>
+            </button>
+          )}
           <UserMenu lang={lang} labels={userMenuLabels} client:load />
         </div>
       </div>
@@ -325,4 +366,60 @@ const navLinks = [
       btn.setAttribute('aria-expanded', String(open));
     });
   })();
+</script>
+
+<script>
+  // "Ordenar escritorio"/"Arrange desktop" icon wiring ("desktop" redesign
+  // PART 4) — a regular bundled module (not `is:inline`) because it needs
+  // `@lib/deskDragMath`/`@lib/ui/deskArrange`'s real imports; see this
+  // file's own header for why the button itself is hub-only and starts
+  // `hidden`, and `@lib/ui/deskArrange`'s header for the event contract
+  // this script shares with `@lib/ui/deskDrag` (the hub page's own script).
+  import { DESK_DRAG_STORAGE_KEY, parseStoredPositions } from '@lib/deskDragMath';
+  import { DESK_ARRANGE_VISIBILITY_EVENT, dispatchArrangeReset } from '@lib/ui/deskArrange';
+
+  function isDesktop(): boolean {
+    return typeof matchMedia === 'function' && matchMedia('(min-width: 1100px)').matches;
+  }
+
+  function hasStoredPositions(): boolean {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(DESK_DRAG_STORAGE_KEY);
+    } catch {
+      return false;
+    }
+    return Object.keys(parseStoredPositions(raw)).length > 0;
+  }
+
+  function run(): void {
+    const button = document.getElementById('desk-arrange-button');
+    // No button on this page (not the hub), or already wired by an earlier
+    // run against this exact (persisted) node — `transition:persist` can
+    // keep the SAME button element across a hub-to-hub navigation.
+    if (!button || button.dataset.wired === 'true') return;
+    button.dataset.wired = 'true';
+
+    button.hidden = !(isDesktop() && hasStoredPositions());
+
+    document.addEventListener(DESK_ARRANGE_VISIBILITY_EVENT, (event) => {
+      const visible = (event as CustomEvent<{ visible: boolean }>).detail.visible;
+      button.hidden = !(isDesktop() && visible);
+    });
+
+    button.addEventListener('click', () => {
+      dispatchArrangeReset(document);
+      button.hidden = true;
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  // Re-run after a client-side navigation — the button only exists on the
+  // hub, and `transition:persist`'s header-matching can swap in a fresh
+  // (unwired) button node when navigating TO the hub from elsewhere.
+  document.addEventListener('astro:page-load', run);
 </script>

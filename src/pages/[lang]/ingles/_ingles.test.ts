@@ -167,13 +167,18 @@ describe('ingles/index.astro (hub)', () => {
     expect(res.status).toBe(200);
   });
 
-  it('ships no framework island on its own markup (Header’s UserMenu island is a separate element)', async () => {
+  it('ships exactly one framework island on its own markup — the "Frase del día" player ("desktop" redesign PART 4; Header’s UserMenu island is a separate element outside <main>)', async () => {
     const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
     const html = await res.text();
 
     const main = html.slice(html.indexOf('id="content"'), html.indexOf('</main>'));
     expect(main).not.toEqual('');
-    expect(main).not.toContain('astro-island');
+    // `DeskPlayerWidget` is this page's one deliberate React island (see its
+    // own header for why) — every other widget (clock/calendar/weather)
+    // stays plain vanilla-JS markup, so there is exactly one island, not zero
+    // and not several.
+    expect(main.match(/astro-island/g)?.length).toBeGreaterThan(0);
+    expect(main).toContain('desk-player');
   });
 
   describe('greeting', () => {
