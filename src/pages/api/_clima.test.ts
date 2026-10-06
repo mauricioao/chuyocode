@@ -63,7 +63,7 @@ describe('GET /api/clima — validation', () => {
 
 describe('GET /api/clima — method guard', () => {
   it('405s any non-GET verb via the ALL fallback, with an Allow header', async () => {
-    const res = await ALL();
+    const res = await ALL(ctx({}));
     expect(res.status).toBe(405);
     expect(res.headers.get('allow')).toBe('GET');
   });

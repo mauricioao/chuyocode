@@ -37,5 +37,16 @@ declare namespace App {
      * nothing.
      */
     user: import('@supabase/supabase-js').User | null;
+    /**
+     * Netlify's own per-request context (geo, IP, etc.), present only when
+     * actually running as a Netlify Function/Edge Function — ABSENT in
+     * local `astro dev` (no Netlify edge in front of it) and in every test,
+     * which is why every reader of `locals.netlify?.context?.geo` treats it
+     * as optional rather than assuming the adapter's own `NetlifyLocals`
+     * shape (which types `netlify` as always present). Read for the desk
+     * hub's weather widget location ("desktop" redesign PART 4) —
+     * `src/pages/[lang]/ingles/index.astro`.
+     */
+    netlify?: import('@astrojs/netlify').NetlifyLocals['netlify'];
   }
 }
