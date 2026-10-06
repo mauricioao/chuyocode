@@ -81,16 +81,18 @@ describe('[data-theme="ingles"] — WCAG contrast (visual-theme pass)', () => {
     expect(contrast(tokenIn(ingles, '--foreground'), tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('muted-foreground on background and on card clears 4.5:1', () => {
+  it('muted-foreground on background, on card, and on the secondary/muted/accent surface clears 4.5:1', () => {
     const mutedForeground = tokenIn(ingles, '--muted-foreground');
     expect(contrast(mutedForeground, tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(mutedForeground, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(mutedForeground, tokenIn(ingles, '--muted'))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('accent-ink on background and on card clears 4.5:1 (bare accent text fails this on light)', () => {
+  it('accent-ink on background, on card, and on the secondary/muted/accent surface clears 4.5:1 (bare accent text fails this on light)', () => {
     const accentInk = tokenIn(ingles, '--color-accent-ink');
     expect(contrast(accentInk, tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(accentInk, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(accentInk, tokenIn(ingles, '--muted'))).toBeGreaterThanOrEqual(4.5);
   });
 
   it('primary-foreground (ink on the yellow fill) clears 4.5:1 on primary', () => {
@@ -103,16 +105,35 @@ describe('[data-theme="ingles"] — WCAG contrast (visual-theme pass)', () => {
     expect(contrast(input, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(3);
   });
 
-  it('the focus ring clears 3:1 on background', () => {
-    expect(contrast(tokenIn(ingles, '--ring'), tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(3);
+  it('the focus ring clears 3:1 on background and on card', () => {
+    const ring = tokenIn(ingles, '--ring');
+    expect(contrast(ring, tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(3);
+    expect(contrast(ring, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(3);
   });
 
-  // Secondary checks, same table: destructive text on its own tint-free
-  // surfaces, and white-on-destructive for a solid destructive fill.
-  it('destructive text clears 4.5:1 on background, and white on the destructive fill clears 4.5:1', () => {
+  // Secondary checks, same table: destructive/success/hint text on their own
+  // tint-free surfaces (white AND the #f3f4f6 desk background — the spec's
+  // two required surfaces for status-as-text), and white-on-destructive for
+  // a solid destructive fill.
+  it('destructive text clears 4.5:1 on background and on card, and white on the destructive fill clears 4.5:1', () => {
     const destructive = tokenIn(ingles, '--destructive');
     expect(contrast(destructive, tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(destructive, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(tokenIn(ingles, '--destructive-foreground'), destructive)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('success / success-strong / success-strong-foreground (same green ink) clears 4.5:1 on background and on card', () => {
+    const success = tokenIn(ingles, '--success');
+    expect(success).toBe(tokenIn(ingles, '--success-strong'));
+    expect(success).toBe(tokenIn(ingles, '--success-strong-foreground'));
+    expect(contrast(success, tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(success, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('hint text clears 4.5:1 on background and on card', () => {
+    const hint = tokenIn(ingles, '--hint');
+    expect(contrast(hint, tokenIn(ingles, '--background'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(hint, tokenIn(ingles, '--card'))).toBeGreaterThanOrEqual(4.5);
   });
 });
 

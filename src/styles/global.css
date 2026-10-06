@@ -70,6 +70,23 @@
   --color-game-orange: #c46c08;
   --color-game-pink: #e44487;
 
+  /* Decorative accent set (visual-theme pass: Inglés "white desk" palette) —
+   * full colour but not oversaturated, meant to sit against the black-and-
+   * white character drawings. FILLS AND ICONS ONLY, never body text (a
+   * caption/label reaches for `--color-accent-ink` or a semantic role
+   * instead) — several of these do not clear 4.5:1 on white. Prefixed
+   * `pop-` so the name collides with neither a Tailwind default-palette
+   * family (`red`, `sky`, `yellow`, `green`, `violet` all already exist as
+   * numbered steps) nor a font-size step. Flat entries like `--color-
+   * accent`/the game set above: no dark/light-scope override, since this
+   * decorative set is only ever used under `theme="ingles"`. */
+  --color-pop-red: #e9573f;
+  --color-pop-sky: #4db3e6;
+  --color-pop-sky-deep: #2f97cf;
+  --color-pop-yellow: #f2c230;
+  --color-pop-green: #3daa6b;
+  --color-pop-violet: #7e6be0;
+
   /* Display face for headings (decision #1). Raleway Variable loads via
    * fonts.css; the system-sans stack is the swap fallback. */
   --font-display: 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
@@ -324,67 +341,78 @@
   --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
-/* Light, warm, cheerful — Inglés only. Values pre-computed for WCAG; see the
- * token table in the feature's own notes for each ratio. */
+/* White desk, grey scale — Inglés only. The warm cream "paper and ink" pass
+ * is retired; the owner's replacement is a white/grey desk the black-and-
+ * white character drawings sit on, with the full-colour `--color-pop-*`
+ * accents (see the `@theme` block above) doing the decoration work the warm
+ * cream used to. Values pre-computed for WCAG; ratios below are this pass's
+ * own numbers (re-run `ingles-theme-contrast.test.ts` after any edit here). */
 [data-theme='ingles'] {
   color-scheme: light;
 
-  --background: #fff8ec;
-  --foreground: #2a2118;
+  --background: #f3f4f6;
+  --foreground: #1c1c1e;
   --card: #ffffff;
-  --card-foreground: #2a2118;
+  --card-foreground: #1c1c1e;
   --popover: #ffffff;
-  --popover-foreground: #2a2118;
+  --popover-foreground: #1c1c1e;
   --primary: #facc15;
-  --primary-foreground: #2a2118;
-  --secondary: #f3ead7;
-  --secondary-foreground: #2a2118;
-  --muted: #f3ead7;
-  --muted-foreground: #6b5b45;
+  --primary-foreground: #1c1c1e;
+  --secondary: #e9ebee;
+  --secondary-foreground: #1c1c1e;
+  --muted: #e9ebee;
+  --muted-foreground: #5f636a;
   /* Collapsed onto --muted-foreground: Inglés never distinguished the
    * zinc-300/zinc-400 steps call sites used to reach for directly (just two
    * shades an author reached for, never semantically distinct here) — see
    * that token's own note in the dark `:root`/`.dark` blocks above. */
-  --muted-foreground-subtle: #6b5b45;
-  --accent: #f3ead7;
-  --accent-foreground: #2a2118;
-  --destructive: #d5361d;
+  --muted-foreground-subtle: #5f636a;
+  --accent: #e9ebee;
+  --accent-foreground: #1c1c1e;
+  --destructive: #c8371f;
   --destructive-foreground: #ffffff;
-  --success: #0b7a54;
+  --success: #1e7d47;
   /* The quiz "correct answer" accent (border/wash-background) and its paired
-   * text/icon tone both collapse onto the SAME warm teal ink here — Inglés's
-   * one "correct!" colour — unlike dark, where the fill is a richer green and
-   * the paired text is a lighter mint (see the dark blocks' own note). These
-   * used to be the raw `emerald-500`/`emerald-300` steps. */
-  --success-strong: #0b7a54;
-  --success-strong-foreground: #0b7a54;
-  /* The hint-lightbulb-icon tone: same ink as `--color-accent-ink` on this
-   * scope (used to be the raw `amber-400` step — see the dark blocks' own
-   * note for why it is still its own role rather than reusing accent-ink). */
-  --hint: #7a6200;
-  --border: #eadfc8;
-  --input: #9a8a6e;
-  --ring: #1c7ed6;
+   * text/icon tone both collapse onto the SAME green ink here — Inglés's one
+   * "correct!" colour — unlike dark, where the fill is a richer green and the
+   * paired text is a lighter mint (see the dark blocks' own note). These used
+   * to be the raw `emerald-500`/`emerald-300` steps. */
+  --success-strong: #1e7d47;
+  --success-strong-foreground: #1e7d47;
+  /* The hint-lightbulb-icon tone: a dark amber ink, legible on both white and
+   * the grey desk (used to be the raw `amber-400` step — see the dark
+   * blocks' own note for why it is still its own role rather than reusing
+   * accent-ink). */
+  --hint: #8a6400;
+  --border: #dcdfe3;
+  /* Spec starting value (#8b9097) clears 3:1 on #ffffff (3.21:1) but falls
+   * just short on the #f3f4f6 desk background (2.92:1); darkened to #888d94
+   * (same blue-grey hue) so the one token clears 3:1 on BOTH surfaces
+   * (3.04:1 on background, 3.34:1 on card). */
+  --input: #888d94;
+  --ring: #1f78b4;
 
-  --color-surface: #fff8ec;
+  --color-surface: #f3f4f6;
   --color-surface-soft: #ffffff;
-  --color-surface-muted: #f3ead7;
-  --color-platinum: #2a2118;
-  --color-accent-ink: #7a6200;
-  --color-accent-ink-hover: #665100;
+  --color-surface-muted: #e9ebee;
+  --color-platinum: #1c1c1e;
+  --color-accent-ink: #1b6fa8;
+  --color-accent-ink-hover: #155a89;
   --color-field: #ffffff;
-  --color-field-border: #9a8a6e;
-  --color-field-border-hover: #6b5b45;
-  --color-field-ring: rgb(28 126 214 / 0.4);
-  --color-glass-ring: rgb(42 33 24 / 0.1);
-  --color-glass-bg: rgb(255 255 255 / 0.6);
-  --color-canvas-dot: rgb(42 33 24 / 0.08);
+  --color-field-border: #888d94;
+  --color-field-border-hover: #5f636a;
+  --color-field-ring: rgb(31 120 180 / 0.4);
+  --color-glass-ring: rgb(28 28 30 / 0.1);
+  --color-glass-bg: rgb(255 255 255 / 0.7);
+  --color-canvas-dot: rgb(28 28 30 / 0.08);
 
-  /* Shadows on light: warm and soft, never black (owner spec). */
-  --shadow-elevation-1: 0 1px 2px 0 rgb(42 33 24 / 0.12);
-  --shadow-elevation-2: 0 4px 12px -2px rgb(42 33 24 / 0.16);
-  --shadow-elevation-3: 0 12px 32px -4px rgb(42 33 24 / 0.2);
-  --shadow-floating: 0 8px 24px -6px rgb(42 33 24 / 0.18), 0 2px 8px -2px rgb(42 33 24 / 0.14);
+  /* Shadows on light: neutral and layered like iOS widget material — a
+   * hairline ring plus soft, wide, low-opacity drop shadows. Never black,
+   * never hard (owner spec). */
+  --shadow-elevation-1: 0 0 0 0.5px rgb(28 28 30 / 0.06), 0 1px 2px rgb(28 28 30 / 0.04);
+  --shadow-elevation-2: 0 0 0 0.5px rgb(28 28 30 / 0.07), 0 6px 16px -4px rgb(28 28 30 / 0.1);
+  --shadow-elevation-3: 0 0 0 0.5px rgb(28 28 30 / 0.08), 0 12px 28px -6px rgb(28 28 30 / 0.12);
+  --shadow-floating: 0 0 0 0.5px rgb(28 28 30 / 0.08), 0 10px 28px -6px rgb(28 28 30 / 0.12), 0 2px 8px -2px rgb(28 28 30 / 0.08);
 }
 
 /* `sky-*`/`violet-*` are HubCard's own decorative tone pair (two Inglés hub

@@ -1487,9 +1487,9 @@ export default function WorksheetZoneEditor({
                 draggable={false}
                 onLoad={() => setImageLoaded(true)}
                 onError={() => setImageBroken(true)}
-                // Visual-theme pass: a subtle warm shadow so the sheet reads
-                // as a distinct surface on the light Inglés canvas (same
-                // `bg-muted` cream as `.canvas-dots`) — `box-shadow` never
+                // Visual-theme pass: a subtle neutral shadow so the sheet
+                // reads as a distinct surface on the light Inglés canvas
+                // (same `bg-muted` grey as `.canvas-dots`) — `box-shadow` never
                 // affects the image's own box/dimensions, which this
                 // canvas's pointer math measures directly, and
                 // `--shadow-elevation-1` restates its current (black,
