@@ -857,6 +857,17 @@ html[data-chrome-hub][data-chrome-js][data-chrome-mode='ingles'] [data-chrome-co
   overflow: visible;
 }
 
+/* The desk widgets' frosted glass (`.ingles-glass`) only blurs what is behind
+ * it when no ancestor is a "backdrop root". `<main>`'s view-transition-name
+ * (from its `transition:animate`) is one, and so is the scroll-reveal
+ * `.reveal` wrapper (which the hub no longer uses): with either in place
+ * Chrome shows the greeting SHARP through the widgets instead of blurred.
+ * On the hub only, `<main>` drops its name and page changes use the root
+ * cross-fade instead. */
+html[data-chrome-hub] main {
+  view-transition-name: none;
+}
+
 /* The one INGLÉS header transition that must NOT animate: collapsing once it
  * has fully scrolled out of view, compensated in the same tick by a matching
  * scroll adjustment so nothing visibly jumps (`chromeVisibility.ts`'s own
