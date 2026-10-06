@@ -110,12 +110,15 @@ export const UI_LABELS = {
       soon: 'Pronto',
       switchTo: 'Cambiar a',
     },
+    // Footer simplification ("opción A", owner decision 2026-10-06): the
+    // footer itself only ever shows these three — `reembolsos`/`credits`
+    // link labels were removed from here (dead code) once their links moved
+    // out of the footer; both pages stay reachable from Premium/Terms
+    // instead (see `Footer.astro`'s own header).
     footer: {
       terms: 'Términos y Condiciones',
       privacy: 'Privacidad',
       premium: 'Premium',
-      reembolsos: 'Reembolsos',
-      credits: 'Créditos',
     },
     // Chrome shared by any page that mounts it (`BackButton`, `ScrollToTop`) —
     // not tied to one section, unlike `english`/`activities`/`legal` below.
@@ -1330,6 +1333,12 @@ export const UI_LABELS = {
         // header's "Ordenar escritorio" icon.
         weatherLabel: 'Clima en {city}',
         weatherUnavailable: 'Clima no disponible',
+        // Weather widget attribution (footer simplification "opción A",
+        // owner decision 2026-10-06): the MET Norway CC BY 4.0 credit now
+        // also sits next to the data it is about, not just on
+        // `/[lang]/creditos` (`CreditsContent.astro`'s own "Datos del
+        // clima" section, same URL).
+        weatherAttribution: 'Datos: MET Norway',
         playerTitle: 'Frase del día',
         playerPrev: 'Anterior',
         playerNext: 'Siguiente',
@@ -1511,8 +1520,6 @@ export const UI_LABELS = {
       terms: 'Terms & Conditions',
       privacy: 'Privacy',
       premium: 'Premium',
-      reembolsos: 'Refunds',
-      credits: 'Credits',
     },
     common: {
       back: 'Back',
@@ -2431,6 +2438,7 @@ export const UI_LABELS = {
         widgetsLabel: 'Your desktop',
         weatherLabel: 'Weather in {city}',
         weatherUnavailable: 'Weather not available',
+        weatherAttribution: 'Data: MET Norway',
         playerTitle: 'Phrase of the day',
         playerPrev: 'Previous',
         playerNext: 'Next',

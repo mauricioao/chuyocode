@@ -38,6 +38,10 @@ const { lang, ownerName, ownerRuc, ownerCity, ownerEmail, updated } =
   Astro.props;
 const isEs = lang === 'es';
 const refundsHref = `/${lang}/legal/reembolsos`;
+// Footer simplification ("opción A", owner decision 2026-10-06): Créditos is
+// no longer linked from the footer — this final section is now how a
+// visitor reading the Terms reaches it (`/[lang]/creditos`).
+const creditsHref = `/${lang}/creditos`;
 ---
 
 {/* `zinc-300` kept literal (theme-remap-cleanup): this component only ever
@@ -70,7 +74,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
             Términos; si no estás de acuerdo, debes abstenerte de usarlo. Para
             cualquier consulta puedes escribir a{' '}
             {ownerEmail ? (
-              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+              <a class="text-primary underline" href={`mailto:${ownerEmail}`}>
                 {ownerEmail}
               </a>
             ) : (
@@ -204,7 +208,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
             quien recibe y procesa los datos de tu pago — nosotros nunca
             vemos ni almacenamos los datos de tu tarjeta. Puedes ver las
             condiciones para pedir un reembolso en nuestra{' '}
-            <a class="text-primary hover:underline" href={refundsHref}>
+            <a class="text-primary underline" href={refundsHref}>
               Política de reembolsos
             </a>
             .
@@ -317,6 +321,24 @@ const refundsHref = `/${lang}/legal/reembolsos`;
             contrario.
           </p>
         </section>
+
+        {/* Footer simplification ("opción A", owner decision 2026-10-06):
+            Créditos ya no se enlaza desde el footer; esta sección final es
+            ahora cómo alguien que lee los Términos llega a esa página. */}
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            14. Créditos y licencias
+          </h2>
+          <p>
+            Los recursos de terceros que usa el Sitio (iconos, tipografías,
+            ilustraciones y la API del clima) están acreditados, con su
+            licencia, en nuestra página de{' '}
+            <a class="text-primary underline" href={creditsHref}>
+              Créditos
+            </a>
+            .
+          </p>
+        </section>
       </>
     ) : (
       <>
@@ -338,7 +360,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
             accepted these Terms; if you disagree, you must refrain from using
             it. For any question, you may contact{' '}
             {ownerEmail ? (
-              <a class="text-primary hover:underline" href={`mailto:${ownerEmail}`}>
+              <a class="text-primary underline" href={`mailto:${ownerEmail}`}>
                 {ownerEmail}
               </a>
             ) : (
@@ -467,7 +489,7 @@ const refundsHref = `/${lang}/legal/reembolsos`;
             any applicable taxes, and is the one that receives and processes
             your payment data — we never see or store your card data. You can
             find the conditions for requesting a refund in our{' '}
-            <a class="text-primary hover:underline" href={refundsHref}>
+            <a class="text-primary underline" href={refundsHref}>
               Refund Policy
             </a>
             .
@@ -573,6 +595,22 @@ const refundsHref = `/${lang}/legal/reembolsos`;
             of the Republic of Peru. Any dispute shall be submitted to the
             competent courts of {ownerCity || 'Lima'}, Peru, unless a mandatory
             legal provision states otherwise.
+          </p>
+        </section>
+
+        {/* Mirrors `es`'s own new section 14 — see its comment there. */}
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            14. Credits and licences
+          </h2>
+          <p>
+            Third-party resources the Site uses (icons, typefaces,
+            illustrations, and the weather API) are credited, with their
+            license, on our{' '}
+            <a class="text-primary underline" href={creditsHref}>
+              Credits
+            </a>{' '}
+            page.
           </p>
         </section>
       </>

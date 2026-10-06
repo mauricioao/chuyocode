@@ -19,6 +19,14 @@
  * UNAVAILABLE STATE: if the fetch fails, `initDeskWeather` swaps this
  * widget's body for a calm, same-size "Clima no disponible"/"Weather not
  * available" message — never a broken half-filled widget.
+ *
+ * MET NORWAY ATTRIBUTION (footer simplification "opción A", owner decision
+ * 2026-10-06): their CC BY 4.0 licence requires credit "where the data is
+ * used", not just on `/[lang]/creditos` — `attributionLabel` renders a tiny
+ * muted line at the BOTTOM of the widget (same URL `CreditsContent.astro`'s
+ * own "Datos del clima" section already uses), so it sits next to the data
+ * without crowding the city/now header row above it. Same size widget: this
+ * adds a short line under the existing 7-day strip, not a new column.
  */
 interface Props {
   lat: number;
@@ -26,9 +34,11 @@ interface Props {
   city: string;
   label: string;
   unavailableLabel: string;
+  attributionLabel: string;
 }
 
-const { lat, lon, city, label, unavailableLabel } = Astro.props;
+const { lat, lon, city, label, unavailableLabel, attributionLabel } = Astro.props;
+const MET_NORWAY_TERMS_URL = 'https://api.met.no/doc/TermsOfService';
 ---
 
 <div
@@ -48,4 +58,12 @@ const { lat, lon, city, label, unavailableLabel } = Astro.props;
   </header>
   <ol data-weather-days class="grid grid-cols-7 gap-1 text-center text-[10px] text-muted-foreground" aria-hidden="true">
   </ol>
+  <a
+    href={MET_NORWAY_TERMS_URL}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="mt-2 block text-center text-[9px] text-muted-foreground/70 underline-offset-2 hover:underline"
+  >
+    {attributionLabel}
+  </a>
 </div>
