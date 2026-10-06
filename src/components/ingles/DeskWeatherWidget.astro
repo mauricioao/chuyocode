@@ -1,0 +1,51 @@
+---
+/**
+ * DeskWeatherWidget — the desk hub's weather widget ("desktop" redesign
+ * PART 4, approved mockup's `.weather`: city + 7-day flat-icon strip).
+ *
+ * SERVER renders only a same-size SHELL with the resolved city name already
+ * in place (from Netlify's request geo, or the Lima fallback — resolved by
+ * `index.astro`'s own frontmatter, never here) plus a loading placeholder
+ * for the "now" line and an empty day list. The actual forecast is fetched
+ * client-side from `GET /api/clima` by `@lib/ui/deskWeather`'s
+ * `initDeskWeather`, wired from the hub page's own script element next to
+ * `initDeskWidgets` — same "empty shell, fill client-side" split
+ * `DeskClockWidget.astro`/`DeskCalendarWidget.astro` already use, here
+ * because the forecast depends on an external API call the server could
+ * make too, but then the WHOLE page would wait on MET before it could
+ * render at all; fetching it after the shell paints keeps the hub fast even
+ * when MET is slow.
+ *
+ * UNAVAILABLE STATE: if the fetch fails, `initDeskWeather` swaps this
+ * widget's body for a calm, same-size "Clima no disponible"/"Weather not
+ * available" message — never a broken half-filled widget.
+ */
+interface Props {
+  lat: number;
+  lon: number;
+  city: string;
+  label: string;
+  unavailableLabel: string;
+}
+
+const { lat, lon, city, label, unavailableLabel } = Astro.props;
+---
+
+<div
+  id="desk-weather"
+  data-desk-widget="weather"
+  data-weather-lat={lat}
+  data-weather-lon={lon}
+  data-weather-city={city}
+  data-weather-unavailable={unavailableLabel}
+  class="ingles-glass col-span-2 w-full p-3.5 desk:col-span-2 desk:w-[336px]"
+  aria-label={label}
+  aria-busy="true"
+>
+  <header class="mb-3 flex items-baseline justify-between gap-2">
+    <b data-weather-city class="truncate text-[11.5px] font-semibold text-muted-foreground">{city}</b>
+    <span data-weather-now class="text-[11px] text-muted-foreground">&hellip;</span>
+  </header>
+  <ol data-weather-days class="grid grid-cols-7 gap-1 text-center text-[10px] text-muted-foreground" aria-hidden="true">
+  </ol>
+</div>

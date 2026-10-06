@@ -149,6 +149,45 @@ describe('BaseLayout — visual-theme scope (theme prop)', () => {
   });
 });
 
+// "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
+// `data-chrome-hub` is server-rendered (no JS dependency) — true ONLY for
+// the Inglés hub itself, computed from the SAME `isInglesHubPath` check the
+// back button uses (`@lib/backNavigation`).
+describe('BaseLayout — data-chrome-hub (desktop redesign PART 1, item C)', () => {
+  it('is present on the Inglés hub', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+      request: new Request('https://chuyocode.netlify.app/es/ingles'),
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).toContain('data-chrome-hub');
+  });
+
+  it('is absent on an Inglés subroute', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', theme: 'ingles' },
+      slots: { default: '<div>content</div>' },
+      request: new Request('https://chuyocode.netlify.app/es/ingles/propuestos'),
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).not.toContain('data-chrome-hub');
+  });
+
+  it('is absent on a non-Inglés page, even one that happens to end in "/ingles"-shaped text', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+      request: new Request('https://chuyocode.netlify.app/es/ingles'),
+    });
+    const htmlTag = html.slice(html.indexOf('<html'), html.indexOf('>', html.indexOf('<html')) + 1);
+    expect(htmlTag).not.toContain('data-chrome-hub');
+  });
+});
+
 // Presentation mode v1 ("Preguntas"): `bare` drops the site chrome (nav
 // progress bar, header, footer, global scroll-to-top) so a page can be
 // exactly its own full-bleed content. Opt-in — every page that omits it

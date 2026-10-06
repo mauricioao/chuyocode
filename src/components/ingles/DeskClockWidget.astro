@@ -1,0 +1,124 @@
+---
+/**
+ * DeskClockWidget — the desk hub's iOS-style analog clock ("desktop" redesign
+ * PART 3, approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.clock`).
+ *
+ * SERVER renders only the SHELL: the 160×160 glass tile, the silver radial
+ * face, its raised drop shadow, and the 12 grey tick marks — all pure,
+ * time-INDEPENDENT geometry, computed once below with plain trigonometry
+ * (no need for the mockup's own client-side tick-building loop). The hour/
+ * minute/second hands and the timezone city name depend on the VISITOR's
+ * browser clock/timezone, which the server cannot know — rendering them
+ * from the server's own UTC would show the wrong time to anyone outside it.
+ * So the shell ships with the hands hidden and the whole widget
+ * `aria-hidden` (no flash of a wrong time), and `initDeskWidgets`
+ * (`@lib/ui/deskWidgets`, wired by the hub page's own script element) fills
+ * them in once it runs client-side, exactly the same "empty shell, fill
+ * client-side" posture `BaseLayout.astro`'s own chrome-visibility script
+ * documents for the identical reason.
+ *
+ * Hovering reveals the time in English words (`@lib/timeInWords`) as a
+ * small tooltip bubble AND as the container's own `aria-label` — both set
+ * by `initDeskWidgets`, never duplicated here.
+ */
+const TICK_INNER_R = 43;
+const TICK_OUTER_R = 49.5;
+
+const ticks = Array.from({ length: 12 }, (_, i) => {
+  const angle = (i / 12) * Math.PI * 2;
+  return {
+    x1: 60 + TICK_INNER_R * Math.sin(angle),
+    y1: 60 - TICK_INNER_R * Math.cos(angle),
+    x2: 60 + TICK_OUTER_R * Math.sin(angle),
+    y2: 60 - TICK_OUTER_R * Math.cos(angle),
+  };
+});
+---
+
+<div
+  id="desk-clock"
+  data-desk-widget="clock"
+  class="ingles-glass group relative grid aspect-square w-full max-w-40 place-items-center p-2.5 desk:h-40 desk:w-40 desk:max-w-none"
+  role="img"
+  aria-hidden="true"
+>
+  <svg viewBox="0 0 120 120" class="h-[87.5%] w-[87.5%] overflow-visible" aria-hidden="true">
+    <defs>
+      <radialGradient id="desk-clock-face" cx="50%" cy="38%" r="70%">
+        <stop offset="0%" stop-color="#ffffff" />
+        <stop offset="70%" stop-color="#f6f7f9" />
+        <stop offset="100%" stop-color="#e7e9ed" />
+      </radialGradient>
+      <filter id="desk-clock-raise" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="#1c1c1e" flood-opacity="0.16" />
+      </filter>
+    </defs>
+    <circle cx="60" cy="60" r="56" fill="url(#desk-clock-face)" filter="url(#desk-clock-raise)" />
+    <circle cx="60" cy="60" r="55.6" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="0.8" />
+    {
+      ticks.map((t) => (
+        <line
+          x1={t.x1}
+          y1={t.y1}
+          x2={t.x2}
+          y2={t.y2}
+          stroke="#a7abb2"
+          stroke-width="2.6"
+          stroke-linecap="round"
+        />
+      ))
+    }
+    <text
+      data-clock-city
+      x="60"
+      y="41"
+      text-anchor="middle"
+      font-size="7.2"
+      font-weight="600"
+      letter-spacing="0.6"
+      fill="#a7abb2"
+      font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    />
+    <line
+      data-clock-hh
+      x1="60"
+      y1="60"
+      x2="60"
+      y2="33"
+      stroke="#1c1c1e"
+      stroke-width="4.4"
+      stroke-linecap="round"
+      style="visibility: hidden"
+    />
+    <line
+      data-clock-mm
+      x1="60"
+      y1="60"
+      x2="60"
+      y2="17"
+      stroke="#1c1c1e"
+      stroke-width="3.2"
+      stroke-linecap="round"
+      style="visibility: hidden"
+    />
+    <line
+      data-clock-ss
+      x1="60"
+      y1="70"
+      x2="60"
+      y2="13"
+      stroke="#ff3b30"
+      stroke-width="1.2"
+      stroke-linecap="round"
+      style="visibility: hidden"
+    />
+    <circle cx="60" cy="60" r="3.4" fill="#1c1c1e" />
+    <circle cx="60" cy="60" r="1.5" fill="#ff3b30" />
+  </svg>
+  <span
+    data-clock-say
+    aria-hidden="true"
+    class="pointer-events-none absolute bottom-[-34px] left-1/2 -translate-x-1/2 rounded-lg bg-foreground px-[9px] py-[5px] text-xs whitespace-nowrap text-card opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+  ></span>
+</div>

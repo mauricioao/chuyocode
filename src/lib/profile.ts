@@ -47,8 +47,14 @@ function emailLocalPart(email: string): string {
  * Google's `full_name`, then `name` (also
  * Google — some flows populate this one instead), then the email local part
  * for an account with no metadata at all (email + password, magic link).
+ *
+ * EXPORTED (not just `toProfile`'s private helper): the desk hub's greeting
+ * ("desktop" redesign PART 3, `/[lang]/ingles/index.astro`) needs only the
+ * NAME, synchronously — `toProfile` additionally awaits `getPlan`/`hasRole`/
+ * `getPendingModerationCount`, three round trips the greeting has no use
+ * for. Pure/zero-I/O, same posture as every other export in this file.
  */
-function nameFrom(user: User): string {
+export function nameFrom(user: User): string {
   const meta = user.user_metadata ?? {};
   const displayName = meta[DISPLAY_NAME_METADATA_KEY];
   if (typeof displayName === 'string' && displayName.trim() !== '') {

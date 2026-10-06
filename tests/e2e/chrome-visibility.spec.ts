@@ -32,9 +32,12 @@ async function footerVisible(page: Page): Promise<boolean> {
 }
 
 /**
- * INGLÉS only: the footer is a "blocks" panel that COLLAPSES TO ZERO HEIGHT
- * rather than merely fading (owner spec 2026-10-05) — opacity stays 1
- * throughout, so `footerVisible` above does not apply here.
+ * INGLÉS only: whether the footer currently has real height. Used to be a
+ * "blocks" panel that COLLAPSED TO ZERO HEIGHT (owner spec 2026-10-05); the
+ * "desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C,
+ * "clean footer scroll") REMOVED that collapse entirely — the Inglés footer
+ * is always expanded now, in both sub-modes, so every call site below
+ * should see `true` immediately, with no reveal gesture needed.
  */
 async function footerExpanded(page: Page): Promise<boolean> {
   return page.evaluate((sel) => {
@@ -126,15 +129,17 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
   test.describe(`INGLÉS (blocks) mode — guest-play activity page, ${viewportLabel}`, () => {
     test.use({ viewport });
 
-    test('starts collapsed, in flow, with no flash', async ({ page }) => {
+    test('starts with the header collapsed but the footer already expanded, with no flash', async ({ page }) => {
       const path = await findInglesActivityPath(page);
       test.skip(path === null, 'Need at least one published activity for a real guest-play id');
 
       await page.goto(path!);
-      // No "always visible at the top" pin in this mode — hidden/collapsed
-      // from the very first paint, even though we have not scrolled yet.
+      // No "always visible at the top" pin for the header in this mode —
+      // hidden/collapsed from the very first paint, even though we have not
+      // scrolled yet. The footer, however, is never collapsed at all
+      // anymore (item C, "clean footer scroll") — expanded immediately.
       expect(await headerHidden(page)).toBe(true);
-      expect(await footerExpanded(page)).toBe(false);
+      expect(await footerExpanded(page)).toBe(true);
     });
 
     test('a wheel pull up at the top expands the header', async ({ page }) => {
@@ -191,29 +196,33 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
       await expect.poll(() => headerHidden(page), { timeout: 2000 }).toBe(true);
     });
 
-    test('a pull down past the bottom expands the footer', async ({ page }) => {
+    test('the footer stays expanded regardless of scroll position or a push past the bottom ("clean footer scroll", item C)', async ({
+      page,
+    }) => {
+      const path = await findInglesActivityPath(page);
+      test.skip(path === null, 'Need at least one published activity for a real guest-play id');
+
+      await page.goto(path!);
+      expect(await footerExpanded(page)).toBe(true);
+
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(150);
+      expect(await footerExpanded(page)).toBe(true);
+
+      await page.mouse.wheel(0, 200); // a further downward attempt past the bottom — no-op now
+      expect(await footerExpanded(page)).toBe(true);
+    });
+
+    test('the footer catches a real tap on its own links — it is never hidden/off-screen behind a collapse', async ({
+      page,
+    }) => {
       const path = await findInglesActivityPath(page);
       test.skip(path === null, 'Need at least one published activity for a real guest-play id');
 
       await page.goto(path!);
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      // Let the (rAF-throttled) scroll measurement land before pushing.
       await page.waitForTimeout(150);
-      expect(await footerExpanded(page)).toBe(false);
 
-      await page.mouse.wheel(0, 200);
-      await expect.poll(() => footerExpanded(page), { timeout: 2000 }).toBe(true);
-    });
-
-    test('a hidden (collapsed) footer never catches a tap', async ({ page }) => {
-      const path = await findInglesActivityPath(page);
-      test.skip(path === null, 'Need at least one published activity for a real guest-play id');
-
-      await page.goto(path!);
-      expect(await footerExpanded(page)).toBe(false);
-
-      // At zero height the hidden footer's own links sit at its collapsed
-      // position; a tap there must reach the page, never an invisible link.
       const hit = await page.evaluate(() => {
         document.querySelector('astro-dev-toolbar')?.remove();
         const link = document.querySelector('[data-chrome-footer] a') as HTMLElement | null;
@@ -224,7 +233,7 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
         return target?.closest('[data-chrome-footer]') ? 'footer' : 'page';
       });
       test.skip(hit === 'off-screen', 'Footer is below the fold on this activity');
-      expect(hit).not.toBe('footer');
+      expect(hit).toBe('footer');
     });
 
     test('tabbing into the header expands it', async ({ page }) => {
@@ -256,3 +265,72 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
 
 defineInglesChromeTests('desktop', { width: 1440, height: 900 });
 defineInglesChromeTests('phone', { width: 390, height: 844 });
+
+/**
+ * The hub (like every other Inglés page except the two guest-play activity
+ * routes, `@lib/access.ts#requiresLogin`) is sign-in gated — this repo has
+ * no e2e auth fixture yet, so an anonymous Playwright session gets
+ * redirected to `/auth/entrar`. Each test below skips gracefully in that
+ * case (same posture as `findInglesActivityPath`'s own skip above) rather
+ * than asserting against a sign-in page; they become real checks the moment
+ * an e2e auth fixture lands, with no change needed here.
+ */
+async function gotoHubOrSkip(page: Page): Promise<boolean> {
+  await page.goto('/es/ingles');
+  return !page.url().includes('/auth/entrar');
+}
+
+/**
+ * INGLÉS HUB (`/es/ingles`) — "desktop" redesign PART 1 scope extension
+ * (owner spec 2026-10-06, item C): the ONE Inglés page whose header stays
+ * always visible (it holds the logo + avatar in the new design) and whose
+ * footer gets scroll-snap, since the hub's own content is one screen tall.
+ */
+test.describe('INGLÉS HUB mode — /es/ingles (desktop redesign PART 1, item C)', () => {
+  test('the header is visible immediately — no pull gesture needed, unlike every other Inglés page', async ({
+    page,
+  }) => {
+    const signedIn = await gotoHubOrSkip(page);
+    test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+    expect(await headerHidden(page)).toBe(false);
+  });
+
+  test('the footer is expanded immediately too', async ({ page }) => {
+    const signedIn = await gotoHubOrSkip(page);
+    test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+    expect(await footerExpanded(page)).toBe(true);
+  });
+
+  test('the header stays visible after scrolling all the way down to the footer', async ({ page }) => {
+    const signedIn = await gotoHubOrSkip(page);
+    test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(150);
+    // Still "visible" in the chrome-visibility sense (expanded, never
+    // collapsed) — it may now be scrolled physically out of the viewport,
+    // same as any other in-flow block, which is expected and fine.
+    const stillExpanded = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return el ? el.getBoundingClientRect().height > 1 : false;
+    }, HEADER_SELECTOR);
+    expect(stillExpanded).toBe(true);
+  });
+
+  test('carries the server-rendered data-chrome-hub attribute and a non-"none" scroll-snap-type', async ({ page }) => {
+    const signedIn = await gotoHubOrSkip(page);
+    test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+    const hub = await page.evaluate(() => document.documentElement.hasAttribute('data-chrome-hub'));
+    expect(hub).toBe(true);
+    const snapType = await page.evaluate(() => getComputedStyle(document.documentElement).scrollSnapType);
+    expect(snapType).not.toBe('none');
+  });
+
+  test('a non-hub Inglés page does NOT carry data-chrome-hub', async ({ page }) => {
+    await page.goto('/es/ingles/propuestos');
+    if (page.url().includes('/auth/entrar')) {
+      test.skip(true, 'Inglés subroutes are sign-in gated; no e2e auth fixture in this repo yet');
+    }
+    const hub = await page.evaluate(() => document.documentElement.hasAttribute('data-chrome-hub'));
+    expect(hub).toBe(false);
+  });
+});

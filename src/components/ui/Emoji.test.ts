@@ -59,4 +59,16 @@ describe('Emoji.astro', () => {
     const html = await render({ name: 'star-struck', 'data-testid': 'my-emoji' });
     expect(html).toMatch(/<picture[^>]*data-testid="my-emoji"/);
   });
+
+  // Desk hub folders ("desktop" redesign PART 3): the two slugs added for
+  // "Actividades de la comunidad" and the "Para ti hoy" folder's star.
+  it('renders the two desk-hub folder emoji', async () => {
+    const busts = await render({ name: 'busts-in-silhouette' });
+    expect(busts).toContain('/images/emoji/busts-in-silhouette-v1-64.avif 1x');
+    expect(busts).toMatch(/<img[^>]*src="\/images\/emoji\/busts-in-silhouette-v1-64\.webp"/);
+
+    const star = await render({ name: 'glowing-star' });
+    expect(star).toContain('/images/emoji/glowing-star-v1-64.avif 1x');
+    expect(star).toMatch(/<img[^>]*src="\/images\/emoji\/glowing-star-v1-64\.webp"/);
+  });
 });

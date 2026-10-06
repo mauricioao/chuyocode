@@ -2,45 +2,60 @@
 /**
  * English section HUB — `/[lang]/ingles` (SSR).
  *
- * `Header.astro` links here from every page of the site, in both locales, so
- * it keeps the previous entry screen's one hard requirement: it must always
- * answer, and the only 404 is an unsupported locale.
+ * "DESKTOP" REDESIGN, PART 3 (owner spec 2026-10-06, approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`): the hub
+ * becomes "the desk" — a centred greeting, a right-edge column of
+ * "desktop icon" folders, a bottom levels dock, and (this part) the
+ * clock + calendar widgets top-left. PARTS 1-2 already shipped the
+ * surrounding chrome (always-visible header/footer, scroll-snap, the
+ * white-desk palette); this part replaces the hub's OWN content — the two
+ * `HubCard`s, the "Para ti hoy"/"Lo más querido" strip and the CEFR pill
+ * row are all gone, superseded by the folders/dock below.
  *
- * This screen used to BE the curated-exercises level picker (search bar,
- * level chips, focus grid) with a single "Actividades de la comunidad" link
- * bolted on top — three different things on one page, none of them named.
- * It is now a plain choice between the two: "Ejercicios propuestos"
- * (`/[lang]/ingles/propuestos`, the former level picker, moved unchanged) and
- * "Actividades de la comunidad" (`/[lang]/ingles/actividades`, unchanged).
+ * DROPPED FROM THIS PASS (owner-approved scope cut, reported back rather
+ * than silently kept): the "top of the week" card. The mockup's "Para ti
+ * hoy" folder covers today's daily pick only — `topActivityOfWeek` and its
+ * query are no longer called from here.
  *
- * VISUAL UPGRADE (premium redesign pass): the two `HubCard`s now carry a live
- * count ("12 ejercicios"/"34 actividades", `getExerciseCount`/
- * `getActivityCount` — cheap `head: true` count-only queries, fail-safe to
- * `null` so a query failure degrades to no number rather than a misleading
- * "0"). Below them, a "Para ti hoy" strip highlights the community's daily
- * pick (`pickDailyActivity`, reused unchanged from the actividades page) and
- * the most-hearted activity of the week (`topActivityOfWeek`), both sharing
- * the SAME single `getPublishedActivities({ orden: 'gustadas' })` read so the
- * hub spends one extra round trip, not two. A row of CEFR pills below that
- * jumps straight into `/[lang]/ingles/propuestos?nivel=<level>`.
+ * WIDGETS, PART 4 (owner spec 2026-10-06): the weather + "Frase del día"
+ * player widgets land here, next to PART 3's clock/calendar. The widgets
+ * zone becomes a real CSS grid on desktop (`160px 160px 320px` columns ×
+ * 2 rows, 20px gaps, exactly the mockup's own `.widgets`) so weather can
+ * span the first two columns on row 2 — PART 3's `desk:flex` row could not
+ * express that second row at all.
  *
- * Still ships no client-side JavaScript FRAMEWORK of its own: every control
- * here is a plain link, same posture as before.
+ * `DeskWeatherWidget` fetches its forecast client-side (`@lib/ui/deskWeather`)
+ * against the location Netlify's own request geo resolves below, falling
+ * back to Lima — see the `lat`/`lon`/`city` consts. `DeskPlayerWidget` is
+ * this page's one REACT island (`client:load`) — see that component's own
+ * header for why, unlike every other widget here, it is not plain
+ * vanilla-JS DOM wiring.
+ *
+ * Still ships no client-side JavaScript FRAMEWORK for the clock/calendar/
+ * weather widgets: every interactive bit there is a plain link, PLUS their
+ * own small inline module script (`@lib/ui/deskWidgets`, `@lib/ui/deskWeather`,
+ * `@lib/ui/deskDrag`) — no island, no React, except the player above.
+ *
+ * HELPER, PART 5 (owner spec 2026-10-06): a floating character ("desktop"
+ * redesign's `.helper`/`.bubble`/`.who`) steps in from the bottom-left with
+ * a grammar-tip speech bubble, hub-only — see `DeskHelper.astro`'s own
+ * header for the fold/tip/lift behaviour. Plain Astro + `@lib/ui/deskHelper`,
+ * same "no extra island" posture as every widget above except the player.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import PageTitle from '@components/ui/PageTitle.astro';
-import HubCard from '@components/ui/HubCard.astro';
-import ActivityCard from '@components/ui/ActivityCard.astro';
-import SectionHeading from '@components/ui/SectionHeading.astro';
-import { badgeVariants } from '@components/ui/badge';
-import { BooksIcon } from '@phosphor-icons/react/dist/ssr/Books';
-import { UsersThreeIcon } from '@phosphor-icons/react/dist/ssr/UsersThree';
+import DeskFolder from '@components/ingles/DeskFolder.astro';
+import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
+import DeskCalendarWidget from '@components/ingles/DeskCalendarWidget.astro';
+import DeskWeatherWidget from '@components/ingles/DeskWeatherWidget.astro';
+import DeskPlayerWidget from '@components/ingles/DeskPlayerWidget';
+import DeskHelper from '@components/ingles/DeskHelper.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { LEVELS } from '@lib/exerciseTaxonomy';
+import { LEVELS, type Level } from '@lib/exerciseTaxonomy';
 import { getExerciseCount } from '@lib/exercises';
 import { getActivityCount, getPublishedActivities } from '@lib/activities/activities';
 import { pickDailyActivity } from '@lib/activities/dailyPick';
-import { topActivityOfWeek } from '@lib/activities/topOfWeek';
+import { publicImageUrl } from '@lib/activities/storage';
+import { nameFrom } from '@lib/profile';
 
 // Prefer the middleware-validated lang; fall back to the route param and 404
 // if neither is supported (defensive — middleware normally sets it).
@@ -55,8 +70,40 @@ if (!lang) {
 const english = UI_LABELS[lang].english;
 const t = english.hub;
 const levelLabels = english.levels;
-const activitiesT = UI_LABELS[lang].activities.explore;
+const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
 const viewerId = Astro.locals.user?.id ?? null;
+
+// Weather widget location (PART 4): Netlify's own request geo when present,
+// Lima otherwise — which is also exactly what local `astro dev` always gets
+// (no Netlify edge in front of it), so local development never needs its
+// own separate fallback branch. Rounded to 2 decimals for the REAL geo
+// reading only (privacy — a visitor's own city-level location is already
+// coarse, 2 decimals narrows it no further than that — and it is also the
+// weather endpoint's own cache key, so coalescing nearby visitors onto the
+// same rounded pair is what keeps MET's request volume low). The literal
+// Lima fallback below is a fixed constant, not a real visitor's location,
+// so it is used exactly as given rather than re-rounded.
+const LIMA_FALLBACK = { lat: -12.0464, lon: -77.0428, city: 'Lima' };
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+const geo = Astro.locals.netlify?.context?.geo;
+const hasGeoCoords = typeof geo?.latitude === 'number' && typeof geo?.longitude === 'number';
+const weatherLat = hasGeoCoords ? round2(geo!.latitude!) : LIMA_FALLBACK.lat;
+const weatherLon = hasGeoCoords ? round2(geo!.longitude!) : LIMA_FALLBACK.lon;
+const weatherCity = geo?.city?.trim() || LIMA_FALLBACK.city;
+const weatherLabel = t.weatherLabel.replace('{city}', weatherCity);
+
+const playerLabels = {
+  title: t.playerTitle,
+  prev: t.playerPrev,
+  next: t.playerNext,
+  play: t.playerPlay,
+  pause: t.playerPause,
+  unavailable: t.playerUnavailable,
+};
 
 /** "12 ejercicios" / "1 ejercicio", or `null` when the count degraded (never "0 …"). */
 function formatCount(count: number | null, one: string, many: string): string | null {
@@ -64,9 +111,8 @@ function formatCount(count: number | null, one: string, many: string): string | 
   return `${count} ${count === 1 ? one : many}`;
 }
 
-// Two cheap counts plus ONE read of the top-hearted live activities — the
-// same pool `pickDailyActivity` picks from and `topActivityOfWeek` scans —
-// all in parallel, so the hub pays for one extra round trip total.
+// Two cheap counts plus the top-hearted pool `pickDailyActivity` picks
+// from, in parallel, so the hub pays for one extra round trip total.
 const [exerciseCount, activityCount, heartedPool] = await Promise.all([
   getExerciseCount(),
   getActivityCount(),
@@ -77,99 +123,230 @@ const exerciseCountLabel = formatCount(exerciseCount, t.exerciseCountOne, t.exer
 const activityCountLabel = formatCount(activityCount, t.activityCountOne, t.activityCountMany);
 
 const dailyPick = pickDailyActivity(heartedPool.activities, new Date());
-// Excludes the daily pick's own id so the strip never shows the same card
-// twice when the pool is small.
-const weeklyPick = topActivityOfWeek(
-  heartedPool.activities.filter((activity) => activity.id !== dailyPick?.id),
-  new Date(),
-);
+const dailyPickHref = dailyPick
+  ? `/${lang}/ingles/actividades/${dailyPick.id}`
+  : `/${lang}/ingles/actividades`;
+const dailyPickMeta = dailyPick?.title ?? null;
+const dailyPickPeek = dailyPick?.thumbnailPath ? publicImageUrl(dailyPick.thumbnailPath) : null;
+
+// First name from the signed-in visitor's own display name (`nameFrom`,
+// `@lib/profile` — the same resolver the header's account chip and `/api/me`
+// use, exported specifically for this synchronous, no-extra-I/O use —
+// `Astro.locals.user` is `User | null`, never read directly for a name
+// anywhere else). Falls back to a bare "Hola."/"Hi." when there is no
+// session at all (also what an anonymous visitor to the gated hub sees).
+const firstName = Astro.locals.user ? nameFrom(Astro.locals.user).trim().split(/\s+/)[0] : null;
+const greetingLine1 = firstName ? t.greetingNamed.replace('{name}', firstName) : t.greetingFallback;
+
+// CEFR band -> the dock tile's filled-bar colour (pop tokens, part 2) and
+// how many of the 6 bars light up — just the level's own position in the
+// ascending `LEVELS` list (A1 -> 1 bar … C2 -> 6 bars), same "ascending
+// difficulty" ordering `exerciseTaxonomy.ts` already documents.
+const BAND_FILL_CLASS: Record<'A' | 'B' | 'C', string> = {
+  A: 'bg-pop-green',
+  B: 'bg-pop-sky',
+  C: 'bg-pop-violet',
+};
+const BAR_HEIGHTS = [7, 11, 15, 19, 23, 27] as const;
+
+function bandOf(level: Level): 'A' | 'B' | 'C' {
+  return level[0] as 'A' | 'B' | 'C';
+}
 ---
 
 <BaseLayout lang={lang} title={t.title} description={t.description} theme="ingles">
-  <section class="reveal mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:py-12">
-    <header class="flex flex-col gap-3">
-      <PageTitle lang={lang} backHref={`/${lang}`}>{t.title}</PageTitle>
-      <p class="max-w-2xl text-lg text-muted-foreground">{t.subtitle}</p>
-    </header>
+  <section
+    data-desk
+    class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-[calc(100dvh-96px)] desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-3 desk:pb-0"
+  >
+    {/* Shared gradients for every `DeskFolder`'s back/front SVG layers —
+        defined ONCE here, referenced by id, same `url(#…)` pattern the
+        approved mockup itself uses (`index.html`'s `#fb`/`#ff`). */}
+    <svg width="0" height="0" class="absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="desk-folder-back" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3aa6dc" />
+          <stop offset="1" stop-color="#2b8fc6" />
+        </linearGradient>
+        <linearGradient id="desk-folder-front" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#6fcdf5" />
+          <stop offset="1" stop-color="#4fb5ea" />
+        </linearGradient>
+      </defs>
+    </svg>
 
-    <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <HubCard
-        href={`/${lang}/ingles/propuestos`}
-        title={t.proposedTitle}
-        description={t.proposedDescription}
-        count={exerciseCountLabel}
-        tone="sky"
-      >
-        <BooksIcon slot="icon" weight="duotone" size={56} aria-hidden="true" />
-      </HubCard>
-      <HubCard
-        href={`/${lang}/ingles/actividades`}
-        title={t.communityTitle}
-        description={t.communityDescription}
-        count={activityCountLabel}
-        tone="violet"
-      >
-        <UsersThreeIcon slot="icon" weight="duotone" size={56} aria-hidden="true" />
-      </HubCard>
+    {/* Greeting — the one big type moment, centred on desktop, left-aligned
+        and FIRST on phones. `pointer-events-none` on desktop only: it
+        overlays the widgets/folders columns, and must never steal a click
+        meant for them. */}
+    <div
+      class="order-1 text-left desk:order-none desk:pointer-events-none desk:absolute desk:top-[46%] desk:left-1/2 desk:w-[min(980px,calc(100%-440px))] desk:-translate-x-1/2 desk:-translate-y-1/2 desk:text-center"
+    >
+      <h1 class="text-[clamp(40px,4.3vw,68px)] leading-[1.04] font-extrabold tracking-[-0.03em] text-foreground">
+        {greetingLine1}
+        <br />
+        <span class="desk:whitespace-nowrap">{t.greetingQuestion}</span>
+      </h1>
+      <p class="mx-auto mt-4 max-w-[54ch] text-base text-muted-foreground desk:mt-[18px] desk:text-lg">
+        {t.greetingSubtitle}
+      </p>
     </div>
 
-    {
-      (dailyPick || weeklyPick) && (
-        <section aria-labelledby="hub-today-heading">
-          <SectionHeading id="hub-today-heading" title={t.todayTitle} />
-          <div class="grid gap-4 sm:grid-cols-2">
-            {dailyPick && (
-              <ActivityCard
-                lang={lang}
-                activity={dailyPick}
-                levelLabels={levelLabels}
-                noLevel={activitiesT.noLevel}
-                blockCountOne={activitiesT.blockCountOne}
-                blockCountMany={activitiesT.blockCountMany}
-                viewedLabel={activitiesT.viewedBadge}
-                highlighted
-                highlightLabel={activitiesT.dailyPickLabel}
-                variant="compact"
-              />
-            )}
-            {weeklyPick && (
-              <ActivityCard
-                lang={lang}
-                activity={weeklyPick}
-                levelLabels={levelLabels}
-                noLevel={activitiesT.noLevel}
-                blockCountOne={activitiesT.blockCountOne}
-                blockCountMany={activitiesT.blockCountMany}
-                viewedLabel={activitiesT.viewedBadge}
-                highlighted
-                highlightLabel={t.weeklyPickLabel}
-                variant="compact"
-              />
-            )}
-          </div>
-        </section>
-      )
-    }
+    {/* Folders — a right-edge column on desktop, a home-screen grid on
+        phones (4 items: the 3 folders + "Crear actividad" fit a clean 2×2). */}
+    <nav
+      aria-label={t.foldersLabel}
+      class="order-2 grid grid-cols-2 gap-1 desk:order-none desk:col-start-2 desk:row-start-1 desk:flex desk:flex-col desk:items-end desk:gap-[18px] desk:pt-1"
+    >
+      <DeskFolder
+        href={`/${lang}/ingles/propuestos`}
+        label={t.proposedTitle}
+        meta={exerciseCountLabel}
+        icon="books"
+      />
+      <DeskFolder
+        href={`/${lang}/ingles/actividades`}
+        label={t.communityTitle}
+        meta={activityCountLabel}
+        icon="busts-in-silhouette"
+      />
+      <DeskFolder
+        href={dailyPickHref}
+        label={t.todayTitle}
+        meta={dailyPickMeta}
+        icon="glowing-star"
+        peekSrc={dailyPickPeek}
+      />
+      <a
+        href={`/${lang}/crear`}
+        class="group grid w-full justify-items-center gap-1.5 rounded-2xl px-2 py-2 text-center transition-colors hover:bg-pop-sky/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:w-[148px]"
+      >
+        <span class="relative block h-[77px] w-24 desk:h-24 desk:w-[120px]">
+          <span class="absolute left-1/2 top-1/2 h-[60%] w-[48%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-card shadow-[0_2px_6px_rgb(28_28_30_/_0.08)]">
+            <span
+              aria-hidden="true"
+              class="absolute inset-x-3 top-[30%] block h-[3px] rounded-sm bg-muted shadow-[0_9px_0_var(--muted),0_18px_0_var(--muted)]"
+            ></span>
+            {/* The "+" sits on the sheet's own corner, so it stays attached at
+                every size. */}
+            <span
+              aria-hidden="true"
+              class="absolute -right-3 -bottom-2.5 grid h-7 w-7 place-items-center rounded-full bg-pop-sky-deep text-lg font-bold leading-none text-white shadow-[0_1px_3px_rgb(28_28_30_/_0.2)]"
+            >
+              +
+            </span>
+          </span>
+        </span>
+        <span class="text-[13px] font-semibold text-foreground">{createActivityLabel}</span>
+      </a>
+    </nav>
 
-    <nav aria-label={t.levelShortcutTitle}>
-      <SectionHeading title={t.levelShortcutTitle} />
-      <ul class="flex gap-2 overflow-x-auto pb-1">
+    {/* Widgets — top-left on desktop (160/160/320 columns × 2 rows, 20px
+        gaps, exactly the mockup's own `.widgets`), two columns on phones
+        (clock+calendar side by side, player/weather full width — the
+        `col-span-2` below, unprefixed, is the phone layout; `desk:` swaps
+        it back to the 2-column span row 2 actually needs). DOM order
+        matches the mockup's own source order (clock, calendar, player,
+        weather), which is also what the drag system (`@lib/ui/deskDrag`)
+        falls back to positioning from on a visitor's very first visit. */}
+    <section
+      aria-label={t.widgetsLabel}
+      class="order-3 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
+    >
+      <DeskClockWidget />
+      <DeskCalendarWidget />
+      <DeskPlayerWidget labels={playerLabels} client:load />
+      <DeskWeatherWidget
+        lat={weatherLat}
+        lon={weatherLon}
+        city={weatherCity}
+        label={weatherLabel}
+        unavailableLabel={t.weatherUnavailable}
+      />
+    </section>
+
+    {/* Levels dock — bottom centre on desktop, a horizontal scroller on
+        phones. */}
+    <div
+      class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2"
+    >
+      <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
+      <nav
+        aria-label={t.levelShortcutTitle}
+        class="ingles-glass flex max-w-full gap-2.5 overflow-x-auto rounded-[26px] p-2.5"
+      >
         {
-          LEVELS.map((level) => (
-            <li class="shrink-0">
+          LEVELS.map((level, index) => {
+            const band = bandOf(level);
+            return (
               <a
                 href={`/${lang}/ingles/propuestos?nivel=${level}`}
-                class={[
-                  badgeVariants({ variant: 'outline' }),
-                  'h-auto gap-1 rounded-full bg-surface-soft px-4 py-2 text-sm hover:border-accent-ink hover:text-accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                ].join(' ')}
+                aria-label={`${level}, ${levelLabels[level]}`}
+                class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {`${level} · ${levelLabels[level]}`}
+                <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]">
+                  {BAR_HEIGHTS.map((height, barIndex) => (
+                    <i
+                      class:list={[
+                        'block w-[5px] rounded-sm',
+                        barIndex <= index ? BAND_FILL_CLASS[band] : 'bg-muted',
+                      ]}
+                      style={`height:${height}px`}
+                    />
+                  ))}
+                </span>
+                <b class="text-[13px] leading-none text-foreground">{level}</b>
+                <small class="text-center text-[11px] leading-tight text-muted-foreground">
+                  {levelLabels[level]}
+                </small>
               </a>
-            </li>
-          ))
+            );
+          })
         }
-      </ul>
-    </nav>
+      </nav>
+    </div>
   </section>
+
+  {/* "Desktop" redesign PART 5 (owner spec 2026-10-06): the floating
+      character helper, hub-only — practice/editor/presentation pages never
+      render it. `position: fixed`, so its place in the DOM does not matter
+      visually; kept as a sibling after the desk section itself. */}
+  <DeskHelper
+    lang={lang}
+    landmarkLabel={t.helperLandmarkLabel}
+    avatarLabelTemplate={t.helperAvatarLabel}
+    otherTipLabel={t.helperOtherTip}
+    closeLabel={t.helperClose}
+  />
+
+  <script>
+    import { initDeskWidgets } from '@lib/ui/deskWidgets';
+    import { initDeskWeather } from '@lib/ui/deskWeather';
+    import { initDeskDrag } from '@lib/ui/deskDrag';
+    import { initDeskHelper } from '@lib/ui/deskHelper';
+
+    // Drag enhancement runs AFTER the widgets/weather shells exist (it reads
+    // their current box with `getBoundingClientRect`), but does not need to
+    // wait on the weather fetch itself — `void` is deliberate, same posture
+    // as not awaiting `initDeskWeather` below.
+    const run = () => {
+      initDeskWidgets();
+      void initDeskWeather();
+      initDeskDrag();
+      initDeskHelper();
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run, { once: true });
+    } else {
+      run();
+    }
+    // Re-run after a client-side (View Transitions) navigation TO this page —
+    // `astro:page-load` fires for the initial load too, so this alone covers
+    // both; the plain listener above is kept as a belt-and-suspenders no-JS-
+    // framework-surprise fallback and is a harmless no-op on the second call
+    // (`initDeskWidgets`/`initDeskDrag` just re-query the same elements;
+    // `initDeskWeather` re-fetches, cheap thanks to its own edge cache).
+    document.addEventListener('astro:page-load', run);
+  </script>
 </BaseLayout>

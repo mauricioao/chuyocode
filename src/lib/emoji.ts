@@ -38,6 +38,12 @@ export const EMOJI_NAMES = [
   'sparkles',
   'waving-hand',
   'rocket',
+  // Desk hub folders ("desktop" redesign PART 3, owner spec 2026-10-06):
+  // "Actividades de la comunidad" and the "Para ti hoy" folder's star.
+  'busts-in-silhouette',
+  'glowing-star',
+  // Desk hub "Frase del día" player cover ("desktop" redesign PART 4).
+  'headphone',
 ] as const;
 
 export type EmojiName = (typeof EMOJI_NAMES)[number];

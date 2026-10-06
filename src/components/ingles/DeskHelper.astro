@@ -1,0 +1,157 @@
+---
+/**
+ * DeskHelper — the Inglés desk hub's floating character "helper", a grammar
+ * tip bubble that steps in from the bottom-left ("desktop" redesign PART 5,
+ * owner spec 2026-10-06, approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.helper` /
+ * `.bubble` / `.who`; art: Open Peeps busts, `@/content/characters`, same
+ * five named mascots already used elsewhere on Inglés). Owner's words: "los
+ * avatares podrían salir como una ayuda muchas veces desde la parte inferior
+ * izquierda con un globo de texto dando ayudas o cosas así".
+ *
+ * HUB ONLY — `index.astro` is the one and only call site; practice, the
+ * editor and presentation pages never render this.
+ *
+ * SERVER renders the shell OPEN (bubble not `hidden`), with TODAY's tip
+ * picked from the server's own clock (`pickDailyTipIndex`,
+ * `@/content/deskHelperTips`) — a real, non-arbitrary default for a no-JS
+ * visitor, and what every vitest render sees. Two small scripts then refine
+ * it, in order of how fast they MUST run:
+ *
+ *  1. A tiny classic (non-module) `is:inline` script, right below the
+ *     markup, decides the FOLD state before first paint (phones below the
+ *     `desk:` breakpoint, and the 1100-1440px desktop range where an open
+ *     bubble can collide with the centred levels dock, both start folded;
+ *     a session choice already in `sessionStorage` wins over either) — same
+ *     "decide before paint, duplicate a few lines on purpose" posture as
+ *     `BaseLayout.astro`'s own chrome-visibility script. Folding is a much
+ *     bigger visual change than swapping a few words of text, so it is the
+ *     one thing here that cannot wait for the deferred module below.
+ *  2. `@lib/ui/deskHelper.ts` (`initDeskHelper`, wired from `index.astro`'s
+ *     own script element next to `initDeskWidgets`) owns everything that is
+ *     fine to settle in just after first paint: correcting the shown tip to
+ *     the VISITOR's own local calendar day (the server's clock cannot know
+ *     their timezone), "Otro tip" cycling, the close/reopen toggle,
+ *     persisting the fold choice for the rest of the browser session, and
+ *     lifting the widget clear of the footer bar while it is on screen.
+ *
+ * `#desk-helper-data` carries every tip pre-resolved for THIS locale (name +
+ * HTML, already picked from `CHARACTERS`/`DESK_HELPER_TIPS` server-side) as
+ * plain JSON data — never a function prop, never a second framework island;
+ * this stays a plain Astro component + a small script, same posture as
+ * every other desk widget except the one deliberate player island.
+ */
+import { CHARACTERS, characterFallbackSrc, characterSrcSet, type CharacterSlug } from '@/content/characters';
+import { DESK_HELPER_TIPS, pickDailyTipIndex } from '@/content/deskHelperTips';
+import type { Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  landmarkLabel: string;
+  avatarLabelTemplate: string;
+  otherTipLabel: string;
+  closeLabel: string;
+}
+
+const { lang, landmarkLabel, avatarLabelTemplate, otherTipLabel, closeLabel } = Astro.props;
+
+const tips = DESK_HELPER_TIPS;
+const defaultIndex = pickDailyTipIndex(new Date(), tips.length);
+const defaultTip = tips[defaultIndex];
+const defaultName = CHARACTERS[defaultTip.character].alt[lang];
+const defaultHtml = defaultTip[lang];
+const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
+
+/** Every tip, pre-resolved for this locale — the ONLY data the client script needs (never the full `CHARACTERS` registry or `@lib/i18n`). `<` is escaped so authored `<em>` markup round-trips through `JSON.parse` + `innerHTML` unchanged while a closing script element tag can never appear literally inside the JSON text node. */
+const clientTips: { slug: CharacterSlug; name: string; html: string }[] = tips.map((tip) => ({
+  slug: tip.character,
+  name: CHARACTERS[tip.character].alt[lang],
+  html: tip[lang],
+}));
+const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
+---
+
+<aside
+  id="desk-helper"
+  data-desk-helper
+  aria-label={landmarkLabel}
+  data-tip-index={defaultIndex}
+  data-avatar-label-template={avatarLabelTemplate}
+  class="fixed bottom-[calc(10px+var(--desk-helper-lift,0px))] left-5 z-[5] flex items-end transition-[bottom] duration-200 ease-out motion-reduce:transition-none"
+>
+  <button
+    type="button"
+    id="desk-helper-avatar"
+    data-desk-helper-avatar
+    aria-expanded="true"
+    aria-controls="desk-helper-bubble"
+    aria-label={defaultAvatarLabel}
+    class="relative block h-16 w-16 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-[124px] desk:w-[124px] desk:rounded-none desk:border-0 desk:bg-transparent"
+  >
+    <picture class="block h-full w-full overflow-hidden rounded-full desk:overflow-visible desk:rounded-none">
+      <source data-desk-helper-avif type="image/avif" srcset={characterSrcSet(defaultTip.character, 'avif')} />
+      <source data-desk-helper-webp type="image/webp" srcset={characterSrcSet(defaultTip.character, 'webp')} />
+      <img
+        data-desk-helper-img
+        src={characterFallbackSrc(defaultTip.character)}
+        alt=""
+        width="124"
+        height="124"
+        decoding="async"
+        class="-ml-1 mt-0.5 block h-[72px] w-[72px] desk:ml-0 desk:mt-0 desk:h-[124px] desk:w-[124px]"
+      />
+    </picture>
+  </button>
+
+  <div
+    id="desk-helper-bubble"
+    data-desk-helper-bubble
+    role="status"
+    aria-live="polite"
+    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground before:absolute before:-bottom-[11px] before:left-[18px] before:h-[18px] before:w-[18px] before:rotate-[35deg] before:skew-x-[-10deg] before:border-r-2 before:border-b-2 before:border-foreground before:bg-card before:content-[''] [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[104px] desk:max-w-[290px] desk:text-[13.5px]"
+  >
+    <b data-desk-helper-name class="mb-0.5 block font-semibold">{defaultName}</b>
+    <span data-desk-helper-tip set:html={defaultHtml} />
+    <br />
+    <button
+      type="button"
+      id="desk-helper-next"
+      data-desk-helper-next
+      class="mt-1.5 inline-block cursor-pointer border-0 bg-transparent p-0 text-[12.5px] font-semibold text-pop-sky-deep"
+    >
+      {otherTipLabel}
+    </button>
+    <button
+      type="button"
+      id="desk-helper-close"
+      data-desk-helper-close
+      aria-label={closeLabel}
+      class="absolute top-1.5 right-1.5 h-6 w-6 cursor-pointer border-0 bg-transparent text-base text-muted-foreground"
+    >
+      &times;
+    </button>
+  </div>
+
+  <script is:inline type="application/json" id="desk-helper-data" set:html={clientTipsJson} />
+</aside>
+
+<script is:inline>
+  (function () {
+    var bubble = document.getElementById('desk-helper-bubble');
+    var avatar = document.getElementById('desk-helper-avatar');
+    if (!bubble || !avatar) return;
+    var STORAGE_KEY = 'ingles-desk-helper-folded';
+    var stored = null;
+    try {
+      stored = sessionStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      stored = null;
+    }
+    // Open by default only at/above 1440px — `@lib/ui/deskHelper.ts`'s own
+    // `DESK_HELPER_OPEN_MIN_WIDTH`, duplicated here on purpose so the FOLD
+    // decision runs before first paint (see this file's own header).
+    var folded = stored === null ? !window.matchMedia('(min-width: 1440px)').matches : stored === 'true';
+    bubble.hidden = folded;
+    avatar.setAttribute('aria-expanded', String(!folded));
+  })();
+</script>

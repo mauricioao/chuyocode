@@ -56,6 +56,14 @@
  *         visible) at `lg:` and up on a `fullHeight` page, where the page
  *         itself never scrolls and the header/footer already bound
  *         `<main>` — see that file's own comment (owner decision).
+ *      3. `data-chrome-hub` on `<html>` ("desktop" redesign PART 1 scope
+ *         extension, owner spec 2026-10-06, item C): true only for the
+ *         Inglés hub (`isInglesHubPath`, `@lib/backNavigation` — the SAME
+ *         check the back button uses, computed server-side here instead of
+ *         re-derived from the URL twice). The hub's header starts visible
+ *         with no flash (see the inline script below); `global.css` keys its
+ *         scroll-snap rules off this same attribute directly, with no JS
+ *         dependency at all.
  *    `initChromeVisibility()` (the body script element below) does the rest:
  *    every page gets `data-chrome-js` once it runs, which is what gates the
  *    new CSS on — no JS / JS failed means the header/footer stay fully
@@ -80,6 +88,7 @@ import {
   defaultHreflangAlternate,
   isNoindexPath,
 } from '@lib/seo';
+import { isInglesHubPath } from '@lib/backNavigation';
 
 interface Props {
   /** Active locale for the `<html lang>` attribute. */
@@ -136,6 +145,14 @@ const {
 
 const isIngles = theme === 'ingles';
 
+// "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
+// the hub is the ONE Inglés page whose header stays always visible and
+// whose footer gets scroll-snap — `chromeVisibility.ts`/`global.css` key off
+// this attribute (set server-side here, the same way `data-theme` already
+// is, rather than re-deriving it from the URL client-side). Reuses the SAME
+// hub-path check `backNavigation.ts` uses for the back button.
+const isInglesHub = isIngles && isInglesHubPath(Astro.url.pathname);
+
 // Localized fallback description keeps every page indexable even when a page
 // forgets to pass its own (decision #7: meta description always present).
 const metaDescription = description ?? UI_LABELS[lang].meta.siteDescription;
@@ -174,6 +191,7 @@ const faviconSvg =
   lang={lang}
   data-theme={isIngles ? 'ingles' : undefined}
   data-full-height={fullHeight ? '' : undefined}
+  data-chrome-hub={isInglesHub ? '' : undefined}
   class:list={['scroll-smooth', !isIngles && 'dark']}
 >
   <head>
@@ -190,9 +208,16 @@ const faviconSvg =
       (function () {
         var html = document.documentElement;
         var ingles = html.getAttribute('data-theme') === 'ingles';
+        // The hub's own attribute is already server-rendered above (same
+        // spot `data-theme` itself is set) — read it rather than
+        // re-deriving it from the URL here, so there is only ONE place that
+        // decides "is this the hub" (`isInglesHubPath`, `backNavigation.ts`).
+        var hub = html.hasAttribute('data-chrome-hub');
         html.setAttribute('data-chrome-js', '');
         html.setAttribute('data-chrome-mode', ingles ? 'ingles' : 'site');
-        html.setAttribute('data-header-visible', ingles ? 'false' : 'true');
+        // "Desktop" redesign PART 1, item C: the hub's header starts
+        // visible immediately — no flash of it being hidden first.
+        html.setAttribute('data-header-visible', ingles ? (hub ? 'true' : 'false') : 'true');
         html.setAttribute('data-footer-visible', 'false');
       })();
     </script>
@@ -322,8 +347,15 @@ const faviconSvg =
         renders straight into the page's own (possibly light) content and
         must NOT be forced dark, which is why this wrapper lives here and not
         inside `ScrollToTop.tsx` itself. BARE mode drops it — a presentation
-        stage has no page scroll to return from. */}
-    {!bare && (
+        stage has no page scroll to return from.
+
+        HUB EXCLUDED ("desktop" redesign PART 4, owner feedback): the hub is
+        one screen plus the footer (scroll-snap between the two, PART 1),
+        and the floating button overlapped the levels dock on phones — with
+        no long page to scroll back up FROM, it has no job to do there
+        either. Every other Inglés page (and every non-Inglés page) keeps
+        it unchanged. */}
+    {!bare && !isInglesHub && (
       <div data-theme="brand" class="dark contents">
         <ScrollToTop client:load labels={scrollToTopLabels} />
       </div>

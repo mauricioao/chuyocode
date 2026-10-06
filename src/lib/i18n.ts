@@ -1294,6 +1294,44 @@ export const UI_LABELS = {
         weeklyPickLabel: 'Lo más querido de la semana',
         // Heading over the CEFR quick-jump row.
         levelShortcutTitle: 'Ir directo a tu nivel',
+        // "Desktop" redesign PART 1 (owner spec 2026-10-06, item B): the
+        // hub-only "by ChuyoCode" header link's accessible name + tooltip.
+        backToChuyoCode: 'Regresar a ChuyoCode',
+        // "Desktop" redesign PART 3 (owner spec 2026-10-06): the desk's own
+        // centred greeting — `{name}` is replaced by the signed-in
+        // visitor's first name (`greetingFallback` when there is none, e.g.
+        // no session, or a display name that resolves to nothing usable).
+        // `greetingQuestion` NEVER wraps on desktop (owner spec: "the second
+        // line never wraps") — `index.astro`'s own `desk:whitespace-nowrap`
+        // is what enforces that, not this string.
+        greetingNamed: 'Hola, {name}.',
+        greetingFallback: 'Hola.',
+        greetingQuestion: '¿Qué practicamos hoy?',
+        greetingSubtitle: 'Abre una carpeta para elegir un ejercicio, o salta directo a tu nivel.',
+        // Landmark names for the desk's own `<nav>`/`<section>` regions —
+        // never shown visually, just for screen-reader navigation.
+        foldersLabel: 'Carpetas',
+        widgetsLabel: 'Tu escritorio',
+        // "Desktop" redesign PART 4 (owner spec 2026-10-06): weather +
+        // "Frase del día" player widgets, draggable positions, and the
+        // header's "Ordenar escritorio" icon.
+        weatherLabel: 'Clima en {city}',
+        weatherUnavailable: 'Clima no disponible',
+        playerTitle: 'Frase del día',
+        playerPrev: 'Anterior',
+        playerNext: 'Siguiente',
+        playerPlay: 'Escuchar',
+        playerPause: 'Pausar',
+        playerUnavailable: 'Audio no disponible en este dispositivo',
+        arrangeDesktop: 'Ordenar escritorio',
+        // "Desktop" redesign PART 5 (owner spec 2026-10-06): the floating
+        // character "helper" with a grammar-tip speech bubble, bottom-left
+        // of the hub only. `{name}` is replaced with the speaking
+        // character's own display name (`@/content/characters`).
+        helperLandmarkLabel: 'Ayuda',
+        helperAvatarLabel: 'Ayuda de {name}',
+        helperOtherTip: 'Otro tip',
+        helperClose: 'Cerrar ayuda',
       },
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
@@ -2367,6 +2405,26 @@ export const UI_LABELS = {
         todayTitle: 'For you today',
         weeklyPickLabel: 'Most loved this week',
         levelShortcutTitle: 'Jump to your level',
+        backToChuyoCode: 'Back to ChuyoCode',
+        greetingNamed: 'Hi, {name}.',
+        greetingFallback: 'Hi.',
+        greetingQuestion: 'What shall we practise today?',
+        greetingSubtitle: 'Open a folder to pick an exercise, or jump straight to your level.',
+        foldersLabel: 'Folders',
+        widgetsLabel: 'Your desktop',
+        weatherLabel: 'Weather in {city}',
+        weatherUnavailable: 'Weather not available',
+        playerTitle: 'Phrase of the day',
+        playerPrev: 'Previous',
+        playerNext: 'Next',
+        playerPlay: 'Listen',
+        playerPause: 'Pause',
+        playerUnavailable: 'Audio not available on this device',
+        arrangeDesktop: 'Arrange desktop',
+        helperLandmarkLabel: 'Help',
+        helperAvatarLabel: 'Help from {name}',
+        helperOtherTip: 'Another tip',
+        helperClose: 'Close help',
       },
       section: {
         // Matches the Spanish move: name the section, not its audience.

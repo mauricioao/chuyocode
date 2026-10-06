@@ -75,6 +75,19 @@ describe('tailwind theme tokens (CSS-first @theme)', () => {
       expect(value).not.toBe('');
     },
   );
+
+  // Visual-theme pass (white desk): decorative accent set for fills/icons
+  // only, prefixed `pop-` so it collides with neither a Tailwind default-
+  // palette family name (`red`, `sky`, `yellow`, `green`, `violet`) nor a
+  // font-size step.
+  it('exposes the pop-* decorative accent set at the spec values', () => {
+    expect(token('--color-pop-red')?.toLowerCase()).toBe('#e9573f');
+    expect(token('--color-pop-sky')?.toLowerCase()).toBe('#4db3e6');
+    expect(token('--color-pop-sky-deep')?.toLowerCase()).toBe('#2f97cf');
+    expect(token('--color-pop-yellow')?.toLowerCase()).toBe('#f2c230');
+    expect(token('--color-pop-green')?.toLowerCase()).toBe('#3daa6b');
+    expect(token('--color-pop-violet')?.toLowerCase()).toBe('#7e6be0');
+  });
 });
 
 // Regression guard for a real production bug: an input/select/textarea

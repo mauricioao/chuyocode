@@ -70,6 +70,23 @@
   --color-game-orange: #c46c08;
   --color-game-pink: #e44487;
 
+  /* Decorative accent set (visual-theme pass: Inglés "white desk" palette) —
+   * full colour but not oversaturated, meant to sit against the black-and-
+   * white character drawings. FILLS AND ICONS ONLY, never body text (a
+   * caption/label reaches for `--color-accent-ink` or a semantic role
+   * instead) — several of these do not clear 4.5:1 on white. Prefixed
+   * `pop-` so the name collides with neither a Tailwind default-palette
+   * family (`red`, `sky`, `yellow`, `green`, `violet` all already exist as
+   * numbered steps) nor a font-size step. Flat entries like `--color-
+   * accent`/the game set above: no dark/light-scope override, since this
+   * decorative set is only ever used under `theme="ingles"`. */
+  --color-pop-red: #e9573f;
+  --color-pop-sky: #4db3e6;
+  --color-pop-sky-deep: #2f97cf;
+  --color-pop-yellow: #f2c230;
+  --color-pop-green: #3daa6b;
+  --color-pop-violet: #7e6be0;
+
   /* Display face for headings (decision #1). Raleway Variable loads via
    * fonts.css; the system-sans stack is the swap fallback. */
   --font-display: 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
@@ -132,6 +149,16 @@
    * theme cross-fade. */
   --transition-duration-control: 180ms;
   --ease-control: cubic-bezier(0, 0, 0.2, 1); /* ease-out */
+
+  /* The Inglés desk hub's own breakpoint ("desktop" redesign PART 3,
+   * approved mockup `ingles-escritorio/index.html`): the mockup's layout
+   * switches from the desk (widgets/folders/greeting/dock, absolutely
+   * positioned over a two-column grid) to a stacked phone layout at
+   * `max-width: 1100px` — a value the standard Tailwind breakpoints
+   * (`md`/`lg`/`xl`) do not land on. A `--breakpoint-*` token generates BOTH
+   * `desk:` (min-width: 1100px) and `max-desk:` (max-width, just under it)
+   * variants, so the hub's own markup never hand-rolls `min-[1100px]:`. */
+  --breakpoint-desk: 1100px;
 }
 
 /* Control heights and the card padding rhythm are plain custom properties,
@@ -324,67 +351,78 @@
   --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
-/* Light, warm, cheerful — Inglés only. Values pre-computed for WCAG; see the
- * token table in the feature's own notes for each ratio. */
+/* White desk, grey scale — Inglés only. The warm cream "paper and ink" pass
+ * is retired; the owner's replacement is a white/grey desk the black-and-
+ * white character drawings sit on, with the full-colour `--color-pop-*`
+ * accents (see the `@theme` block above) doing the decoration work the warm
+ * cream used to. Values pre-computed for WCAG; ratios below are this pass's
+ * own numbers (re-run `ingles-theme-contrast.test.ts` after any edit here). */
 [data-theme='ingles'] {
   color-scheme: light;
 
-  --background: #fff8ec;
-  --foreground: #2a2118;
+  --background: #f3f4f6;
+  --foreground: #1c1c1e;
   --card: #ffffff;
-  --card-foreground: #2a2118;
+  --card-foreground: #1c1c1e;
   --popover: #ffffff;
-  --popover-foreground: #2a2118;
+  --popover-foreground: #1c1c1e;
   --primary: #facc15;
-  --primary-foreground: #2a2118;
-  --secondary: #f3ead7;
-  --secondary-foreground: #2a2118;
-  --muted: #f3ead7;
-  --muted-foreground: #6b5b45;
+  --primary-foreground: #1c1c1e;
+  --secondary: #e9ebee;
+  --secondary-foreground: #1c1c1e;
+  --muted: #e9ebee;
+  --muted-foreground: #5f636a;
   /* Collapsed onto --muted-foreground: Inglés never distinguished the
    * zinc-300/zinc-400 steps call sites used to reach for directly (just two
    * shades an author reached for, never semantically distinct here) — see
    * that token's own note in the dark `:root`/`.dark` blocks above. */
-  --muted-foreground-subtle: #6b5b45;
-  --accent: #f3ead7;
-  --accent-foreground: #2a2118;
-  --destructive: #d5361d;
+  --muted-foreground-subtle: #5f636a;
+  --accent: #e9ebee;
+  --accent-foreground: #1c1c1e;
+  --destructive: #c8371f;
   --destructive-foreground: #ffffff;
-  --success: #0b7a54;
+  --success: #1e7d47;
   /* The quiz "correct answer" accent (border/wash-background) and its paired
-   * text/icon tone both collapse onto the SAME warm teal ink here — Inglés's
-   * one "correct!" colour — unlike dark, where the fill is a richer green and
-   * the paired text is a lighter mint (see the dark blocks' own note). These
-   * used to be the raw `emerald-500`/`emerald-300` steps. */
-  --success-strong: #0b7a54;
-  --success-strong-foreground: #0b7a54;
-  /* The hint-lightbulb-icon tone: same ink as `--color-accent-ink` on this
-   * scope (used to be the raw `amber-400` step — see the dark blocks' own
-   * note for why it is still its own role rather than reusing accent-ink). */
-  --hint: #7a6200;
-  --border: #eadfc8;
-  --input: #9a8a6e;
-  --ring: #1c7ed6;
+   * text/icon tone both collapse onto the SAME green ink here — Inglés's one
+   * "correct!" colour — unlike dark, where the fill is a richer green and the
+   * paired text is a lighter mint (see the dark blocks' own note). These used
+   * to be the raw `emerald-500`/`emerald-300` steps. */
+  --success-strong: #1e7d47;
+  --success-strong-foreground: #1e7d47;
+  /* The hint-lightbulb-icon tone: a dark amber ink, legible on both white and
+   * the grey desk (used to be the raw `amber-400` step — see the dark
+   * blocks' own note for why it is still its own role rather than reusing
+   * accent-ink). */
+  --hint: #8a6400;
+  --border: #dcdfe3;
+  /* Spec starting value (#8b9097) clears 3:1 on #ffffff (3.21:1) but falls
+   * just short on the #f3f4f6 desk background (2.92:1); darkened to #888d94
+   * (same blue-grey hue) so the one token clears 3:1 on BOTH surfaces
+   * (3.04:1 on background, 3.34:1 on card). */
+  --input: #888d94;
+  --ring: #1f78b4;
 
-  --color-surface: #fff8ec;
+  --color-surface: #f3f4f6;
   --color-surface-soft: #ffffff;
-  --color-surface-muted: #f3ead7;
-  --color-platinum: #2a2118;
-  --color-accent-ink: #7a6200;
-  --color-accent-ink-hover: #665100;
+  --color-surface-muted: #e9ebee;
+  --color-platinum: #1c1c1e;
+  --color-accent-ink: #1b6fa8;
+  --color-accent-ink-hover: #155a89;
   --color-field: #ffffff;
-  --color-field-border: #9a8a6e;
-  --color-field-border-hover: #6b5b45;
-  --color-field-ring: rgb(28 126 214 / 0.4);
-  --color-glass-ring: rgb(42 33 24 / 0.1);
-  --color-glass-bg: rgb(255 255 255 / 0.6);
-  --color-canvas-dot: rgb(42 33 24 / 0.08);
+  --color-field-border: #888d94;
+  --color-field-border-hover: #5f636a;
+  --color-field-ring: rgb(31 120 180 / 0.4);
+  --color-glass-ring: rgb(28 28 30 / 0.1);
+  --color-glass-bg: rgb(255 255 255 / 0.7);
+  --color-canvas-dot: rgb(28 28 30 / 0.08);
 
-  /* Shadows on light: warm and soft, never black (owner spec). */
-  --shadow-elevation-1: 0 1px 2px 0 rgb(42 33 24 / 0.12);
-  --shadow-elevation-2: 0 4px 12px -2px rgb(42 33 24 / 0.16);
-  --shadow-elevation-3: 0 12px 32px -4px rgb(42 33 24 / 0.2);
-  --shadow-floating: 0 8px 24px -6px rgb(42 33 24 / 0.18), 0 2px 8px -2px rgb(42 33 24 / 0.14);
+  /* Shadows on light: neutral and layered like iOS widget material — a
+   * hairline ring plus soft, wide, low-opacity drop shadows. Never black,
+   * never hard (owner spec). */
+  --shadow-elevation-1: 0 0 0 0.5px rgb(28 28 30 / 0.06), 0 1px 2px rgb(28 28 30 / 0.04);
+  --shadow-elevation-2: 0 0 0 0.5px rgb(28 28 30 / 0.07), 0 6px 16px -4px rgb(28 28 30 / 0.1);
+  --shadow-elevation-3: 0 0 0 0.5px rgb(28 28 30 / 0.08), 0 12px 28px -6px rgb(28 28 30 / 0.12);
+  --shadow-floating: 0 0 0 0.5px rgb(28 28 30 / 0.08), 0 10px 28px -6px rgb(28 28 30 / 0.12), 0 2px 8px -2px rgb(28 28 30 / 0.08);
 }
 
 /* `sky-*`/`violet-*` are HubCard's own decorative tone pair (two Inglés hub
@@ -631,6 +669,93 @@ h3 {
   }
 }
 
+/* --- Inglés desk glass material ("desktop" redesign PART 3) -------------
+ * iOS-widget-style frosted glass, ported from the approved mockup
+ * (`ingles-escritorio/index.html`'s `.widget`/`.dock`) near byte-for-byte:
+ * a two-stop white gradient (not a flat tint — `.glass-floating` above is
+ * flat, which read noticeably flatter/duller side-by-side with the
+ * mockup), a strong blur+saturate, a hairline light top edge plus a faint
+ * ink ring, and two soft/wide/low-opacity shadow layers — never a hard
+ * black shadow (owner spec: "iOS-level delicacy").
+ *
+ * Reusable: today's two widgets (`DeskClockWidget.astro`,
+ * `DeskCalendarWidget.astro`) and the levels dock (`index.astro`) all share
+ * this ONE class, and the weather/player widgets due in PART 4 reuse it
+ * unchanged. Deliberately its own class rather than folded into
+ * `--color-glass-bg` (a single flat colour, used elsewhere for a SOLID
+ * `background-color`) — this material is a two-stop GRADIENT plus its own
+ * shadow stack, which a single custom property cannot express. */
+.ingles-glass {
+  position: relative;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.78) 0%, rgb(246 247 249 / 0.62) 100%);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 0.95),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.55),
+    0 0 0 0.5px rgb(28 28 30 / 0.07),
+    0 1px 2px rgb(28 28 30 / 0.04),
+    0 10px 28px -6px rgb(28 28 30 / 0.12);
+}
+
+@supports (corner-shape: squircle) {
+  .ingles-glass {
+    border-radius: 34px;
+    corner-shape: squircle;
+  }
+}
+
+/* People who ask the OS for less transparency get a solid widget (same
+ * fallback posture as `.glass-floating`'s `@supports not` block above, keyed
+ * off the OS preference instead since `backdrop-filter` support itself is
+ * nearly universal now). */
+@media (prefers-reduced-transparency: reduce) {
+  .ingles-glass {
+    background: var(--color-surface-soft);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* --- Desk calendar widget cells ("desktop" redesign PART 3) --------------
+ * Plain selectors, not Tailwind utilities: `@lib/ui/deskWidgets.ts` injects
+ * the day grid's `<td>`/`<span>` cells as a raw HTML string at runtime,
+ * which Tailwind's source-text JIT scanner never sees. */
+#desk-calendar td {
+  padding: 1px 0;
+}
+
+.ingles-calendar-today {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--foreground);
+  color: var(--card);
+  font-weight: 700;
+}
+
+/* --- Draggable desk widgets ("desktop" redesign PART 4, `@lib/ui/deskDrag`)
+ * `z-index` only takes effect once `deskDrag` switches a widget to
+ * `position: absolute` (it is a no-op on the normal grid-flow item every
+ * widget starts as) — this is what then keeps every widget rendering ABOVE
+ * the centred greeting text, so the frosted glass shows over the title the
+ * instant a widget is dragged across it. `.is-dragging` (toggled for the
+ * duration of a drag only) bumps both further, matching the approved
+ * mockup's own `.desk.free .widget.dragging` treatment. */
+[data-desk-widget] {
+  z-index: 2;
+}
+
+[data-desk-widget].is-dragging {
+  z-index: 4;
+  box-shadow:
+    0 2px 4px rgb(28 28 30 / 0.08),
+    0 18px 40px rgb(28 28 30 / 0.14);
+}
+
 /* --- Dotted work-surface background (canvas polish) ----------------------
  * A subtle Figma/Miro-style dot grid for every canvas VIEWPORT — the
  * practice player's worksheet camera (desktop AND mobile) and the editor's
@@ -694,43 +819,95 @@ html[data-chrome-js][data-chrome-mode='site'][data-footer-visible='false'] [data
   pointer-events: none;
 }
 
-/* --- INGLÉS "blocks" chrome (owner spec 2026-10-05) ----------------------- *
- * Both bars are ordinary blocks in normal document flow — NEVER a floating/
- * fixed overlay (that was last night's rule, SITE-only now, above) — that
- * collapse to ZERO height (no space taken) and expand IN FLOW, pushing
- * surrounding content, via the CSS grid "0fr/1fr" animated-height technique:
- * the bar itself is the grid container (`grid-template-rows` is what
- * animates) and `[data-chrome-collapse]` is its ONE child spanning the row,
- * clipped while collapsing so nothing of its content is reachable/visible
- * at zero height. `Header.astro`/`Footer.astro`'s own INGLÉS markup is what
- * carries that one wrapper — see those files' own comments. */
-html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header],
-html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-footer] {
+/* --- INGLÉS "blocks" chrome (owner spec 2026-10-05; narrowed to the HEADER
+ * ONLY, non-hub, by the "desktop" redesign PART 1 scope extension, owner
+ * spec 2026-10-06, item C — "clean footer scroll") -------------------------
+ * The header is an ordinary block in normal document flow — NEVER a
+ * floating/fixed overlay (that was last night's rule, SITE-only now, above)
+ * — that collapses to ZERO height (no space taken) and expands IN FLOW,
+ * pushing surrounding content, via the CSS grid "0fr/1fr" animated-height
+ * technique: the bar itself is the grid container (`grid-template-rows` is
+ * what animates) and `[data-chrome-collapse]` is its ONE child spanning the
+ * row, clipped while collapsing so nothing of its content is
+ * reachable/visible at zero height. `Header.astro`'s own INGLÉS markup is
+ * what carries that one wrapper — see that file's own comment.
+ *
+ * The FOOTER no longer has any rule here at all (item C): it is always in
+ * normal flow, at its ordinary height, in both Inglés sub-modes — no grid,
+ * no collapse, no `[data-chrome-collapse]` wrapper (`Footer.astro` no
+ * longer renders one). `[data-header-visible='true']` already covers the
+ * hub too: `chromeVisibility.ts`'s `createInitialChromeState` starts (and
+ * keeps) it `true` there, so this same rule is what keeps the hub's header
+ * expanded — no separate hub selector needed. */
+html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 220ms var(--ease-control);
 }
-html[data-chrome-js][data-chrome-mode='ingles'][data-header-visible='true'] [data-chrome-header],
-html[data-chrome-js][data-chrome-mode='ingles'][data-footer-visible='true'] [data-chrome-footer] {
+html[data-chrome-js][data-chrome-mode='ingles'][data-header-visible='true'] [data-chrome-header] {
   grid-template-rows: 1fr;
 }
 html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
   overflow: hidden;
 }
+/* The hub's header never collapses, so nothing needs clipping there — and
+ * clipping would cut the logo's "Regresar a ChuyoCode" tooltip, which hangs
+ * below the header. */
+html[data-chrome-hub][data-chrome-js][data-chrome-mode='ingles'] [data-chrome-collapse] {
+  overflow: visible;
+}
+
+/* The desk widgets' frosted glass (`.ingles-glass`) only blurs what is behind
+ * it when no ancestor is a "backdrop root". `<main>`'s view-transition-name
+ * (from its `transition:animate`) is one, and so is the scroll-reveal
+ * `.reveal` wrapper (which the hub no longer uses): with either in place
+ * Chrome shows the greeting SHARP through the widgets instead of blurred.
+ * On the hub only, `<main>` drops its name and page changes use the root
+ * cross-fade instead. */
+html[data-chrome-hub] main {
+  view-transition-name: none;
+}
 
 /* The one INGLÉS header transition that must NOT animate: collapsing once it
  * has fully scrolled out of view, compensated in the same tick by a matching
  * scroll adjustment so nothing visibly jumps (`chromeVisibility.ts`'s own
- * `measureAndDispatchScroll`, which sets/clears this attribute). */
+ * `measureAndDispatchScroll`, which sets/clears this attribute). Never fires
+ * on the hub — its header never collapses (item C) — so this is a no-op
+ * there in practice. */
 html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome-instant] {
   transition-duration: 0ms;
+}
+
+/* --- Inglés hub: clean footer scroll + scroll-snap ("desktop" redesign
+ * PART 1 scope extension, owner spec 2026-10-06, item C) -------------------
+ * `[data-chrome-hub]` is server-rendered by `BaseLayout.astro` (no JS
+ * dependency — see that file's own header) — true ONLY for the hub, whose
+ * content is one screen tall. Two snap points at the page's own natural
+ * scroll extremes: `[data-chrome-header]` (start) is the TOP (the hub's own
+ * header + one-screen content, both always visible there); `[data-chrome-
+ * footer]` (end) is the BOTTOM (the footer fully visible) — "si se baja se
+ * mira completo, si se sube se mira toda la pantalla" (owner's words).
+ * `proximity`, not `mandatory`: a gentle rest at either end, never a forced
+ * jump mid-scroll. Deliberately scoped to the hub alone — a long Inglés
+ * page (the practice player, the editor, a long activity list) must never
+ * fight a visitor trying to read partway down it. Reduced motion drops the
+ * snap entirely, in favor of plain, un-snapped scrolling. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-chrome-hub] {
+    scroll-snap-type: y proximity;
+  }
+  html[data-chrome-hub] [data-chrome-header] {
+    scroll-snap-align: start;
+  }
+  html[data-chrome-hub] [data-chrome-footer] {
+    scroll-snap-align: end;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-chrome-js] [data-chrome-header],
   html[data-chrome-js] [data-chrome-footer],
-  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header],
-  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-footer] {
+  html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header] {
     transition: none;
   }
 }

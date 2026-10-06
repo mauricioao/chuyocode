@@ -87,14 +87,28 @@ describe('GET /[lang]/creditos — license notices', () => {
     }
   });
 
-  it('names Open Peeps / Open Doodles as CC0 and not yet in use', async () => {
+  it('credits MET Norway for the weather widget, with a link to its terms of service', async () => {
+    for (const lang of ['es', 'en'] as const) {
+      const res = await render(`https://chuyocode.test/${lang}/creditos`, {
+        params: { lang },
+        locals: { lang },
+      });
+      const html = await res.text();
+      expect(html).toContain('MET Norway');
+      expect(html).toContain('CC BY 4.0');
+      expect(html).toContain('href="https://api.met.no/doc/TermsOfService"');
+    }
+  });
+
+  it('names Open Peeps / Open Doodles as CC0, with Open Peeps now in use for the Inglés desk characters', async () => {
     const res = await render('https://chuyocode.test/es/creditos', {
       params: { lang: 'es' },
       locals: { lang: 'es' },
     });
     const html = await res.text();
     expect(html).toContain('CC0');
-    expect(html).toContain('Todavía no se usan en el sitio');
+    expect(html).toContain('Paco, Luna, Mia, Bruno y Tobi');
+    expect(html).toContain('Open Doodles todavía no se usa en el sitio');
   });
 });
 

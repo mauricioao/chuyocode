@@ -55,20 +55,30 @@
  *
  * INGLÉS "BLOCKS" VARIANT (owner spec 2026-10-05, town.com-style): the
  * `ingles` prop switches this SAME component to a second, independent
- * markup branch below — a row of separate bordered/rounded blocks (logo,
- * nav, account; mobile collapses the nav block into the hamburger's own
- * block) instead of one full-width dark bar — rendered ONLY by
- * `BaseLayout.astro` when `theme="ingles"`, and only ever inside the page's
- * own light `[data-theme="ingles"]` scope (no `[data-theme="brand"] dark`
- * wrapper there — see that file's own header). Every OTHER page keeps the
- * original branch below, byte-for-byte unchanged. Both branches share
- * `data-chrome-header` (and the hamburger's `#mobile-menu-button`/
- * `#mobile-menu` ids, and the toggle script at the bottom), so
- * `chromeVisibility.ts` and the mobile-menu stub need no branching of their
- * own — only the CSS consequence of `data-header-visible` differs by mode
- * (`global.css`'s own `[data-chrome-mode]` split).
+ * markup branch below — rendered ONLY by `BaseLayout.astro` when
+ * `theme="ingles"`, and only ever inside the page's own light
+ * `[data-theme="ingles"]` scope (no `[data-theme="brand"] dark` wrapper
+ * there — see that file's own header). Every OTHER page keeps the original
+ * branch below, byte-for-byte unchanged. Both branches share
+ * `data-chrome-header` and the hamburger toggle script at the bottom (a
+ * no-op in Inglés mode — see PART 1 below).
+ *
+ * PART 1 of the "desktop" redesign (owner spec 2026-10-06): the Inglés
+ * branch dropped its own Libros/Noticias/Inglés nav block entirely (desktop
+ * AND mobile) — it is a `theme="ingles"` page already, so that nav was
+ * always "you are here" — and the bordered/padded box that used to wrap the
+ * account control. What is left is just the unchanged logo block and the
+ * bare `UserMenu` island (avatar trigger, or the "Ingresar" pill signed
+ * out), sitting directly in the header row. With no nav links left, there is
+ * nothing for a hamburger to hold either, so this branch renders no
+ * `#mobile-menu-button`/`#mobile-menu` at all; the toggle script at the
+ * bottom still looks for those ids unconditionally (shared with the SITE
+ * branch below, which still has them) and simply no-ops when they are
+ * absent.
  */
 import { UI_LABELS, DEFAULT_LANG, type Lang } from '@lib/i18n';
+import { isInglesHubPath } from '@lib/backNavigation';
+import { ICON_TOOLTIP_BUBBLE_CLASS } from '@lib/ui/iconTooltip';
 import UserMenu from '@components/islands/UserMenu';
 
 interface Props {
@@ -82,6 +92,24 @@ const { lang = DEFAULT_LANG, ingles = false } = Astro.props;
 const labels = UI_LABELS[lang].nav;
 const base = `/${lang}`;
 const inglesHref = `${base}/ingles`;
+
+// PART 1 scope extension (owner spec 2026-10-06, item B): only the HUB
+// itself splits its logo block into two separate links (see that block's
+// own comment below) — every other Inglés page keeps today's single link.
+// `isInglesHubPath` is the SAME hub-path check `backNavigation.ts` uses for
+// the back button, reused here rather than duplicated.
+const isHub = ingles && isInglesHubPath(Astro.url.pathname);
+const backToChuyoCodeLabel = UI_LABELS[lang].english.hub.backToChuyoCode;
+
+// "Desktop" redesign PART 4 (owner spec 2026-10-06): the "Ordenar escritorio"/
+// "Arrange desktop" icon, HUB ONLY — `@lib/ui/deskDrag`'s own script (the
+// hub page's) un-hides it once a widget has actually been moved, and hides
+// it again on "desk:arrange-reset" (see the script block at this file's
+// bottom, and `@lib/ui/deskArrange`'s own header for the event contract).
+// Rendered `hidden` by default so there is no flash of it showing before
+// that script runs, and so a visitor who never dragged anything never sees
+// it at all.
+const arrangeDesktopLabel = UI_LABELS[lang].english.hub.arrangeDesktop;
 
 // Computed here (server-side) so `UserMenu` — hydrated on EVERY page — only
 // ever receives its own small slice of copy as a plain prop, never the full
@@ -108,111 +136,128 @@ const navLinks = [
      of content, which is what that same CSS clips to zero height. */
   <header data-chrome-header transition:persist transition:animate="none">
     <div data-chrome-collapse>
-      <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+      {/* "Desktop" redesign PART 3 (owner spec 2026-10-06): full width, no
+          `max-w-6xl` centered panel — the same ~28px/16px side gutters as
+          the desk itself (`index.astro`'s own `px-4 desk:px-7`), so the
+          header's logo/account row lines up with the desk's own left/right
+          edges on every Inglés page, not just the hub. */}
+      <div class="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-4 desk:px-7">
         {/* Logo block: the word "Inglés" (display font) over a small "by
             ChuyoCode" byline, standing in for the owner's own AI-generated
             lettering until that asset exists — see the comment right above
-            the fallback <span> below for the one-line swap. Links to the
-            Inglés hub; `aria-label` fixes the accessible name regardless of
-            which of the two (image or fallback) is currently rendered. */}
-        <a
-          href={inglesHref}
-          aria-label="Inglés by ChuyoCode"
-          class="flex flex-none flex-col items-start gap-1 rounded-card border border-border bg-card px-4 py-2 shadow-elevation-1 transition-theme duration-theme hover:border-accent-ink"
-        >
-          {/* IMAGE SLOT — once the owner drops the real lettering at
-              `/images/brand/ingles-wordmark-v1.webp`, swap the fallback
-              <span> below for:
-                <img src="/images/brand/ingles-wordmark-v1.webp" alt="Inglés" class="h-7 w-auto sm:h-8" />
-              — a one-line change, nothing else in this block depends on it. */}
-          <span class="font-display text-2xl leading-none font-extrabold tracking-tight text-foreground sm:text-3xl">
-            Inglés
-          </span>
-          <span class="flex items-center gap-1 text-[11px] leading-none font-medium text-muted-foreground">
-            by
-            <img src="/chuyocode.svg" alt="" class="h-3 w-3" />
-            ChuyoCode
-          </span>
-        </a>
+            the fallback <span> below for the one-line swap.
+            PART 1 scope extension (owner spec 2026-10-06, item B): on the
+            HUB only, the byline becomes its OWN link back to the ChuyoCode
+            home — a visitor already on the hub has no other one-click way
+            back. Two links means this block can no longer be a single outer
+            `<a>` (nested anchors are invalid HTML), so the hub renders the
+            same visual block as a plain `<div>` wrapping two separate
+            links instead; every other Inglés page keeps the original single
+            `<a>`, byline as plain text, unchanged byte-for-byte. */}
+        {isHub ? (
+          <div class="flex flex-none flex-col items-start gap-1 rounded-card border border-border bg-card px-4 py-2 shadow-elevation-1 transition-theme duration-theme">
+            <a
+              href={inglesHref}
+              aria-label="Inglés"
+              class="font-display text-2xl leading-none font-extrabold tracking-tight text-foreground transition-theme duration-theme hover:text-accent-ink sm:text-3xl"
+            >
+              Inglés
+            </a>
+            {/* "by ChuyoCode" — soft hover (color + underline, no motion) and
+                the same hover/focus tooltip pattern the practice-page icon
+                buttons use (`@lib/ui/iconTooltip`'s `ICON_TOOLTIP_BUBBLE_CLASS`):
+                `group relative` here is what that bubble anchors to and
+                reveals from. `aria-label` carries the same text as the
+                tooltip (never only `title`, which some platforms' a11y trees
+                ignore) and `aria-describedby` wires the two together without
+                a screen reader hearing the name twice. */}
+            <a
+              href={`${base}/`}
+              aria-label={backToChuyoCodeLabel}
+              aria-describedby="header-back-to-chuyocode-tooltip"
+              class="group relative flex items-center gap-1 text-[11px] leading-none font-medium text-muted-foreground transition-colors duration-theme hover:text-accent-ink hover:underline"
+            >
+              by
+              <img src="/chuyocode.svg" alt="" class="h-3 w-3" />
+              ChuyoCode
+              <span
+                role="tooltip"
+                id="header-back-to-chuyocode-tooltip"
+                class={ICON_TOOLTIP_BUBBLE_CLASS}
+              >
+                {backToChuyoCodeLabel}
+              </span>
+            </a>
+          </div>
+        ) : (
+          <a
+            href={inglesHref}
+            aria-label="Inglés by ChuyoCode"
+            class="flex flex-none flex-col items-start gap-1 rounded-card border border-border bg-card px-4 py-2 shadow-elevation-1 transition-theme duration-theme hover:border-accent-ink"
+          >
+            {/* IMAGE SLOT — once the owner drops the real lettering at
+                `/images/brand/ingles-wordmark-v1.webp`, swap the fallback
+                <span> below for:
+                  <img src="/images/brand/ingles-wordmark-v1.webp" alt="Inglés" class="h-7 w-auto sm:h-8" />
+                — a one-line change, nothing else in this block depends on it. */}
+            <span class="font-display text-2xl leading-none font-extrabold tracking-tight text-foreground sm:text-3xl">
+              Inglés
+            </span>
+            <span class="flex items-center gap-1 text-[11px] leading-none font-medium text-muted-foreground">
+              by
+              <img src="/chuyocode.svg" alt="" class="h-3 w-3" />
+              ChuyoCode
+            </span>
+          </a>
+        )}
 
-        {/* Nav block: Libros · Noticias · Inglés, desktop only (mobile gets
-            the same three links inside the hamburger's own block panel
-            below). This render ONLY ever happens on an Inglés page (the
-            `ingles` prop), so "Inglés" is always the current section. */}
-        <nav
-          class="hidden items-center gap-1 rounded-card border border-border bg-card px-2 py-2 md:flex"
-          aria-label="Primary"
-        >
-          {
-            navLinks.map((link) => {
-              const current = link.href === inglesHref;
-              return (
-                <a
-                  href={link.href}
-                  aria-current={current ? 'page' : undefined}
-                  class={[
-                    'rounded-pill px-3 py-1.5 text-sm font-medium transition-theme duration-theme',
-                    current ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent-ink',
-                  ].join(' ')}
-                >
-                  {link.label}
-                </a>
-              );
-            })
-          }
-        </nav>
-
-        {/* Account block — same `UserMenu` island as the SITE branch. */}
-        <div class="flex flex-none items-center gap-3 rounded-card border border-border bg-card px-3 py-2 shadow-elevation-1" data-header-actions>
+        {/* Account block — same `UserMenu` island as the SITE branch. PART 1
+            of the owner-approved "desktop" redesign (2026-10-06) drops the
+            Libros/Noticias/Inglés nav (both the desktop block above and the
+            mobile hamburger panel it used to share with the account block)
+            and the bordered/padded box around the account control itself —
+            the avatar trigger (signed in) or the "Ingresar" pill (signed
+            out) now sits directly in the header row, with no surrounding
+            card. No nav links are left for a hamburger to hold on an Inglés
+            page, so there is no mobile menu button/panel in this branch
+            either; `UserMenu`'s own dropdown already works (and is already
+            reachable) at every breakpoint on its own, portaled to
+            `document.body` — see that component's own header. */}
+        <div class="flex flex-none items-center gap-1" data-header-actions>
+          {isHub && (
+            /* "Ordenar escritorio"/"Arrange desktop" — a minimal ghost icon
+               button (no border/background at rest, matching the mockup's
+               own `.icon-btn`), left of the account control. `hidden` until
+               `@lib/ui/deskDrag` finds a saved widget position; `max-desk:hidden`
+               is a defensive belt-and-suspenders (phones never run the drag
+               system at all, so the button should never show there even if
+               something else forgot to check). */
+            <button
+              type="button"
+              id="desk-arrange-button"
+              hidden
+              aria-label={arrangeDesktopLabel}
+              aria-describedby="header-arrange-tooltip"
+              class="group relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-theme hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 max-desk:hidden"
+            >
+              {/* Phosphor "SquaresFour", regular weight, 256×256 viewBox —
+                  path copied verbatim from
+                  `node_modules/@phosphor-icons/react/dist/defs/SquaresFour.es.js`
+                  (MIT licensed, credited on `/[lang]/creditos`), same
+                  "copy the geometry, skip the React import" posture
+                  `@lib/skillIcons.ts` already documents for its own icons —
+                  this header branch renders no React at all today. */}
+              <svg viewBox="0 0 256 256" class="h-[19px] w-[19px]" aria-hidden="true" fill="currentColor">
+                <path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z" />
+              </svg>
+              <span role="tooltip" id="header-arrange-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {arrangeDesktopLabel}
+              </span>
+            </button>
+          )}
           <UserMenu lang={lang} labels={userMenuLabels} client:load />
         </div>
-
-        {/* Mobile menu-button block (replaces the nav block below `md:`). */}
-        <button
-          type="button"
-          id="mobile-menu-button"
-          class="inline-flex flex-none items-center justify-center rounded-card border border-border bg-card p-2 text-muted-foreground shadow-elevation-1 transition-theme duration-theme hover:text-accent-ink md:hidden"
-          aria-label="Toggle navigation menu"
-          aria-controls="mobile-menu"
-          aria-expanded="false"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
       </div>
-
-      {/* Mobile menu panel — styled as its OWN block, same radius/border/
-          surface as the row above (owner spec: "mobile menu panel styled
-          the same way"). */}
-      <nav
-        id="mobile-menu"
-        class="mx-4 mb-4 hidden flex-col gap-2 rounded-card border border-border bg-card px-4 py-3 md:hidden"
-        aria-label="Mobile"
-      >
-        {
-          navLinks.map((link) => {
-            const current = link.href === inglesHref;
-            return (
-              <a
-                href={link.href}
-                aria-current={current ? 'page' : undefined}
-                class={['py-1 text-sm font-medium', current ? 'text-accent-ink' : 'text-muted-foreground hover:text-accent-ink'].join(' ')}
-              >
-                {link.label}
-              </a>
-            );
-          })
-        }
-        <div id="mobile-menu-account" class="flex flex-col gap-2 border-t border-border pt-2" />
-      </nav>
     </div>
   </header>
 ) : (
@@ -321,4 +366,60 @@ const navLinks = [
       btn.setAttribute('aria-expanded', String(open));
     });
   })();
+</script>
+
+<script>
+  // "Ordenar escritorio"/"Arrange desktop" icon wiring ("desktop" redesign
+  // PART 4) — a regular bundled module (not `is:inline`) because it needs
+  // `@lib/deskDragMath`/`@lib/ui/deskArrange`'s real imports; see this
+  // file's own header for why the button itself is hub-only and starts
+  // `hidden`, and `@lib/ui/deskArrange`'s header for the event contract
+  // this script shares with `@lib/ui/deskDrag` (the hub page's own script).
+  import { DESK_DRAG_STORAGE_KEY, parseStoredPositions } from '@lib/deskDragMath';
+  import { DESK_ARRANGE_VISIBILITY_EVENT, dispatchArrangeReset } from '@lib/ui/deskArrange';
+
+  function isDesktop(): boolean {
+    return typeof matchMedia === 'function' && matchMedia('(min-width: 1100px)').matches;
+  }
+
+  function hasStoredPositions(): boolean {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(DESK_DRAG_STORAGE_KEY);
+    } catch {
+      return false;
+    }
+    return Object.keys(parseStoredPositions(raw)).length > 0;
+  }
+
+  function run(): void {
+    const button = document.getElementById('desk-arrange-button');
+    // No button on this page (not the hub), or already wired by an earlier
+    // run against this exact (persisted) node — `transition:persist` can
+    // keep the SAME button element across a hub-to-hub navigation.
+    if (!button || button.dataset.wired === 'true') return;
+    button.dataset.wired = 'true';
+
+    button.hidden = !(isDesktop() && hasStoredPositions());
+
+    document.addEventListener(DESK_ARRANGE_VISIBILITY_EVENT, (event) => {
+      const visible = (event as CustomEvent<{ visible: boolean }>).detail.visible;
+      button.hidden = !(isDesktop() && visible);
+    });
+
+    button.addEventListener('click', () => {
+      dispatchArrangeReset(document);
+      button.hidden = true;
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  // Re-run after a client-side navigation — the button only exists on the
+  // hub, and `transition:persist`'s header-matching can swap in a fresh
+  // (unwired) button node when navigating TO the hub from elsewhere.
+  document.addEventListener('astro:page-load', run);
 </script>
