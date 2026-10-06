@@ -4,14 +4,40 @@
  * (mocked), same posture as `DuplicateActivityButton.test.tsx`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ProfilePasswordForm from './ProfilePasswordForm';
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
+
+function scriptTags(): NodeListOf<HTMLScriptElement> {
+  return document.head.querySelectorAll('script[src*="challenges.cloudflare.com"]');
+}
+
+/** The slice of `turnstile.render`'s options this test suite reads. */
+interface FakeRenderOptions {
+  sitekey: string;
+  callback: (token: string) => void;
+  'expired-callback': () => void;
+  'error-callback': () => void;
+  theme: string;
+  language: string;
+}
+
+/** Install a `window.turnstile` stub; the loader then skips the script tag. */
+function stubTurnstileGlobal() {
+  const render = vi.fn<(container: HTMLElement, options: FakeRenderOptions) => string>(
+    () => 'widget-1',
+  );
+  const remove = vi.fn();
+  const reset = vi.fn();
+  (window as unknown as { turnstile?: unknown }).turnstile = { render, remove, reset };
+  return { render, remove, reset };
+}
 
 function fillAndSubmit(current: string, next: string, confirm: string) {
   fireEvent.change(screen.getByTestId('profile-current-password'), { target: { value: current } });
@@ -118,6 +144,109 @@ describe('ProfilePasswordForm — submit', () => {
     fillAndSubmit('old-password1', 'new-password1', 'new-password1');
 
     expect(await screen.findByTestId('profile-password-error')).toBeTruthy();
+  });
+});
+
+describe('ProfilePasswordForm — Turnstile, no site key configured', () => {
+  it('renders no widget and submits with no captchaToken field, exactly as before', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ProfilePasswordForm lang="es" />);
+
+    expect(screen.queryByTestId('turnstile-widget')).toBeNull();
+    expect(scriptTags()).toHaveLength(0);
+    expect(screen.getByTestId('profile-password-save').hasAttribute('disabled')).toBe(false);
+
+    fillAndSubmit('old-password1', 'new-password1', 'new-password1');
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('captchaToken');
+  });
+});
+
+describe('ProfilePasswordForm — Turnstile, site key configured', () => {
+  it('renders the widget, holds submit disabled until a token arrives, and sends the token', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ProfilePasswordForm lang="es" />);
+
+    expect(scriptTags()).toHaveLength(1);
+    expect(screen.getByTestId('profile-password-save').hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('Esperando verificación…')).toBeTruthy();
+
+    const { render: renderMock } = stubTurnstileGlobal();
+    scriptTags()[0].dispatchEvent(new Event('load'));
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('profile-password-save').hasAttribute('disabled')).toBe(false),
+    );
+
+    fillAndSubmit('old-password1', 'new-password1', 'new-password1');
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).captchaToken).toBe('tok-abc');
+  });
+
+  it('resets the widget after a failed attempt (tokens are single-use)', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: false, error: 'invalid_current_password' }) }),
+    );
+    render(<ProfilePasswordForm lang="es" />);
+
+    const { render: renderMock, reset: resetMock } = stubTurnstileGlobal();
+    scriptTags()[0].dispatchEvent(new Event('load'));
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('profile-password-save').hasAttribute('disabled')).toBe(false),
+    );
+
+    fillAndSubmit('old-password1', 'new-password1', 'new-password1');
+
+    expect(await screen.findByTestId('profile-password-error')).toHaveProperty(
+      'textContent',
+      'La contraseña actual no es correcta.',
+    );
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith('widget-1'));
+    // Re-armed: submit is disabled again until a fresh token arrives.
+    expect(screen.getByTestId('profile-password-save').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('maps a captcha_failed server response to its own message, distinct from a wrong current password', async () => {
+    vi.stubEnv('PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: false, error: 'captcha_failed' }) }),
+    );
+    render(<ProfilePasswordForm lang="es" />);
+
+    const { render: renderMock } = stubTurnstileGlobal();
+    scriptTags()[0].dispatchEvent(new Event('load'));
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    act(() => {
+      renderMock.mock.calls[0][1].callback('tok-abc');
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('profile-password-save').hasAttribute('disabled')).toBe(false),
+    );
+
+    fillAndSubmit('old-password1', 'new-password1', 'new-password1');
+
+    expect(await screen.findByTestId('profile-password-error')).toHaveProperty(
+      'textContent',
+      'No pudimos verificar que eres una persona. Inténtalo de nuevo.',
+    );
   });
 });
 
