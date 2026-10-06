@@ -31,6 +31,16 @@
  * clicker (PageDown-only, no separate "reveal" button) run the whole class:
  * every press either shows something or moves on, never both at once.
  *
+ * START/RESTART LAND ON {@link PresentationState.startIndex} (owner feedback
+ * 2026-10-06, replacing the old "always 0"): `PresentationIsland` opens
+ * directly on the first content slide — the cover's title/level/count screen
+ * is still reachable via `prev` from there, it just is not where a
+ * presentation BEGINS anymore. `startIndex` is kept on state (not
+ * hardcoded in the reducer) so `restart` lands wherever the presentation
+ * actually started, rather than assuming it was always the cover — the
+ * one caller still using the plain default (`createPresentationState`
+ * with no third argument) keeps starting on the cover, unchanged.
+ *
  * Zero DOM, zero I/O — same posture as `canvasViewport.ts`'s camera: the
  * island only translates keyboard/pointer events and the deck's own shape
  * (from its own props) into actions here, so the actual state machine stays
@@ -46,6 +56,8 @@ export interface PresentationState {
   index: number;
   /** Whether the CURRENT content slide's reveal is showing. Always `false` on the cover/summary, and never flips true on a non-revealable slide. */
   revealed: boolean;
+  /** Where `start`/`restart` reset `index` to — see this module's own header. */
+  startIndex: number;
 }
 
 export type PresentationAction =
@@ -56,8 +68,11 @@ export type PresentationAction =
   | { type: 'restart' };
 
 /**
- * The initial state: the cover slide, nothing revealed. Used both as the
- * `useReducer` lazy-init result (via `{ type: 'start' }`) and directly by
+ * The initial state: nothing revealed, sitting on {@link PresentationState.startIndex}
+ * — the cover (`0`) by default, or the first content slide (`1`) when
+ * `startAtFirstContent` is true AND there is at least one content slide
+ * (owner feedback 2026-10-06 — see this module's own header). Used both as
+ * the `useReducer` lazy-init result (via `{ type: 'start' }`) and directly by
  * tests.
  *
  * `revealable` defaults to "every slide is revealable" when omitted or
@@ -68,11 +83,13 @@ export type PresentationAction =
 export function createPresentationState(
   slideCount: number,
   revealable?: readonly boolean[],
+  startAtFirstContent = false,
 ): PresentationState {
   const count = Math.max(0, slideCount);
   const flags =
     revealable && revealable.length === slideCount ? revealable.slice(0, count) : Array(count).fill(true);
-  return { slideCount: count, revealable: flags, index: 0, revealed: false };
+  const startIndex = startAtFirstContent && count > 0 ? 1 : 0;
+  return { slideCount: count, revealable: flags, index: startIndex, revealed: false, startIndex };
 }
 
 /** Is `state` sitting on the cover slide? */
@@ -117,7 +134,9 @@ export function presentationReducer(
   switch (action.type) {
     case 'start':
     case 'restart':
-      return state.index === 0 && !state.revealed ? state : { ...state, index: 0, revealed: false };
+      return state.index === state.startIndex && !state.revealed
+        ? state
+        : { ...state, index: state.startIndex, revealed: false };
 
     case 'reveal':
       if (!isRevealable(state) || state.revealed) return state;

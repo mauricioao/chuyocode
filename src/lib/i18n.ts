@@ -1082,6 +1082,11 @@ export const UI_LABELS = {
         worksheetCountMany: 'hojas',
         scanHint: 'Escanea el código para abrir esta actividad en el teléfono.',
         qrAlt: 'Código QR para abrir esta actividad en un teléfono',
+        // "Mostrar QR" control (owner feedback 2026-10-06): the QR moved
+        // from the old cover-only screen to an on-demand overlay, reachable
+        // from any slide via this button or the `Q` key.
+        showQr: 'Mostrar QR',
+        hideQr: 'Ocultar QR',
         summaryTitle: '¡Listo!',
         restart: 'Volver a empezar',
         prev: 'Anterior',
@@ -2254,6 +2259,8 @@ export const UI_LABELS = {
         worksheetCountMany: 'sheets',
         scanHint: 'Scan the code to open this activity on a phone.',
         qrAlt: 'QR code to open this activity on a phone',
+        showQr: 'Show QR',
+        hideQr: 'Hide QR',
         summaryTitle: 'All done!',
         restart: 'Start over',
         prev: 'Previous',

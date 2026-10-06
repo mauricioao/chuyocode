@@ -24,6 +24,7 @@ describe('createPresentationState', () => {
       revealable: [true, true, true],
       index: 0,
       revealed: false,
+      startIndex: 0,
     });
   });
 
@@ -40,6 +41,23 @@ describe('createPresentationState', () => {
   it('falls back to all-revealable when the given flags do not match the slide count', () => {
     expect(createPresentationState(3, [true]).revealable).toEqual([true, true, true]);
   });
+
+  // Owner feedback 2026-10-06: "Presentar" opens directly on the first
+  // content slide instead of the cover/QR screen.
+  describe('startAtFirstContent', () => {
+    it('starts on the first content slide (index 1), not the cover, when there is at least one', () => {
+      const s = createPresentationState(SLIDE_COUNT, undefined, true);
+      expect(s.index).toBe(1);
+      expect(s.startIndex).toBe(1);
+      expect(s.revealed).toBe(false);
+    });
+
+    it('falls back to the cover when there are no content slides at all', () => {
+      const s = createPresentationState(0, undefined, true);
+      expect(s.index).toBe(0);
+      expect(s.startIndex).toBe(0);
+    });
+  });
 });
 
 describe('presentationReducer — start / restart', () => {
@@ -52,6 +70,12 @@ describe('presentationReducer — start / restart', () => {
   it('is a no-op (same values) already sitting on the cover', () => {
     const cover = createPresentationState(SLIDE_COUNT);
     expect(presentationReducer(cover, { type: 'restart' })).toEqual(cover);
+  });
+
+  it('resets to the FIRST CONTENT slide, not the cover, when startIndex is 1', () => {
+    const started = createPresentationState(SLIDE_COUNT, undefined, true);
+    const summary = { ...started, index: SLIDE_COUNT + 1, revealed: false };
+    expect(presentationReducer(summary, { type: 'restart' })).toEqual(started);
   });
 });
 
