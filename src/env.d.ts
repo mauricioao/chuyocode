@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly AD_HMAC_SECRET: string;
   /** Public, build-time only. See `src/lib/turnstile.ts`'s header. */
   readonly PUBLIC_TURNSTILE_SITE_KEY: string;
+  /** Public, build-time only. See `src/lib/webAnalytics.ts`'s header. */
+  readonly PUBLIC_CF_WEB_ANALYTICS_TOKEN: string;
 }
 
 interface ImportMeta {

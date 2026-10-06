@@ -89,6 +89,7 @@ import {
   isNoindexPath,
 } from '@lib/seo';
 import { isInglesHubPath } from '@lib/backNavigation';
+import { getWebAnalyticsBeaconPayload } from '@lib/webAnalytics';
 
 interface Props {
   /** Active locale for the `<html lang>` attribute. */
@@ -195,6 +196,13 @@ const defaultAlternate = defaultHreflangAlternate(alternates);
 // search results — see `@lib/seo.ts#isNoindexPath` for the exact rule.
 const noindex = isNoindexPath(Astro.url.pathname);
 
+// Cloudflare Web Analytics (cookieless page views, launch "must"): `null`
+// while PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset, same inert-by-construction
+// posture as Turnstile/Sentry in this repo — see `@lib/webAnalytics`'s own
+// header. No script element renders, and no Cloudflare origin appears in
+// the page at all, until it is set at build time.
+const webAnalyticsBeacon = getWebAnalyticsBeaconPayload();
+
 /** `og:locale` per language (Facebook's `xx_YY` format). `es_PE`/`en_US`
  * mirror the locale strings this codebase already formats dates with
  * elsewhere (`legal/[page].astro`, `noticias/[slug].astro`). */
@@ -292,6 +300,30 @@ const faviconSvg =
     <meta name="twitter:description" content={metaDescription} />
     {ogImage && <meta name="twitter:image" content={ogImage} />}
     <slot name="head" />
+
+    {/* Cloudflare Web Analytics (cookieless page views, launch "must"):
+        rendered LAST in <head> — Cloudflare's own docs ask for this element
+        immediately before the closing head tag, which is only guaranteed by
+        placing it after `slot name="head"`, since a page can add its own
+        content there. `is:inline` keeps the element exactly as Cloudflare
+        documents it, untouched by Astro's own script processing/bundling —
+        same reasoning as the chrome-visibility script element above.
+
+        Rendered UNCONDITIONALLY, including on a `bare` presentation page
+        (see the `bare` prop doc above): this beacon has no dependency on
+        the chrome `bare` strips, and coupling page-view tracking to that
+        prop would add a second switch to reason about for no behavioral
+        gain. `webAnalyticsBeacon` is `null` (see `@lib/webAnalytics`) —
+        and this renders nothing at all, on EVERY page — until the owner
+        sets PUBLIC_CF_WEB_ANALYTICS_TOKEN at build time. */}
+    {webAnalyticsBeacon && (
+      <script
+        is:inline
+        defer
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon={webAnalyticsBeacon}
+      ></script>
+    )}
   </head>
   <body
     class:list={[

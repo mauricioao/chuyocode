@@ -91,6 +91,12 @@ describe('applySecurityHeaders', () => {
       expect(reportOnly()).toMatch(/script-src[^;]*https:\/\/challenges\.cloudflare\.com/);
     });
 
+    it('allows the Cloudflare Web Analytics beacon script and its reporting origin', () => {
+      const csp = reportOnly();
+      expect(csp).toMatch(/script-src[^;]*https:\/\/static\.cloudflareinsights\.com/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/cloudflareinsights\.com/);
+    });
+
     it('allows the Google Fonts stylesheet and its gstatic font files', () => {
       const csp = reportOnly();
       expect(csp).toMatch(/style-src[^;]*https:\/\/fonts\.googleapis\.com/);
