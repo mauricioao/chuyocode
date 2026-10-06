@@ -17,13 +17,14 @@
  * `moderation.test.ts` matching the migration's own check constraint, and by
  * this component's own tests matching `REPORT_REASONS` one-to-one.
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 
 const REPORT_REASONS = ['inappropriate', 'off_topic', 'copyright', 'wrong_answers', 'other'] as const;
 type ReportReason = (typeof REPORT_REASONS)[number];
@@ -37,6 +38,7 @@ type Status = 'idle' | 'submitting' | 'success' | 'error';
 
 export default function ReportActivityButton({ lang, activityId }: ReportActivityButtonProps) {
   const t = UI_LABELS[lang].activities.report;
+  const tooltipId = useId();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
@@ -89,10 +91,14 @@ export default function ReportActivityButton({ lang, activityId }: ReportActivit
         type="button"
         data-testid="report-activity-button"
         onClick={openDialog}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        aria-label={t.button}
+        aria-describedby={tooltipId}
+        className={ICON_TOOLTIP_TRIGGER_CLASS}
       >
         <FlagIcon aria-hidden="true" size={16} />
-        <span>{t.button}</span>
+        <span role="tooltip" id={tooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {t.button}
+        </span>
       </button>
 
       <Dialog open={open} onOpenChange={(next) => !next && close()}>

@@ -14,11 +14,13 @@ const {
   signInWithPasswordMock,
   signUpMock,
   resetPasswordForEmailMock,
+  recordAgeConsentMock,
 } = vi.hoisted(() => ({
   createSessionClientMock: vi.fn(),
   signInWithPasswordMock: vi.fn(),
   signUpMock: vi.fn(),
   resetPasswordForEmailMock: vi.fn(),
+  recordAgeConsentMock: vi.fn(),
 }));
 
 vi.mock('@lib/env', () => ({
@@ -28,6 +30,15 @@ vi.mock('@lib/env', () => ({
 vi.mock('@lib/supabaseSession', async (importActual) => {
   const actual = await importActual<typeof import('@lib/supabaseSession')>();
   return { ...actual, createSessionClient: createSessionClientMock };
+});
+
+// Age/legal consent (Ley N° 29733): `recordAgeConsent`'s own write shape and
+// fail-closed behavior are covered by `ageConsent.test.ts` — this file only
+// proves the ORCHESTRATION (required field, called with the right id/
+// metadata, only on an actual new session, non-fatal on failure).
+vi.mock('@lib/ageConsent', async (importActual) => {
+  const actual = await importActual<typeof import('@lib/ageConsent')>();
+  return { ...actual, recordAgeConsent: recordAgeConsentMock };
 });
 
 import { POST } from './password';
@@ -63,6 +74,7 @@ beforeEach(() => {
   });
   signUpMock.mockResolvedValue({ data: { session: null }, error: null });
   resetPasswordForEmailMock.mockResolvedValue({ data: {}, error: null });
+  recordAgeConsentMock.mockResolvedValue(true);
 });
 
 describe('POST /api/auth/password — malformed requests', () => {
@@ -155,13 +167,17 @@ describe('POST /api/auth/password — signin', () => {
 
 describe('POST /api/auth/password — signup', () => {
   it('rejects a password shorter than the minimum, before touching Supabase', async () => {
-    const res = await POST(ctx({ action: 'signup', email: EMAIL, password: 'short' }));
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'short', consent: true }),
+    );
     expect(res.status).toBe(400);
     expect(signUpMock).not.toHaveBeenCalled();
   });
 
   it('answers { ok: true, signedIn: false } uniformly when no session comes back', async () => {
-    const res = await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1' }));
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }),
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, signedIn: false });
@@ -172,7 +188,9 @@ describe('POST /api/auth/password — signup', () => {
       data: { session: { access_token: 't' } },
       error: null,
     });
-    const res = await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1' }));
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }),
+    );
 
     expect(await res.json()).toEqual({ ok: true, signedIn: true });
     expect(res.headers.getSetCookie()).toEqual([SESSION_COOKIE]);
@@ -183,7 +201,9 @@ describe('POST /api/auth/password — signup', () => {
       data: { session: null },
       error: { message: 'User already registered' },
     });
-    const res = await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1' }));
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }),
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, signedIn: false });
@@ -191,14 +211,24 @@ describe('POST /api/auth/password — signup', () => {
 
   it('degrades an unreachable Supabase to the same uniform body, never a 500', async () => {
     signUpMock.mockRejectedValueOnce(new Error('fetch failed'));
-    const res = await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1' }));
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }),
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, signedIn: false });
   });
 
   it('points emailRedirectTo at the confirm route on this origin', async () => {
-    await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1', next: '/en/ingles' }));
+    await POST(
+      ctx({
+        action: 'signup',
+        email: EMAIL,
+        password: 'longenough1',
+        next: '/en/ingles',
+        consent: true,
+      }),
+    );
 
     const call = signUpMock.mock.calls.at(-1)?.[0];
     const target = new URL(call.options.emailRedirectTo);
@@ -207,7 +237,15 @@ describe('POST /api/auth/password — signup', () => {
   });
 
   it('neutralises a hostile next before it reaches the email', async () => {
-    await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1', next: '//evil.com' }));
+    await POST(
+      ctx({
+        action: 'signup',
+        email: EMAIL,
+        password: 'longenough1',
+        next: '//evil.com',
+        consent: true,
+      }),
+    );
 
     const call = signUpMock.mock.calls.at(-1)?.[0];
     const target = new URL(call.options.emailRedirectTo);
@@ -215,12 +253,78 @@ describe('POST /api/auth/password — signup', () => {
   });
 
   it('passes email, password and the submitted locale through', async () => {
-    await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1', lang: 'en' }));
+    await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', lang: 'en', consent: true }),
+    );
 
     const call = signUpMock.mock.calls.at(-1)?.[0];
     expect(call.email).toBe(EMAIL);
     expect(call.password).toBe('longenough1');
     expect(call.options.data).toEqual({ lang: 'en' });
+  });
+});
+
+describe('POST /api/auth/password — signup requires age/legal consent (Ley N° 29733)', () => {
+  it('rejects a signup with no consent field, before touching Supabase', async () => {
+    const res = await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1' }));
+
+    expect(res.status).toBe(400);
+    expect(signUpMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects consent: false', async () => {
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: false }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(signUpMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a truthy non-boolean consent value (never trust the client\'s shape)', async () => {
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: 'true' }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(signUpMock).not.toHaveBeenCalled();
+  });
+
+  it('records consent for the new user once Supabase returns a session immediately', async () => {
+    const NEW_USER = { id: 'user-new', app_metadata: { provider: 'email', providers: ['email'] } };
+    signUpMock.mockResolvedValueOnce({
+      data: { session: { access_token: 't' }, user: NEW_USER },
+      error: null,
+    });
+
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }),
+    );
+
+    expect(await res.json()).toEqual({ ok: true, signedIn: true });
+    expect(recordAgeConsentMock).toHaveBeenCalledWith('user-new', NEW_USER.app_metadata);
+  });
+
+  it('does NOT record consent when Supabase returns no session (existing/unconfirmed address, uniform no-op)', async () => {
+    // Default `beforeEach` arrangement: `{ data: { session: null }, error: null }`.
+    await POST(ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }));
+
+    expect(recordAgeConsentMock).not.toHaveBeenCalled();
+  });
+
+  it('still answers the uniform success body even when recordAgeConsent fails (non-fatal)', async () => {
+    recordAgeConsentMock.mockResolvedValue(false);
+    signUpMock.mockResolvedValueOnce({
+      data: { session: { access_token: 't' }, user: { id: 'user-new' } },
+      error: null,
+    });
+
+    const res = await POST(
+      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', consent: true }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, signedIn: true });
   });
 });
 
@@ -321,7 +425,13 @@ describe('POST /api/auth/password — captchaToken (Turnstile)', () => {
 
   it('signup: forwards a valid token inside options', async () => {
     await POST(
-      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', captchaToken: 'tok-abc' }),
+      ctx({
+        action: 'signup',
+        email: EMAIL,
+        password: 'longenough1',
+        captchaToken: 'tok-abc',
+        consent: true,
+      }),
     );
 
     const call = signUpMock.mock.calls.at(-1)?.[0];
@@ -334,7 +444,13 @@ describe('POST /api/auth/password — captchaToken (Turnstile)', () => {
       error: { code: 'captcha_failed', message: 'captcha protection: request disallowed' },
     });
     const res = await POST(
-      ctx({ action: 'signup', email: EMAIL, password: 'longenough1', captchaToken: 'bad-tok' }),
+      ctx({
+        action: 'signup',
+        email: EMAIL,
+        password: 'longenough1',
+        captchaToken: 'bad-tok',
+        consent: true,
+      }),
     );
 
     expect(res.status).toBe(400);

@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { hasAccess, requiresLogin } from '@lib/access';
+import { hasRecordedConsent, isConsentExemptPath } from '@lib/ageConsent';
 import { safeNextPath } from '@lib/authRedirect';
 import { markPrivate } from '@lib/httpCache';
 import { DEFAULT_LANG, isValidLang, type Lang } from '@lib/i18n';
@@ -156,6 +157,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // lang, so checking it against `/api/...` or an asset path would be
   // meaningless. Libros, Noticias and the home page are untouched: they are
   // simply never `requiresLogin`.
+  //
+  // A SECOND, independent gate sits just below this one (age/legal consent,
+  // `@lib/ageConsent`) — see its own comment there for why it is broader
+  // than this login gate's two sections.
   const gated = !isNonLocalePath && requiresLogin(pathname);
 
   if (gated && !hasAccess(context.locals.user, pathname)) {
@@ -173,6 +178,35 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // visitor who IS signed in, or — worse — cache a signed-in visitor's
     // gated page under this same key and hand it to the next anonymous
     // request. See `src/lib/httpCache.ts` (design §2 / T7).
+    markPrivate(headers);
+
+    return withSecurityHeaders(
+      new Response(null, { status: 303, statusText: 'See Other', headers }),
+    );
+  }
+
+  // Age/legal consent gate (Ley N° 29733, `@lib/ageConsent`). Runs AFTER the
+  // login gate above, and only ever fires for a signed-in visitor — an
+  // anonymous one already got the entrar redirect above (if the path was
+  // login-gated) or reaches the page itself (if it wasn't), same as today.
+  // Broader than `requiresLogin`'s two sections on purpose: `crear`,
+  // `mis-actividades` and `admin` are signed-in-only IN INTENT even though no
+  // middleware login gate enforces them (`@lib/access`'s own header) — a
+  // signed-in, non-consented visitor must still be caught there.
+  const needsConsent =
+    !isNonLocalePath &&
+    context.locals.user !== null &&
+    !isConsentExemptPath(pathname) &&
+    !hasRecordedConsent(context.locals.user);
+
+  if (needsConsent) {
+    const next = safeNextPath(`${pathname}${context.url.search}`);
+    const headers = new Headers({
+      location: `/${context.locals.lang}/auth/consentimiento?next=${encodeURIComponent(next)}`,
+    });
+    flushSessionHeaders(headers, session);
+    // Same T7 reasoning as the login gate's own redirect above: never
+    // cacheable, since it differs by visitor.
     markPrivate(headers);
 
     return withSecurityHeaders(

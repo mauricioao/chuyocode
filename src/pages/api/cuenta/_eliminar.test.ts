@@ -87,6 +87,19 @@ describe('POST /api/cuenta/eliminar — confirmation word', () => {
     expect(deleteAccountMock).not.toHaveBeenCalled();
   });
 
+  it('400s a text/plain body even when it carries the confirmation (cross-site form)', async () => {
+    // request.json() parses this happily; only the content-type tells it apart.
+    const request = new Request('https://chuyo.test/api/cuenta/eliminar', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ confirm: 'ELIMINAR' }),
+    });
+    const res = await POST({ request, locals: { user: USER } } as unknown as Parameters<typeof POST>[0]);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'confirmation_required' });
+    expect(deleteAccountMock).not.toHaveBeenCalled();
+  });
+
   it('400s the wrong word', async () => {
     const res = await POST(ctx({ body: { confirm: 'eliminar' } }));
     expect(res.status).toBe(400);

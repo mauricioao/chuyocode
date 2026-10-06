@@ -409,18 +409,20 @@ describe('UserMenu — dropdown', () => {
     ).toBeTruthy();
   });
 
-  it('offers "Eliminar mi cuenta" in the dropdown, which opens the delete-account dialog', async () => {
+  // T3: "Eliminar mi cuenta" moved out of this menu, to the Perfil page's own
+  // "Zona de peligro" section — the dropdown now links to that page instead.
+  it('offers "Perfil" in the dropdown (not "Eliminar mi cuenta", which moved to that page)', async () => {
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" labels={esLabels} />);
     fireEvent.click(await screen.findByTestId('user-menu-trigger'));
 
-    const entry = screen.getByTestId('user-menu-delete-account');
+    const entry = screen.getByTestId('user-menu-profile');
     expect(entry.getAttribute('role')).toBe('menuitem');
-    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.deleteAccount);
-    expect(screen.queryByTestId('delete-account-dialog')).toBeNull();
+    expect(entry.getAttribute('href')).toBe('/es/perfil');
+    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.profile);
 
-    fireEvent.click(entry);
-    expect(screen.getByTestId('delete-account-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('user-menu-delete-account')).toBeNull();
+    expect(screen.queryByTestId('delete-account-dialog')).toBeNull();
   });
 
   it('closes on Escape', async () => {
@@ -493,6 +495,33 @@ describe('UserMenu — dropdown', () => {
   });
 });
 
+// T1 (owner screenshot bug): INGLÉS's `[data-chrome-collapse]` wrapper is
+// permanently `overflow: hidden` — a requirement of its own 0fr/1fr
+// collapse-to-zero-height animation (`global.css`'s chrome-visibility
+// section), not something this component can ask it to relax — so a
+// descendant that visually overflows it (the dropdown's own height) gets
+// clipped. The fix portals the dropdown to `document.body`, outside any such
+// ancestor, regardless of which header variant (INGLÉS or SITE) mounts it.
+describe('UserMenu — dropdown is never clipped by an overflow-hidden chrome ancestor (T1)', () => {
+  it('portals the open dropdown outside any ancestor marked data-chrome-collapse', async () => {
+    stubMe(PASSWORD_PROFILE);
+    const clipper = document.createElement('div');
+    clipper.setAttribute('data-chrome-collapse', '');
+    document.body.appendChild(clipper);
+
+    try {
+      render(<UserMenu lang="es" labels={esLabels} />, { container: clipper });
+      fireEvent.click(await screen.findByTestId('user-menu-trigger'));
+
+      const dropdown = screen.getByTestId('user-menu-dropdown');
+      expect(clipper.contains(dropdown)).toBe(false);
+      expect(document.body.contains(dropdown)).toBe(true);
+    } finally {
+      clipper.remove();
+    }
+  });
+});
+
 describe('UserMenu — localization', () => {
   it('writes its Spanish in neutral Spanish, with no voseo', () => {
     expect(findVoseo(UI_LABELS.es.auth.userMenu)).toEqual([]);
@@ -542,17 +571,19 @@ describe('UserMenu — mobile hamburger menu account entries (mobile layout pass
     expect(screen.getByTestId('user-menu-trigger')).toBeTruthy();
   });
 
-  it('portals "Eliminar mi cuenta" too, which opens the delete-account dialog', async () => {
+  // T3: same move as the desktop dropdown's own test above.
+  it('portals "Perfil" too (not "Eliminar mi cuenta", which moved to that page)', async () => {
     const slot = withMobileMenuSlot();
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" labels={esLabels} />);
 
-    const entry = await screen.findByTestId('mobile-account-delete-account');
+    const entry = await screen.findByTestId('mobile-account-profile');
     expect(slot.contains(entry)).toBe(true);
-    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.deleteAccount);
+    expect(entry.getAttribute('href')).toBe('/es/perfil');
+    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.profile);
 
-    fireEvent.click(entry);
-    expect(screen.getByTestId('delete-account-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('mobile-account-delete-account')).toBeNull();
+    expect(screen.queryByTestId('delete-account-dialog')).toBeNull();
   });
 
   it('signed in as a moderator: portals the moderación entry with its pending-count badge', async () => {

@@ -13,10 +13,13 @@ beforeEach(() => {
 });
 
 describe('DuplicateActivityButton', () => {
-  it('renders the trigger, idle', () => {
+  it('renders the trigger, idle — an icon button with an aria-label and a hover/focus tooltip, not visible text', () => {
     render(<DuplicateActivityButton lang="es" activityId={ACTIVITY_ID} navigate={vi.fn()} />);
     const button = screen.getByTestId('duplicate-activity-button');
-    expect(button.textContent).toContain('Duplicar');
+    expect(button.getAttribute('aria-label')).toBe('Duplicar');
+    const tooltip = button.querySelector('[role="tooltip"]');
+    expect(tooltip?.textContent).toBe('Duplicar');
+    expect(button.getAttribute('aria-describedby')).toBe(tooltip?.id);
     expect(screen.queryByTestId('duplicate-activity-error')).toBeNull();
   });
 
@@ -90,7 +93,9 @@ describe('DuplicateActivityButton', () => {
     render(<DuplicateActivityButton lang="es" activityId={ACTIVITY_ID} navigate={vi.fn()} />);
     fireEvent.click(screen.getByTestId('duplicate-activity-button'));
 
-    await waitFor(() => expect(screen.getByTestId('duplicate-activity-button').textContent).toContain('Duplicando'));
+    await waitFor(() =>
+      expect(screen.getByTestId('duplicate-activity-button').getAttribute('aria-label')).toContain('Duplicando'),
+    );
     resolveFetch({ ok: true, json: async () => ({ id: 'new-activity-1' }) });
   });
 });

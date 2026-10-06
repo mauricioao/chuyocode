@@ -61,6 +61,7 @@ import { hasPresentableContent } from '@lib/activities/presentationSlides';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { hasHeartedActivity } from '@lib/activities/hearts';
 import { qrSvg, shareUrl } from '@lib/qr';
+import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@lib/ui/iconTooltip';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -247,6 +248,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
                 qr={shareQr}
                 whatsappHref={whatsappHref}
                 downloadFileName={`${activity.id}.svg`}
+                iconOnly
                 labels={{
                   trigger: t.share,
                   title: t.shareTitle,
@@ -271,10 +273,14 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
             <a
               href={guestSignInHref}
               data-testid="activity-duplicate-guest"
-              class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={t.duplicate}
+              aria-describedby="action-duplicate-guest-tooltip"
+              class={ICON_TOOLTIP_TRIGGER_CLASS}
             >
               <CopySimpleIcon aria-hidden="true" size={16} />
-              <span>{t.duplicate}</span>
+              <span role="tooltip" id="action-duplicate-guest-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {t.duplicate}
+              </span>
             </a>
           )}
           {canReport ? (
@@ -286,10 +292,14 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
               <a
                 href={guestSignInHref}
                 data-testid="activity-report-guest"
-                class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={UI_LABELS[lang].activities.report.button}
+                aria-describedby="action-report-guest-tooltip"
+                class={ICON_TOOLTIP_TRIGGER_CLASS}
               >
                 <FlagIcon aria-hidden="true" size={16} />
-                <span>{UI_LABELS[lang].activities.report.button}</span>
+                <span role="tooltip" id="action-report-guest-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                  {UI_LABELS[lang].activities.report.button}
+                </span>
               </a>
             )
           )}
@@ -301,10 +311,14 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
             <a
               href={`/${lang}/ingles/actividades/${activity.id}/presentar`}
               data-testid="activity-present-link"
-              class="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              aria-label={t.present}
+              aria-describedby="action-present-tooltip"
+              class={ICON_TOOLTIP_TRIGGER_CLASS}
             >
-              <PresentationIcon aria-hidden="true" />
-              {t.present}
+              <PresentationIcon aria-hidden="true" size={16} />
+              <span role="tooltip" id="action-present-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {t.present}
+              </span>
             </a>
           )}
           {/* "Imprimir" (D6): a plain, unconditional link to the print page
@@ -315,10 +329,14 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           <a
             href={`/${lang}/ingles/actividades/${activity.id}/imprimir`}
             data-testid="activity-print-link"
-            class="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label={t.print}
+            aria-describedby="action-print-tooltip"
+            class={ICON_TOOLTIP_TRIGGER_CLASS}
           >
-            <PrinterIcon aria-hidden="true" />
-            {t.print}
+            <PrinterIcon aria-hidden="true" size={16} />
+            <span role="tooltip" id="action-print-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+              {t.print}
+            </span>
           </a>
         </div>
       </div>

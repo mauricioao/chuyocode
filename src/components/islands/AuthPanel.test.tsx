@@ -7,13 +7,27 @@
  * `next`/`initialMode` reach it — the magic-link behavior itself stays
  * covered by `SignInForm.test.tsx`, untouched.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import AuthPanel from './AuthPanel';
 import { COPY as PASSWORD_COPY } from './PasswordAuthForm';
 
+// jsdom has no ResizeObserver; sign-up mode renders `AgeConsentCheckbox`'s
+// `Checkbox` (Radix), which reads one via `@radix-ui/react-use-size` — same
+// stub precedent as `LessonForm.test.tsx`/`WorksheetZoneEditor.test.tsx`.
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', MockResizeObserver);
+});
+
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 

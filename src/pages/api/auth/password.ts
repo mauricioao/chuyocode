@@ -21,6 +21,15 @@
  *    fires only when Supabase hands back a session immediately, which is a
  *    PROJECT-WIDE setting (email confirmation disabled), never a
  *    per-address signal, so it cannot become an oracle either.
+ *
+ *    🔴 `consent` (REQUIRED, `signup` only) — Ley N° 29733 age/legal consent
+ *    checkbox. Rejected with a plain `badRequest()` unless it is literally
+ *    `true`, before Supabase is ever called — the client's disabled-submit
+ *    button (`PasswordAuthForm`) is UI only, never trusted. Recorded via
+ *    `@lib/ageConsent#recordAgeConsent` ONLY once `signedIn` is actually
+ *    true for THIS request (see `handleSignUp`'s own comment on why that,
+ *    not `!error`, is the correct branch — the uniformity guarantee above is
+ *    exactly what makes "no error" insufficient on its own).
  *  - `reset` — `resetPasswordForEmail`, uniform for the same T3 reason as
  *    `signin.ts`: the caller must not learn whether an address has an
  *    account by asking it to reset the password on one.
@@ -44,6 +53,7 @@
  * cannot become a new enumeration oracle.
  */
 import type { APIRoute } from 'astro';
+import { recordAgeConsent } from '@lib/ageConsent';
 import { safeNextPath } from '@lib/authRedirect';
 import { looksLikeEmail, isValidPassword } from '@lib/authValidation';
 import { markPrivate } from '@lib/httpCache';
@@ -62,6 +72,8 @@ interface PasswordBody {
   lang?: unknown;
   next?: unknown;
   captchaToken?: unknown;
+  /** Age/legal consent checkbox (Ley N° 29733). Required for `signup` only. */
+  consent?: unknown;
 }
 
 function json(body: unknown, status: number, session: SessionClient): Response {
@@ -169,6 +181,16 @@ async function handleSignUp(
       }
     } else if (data.session) {
       signedIn = true;
+      // Record consent for the account THIS request just actually created —
+      // confirmed by the presence of a live session, not merely the absence
+      // of an error. Supabase's own signup-uniformity guarantee (file
+      // header) means a `signUp()` call for an ALREADY-registered, confirmed
+      // address can also return no error and no session; branching on
+      // `data.session` here, not on `!error`, is what keeps this from ever
+      // touching an existing, unrelated account's consent record.
+      if (data.user) {
+        await recordAgeConsent(data.user.id, data.user.app_metadata);
+      }
     }
   } catch (err) {
     console.error('[auth/password] signUp threw:', err);
@@ -236,6 +258,12 @@ export const POST: APIRoute = async ({ request }) => {
     }
     case 'signup': {
       if (!isValidPassword(body.password)) {
+        return badRequest();
+      }
+      // Age/legal consent (Ley N° 29733): REQUIRED, server-enforced — never
+      // trust the client's own disabled-submit-button UI. Checked before any
+      // Supabase call, same tier as the email/password shape checks above.
+      if (body.consent !== true) {
         return badRequest();
       }
       return handleSignUp(request, email, body.password, lang, body.next, captchaToken);

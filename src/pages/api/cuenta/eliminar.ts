@@ -61,6 +61,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
   if (!user) return requireUser();
 
+  // `application/json` only: a cross-site form can post `text/plain` with a
+  // JSON-shaped body, which `request.json()` parses. Astro's checkOrigin
+  // already rejects cross-origin form posts; this is the second layer.
+  const contentType = request.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return jsonResponse({ ok: false, error: 'confirmation_required' }, 400);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
