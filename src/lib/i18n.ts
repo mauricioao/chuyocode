@@ -409,6 +409,11 @@ export const UI_LABELS = {
       passwordErrorTooShort: 'Usa al menos 8 caracteres.',
       passwordErrorReauthRequired: 'Por tu seguridad, vuelve a iniciar sesión y prueba de nuevo.',
       passwordErrorSamePassword: 'La contraseña nueva debe ser diferente de la actual.',
+      // Supabase's Turnstile captcha rejection (`captcha_failed`) — distinct
+      // from `passwordErrorInvalidCurrent`; mirrors `PasswordAuthForm`'s own
+      // local `captchaError`/`captchaPending` copy.
+      passwordErrorCaptchaFailed: 'No pudimos verificar que eres una persona. Inténtalo de nuevo.',
+      passwordCaptchaPending: 'Esperando verificación…',
       passwordGoogleOnlyNote: 'Iniciaste sesión con Google, así que no tienes una contraseña que cambiar aquí.',
       planSectionTitle: 'Plan',
       planUpgradeLink: 'Conoce Premium',
@@ -1687,6 +1692,8 @@ export const UI_LABELS = {
       passwordErrorTooShort: 'Use at least 8 characters.',
       passwordErrorReauthRequired: 'For your security, sign in again and retry.',
       passwordErrorSamePassword: 'Your new password must be different from the current one.',
+      passwordErrorCaptchaFailed: "We couldn't verify you're human. Please try again.",
+      passwordCaptchaPending: 'Waiting for verification…',
       passwordGoogleOnlyNote: 'You signed in with Google, so there is no password to change here.',
       planSectionTitle: 'Plan',
       planUpgradeLink: 'Discover Premium',

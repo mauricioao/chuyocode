@@ -168,6 +168,43 @@ describe('POST /api/cuenta/contrasena — success', () => {
   });
 });
 
+describe('POST /api/cuenta/contrasena — captcha (Turnstile)', () => {
+  it('forwards captchaToken to signInWithPassword\'s options when the client sends one', async () => {
+    await POST(
+      ctx({ currentPassword: 'old-password1', newPassword: 'new-password1', captchaToken: 'tok-abc' }),
+    );
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: 'lector@example.com',
+      password: 'old-password1',
+      options: { captchaToken: 'tok-abc' },
+    });
+  });
+
+  it('ignores a blank captchaToken, calling signInWithPassword exactly as with none sent', async () => {
+    await POST(
+      ctx({ currentPassword: 'old-password1', newPassword: 'new-password1', captchaToken: '   ' }),
+    );
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: 'lector@example.com',
+      password: 'old-password1',
+    });
+  });
+
+  it('maps a Supabase captcha rejection to captcha_failed, distinct from a wrong current password, and never calls updateUser', async () => {
+    signInWithPasswordMock.mockResolvedValueOnce({
+      data: {},
+      error: { message: 'captcha protection: request disallowed', code: 'captcha_failed' },
+    });
+    const res = await POST(
+      ctx({ currentPassword: 'old-password1', newPassword: 'new-password1', captchaToken: 'tok-abc' }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'captcha_failed' });
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/cuenta/contrasena — updateUser failures, mapped by Supabase\'s own error code', () => {
   it('maps reauthentication_needed to a dedicated code, never a raw Supabase message', async () => {
     updateUserMock.mockResolvedValueOnce({ data: {}, error: { message: 'reauth needed', code: 'reauthentication_needed' } });

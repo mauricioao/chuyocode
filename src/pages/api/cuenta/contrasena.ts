@@ -25,7 +25,10 @@
  *    empty string, newPassword passes isValidPassword)
  * 3. no email/password identity on this account      -> 400
  *                                                        { ok:false, error:'no_password_identity' }
- * 4. signInWithPassword(currentPassword) fails        -> 401
+ * 4. signInWithPassword(currentPassword) fails:
+ *    - Supabase's captcha rejection (isCaptchaError)  -> 400
+ *                                                        { ok:false, error:'captcha_failed' }
+ *    - anything else                                 -> 401
  *                                                        { ok:false, error:'invalid_current_password' }
  * 5. updateUser({password}) fails, mapped by
  *    Supabase's own error code:
@@ -41,6 +44,18 @@
  * body, which `request.json()` parses) — same guard as `nombre.ts` and
  * `src/pages/api/auth/consentimiento.ts`.
  *
+ * 🔴 `captchaToken` (OPTIONAL) — Cloudflare Turnstile, same posture as
+ * `src/pages/api/auth/password.ts`. `normalizeCaptchaToken` (`@lib/turnstile`)
+ * reduces it to a usable string or `undefined` before it ever reaches the
+ * CURRENT-password `signInWithPassword` check below (`updateUser` is never
+ * captcha-gated by Supabase, so it is never forwarded there); `undefined`
+ * keeps this endpoint inert while `PUBLIC_TURNSTILE_SITE_KEY` is unset, same
+ * as before this field existed. When Supabase's CAPTCHA protection is on and
+ * rejects the token, `isCaptchaError` maps that failure to a dedicated
+ * `captcha_failed` code — distinct from `invalid_current_password`, so the
+ * form can tell a visitor "we could not verify you're human" instead of
+ * "your current password is wrong".
+ *
  * Every response is private/no-store (T7); never echoes either password
  * back, and only ever logs `error.code`/`error.message`, never the request
  * body.
@@ -49,6 +64,7 @@ import type { APIRoute } from 'astro';
 import { jsonResponse, requireUser } from '@lib/apiResponse';
 import { isValidPassword } from '@lib/authValidation';
 import { createSessionClient, flushSessionHeaders, type SessionClient } from '@lib/supabaseSession';
+import { isCaptchaError, normalizeCaptchaToken } from '@lib/turnstile';
 
 /** `jsonResponse` (private/no-store JSON, `@lib/apiResponse`) plus an optional session-cookie flush, once a session client exists. */
 function respond(body: unknown, status: number, session?: SessionClient): Response {
@@ -67,9 +83,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return respond({ ok: false, error: 'bad_request' }, 400);
   }
 
-  let body: { currentPassword?: unknown; newPassword?: unknown };
+  let body: { currentPassword?: unknown; newPassword?: unknown; captchaToken?: unknown };
   try {
-    body = (await request.json()) as { currentPassword?: unknown; newPassword?: unknown };
+    body = (await request.json()) as {
+      currentPassword?: unknown;
+      newPassword?: unknown;
+      captchaToken?: unknown;
+    };
   } catch {
     return respond({ ok: false, error: 'bad_request' }, 400);
   }
@@ -78,6 +98,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (typeof currentPassword !== 'string' || currentPassword === '' || !isValidPassword(newPassword)) {
     return respond({ ok: false, error: 'bad_request' }, 400);
   }
+  const captchaToken = normalizeCaptchaToken(body?.captchaToken);
 
   const hasPasswordIdentity = (user.identities ?? []).some((identity) => identity.provider === 'email');
   if (!hasPasswordIdentity) {
@@ -93,9 +114,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const { error: verifyError } = await session.client.auth.signInWithPassword({
       email: user.email ?? '',
       password: currentPassword,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
     });
     if (verifyError) {
       console.error('[cuenta/contrasena] current-password sign-in failed:', verifyError.code ?? verifyError.message);
+      if (isCaptchaError(verifyError)) {
+        return respond({ ok: false, error: 'captcha_failed' }, 400, session);
+      }
       return respond({ ok: false, error: 'invalid_current_password' }, 401, session);
     }
   } catch (err) {

@@ -10,14 +10,25 @@
  * `MIN_PASSWORD_LENGTH`) is a nicer UX only; the server re-verifies the
  * CURRENT password (by signing in with it) and re-validates the new one
  * independently either way.
+ *
+ * 🔴 TURNSTILE IS INERT UNTIL `PUBLIC_TURNSTILE_SITE_KEY` IS SET, same
+ * posture as `PasswordAuthForm`/`SignInForm`: `siteKey` is `null` when
+ * unset, so no `<TurnstileWidget>` renders, submit is never held disabled
+ * waiting for a token, and the request body never carries `captchaToken`.
+ * Once a token arrives it is sent with the save request; the widget is reset
+ * (and submit re-disabled) after EVERY attempt, success or failure, because
+ * Turnstile tokens are single-use — same reasoning as `PasswordAuthForm`'s
+ * own `resetCaptcha`.
  */
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { isValidPassword } from '@/lib/authValidation';
+import { getTurnstileSiteKey } from '@/lib/turnstile';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import TurnstileWidget from './TurnstileWidget';
 
 export interface ProfilePasswordFormProps {
   lang: Lang;
@@ -32,6 +43,9 @@ const SERVER_ERROR_LABEL = {
   same_password: 'passwordErrorSamePassword',
   // "weak" and "too short" read the same to a visitor — no separate label.
   weak_password: 'passwordErrorTooShort',
+  // Supabase's Turnstile captcha rejection — distinct from
+  // `invalid_current_password` (see `/api/cuenta/contrasena.ts`'s header).
+  captcha_failed: 'passwordErrorCaptchaFailed',
 } as const satisfies Record<string, keyof (typeof UI_LABELS)['es']['profile']>;
 
 export default function ProfilePasswordForm({ lang }: ProfilePasswordFormProps) {
@@ -41,6 +55,23 @@ export default function ProfilePasswordForm({ lang }: ProfilePasswordFormProps) 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
+  // `null` while unset (`@lib/turnstile`'s header) — every captcha-related
+  // line below is gated on it, same as `PasswordAuthForm`/`SignInForm`.
+  const siteKey = getTurnstileSiteKey();
+  const needsCaptcha = siteKey !== null && captchaToken === null;
+
+  /**
+   * Tokens are single-use (Turnstile): clear the stale one and bump the
+   * widget's reset signal together, so submit goes back to "waiting for
+   * verification" immediately rather than staying enabled with a token
+   * Supabase will no longer accept.
+   */
+  function resetCaptcha() {
+    setCaptchaToken(null);
+    setCaptchaResetSignal((n) => n + 1);
+  }
 
   async function submit() {
     if (newPassword !== confirmPassword) {
@@ -57,8 +88,15 @@ export default function ProfilePasswordForm({ lang }: ProfilePasswordFormProps) 
       const res = await fetch('/api/cuenta/contrasena', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          ...(captchaToken ? { captchaToken } : {}),
+        }),
       });
+      // Every attempt, success or failure (see this file's header).
+      resetCaptcha();
+
       const body: { ok?: unknown; error?: unknown } = await res.json().catch(() => ({}));
       if (!res.ok || body.ok !== true) {
         const code = typeof body.error === 'string' ? body.error : '';
@@ -73,6 +111,7 @@ export default function ProfilePasswordForm({ lang }: ProfilePasswordFormProps) 
       setStatus('idle');
       toast.success(t.passwordSuccessToast);
     } catch {
+      resetCaptcha();
       setError(t.passwordErrorGeneric);
       setStatus('error');
     }
@@ -129,6 +168,14 @@ export default function ProfilePasswordForm({ lang }: ProfilePasswordFormProps) 
           />
         )}
       </Field>
+      {siteKey && (
+        <TurnstileWidget
+          siteKey={siteKey}
+          language={lang}
+          onToken={setCaptchaToken}
+          resetSignal={captchaResetSignal}
+        />
+      )}
       {error && (
         <p role="alert" data-testid="profile-password-error" className="text-sm text-destructive">
           {error}
@@ -139,11 +186,17 @@ export default function ProfilePasswordForm({ lang }: ProfilePasswordFormProps) 
           type="submit"
           data-testid="profile-password-save"
           loading={status === 'saving'}
-          disabled={status === 'saving'}
+          disabled={status === 'saving' || needsCaptcha}
+          aria-describedby={needsCaptcha ? 'profile-password-captcha-hint' : undefined}
         >
           {status === 'saving' ? t.passwordSaving : t.passwordSaveButton}
         </Button>
       </div>
+      {needsCaptcha && (
+        <p id="profile-password-captcha-hint" className="text-xs text-muted-foreground">
+          {t.passwordCaptchaPending}
+        </p>
+      )}
     </form>
   );
 }
