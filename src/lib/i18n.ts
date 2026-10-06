@@ -1312,6 +1312,18 @@ export const UI_LABELS = {
         // never shown visually, just for screen-reader navigation.
         foldersLabel: 'Carpetas',
         widgetsLabel: 'Tu escritorio',
+        // "Desktop" redesign PART 4 (owner spec 2026-10-06): weather +
+        // "Frase del día" player widgets, draggable positions, and the
+        // header's "Ordenar escritorio" icon.
+        weatherLabel: 'Clima en {city}',
+        weatherUnavailable: 'Clima no disponible',
+        playerTitle: 'Frase del día',
+        playerPrev: 'Anterior',
+        playerNext: 'Siguiente',
+        playerPlay: 'Escuchar',
+        playerPause: 'Pausar',
+        playerUnavailable: 'Audio no disponible en este dispositivo',
+        arrangeDesktop: 'Ordenar escritorio',
       },
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
@@ -2392,6 +2404,15 @@ export const UI_LABELS = {
         greetingSubtitle: 'Open a folder to pick an exercise, or jump straight to your level.',
         foldersLabel: 'Folders',
         widgetsLabel: 'Your desktop',
+        weatherLabel: 'Weather in {city}',
+        weatherUnavailable: 'Weather not available',
+        playerTitle: 'Phrase of the day',
+        playerPrev: 'Previous',
+        playerNext: 'Next',
+        playerPlay: 'Listen',
+        playerPause: 'Pause',
+        playerUnavailable: 'Audio not available on this device',
+        arrangeDesktop: 'Arrange desktop',
       },
       section: {
         // Matches the Spanish move: name the section, not its audience.

@@ -87,6 +87,19 @@ describe('GET /[lang]/creditos — license notices', () => {
     }
   });
 
+  it('credits MET Norway for the weather widget, with a link to its terms of service', async () => {
+    for (const lang of ['es', 'en'] as const) {
+      const res = await render(`https://chuyocode.test/${lang}/creditos`, {
+        params: { lang },
+        locals: { lang },
+      });
+      const html = await res.text();
+      expect(html).toContain('MET Norway');
+      expect(html).toContain('CC BY 4.0');
+      expect(html).toContain('href="https://api.met.no/doc/TermsOfService"');
+    }
+  });
+
   it('names Open Peeps / Open Doodles as CC0 and not yet in use', async () => {
     const res = await render('https://chuyocode.test/es/creditos', {
       params: { lang: 'es' },
