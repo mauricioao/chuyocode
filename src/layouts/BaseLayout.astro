@@ -131,6 +131,19 @@ interface Props {
    * `fullHeight` body/main classes.
    */
   bare?: boolean;
+  /**
+   * "Desktop" redesign PART 6a (owner spec 2026-10-06): true on a page that
+   * renders the Inglés desk (`DeskScene.astro`) BEHIND something else — so
+   * far, only the practice page's window, for a signed-in visitor. Widens
+   * the existing hub-only `html[data-chrome-hub] main { view-transition-
+   * name: none; }` rule (`global.css`) to this page too: without it, the
+   * desk widgets' frosted glass (`.ingles-glass`) would show the greeting
+   * SHARP through them instead of blurred, same Chrome quirk that rule's own
+   * comment documents for the hub. Defaults to `false` (every existing
+   * page, including the hub itself, which already matches via
+   * `data-chrome-hub`).
+   */
+  deskBehind?: boolean;
 }
 
 const {
@@ -141,6 +154,7 @@ const {
   fullHeight = false,
   theme,
   bare = false,
+  deskBehind = false,
 } = Astro.props;
 
 const isIngles = theme === 'ingles';
@@ -192,6 +206,7 @@ const faviconSvg =
   data-theme={isIngles ? 'ingles' : undefined}
   data-full-height={fullHeight ? '' : undefined}
   data-chrome-hub={isInglesHub ? '' : undefined}
+  data-desk-behind={deskBehind ? '' : undefined}
   class:list={['scroll-smooth', !isIngles && 'dark']}
 >
   <head>
@@ -375,6 +390,7 @@ const faviconSvg =
       import { initReveals } from '@lib/reveal';
       import { initBackButtons } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
+      import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
 
       const run = () => initReveals();
 
@@ -391,6 +407,15 @@ const faviconSvg =
       // the whole session — `document` survives View Transitions swaps, so
       // (unlike reveals) this needs no re-init on `astro:after-swap`.
       initBackButtons();
+
+      // "Desktop" redesign PART 6a: captures a `[data-desk-window-open]`
+      // folder's own rect just before navigation, for the practice window's
+      // scale-in — site-wide (like `initBackButtons`) since the desk only
+      // ever renders under Inglés, and the attribute selector simply never
+      // matches elsewhere. Self-guards against double-wiring on its own
+      // (`@lib/ui/deskWindow.ts`'s own header), so it is safe to call here
+      // unconditionally, once per session.
+      initDeskWindowOpeners();
 
       // Smart header/footer visibility (chrome-visibility feature): binds
       // its own listeners exactly once and re-picks the mode on every page

@@ -889,10 +889,68 @@ html[data-chrome-hub][data-chrome-js][data-chrome-mode='ingles'] [data-chrome-co
  * (from its `transition:animate`) is one, and so is the scroll-reveal
  * `.reveal` wrapper (which the hub no longer uses): with either in place
  * Chrome shows the greeting SHARP through the widgets instead of blurred.
- * On the hub only, `<main>` drops its name and page changes use the root
- * cross-fade instead. */
-html[data-chrome-hub] main {
+ * On the hub, and on any OTHER page that renders the desk behind something
+ * else (`data-desk-behind` — "desktop" redesign PART 6a, the practice
+ * page's own window, `BaseLayout.astro`'s own `deskBehind` prop), `<main>`
+ * drops its name and page changes use the root cross-fade instead. */
+html[data-chrome-hub] main,
+html[data-desk-behind] main {
   view-transition-name: none;
+}
+
+/* ── Desk window ("desktop" redesign PART 6a, owner spec 2026-10-06) ───────
+ * The practice page renders as a WINDOW over the desk — approved mockup
+ * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.veil` /
+ * `.window`. Tailwind utilities express the box itself (`DeskWindow.astro`'s
+ * own classes); only the one-shot open animation and the two OS-preference
+ * fallbacks need hand-written CSS, same posture as `.ingles-glass` above. */
+.ingles-window-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgb(243 244 246 / 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* `prefers-reduced-transparency` (same fallback posture as `.ingles-glass`). */
+@media (prefers-reduced-transparency: reduce) {
+  .ingles-window-veil {
+    background: var(--color-surface-soft);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@keyframes ingles-window-open {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ingles-window {
+  transform-origin: var(--ingles-window-from, 50% 50%);
+  animation: ingles-window-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingles-window {
+    animation: none;
+  }
+}
+
+/* Full screen (green light), remembered per browser — forces the full-bleed
+ * sheet regardless of the `desk:` breakpoint's own inset. `!important`
+ * because it must win over the SAME-specificity Tailwind utility classes
+ * that set the desktop inset, regardless of stylesheet order. */
+.ingles-window[data-fullscreen='true'] {
+  inset: 0 !important;
+  border-radius: 0 !important;
 }
 
 /* The one INGLÉS header transition that must NOT animate: collapsing once it

@@ -29,9 +29,19 @@ interface Props {
   icon: EmojiName;
   /** Set only for the "Para ti hoy" peek variant. */
   peekSrc?: string | null;
+  /**
+   * "Desktop" redesign PART 6a (owner spec 2026-10-06): set only for a
+   * folder that opens a practice-page WINDOW (today's "Para ti hoy" pick) —
+   * `@lib/ui/deskWindow.ts`'s opener wiring reads this back off
+   * `data-desk-window-open` to animate the window's scale-in FROM this
+   * folder's own rect, and to return focus to it when the window closes.
+   * Omitted (every other folder, which links to a plain listing page, never
+   * a window) renders no such attribute at all.
+   */
+  openerId?: string | null;
 }
 
-const { href, label, meta, icon, peekSrc = null } = Astro.props;
+const { href, label, meta, icon, peekSrc = null, openerId = null } = Astro.props;
 const hasPeek = peekSrc !== null;
 const BACK_PATH =
   'M8 14a6 6 0 0 1 6-6h30l8 8h54a6 6 0 0 1 6 6v62a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z';
@@ -39,6 +49,7 @@ const BACK_PATH =
 
 <a
   href={href}
+  data-desk-window-open={openerId}
   class="folder group grid w-full justify-items-center gap-1.5 rounded-2xl px-2 py-2 text-center transition-colors hover:bg-pop-sky/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:w-[148px]"
 >
   <figure class="relative m-0 h-[77px] w-24 desk:h-24 desk:w-[120px]">

@@ -1,18 +1,49 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
+// `loadDeskSceneData` (the desk behind the window, "desktop" redesign PART
+// 6a) pulls in `@lib/profile` -> `@lib/access` -> `@lib/supabase` ->
+// `loadEnv`, which reads `import.meta.env` — stub it before any module that
+// calls it, same posture as `src/pages/[lang]/ingles/_ingles.test.ts`.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({
+    SANITY_PROJECT_ID: 'test-proj',
+    SANITY_DATASET: 'production',
+    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_ANON_KEY: 'test-anon',
+    SUPABASE_SERVICE_ROLE_KEY: '',
+    AD_HMAC_SECRET: '',
+  }),
+}));
+
 const { activityResult, heartedResult, hasHeartedActivityMock } = vi.hoisted(() => ({
   activityResult: { value: null as unknown },
   heartedResult: { value: false },
   hasHeartedActivityMock: vi.fn(async () => heartedResult.value),
 }));
 
+const getActivityCount = vi.fn();
+const getPublishedActivities = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
   getPublishedActivity: vi.fn(async () => activityResult.value),
+  getActivityCount: (...args: unknown[]) => getActivityCount(...args),
+  getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
 }));
 
 vi.mock('@lib/activities/hearts', () => ({
   hasHeartedActivity: hasHeartedActivityMock,
+}));
+
+// The desk behind the window (signed-in visitors only) shares the hub's own
+// two counts — mocked here so no network happens, same posture as
+// `_ingles.test.ts`'s own mock for the hub itself.
+const getExerciseCount = vi.fn();
+vi.mock('@lib/exercises', () => ({
+  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
+}));
+
+vi.mock('@lib/activities/storage', () => ({
+  publicImageUrl: (path: string) => `https://public.example/${path}`,
 }));
 
 import PracticePage from './[id].astro';
@@ -33,6 +64,12 @@ beforeEach(() => {
   activityResult.value = null;
   heartedResult.value = false;
   hasHeartedActivityMock.mockClear();
+  getActivityCount.mockReset();
+  getPublishedActivities.mockReset();
+  getExerciseCount.mockReset();
+  getActivityCount.mockResolvedValue(null);
+  getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
+  getExerciseCount.mockResolvedValue(null);
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — routing', () => {
@@ -90,7 +127,7 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     expect(html).toContain('data-testid="worksheet-player"');
   });
 
-  it('renders "Sin nivel" when the activity has no level', async () => {
+  it('renders "Sin nivel" (the window\'s level chip) when the activity has no level', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -99,40 +136,34 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     expect(html).toContain('Sin nivel');
   });
 
-  it('links back to the community feed, via the back button beside the title', async () => {
+  it('renders the window shell: a dialog with three named "traffic light" buttons and the title', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
-    expect(html).toContain('data-back-button');
-    expect(html).toContain('href="/es/ingles/actividades"');
+    expect(html).toContain('data-desk-window');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-label="Cerrar"');
+    expect(html).toContain('aria-label="Minimizar"');
+    expect(html).toContain('aria-label="Pantalla completa"');
   });
 
-  it('renders one framed card (practice player redesign — fullHeight layout, no page-level scroll at lg)', async () => {
-    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
-    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
-      params: { lang: 'es', id: 'abc' },
-    });
-    const html = await res.text();
-    expect(html).toContain('data-testid="practice-card"');
-    // `fullHeight` (BaseLayout's own prop) is what turns off page scroll at `lg:`.
-    expect(html).toContain('lg:h-dvh');
-  });
-
-  it('keeps the level text inside the same header row as the back button and title', async () => {
+  it('keeps the lights, title and level chip in the same title bar, in that order ("desktop" redesign PART 6a — the red light replaces the old back button)', async () => {
     activityResult.value = { id: 'abc', title: 'Present simple', level: 'A2', blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
-    const cardStart = html.indexOf('data-testid="practice-card"');
-    const backButton = html.indexOf('data-back-button', cardStart);
-    const title = html.indexOf('Present simple', backButton);
-    const level = html.indexOf('A2', title);
-    expect(backButton).toBeGreaterThan(cardStart);
-    expect(title).toBeGreaterThan(backButton);
-    expect(level).toBeGreaterThan(title);
+    const windowStart = html.indexOf('data-desk-window');
+    const close = html.indexOf('aria-label="Cerrar"', windowStart);
+    const title = html.indexOf('Present simple', close);
+    const chip = html.indexOf('A2', title);
+    expect(windowStart).toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(windowStart);
+    expect(title).toBeGreaterThan(close);
+    expect(chip).toBeGreaterThan(title);
   });
 
   it('renders a quiz block through the real quiz practice renderer', async () => {
@@ -164,6 +195,85 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
       params: { lang: 'en', id: 'abc' },
     });
     expect(res.status).toBe(200);
+  });
+});
+
+// "Desktop" redesign PART 6a (owner spec 2026-10-06): the practice page
+// renders as a WINDOW over the desk, keeping its own real URL. The desk
+// renders behind it for a signed-in visitor (same data/component the hub
+// itself uses) and NOT AT ALL for a guest, who cannot see the gated hub —
+// their red/yellow lights go to the ChuyoCode home instead.
+describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PART 6a)', () => {
+  it('renders the desk behind the window, inert, for a signed-in visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-desk');
+    expect(html).toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    // The hub's own folders/widgets landmarks, proving the SAME desk renders.
+    expect(html).toContain('Para ti hoy');
+    expect(html).toContain('Tu escritorio');
+  });
+
+  it('renders no desk at all behind the window for a guest', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    // `data-desk-window` (the window shell itself, always present) is NOT a
+    // false positive here — it is checked separately via the hub-only
+    // landmarks below, never via a bare `data-desk` substring.
+    expect(html).not.toContain('Para ti hoy');
+    expect(html).not.toContain('Tu escritorio');
+    expect(getExerciseCount).not.toHaveBeenCalled();
+  });
+
+  it("sends a signed-in visitor's close/minimize lights to the Inglés hub", async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-close-target="/es/ingles"');
+  });
+
+  it("sends a guest's close/minimize lights to the ChuyoCode home, never the gated hub", async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-close-target="/es/"');
+    expect(html).not.toContain('data-close-target="/es/ingles"');
+  });
+
+  it('opens full screen for a guest (no plain-background gap behind it, since there is no desk to fill it)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/<section[^>]*data-desk-window[^>]*data-fullscreen="true"[^>]*>/);
+    expect(html).toContain('aria-pressed="true"');
+  });
+
+  it('does NOT force full screen for a signed-in visitor (the desk fills the space behind it)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-fullscreen');
+    expect(html).toContain('aria-pressed="false"');
   });
 });
 
@@ -607,6 +717,8 @@ describe('GET /[lang]/ingles/actividades/[id] — "Basado en" credit line (D7)',
 // Presentar/Imprimir became icon buttons, each with an accessible name
 // (`aria-label`, never only the native `title`) and a hover/focus tooltip
 // (`role="tooltip"`, wired via `aria-describedby`) carrying that same label.
+// PART 6a moved this whole action bar into the window's title bar
+// (`actions` slot) — the buttons themselves are unchanged.
 describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with tooltips (T2)', () => {
   it('Presentar and Imprimir (plain Astro links) carry an accessible name and a linked tooltip', async () => {
     activityResult.value = {

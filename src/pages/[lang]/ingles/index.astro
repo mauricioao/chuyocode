@@ -41,21 +41,19 @@
  * a grammar-tip speech bubble, hub-only — see `DeskHelper.astro`'s own
  * header for the fold/tip/lift behaviour. Plain Astro + `@lib/ui/deskHelper`,
  * same "no extra island" posture as every widget above except the player.
+ *
+ * WINDOWS, PART 6a (owner spec 2026-10-06): the desk itself and its own data
+ * loading moved into `DeskScene.astro` / `@lib/ingles/deskSceneData` so the
+ * practice page (`/[lang]/ingles/actividades/[id].astro`) can render the
+ * SAME desk behind its own window — this file is now just this route's data
+ * (via the shared loader) plus the parts still unique to the hub itself
+ * (the floating helper, the folder-gradient-adjacent script wiring).
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import DeskFolder from '@components/ingles/DeskFolder.astro';
-import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
-import DeskCalendarWidget from '@components/ingles/DeskCalendarWidget.astro';
-import DeskWeatherWidget from '@components/ingles/DeskWeatherWidget.astro';
-import DeskPlayerWidget from '@components/ingles/DeskPlayerWidget';
+import DeskScene from '@components/ingles/DeskScene.astro';
 import DeskHelper from '@components/ingles/DeskHelper.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { LEVELS, type Level } from '@lib/exerciseTaxonomy';
-import { getExerciseCount } from '@lib/exercises';
-import { getActivityCount, getPublishedActivities } from '@lib/activities/activities';
-import { pickDailyActivity } from '@lib/activities/dailyPick';
-import { publicImageUrl } from '@lib/activities/storage';
-import { nameFrom } from '@lib/profile';
+import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 
 // Prefer the middleware-validated lang; fall back to the route param and 404
 // if neither is supported (defensive — middleware normally sets it).
@@ -71,241 +69,42 @@ const english = UI_LABELS[lang].english;
 const t = english.hub;
 const levelLabels = english.levels;
 const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
-const viewerId = Astro.locals.user?.id ?? null;
 
-// Weather widget location (PART 4): Netlify's own request geo when present,
-// Lima otherwise — which is also exactly what local `astro dev` always gets
-// (no Netlify edge in front of it), so local development never needs its
-// own separate fallback branch. Rounded to 2 decimals for the REAL geo
-// reading only (privacy — a visitor's own city-level location is already
-// coarse, 2 decimals narrows it no further than that — and it is also the
-// weather endpoint's own cache key, so coalescing nearby visitors onto the
-// same rounded pair is what keeps MET's request volume low). The literal
-// Lima fallback below is a fixed constant, not a real visitor's location,
-// so it is used exactly as given rather than re-rounded.
-const LIMA_FALLBACK = { lat: -12.0464, lon: -77.0428, city: 'Lima' };
-
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-const geo = Astro.locals.netlify?.context?.geo;
-const hasGeoCoords = typeof geo?.latitude === 'number' && typeof geo?.longitude === 'number';
-const weatherLat = hasGeoCoords ? round2(geo!.latitude!) : LIMA_FALLBACK.lat;
-const weatherLon = hasGeoCoords ? round2(geo!.longitude!) : LIMA_FALLBACK.lon;
-const weatherCity = geo?.city?.trim() || LIMA_FALLBACK.city;
-const weatherLabel = t.weatherLabel.replace('{city}', weatherCity);
-
-const playerLabels = {
-  title: t.playerTitle,
-  prev: t.playerPrev,
-  next: t.playerNext,
-  play: t.playerPlay,
-  pause: t.playerPause,
-  unavailable: t.playerUnavailable,
-};
-
-/** "12 ejercicios" / "1 ejercicio", or `null` when the count degraded (never "0 …"). */
-function formatCount(count: number | null, one: string, many: string): string | null {
-  if (count === null) return null;
-  return `${count} ${count === 1 ? one : many}`;
-}
-
-// Two cheap counts plus the top-hearted pool `pickDailyActivity` picks
-// from, in parallel, so the hub pays for one extra round trip total.
-const [exerciseCount, activityCount, heartedPool] = await Promise.all([
-  getExerciseCount(),
-  getActivityCount(),
-  getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId }),
-]);
-
-const exerciseCountLabel = formatCount(exerciseCount, t.exerciseCountOne, t.exerciseCountMany);
-const activityCountLabel = formatCount(activityCount, t.activityCountOne, t.activityCountMany);
-
-const dailyPick = pickDailyActivity(heartedPool.activities, new Date());
-const dailyPickHref = dailyPick
-  ? `/${lang}/ingles/actividades/${dailyPick.id}`
-  : `/${lang}/ingles/actividades`;
-const dailyPickMeta = dailyPick?.title ?? null;
-const dailyPickPeek = dailyPick?.thumbnailPath ? publicImageUrl(dailyPick.thumbnailPath) : null;
-
-// First name from the signed-in visitor's own display name (`nameFrom`,
-// `@lib/profile` — the same resolver the header's account chip and `/api/me`
-// use, exported specifically for this synchronous, no-extra-I/O use —
-// `Astro.locals.user` is `User | null`, never read directly for a name
-// anywhere else). Falls back to a bare "Hola."/"Hi." when there is no
-// session at all (also what an anonymous visitor to the gated hub sees).
-const firstName = Astro.locals.user ? nameFrom(Astro.locals.user).trim().split(/\s+/)[0] : null;
-const greetingLine1 = firstName ? t.greetingNamed.replace('{name}', firstName) : t.greetingFallback;
-
-// CEFR band -> the dock tile's filled-bar colour (pop tokens, part 2) and
-// how many of the 6 bars light up — just the level's own position in the
-// ascending `LEVELS` list (A1 -> 1 bar … C2 -> 6 bars), same "ascending
-// difficulty" ordering `exerciseTaxonomy.ts` already documents.
-const BAND_FILL_CLASS: Record<'A' | 'B' | 'C', string> = {
-  A: 'bg-pop-green',
-  B: 'bg-pop-sky',
-  C: 'bg-pop-violet',
-};
-const BAR_HEIGHTS = [7, 11, 15, 19, 23, 27] as const;
-
-function bandOf(level: Level): 'A' | 'B' | 'C' {
-  return level[0] as 'A' | 'B' | 'C';
-}
+const desk = await loadDeskSceneData({
+  lang,
+  user: Astro.locals.user,
+  geo: Astro.locals.netlify?.context?.geo,
+});
 ---
 
 <BaseLayout lang={lang} title={t.title} description={t.description} theme="ingles">
-  <section
-    data-desk
-    class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-[calc(100dvh-96px)] desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-3 desk:pb-0"
-  >
-    {/* Shared gradients for every `DeskFolder`'s back/front SVG layers —
-        defined ONCE here, referenced by id, same `url(#…)` pattern the
-        approved mockup itself uses (`index.html`'s `#fb`/`#ff`). */}
-    <svg width="0" height="0" class="absolute" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="desk-folder-back" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#3aa6dc" />
-          <stop offset="1" stop-color="#2b8fc6" />
-        </linearGradient>
-        <linearGradient id="desk-folder-front" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#6fcdf5" />
-          <stop offset="1" stop-color="#4fb5ea" />
-        </linearGradient>
-      </defs>
-    </svg>
-
-    {/* Greeting — the one big type moment, centred on desktop, left-aligned
-        and FIRST on phones. `pointer-events-none` on desktop only: it
-        overlays the widgets/folders columns, and must never steal a click
-        meant for them. */}
-    <div
-      class="order-1 text-left desk:order-none desk:pointer-events-none desk:absolute desk:top-[46%] desk:left-1/2 desk:w-[min(980px,calc(100%-440px))] desk:-translate-x-1/2 desk:-translate-y-1/2 desk:text-center"
-    >
-      <h1 class="text-[clamp(40px,4.3vw,68px)] leading-[1.04] font-extrabold tracking-[-0.03em] text-foreground">
-        {greetingLine1}
-        <br />
-        <span class="desk:whitespace-nowrap">{t.greetingQuestion}</span>
-      </h1>
-      <p class="mx-auto mt-4 max-w-[54ch] text-base text-muted-foreground desk:mt-[18px] desk:text-lg">
-        {t.greetingSubtitle}
-      </p>
-    </div>
-
-    {/* Folders — a right-edge column on desktop, a home-screen grid on
-        phones (4 items: the 3 folders + "Crear actividad" fit a clean 2×2). */}
-    <nav
-      aria-label={t.foldersLabel}
-      class="order-2 grid grid-cols-2 gap-1 desk:order-none desk:col-start-2 desk:row-start-1 desk:flex desk:flex-col desk:items-end desk:gap-[18px] desk:pt-1"
-    >
-      <DeskFolder
-        href={`/${lang}/ingles/propuestos`}
-        label={t.proposedTitle}
-        meta={exerciseCountLabel}
-        icon="books"
-      />
-      <DeskFolder
-        href={`/${lang}/ingles/actividades`}
-        label={t.communityTitle}
-        meta={activityCountLabel}
-        icon="busts-in-silhouette"
-      />
-      <DeskFolder
-        href={dailyPickHref}
-        label={t.todayTitle}
-        meta={dailyPickMeta}
-        icon="glowing-star"
-        peekSrc={dailyPickPeek}
-      />
-      <a
-        href={`/${lang}/crear`}
-        class="group grid w-full justify-items-center gap-1.5 rounded-2xl px-2 py-2 text-center transition-colors hover:bg-pop-sky/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:w-[148px]"
-      >
-        <span class="relative block h-[77px] w-24 desk:h-24 desk:w-[120px]">
-          <span class="absolute left-1/2 top-1/2 h-[60%] w-[48%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-card shadow-[0_2px_6px_rgb(28_28_30_/_0.08)]">
-            <span
-              aria-hidden="true"
-              class="absolute inset-x-3 top-[30%] block h-[3px] rounded-sm bg-muted shadow-[0_9px_0_var(--muted),0_18px_0_var(--muted)]"
-            ></span>
-            {/* The "+" sits on the sheet's own corner, so it stays attached at
-                every size. */}
-            <span
-              aria-hidden="true"
-              class="absolute -right-3 -bottom-2.5 grid h-7 w-7 place-items-center rounded-full bg-pop-sky-deep text-lg font-bold leading-none text-white shadow-[0_1px_3px_rgb(28_28_30_/_0.2)]"
-            >
-              +
-            </span>
-          </span>
-        </span>
-        <span class="text-[13px] font-semibold text-foreground">{createActivityLabel}</span>
-      </a>
-    </nav>
-
-    {/* Widgets — top-left on desktop (160/160/320 columns × 2 rows, 20px
-        gaps, exactly the mockup's own `.widgets`), two columns on phones
-        (clock+calendar side by side, player/weather full width — the
-        `col-span-2` below, unprefixed, is the phone layout; `desk:` swaps
-        it back to the 2-column span row 2 actually needs). DOM order
-        matches the mockup's own source order (clock, calendar, player,
-        weather), which is also what the drag system (`@lib/ui/deskDrag`)
-        falls back to positioning from on a visitor's very first visit. */}
-    <section
-      aria-label={t.widgetsLabel}
-      class="order-3 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
-    >
-      <DeskClockWidget />
-      <DeskCalendarWidget />
-      <DeskPlayerWidget labels={playerLabels} client:load />
-      <DeskWeatherWidget
-        lat={weatherLat}
-        lon={weatherLon}
-        city={weatherCity}
-        label={weatherLabel}
-        unavailableLabel={t.weatherUnavailable}
-      />
-    </section>
-
-    {/* Levels dock — bottom centre on desktop, a horizontal scroller on
-        phones. */}
-    <div
-      class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2"
-    >
-      <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
-      <nav
-        aria-label={t.levelShortcutTitle}
-        class="ingles-glass flex max-w-full gap-2.5 overflow-x-auto rounded-[26px] p-2.5"
-      >
-        {
-          LEVELS.map((level, index) => {
-            const band = bandOf(level);
-            return (
-              <a
-                href={`/${lang}/ingles/propuestos?nivel=${level}`}
-                aria-label={`${level}, ${levelLabels[level]}`}
-                class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]">
-                  {BAR_HEIGHTS.map((height, barIndex) => (
-                    <i
-                      class:list={[
-                        'block w-[5px] rounded-sm',
-                        barIndex <= index ? BAND_FILL_CLASS[band] : 'bg-muted',
-                      ]}
-                      style={`height:${height}px`}
-                    />
-                  ))}
-                </span>
-                <b class="text-[13px] leading-none text-foreground">{level}</b>
-                <small class="text-center text-[11px] leading-tight text-muted-foreground">
-                  {levelLabels[level]}
-                </small>
-              </a>
-            );
-          })
-        }
-      </nav>
-    </div>
-  </section>
+  <DeskScene
+    lang={lang}
+    greetingLine1={desk.greetingLine1}
+    exerciseCountLabel={desk.exerciseCountLabel}
+    activityCountLabel={desk.activityCountLabel}
+    dailyPickHref={desk.dailyPickHref}
+    dailyPickMeta={desk.dailyPickMeta}
+    dailyPickPeek={desk.dailyPickPeek}
+    weatherLat={desk.weatherLat}
+    weatherLon={desk.weatherLon}
+    weatherCity={desk.weatherCity}
+    weatherLabel={desk.weatherLabel}
+    playerLabels={desk.playerLabels}
+    levelLabels={levelLabels}
+    labels={{
+      greetingQuestion: t.greetingQuestion,
+      greetingSubtitle: t.greetingSubtitle,
+      foldersLabel: t.foldersLabel,
+      proposedTitle: t.proposedTitle,
+      communityTitle: t.communityTitle,
+      todayTitle: t.todayTitle,
+      createActivityLabel,
+      widgetsLabel: t.widgetsLabel,
+      weatherUnavailable: t.weatherUnavailable,
+      levelShortcutTitle: t.levelShortcutTitle,
+    }}
+  />
 
   {/* "Desktop" redesign PART 5 (owner spec 2026-10-06): the floating
       character helper, hub-only — practice/editor/presentation pages never
@@ -324,6 +123,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
     import { initDeskWeather } from '@lib/ui/deskWeather';
     import { initDeskDrag } from '@lib/ui/deskDrag';
     import { initDeskHelper } from '@lib/ui/deskHelper';
+    import { applyDeskWindowReturnFocus } from '@lib/ui/deskWindow';
 
     // Drag enhancement runs AFTER the widgets/weather shells exist (it reads
     // their current box with `getBoundingClientRect`), but does not need to
@@ -334,6 +134,10 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       void initDeskWeather();
       initDeskDrag();
       initDeskHelper();
+      // "Desktop" redesign PART 6a: refocuses whichever folder opened a
+      // practice window, once the visitor is back on the hub — a no-op
+      // (idempotent) when nothing closed a window to get here.
+      applyDeskWindowReturnFocus();
     };
 
     if (document.readyState === 'loading') {

@@ -53,8 +53,12 @@ describe('ROW_PADDING_X', () => {
     expect(src).not.toContain('px-2 py-1"');
   });
 
-  it('the practice page\'s own static header row uses the same token', () => {
-    const src = sourceOf('pages/[lang]/ingles/actividades/[id].astro');
+  // "Desktop" redesign PART 6a (owner spec 2026-10-06): the practice page's
+  // own static header row moved into the shared window shell's title bar
+  // (`DeskWindow.astro`, every practice-window-opening page's own titlebar,
+  // not just this one page) — the token moved with it.
+  it("the practice window's title bar uses the same token", () => {
+    const src = sourceOf('components/ingles/DeskWindow.astro');
     expect(src).toContain("import { ROW_PADDING_X } from '@lib/ui/layout'");
     expect(src).toContain('${ROW_PADDING_X} py-3');
     expect(src).not.toContain('border-border p-3 lg:rounded-none');
