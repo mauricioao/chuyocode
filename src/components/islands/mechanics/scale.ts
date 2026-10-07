@@ -13,8 +13,7 @@
  * always the one nobody remembers to update.
  *
  * Tailwind scans source TEXT, so these must stay whole, literal class names —
- * never a template built from a variable (see `TITLE_SIZE` in
- * `ExerciseCard.astro` for the same rule).
+ * never a template built from a variable.
  */
 
 /**
