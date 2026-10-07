@@ -4,7 +4,6 @@ import { initDeskWindowDrag } from './deskWindowDrag';
 import { DESK_WINDOW_OFFSET_STORAGE_KEY } from '../deskWindowDragMath';
 
 const RECTS: Record<string, { left: number; top: number; width: number; height: number }> = {
-  header: { left: 0, top: 0, width: 1440, height: 64 },
   window: { left: 64, top: 76, width: 600, height: 500 },
 };
 
@@ -16,10 +15,6 @@ const RECTS: Record<string, { left: number; top: number; width: number; height: 
  * "moved", breaking the module's own idempotency assumption purely as a test
  * artifact. */
 function rectFor(el: Element) {
-  if (el.hasAttribute('data-chrome-header')) {
-    const r = RECTS.header;
-    return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON() {} };
-  }
   if (el.id === 'desk-window') {
     const r = RECTS.window;
     const translate = windowEl().style.translate || '0px 0px';
@@ -33,7 +28,6 @@ function rectFor(el: Element) {
 
 function setDom(): void {
   document.body.innerHTML = `
-    <header data-chrome-header></header>
     <section id="desk-window" data-fullscreen="false">
       <div data-desk-window-titlebar data-testid="desk-window-titlebar">
         <button type="button" id="inner-btn">x</button>
@@ -164,15 +158,15 @@ describe('initDeskWindowDrag — pointer drag', () => {
     expect(down.defaultPrevented).toBe(false);
   });
 
-  it('clamps the offset so the window never goes above the header', () => {
+  it('clamps the offset so the window never goes above the top edge margin — the whole screen is usable', () => {
     const win = fakeWin();
     initDeskWindowDrag(windowEl(), document, win);
 
     titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0 }));
     titlebarEl().dispatchEvent(new MouseEvent('pointermove', { clientX: 0, clientY: -5000 }));
 
-    // window.top (76) + offset.y must equal header.bottom (64).
-    expect(windowEl().style.translate).toBe('0px -12px');
+    // window.top (76) + offset.y must equal the 8px edge margin.
+    expect(windowEl().style.translate).toBe('0px -68px');
   });
 
   it('keeps the whole window on screen when dragged far past the right/bottom edges', () => {

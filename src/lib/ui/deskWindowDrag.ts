@@ -29,7 +29,6 @@ import { isEmbeddedWindowDom, postDeskWindowMessage } from './deskWindowMessagin
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 const TITLEBAR_SELECTOR = '[data-desk-window-titlebar]';
-const HEADER_SELECTOR = '[data-chrome-header]';
 /** Pointerdowns on any of these (including the editor's own portaled title `<input>`) never start a drag. */
 const IGNORE_SELECTOR = 'button, a, input, textarea, select, [contenteditable="true"]';
 const DRAGGING_CLASS = 'ingles-window--dragging';
@@ -57,11 +56,6 @@ function isDesktop(win: Window): boolean {
 
 function isFullScreen(windowEl: HTMLElement): boolean {
   return windowEl.getAttribute('data-fullscreen') === 'true';
-}
-
-function headerBottom(doc: Document): number {
-  const header = doc.querySelector<HTMLElement>(HEADER_SELECTOR);
-  return header ? header.getBoundingClientRect().bottom : 0;
 }
 
 /** The whole window element's own rect WITHOUT `current` (the offset already applied to it) — so repeated clamps never compound onto an already-offset measurement. */
@@ -127,7 +121,7 @@ export function initDeskWindowDrag(windowEl: HTMLElement, doc: Document = docume
 
   function clampAndApply(next: Offset): void {
     const rect = unoffsetWindowRect(windowEl, offset);
-    const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
+    const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
     applyOffset(clamped);
   }
 

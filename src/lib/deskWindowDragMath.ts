@@ -39,25 +39,26 @@ export const WINDOW_EDGE_MARGIN = 8;
 
 /**
  * Clamps a drag offset so the WHOLE window — not just its title bar — always
- * stays inside the viewport: never above the header's own bottom edge
- * (keeps the traffic lights reachable), and never closer than
- * {@link WINDOW_EDGE_MARGIN} to the left, right, or bottom viewport edge.
+ * stays inside the viewport: never closer than {@link WINDOW_EDGE_MARGIN} to
+ * the top, left, right, or bottom viewport edge. "Desktop" redesign (owner
+ * spec 2026-10-07, "prescindir del header normal"): the window may use the
+ * ENTIRE screen now — there is no more header reserving the top of the
+ * viewport, so the top bound is the same small edge margin every other side
+ * already used, not a header's own bottom edge.
  *
  * When the viewport is too small/short for both bounds to hold at once (a
  * tiny viewport, or a window wider/taller than the viewport itself), the
- * UPPER/LEFT bound (never above the header, never off the left edge) wins
- * over the lower/right one — same "clamp to the safe corner" posture as
- * `@lib/deskDragMath#clampPosition`, which keeps the traffic lights (always
- * top-left of the window) on screen even then.
+ * upper/left bound wins over the lower/right one — same "clamp to the safe
+ * corner" posture as `@lib/deskDragMath#clampPosition`, which keeps the
+ * traffic lights (always top-left of the window) on screen even then.
  */
 export function clampWindowDragOffset(
   offset: Offset,
   windowRect: WindowRect,
   viewport: ViewportSize,
-  headerBottom: number,
   margin: number = WINDOW_EDGE_MARGIN,
 ): Offset {
-  const minY = headerBottom - windowRect.top;
+  const minY = margin - windowRect.top;
   const maxY = Math.max(minY, viewport.height - margin - windowRect.height - windowRect.top);
   const y = Math.min(Math.max(offset.y, minY), maxY);
 

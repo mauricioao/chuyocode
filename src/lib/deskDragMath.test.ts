@@ -31,6 +31,15 @@ describe('clampPosition', () => {
   it('clamps to 0 when the desk is smaller than the widget, rather than going negative', () => {
     expect(clampPosition({ x: 10, y: 10 }, { w: 400, h: 400 }, { w: 100, h: 100 })).toEqual({ x: 0, y: 0 });
   });
+
+  it('honours a custom top margin, clamping the top edge to it instead of 0 — the rest of the desk stays flush', () => {
+    expect(clampPosition({ x: 10, y: -50 }, widget, desk, 8)).toEqual({ x: 10, y: 8 });
+    expect(clampPosition({ x: 5000, y: 5000 }, widget, desk, 8)).toEqual({ x: desk.w - widget.w, y: desk.h - widget.h });
+  });
+
+  it('prefers the top margin over the degenerate 0 bound when the desk is smaller than the widget', () => {
+    expect(clampPosition({ x: 10, y: 10 }, { w: 400, h: 400 }, { w: 100, h: 100 }, 8)).toEqual({ x: 0, y: 8 });
+  });
 });
 
 describe('parseStoredPositions', () => {
