@@ -245,6 +245,9 @@ function createChip(
   return chip;
 }
 
+/** The `[role="menu"]` popover's own marker attribute — see {@link createOverflowTile}'s header for why it lives on `doc.body`, not inside the tray. */
+const OVERFLOW_MENU_ATTR = 'data-minimized-tray-menu';
+
 /**
  * Builds the "+N" overflow tile — same 56px squircle footprint as a chip,
  * but a `<button>` (not an opener) that toggles a small `role="menu"`
@@ -253,15 +256,23 @@ function createChip(
  * Escape closes — owner spec 2026-10-06). Each link still carries
  * `data-desk-window-open`, so reopening from inside the menu gets the exact
  * same treatment as a directly-visible chip, with no extra wiring.
+ *
+ * The menu is appended to `doc.body`, positioned with `position: fixed`
+ * from the button's own `getBoundingClientRect()` at OPEN time, rather than
+ * nested `position: absolute` inside the button's own wrapper — the dock
+ * shelf itself scrolls horizontally (`overflow-x-auto`, for the phone
+ * layout), which also computes its own `overflow-y` to `auto` per the CSS
+ * spec the moment only one axis is set to non-`visible`, clipping anything
+ * that tried to escape it vertically. Returns the button alone (the tray's
+ * own flex child); the caller is responsible for clearing any previous
+ * menu from `doc.body` before building a new one — see
+ * {@link renderMinimizedWindowsTray}.
  */
 function createOverflowTile(
   overflowEntries: readonly MinimizedWindowEntry[],
   moreLabelTemplate: string,
   doc: Document,
 ): HTMLElement {
-  const wrapper = doc.createElement('div');
-  wrapper.className = 'relative shrink-0';
-
   const moreLabel = fillMoreLabel(moreLabelTemplate, overflowEntries.length);
 
   const button = doc.createElement('button');
@@ -273,14 +284,14 @@ function createOverflowTile(
   button.title = moreLabel;
   button.textContent = `+${overflowEntries.length}`;
   button.className =
-    'flex h-14 w-14 items-center justify-center rounded-[13px] bg-gradient-to-b from-card to-muted text-sm font-semibold text-foreground shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'flex h-14 w-14 shrink-0 items-center justify-center rounded-[13px] bg-gradient-to-b from-card to-muted text-sm font-semibold text-foreground shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   const menu = doc.createElement('div');
+  menu.setAttribute(OVERFLOW_MENU_ATTR, '');
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', moreLabel);
   menu.hidden = true;
-  menu.className =
-    'absolute bottom-full right-0 mb-2 w-48 rounded-md border border-border bg-popover p-1 shadow-lg';
+  menu.className = 'fixed z-50 w-48 rounded-md border border-border bg-popover p-1 shadow-lg';
 
   for (const entry of overflowEntries) {
     const link = doc.createElement('a');
@@ -294,31 +305,42 @@ function createOverflowTile(
 
   button.addEventListener('click', () => {
     const willOpen = menu.hidden;
+    if (willOpen) {
+      const rect = button.getBoundingClientRect();
+      const MENU_WIDTH = 192; // w-48
+      const GAP = 8;
+      menu.style.left = `${Math.max(8, rect.right - MENU_WIDTH)}px`;
+      menu.style.top = `${Math.max(8, rect.top - GAP)}px`;
+      menu.style.transform = 'translateY(-100%)'; // opens UPWARD from the tile, same side as the dock's own tooltip/popover posture
+    }
     menu.hidden = !willOpen;
     button.setAttribute('aria-expanded', String(willOpen));
   });
 
-  wrapper.append(button, menu);
-  return wrapper;
+  doc.body.appendChild(menu);
+  return button;
 }
 
 /**
- * Wires ONE `Escape`-closes-the-open-menu listener per `container`, idempotent
- * (same `dataset`-flag posture as `deskHelper.ts#initDeskHelper`) — the tray
- * re-renders every time a chip is added/removed/reopened, which would
- * otherwise create (and recreate, never remove) a fresh overflow tile AND a
- * fresh `document`-level listener on every single render. Looked up fresh at
- * EVENT time, never captured at wiring time, since the overflow tile/menu
- * pair is itself rebuilt on every render.
+ * Wires ONE `Escape`-closes-the-open-menu listener per `doc`, idempotent via
+ * `doc.documentElement`'s own `dataset` flag (same posture as
+ * `deskHelper.ts#initDeskHelper`) — the tray re-renders every time a chip is
+ * added/removed/reopened, which would otherwise stack a fresh
+ * `document`-level listener on every single render. There is only ever ONE
+ * tray/menu pair live in a document at a time (same assumption
+ * `createOverflowTile`'s own global `doc.body` placement already makes), so
+ * both the button and the menu are looked up globally, fresh at EVENT time —
+ * never a `container` captured at wiring time, which would otherwise go
+ * stale the moment a later render replaces it with a new one.
  */
-function wireOverflowEscapeClose(container: HTMLElement, doc: Document): void {
-  if (container.dataset.minimizedTrayEscapeReady === 'true') return;
-  container.dataset.minimizedTrayEscapeReady = 'true';
+function wireOverflowEscapeClose(doc: Document): void {
+  if (doc.documentElement.dataset.minimizedTrayEscapeReady === 'true') return;
+  doc.documentElement.dataset.minimizedTrayEscapeReady = 'true';
 
   doc.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
-    const menu = container.querySelector<HTMLElement>('[role="menu"]');
-    const button = container.querySelector<HTMLElement>(`[${MINIMIZED_TRAY_ATTR.more}]`);
+    const menu = doc.querySelector<HTMLElement>(`[${OVERFLOW_MENU_ATTR}]`);
+    const button = doc.querySelector<HTMLElement>(`[${MINIMIZED_TRAY_ATTR.more}]`);
     if (!menu || menu.hidden) return;
     menu.hidden = true;
     button?.setAttribute('aria-expanded', 'false');
@@ -344,7 +366,13 @@ export function renderMinimizedWindowsTray(
   doc: Document = document,
   moreLabelTemplate = '+{n}',
 ): void {
-  wireOverflowEscapeClose(container, doc);
+  wireOverflowEscapeClose(doc);
+
+  // The overflow menu (if any) lives on `doc.body`, outside `container` —
+  // `container.replaceChildren()` below never reaches it, so it is cleared
+  // explicitly here on every render to avoid leaking a stale/orphaned copy
+  // behind the one `createOverflowTile` is about to build (or not).
+  doc.querySelector(`[${OVERFLOW_MENU_ATTR}]`)?.remove();
 
   container.replaceChildren();
   const isEmpty = entries.length === 0;

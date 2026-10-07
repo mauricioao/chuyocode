@@ -253,7 +253,9 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
 
     const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
-    const menu = container.querySelector('[role="menu"]') as HTMLElement;
+    // The menu escapes the dock's own `overflow-x-auto` scroller onto
+    // `document.body` (fixed-positioned) — see `createOverflowTile`'s header.
+    const menu = document.querySelector('[data-minimized-tray-menu]') as HTMLElement;
     expect(menu.hidden).toBe(true);
 
     moreButton.click();
@@ -275,7 +277,7 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
 
     const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
-    const menu = container.querySelector('[role="menu"]') as HTMLElement;
+    const menu = document.querySelector('[data-minimized-tray-menu]') as HTMLElement;
     moreButton.click();
     expect(menu.hidden).toBe(false);
 
@@ -285,6 +287,7 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     expect(menu.hidden).toBe(true);
     expect(moreButton.getAttribute('aria-expanded')).toBe('false');
     container.remove();
+    menu.remove();
   });
 });
 
