@@ -6,8 +6,8 @@
  * `@lib/ui/deskWindowDrag`) — the window itself is positioned by CSS
  * `inset-*` utilities (`DeskWindow.astro`), never JS-computed left/top, so
  * dragging only ever adds a `translate` OFFSET on top of that default box;
- * this module is exactly the clamp that keeps the title bar reachable no
- * matter how far a visitor drags it.
+ * this module is exactly the clamp that keeps the WHOLE window (and so its
+ * traffic lights) on screen no matter how far a visitor drags it.
  */
 
 export interface Offset {
@@ -15,8 +15,8 @@ export interface Offset {
   y: number;
 }
 
-/** The title bar's own rect at offset `{x:0,y:0}` — its default, un-dragged position. */
-export interface TitlebarRect {
+/** The whole window element's own rect at offset `{x:0,y:0}` — its default, un-dragged position. */
+export interface WindowRect {
   top: number;
   left: number;
   width: number;
@@ -34,38 +34,35 @@ export interface ViewportSize {
  * activity's own window. */
 export const DESK_WINDOW_OFFSET_STORAGE_KEY = 'ingles-desk-window-offset';
 
-/** How much of the title bar's own width must stay horizontally on screen, on either side. */
-export const MIN_VISIBLE_TITLEBAR_WIDTH = 160;
+/** Minimum gap kept between the window's own edge and the viewport's edge (left/right/bottom). */
+export const WINDOW_EDGE_MARGIN = 8;
 
 /**
- * Clamps a drag offset so the title bar — not the whole window, which can
- * legitimately run off-screen at the bottom/sides; the title bar is what a
- * visitor actually needs to reach to drag/close/minimize it again — always
- * stays between the header's own bottom edge and the viewport's bottom
- * edge vertically, and keeps at least {@link MIN_VISIBLE_TITLEBAR_WIDTH} of
- * it on screen horizontally either side.
+ * Clamps a drag offset so the WHOLE window — not just its title bar — always
+ * stays inside the viewport: never above the header's own bottom edge
+ * (keeps the traffic lights reachable), and never closer than
+ * {@link WINDOW_EDGE_MARGIN} to the left, right, or bottom viewport edge.
  *
- * When the viewport is too small/short for both bounds to hold at once
- * (a tiny window, or a very short viewport), the UPPER bound (never above
- * the header, never fully off the left/right edge) wins over the lower
- * one — same "clamp to the safe corner" posture as
- * `@lib/deskDragMath#clampPosition`.
+ * When the viewport is too small/short for both bounds to hold at once (a
+ * tiny viewport, or a window wider/taller than the viewport itself), the
+ * UPPER/LEFT bound (never above the header, never off the left edge) wins
+ * over the lower/right one — same "clamp to the safe corner" posture as
+ * `@lib/deskDragMath#clampPosition`, which keeps the traffic lights (always
+ * top-left of the window) on screen even then.
  */
 export function clampWindowDragOffset(
   offset: Offset,
-  titlebar: TitlebarRect,
+  windowRect: WindowRect,
   viewport: ViewportSize,
   headerBottom: number,
-  minVisibleWidth: number = MIN_VISIBLE_TITLEBAR_WIDTH,
+  margin: number = WINDOW_EDGE_MARGIN,
 ): Offset {
-  const minY = headerBottom - titlebar.top;
-  const maxY = Math.max(minY, viewport.height - titlebar.height - titlebar.top);
+  const minY = headerBottom - windowRect.top;
+  const maxY = Math.max(minY, viewport.height - margin - windowRect.height - windowRect.top);
   const y = Math.min(Math.max(offset.y, minY), maxY);
 
-  const boundA = minVisibleWidth - titlebar.width - titlebar.left;
-  const boundB = viewport.width - minVisibleWidth - titlebar.left;
-  const minX = Math.min(boundA, boundB);
-  const maxX = Math.max(boundA, boundB);
+  const minX = margin - windowRect.left;
+  const maxX = Math.max(minX, viewport.width - margin - windowRect.width - windowRect.left);
   const x = Math.min(Math.max(offset.x, minX), maxX);
 
   return { x, y };

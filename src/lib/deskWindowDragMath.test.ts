@@ -3,59 +3,64 @@ import {
   clampWindowDragOffset,
   parseStoredWindowOffset,
   serializeWindowOffset,
-  MIN_VISIBLE_TITLEBAR_WIDTH,
-  type TitlebarRect,
+  WINDOW_EDGE_MARGIN,
+  type WindowRect,
 } from './deskWindowDragMath';
 
 const viewport = { width: 1440, height: 900 };
 const headerBottom = 64;
 
-/** A titlebar sitting at its default position: inset 64px from the left, 76px from the top, 600px wide, 56px tall. */
-const titlebar: TitlebarRect = { top: 76, left: 64, width: 600, height: 56 };
+/** The whole window's own rect sitting at its default position: inset 64px from the left, 76px from the top, 600px wide, 500px tall. */
+const windowRect: WindowRect = { top: 76, left: 64, width: 600, height: 500 };
 
 describe('clampWindowDragOffset', () => {
   it('leaves a small, in-bounds offset untouched', () => {
-    expect(clampWindowDragOffset({ x: 20, y: 20 }, titlebar, viewport, headerBottom)).toEqual({ x: 20, y: 20 });
+    expect(clampWindowDragOffset({ x: 20, y: 20 }, windowRect, viewport, headerBottom)).toEqual({ x: 20, y: 20 });
   });
 
-  it('never lets the title bar go above the header bottom', () => {
-    const result = clampWindowDragOffset({ x: 0, y: -500 }, titlebar, viewport, headerBottom);
-    expect(titlebar.top + result.y).toBe(headerBottom);
+  it('never lets the window go above the header bottom (traffic lights stay reachable)', () => {
+    const result = clampWindowDragOffset({ x: 0, y: -500 }, windowRect, viewport, headerBottom);
+    expect(windowRect.top + result.y).toBe(headerBottom);
   });
 
-  it('never lets the title bar go past the viewport bottom', () => {
-    const result = clampWindowDragOffset({ x: 0, y: 5000 }, titlebar, viewport, headerBottom);
-    expect(titlebar.top + result.y + titlebar.height).toBe(viewport.height);
+  it('never lets the window bottom edge go past the viewport bottom minus the edge margin', () => {
+    const result = clampWindowDragOffset({ x: 0, y: 5000 }, windowRect, viewport, headerBottom);
+    expect(windowRect.top + result.y + windowRect.height).toBe(viewport.height - WINDOW_EDGE_MARGIN);
   });
 
-  it('keeps at least MIN_VISIBLE_TITLEBAR_WIDTH visible when dragged far left', () => {
-    const result = clampWindowDragOffset({ x: -5000, y: 0 }, titlebar, viewport, headerBottom);
-    const visibleRight = titlebar.left + result.x + titlebar.width;
-    expect(visibleRight).toBe(MIN_VISIBLE_TITLEBAR_WIDTH);
+  it('never lets the window left edge go past the edge margin when dragged far left', () => {
+    const result = clampWindowDragOffset({ x: -5000, y: 0 }, windowRect, viewport, headerBottom);
+    expect(windowRect.left + result.x).toBe(WINDOW_EDGE_MARGIN);
   });
 
-  it('keeps at least MIN_VISIBLE_TITLEBAR_WIDTH visible when dragged far right', () => {
-    const result = clampWindowDragOffset({ x: 5000, y: 0 }, titlebar, viewport, headerBottom);
-    const visibleLeft = titlebar.left + result.x;
-    expect(visibleLeft).toBe(viewport.width - MIN_VISIBLE_TITLEBAR_WIDTH);
+  it('never lets the window right edge go past the viewport width minus the edge margin when dragged far right', () => {
+    const result = clampWindowDragOffset({ x: 5000, y: 0 }, windowRect, viewport, headerBottom);
+    expect(windowRect.left + result.x + windowRect.width).toBe(viewport.width - WINDOW_EDGE_MARGIN);
   });
 
-  it('honours a custom minVisibleWidth', () => {
-    const result = clampWindowDragOffset({ x: -5000, y: 0 }, titlebar, viewport, headerBottom, 80);
-    const visibleRight = titlebar.left + result.x + titlebar.width;
-    expect(visibleRight).toBe(80);
+  it('honours a custom edge margin', () => {
+    const result = clampWindowDragOffset({ x: -5000, y: 0 }, windowRect, viewport, headerBottom, 24);
+    expect(windowRect.left + result.x).toBe(24);
   });
 
   it('prefers staying below the header over the viewport-bottom bound when both cannot hold (a tiny viewport)', () => {
     const tinyViewport = { width: 1440, height: 100 };
-    const result = clampWindowDragOffset({ x: 0, y: 0 }, titlebar, tinyViewport, headerBottom);
-    expect(titlebar.top + result.y).toBe(headerBottom);
+    const result = clampWindowDragOffset({ x: 0, y: 0 }, windowRect, tinyViewport, headerBottom);
+    expect(windowRect.top + result.y).toBe(headerBottom);
   });
 
   it('is a no-op round trip at the exact bound (idempotent)', () => {
-    const first = clampWindowDragOffset({ x: -5000, y: -5000 }, titlebar, viewport, headerBottom);
-    const second = clampWindowDragOffset(first, titlebar, viewport, headerBottom);
+    const first = clampWindowDragOffset({ x: -5000, y: -5000 }, windowRect, viewport, headerBottom);
+    const second = clampWindowDragOffset(first, windowRect, viewport, headerBottom);
     expect(second).toEqual(first);
+  });
+
+  it('keeps the whole window on screen even when dragged diagonally past every edge at once', () => {
+    const result = clampWindowDragOffset({ x: -5000, y: 5000 }, windowRect, viewport, headerBottom);
+    expect(windowRect.left + result.x).toBeGreaterThanOrEqual(WINDOW_EDGE_MARGIN);
+    expect(windowRect.top + result.y).toBeGreaterThanOrEqual(headerBottom);
+    expect(windowRect.left + result.x + windowRect.width).toBeLessThanOrEqual(viewport.width - WINDOW_EDGE_MARGIN);
+    expect(windowRect.top + result.y + windowRect.height).toBeLessThanOrEqual(viewport.height - WINDOW_EDGE_MARGIN);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   serializeWindowOffset,
   DESK_WINDOW_OFFSET_STORAGE_KEY,
   type Offset,
+  type WindowRect,
 } from '../deskWindowDragMath';
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
@@ -62,9 +63,9 @@ function headerBottom(doc: Document): number {
   return header ? header.getBoundingClientRect().bottom : 0;
 }
 
-/** The title bar's own rect WITHOUT `current` (the offset already applied to it) — so repeated clamps never compound onto an already-offset measurement. */
-function unoffsetTitlebarRect(titlebar: HTMLElement, current: Offset) {
-  const rect = titlebar.getBoundingClientRect();
+/** The whole window element's own rect WITHOUT `current` (the offset already applied to it) — so repeated clamps never compound onto an already-offset measurement. */
+function unoffsetWindowRect(windowEl: HTMLElement, current: Offset): WindowRect {
+  const rect = windowEl.getBoundingClientRect();
   return { top: rect.top - current.y, left: rect.left - current.x, width: rect.width, height: rect.height };
 }
 
@@ -89,7 +90,7 @@ export function initDeskWindowDrag(windowEl: HTMLElement, doc: Document = docume
   }
 
   function clampAndApply(next: Offset): void {
-    const rect = unoffsetTitlebarRect(titlebar!, offset);
+    const rect = unoffsetWindowRect(windowEl, offset);
     const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
     applyOffset(clamped);
   }

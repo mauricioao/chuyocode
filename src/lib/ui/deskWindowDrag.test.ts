@@ -5,23 +5,23 @@ import { DESK_WINDOW_OFFSET_STORAGE_KEY } from '../deskWindowDragMath';
 
 const RECTS: Record<string, { left: number; top: number; width: number; height: number }> = {
   header: { left: 0, top: 0, width: 1440, height: 64 },
-  titlebar: { left: 64, top: 76, width: 600, height: 56 },
+  window: { left: 64, top: 76, width: 600, height: 500 },
 };
 
 /** jsdom computes no real layout — `getBoundingClientRect` is stubbed from
- * fixed fixture rects, but the TITLE BAR's reported rect must still reflect
- * whatever `translate` the window itself currently carries (same as a real
- * browser, where translating the window visually moves everything inside
- * it) — otherwise re-clamping a second time would subtract an offset from a
- * rect that never actually "moved", breaking the module's own idempotency
- * assumption purely as a test artifact. */
+ * fixed fixture rects, but the WINDOW's own reported rect must still reflect
+ * whatever `translate` it currently carries (same as a real browser, where
+ * `translate` is set directly on the window element) — otherwise re-clamping
+ * a second time would subtract an offset from a rect that never actually
+ * "moved", breaking the module's own idempotency assumption purely as a test
+ * artifact. */
 function rectFor(el: Element) {
   if (el.hasAttribute('data-chrome-header')) {
     const r = RECTS.header;
     return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON() {} };
   }
-  if (el.hasAttribute('data-desk-window-titlebar')) {
-    const r = RECTS.titlebar;
+  if (el.id === 'desk-window') {
+    const r = RECTS.window;
     const translate = windowEl().style.translate || '0px 0px';
     const [dx, dy] = translate.split(' ').map((v) => parseFloat(v) || 0);
     const left = r.left + dx;
@@ -143,15 +143,30 @@ describe('initDeskWindowDrag — pointer drag', () => {
     expect(stored).toEqual({ x: 40, y: 30 });
   });
 
-  it('clamps the offset so the title bar never goes above the header', () => {
+  it('clamps the offset so the window never goes above the header', () => {
     const win = fakeWin();
     initDeskWindowDrag(windowEl(), document, win);
 
     titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0 }));
     titlebarEl().dispatchEvent(new MouseEvent('pointermove', { clientX: 0, clientY: -5000 }));
 
-    // titlebar.top (76) + offset.y must equal header.bottom (64).
+    // window.top (76) + offset.y must equal header.bottom (64).
     expect(windowEl().style.translate).toBe('0px -12px');
+  });
+
+  it('keeps the whole window on screen when dragged far past the right/bottom edges', () => {
+    const win = fakeWin();
+    initDeskWindowDrag(windowEl(), document, win);
+
+    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointermove', { clientX: 5000, clientY: 5000 }));
+
+    const [x, y] = windowEl()
+      .style.translate.split(' ')
+      .map((v) => parseFloat(v));
+    // window is 600x500 at (64, 76); viewport is 1440x900; margin is 8px.
+    expect(64 + x + 600).toBeLessThanOrEqual(1440 - 8);
+    expect(76 + y + 500).toBeLessThanOrEqual(900 - 8);
   });
 });
 
