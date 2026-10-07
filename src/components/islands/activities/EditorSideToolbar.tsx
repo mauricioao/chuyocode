@@ -81,17 +81,34 @@ const STORAGE_KEY = 'chuyocode:editor-side-toolbar';
 const DOCK_TARGET_SIZE = 32;
 
 /**
- * The visible area the floating rail (and the ghost dock target) may occupy
- * — between the real `<header>`/`<footer>` elements' own edges, full window
- * width. Only ever called client-side (inside an effect or an event
- * handler, never during the render body while `docked` could still be the
- * server-matching default) — `document`/`window` don't exist during SSR,
- * and the guard below is defensive insurance on top of that, not the only
- * thing preventing an SSR crash.
+ * The visible area the floating rail (and the ghost dock target) may occupy.
+ *
+ * PART 6b polish (owner report: "el riel se sale de la ventana, queda
+ * pegado al borde de la pantalla"): this component now ALWAYS renders
+ * inside `DeskWindow` (the activity editor's only caller) — a plain `fixed`
+ * rail measured against the full viewport/header/footer used to clamp
+ * itself past the window's own `desk:` inset border, since the window is
+ * itself inset from the viewport there. `[data-desk-window-body]`
+ * (`DeskWindow.astro`'s own body wrapper, the one non-scrolling ancestor at
+ * `desk:`) is checked FIRST and, when present, is the bounds — the rail then
+ * stays fully inside the window's own body, on every axis, instead of the
+ * screen. Falls back to the original header-to-footer/full-width
+ * measurement when no desk window is mounted (every other, non-editor
+ * caller of this component, and this file's own tests). Only ever called
+ * client-side (inside an effect or an event handler, never during the
+ * render body while `docked` could still be the server-matching default) —
+ * `document`/`window` don't exist during SSR, and the guard below is
+ * defensive insurance on top of that, not the only thing preventing an SSR
+ * crash.
  */
 function measureBounds(): Bounds {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return { left: 0, right: 0, top: 0, bottom: 0 };
+  }
+  const windowBody = document.querySelector('[data-desk-window-body]');
+  if (windowBody) {
+    const rect = windowBody.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
   }
   const header = document.querySelector('header');
   const footer = document.querySelector('footer');
@@ -610,8 +627,15 @@ export default function EditorSideToolbar({
         // which a docked rail is not). FLOATING (undocked): the same
         // glass-floating recipe `BackButton`/`ScrollToTop` use, since once
         // dragged free it IS a floating control.
+        // `desk:right-7` (PART 6b polish): the window's own `desk:inset-x-16`
+        // border sits 16px in from the viewport edge at that breakpoint —
+        // `right-3` (12px) alone landed the docked rail OUTSIDE it. 28px
+        // (16+12) keeps the exact same `right-3` look everywhere the window
+        // is already full-screen (below `desk:`, where window edge ==
+        // viewport edge, so `right-3` was already correct) and pulls it
+        // inward only once the window itself gets that 16px desktop inset.
         docked
-          ? 'fixed top-1/2 right-3 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
+          ? 'fixed top-1/2 right-3 desk:right-7 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
           : 'glass-floating fixed z-40 flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)'
       }
       style={docked ? undefined : { left: position.x, top: position.y }}
