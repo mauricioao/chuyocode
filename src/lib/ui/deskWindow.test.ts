@@ -129,6 +129,7 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
         fn();
         return 0;
       }) as unknown as Window['setTimeout'],
+      addEventListener: () => {},
     } as unknown as Window;
   }
 
@@ -388,6 +389,122 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
 
       expect(el.classList.contains('ingles-window--closing')).toBe(false);
       expect(win.location.href).toBe('/es/ingles');
+    });
+  });
+
+  // Window-manager architecture (embedded mode): `document.documentElement`
+  // carries `data-desk-window-embedded` (`BaseLayout.astro`'s own `embedded`
+  // prop) — `deskWindow.ts` reads it off the REAL `document` passed as `doc`
+  // in every test above, so these are isolated to their own `describe` with
+  // their own `afterEach` cleanup.
+  describe('embedded mode (window-manager architecture): posts to the host instead of navigating', () => {
+    function fakeEmbeddedWin(parentPosted: Array<{ message: unknown; origin: string }>) {
+      const win = fakeWin();
+      (win as unknown as { parent: unknown }).parent = {
+        postMessage: (message: unknown, origin: string) => parentPosted.push({ message, origin }),
+      };
+      return win;
+    }
+
+    afterEach(() => {
+      document.documentElement.removeAttribute('data-desk-window-embedded');
+    });
+
+    it('close() posts {type:"close"} instead of navigating, and never asks the editor guard itself', async () => {
+      document.documentElement.setAttribute('data-desk-window-embedded', '');
+      const el = buildWindowEl();
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      const win = fakeEmbeddedWin(posted);
+      let confirmCloseCalls = 0;
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = {
+        isDirty: () => true,
+        flush: async () => true,
+        confirmClose: async () => {
+          confirmCloseCalls += 1;
+          return 'cancelled';
+        },
+      } satisfies EditorWindowGuard;
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('');
+      expect(confirmCloseCalls).toBe(0); // the HOST resolves the guard, via window.deskWindowCanClose — not this frame.
+      expect(posted).toContainEqual({ message: { source: 'desk-window', type: 'close' }, origin: 'https://example.test' });
+    });
+
+    it('minimize() posts {type:"minimize"} and never touches sessionStorage (the host owns the live tray)', async () => {
+      document.documentElement.setAttribute('data-desk-window-embedded', '');
+      const el = buildWindowEl();
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      const win = fakeEmbeddedWin(posted);
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('');
+      expect(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY)).toBeNull();
+      expect(posted).toContainEqual({ message: { source: 'desk-window', type: 'minimize' }, origin: 'https://example.test' });
+    });
+
+    it('the fullscreen button posts {type:"maximize-toggle"} instead of writing localStorage', async () => {
+      document.documentElement.setAttribute('data-desk-window-embedded', '');
+      const el = buildWindowEl();
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      const win = fakeEmbeddedWin(posted);
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      click(el.querySelector('[data-desk-window-fullscreen]')!);
+
+      expect(posted).toContainEqual({ message: { source: 'desk-window', type: 'maximize-toggle' }, origin: 'https://example.test' });
+    });
+
+    it('posts the initial title to the host on mount', () => {
+      document.documentElement.setAttribute('data-desk-window-embedded', '');
+      const el = buildWindowEl();
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      const win = fakeEmbeddedWin(posted);
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      expect(posted).toContainEqual({
+        message: { source: 'desk-window', type: 'title', text: 'Nueva actividad' },
+        origin: 'https://example.test',
+      });
+    });
+
+    it('window.deskWindowCanClose resolves the SAME guard decision canCloseNow would, for the host to call directly', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin();
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = {
+        isDirty: () => true,
+        flush: async () => true,
+        confirmClose: async () => 'cancelled',
+      } satisfies EditorWindowGuard;
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      const canClose = (win as unknown as { deskWindowCanClose: () => Promise<boolean> }).deskWindowCanClose;
+      await expect(canClose()).resolves.toBe(false);
+    });
+
+    it('window.deskWindowCanMinimize flushes silently and resolves true on a successful flush', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin();
+      let confirmCloseCalls = 0;
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = {
+        isDirty: () => true,
+        flush: async () => true,
+        confirmClose: async () => {
+          confirmCloseCalls += 1;
+          return 'cancelled';
+        },
+      } satisfies EditorWindowGuard;
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      const canMinimize = (win as unknown as { deskWindowCanMinimize: () => Promise<boolean> }).deskWindowCanMinimize;
+      await expect(canMinimize()).resolves.toBe(true);
+      expect(confirmCloseCalls).toBe(0);
     });
   });
 });

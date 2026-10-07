@@ -265,3 +265,54 @@ describe('initDeskWindowDrag — double-wiring guard', () => {
     expect(windowEl().style.translate).toBe('40px 0px');
   });
 });
+
+// Window-manager architecture: embedded, there is no local window box to
+// translate — the title bar posts SCREEN-space deltas to the host instead
+// (`screenX`/`screenY`, never `clientX`/`clientY` — those are relative to
+// THIS iframe's own viewport and meaningless once the drag crosses the
+// frame boundary into the host document).
+describe('initDeskWindowDrag — embedded mode (posts screen deltas to the host)', () => {
+  function fakeEmbeddedWin(posted: Array<{ message: unknown; origin: string }>) {
+    const win = fakeWin();
+    (win as unknown as { location: unknown }).location = { origin: 'https://example.test' };
+    (win as unknown as { parent: unknown }).parent = {
+      postMessage: (message: unknown, origin: string) => posted.push({ message, origin }),
+    };
+    return win;
+  }
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-desk-window-embedded');
+  });
+
+  it('posts drag-start/drag-move/drag-end with screen-space deltas, and never sets a local translate', () => {
+    document.documentElement.setAttribute('data-desk-window-embedded', '');
+    const posted: Array<{ message: unknown; origin: string }> = [];
+    const win = fakeEmbeddedWin(posted);
+    initDeskWindowDrag(windowEl(), document, win);
+
+    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointermove', { screenX: 140, screenY: 170 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointerup', { screenX: 140, screenY: 170 }));
+
+    expect(windowEl().style.translate).toBe('');
+    expect(posted.map((p) => p.message)).toEqual([
+      { source: 'desk-window', type: 'drag-start' },
+      { source: 'desk-window', type: 'drag-move', dx: 40, dy: -30 },
+      { source: 'desk-window', type: 'drag-end' },
+    ]);
+    expect(posted.every((p) => p.origin === 'https://example.test')).toBe(true);
+  });
+
+  it('still respects the breakpoint/fullscreen guards when embedded', () => {
+    document.documentElement.setAttribute('data-desk-window-embedded', '');
+    windowEl().setAttribute('data-fullscreen', 'true');
+    const posted: Array<{ message: unknown; origin: string }> = [];
+    const win = fakeEmbeddedWin(posted);
+    initDeskWindowDrag(windowEl(), document, win);
+
+    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200 }));
+
+    expect(posted).toEqual([]);
+  });
+});

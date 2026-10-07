@@ -137,6 +137,17 @@ interface Props {
    * unchanged.
    */
   titleEditable?: boolean;
+  /**
+   * EMBEDDED (window-manager architecture): true when this window renders
+   * inside the host's own `<iframe>` (`@lib/ui/embeddedWindow`'s own
+   * header). The HOST frame element now draws the desktop inset/rounded
+   * corners/drop shadow (and owns dragging/maximizing it) — this window
+   * just fills whatever box the iframe already is, at every viewport width,
+   * same as the existing below-`desk:`/guest full-screen sheet. Defaults to
+   * `false` — every caller keeps today's own `fixed inset-0 … desk:inset-x-…`
+   * desktop-window treatment unchanged.
+   */
+  embedded?: boolean;
 }
 
 const {
@@ -153,6 +164,7 @@ const {
   status = null,
   statusId = 'desk-window-status',
   titleEditable = false,
+  embedded = false,
 } = Astro.props;
 ---
 
@@ -166,7 +178,19 @@ const {
   role="dialog"
   aria-labelledby={titleId}
   tabindex="-1"
-  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-card outline-none desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
+  data-desk-window-embedded={embedded ? '' : undefined}
+  class:list={[
+    'ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-card outline-none',
+    // EMBEDDED (window-manager architecture): the HOST frame element draws
+    // the desktop inset/rounded corners/drop shadow now (and owns dragging/
+    // maximizing it) — this window just fills the iframe at every width,
+    // same as the existing below-`desk:`/guest full-screen sheet, never the
+    // desktop-inset treatment below. See the `embedded` prop's own doc.
+    !embedded && [
+      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px]',
+      'shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]',
+    ],
+  ]}
 >
   {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
       como presentación"/"Enviar a revisión" — squeezed the title down to

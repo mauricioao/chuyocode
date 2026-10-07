@@ -16,6 +16,7 @@
  * assert on directly.
  */
 import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
+import { isEmbeddedWindowDom, postDeskWindowMessage } from './deskWindowMessaging';
 
 /**
  * Editor <-> window bridge (PART 6b). `DeskWindow`/`deskWindow.ts` are plain
@@ -62,6 +63,43 @@ function getEditorWindowGuard(win: Window): EditorWindowGuard | null {
  */
 export function shouldProceedAfterGuardDecision(decision: 'saved' | 'discarded' | 'cancelled'): boolean {
   return decision !== 'cancelled';
+}
+
+/**
+ * The CLOSE half of the editor guard, factored out of `close()` below so it
+ * can ALSO be exposed as `window.deskWindowCanClose` (window-manager
+ * architecture): embedded, the red light/Escape no longer resolve this
+ * themselves — they just tell the host "close me" (`postDeskWindowMessage`)
+ * and the HOST calls this exact function directly on the iframe's own
+ * `contentWindow` (same-origin, no `postMessage` round trip needed for a
+ * value it needs to `await`) before actually removing the frame. `true`
+ * means "safe to close right now".
+ */
+async function canCloseNow(win: Window): Promise<boolean> {
+  const guard = getEditorWindowGuard(win);
+  if (guard && guard.isDirty()) {
+    const decision = await guard.confirmClose();
+    return shouldProceedAfterGuardDecision(decision);
+  }
+  return true;
+}
+
+/**
+ * The MINIMIZE half — same split as {@link canCloseNow}, exposed as
+ * `window.deskWindowCanMinimize`. A silent flush first (minimizing is "put
+ * this aside", never "leave" — see `minimize()`'s own header below); only a
+ * FAILED flush falls back to the same confirm modal `canCloseNow` uses.
+ */
+async function canMinimizeNow(win: Window): Promise<boolean> {
+  const guard = getEditorWindowGuard(win);
+  if (guard && guard.isDirty()) {
+    const flushed = await guard.flush();
+    if (!flushed) {
+      const decision = await guard.confirmClose();
+      return shouldProceedAfterGuardDecision(decision);
+    }
+  }
+  return true;
 }
 
 const FULLSCREEN_STORAGE_KEY = 'ingles-desk-window-fullscreen';
@@ -328,16 +366,33 @@ export function initDeskWindow(
   if (windowEl.dataset.deskWindowReady === 'true') return;
   windowEl.dataset.deskWindowReady = 'true';
 
-  applyDeskWindowOrigin(windowEl, win);
+  // EMBEDDED (window-manager architecture): the host renders the entrance
+  // animation and owns full-screen/maximize state itself — see this file's
+  // own header on `isEmbedded`/`postDeskWindowMessage` below. Neither of
+  // these two mount-time steps has anything to do when embedded.
+  const embedded = isEmbeddedWindowDom(doc);
+  if (!embedded) {
+    applyDeskWindowOrigin(windowEl, win);
+  }
 
   const fullscreenButton = windowEl.querySelector<HTMLElement>(`[${DESK_WINDOW_ATTR.fullscreen}]`);
   // "Remembered per browser" (owner spec): applied on mount, before anything
   // else, so a visitor who left it full screen sees it that way immediately
-  // rather than flashing open small first.
-  if (fullscreenButton && readFullScreenPreference()) {
+  // rather than flashing open small first. Embedded: the host decides
+  // maximize state fresh on every open — a stale per-browser preference
+  // would otherwise flash a window maximized that the host never asked for.
+  if (fullscreenButton && !embedded && readFullScreenPreference()) {
     windowEl.setAttribute('data-fullscreen', 'true');
     fullscreenButton.setAttribute('aria-pressed', 'true');
   }
+
+  // `window.deskWindowCanClose`/`deskWindowCanMinimize` (window-manager
+  // architecture): exposed UNCONDITIONALLY (harmless outside an iframe —
+  // nothing else ever calls them) so the HOST can call them directly on
+  // `iframe.contentWindow` before honouring a `close`/`minimize` message,
+  // same-origin, no `postMessage` round trip needed for a value it awaits.
+  (win as unknown as Record<string, unknown>).deskWindowCanClose = () => canCloseNow(win);
+  (win as unknown as Record<string, unknown>).deskWindowCanMinimize = () => canMinimizeNow(win);
 
   function prefersReducedMotion(): boolean {
     try {
@@ -373,7 +428,23 @@ export function initDeskWindow(
   // first (`confirmClose`) and only actually closes once the author picked
   // "save and leave" or "leave without saving"; "cancel" leaves the window
   // open with nothing navigated.
+  //
+  // EMBEDDED (window-manager architecture): the guard check moves to the
+  // HOST (it calls `window.deskWindowCanClose` directly on this frame,
+  // exposed above) — this just asks it to close, with no local animation or
+  // navigation of its own; the host plays the close animation on its own
+  // frame element and removes it once (if) it actually honours the request.
   async function close(): Promise<void> {
+    if (embedded) {
+      postDeskWindowMessage(win, { type: 'close' });
+      return;
+    }
+    // Inlined rather than calling `canCloseNow` (same logic): a clean guard
+    // (or no guard at all) must resolve `closeNow()` SYNCHRONOUSLY, with no
+    // extra microtask tick — `canCloseNow`'s own `await` on an
+    // already-resolved `Promise.resolve(true)` would still defer one tick,
+    // which is observable (and was never true of this function before the
+    // embedded branch above existed).
     const guard = getEditorWindowGuard(win);
     if (guard && guard.isDirty()) {
       const decision = await guard.confirmClose();
@@ -425,7 +496,17 @@ export function initDeskWindow(
   // fall back to the SAME `confirmClose` modal `close()` uses above — by
   // then something is genuinely wrong with saving, and silently minimizing
   // over it would risk losing the draft for real.
+  // EMBEDDED: same split as `close()` above — the host calls
+  // `window.deskWindowCanMinimize` directly before honouring this, and owns
+  // the tray entry/animation itself (the iframe stays alive, just hidden —
+  // see `deskWindowManager.ts`'s own header), so there is nothing left for
+  // this frame to write to `sessionStorage` or animate locally.
   async function minimize(): Promise<void> {
+    if (embedded) {
+      postDeskWindowMessage(win, { type: 'minimize' });
+      return;
+    }
+    // Inlined, same reasoning as `close()` above — a clean guard resolves synchronously.
     const guard = getEditorWindowGuard(win);
     if (guard && guard.isDirty()) {
       const flushed = await guard.flush();
@@ -468,7 +549,15 @@ export function initDeskWindow(
       const next = windowEl.getAttribute('data-fullscreen') !== 'true';
       windowEl.setAttribute('data-fullscreen', String(next));
       fullscreenButton.setAttribute('aria-pressed', String(next));
-      writeFullScreenPreference(next);
+      // Embedded: "full screen" means filling the HOST's own viewport (its
+      // frame element), a host-owned layout decision with no meaningful
+      // per-browser preference to remember inside the iframe — ask the host
+      // instead of writing to `localStorage`.
+      if (embedded) {
+        postDeskWindowMessage(win, { type: 'maximize-toggle' });
+      } else {
+        writeFullScreenPreference(next);
+      }
     });
   }
 
@@ -494,4 +583,21 @@ export function initDeskWindow(
   // kept (still exported/tested) as a small, generic, reusable query — it
   // simply has no caller inside this function anymore.
   windowEl.focus();
+
+  // EMBEDDED (window-manager architecture): tell the host what to show in
+  // its OWN title bar/tray chip/`history.replaceState` — the host never
+  // loads this window's data itself (`@lib/ui/embeddedWindow`'s own header),
+  // so this is the only way it learns the real title, e.g. for the very
+  // FIRST window a direct visit opens, before any `[data-desk-window-open]`
+  // anchor text was there to seed it from. `navigating` on `pagehide` is
+  // what re-arms the host's loader for every later IN-WINDOW navigation
+  // (there is no `ClientRouter` here — each one is a real iframe navigation,
+  // so this script re-runs fresh on the next page and posts its own title
+  // again once mounted).
+  if (embedded) {
+    const titleEl = doc.getElementById(windowEl.getAttribute('aria-labelledby') ?? '');
+    const initialTitle = titleEl?.textContent?.trim();
+    if (initialTitle) postDeskWindowMessage(win, { type: 'title', text: initialTitle });
+    win.addEventListener('pagehide', () => postDeskWindowMessage(win, { type: 'navigating' }));
+  }
 }
