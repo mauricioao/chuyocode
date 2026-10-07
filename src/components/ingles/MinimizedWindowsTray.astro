@@ -29,6 +29,19 @@
  * window from the hub on mobile too. At `desk:` and up it always shows,
  * window or not.
  *
+ * ONE CHIP AT EVERY WIDTH (PART 6c polish, owner feedback 2026-10-07: "un
+ * pequeño rectángulo", not a row of them — the old 3-chips-≥1280px/1-below
+ * rule still ran under/over the hub's levels dock and the footer): see
+ * `@lib/ui/minimizedWindows`'s own `MAX_VISIBLE_MINIMIZED_CHIPS` header —
+ * the width-dependent cap is gone, the overflow "+N" tile/menu is not.
+ *
+ * FOOTER OVERLAP GUARD (PART 6c polish, defect #3): `data-minimized-tray-
+ * wrapper` on the OUTER div below (never the inner `<nav>`, which already
+ * carries its own "nothing to show" `hidden` state) is what
+ * `@lib/ui/minimizedWindows#initFooterOverlapGuard` toggles
+ * `data-tray-footer-overlap` on, and what `global.css` fades out, while the
+ * hub's real footer is scrolled into view — see that function's own header.
+ *
  * `pointer-events-none` on the outer (viewport-spanning on mobile) wrapper
  * plus `pointer-events-auto` on the actual tray keeps the empty margin
  * around the chips from ever intercepting a click/drag meant for the desk
@@ -47,6 +60,7 @@ const t = UI_LABELS[isValidLang(lang) ? lang : 'es'].english.hub;
 ---
 
 <div
+  data-minimized-tray-wrapper
   class:list={[
     'pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-end px-4 pb-[max(16px,env(safe-area-inset-bottom))] desk:inset-x-auto desk:right-6 desk:bottom-[10px] desk:px-0 desk:pb-0',
     hasOverlay && 'max-desk:hidden',

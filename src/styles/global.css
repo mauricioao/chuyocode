@@ -956,6 +956,27 @@ html[data-desk-behind] [data-chrome-footer] {
  * stays reachable above an open window on desktop — see that component's
  * own header. */
 
+/* Minimized-windows tray — footer overlap guard (PART 6c polish, owner spec
+ * 2026-10-07, defect #3): `@lib/ui/minimizedWindows#initFooterOverlapGuard`
+ * toggles `data-tray-footer-overlap` on the tray's own OUTER fixed wrapper
+ * (`[data-minimized-tray-wrapper]`, `MinimizedWindowsTray.astro`) while the
+ * hub's real footer is scrolled into view, so the tray never sits on top of
+ * the footer's own Premium/Términos/Privacidad links. Purely additive
+ * opacity/`pointer-events` on an element that is already `fixed` — nothing
+ * else in the layout moves either way, so there is no jump when it fades. */
+[data-minimized-tray-wrapper] {
+  transition: opacity 160ms var(--ease-control);
+}
+[data-minimized-tray-wrapper][data-tray-footer-overlap] {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-minimized-tray-wrapper] {
+    transition: none;
+  }
+}
+
 @keyframes ingles-window-open {
   from {
     opacity: 0;

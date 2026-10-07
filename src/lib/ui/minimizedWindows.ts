@@ -14,6 +14,16 @@
  * glance once they are not all crammed into one shelf next to six level
  * tiles anymore.
  *
+ * PART 6c polish (owner feedback 2026-10-07: the tray's own corner box was
+ * still too wide — three ~200px rectangles plus a "+N" pill ran under/over
+ * the hub's levels dock and the footer at common desktop widths): ONE chip
+ * (the most recently minimized window) renders directly, at EVERY viewport
+ * width — see {@link MAX_VISIBLE_MINIMIZED_CHIPS}'s own comment, which
+ * REPLACES the old width-dependent `visibleChipLimit`/`NARROW_DESK_WIDTH`
+ * (3 chips ≥1280px, 1 below it). Anything past the cap still collapses into
+ * the same "+N" overflow tile/menu — only the cap itself (and its dependence
+ * on viewport width) changed.
+ *
  * Split the same way `deskWindow.ts`/`backNavigation.ts` are: pure, zero-DOM
  * list operations ({@link withMinimizedWindow}, {@link withoutMinimizedWindow},
  * {@link parseMinimizedWindows}) that are fully unit-testable, plus thin
@@ -22,27 +32,21 @@
  * `MinimizedWindowsTray.astro`'s own tray element.
  */
 
+import { FOOTER_SELECTOR } from '@lib/chromeVisibility';
+
 export const MINIMIZED_WINDOWS_STORAGE_KEY = 'ingles-desk-minimized-windows';
 
 /** At most this many chips — oldest (least recently minimized/reopened) dropped first. */
 export const MAX_MINIMIZED_WINDOWS = 5;
 
 /**
- * At most this many chips render DIRECTLY in the dock (polish pass
- * 2026-10-06, owner report `dock-three-chips.png`: beyond this the dock kept
- * widening to the left, under the open helper bubble). Anything past this
- * collapses into one "+N" tile that opens a small menu listing the rest —
- * see {@link renderMinimizedWindowsTray}.
+ * At most this many chips render DIRECTLY in the tray, at every viewport
+ * width (PART 6c polish, owner spec 2026-10-07: "un pequeño rectángulo" —
+ * ONE small rectangle, not a row of them). Anything past this collapses into
+ * one "+N" tile that opens a small menu listing the rest — see
+ * {@link renderMinimizedWindowsTray}.
  */
-export const MAX_VISIBLE_MINIMIZED_CHIPS = 3;
-
-/** Below this viewport width the dock has no room for three chips next to the six level tiles (it would scroll and hide A1, or reach the folders column), so only one chip shows before the "+N" tile. */
-export const NARROW_DESK_WIDTH = 1280;
-
-/** How many chips render directly at a given viewport width — the rest collapse into the "+N" tile. */
-export function visibleChipLimit(viewportWidth: number): number {
-  return viewportWidth < NARROW_DESK_WIDTH ? 1 : MAX_VISIBLE_MINIMIZED_CHIPS;
-}
+export const MAX_VISIBLE_MINIMIZED_CHIPS = 1;
 
 export interface MinimizedWindowEntry {
   /** The activity id — also the dedupe key (re-minimizing the same activity moves it to the front instead of duplicating it). */
@@ -402,9 +406,8 @@ export function renderMinimizedWindowsTray(
   const isEmpty = entries.length === 0;
   container.hidden = isEmpty;
 
-  const limit = visibleChipLimit(doc.defaultView?.innerWidth ?? Number.POSITIVE_INFINITY);
-  const visible = entries.slice(0, limit);
-  const overflow = entries.slice(limit);
+  const visible = entries.slice(0, MAX_VISIBLE_MINIMIZED_CHIPS);
+  const overflow = entries.slice(MAX_VISIBLE_MINIMIZED_CHIPS);
 
   const rerender = () =>
     renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate);
@@ -442,15 +445,57 @@ export function initMinimizedWindowsTray(doc: Document = document, win: Window =
     );
   render();
 
-  // Re-render only when a resize crosses the narrow-desk threshold — once
-  // per container element, like every other desk script's wiring guard.
-  if (typeof win.addEventListener !== 'function' || container.hasAttribute('data-minimized-tray-resize')) return;
-  container.setAttribute('data-minimized-tray-resize', '');
-  let lastLimit = visibleChipLimit(win.innerWidth);
-  win.addEventListener('resize', () => {
-    const limit = visibleChipLimit(win.innerWidth);
-    if (limit === lastLimit || !container.isConnected) return;
-    lastLimit = limit;
-    render();
-  });
+  // PART 6c polish (owner spec 2026-10-07, "que no tape el footer"): the
+  // tray's own OUTER fixed wrapper (`MinimizedWindowsTray.astro`'s own
+  // `[data-minimized-tray-wrapper]`), not this `<nav>` — see
+  // {@link initFooterOverlapGuard}'s own header.
+  const wrapper = container.closest<HTMLElement>(`[${MINIMIZED_TRAY_WRAPPER_ATTR}]`);
+  if (wrapper) initFooterOverlapGuard(wrapper, doc);
+}
+
+/**
+ * The tray's own outer fixed wrapper (`MinimizedWindowsTray.astro`) — the
+ * element {@link initFooterOverlapGuard} toggles, never the inner `<nav>`
+ * (which already carries the "nothing to show" `hidden` state driven by
+ * {@link renderMinimizedWindowsTray}).
+ */
+export const MINIMIZED_TRAY_WRAPPER_ATTR = 'data-minimized-tray-wrapper';
+
+/** Set on {@link MINIMIZED_TRAY_WRAPPER_ATTR} while the real site footer is in view — `global.css` fades the tray out while this is present. */
+export const TRAY_FOOTER_OVERLAP_ATTR = 'data-tray-footer-overlap';
+
+/**
+ * PART 6c polish (owner spec 2026-10-07, defect #3: "al bajar al footer en
+ * el hub, la bandeja no debe tapar los links"): the hub is the one Inglés
+ * page whose footer is actually reachable by scrolling — a page rendering a
+ * `DeskWindow` locks page scroll and hides its footer outright
+ * (`BaseLayout.astro`'s own `hasOverlay`, `global.css`'s own
+ * `[data-desk-behind] [data-chrome-footer]` rule), so there is nothing to
+ * guard against there. On the hub, the fixed bottom-right tray would
+ * otherwise sit directly on top of the footer's own Premium/Términos/
+ * Privacidad links once the visitor scrolls down to it.
+ *
+ * An `IntersectionObserver` on the real `<footer>` (`@lib/chromeVisibility`'s
+ * own `FOOTER_SELECTOR`) toggles {@link TRAY_FOOTER_OVERLAP_ATTR} on the
+ * tray's OUTER wrapper — purely additive opacity/`pointer-events` CSS on an
+ * already `fixed` element (`global.css`), so nothing else in the layout
+ * moves either way: no layout jump. `threshold: 0` fires as soon as even one
+ * pixel of the footer is visible, erring toward hiding the tray a little
+ * early rather than a little late. Idempotent per element, same wiring-guard
+ * posture as every other desk script.
+ */
+export function initFooterOverlapGuard(wrapper: HTMLElement, doc: Document = document): void {
+  if (wrapper.dataset.trayFooterGuardReady === 'true') return;
+  if (typeof IntersectionObserver === 'undefined') return;
+  const footer = doc.querySelector(FOOTER_SELECTOR);
+  if (!footer) return;
+  wrapper.dataset.trayFooterGuardReady = 'true';
+
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      wrapper.toggleAttribute(TRAY_FOOTER_OVERLAP_ATTR, entry?.isIntersecting ?? false);
+    },
+    { threshold: 0 },
+  );
+  observer.observe(footer);
 }
