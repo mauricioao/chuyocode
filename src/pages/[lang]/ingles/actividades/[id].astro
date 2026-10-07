@@ -307,8 +307,13 @@ function heartsLabel(count: number): string {
       {/* Eye icon + view count (owner feedback 2026-10-06): right next to
           the hearts, same style/size — replaces the old "· Ya lo viste · N
           veces" strip under the title bar. Signed-in visitors only, same
-          gate the old strip used (a guest's view is never tracked). */}
-      {user && <ActivityViewBadge client:load lang={lang} activityId={activity.id} />}
+          gate the old strip used (a guest's view is never tracked).
+          `client:idle` (perf pass): its own `POST …/visto` already fires
+          from a `useEffect` well after mount, never in the critical render
+          path (this component's own header) — deferring hydration to idle
+          only delays that same cosmetic counter by a beat, never drops it,
+          and there is no click to lose on a badge with no button at all. */}
+      {user && <ActivityViewBadge client:idle lang={lang} activityId={activity.id} />}
       {/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below
           `desk:` the title bar has no room for six 44px/36px icon buttons in
           one row (owner report: it used to wrap into a tall second row) —
@@ -378,7 +383,12 @@ function heartsLabel(count: number): string {
             />
           )}
           {canDuplicate ? (
-            <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />
+            /* `client:idle` (perf pass): a plain `<button>` with no native
+               action of its own — a click before hydration simply has no
+               effect yet (nothing to lose, unlike an `<a href>`), and this
+               sits inside the "Más" overflow menu besides, so it is never
+               the very first thing a visitor reaches for. */
+            <DuplicateActivityButton client:idle lang={lang} activityId={activity.id} />
           ) : (
             /* Guest: `canDuplicate` is exactly "no user" here (the author
                keeps the real button) — a plain link to sign-in instead. */
@@ -396,7 +406,10 @@ function heartsLabel(count: number): string {
             </a>
           )}
           {canReport ? (
-            <ReportActivityButton client:load lang={lang} activityId={activity.id} />
+            /* `client:idle` (perf pass) — same reasoning as `DuplicateActivityButton`
+               right above: a plain pre-hydration-inert button, inside the
+               same overflow menu. */
+            <ReportActivityButton client:idle lang={lang} activityId={activity.id} />
           ) : (
             !user && (
               /* Guest: the author still sees nothing (cannot report their
