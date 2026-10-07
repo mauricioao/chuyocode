@@ -305,14 +305,16 @@ const {
     </div>
   </div>
 
-  {/* `data-desk-window-body` (PART 6b polish): the ONE non-scrolling
-      ancestor the editor's own floating side toolbar (`EditorSideToolbar.tsx`
-      `measureBounds()`) anchors/clamps itself against instead of the full
-      viewport — see that component's own header on why `fixed` alone used to
-      let it escape past this window's own border at the `desk:` inset.
-      Harmless for every other caller (the practice window): nothing else
-      reads this attribute. */}
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden" data-desk-window-body>
+  {/* `data-desk-window-body` (PART 6b polish; dock pass: now also `relative`):
+      the ONE non-scrolling ancestor the editor's own floating side toolbar
+      (`EditorSideToolbar.tsx`) measures against for its ghost dock-target/
+      snap-back check (`measureBounds()`), AND — `relative` — the real CSS
+      containing block its DOCKED `position: absolute` state anchors to, so
+      it moves/resizes with the window for free, no JS positioning while
+      docked. See that component's own header. Harmless for every other
+      caller (the practice window): nothing else reads this attribute or
+      relies on it being a positioning context. */}
+  <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-desk-window-body>
     <slot />
   </div>
 </section>

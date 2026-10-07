@@ -266,12 +266,15 @@ describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "dou
     expect(root.className).toContain('lg:pb-0');
   });
 
-  it('keeps the sticky side toolbar exactly outside/unaffected by the card', () => {
+  it('keeps the sticky side toolbar exactly outside/unaffected by the card, body-portaled and JS-synced to the window (not the card)', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     const card = screen.getByTestId('activity-editor-card');
     const toolbar = screen.getByTestId('editor-side-toolbar');
     expect(card.contains(toolbar)).toBe(false);
-    expect(toolbar.className).toContain('fixed');
+    // Dock pass: the rail is ALWAYS portaled straight to `document.body` now
+    // (never nested under the card either way) — see `EditorSideToolbar.tsx`'s
+    // own header for why.
+    expect(toolbar.parentElement).toBe(document.body);
   });
 });
 

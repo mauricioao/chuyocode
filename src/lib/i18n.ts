@@ -517,6 +517,9 @@ export const UI_LABELS = {
         // target shown while undocked.
         moveToolbar: 'Mover barra',
         dockToolbar: 'Volver a su lugar',
+        // Dock/float toggle (the "clip"): pinned (docked, inside the window)
+        // vs. released (undocked, floating anywhere on screen).
+        undockToolbar: 'Soltar y flotar',
         savingStatus: 'Guardando cambios',
         savedStatus: 'Cambios guardados',
         errorStatus: 'No se pudo guardar',
@@ -1878,6 +1881,7 @@ export const UI_LABELS = {
         shortcutNewZone: 'New zone',
         moveToolbar: 'Move toolbar',
         dockToolbar: 'Dock',
+        undockToolbar: 'Release and float',
         savingStatus: 'Saving changes',
         savedStatus: 'Changes saved',
         errorStatus: 'Could not save',

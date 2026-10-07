@@ -222,36 +222,32 @@ describe('EditorSideToolbar — save', () => {
 // back to `{ left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight }`
 // here — `beforeEach` fixes those at 1000x700 for deterministic numbers.
 describe('EditorSideToolbar — floating: docked by default', () => {
-  it('renders the ORIGINAL fixed/centered classes, docked, no drag handle inline position', () => {
+  it('renders fixed (body-portaled), JS-synced to the window\'s own dock slot, docked, no drag handle inline position mismatch', () => {
     renderToolbar();
     const rail = screen.getByTestId('editor-side-toolbar');
     expect(rail.getAttribute('data-docked')).toBe('true');
-    expect(rail.className).toContain('top-1/2');
-    expect(rail.className).toContain('right-3');
-    expect(rail.style.left).toBe('');
-    expect(rail.style.top).toBe('');
+    expect(rail.className).toContain('fixed');
+    expect(rail.className).toContain('z-[60]');
+    // Dock pass: no more CSS-only `absolute`/`top-1/2`/`right-3` trick — the
+    // rail is ALWAYS portaled to `document.body` now (the file header's own
+    // doc on why), so the docked spot is computed the SAME way the
+    // keyboard-nudge tests below already compute it.
+    expect(rail.className).not.toContain('absolute');
+    const target = dockTargetPosition({ width: 0, height: 0 }, { left: 0, right: 1000, top: 0, bottom: 700 });
+    expect(rail.style.left).toBe(`${target.x}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
     expect(screen.getByTestId('toolbar-drag-handle')).toBeTruthy();
     expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
   });
-
-  // PART 6b polish (owner report: "el riel se sale de la ventana, queda
-  // pegado al borde de la pantalla"): below the `desk:` breakpoint the
-  // window is itself full-screen (edge == viewport edge), so the plain
-  // `right-3` above is already correct there; `desk:right-7` only pulls the
-  // docked rail inward once the window gets its own 16px desktop inset.
-  it('carries a desk:-breakpoint inward offset so it stays inside the window\'s own desktop inset', () => {
-    renderToolbar();
-    const rail = screen.getByTestId('editor-side-toolbar');
-    expect(rail.className).toContain('desk:right-7');
-  });
 });
 
-// PART 6b polish: this component now ALWAYS renders inside `DeskWindow` —
-// `measureBounds()` prefers `[data-desk-window-body]`'s own rect (the
-// window's non-scrolling body wrapper) over the full viewport/header/footer
-// once one is mounted, so the floating rail can never drag/clamp/ghost-dock
-// itself past the window's own border.
-describe('EditorSideToolbar — contained within the desk window body (PART 6b polish)', () => {
+// Dock pass: this component now ALWAYS renders inside `DeskWindow` — DOCKED
+// is pure CSS against `[data-desk-window-body]` (no JS measurement at all
+// any more), and FLOATING always clamps to the full VIEWPORT regardless of
+// the window's own rect. `measureBounds()` (`[data-desk-window-body]`'s own
+// rect when mounted) now ONLY feeds the ghost dock-target/snap-back check —
+// "where is the window right now", for re-docking — never the drag clamp.
+describe('EditorSideToolbar — docked-inside-the-window vs. floating-the-full-viewport split', () => {
   function mountWindowBody(box: { left: number; top: number; width: number; height: number }) {
     const body = document.createElement('div');
     body.setAttribute('data-desk-window-body', '');
@@ -260,7 +256,7 @@ describe('EditorSideToolbar — contained within the desk window body (PART 6b p
     return body;
   }
 
-  it('clamps a drag within the desk-window-body rect instead of the full viewport', () => {
+  it('clamps a drag to the full viewport even when a (smaller) desk window body is mounted', () => {
     const windowBody = mountWindowBody({ left: 16, top: 56, width: 900, height: 600 });
     renderToolbar();
     const rail = screen.getByTestId('editor-side-toolbar');
@@ -271,13 +267,41 @@ describe('EditorSideToolbar — contained within the desk window body (PART 6b p
     firePointer(handle, 'pointermove', 5000, 5000); // way past every edge
     firePointer(handle, 'pointerup', 5000, 5000);
 
-    // maxX = 16 + 900 - 56 = 860; maxY = 56 + 600 - 300 = 356.
-    expect(rail.style.left).toBe('860px');
-    expect(rail.style.top).toBe('356px');
+    // Viewport clamp (1000x700), NOT the window body's own (smaller) rect:
+    // maxX = 1000 - 56 = 944; maxY = 700 - 300 = 400. The old window-body
+    // numbers (860, 356) would mean the OLD clamp-to-window behaviour regressed.
+    expect(rail.style.left).toBe('944px');
+    expect(rail.style.top).toBe('400px');
     windowBody.remove();
   });
 
-  it('falls back to the full viewport when no desk window body is mounted (every other caller)', () => {
+  it('snaps back to re-dock near the WINDOW BODY\'s own slot, not a viewport-wide one', () => {
+    // Window body far from where a viewport-based dock target would land —
+    // deliberately chosen so the two targets are nowhere near each other.
+    const windowBody = mountWindowBody({ left: 100, top: 400, width: 400, height: 200 });
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    // Window-body dock target: x = 100+400-56-12 = 432, y = (400+600)/2-150 = 350.
+    // A viewport-wide target would instead be (932, 200) — over 500px away —
+    // so landing exactly on (432, 350) only snaps if the WINDOW BODY is the
+    // real target.
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 452, 400);
+    firePointer(handle, 'pointerup', 452, 400);
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    // Re-docked -> the sync effect immediately recomputes `position` from
+    // the SAME window-body rect (never empty any more — see the file header
+    // on why docked is no longer pure CSS).
+    expect(rail.style.left).toBe('432px');
+    expect(rail.style.top).toBe('350px');
+    windowBody.remove();
+  });
+
+  it('falls back to the full viewport for both clamp and dock target when no desk window body is mounted (every other caller)', () => {
     renderToolbar();
     const rail = screen.getByTestId('editor-side-toolbar');
     mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
@@ -290,6 +314,49 @@ describe('EditorSideToolbar — contained within the desk window body (PART 6b p
     // Same as the existing "clamps a drag" test: maxX = 1000-56=944, maxY = 700-300=400.
     expect(rail.style.left).toBe('944px');
     expect(rail.style.top).toBe('400px');
+  });
+});
+
+describe('EditorSideToolbar — dock/float toggle (the "clip")', () => {
+  it('is pressed (pinned) by default, docked', () => {
+    renderToolbar();
+    const toggle = screen.getByTestId('toolbar-dock-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Soltar y flotar');
+  });
+
+  it('clicking it releases the rail to float at its current on-screen position', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 300, top: 120, width: 56, height: 300 });
+    const toggle = screen.getByTestId('toolbar-dock-toggle');
+
+    fireEvent.click(toggle);
+
+    expect(rail.getAttribute('data-docked')).toBe('false');
+    expect(rail.style.left).toBe('300px');
+    expect(rail.style.top).toBe('120px');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Volver a su lugar');
+  });
+
+  it('clicking it again re-docks', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 300, top: 120, width: 56, height: 300 });
+    const toggle = screen.getByTestId('toolbar-dock-toggle');
+
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    // Re-docked -> the sync effect recomputes `position` from the window's
+    // own (here: viewport-fallback) dock slot, same formula as the
+    // "docked by default" test above.
+    const target = dockTargetPosition({ width: 56, height: 300 }, { left: 0, right: 1000, top: 0, bottom: 700 });
+    expect(rail.style.left).toBe(`${target.x}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 });
 
@@ -342,7 +409,10 @@ describe('EditorSideToolbar — floating: drag to undock/move', () => {
     firePointer(handle, 'pointerup', 952, 250);
 
     expect(rail.getAttribute('data-docked')).toBe('true');
-    expect(rail.style.left).toBe('');
+    // Re-docked exactly at the dock target -> the sync effect recomputes the
+    // SAME spot (932, 200) from the same (viewport-fallback) bounds.
+    expect(rail.style.left).toBe('932px');
+    expect(rail.style.top).toBe('200px');
     expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
   });
 
@@ -566,13 +636,15 @@ describe('EditorSideToolbar — floating: re-clamp on resize', () => {
     expect(rail.style.left).toBe('344px');
   });
 
-  it('does not touch the position while docked', () => {
+  it('re-syncs the docked position on resize too (JS-synced now, never inert)', () => {
     renderToolbar();
     const rail = screen.getByTestId('editor-side-toolbar');
     Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
     fireEvent(window, new Event('resize'));
     expect(rail.getAttribute('data-docked')).toBe('true');
-    expect(rail.style.left).toBe('');
+    const target = dockTargetPosition({ width: 0, height: 0 }, { left: 0, right: 400, top: 0, bottom: 700 });
+    expect(rail.style.left).toBe(`${target.x}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
   });
 });
 
