@@ -709,6 +709,88 @@ describe('initDeskWindowManager — entrance/exit motion (robustness pass)', () 
       }
     });
   });
+
+  // Perf pass (owner report: the loader used to wait for the iframe's own
+  // `load` — every resource the window pulls in — even once its own chrome
+  // had already painted): the embedded page posts `{type:'ready'}` right
+  // after its first paint (`deskWindow.ts#afterFirstPaint`); the host must
+  // hide the loader on THAT, not wait for `load`, while `load` keeps doing
+  // its own, separate job (the chrome-less fallback-bar check).
+  describe('"ready" postMessage reveals the window before `load` fires (perf pass)', () => {
+    it('hides the loader on `ready`, before any `load` event', () => {
+      const win = fakeWin();
+      handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+      handle.openWindow('/es/ingles/actividades', 'Comunidad');
+      const frame = frameFor('community')!;
+      const loader = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-loader]')!;
+      expect(loader.classList.contains('opacity-0')).toBe(false); // still showing — no load/ready yet
+
+      win.dispatchMessage({ source: 'desk-window', type: 'ready' }, frame.iframe.contentWindow);
+
+      expect(loader.classList.contains('opacity-0')).toBe(true);
+    });
+
+    it('clears the never-resolving-load fallback timer on `ready`, exactly like `load` does', () => {
+      vi.useFakeTimers();
+      try {
+        const win = fakeWin({ realTimers: true });
+        handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+        handle.openWindow('/es/ingles/actividades', 'Comunidad');
+        const frame = frameFor('community')!;
+
+        vi.advanceTimersByTime(500);
+        win.dispatchMessage({ source: 'desk-window', type: 'ready' }, frame.iframe.contentWindow);
+
+        // The 8s timer that would otherwise fire at ~8000ms from OPEN was
+        // cleared by `ready` at 500ms — it must never fire "late".
+        vi.advanceTimersByTime(8000);
+        const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+        expect(bar.hidden).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('`load` still runs its own chrome-less fallback-bar check after `ready` already hid the loader', () => {
+      const win = fakeWin();
+      handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+      handle.openWindow('/es/ingles/actividades', 'Comunidad');
+      const frame = frameFor('community')!;
+      const loader = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-loader]')!;
+
+      win.dispatchMessage({ source: 'desk-window', type: 'ready' }, frame.iframe.contentWindow);
+      expect(loader.classList.contains('opacity-0')).toBe(true);
+
+      // `load` fires afterwards on a document with NO `[data-desk-window]`
+      // marker — a chrome-less document (e.g. a login redirect) that, in
+      // this unusual case, happened to post `ready` regardless; `load`'s own
+      // detection must still run and show the fallback bar.
+      const innerDoc = frame.iframe.contentDocument!;
+      innerDoc.open();
+      innerDoc.write('<!doctype html><html><body>not a desk window</body></html>');
+      innerDoc.close();
+      frame.iframe.dispatchEvent(new Event('load'));
+
+      const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+      expect(bar.hidden).toBe(false);
+    });
+
+    it('`load` firing first (ready arrives late or never) still hides the loader, same as before', () => {
+      const win = fakeWin();
+      handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+      handle.openWindow('/es/ingles/actividades', 'Comunidad');
+      const frame = frameFor('community')!;
+      const loader = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-loader]')!;
+
+      const innerDoc = frame.iframe.contentDocument!;
+      innerDoc.open();
+      innerDoc.write('<!doctype html><html><body><div data-desk-window></div></body></html>');
+      innerDoc.close();
+      frame.iframe.dispatchEvent(new Event('load'));
+
+      expect(loader.classList.contains('opacity-0')).toBe(true);
+    });
+  });
 });
 
 describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
