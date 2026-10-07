@@ -1013,24 +1013,32 @@ export default function ActivityEditorIsland({
         <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={preview ? previewScrollRef : blockListRef} />
       </div>
 
-      <EditorSideToolbar
-        lang={lang}
-        blocks={blocks}
-        onCollapseAll={collapseAllBlocks}
-        onExpandAll={expandAllBlocks}
-        onGoToBlock={goToBlock}
-        onAddBlock={() => setAddingBlock(true)}
-        preview={preview}
-        onTogglePreview={() => setPreview((p) => !p)}
-        canUndo={canUndo(history)}
-        canRedo={canRedo(history)}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onSave={handleSaveNow}
-        saveDisabled={saveState === 'saving'}
-        saveState={saveState}
-        saveLabels={saveLabels}
-      />
+      {/* Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the
+          "Elige con qué seguir" type picker (`showAddFlow` above, rendered
+          while `blocks.length === 0`) has nothing yet for collapse-all/
+          expand-all/block-index/undo/redo/preview to act on — the rail used
+          to render anyway, floating next to an editor with no content. It
+          now only mounts once the activity has at least one block. */}
+      {blocks.length > 0 && (
+        <EditorSideToolbar
+          lang={lang}
+          blocks={blocks}
+          onCollapseAll={collapseAllBlocks}
+          onExpandAll={expandAllBlocks}
+          onGoToBlock={goToBlock}
+          onAddBlock={() => setAddingBlock(true)}
+          preview={preview}
+          onTogglePreview={() => setPreview((p) => !p)}
+          canUndo={canUndo(history)}
+          canRedo={canRedo(history)}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onSave={handleSaveNow}
+          saveDisabled={saveState === 'saving'}
+          saveState={saveState}
+          saveLabels={saveLabels}
+        />
+      )}
 
       <UnsavedChangesModal
         open={navGuard.open}

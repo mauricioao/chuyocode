@@ -177,7 +177,7 @@ function renderEditor(overrides: Partial<Parameters<typeof ActivityEditorIsland>
 
 describe('ActivityEditorIsland — initial render', () => {
   it('renders the title, level and a clean save status', () => {
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     expect((screen.getByTestId('activity-title-input') as HTMLInputElement).value).toBe('Sin título');
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved');
   });
@@ -267,11 +267,31 @@ describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "dou
   });
 
   it('keeps the sticky side toolbar exactly outside/unaffected by the card', () => {
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     const card = screen.getByTestId('activity-editor-card');
     const toolbar = screen.getByTestId('editor-side-toolbar');
     expect(card.contains(toolbar)).toBe(false);
     expect(toolbar.className).toContain('fixed');
+  });
+});
+
+// Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the
+// "Elige con qué seguir" type picker — shown while `blocks.length === 0`,
+// before any block exists — used to render WITH the floating side toolbar
+// next to it, even though there is nothing yet for collapse-all/expand-all/
+// block-index/undo/redo to act on. The toolbar now only mounts once there is
+// an editor with blocks.
+describe('ActivityEditorIsland — no side toolbar while the empty-blocks picker is showing', () => {
+  it('does not render the floating side toolbar for a brand-new, zero-block activity', () => {
+    renderEditor({ initialBlocks: [] });
+    expect(screen.getByTestId('block-type-picker')).toBeTruthy();
+    expect(screen.queryByTestId('editor-side-toolbar')).toBeNull();
+    expect(screen.queryByTestId('editor-side-toolbar-mobile')).toBeNull();
+  });
+
+  it('renders the floating side toolbar once the activity has at least one block', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(screen.getByTestId('editor-side-toolbar')).toBeTruthy();
   });
 });
 
@@ -318,7 +338,7 @@ describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
       .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento');
 
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
@@ -468,7 +488,7 @@ describe('ActivityEditorIsland — autosave', () => {
   it('saves automatically ~5s after the last change, with no manual save click', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
 
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Autoguardado' } });
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
@@ -491,7 +511,7 @@ describe('ActivityEditorIsland — autosave', () => {
       .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
 
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
     await act(async () => {
@@ -544,7 +564,7 @@ describe('ActivityEditorIsland — autosave', () => {
 
 describe('ActivityEditorIsland — dirty tracking and save', () => {
   it('marks unsaved after editing the title', () => {
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Nuevo título' } });
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
   });
@@ -552,14 +572,20 @@ describe('ActivityEditorIsland — dirty tracking and save', () => {
   it('saves successfully and posts the current title/level/blocks', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
+    // Deliberately zero blocks (the empty-blocks picker state, no floating
+    // side toolbar mounted — see the "no side toolbar" describe block below):
+    // saved via the Ctrl/⌘+S shortcut, which is wired at the island level,
+    // independently of the toolbar's own save button.
     renderEditor({ initialLevel: 'A2' });
 
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Mi actividad' } });
     await act(async () => {
-      fireEvent.click(screen.getByTestId('save-button'));
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
     });
 
-    await waitFor(() => expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('saved'));
+    await waitFor(() =>
+      expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento'),
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/actividades/act-1/guardar',
       expect.objectContaining({
@@ -571,7 +597,7 @@ describe('ActivityEditorIsland — dirty tracking and save', () => {
 
   it('shows an error status when the save request fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     await act(async () => {
       fireEvent.click(screen.getByTestId('save-button'));
     });
@@ -581,7 +607,7 @@ describe('ActivityEditorIsland — dirty tracking and save', () => {
 
 describe('ActivityEditorIsland — level select', () => {
   it('changing the level marks unsaved and updates the value', () => {
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     fireEvent.change(screen.getByTestId('activity-level-select'), { target: { value: 'B1' } });
     expect((screen.getByTestId('activity-level-select') as HTMLSelectElement).value).toBe('B1');
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
@@ -783,7 +809,7 @@ describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pa
 
 describe('ActivityEditorIsland — undo/redo', () => {
   it('undoes a title change and redoes it', () => {
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     const input = screen.getByTestId('activity-title-input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'Nuevo título' } });
     expect(input.value).toBe('Nuevo título');
@@ -796,7 +822,7 @@ describe('ActivityEditorIsland — undo/redo', () => {
   });
 
   it('starts with undo/redo both disabled', () => {
-    renderEditor();
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     expect((screen.getByTestId('undo-button') as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId('redo-button') as HTMLButtonElement).disabled).toBe(true);
   });
