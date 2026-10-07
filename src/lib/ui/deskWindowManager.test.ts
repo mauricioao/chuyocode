@@ -429,6 +429,28 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     const second = frameFor('create')!;
     expect(second.wrapper.style.translate).toBe('68px 38px'); // 40+28, 10+28
   });
+
+  it('a long drag past the top-left corner stops exactly at the 8px edge margin', () => {
+    // Like a real browser: the measured rect moves with the applied `translate`.
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const [tx = 0, ty = 0] = ((this as HTMLElement).style?.translate || '0px 0px').split(' ').map((v) => Number.parseFloat(v) || 0);
+      const r = { ...WRAPPER_RECT, left: WRAPPER_RECT.left + tx, top: WRAPPER_RECT.top + ty };
+      return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON() {} } as DOMRect;
+    };
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+    frame.wrapper.style.translate = '';
+
+    win.dispatchMessage({ source: 'desk-window', type: 'drag-start' }, frame.iframe.contentWindow);
+    for (let step = 1; step <= 25; step++) {
+      win.dispatchMessage({ source: 'desk-window', type: 'drag-move', dx: -12 * step, dy: -12 * step }, frame.iframe.contentWindow);
+    }
+
+    // WRAPPER_RECT sits at left 64 / top 76 untranslated: 8 - 64, 8 - 76.
+    expect(frame.wrapper.style.translate).toBe('-56px -68px');
+  });
 });
 
 describe('initDeskWindowManager — restore-after-reload (robustness pass)', () => {

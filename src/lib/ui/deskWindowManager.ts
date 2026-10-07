@@ -113,9 +113,22 @@ function isDesktop(win: Window): boolean {
   }
 }
 
-/** The wrapper's own rect at offset `{0,0}` — same "unoffset before re-clamping" posture as `deskWindowDrag.ts#unoffsetWindowRect`. */
-function unoffsetWrapperRect(wrapper: HTMLElement, current: DeskWindowOffset): WindowRect {
+/** The `translate` currently applied to the wrapper (`''`, `'Xpx'` or `'Xpx Ypx'`). */
+function appliedOffset(wrapper: HTMLElement): DeskWindowOffset {
+  const [x = 0, y = 0] = (wrapper.style.translate || '').split(' ').map((v) => Number.parseFloat(v) || 0);
+  return { x, y };
+}
+
+/**
+ * The wrapper's own rect at offset `{0,0}` — same "unoffset before
+ * re-clamping" posture as `deskWindowDrag.ts#unoffsetWindowRect`. The measured
+ * rect already includes the applied `translate`, so that exact offset is the
+ * one to subtract; subtracting nothing made the clamp's bounds shift with every
+ * drag step, stopping a window ~48px short of the edge.
+ */
+function unoffsetWrapperRect(wrapper: HTMLElement): WindowRect {
   const rect = wrapper.getBoundingClientRect();
+  const current = appliedOffset(wrapper);
   return { top: rect.top - current.y, left: rect.left - current.x, width: rect.width, height: rect.height };
 }
 
@@ -279,7 +292,7 @@ export function initDeskWindowManager(
       managed.wrapper.style.translate = '';
       return;
     }
-    const rect = unoffsetWrapperRect(managed.wrapper, { x: 0, y: 0 });
+    const rect = unoffsetWrapperRect(managed.wrapper);
     const clamped = clampWindowDragOffset(entry.offset, rect, { width: win.innerWidth, height: win.innerHeight });
     managed.wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
   }
@@ -392,7 +405,7 @@ export function initDeskWindowManager(
         x: fallbackDrag.offset.x + (event.clientX - fallbackDrag.x),
         y: fallbackDrag.offset.y + (event.clientY - fallbackDrag.y),
       };
-      const rect = unoffsetWrapperRect(wrapper, { x: 0, y: 0 });
+      const rect = unoffsetWrapperRect(wrapper);
       const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
       wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
     });
@@ -873,7 +886,7 @@ export function initDeskWindowManager(
       case 'drag-move': {
         if (!managed.dragStartOffset || !isDesktop(win)) return;
         const next = { x: managed.dragStartOffset.x + message.dx, y: managed.dragStartOffset.y + message.dy };
-        const rect = unoffsetWrapperRect(managed.wrapper, { x: 0, y: 0 });
+        const rect = unoffsetWrapperRect(managed.wrapper);
         const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
         managed.wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
         return;
