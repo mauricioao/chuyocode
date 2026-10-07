@@ -42,9 +42,9 @@
  * `deskWindowDrag.ts`'s own header), never in in-memory DOM state that a
  * fresh page render would lose. The scale-in open animation is the other
  * half of "feels like one window": it is GATED to a genuine folder/desk
- * opener click (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`'s own header)
- * and never replays for any of these plain in-window links, only for a
- * fresh open from the hub's own folder. The practice window's own `‹` back
+ * opener click, now the HOST's own (`@lib/ui/deskWindowManager.ts#onClickCapture`'s
+ * own header) — and never replays for any of these plain in-window links,
+ * only for a fresh open from the hub's own folder. The practice window's own `‹` back
  * arrow (which used to return here) is GONE (owner spec 2026-10-07, "ya no
  * será necesario el botón de regresar... tiene los 3 botones de colores") —
  * the red/yellow lights already close/minimize back to the hub; reaching

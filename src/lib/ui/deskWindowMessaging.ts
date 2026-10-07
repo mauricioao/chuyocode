@@ -14,9 +14,9 @@
  * `message` listener (`deskWindowManager.ts`) can tell a real desk-window
  * message apart from anything else that might ever post to the same window
  * (a browser extension, an unrelated third-party script) before trusting its
- * `type` — same "narrow, explicit shape" posture `isOriginEntry`/
- * `isMinimizedWindowEntry` already use for `sessionStorage` payloads in this
- * codebase. The host additionally checks `event.origin` and `event.source`
+ * `type` — same "narrow, explicit shape" posture `isMinimizedWindowEntry`
+ * already uses for `sessionStorage` payloads in this codebase. The host
+ * additionally checks `event.origin` and `event.source`
  * itself (it knows which `iframe.contentWindow` each message should come
  * from); this module only owns the payload shape.
  */

@@ -977,40 +977,6 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
-@keyframes ingles-window-open {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.ingles-window {
-  transform-origin: var(--ingles-window-from, 50% 50%);
-}
-
-/* GATED, not unconditional (community-list-as-a-window pass, owner spec
- * 2026-10-07): only a FRESH open from a folder/desk opener ever plays this —
- * `@lib/ui/deskWindow.ts#applyDeskWindowOrigin` is the one place that sets
- * `data-desk-window-opening`, and only when it just consumed a genuine,
- * non-stale opener entry. A direct visit and every IN-WINDOW navigation
- * (a filter change, a page of results, opening an activity card from the
- * community list, the practice window's own `‹` back arrow) leave this
- * attribute unset, so the window simply appears with no scale-in — it would
- * otherwise have replayed on every one of those, which is not an "opening". */
-.ingles-window[data-desk-window-opening] {
-  animation: ingles-window-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ingles-window[data-desk-window-opening] {
-    animation: none;
-  }
-}
-
 /* Full screen (green light), remembered per browser — forces the full-bleed
  * sheet regardless of the `desk:` breakpoint's own inset. `!important`
  * because it must win over the SAME-specificity Tailwind utility classes
@@ -1102,20 +1068,21 @@ html[data-desk-behind] [data-chrome-footer] {
  * `WRAPPER_CLASS` div) — a DIFFERENT element from `.ingles-window` above
  * (that one is the EMBEDDED page's own dialog section, inside the iframe;
  * this one is the floating frame the host positions/drags/stacks). Same
- * delicate "settle in" curve/duration as the old single-window
- * `ingles-window-open` above, reused here rather than duplicated.
+ * delicate "settle in" curve/duration the single-window model's own
+ * (now-removed) entrance animation used.
  *
  * ONE keyframe serves BOTH variants `deskWindowManager.ts#applyOpenAnimation`
  * produces: a genuine desk-item open sets `--desk-window-manager-from` to
- * that item's own screen point (relative to this wrapper's own box, same
- * "transform-origin is element-relative" reasoning `applyDeskWindowOrigin`'s
- * old single-window version already had to account for); any OTHER open
- * (reopening from inside an embedded window, e.g. an `ActivityCard`'s
- * `data-desk-open-window` -> `postMessage`) leaves it unset, which falls
- * back to `50% 50%` — scaling in from the window's own centre, i.e. "the
- * cascade spot" it already landed at. Restoring persisted windows after a
- * reload never sets `data-desk-window-manager-opening` at all (that is not
- * an "opening"), so nothing here ever plays for them. */
+ * that item's own screen point, relative to this wrapper's own box
+ * (`transform-origin` is always element-relative, never viewport-relative —
+ * `applyOpenAnimation`'s own header on why it subtracts the wrapper's own
+ * `getBoundingClientRect()` first); any OTHER open (reopening from inside an
+ * embedded window, e.g. an `ActivityCard`'s `data-desk-open-window` ->
+ * `postMessage`) leaves it unset, which falls back to `50% 50%` — scaling in
+ * from the window's own centre, i.e. "the cascade spot" it already landed
+ * at. Restoring persisted windows after a reload never sets
+ * `data-desk-window-manager-opening` at all (that is not an "opening"), so
+ * nothing here ever plays for them. */
 @keyframes ingles-window-manager-open {
   from {
     opacity: 0;

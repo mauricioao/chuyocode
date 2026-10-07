@@ -9,9 +9,9 @@
  * BUGFIX (owner report, robustness pass): a direct visit to a window route
  * (e.g. `/[lang]/ingles/actividades/<id>`) used to render `DeskScene` but
  * NOT `DeskHelper` — only the hub's own frontmatter rendered the helper and
- * wired its init script (`initDeskHelper`/`applyDeskWindowReturnFocus`), so
- * every OTHER host branch silently diverged from the hub the moment it was
- * reached directly rather than by opening a window FROM the hub. Four
+ * wired its init script (`initDeskHelper`), so every OTHER host branch
+ * silently diverged from the hub the moment it was reached directly rather
+ * than by opening a window FROM the hub. Four
  * near-identical copies of "the desk behind a host page" (`DeskScene` +
  * labels built from `UI_LABELS[lang]`) already existed across
  * `ingles/index.astro`, `ingles/actividades/index.astro`,
@@ -89,18 +89,13 @@ const hub = english.hub;
 
 <script>
   import { initDeskHelper } from '@lib/ui/deskHelper';
-  import { applyDeskWindowReturnFocus } from '@lib/ui/deskWindow';
 
   // Same wiring the hub's own script used to own alone — see this file's
-  // header. Both are idempotent/self-guarded (`deskHelper.ts#initDeskHelper`,
-  // `deskWindow.ts#applyDeskWindowReturnFocus`), so re-running them on every
-  // `astro:page-load` (including the very first one) is always safe.
+  // header. Idempotent/self-guarded (`deskHelper.ts#initDeskHelper`), so
+  // re-running it on every `astro:page-load` (including the very first one)
+  // is always safe.
   const run = () => {
     initDeskHelper();
-    // Refocuses whichever folder/opener opened a window that has since
-    // closed back to THIS host page — a no-op (idempotent) when nothing
-    // closed a window to get here.
-    applyDeskWindowReturnFocus();
   };
 
   if (document.readyState === 'loading') {

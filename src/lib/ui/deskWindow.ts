@@ -103,13 +103,6 @@ async function canMinimizeNow(win: Window): Promise<boolean> {
 }
 
 const FULLSCREEN_STORAGE_KEY = 'ingles-desk-window-fullscreen';
-const ORIGIN_STORAGE_KEY = 'ingles-desk-window-origin';
-const RETURN_FOCUS_STORAGE_KEY = 'ingles-desk-window-return-focus';
-/** An origin/return-focus entry older than this is treated as stale (e.g. a
- * folder click that led somewhere other than a window, or a browser tab left
- * open for a while) and ignored rather than mis-applied to an unrelated
- * later visit. */
-const ORIGIN_MAX_AGE_MS = 5000;
 
 /** How long the "minimize" CSS animation (`.ingles-window--minimizing`,
  * `global.css`) runs before the actual navigation fires — long enough to
@@ -197,147 +190,6 @@ export function writeFullScreenPreference(
   }
 }
 
-interface OriginEntry {
-  id: string;
-  x: number;
-  y: number;
-  t: number;
-}
-
-function isOriginEntry(value: unknown): value is OriginEntry {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return typeof v.id === 'string' && typeof v.x === 'number' && typeof v.y === 'number' && typeof v.t === 'number';
-}
-
-/**
- * Hub-side (and anywhere else a `[data-desk-window-open]` opener lives):
- * capture the clicked opener's own viewport rect BEFORE the browser
- * navigates away, so the window page can scale in FROM that spot (mockup's
- * own `--from` custom property) instead of always from the screen's centre.
- * Does not call `preventDefault` — the real navigation proceeds exactly as
- * the plain `<a href>` already describes; this only ever writes a few bytes
- * to `sessionStorage` alongside it.
- */
-export function initDeskWindowOpeners(doc: Document = document, win: Window = window): void {
-  // Guard against double-wiring (same posture as `deskHelper.ts#initDeskHelper`):
-  // this listener is bound to `document`, which survives every client-side
-  // navigation for the whole session, while the hub's own script re-runs
-  // `initDeskWindowOpeners` every time a visitor RETURNS to the hub — without
-  // this flag, each return trip would stack another full-document click
-  // listener on top of the last.
-  const root = doc.documentElement;
-  if (root.dataset.deskWindowOpenersReady === 'true') return;
-  root.dataset.deskWindowOpenersReady = 'true';
-
-  doc.addEventListener('click', (event) => {
-    if (event.defaultPrevented || event.button !== 0) return;
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const opener = target.closest(`[${DESK_WINDOW_ATTR.opener}]`);
-    if (!(opener instanceof HTMLElement)) return;
-    const id = opener.getAttribute(DESK_WINDOW_ATTR.opener);
-    if (!id) return;
-
-    const rect = opener.getBoundingClientRect();
-    const entry: OriginEntry = {
-      id,
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-      t: Date.now(),
-    };
-    try {
-      win.sessionStorage.setItem(ORIGIN_STORAGE_KEY, JSON.stringify(entry));
-    } catch {
-      // Best-effort — the window just opens centred instead.
-    }
-  });
-}
-
-/**
- * The scale-in entrance animation's own marker attribute — `global.css`'s
- * own `.ingles-window[${DESK_WINDOW_OPENING_ATTR}]` rule, NOT the unconditional
- * `.ingles-window` class. See {@link applyDeskWindowOrigin}'s own header for
- * why this is gated rather than always playing.
- */
-export const DESK_WINDOW_OPENING_ATTR = 'data-desk-window-opening';
-
-/**
- * Window-side, on mount: consume a fresh (not stale) opener entry, if any,
- * to set the scale-in's transform-origin, and arm the entrance animation
- * itself ({@link DESK_WINDOW_OPENING_ATTR}) — then move the entry to the
- * return-focus key (same id) so the hub can refocus that exact opener once
- * the window closes.
- *
- * ONLY A FRESH OPEN FROM A FOLDER/DESK OPENER EVER ANIMATES (owner spec
- * 2026-10-07, carried over from the community-list-as-a-window pass): a
- * direct visit (no entry at all — a QR scan, a shared link, a new tab) and,
- * now that `/[lang]/ingles/actividades` itself opens as a window with its
- * OWN in-window links (a card, a filter, a page of results, the practice
- * window's own `‹` back arrow), every IN-WINDOW navigation between two
- * window pages all leave no fresh entry behind either — `initDeskWindowOpeners`
- * only ever writes one for a click on a REAL `[data-desk-window-open]`
- * opener, never a plain link — so none of them arm the animation. Without
- * this gate, `.ingles-window`'s animation used to play on EVERY mount
- * unconditionally, which would have replayed the scale-in on every filter
- * change, every page of results, and every card opened from the list.
- */
-export function applyDeskWindowOrigin(
-  windowEl: HTMLElement,
-  win: Window = window,
-): void {
-  let raw: string | null;
-  try {
-    raw = win.sessionStorage.getItem(ORIGIN_STORAGE_KEY);
-    win.sessionStorage.removeItem(ORIGIN_STORAGE_KEY);
-  } catch {
-    return;
-  }
-  if (!raw) return;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  if (!isOriginEntry(parsed)) return;
-  if (Date.now() - parsed.t > ORIGIN_MAX_AGE_MS) return;
-
-  windowEl.style.setProperty('--ingles-window-from', `${parsed.x}px ${parsed.y}px`);
-  windowEl.setAttribute(DESK_WINDOW_OPENING_ATTR, '');
-  try {
-    win.sessionStorage.setItem(RETURN_FOCUS_STORAGE_KEY, parsed.id);
-  } catch {
-    // Best-effort — the hub just leaves focus wherever it already is.
-  }
-}
-
-/**
- * Hub-side, on mount (first load AND every `astro:page-load`, since the hub
- * is exactly where a closed window returns to): refocus the opener the
- * window remembers closing back to, if it still exists on the page.
- * Always clears the key, found or not, so a later unrelated visit never
- * inherits a stale focus target.
- */
-export function applyDeskWindowReturnFocus(doc: Document = document, win: Window = window): void {
-  let id: string | null;
-  try {
-    id = win.sessionStorage.getItem(RETURN_FOCUS_STORAGE_KEY);
-    win.sessionStorage.removeItem(RETURN_FOCUS_STORAGE_KEY);
-  } catch {
-    return;
-  }
-  if (!id) return;
-
-  const opener = doc.querySelector(`[${DESK_WINDOW_ATTR.opener}="${id}"]`);
-  if (opener instanceof HTMLElement) {
-    opener.focus();
-  }
-}
-
 /**
  * Window-side: wires the three "traffic light" buttons, Escape, and initial
  * focus. `windowEl` is the `role="dialog"` element itself; `closeTargetPath`
@@ -367,13 +219,14 @@ export function initDeskWindow(
   windowEl.dataset.deskWindowReady = 'true';
 
   // EMBEDDED (window-manager architecture): the host renders the entrance
-  // animation and owns full-screen/maximize state itself — see this file's
-  // own header on `isEmbedded`/`postDeskWindowMessage` below. Neither of
-  // these two mount-time steps has anything to do when embedded.
+  // animation (`deskWindowManager.ts#applyOpenAnimation`) and owns full-
+  // screen/maximize state itself — see this file's own header on
+  // `isEmbedded`/`postDeskWindowMessage` below. GUEST (never embedded): no
+  // desk/folder exists for its window to have scaled in from either — a
+  // guest always lands on this window directly (a QR code, a shared link),
+  // never by clicking a `[data-desk-window-open]` desk item — so there has
+  // never been an entrance animation to play here for either case.
   const embedded = isEmbeddedWindowDom(doc);
-  if (!embedded) {
-    applyDeskWindowOrigin(windowEl, win);
-  }
 
   const fullscreenButton = windowEl.querySelector<HTMLElement>(`[${DESK_WINDOW_ATTR.fullscreen}]`);
   // "Remembered per browser" (owner spec): applied on mount, before anything

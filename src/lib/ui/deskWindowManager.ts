@@ -46,7 +46,7 @@ const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 /** `DeskWindow.astro`'s own root element marker — present on every genuine desk-window document. Its absence is what {@link buildFallbackBar}'s own bar guards against. */
 const DESK_WINDOW_MARKER_SELECTOR = '[data-desk-window]';
 
-/** Marks a link anywhere on the HOST page (a desk folder, a tray chip, the levels dock…) as something the manager should open as a window rather than navigate to. Same attribute `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already looked for (its own scale-in capture) — a manager click handler that `preventDefault()`s in the CAPTURE phase makes that older bubble-phase listener a no-op for free (it already bails out on `event.defaultPrevented`). */
+/** Marks a link anywhere on the HOST page (a desk folder, a tray chip, the levels dock…) as something the manager should open as a window rather than navigate to — `onClickCapture` below is the one and only listener for it (the old per-page `initDeskWindowOpeners`/sessionStorage-based scale-in capture this attribute used to ALSO feed is gone; this manager now captures the opener's own rect directly, synchronously, in the same click). */
 export const DESK_WINDOW_OPEN_ATTR = 'data-desk-window-open';
 
 const CLOSE_ANIMATION_MS = 160;

@@ -126,8 +126,9 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       abrirá una ventana dentro del escritorio") — its own curated-exercise
       count is gone from the desk for the same reason. `openerId="community"`
       gives it the SAME folder-origin scale-in the daily-pick folder already
-      has (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`) — its destination
-      (`/[lang]/ingles/actividades`) now renders as a window too. */}
+      has (`@lib/ui/deskWindowManager.ts#onClickCapture`/`applyOpenAnimation`)
+      — its destination (`/[lang]/ingles/actividades`) now renders as a
+      window too. */}
   <nav
     aria-label={t.foldersLabel}
     class="order-2 grid grid-cols-2 gap-1 desk:order-none desk:col-start-2 desk:row-start-1 desk:flex desk:flex-col desk:items-end desk:gap-[18px] desk:pt-1"

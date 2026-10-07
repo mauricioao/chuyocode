@@ -599,18 +599,16 @@ const faviconSvg =
       import { initReveals } from '@lib/reveal';
       import { initBackButtons, trackPageVisit } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
-      import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
       import { initDeskSceneWidgets } from '@lib/ui/deskScene';
       import { isEmbeddedWindowDom } from '@lib/ui/deskWindowMessaging';
 
       // EMBEDDED (window-manager architecture): none of this site-chrome
       // wiring has anything to do inside a window's own iframe — no reveal
       // animations worth running behind a window that fills the whole
-      // viewport, no header/footer to show/hide, no desk/helper, and no
-      // `[data-desk-window-open]` openers (those only ever live on the
-      // desk). Self-guarded here (rather than dropping the whole script
-      // element) — same low-risk posture as every other desk script's own
-      // double-wiring guard.
+      // viewport, no header/footer to show/hide, no desk/helper. Self-
+      // guarded here (rather than dropping the whole script element) — same
+      // low-risk posture as every other desk script's own double-wiring
+      // guard.
       if (!isEmbeddedWindowDom(document)) {
 
       const run = () => initReveals();
@@ -640,15 +638,6 @@ const faviconSvg =
       // (unlike reveals) this needs no re-init on `astro:after-swap`.
       initBackButtons();
 
-      // "Desktop" redesign PART 6a: captures a `[data-desk-window-open]`
-      // folder's own rect just before navigation, for the practice window's
-      // scale-in — site-wide (like `initBackButtons`) since the desk only
-      // ever renders under Inglés, and the attribute selector simply never
-      // matches elsewhere. Self-guards against double-wiring on its own
-      // (`@lib/ui/deskWindow.ts`'s own header), so it is safe to call here
-      // unconditionally, once per session.
-      initDeskWindowOpeners();
-
       // Smart header/footer visibility (chrome-visibility feature): binds
       // its own listeners exactly once and re-picks the mode on every page
       // entry (including View Transitions) internally — see that module's
@@ -662,7 +651,7 @@ const faviconSvg =
       // practice/community/create/editor) never ran it at all, leaving a
       // hand-less clock and a date-less calendar. Site-wide and here
       // instead, same "self-guards on a page with no desk" posture as
-      // `initDeskWindowOpeners` above — see `@lib/ui/deskScene`'s own
+      // `initBackButtons` above — see `@lib/ui/deskScene`'s own
       // header. Runs on first load AND every `astro:page-load` (a desk
       // behind a window, or the hub itself, reached by a client-side
       // navigation from another such page).

@@ -212,9 +212,10 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
  * still carry the UNtruncated title for anyone who needs it.
  *
  * The chip is a plain `<a href>` carrying `data-desk-window-open` with the
- * SAME id `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already listens for
- * — reopening a chip gets the exact scale-in-from-this-spot treatment any
- * other opener gets, with no new wiring. Its own "×" is a `<button>` that
+ * SAME id the HOST's own window manager already listens for
+ * (`@lib/ui/deskWindowManager.ts#onClickCapture`) — reopening a chip gets
+ * the exact scale-in-from-this-spot treatment any other opener gets, with
+ * no new wiring. Its own "×" is a `<button>` that
  * stops the click from reaching the anchor (`stopPropagation` +
  * `preventDefault`) so hovering/clicking it removes the chip instead of
  * reopening the window; it is visible on hover/focus only, but — being a
