@@ -783,6 +783,19 @@ h3 {
     0 18px 40px rgb(28 28 30 / 0.14);
 }
 
+/* A widget whose glass is a descendant (the player: an Astro wrapper around
+ * its React island) lifts that glass instead, so the shadow keeps its rounded
+ * corners. */
+[data-desk-widget].is-dragging:not(.ingles-glass) {
+  box-shadow: none;
+}
+
+[data-desk-widget].is-dragging:not(.ingles-glass) .ingles-glass {
+  box-shadow:
+    0 2px 4px rgb(28 28 30 / 0.08),
+    0 18px 40px rgb(28 28 30 / 0.14);
+}
+
 /* --- Dotted work-surface background (canvas polish) ----------------------
  * A subtle Figma/Miro-style dot grid for every canvas VIEWPORT — the
  * practice player's worksheet camera (desktop AND mobile) and the editor's
