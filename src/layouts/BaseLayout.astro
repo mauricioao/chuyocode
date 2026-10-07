@@ -206,6 +206,20 @@ const effectiveBare = bare || embedded;
 const isIngles = theme === 'ingles';
 
 /**
+ * "Desktop" redesign (owner spec 2026-10-07, "prescindir del header
+ * normal"): true for every desk HOST page — the hub, and every window
+ * route's host shell for a SIGNED-IN visitor (`windowManager`/`deskBehind`
+ * are only ever both true together, only ever for that exact case — see
+ * each page's own frontmatter). Those pages drop the site `<Header>`
+ * entirely; `DeskHost.astro` renders its own desk-integrated logo/account
+ * row instead (`DeskChrome.astro`). The one Inglés page this does NOT cover
+ * is a GUEST's window (`hostMode` false there) — its header keeps rendering
+ * exactly as before, simply hidden behind that window's own full-screen
+ * veil (owner instruction: "keep that exactly as is").
+ */
+const isDeskHost = isIngles && (windowManager || deskBehind);
+
+/**
  * Does this page pass anything into the `overlay` slot below — the
  * practice/creator pages' own `DeskWindow`, rendered with `slot="overlay"`
  * (`[id].astro`'s own header) rather than the default slot, so it paints
@@ -549,7 +563,7 @@ const faviconSvg =
         semantic tokens every other Inglés surface already uses. Every other
         page is completely unaffected — this branch only ever runs when
         `isIngles` is true. */}
-    {!effectiveBare &&
+    {!effectiveBare && !isDeskHost &&
       (isIngles ? <Header lang={lang} ingles /> : (
         <div data-theme="brand" class="dark contents">
           <Header lang={lang} />

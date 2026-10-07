@@ -821,6 +821,16 @@ h3 {
    * `initChromeVisibility` otherwise keeps in sync (see that module's own
    * header and `BackButton.astro`'s). */
   --chrome-header-offset: 5rem;
+
+  /* Default (pre-JS) desk-chrome offset — a reasonable estimate of the
+   * desk-integrated logo/account row's own rendered height
+   * (`DeskChrome.astro`), overwritten the instant JS measures the real one
+   * (`@lib/ui/deskChrome.ts#initDeskChromeOffset`). Used by a freshly-opened
+   * desk window's default top inset (`@lib/ui/deskWindowManager.ts`) and by
+   * the desk's own content top padding (`DeskScene.astro`) — see
+   * `DeskChrome.astro`'s own header. Never a stand-in for the removed site
+   * `<Header>`: a desk host page renders no header at all any more. */
+  --desk-chrome-offset: 4.75rem;
 }
 
 /* SITE mode only (owner spec 2026-10-05 moved INGLÉS to its own "blocks"
@@ -1154,20 +1164,29 @@ html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome
  * `[data-chrome-hub]` is server-rendered by `BaseLayout.astro` (no JS
  * dependency — see that file's own header) — true ONLY for the hub, whose
  * content is one screen tall. Two snap points at the page's own natural
- * scroll extremes: `[data-chrome-header]` (start) is the TOP (the hub's own
- * header + one-screen content, both always visible there); `[data-chrome-
- * footer]` (end) is the BOTTOM (the footer fully visible) — "si se baja se
- * mira completo, si se sube se mira toda la pantalla" (owner's words).
- * `proximity`, not `mandatory`: a gentle rest at either end, never a forced
- * jump mid-scroll. Deliberately scoped to the hub alone — a long Inglés
- * page (the practice player, the editor, a long activity list) must never
- * fight a visitor trying to read partway down it. Reduced motion drops the
- * snap entirely, in favor of plain, un-snapped scrolling. */
+ * scroll extremes: `[data-desk]` (start) is the TOP (the desk itself, with
+ * its own desk-integrated logo/account row — "desktop" redesign, owner spec
+ * 2026-10-07 — always visible there); `[data-chrome-footer]` (end) is the
+ * BOTTOM (the footer fully visible) — "si se baja se mira completo, si se
+ * sube se mira toda la pantalla" (owner's words). `proximity`, not
+ * `mandatory`: a gentle rest at either end, never a forced jump mid-scroll.
+ * Deliberately scoped to the hub alone — a long Inglés page (the practice
+ * player, the editor, a long activity list) must never fight a visitor
+ * trying to read partway down it. Reduced motion drops the snap entirely,
+ * in favor of plain, un-snapped scrolling.
+ *
+ * BUGFIX (own regression, "desktop" redesign, owner spec 2026-10-07): this
+ * used to snap-align `[data-chrome-header]` as the start point — now that
+ * the hub renders no `<Header>` at all, that selector matched nothing, so
+ * the snap container had only an END point and the page auto-snapped
+ * straight to the BOTTOM on load. `[data-desk]` (the desk section itself,
+ * never absolutely positioned, so it is always a valid snap area) restores
+ * the top anchor. */
 @media (prefers-reduced-motion: no-preference) {
   html[data-chrome-hub] {
     scroll-snap-type: y proximity;
   }
-  html[data-chrome-hub] [data-chrome-header] {
+  html[data-chrome-hub] [data-desk] {
     scroll-snap-align: start;
   }
   html[data-chrome-hub] [data-chrome-footer] {

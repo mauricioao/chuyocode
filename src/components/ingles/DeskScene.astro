@@ -23,6 +23,7 @@
  * `DeskWindow.astro`'s own header), and the desk stays fully visible AND
  * interactive around it, same as the hub itself.
  */
+import DeskChrome from '@components/ingles/DeskChrome.astro';
 import DeskFolder from '@components/ingles/DeskFolder.astro';
 import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
 import DeskCalendarWidget from '@components/ingles/DeskCalendarWidget.astro';
@@ -34,6 +35,8 @@ import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSce
 
 interface Props {
   lang: Lang;
+  /** True only on the Inglés hub — forwarded straight to `DeskChrome`'s own `isHub`. */
+  isHub: boolean;
   greetingLine1: string;
   activityCountLabel: string | null;
   dailyPickHref: string;
@@ -50,6 +53,7 @@ interface Props {
 
 const {
   lang,
+  isHub,
   greetingLine1,
   activityCountLabel,
   dailyPickHref,
@@ -82,8 +86,15 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
 <section
   data-desk
   transition:persist="desk-scene"
-  class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-[calc(100dvh-96px)] desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-3 desk:pb-0"
+  class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-dvh desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-(--desk-chrome-offset) desk:pb-0"
 >
+  {/* Desk-integrated logo + account control row ("desktop" redesign, owner
+      spec 2026-10-07) — FIRST child so it sits earliest in this stacking
+      context; `desk:absolute` there (see its own header) is what lets a
+      window or a dragged widget, both later in source order, paint over
+      it. */}
+  <DeskChrome lang={lang} isHub={isHub} />
+
   {/* Shared gradients for every `DeskFolder`'s back/front SVG layers —
       defined ONCE here, referenced by id, same `url(#…)` pattern the
       approved mockup itself uses (`index.html`'s `#fb`/`#ff`). */}

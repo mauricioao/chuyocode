@@ -40,7 +40,6 @@ import { isDeskWindowMessageEnvelope } from './deskWindowMessaging';
 import { renderMinimizedWindowsTrayFrom, type MinimizedWindowEntry } from './minimizedWindows';
 import { readPersistedDeskWindows, writePersistedDeskWindows } from './deskWindowsPersistence';
 
-const HEADER_SELECTOR = '[data-chrome-header]';
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 
 /** `DeskWindow.astro`'s own root element marker — present on every genuine desk-window document. Its absence is what {@link buildFallbackBar}'s own bar guards against. */
@@ -72,9 +71,17 @@ const FALLBACK_LOAD_TIMEOUT_MS = 8000;
  * through `openWindow` at all) means "no entrance animation at all". */
 type PendingOpen = { kind: 'origin'; x: number; y: number } | { kind: 'cascade' } | null;
 
-/** The wrapper's own default (non-maximized) geometry — identical to `DeskWindow.astro`'s old desktop-inset treatment, now owned by the HOST frame instead of the embedded page itself. */
+/**
+ * The wrapper's own default (non-maximized) geometry. "Desktop" redesign
+ * (owner spec 2026-10-07, "prescindir del header normal"): the top inset is
+ * no longer the old header's own reserved space — it is
+ * `--desk-chrome-offset`, the desk-integrated logo/account row's own
+ * MEASURED bottom edge (`@lib/ui/deskChrome#initDeskChromeOffset`), so a
+ * freshly-opened window starts just below that row, never hard-coded. The
+ * bottom/side insets are unchanged.
+ */
 const WRAPPER_CLASS =
-  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]';
+  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]';
 
 interface ManagedWindow {
   wrapper: HTMLElement;
@@ -104,11 +111,6 @@ function isDesktop(win: Window): boolean {
   } catch {
     return false;
   }
-}
-
-function headerBottom(doc: Document): number {
-  const header = doc.querySelector<HTMLElement>(HEADER_SELECTOR);
-  return header ? header.getBoundingClientRect().bottom : 0;
 }
 
 /** The wrapper's own rect at offset `{0,0}` — same "unoffset before re-clamping" posture as `deskWindowDrag.ts#unoffsetWindowRect`. */
@@ -278,7 +280,7 @@ export function initDeskWindowManager(
       return;
     }
     const rect = unoffsetWrapperRect(managed.wrapper, { x: 0, y: 0 });
-    const clamped = clampWindowDragOffset(entry.offset, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
+    const clamped = clampWindowDragOffset(entry.offset, rect, { width: win.innerWidth, height: win.innerHeight });
     managed.wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
   }
 
@@ -391,7 +393,7 @@ export function initDeskWindowManager(
         y: fallbackDrag.offset.y + (event.clientY - fallbackDrag.y),
       };
       const rect = unoffsetWrapperRect(wrapper, { x: 0, y: 0 });
-      const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
+      const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
       wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
     });
     fallbackBar.addEventListener('pointerup', () => {
@@ -872,7 +874,7 @@ export function initDeskWindowManager(
         if (!managed.dragStartOffset || !isDesktop(win)) return;
         const next = { x: managed.dragStartOffset.x + message.dx, y: managed.dragStartOffset.y + message.dy };
         const rect = unoffsetWrapperRect(managed.wrapper, { x: 0, y: 0 });
-        const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
+        const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
         managed.wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
         return;
       }

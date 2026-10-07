@@ -33,6 +33,7 @@
  */
 import DeskScene from '@components/ingles/DeskScene.astro';
 import DeskHelper from '@components/ingles/DeskHelper.astro';
+import { isInglesHubPath } from '@lib/backNavigation';
 import { UI_LABELS, type Lang } from '@lib/i18n';
 import type { DeskSceneData } from '@lib/ingles/deskSceneData';
 
@@ -45,10 +46,14 @@ const { lang, desk } = Astro.props;
 
 const english = UI_LABELS[lang].english;
 const hub = english.hub;
+
+/** Same hub-path check `Header.astro` used to drive its own `isHub` split — forwarded to `DeskScene`/`DeskChrome` now that the desk itself renders the logo + account control. */
+const isHub = isInglesHubPath(Astro.url.pathname);
 ---
 
 <DeskScene
   lang={lang}
+  isHub={isHub}
   greetingLine1={desk.greetingLine1}
   activityCountLabel={desk.activityCountLabel}
   dailyPickHref={desk.dailyPickHref}
@@ -89,6 +94,7 @@ const hub = english.hub;
 
 <script>
   import { initDeskHelper } from '@lib/ui/deskHelper';
+  import { initDeskChromeOffset } from '@lib/ui/deskChrome';
 
   // Same wiring the hub's own script used to own alone — see this file's
   // header. Idempotent/self-guarded (`deskHelper.ts#initDeskHelper`), so
@@ -96,6 +102,10 @@ const hub = english.hub;
   // is always safe.
   const run = () => {
     initDeskHelper();
+    // The desk-integrated logo/account row's own measured offset (see that
+    // module's own header) — every desk host page needs this, not just the
+    // hub, since every one of them drops the site header now.
+    initDeskChromeOffset();
   };
 
   if (document.readyState === 'loading') {
