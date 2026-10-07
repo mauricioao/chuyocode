@@ -1343,6 +1343,7 @@ export const UI_LABELS = {
         // chip's "×" button.
         trayLabel: 'Ventanas minimizadas',
         trayRemoveLabel: 'Quitar de la bandeja',
+        trayMoreLabel: 'Ver {n} ventanas más',
         // "Desktop" redesign PART 1 (owner spec 2026-10-06, item B): the
         // hub-only "by ChuyoCode" header link's accessible name + tooltip.
         backToChuyoCode: 'Regresar a ChuyoCode',
@@ -2474,6 +2475,7 @@ export const UI_LABELS = {
         levelShortcutTitle: 'Jump to your level',
         trayLabel: 'Minimized windows',
         trayRemoveLabel: 'Remove from tray',
+        trayMoreLabel: 'See {n} more windows',
         backToChuyoCode: 'Back to ChuyoCode',
         greetingNamed: 'Hi, {name}.',
         greetingFallback: 'Hi.',

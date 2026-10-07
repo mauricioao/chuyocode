@@ -16,9 +16,12 @@ import {
   renderMinimizedWindowsTray,
   initMinimizedWindowsTray,
   MAX_MINIMIZED_WINDOWS,
+  MAX_VISIBLE_MINIMIZED_CHIPS,
   MINIMIZED_WINDOWS_STORAGE_KEY,
   type MinimizedWindowEntry,
 } from './minimizedWindows';
+
+const MORE_LABEL_TEMPLATE = '{n} ventanas más';
 
 function entry(id: string, t = 0): MinimizedWindowEntry {
   return { id, title: `Title ${id}`, href: `/es/ingles/actividades/${id}`, thumbnail: null, t };
@@ -159,7 +162,7 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
     expect(container.children).toHaveLength(0);
   });
 
-  it('renders one chip per entry, unhidden, each an opener anchor with the title and a close button', () => {
+  it('renders one chip per entry, unhidden, each an opener anchor with an accessible name and a close button', () => {
     const container = document.createElement('nav');
     renderMinimizedWindowsTray(container, [entry('a'), entry('b')], 'Quitar');
     expect(container.hidden).toBe(false);
@@ -167,18 +170,24 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
     expect(chips).toHaveLength(2);
     expect(chips[0].getAttribute('data-desk-window-open')).toBe('a');
     expect(chips[0].getAttribute('href')).toBe('/es/ingles/actividades/a');
-    expect(chips[0].textContent).toContain('Title a');
     expect(chips[0].querySelector('button')?.getAttribute('aria-label')).toBe('Quitar');
   });
 
-  it('each chip is a tile: a document glyph preview (no thumbnail yet) with the title underneath', () => {
+  // Polish pass 2026-10-06 (owner report, `dock-three-chips.png`): chips used
+  // to carry a visible title underneath the preview, which got cut off at
+  // the dock's own width. They are now icon-only tiles — the title lives in
+  // the existing tooltip pattern (`title`, a native tooltip) plus the
+  // anchor's own accessible name (`aria-label`), never visible chip text.
+  it('each chip is an icon-only tile: a document glyph preview (no thumbnail yet), no visible text label', () => {
     const container = document.createElement('nav');
     renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
-    const chip = container.querySelector('a[data-desk-window-open]') as HTMLElement;
+    const chip = container.querySelector('a[data-desk-window-open]') as HTMLAnchorElement;
 
     expect(chip.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(chip.querySelector('img')).toBeNull();
-    expect(chip.querySelector('small')?.textContent).toBe('Title a');
+    expect(chip.querySelector('small')).toBeNull();
+    expect(chip.title).toBe('Title a');
+    expect(chip.getAttribute('aria-label')).toBe('Title a');
   });
 
   it('shows the thumbnail image instead of the glyph once an entry has one', () => {
@@ -206,6 +215,76 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
     expect(clickEvent.defaultPrevented).toBe(true);
     expect(readMinimizedWindows(storage).map((e) => e.id)).toEqual(['b']);
     expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(1);
+  });
+});
+
+// Polish pass 2026-10-06 (owner report, `dock-three-chips.png`): the dock
+// used to widen under the open helper bubble to fit every minimized chip.
+// It now shows at most `MAX_VISIBLE_MINIMIZED_CHIPS` (3) chips; the rest
+// collapse into one "+N" tile that opens a small menu listing them.
+describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () => {
+  it('shows every chip, no overflow tile, when at or under the visible cap', () => {
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, [entry('a'), entry('b'), entry('c')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+    expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(3);
+    expect(container.querySelector('[data-minimized-tray-more]')).toBeNull();
+  });
+
+  it('shows only the first MAX_VISIBLE_MINIMIZED_CHIPS chips plus a "+N" tile once there are more', () => {
+    const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+
+    const visibleChips = container.querySelectorAll('a[data-minimized-chip]');
+    expect(visibleChips).toHaveLength(MAX_VISIBLE_MINIMIZED_CHIPS);
+    expect([...visibleChips].map((c) => c.getAttribute('data-desk-window-open'))).toEqual(['id-0', 'id-1', 'id-2']);
+
+    const overflowCount = entries.length - MAX_VISIBLE_MINIMIZED_CHIPS;
+    const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
+    expect(moreButton).not.toBeNull();
+    expect(moreButton.getAttribute('aria-expanded')).toBe('false');
+    expect(moreButton.getAttribute('aria-label')).toBe(`${overflowCount} ventanas más`);
+    expect(moreButton.textContent).toBe(`+${overflowCount}`);
+  });
+
+  it('the "+N" tile is a button that opens a hidden menu listing every remaining entry as a link', () => {
+    const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+
+    const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
+    const menu = container.querySelector('[role="menu"]') as HTMLElement;
+    expect(menu.hidden).toBe(true);
+
+    moreButton.click();
+    expect(moreButton.getAttribute('aria-expanded')).toBe('true');
+    expect(menu.hidden).toBe(false);
+    const items = menu.querySelectorAll('a[role="menuitem"][data-desk-window-open]');
+    expect([...items].map((a) => a.getAttribute('data-desk-window-open'))).toEqual(['id-3', 'id-4']);
+    expect(items[0].textContent).toBe('Title id-3');
+
+    moreButton.click();
+    expect(moreButton.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.hidden).toBe(true);
+  });
+
+  it('Escape closes the open menu and resets aria-expanded', () => {
+    const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
+    const container = document.createElement('nav');
+    document.body.appendChild(container);
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+
+    const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
+    const menu = container.querySelector('[role="menu"]') as HTMLElement;
+    moreButton.click();
+    expect(menu.hidden).toBe(false);
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+    document.dispatchEvent(escape);
+
+    expect(menu.hidden).toBe(true);
+    expect(moreButton.getAttribute('aria-expanded')).toBe('false');
+    container.remove();
   });
 });
 

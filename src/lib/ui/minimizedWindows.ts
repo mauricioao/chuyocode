@@ -21,6 +21,15 @@ export const MINIMIZED_WINDOWS_STORAGE_KEY = 'ingles-desk-minimized-windows';
 /** At most this many chips — oldest (least recently minimized/reopened) dropped first. */
 export const MAX_MINIMIZED_WINDOWS = 5;
 
+/**
+ * At most this many chips render DIRECTLY in the dock (polish pass
+ * 2026-10-06, owner report `dock-three-chips.png`: beyond this the dock kept
+ * widening to the left, under the open helper bubble). Anything past this
+ * collapses into one "+N" tile that opens a small menu listing the rest —
+ * see {@link renderMinimizedWindowsTray}.
+ */
+export const MAX_VISIBLE_MINIMIZED_CHIPS = 3;
+
 export interface MinimizedWindowEntry {
   /** The activity id — also the dedupe key (re-minimizing the same activity moves it to the front instead of duplicating it). */
   id: string;
@@ -130,7 +139,14 @@ export function removeMinimizedWindow(
 export const MINIMIZED_TRAY_ATTR = {
   container: 'data-minimized-tray',
   chip: 'data-minimized-chip',
+  /** The "+N" overflow tile's own button — see {@link renderMinimizedWindowsTray}. */
+  more: 'data-minimized-tray-more',
 } as const;
+
+/** Fills the `{n}` placeholder in a localized "+N" template (e.g. "{n} more windows"). */
+function fillMoreLabel(template: string, n: number): string {
+  return template.replace('{n}', String(n));
+}
 
 /**
  * A plain document-glyph SVG — the chip's preview when `entry.thumbnail` is
@@ -164,19 +180,20 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
 }
 
 /**
- * DOM: (re)render `container`'s chips from `entries`. Clears and rebuilds
- * every time rather than diffing — the list is at most
- * {@link MAX_MINIMIZED_WINDOWS} long, so a full rebuild is cheap, and it
- * keeps this function simple enough to trust at a glance.
+ * Builds one chip tile — shared by the directly-visible chips and (in a
+ * simpler form) nothing else; factored out purely to keep
+ * {@link renderMinimizedWindowsTray} readable.
  *
- * Each chip is a TILE matching the levels dock's own level tiles (owner
- * feedback 2026-10-06: "como el dock de macOS" — chips belong INSIDE the
- * same glass shelf, styled like its other tiles, not a separate pill):
+ * ICON-ONLY (polish pass 2026-10-06, owner report `dock-three-chips.png`):
  * a 56px squircle preview (the activity's thumbnail when known, else a
- * document glyph) with the truncated title in the label slot underneath,
- * exactly like a level tile's bars + level code + name.
+ * document glyph), matching the levels dock's own level tiles ("como el
+ * dock de macOS"). The title no longer renders as visible text underneath
+ * (it used to get cut off at the dock's own width) — it lives in the
+ * existing tooltip pattern (`title`, a native tooltip on hover) PLUS the
+ * anchor's own accessible name (`aria-label`), so it is still announced to
+ * assistive tech with nothing to truncate.
  *
- * Each chip is a plain `<a href>` carrying `data-desk-window-open` with the
+ * The chip is a plain `<a href>` carrying `data-desk-window-open` with the
  * SAME id `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already listens for
  * — reopening a chip gets the exact scale-in-from-this-spot treatment any
  * other opener gets, with no new wiring. Its own "×" is a `<button>` that
@@ -185,13 +202,150 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
  * reopening the window; it keeps the old pill's "visible on hover/focus
  * only" posture, now pinned to the squircle's own top-right corner.
  */
+function createChip(
+  entry: MinimizedWindowEntry,
+  removeLabel: string,
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  doc: Document,
+  onRemoved: () => void,
+): HTMLAnchorElement {
+  const chip = doc.createElement('a');
+  chip.href = entry.href;
+  chip.setAttribute('data-desk-window-open', entry.id);
+  chip.setAttribute(MINIMIZED_TRAY_ATTR.chip, entry.id);
+  chip.title = entry.title;
+  chip.setAttribute('aria-label', entry.title);
+  chip.className =
+    'group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[13px] bg-gradient-to-b from-card to-muted shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  if (entry.thumbnail) {
+    const img = doc.createElement('img');
+    img.src = entry.thumbnail;
+    img.alt = '';
+    img.className = 'h-full w-full object-cover';
+    chip.appendChild(img);
+  } else {
+    chip.appendChild(createDocumentGlyph(doc));
+  }
+
+  const closeButton = doc.createElement('button');
+  closeButton.type = 'button';
+  closeButton.setAttribute('aria-label', removeLabel);
+  closeButton.className =
+    'absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-[0_1px_2px_rgb(28_28_30_/_0.12)] transition-opacity hover:bg-border hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover:opacity-100';
+  closeButton.textContent = '×';
+  closeButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    removeMinimizedWindow(entry.id, storage);
+    onRemoved();
+  });
+  chip.appendChild(closeButton);
+
+  return chip;
+}
+
+/**
+ * Builds the "+N" overflow tile — same 56px squircle footprint as a chip,
+ * but a `<button>` (not an opener) that toggles a small `role="menu"`
+ * popover listing every entry past {@link MAX_VISIBLE_MINIMIZED_CHIPS} as a
+ * plain link (accessible: `aria-haspopup`/`aria-expanded`, a list of links,
+ * Escape closes — owner spec 2026-10-06). Each link still carries
+ * `data-desk-window-open`, so reopening from inside the menu gets the exact
+ * same treatment as a directly-visible chip, with no extra wiring.
+ */
+function createOverflowTile(
+  overflowEntries: readonly MinimizedWindowEntry[],
+  moreLabelTemplate: string,
+  doc: Document,
+): HTMLElement {
+  const wrapper = doc.createElement('div');
+  wrapper.className = 'relative shrink-0';
+
+  const moreLabel = fillMoreLabel(moreLabelTemplate, overflowEntries.length);
+
+  const button = doc.createElement('button');
+  button.type = 'button';
+  button.setAttribute(MINIMIZED_TRAY_ATTR.more, '');
+  button.setAttribute('aria-haspopup', 'menu');
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-label', moreLabel);
+  button.title = moreLabel;
+  button.textContent = `+${overflowEntries.length}`;
+  button.className =
+    'flex h-14 w-14 items-center justify-center rounded-[13px] bg-gradient-to-b from-card to-muted text-sm font-semibold text-foreground shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  const menu = doc.createElement('div');
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', moreLabel);
+  menu.hidden = true;
+  menu.className =
+    'absolute bottom-full right-0 mb-2 w-48 rounded-md border border-border bg-popover p-1 shadow-lg';
+
+  for (const entry of overflowEntries) {
+    const link = doc.createElement('a');
+    link.href = entry.href;
+    link.setAttribute('role', 'menuitem');
+    link.setAttribute('data-desk-window-open', entry.id);
+    link.textContent = entry.title;
+    link.className = 'block truncate rounded px-2 py-1.5 text-sm text-foreground hover:bg-muted';
+    menu.appendChild(link);
+  }
+
+  button.addEventListener('click', () => {
+    const willOpen = menu.hidden;
+    menu.hidden = !willOpen;
+    button.setAttribute('aria-expanded', String(willOpen));
+  });
+
+  wrapper.append(button, menu);
+  return wrapper;
+}
+
+/**
+ * Wires ONE `Escape`-closes-the-open-menu listener per `container`, idempotent
+ * (same `dataset`-flag posture as `deskHelper.ts#initDeskHelper`) — the tray
+ * re-renders every time a chip is added/removed/reopened, which would
+ * otherwise create (and recreate, never remove) a fresh overflow tile AND a
+ * fresh `document`-level listener on every single render. Looked up fresh at
+ * EVENT time, never captured at wiring time, since the overflow tile/menu
+ * pair is itself rebuilt on every render.
+ */
+function wireOverflowEscapeClose(container: HTMLElement, doc: Document): void {
+  if (container.dataset.minimizedTrayEscapeReady === 'true') return;
+  container.dataset.minimizedTrayEscapeReady = 'true';
+
+  doc.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const menu = container.querySelector<HTMLElement>('[role="menu"]');
+    const button = container.querySelector<HTMLElement>(`[${MINIMIZED_TRAY_ATTR.more}]`);
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    button?.setAttribute('aria-expanded', 'false');
+  });
+}
+
+/**
+ * DOM: (re)render `container`'s chips from `entries`. Clears and rebuilds
+ * every time rather than diffing — the list is at most
+ * {@link MAX_MINIMIZED_WINDOWS} long, so a full rebuild is cheap, and it
+ * keeps this function simple enough to trust at a glance.
+ *
+ * At most {@link MAX_VISIBLE_MINIMIZED_CHIPS} render directly; the rest
+ * collapse into one "+N" tile (`createOverflowTile`) — see that function's
+ * own header for why (owner report `dock-three-chips.png`: the dock used to
+ * widen under the open helper bubble to fit every chip).
+ */
 export function renderMinimizedWindowsTray(
   container: HTMLElement,
   entries: readonly MinimizedWindowEntry[],
   removeLabel: string,
   storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
   doc: Document = document,
+  moreLabelTemplate = '+{n}',
 ): void {
+  wireOverflowEscapeClose(container, doc);
+
   container.replaceChildren();
   const isEmpty = entries.length === 0;
   container.hidden = isEmpty;
@@ -201,49 +355,18 @@ export function renderMinimizedWindowsTray(
   const hairline = container.parentElement?.querySelector<HTMLElement>('[data-minimized-tray-hairline]');
   if (hairline) hairline.hidden = isEmpty;
 
-  for (const entry of entries) {
-    const chip = doc.createElement('a');
-    chip.href = entry.href;
-    chip.setAttribute('data-desk-window-open', entry.id);
-    chip.setAttribute(MINIMIZED_TRAY_ATTR.chip, entry.id);
-    chip.title = entry.title;
-    chip.className =
-      'group relative flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  const visible = entries.slice(0, MAX_VISIBLE_MINIMIZED_CHIPS);
+  const overflow = entries.slice(MAX_VISIBLE_MINIMIZED_CHIPS);
 
-    const preview = doc.createElement('span');
-    preview.className =
-      'flex h-14 w-14 items-center justify-center overflow-hidden rounded-[13px] bg-gradient-to-b from-card to-muted shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]';
-    if (entry.thumbnail) {
-      const img = doc.createElement('img');
-      img.src = entry.thumbnail;
-      img.alt = '';
-      img.className = 'h-full w-full object-cover';
-      preview.appendChild(img);
-    } else {
-      preview.appendChild(createDocumentGlyph(doc));
-    }
-    chip.appendChild(preview);
+  const rerender = () =>
+    renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate);
 
-    const label = doc.createElement('small');
-    label.className = 'max-w-full truncate text-center text-[11px] leading-tight text-foreground';
-    label.textContent = entry.title;
-    chip.appendChild(label);
+  for (const entry of visible) {
+    container.appendChild(createChip(entry, removeLabel, storage, doc, rerender));
+  }
 
-    const closeButton = doc.createElement('button');
-    closeButton.type = 'button';
-    closeButton.setAttribute('aria-label', removeLabel);
-    closeButton.className =
-      'absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-[0_1px_2px_rgb(28_28_30_/_0.12)] transition-opacity hover:bg-border hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover:opacity-100';
-    closeButton.textContent = '×';
-    closeButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const next = removeMinimizedWindow(entry.id, storage);
-      renderMinimizedWindowsTray(container, next, removeLabel, storage, doc);
-    });
-    chip.appendChild(closeButton);
-
-    container.appendChild(chip);
+  if (overflow.length > 0) {
+    container.appendChild(createOverflowTile(overflow, moreLabelTemplate, doc));
   }
 }
 
@@ -260,5 +383,13 @@ export function initMinimizedWindowsTray(doc: Document = document, win: Window =
   if (!container) return;
 
   const removeLabel = container.getAttribute('data-remove-label') ?? '';
-  renderMinimizedWindowsTray(container, readMinimizedWindows(win.sessionStorage), removeLabel, win.sessionStorage, doc);
+  const moreLabelTemplate = container.getAttribute('data-more-label') ?? '+{n}';
+  renderMinimizedWindowsTray(
+    container,
+    readMinimizedWindows(win.sessionStorage),
+    removeLabel,
+    win.sessionStorage,
+    doc,
+    moreLabelTemplate,
+  );
 }

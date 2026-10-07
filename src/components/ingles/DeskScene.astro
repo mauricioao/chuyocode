@@ -211,7 +211,10 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       there is no more separate "tray row above the dock" on phones. */}
   <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
-    <div class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5">
+    <div
+      data-desk-dock
+      class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5"
+    >
       <nav aria-label={t.levelShortcutTitle} class="flex shrink-0 gap-2.5">
         {
           LEVELS.map((level, index) => {
@@ -254,6 +257,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
         data-minimized-tray
         data-testid="minimized-tray"
         data-remove-label={t.trayRemoveLabel}
+        data-more-label={t.trayMoreLabel}
         hidden
         aria-label={t.trayLabel}
         class="flex shrink-0 gap-2.5"
