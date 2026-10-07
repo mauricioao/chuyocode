@@ -175,6 +175,35 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).not.toContain('data-back-button');
   });
 
+  // Scroll bug fix (owner report: "se rompe el scroll y no deja llegar a la
+  // parte superior" — confirmed root cause: a descendant's `scrollIntoView()`
+  // can still scroll an `overflow: hidden` ancestor programmatically, with no
+  // visible scrollbar for a visitor to undo it with — see
+  // `QuizBlockEditor.test.tsx`'s own header). This section exists only to
+  // clip its content, never to scroll (the editor island owns its own
+  // internal scroll chain) — `overflow: clip` keeps the same visual clipping
+  // but can never be scrolled.
+  it("clips the editor's own body section with overflow-clip at desk:, never overflow-hidden", async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const sectionMatch = html.match(/<section class="([^"]*overflow-y-auto bg-muted[^"]*)"/);
+    expect(sectionMatch?.[1]).toContain('lg:overflow-clip');
+    expect(sectionMatch?.[1]).not.toContain('overflow-hidden');
+  });
+
   it('shows the activity title in the window title bar, and the muted autosave status next to it', async () => {
     editableActivity.value = {
       id: 'abc',

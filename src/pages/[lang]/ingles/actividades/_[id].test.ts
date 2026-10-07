@@ -257,6 +257,30 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     expect(html).toContain('aria-pressed="true"');
   });
 
+  // Scroll bug fix (owner report: "se rompe el scroll y no deja llegar a la
+  // parte superior" — confirmed root cause: a descendant's `scrollIntoView()`
+  // can still scroll an `overflow: hidden` ancestor programmatically, even
+  // with no visible scrollbar for a visitor to undo it with — see
+  // `QuizBlockEditor.test.tsx`'s own header). The window's own body wrapper
+  // and dialog section both exist only to clip content, never to scroll —
+  // `overflow: clip` keeps the same visual clipping but can never be
+  // scrolled.
+  it("clips the window's own dialog section and body wrapper with overflow-clip, never overflow-hidden", async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const bodyMatch = html.match(/class="([^"]*)"[^>]*data-desk-window-body/);
+    expect(bodyMatch?.[1]).toContain('overflow-clip');
+    expect(bodyMatch?.[1]).not.toContain('overflow-hidden');
+
+    const sectionMatch = html.match(/<section[^>]*id="desk-window"[^>]*class="([^"]*)"/);
+    expect(sectionMatch?.[1]).toContain('overflow-clip');
+    expect(sectionMatch?.[1]).not.toContain('overflow-hidden');
+  });
+
   it('does NOT force full screen for a signed-in visitor (the desk fills the space behind it)', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {

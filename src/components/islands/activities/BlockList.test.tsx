@@ -318,6 +318,25 @@ describe('BlockList — fill the empty space (creator polish round 4, owner feed
     }
     expect(el).toBe(li); // actually reached the <li> — the chain is intact
   });
+
+  // Scroll bug fix (owner report: "se rompe el scroll y no deja llegar a la
+  // parte superior") — these wrappers exist ONLY to clip their rounded
+  // corners/overflow, never to scroll: `overflow: hidden` is still a valid
+  // target for a descendant's `scrollIntoView()`/`.focus()` call (confirmed
+  // with a real browser — see `QuizBlockEditor.test.tsx`'s own header),
+  // even though it has no visible scrollbar for a visitor to undo that with.
+  // `overflow: clip` keeps the exact same visual clipping but can never be
+  // scrolled programmatically.
+  it('clips the focus-active <li> and its expanded-block wrapper with `overflow-clip`, never `overflow-hidden`', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
+    const li = screen.getByTestId('block-b1').closest('li')!;
+    expect(li.className).toContain('overflow-clip');
+    expect(li.className).not.toContain('overflow-hidden');
+
+    const expandedWrapper = screen.getByTestId('worksheet-zone-editor').closest('[class*="border-t"]')!;
+    expect(expandedWrapper.className).toContain('overflow-clip');
+    expect(expandedWrapper.className).not.toContain('overflow-hidden');
+  });
 });
 
 describe('BlockList — rotation', () => {

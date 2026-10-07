@@ -898,7 +898,7 @@ export default function ActivityEditorIsland({
           a revisión" already lived in that same title bar's `actions` slot. */}
       <div
         data-testid="activity-editor-card"
-        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden"
+        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-clip"
       >
         {/* "Duplicar y adaptar" credit line (D7) — only ever set for a
             duplicate's own editor; an ordinary activity never renders this. */}

@@ -330,7 +330,19 @@ export default function QuizBlockEditor({
   const cardNodeRefs = useRef<Record<string, HTMLLIElement | null>>({});
   useEffect(() => {
     if (!selectedSlotId) return;
-    cardNodeRefs.current[selectedSlotId]?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    // `block: 'nearest'` (scroll bug fix, owner report: "se rompe el scroll
+    // y no deja llegar a la parte superior") — `'center'` asked EVERY
+    // scrollable ancestor along the way to re-center the target, including
+    // several wrappers up this chain that only exist to CLIP their content
+    // (`overflow: hidden`, no visible scrollbar — `activity-editor-card` in
+    // `ActivityEditorIsland.tsx`, confirmed the culprit) rather than to
+    // actually scroll it. Those are now `overflow: clip` (cannot be
+    // scrolled programmatically at all, see that file's own comment), but
+    // 'nearest' is kept too: it only moves the ONE real scroll container
+    // (this column, `QUIZ_COLUMN_CLASS`) the minimum needed, instead of
+    // re-centering it on every add/select — gentler, and never a reason by
+    // itself for an ancestor to move.
+    cardNodeRefs.current[selectedSlotId]?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   }, [selectedSlotId]);
 
   const hasQuestions = questions.length > 0;

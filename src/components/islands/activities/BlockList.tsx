@@ -236,7 +236,7 @@ function SortableBlockItem({
       // this list — block cards need their OWN white background now to
       // still read against it; they used to inherit it for free from that
       // removed outer card.
-      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card ${
+      className={`flex min-h-0 min-w-0 flex-col overflow-clip rounded-lg border border-border bg-card ${
         focusActive ? 'lg:min-h-[22rem] lg:flex-1' : 'lg:flex-none'
       }`}
     >
@@ -489,7 +489,7 @@ export default function BlockList({
                     // its name/handle (this header, then the canvas' own
                     // zoom toolbar) rather than one padded content area —
                     // every pixel here is height the canvas doesn't get.
-                    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
+                    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-clip border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
                       {worksheet.image ? (
                         <WorksheetZoneEditor
                           lang={lang}
@@ -521,7 +521,7 @@ export default function BlockList({
                   )}
 
                   {expanded && quiz && (
-                    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
+                    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-clip border-t border-border pb-2 pt-1', ROW_PADDING_X)}>
                       <QuizBlockEditor
                         blockId={block.id}
                         lang={lang}

@@ -205,7 +205,7 @@ const BACK_BUTTON_TRIGGER_CLASS =
   role="dialog"
   aria-labelledby={titleId}
   tabindex="-1"
-  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
+  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-card outline-none desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
 >
   {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
       como presentación"/"Enviar a revisión" — squeezed the title down to
@@ -348,7 +348,7 @@ const BACK_BUTTON_TRIGGER_CLASS =
       docked. See that component's own header. Harmless for every other
       caller (the practice window): nothing else reads this attribute or
       relies on it being a positioning context. */}
-  <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-desk-window-body>
+  <div class="relative flex min-h-0 flex-1 flex-col overflow-clip" data-desk-window-body>
     <slot />
   </div>
 </section>
