@@ -1007,6 +1007,12 @@ export const UI_LABELS = {
         // Card badges (heart/eye counters, "Vista" badge) and the daily pick.
         viewedBadge: 'Vista',
         dailyPickLabel: 'Actividad del día',
+        // Window chrome (community-list-as-a-window pass, 2026-10-07) —
+        // same wording as `practice.windowClose`/etc, duplicated per
+        // section like every other window-chrome label in this file.
+        windowClose: 'Cerrar',
+        windowMinimize: 'Minimizar',
+        windowFullScreen: 'Pantalla completa',
       },
       // Moderator queue (`/[lang]/admin/actividades`, PR E "Moderation").
       // `report.reasons` (above) is reused for the "Reportadas" tab's report
@@ -2207,6 +2213,9 @@ export const UI_LABELS = {
         novistasChip: 'Unseen',
         viewedBadge: 'Seen',
         dailyPickLabel: "Today's activity",
+        windowClose: 'Close',
+        windowMinimize: 'Minimize',
+        windowFullScreen: 'Full screen',
       },
       moderation: {
         pageTitle: 'Moderation',

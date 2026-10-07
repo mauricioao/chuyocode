@@ -11,25 +11,61 @@
  * `src/middleware.ts`'s own header comment) — no per-page gate or
  * `markPrivate` call is needed here, unlike `/[lang]/crear` or
  * `/[lang]/mis-actividades`, which sit OUTSIDE that section. `Astro.locals.user`
- * is therefore expected non-null (checked defensively anyway, same posture
- * as `[id].astro`'s own `canReport`/`canHeart`).
+ * is therefore expected non-null in production — the `isGuest` branch below
+ * exists only for parity with `[id].astro`'s own documented pattern
+ * (defensive, and what the TEMP local override needs for screenshots); a
+ * real anonymous visitor is redirected away by the middleware before this
+ * page ever runs, so `isGuest` is always `false` in practice.
  *
- * UNIFIED SEARCH HEADER (community-search-unify pass): search now sits in
- * `PageTitle`'s `actions` slot, same spot/visual weight as Libros/Noticias'
- * own `SearchFilter` — the community list is a bigger, gated catalog with
- * MORE facets (level/type/sort/"no las he visto"), so it also gets a compact
- * `CommunityFiltersPanel` (funnel button + popover/sheet) right next to it,
- * instead of the old always-visible filter bar. ALL FILTERS STILL LIVE IN
- * THE URL, as plain GET forms plus plain links (pagination, chips, "Limpiar
+ * "DESKTOP" REDESIGN, community-folds-into-propuestos pass (owner spec
+ * 2026-10-07, "ya no tendremos ejercicios propuestos separados de
+ * actividades de la comunidad... de igual manera será una carpeta y abrirá
+ * una ventana dentro del escritorio"): this catalog now RENDERS AS A WINDOW
+ * over the desk too, exactly like the practice page (`[id].astro`'s own
+ * header) — same `DeskScene`/`DeskWindow` shell, same real URL (every
+ * filter/the page number/the search term all still live in the query
+ * string, so the whole page keeps working with scripting off and stays
+ * deep-linkable). The "Ejercicios propuestos" folder/route is GONE — its
+ * curated-exercise levels dock now points here instead
+ * (`DeskScene.astro`'s own header), and `/[lang]/ingles/propuestos`,
+ * `/[lang]/ingles/[level]/[focus]` and `/[lang]/ingles/[level]/[focus]/[slug]`
+ * are now permanent redirects to this exact route.
+ *
+ * ONE WINDOW, NOT A STACK (owner spec: filter changes, pagination, opening
+ * an activity, and going back must all feel like ONE window): a filter
+ * link, a pagination link, and an `ActivityCard`'s own link are all PLAIN
+ * `<a href>`s — Astro's ClientRouter still treats each as a real navigation
+ * (so the URL/back button/no-JS story is unchanged), but the window's own
+ * drag offset survives it regardless, because that offset lives in
+ * `sessionStorage` under one shared key (`@lib/deskWindowDragMath`'s own
+ * `DESK_WINDOW_OFFSET_STORAGE_KEY`, re-applied on every `DeskWindow` mount —
+ * `deskWindowDrag.ts`'s own header), never in in-memory DOM state that a
+ * fresh page render would lose. The scale-in open animation is the other
+ * half of "feels like one window": it is GATED to a genuine folder/desk
+ * opener click (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`'s own header)
+ * and never replays for any of these plain in-window links, only for a
+ * fresh open from the hub's own folder. The practice window's `‹` back arrow
+ * returns here with `history.back()` when it can (`DeskWindow.astro`'s own
+ * `backHref` doc), landing back on the exact filtered/scrolled state the
+ * visitor left.
+ *
+ * UNIFIED SEARCH HEADER (community-search-unify pass, carried over
+ * unchanged): search + the compact filters panel now sit in the window's
+ * OWN title-bar `actions` — the same slot the practice window's heart/
+ * share/more icons already use (same compact 36px controls, no second row
+ * needed), rather than `PageTitle`'s old `actions` slot (there is no
+ * `PageTitle` heading here any more — the window's own title bar already
+ * shows "Actividades de la comunidad"). ALL FILTERS STILL LIVE IN THE URL,
+ * as plain GET forms plus plain links (pagination, chips, "Limpiar
  * filtros") — the whole page still works with scripting off, stays
- * deep-linkable, and survives a back-button press. The actual query building
- * (search escaping, sort columns, the `novistas` exclusion) lives in
- * `getPublishedActivities` (`@lib/activities/activities`) and
+ * deep-linkable, and survives a back-button press. The actual query
+ * building (search escaping, sort columns, the `novistas` exclusion) lives
+ * in `getPublishedActivities` (`@lib/activities/activities`) and
  * `discoveryQuery.ts`, never here.
  *
  * Active filters (nivel/tipo/orden!=default/novistas) are visible without
- * opening the panel: a row of small removable chips under the title, each a
- * plain link dropping just that one param.
+ * opening the panel: a row of small removable chips under the title bar,
+ * each a plain link dropping just that one param.
  *
  * "Actividad del día": only on page 1 with NO filters active, a highlighted
  * card picked deterministically for the calendar day
@@ -37,17 +73,22 @@
  * activities by heart count. Hidden entirely when there are no candidates.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import PageTitle from '@components/ui/PageTitle.astro';
+import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskWindow from '@components/ingles/DeskWindow.astro';
 import ActivityCard from '@components/ui/ActivityCard.astro';
 import Emoji from '@components/ui/Emoji.astro';
 import SearchFilter from '@components/ui/SearchFilter.astro';
 import CommunityFiltersPanel from '@components/activities/CommunityFiltersPanel.astro';
 import { buttonVariants } from '@components/ui/button';
+import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { LEVELS, isLevel } from '@lib/exerciseTaxonomy';
 import { getPublishedActivities, ACTIVITIES_PAGE_SIZE, type PublishedActivityCard } from '@lib/activities/activities';
 import { isBlockTypeFilter, isSortOrder, type BlockTypeFilter, type SortOrder } from '@lib/activities/discoveryQuery';
 import { pickDailyActivity } from '@lib/activities/dailyPick';
+import { ROW_PADDING_X } from '@lib/ui/layout';
+import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@lib/ui/iconTooltip';
+import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -59,7 +100,9 @@ if (!lang) {
 
 const t = UI_LABELS[lang].activities.explore;
 const levelLabels = UI_LABELS[lang].english.levels;
-const viewerId = Astro.locals.user?.id ?? null;
+const user = Astro.locals.user;
+const isGuest = user === null;
+const viewerId = user?.id ?? null;
 
 // Every filter defaults to "off"/"none" for an invalid or absent value — the
 // same lenient posture the level filter already had: a bad URL shows the
@@ -200,139 +243,234 @@ if (orden !== 'recientes') {
   });
 }
 if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWithoutFilter('novistas') });
+
+/**
+ * The window's red/yellow lights ("desktop" redesign, same pattern
+ * `[id].astro`'s own header documents): the Inglés hub/desk for a
+ * signed-in visitor, the ChuyoCode home for a guest.
+ */
+const closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
+
+/**
+ * The desk behind the window — SIGNED-IN visitors only, same loader/
+ * component the hub and the practice window use. In production `isGuest`
+ * is always `false` here (the middleware already redirects an anonymous
+ * visitor away from every `ingles/**` route before this page ever runs),
+ * so this branch exists only for parity with `[id].astro` and the TEMP
+ * local-dev screenshot override.
+ */
+const desk = isGuest
+  ? null
+  : await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+const deskLabels = desk && {
+  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
+  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
+  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
+  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
+  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
+  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
+  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
+  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
+  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
+  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
+};
+
+/** Minimize-to-tray (`@lib/ui/minimizedWindows`): ONE stable id for this
+ * window regardless of its current filters — re-minimizing it just moves
+ * the same chip back to the front with its latest `href` (current path +
+ * query), rather than stacking a separate chip per filter combination. */
+const COMMUNITY_TRAY_ID = 'community-activities';
+
+const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
-  <section class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:py-12">
-    <header class="flex flex-col gap-3">
-      <PageTitle lang={lang} backHref={`/${lang}/ingles`}>
-        {t.heading}
-        <Fragment slot="actions">
-          <div class="flex items-center gap-1">
-            <SearchFilter
-              mode="server"
-              action={basePath}
-              value={activeQuery ?? ''}
-              label={t.searchLabel}
-              preserve={activeFilterParams}
-            />
-            <CommunityFiltersPanel
-              lang={lang}
-              action={basePath}
-              triggerLabel={t.filtersToggle}
-              activeCount={chips.length}
-              applyLabel={t.applyFilters}
-              clearLabel={t.panelClear}
-              clearHref={panelClearHref}
-              levelSelectLabel={t.levelLabel}
-              levelOptions={levelOptions}
-              typeSelectLabel={t.typeLabel}
-              typeOptions={typeOptions}
-              sortSelectLabel={t.sortLabel}
-              sortOptions={sortOptions}
-              showNovistas={viewerId !== null}
-              novistasChecked={novistas}
-              novistasLabel={t.novistasLabel}
-              query={activeQuery ?? ''}
-            />
-          </div>
-        </Fragment>
-      </PageTitle>
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind={!isGuest}>
+  {desk && deskLabels && (
+    <DeskScene
+      lang={lang}
+      greetingLine1={desk.greetingLine1}
+      activityCountLabel={desk.activityCountLabel}
+      dailyPickHref={desk.dailyPickHref}
+      dailyPickMeta={desk.dailyPickMeta}
+      dailyPickPeek={desk.dailyPickPeek}
+      weatherLat={desk.weatherLat}
+      weatherLon={desk.weatherLon}
+      weatherCity={desk.weatherCity}
+      weatherLabel={desk.weatherLabel}
+      playerLabels={desk.playerLabels}
+      levelLabels={levelLabels}
+      labels={deskLabels}
+    />
+  )}
 
-      {
-        chips.length > 0 && (
-          <ul class="flex flex-wrap gap-2" data-testid="active-filter-chips">
-            {chips.map((chip) => (
-              <li>
-                <a
-                  href={chip.href}
-                  data-testid={`filter-chip-${chip.key}`}
-                  class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-muted-foreground hover:border-accent-ink hover:text-accent-ink"
-                >
-                  {chip.label} <span aria-hidden="true">&times;</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )
-      }
-    </header>
+  <DeskWindow
+    lang={lang}
+    title={UI_LABELS[lang].english.hub.communityTitle}
+    closeHref={closeHref}
+    closeLabel={t.windowClose}
+    minimizeLabel={t.windowMinimize}
+    fullScreenLabel={t.windowFullScreen}
+    forceFullScreen={isGuest}
+    trayId={isGuest ? null : COMMUNITY_TRAY_ID}
+    slot="overlay"
+  >
+    <Fragment slot="actions">
+      <SearchFilter
+        mode="server"
+        action={basePath}
+        value={activeQuery ?? ''}
+        label={t.searchLabel}
+        preserve={activeFilterParams}
+      />
+      <CommunityFiltersPanel
+        lang={lang}
+        action={basePath}
+        triggerLabel={t.filtersToggle}
+        activeCount={chips.length}
+        applyLabel={t.applyFilters}
+        clearLabel={t.panelClear}
+        clearHref={panelClearHref}
+        levelSelectLabel={t.levelLabel}
+        levelOptions={levelOptions}
+        typeSelectLabel={t.typeLabel}
+        typeOptions={typeOptions}
+        sortSelectLabel={t.sortLabel}
+        sortOptions={sortOptions}
+        showNovistas={viewerId !== null}
+        novistasChecked={novistas}
+        novistasLabel={t.novistasLabel}
+        query={activeQuery ?? ''}
+      />
+      {/* "+" (owner spec: a small create-activity shortcut right in this
+          window's own title bar) — same folder-origin scale-in the hub's
+          own "Crear actividad" tile uses (`data-desk-window-open="create"`,
+          `@lib/ui/deskWindow.ts`'s opener wiring), so opening the creator
+          FROM this window feels the same as opening it from the desk. */}
+      <a
+        href={`/${lang}/crear`}
+        data-desk-window-open="create"
+        data-testid="community-create-link"
+        aria-label={createActivityLabel}
+        aria-describedby="action-create-tooltip"
+        class={ICON_TOOLTIP_TRIGGER_CLASS}
+      >
+        <PlusIcon aria-hidden="true" size={16} />
+        <span role="tooltip" id="action-create-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {createActivityLabel}
+        </span>
+      </a>
+    </Fragment>
 
     {
-      activities.length === 0 && !(showDailyPick && dailyPick) ? (
-        <div class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground">
-          {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely decorative, next to the empty message below. */}
-          <Emoji name="llama" size={48} />
-          <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
-          {anyFilterActive && (
-            <a href={basePath} class="text-sm font-medium text-accent-ink hover:underline">
-              {t.clearFilters}
-            </a>
-          )}
-        </div>
-      ) : (
-        <>
-          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {/* The daily pick is the grid's first card, same size as the rest
-                (a full-width banner took too much room), and is not repeated
-                further down the list. */}
-            {showDailyPick && dailyPick && (
-              <li>
-                <ActivityCard
-                  lang={lang}
-                  activity={dailyPick}
-                  levelLabels={levelLabels}
-                  noLevel={t.noLevel}
-                  blockCountOne={t.blockCountOne}
-                  blockCountMany={t.blockCountMany}
-                  viewedLabel={t.viewedBadge}
-                  highlighted
-                  highlightLabel={t.dailyPickLabel}
-                />
-              </li>
-            )}
-            {activities.filter((activity) => !(showDailyPick && dailyPick && activity.id === dailyPick.id)).map((activity) => (
-              <li>
-                <ActivityCard
-                  lang={lang}
-                  activity={activity}
-                  levelLabels={levelLabels}
-                  noLevel={t.noLevel}
-                  blockCountOne={t.blockCountOne}
-                  blockCountMany={t.blockCountMany}
-                  viewedLabel={t.viewedBadge}
-                />
-              </li>
-            ))}
-          </ul>
-
-          {totalPages > 1 && (
-            <nav class="flex items-center justify-between gap-4" aria-label={t.pagination}>
-              {currentPage > 1 ? (
-                <a href={buildHref({ page: currentPage - 1 })} class={buttonVariants({ variant: 'outline' })}>
-                  {t.prevPage}
-                </a>
-              ) : (
-                <span class={buttonVariants({ variant: 'outline' })} aria-disabled="true">
-                  {t.prevPage}
-                </span>
-              )}
-              <span class="text-sm text-muted-foreground tabular-nums">
-                {t.pageLabel} {currentPage} {t.ofLabel} {totalPages}
-              </span>
-              {currentPage < totalPages ? (
-                <a href={buildHref({ page: currentPage + 1 })} class={buttonVariants({ variant: 'outline' })}>
-                  {t.nextPage}
-                </a>
-              ) : (
-                <span class={buttonVariants({ variant: 'outline' })} aria-disabled="true">
-                  {t.nextPage}
-                </span>
-              )}
-            </nav>
-          )}
-        </>
+      chips.length > 0 && (
+        <ul
+          class={`flex flex-none flex-wrap gap-2 border-b border-border ${ROW_PADDING_X} py-3`}
+          data-testid="active-filter-chips"
+        >
+          {chips.map((chip) => (
+            <li>
+              <a
+                href={chip.href}
+                data-testid={`filter-chip-${chip.key}`}
+                class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-muted-foreground hover:border-accent-ink hover:text-accent-ink"
+              >
+                {chip.label} <span aria-hidden="true">&times;</span>
+              </a>
+            </li>
+          ))}
+        </ul>
       )
     }
-  </section>
+
+    {/* The scrollable body — grid + pagination together, so pagination
+        always sits at the bottom of whatever is currently on screen,
+        never pinned outside the window's own scroll. */}
+    <div class="flex-1 overflow-y-auto">
+      <div class={`flex flex-col gap-6 ${ROW_PADDING_X} py-6`}>
+        {
+          activities.length === 0 && !(showDailyPick && dailyPick) ? (
+            <div
+              class="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground"
+              data-testid="community-empty-state"
+            >
+              {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely decorative, next to the empty message below. */}
+              <Emoji name="llama" size={48} />
+              <p>{anyFilterActive ? t.emptyFiltered : t.empty}</p>
+              {anyFilterActive && (
+                <a
+                  href={basePath}
+                  data-testid="community-clear-filters"
+                  class="text-sm font-medium text-accent-ink hover:underline"
+                >
+                  {t.clearFilters}
+                </a>
+              )}
+            </div>
+          ) : (
+            <>
+              <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {/* The daily pick is the grid's first card, same size as the rest
+                    (a full-width banner took too much room), and is not repeated
+                    further down the list. */}
+                {showDailyPick && dailyPick && (
+                  <li>
+                    <ActivityCard
+                      lang={lang}
+                      activity={dailyPick}
+                      levelLabels={levelLabels}
+                      noLevel={t.noLevel}
+                      blockCountOne={t.blockCountOne}
+                      blockCountMany={t.blockCountMany}
+                      viewedLabel={t.viewedBadge}
+                      highlighted
+                      highlightLabel={t.dailyPickLabel}
+                    />
+                  </li>
+                )}
+                {activities.filter((activity) => !(showDailyPick && dailyPick && activity.id === dailyPick.id)).map((activity) => (
+                  <li>
+                    <ActivityCard
+                      lang={lang}
+                      activity={activity}
+                      levelLabels={levelLabels}
+                      noLevel={t.noLevel}
+                      blockCountOne={t.blockCountOne}
+                      blockCountMany={t.blockCountMany}
+                      viewedLabel={t.viewedBadge}
+                    />
+                  </li>
+                ))}
+              </ul>
+
+              {totalPages > 1 && (
+                <nav class="flex items-center justify-between gap-4" aria-label={t.pagination}>
+                  {currentPage > 1 ? (
+                    <a href={buildHref({ page: currentPage - 1 })} class={buttonVariants({ variant: 'outline' })}>
+                      {t.prevPage}
+                    </a>
+                  ) : (
+                    <span class={buttonVariants({ variant: 'outline' })} aria-disabled="true">
+                      {t.prevPage}
+                    </span>
+                  )}
+                  <span class="text-sm text-muted-foreground tabular-nums">
+                    {t.pageLabel} {currentPage} {t.ofLabel} {totalPages}
+                  </span>
+                  {currentPage < totalPages ? (
+                    <a href={buildHref({ page: currentPage + 1 })} class={buttonVariants({ variant: 'outline' })}>
+                      {t.nextPage}
+                    </a>
+                  ) : (
+                    <span class={buttonVariants({ variant: 'outline' })} aria-disabled="true">
+                      {t.nextPage}
+                    </span>
+                  )}
+                </nav>
+              )}
+            </>
+          )
+        }
+      </div>
+    </div>
+  </DeskWindow>
 </BaseLayout>

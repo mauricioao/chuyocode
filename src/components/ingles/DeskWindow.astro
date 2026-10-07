@@ -137,6 +137,24 @@ interface Props {
    * unchanged.
    */
   titleEditable?: boolean;
+  /**
+   * "Actividades de la comunidad" back arrow (owner spec 2026-10-07, "ya no
+   * tendremos ejercicios propuestos separados de actividades de la
+   * comunidad"): a small `‹` right after the traffic lights, for a window
+   * whose content is one level BELOW a list the visitor can go back to (the
+   * practice window -> the community list, today). A plain
+   * `<a href={backHref} data-back-button>` — same no-JS-first posture as
+   * every other control here — that opts into the SAME site-wide
+   * progressive enhancement `BackButton.astro` uses
+   * (`@lib/backNavigation#initBackButtons`, wired once from
+   * `BaseLayout.astro`'s own script): `history.back()` when the visitor's
+   * tracked previous screen is genuinely that list, a plain navigation to
+   * `backHref` otherwise. Omitted entirely (`null`, the default) for every
+   * caller with nothing to go back to (the list window itself, the editor).
+   */
+  backHref?: string | null;
+  /** Accessible name AND tooltip for {@link backHref} — required together with it. */
+  backLabel?: string;
 }
 
 const {
@@ -153,6 +171,8 @@ const {
   status = null,
   statusId = 'desk-window-status',
   titleEditable = false,
+  backHref = null,
+  backLabel = '',
 } = Astro.props;
 ---
 
@@ -206,6 +226,26 @@ const {
         aria-pressed={forceFullScreen ? 'true' : 'false'}
         class="h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       ></button>
+      {/* "‹" back arrow (owner spec 2026-10-07): grouped INSIDE the lights'
+          own tight `gap-2` cluster, not as a separate top-level child of the
+          title bar's `gap-4` row — on the narrowest phones, where this row
+          is already tight (title/chip/actions all competing for one line,
+          PART 6a phone layout fix), a second `gap-4` boundary left the
+          title truncated down to a single letter. Sharing the lights'
+          own spacing keeps "right after the traffic lights" literally true
+          while costing the title noticeably less room. */}
+      {backHref && (
+        <a
+          href={backHref}
+          data-back-button
+          data-testid="desk-window-back"
+          aria-label={backLabel}
+          title={backLabel}
+          class="flex h-5 w-5 flex-none items-center justify-center rounded-full text-base leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span aria-hidden="true">‹</span>
+        </a>
+      )}
     </div>
     {/* PART 6b polish bugfix (owner-reported e2e regression: the PRACTICE
         window's own title bar grew past one row on a narrow phone) —

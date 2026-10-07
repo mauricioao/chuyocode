@@ -990,11 +990,23 @@ html[data-desk-behind] [data-chrome-footer] {
 
 .ingles-window {
   transform-origin: var(--ingles-window-from, 50% 50%);
+}
+
+/* GATED, not unconditional (community-list-as-a-window pass, owner spec
+ * 2026-10-07): only a FRESH open from a folder/desk opener ever plays this —
+ * `@lib/ui/deskWindow.ts#applyDeskWindowOrigin` is the one place that sets
+ * `data-desk-window-opening`, and only when it just consumed a genuine,
+ * non-stale opener entry. A direct visit and every IN-WINDOW navigation
+ * (a filter change, a page of results, opening an activity card from the
+ * community list, the practice window's own `‹` back arrow) leave this
+ * attribute unset, so the window simply appears with no scale-in — it would
+ * otherwise have replayed on every one of those, which is not an "opening". */
+.ingles-window[data-desk-window-opening] {
   animation: ingles-window-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ingles-window {
+  .ingles-window[data-desk-window-opening] {
     animation: none;
   }
 }

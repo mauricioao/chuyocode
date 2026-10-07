@@ -238,6 +238,8 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
     fullScreenLabel={t.windowFullScreen}
     forceFullScreen={isGuest}
     trayId={isGuest ? null : activity.id}
+    backHref={isGuest ? null : `/${lang}/ingles/actividades`}
+    backLabel={UI_LABELS[lang].english.hub.communityTitle}
     slot="overlay"
   >
     <Fragment slot="actions">

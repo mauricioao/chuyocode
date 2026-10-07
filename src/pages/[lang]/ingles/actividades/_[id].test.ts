@@ -267,6 +267,40 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     expect(html).not.toContain('data-fullscreen');
     expect(html).toContain('aria-pressed="false"');
   });
+
+  // "‹" back arrow to the community list (community-list-as-a-window pass,
+  // owner spec 2026-10-07) — `DeskWindow.astro`'s own `backHref` doc.
+  it('shows a "‹" back arrow to the community list, right after the traffic lights, for a signed-in visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="desk-window-back"');
+
+    const testidIndex = html.indexOf('data-testid="desk-window-back"');
+    const start = html.lastIndexOf('<a', testidIndex);
+    const backArrow = html.slice(start, html.indexOf('</a>', testidIndex));
+    expect(backArrow).toContain('href="/es/ingles/actividades"');
+    expect(backArrow).toContain('aria-label="Actividades de la comunidad"');
+    expect(backArrow).toContain('data-back-button');
+
+    const titlebar = html.slice(html.indexOf('data-desk-window-titlebar'));
+    expect(titlebar.indexOf('data-desk-window-fullscreen')).toBeLessThan(
+      titlebar.indexOf('data-testid="desk-window-back"'),
+    );
+  });
+
+  it('hides the back arrow for a guest — the community list is gated and unreachable to them', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="desk-window-back"');
+  });
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — report button (PR E, Moderation)', () => {

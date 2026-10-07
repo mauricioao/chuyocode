@@ -219,11 +219,32 @@ export function initDeskWindowOpeners(doc: Document = document, win: Window = wi
 }
 
 /**
+ * The scale-in entrance animation's own marker attribute — `global.css`'s
+ * own `.ingles-window[${DESK_WINDOW_OPENING_ATTR}]` rule, NOT the unconditional
+ * `.ingles-window` class. See {@link applyDeskWindowOrigin}'s own header for
+ * why this is gated rather than always playing.
+ */
+export const DESK_WINDOW_OPENING_ATTR = 'data-desk-window-opening';
+
+/**
  * Window-side, on mount: consume a fresh (not stale) opener entry, if any,
- * to set the scale-in's transform-origin — then move it to the
+ * to set the scale-in's transform-origin, and arm the entrance animation
+ * itself ({@link DESK_WINDOW_OPENING_ATTR}) — then move the entry to the
  * return-focus key (same id) so the hub can refocus that exact opener once
- * the window closes. A direct visit (no entry, or a stale one from an
- * unrelated earlier click) leaves the CSS default (centre) alone.
+ * the window closes.
+ *
+ * ONLY A FRESH OPEN FROM A FOLDER/DESK OPENER EVER ANIMATES (owner spec
+ * 2026-10-07, carried over from the community-list-as-a-window pass): a
+ * direct visit (no entry at all — a QR scan, a shared link, a new tab) and,
+ * now that `/[lang]/ingles/actividades` itself opens as a window with its
+ * OWN in-window links (a card, a filter, a page of results, the practice
+ * window's own `‹` back arrow), every IN-WINDOW navigation between two
+ * window pages all leave no fresh entry behind either — `initDeskWindowOpeners`
+ * only ever writes one for a click on a REAL `[data-desk-window-open]`
+ * opener, never a plain link — so none of them arm the animation. Without
+ * this gate, `.ingles-window`'s animation used to play on EVERY mount
+ * unconditionally, which would have replayed the scale-in on every filter
+ * change, every page of results, and every card opened from the list.
  */
 export function applyDeskWindowOrigin(
   windowEl: HTMLElement,
@@ -248,6 +269,7 @@ export function applyDeskWindowOrigin(
   if (Date.now() - parsed.t > ORIGIN_MAX_AGE_MS) return;
 
   windowEl.style.setProperty('--ingles-window-from', `${parsed.x}px ${parsed.y}px`);
+  windowEl.setAttribute(DESK_WINDOW_OPENING_ATTR, '');
   try {
     win.sessionStorage.setItem(RETURN_FOCUS_STORAGE_KEY, parsed.id);
   } catch {
