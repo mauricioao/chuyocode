@@ -197,6 +197,45 @@ describe('legal/[page].astro — key facts (privacy)', () => {
   });
 });
 
+// Footer simplification ("opción A", owner decision 2026-10-06): Créditos is
+// no longer linked from the footer; the Terms page's own final section is
+// now how a visitor reaches it. Inline legal links are also underlined AT
+// REST now (a11y finding — `hover:underline` only showed the underline on
+// hover, which fails the "link without relying on colour alone" check).
+describe('legal/[page].astro — Terms: refund and credits links (footer simplification)', () => {
+  it('links the refund policy from the Premium section, underlined at rest, in es', async () => {
+    const res = await render({ lang: 'es', page: 'terms' });
+    const html = await res.text();
+
+    expect(html).toMatch(/<a class="text-primary underline" href="\/es\/legal\/reembolsos"[^>]*>/);
+    expect(html).not.toContain('hover:underline');
+  });
+
+  it('links the refund policy from the Premium section, underlined at rest, in en', async () => {
+    const res = await render({ lang: 'en', page: 'terms' });
+    const html = await res.text();
+
+    expect(html).toMatch(/<a class="text-primary underline" href="\/en\/legal\/reembolsos"[^>]*>/);
+    expect(html).not.toContain('hover:underline');
+  });
+
+  it('adds a final "Créditos y licencias" section linking /[lang]/creditos, in es', async () => {
+    const res = await render({ lang: 'es', page: 'terms' });
+    const html = await res.text();
+
+    expect(html).toContain('Créditos y licencias');
+    expect(html).toMatch(/<a class="text-primary underline" href="\/es\/creditos"[^>]*>/);
+  });
+
+  it('adds a final "Credits and licences" section linking /[lang]/creditos, in en', async () => {
+    const res = await render({ lang: 'en', page: 'terms' });
+    const html = await res.text();
+
+    expect(html).toContain('Credits and licences');
+    expect(html).toMatch(/<a class="text-primary underline" href="\/en\/creditos"[^>]*>/);
+  });
+});
+
 describe('legal/[page].astro — key facts (reembolsos)', () => {
   it('states the 14-day window and Paddle as the processor, in es', async () => {
     const res = await render({ lang: 'es', page: 'reembolsos' });

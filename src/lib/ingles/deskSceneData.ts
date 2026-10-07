@@ -51,7 +51,14 @@ export interface DeskSceneLabels {
   createActivityLabel: string;
   widgetsLabel: string;
   weatherUnavailable: string;
+  /** The weather widget's own MET Norway credit ("Datos: MET Norway"). */
+  weatherAttribution: string;
   levelShortcutTitle: string;
+  /** Minimized-windows tray (owner feedback 2026-10-06): the tray `<nav>`'s own accessible name, and the accessible name of each chip's "×" button. */
+  trayLabel: string;
+  trayRemoveLabel: string;
+  /** Polish pass 2026-10-06: the "+N" overflow tile's accessible name/tooltip template — `{n}` is filled with the overflow count. */
+  trayMoreLabel: string;
 }
 
 export interface DeskSceneData {

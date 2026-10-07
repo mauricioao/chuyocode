@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import BaseLayout from './BaseLayout.astro';
 import { UI_LABELS } from '@lib/i18n';
 import { createContainer } from '@/testSupport/astroContainer';
@@ -436,5 +436,77 @@ describe('BaseLayout — chrome-visibility SSR hooks', () => {
     });
     expect(html).not.toContain('data-chrome-header');
     expect(html).not.toContain('data-chrome-footer');
+  });
+});
+
+// Cloudflare Web Analytics (cookieless page views, launch "must" per the
+// PRD): INERT until the owner sets PUBLIC_CF_WEB_ANALYTICS_TOKEN at build
+// time, same posture as Turnstile/Sentry in this repo — see
+// `@lib/webAnalytics`'s own header.
+describe('BaseLayout — Cloudflare Web Analytics (cookieless)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** Extracts the `<script>...</script>` element whose src/attrs mention Cloudflare, regardless of attribute order. */
+  function cloudflareScriptTag(html: string): string | null {
+    const marker = html.indexOf('cloudflareinsights.com');
+    if (marker === -1) return null;
+    const start = html.lastIndexOf('<script', marker);
+    const end = html.indexOf('</script>', marker) + '</script>'.length;
+    return html.slice(start, end);
+  }
+
+  /** Decodes the one HTML entity this attribute can carry (see `webAnalytics.ts`'s header). */
+  function decodedBeaconPayload(html: string): unknown {
+    const match = html.match(/data-cf-beacon="([^"]*)"/);
+    return match ? JSON.parse(match[1].replace(/&quot;/g, '"')) : null;
+  }
+
+  it('renders no script element and no Cloudflare origin when no token is configured', async () => {
+    vi.stubEnv('PUBLIC_CF_WEB_ANALYTICS_TOKEN', undefined);
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(html).not.toContain('cloudflareinsights.com');
+    expect(html).not.toContain('data-cf-beacon');
+  });
+
+  it('renders the documented beacon script exactly once, deferred, carrying the token', async () => {
+    vi.stubEnv('PUBLIC_CF_WEB_ANALYTICS_TOKEN', 'abc123def456');
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+
+    expect(html.match(/cloudflareinsights\.com/g) ?? []).toHaveLength(1);
+    const scriptTag = cloudflareScriptTag(html);
+    expect(scriptTag).toContain('defer');
+    expect(scriptTag).toContain('src="https://static.cloudflareinsights.com/beacon.min.js"');
+    expect(decodedBeaconPayload(html)).toEqual({ token: 'abc123def456' });
+  });
+
+  it('escapes a token containing a quote as an attribute value, never breaking out of the tag', async () => {
+    const token = 'ab"cd';
+    vi.stubEnv('PUBLIC_CF_WEB_ANALYTICS_TOKEN', token);
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(decodedBeaconPayload(html)).toEqual({ token });
+  });
+
+  it('still renders on a bare presentation page (documented choice in BaseLayout.astro)', async () => {
+    vi.stubEnv('PUBLIC_CF_WEB_ANALYTICS_TOKEN', 'abc123def456');
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', bare: true },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(cloudflareScriptTag(html)).not.toBeNull();
   });
 });

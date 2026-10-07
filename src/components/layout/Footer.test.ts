@@ -66,47 +66,84 @@ describe('Footer.astro — Premium link', () => {
   });
 });
 
-// Refund Policy link (third legal document, RefundsContent.astro). The
-// `reembolsos` slug is deliberately the SAME in both languages — see
-// `legal/[page].astro`'s own `LEGAL_PAGES` comment.
-describe('Footer.astro — Refunds link', () => {
-  it('links to /[lang]/legal/reembolsos in es', async () => {
+// Footer simplification ("opción A", owner decision 2026-10-06): Reembolsos
+// and Créditos are no longer linked from the footer at all — their pages and
+// routes stay live (reachable from Premium/Terms instead), just not here.
+describe('Footer.astro — simplified link set (no Reembolsos/Créditos)', () => {
+  it('never links /[lang]/legal/reembolsos or /[lang]/creditos from the SITE footer', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Footer, {
       props: { lang: 'es' },
     });
-    expect(html).toContain('href="/es/legal/reembolsos"');
-    expect(html).toContain(escapeHtml(UI_LABELS.es.footer.reembolsos));
+    expect(html).not.toContain('/es/legal/reembolsos');
+    expect(html).not.toContain('/es/creditos');
   });
 
-  it('links to /[lang]/legal/reembolsos in en', async () => {
+  it('never links /[lang]/legal/reembolsos or /[lang]/creditos from the Inglés footer', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Footer, {
-      props: { lang: 'en' },
+      props: { lang: 'es', ingles: true },
     });
-    expect(html).toContain('href="/en/legal/reembolsos"');
-    expect(html).toContain(escapeHtml(UI_LABELS.en.footer.reembolsos));
+    expect(html).not.toContain('/es/legal/reembolsos');
+    expect(html).not.toContain('/es/creditos');
+  });
+
+  it('renders exactly the copyright, Premium, Términos and Privacidad, in order (es)', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es' },
+    });
+    const copyrightIndex = html.indexOf('ChuyoCode');
+    const premiumIndex = html.indexOf('/es/premium');
+    const termsIndex = html.indexOf('/es/legal/terms');
+    const privacyIndex = html.indexOf('/es/legal/privacy');
+    expect(copyrightIndex).toBeGreaterThan(-1);
+    expect(premiumIndex).toBeGreaterThan(copyrightIndex);
+    expect(termsIndex).toBeGreaterThan(premiumIndex);
+    expect(privacyIndex).toBeGreaterThan(termsIndex);
   });
 });
 
-// Credits page link (visual-identity decision, 2026-10-04).
-describe('Footer.astro — credits link', () => {
-  it('links to /[lang]/creditos next to the legal links', async () => {
+// "Premium" pill (footer simplification "opción A"): a yellow pill with a
+// sparkle glyph, not a plain text link — eye-catching, but its accessible
+// name stays just "Premium" (the sparkle is `aria-hidden`).
+describe('Footer.astro — Premium pill', () => {
+  it('renders the Premium link as a rounded, accent-filled pill with ink text (es)', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Footer, {
       props: { lang: 'es' },
     });
-    expect(html).toContain('href="/es/creditos"');
-    expect(html).toContain(UI_LABELS.es.footer.credits);
+    const linkOpenTag = html.slice(
+      html.indexOf('<a href="/es/premium"'),
+      html.indexOf('>', html.indexOf('<a href="/es/premium"')) + 1,
+    );
+    expect(linkOpenTag).toContain('rounded-full');
+    expect(linkOpenTag).toContain('bg-accent');
+    expect(linkOpenTag).toContain('text-primary-foreground');
+    expect(linkOpenTag).toContain('hover:bg-accent-hover');
+    expect(linkOpenTag).toContain('focus-visible:ring');
   });
 
-  it('localizes the credits link label and base path for en', async () => {
+  it('hides the sparkle icon from assistive tech, keeping "Premium" as the accessible name', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Footer, {
-      props: { lang: 'en' },
+      props: { lang: 'es' },
     });
-    expect(html).toContain('href="/en/creditos"');
-    expect(html).toContain(UI_LABELS.en.footer.credits);
+    const pillStart = html.indexOf('<a href="/es/premium"');
+    const pillEnd = html.indexOf('</a>', pillStart);
+    const pillHtml = html.slice(pillStart, pillEnd);
+    expect(pillHtml).toContain('<svg');
+    expect(pillHtml).toContain('aria-hidden="true"');
+    expect(pillHtml).toContain(UI_LABELS.es.footer.premium);
+  });
+
+  it('renders the same pill in the Inglés footer', async () => {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(Footer, {
+      props: { lang: 'es', ingles: true },
+    });
+    expect(html).toMatch(/<a href="\/es\/premium"[^>]*bg-accent[^>]*>/);
+    expect(html).toContain('aria-hidden="true"');
   });
 });
 
@@ -137,7 +174,7 @@ describe('Footer.astro — Inglés full-width bar (desktop redesign PART 1, item
     expect(html).toMatch(/<p class="[^"]*font-bold[^"]*"[^>]*>&copy;/);
   });
 
-  it('carries every item the SITE footer has today: Premium, legal links, credits', async () => {
+  it('carries every item the SITE footer has today: Premium, Términos, Privacidad', async () => {
     const container = await AstroContainer.create();
     const html = await container.renderToString(Footer, {
       props: { lang: 'es', ingles: true },
@@ -145,8 +182,6 @@ describe('Footer.astro — Inglés full-width bar (desktop redesign PART 1, item
     expect(html).toContain('href="/es/premium"');
     expect(html).toContain('href="/es/legal/terms"');
     expect(html).toContain('href="/es/legal/privacy"');
-    expect(html).toContain('href="/es/legal/reembolsos"');
-    expect(html).toContain('href="/es/creditos"');
   });
 
   it('still carries data-chrome-footer, for the (now non-collapsing) chrome-visibility hook', async () => {

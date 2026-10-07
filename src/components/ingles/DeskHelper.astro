@@ -12,11 +12,21 @@
  * HUB ONLY — `index.astro` is the one and only call site; practice, the
  * editor and presentation pages never render this.
  *
- * SERVER renders the shell OPEN (bubble not `hidden`), with TODAY's tip
- * picked from the server's own clock (`pickDailyTipIndex`,
- * `@/content/deskHelperTips`) — a real, non-arbitrary default for a no-JS
- * visitor, and what every vitest render sees. Two small scripts then refine
- * it, in order of how fast they MUST run:
+ * PART 7 (owner spec 2026-10-06, "100 tips revisados, sin repetir"): the 20
+ * launch tips are now the full reviewed set of 100
+ * (`@/content/deskHelperTips`). The server renders the shell OPEN (bubble
+ * not `hidden`) with a RANDOM tip (`pickRandomTipIndex`) — a real,
+ * non-arbitrary default for a no-JS visitor, and what every vitest render
+ * sees — but, unlike the old daily pick, this is the ONE tip embedded in the
+ * page at all: shipping all 100 here would grow with every tip ever added.
+ * `@lib/ui/deskHelper.ts` fetches the full per-language list lazily, only on
+ * the visitor's FIRST "Otro tip" click (`/desk-tips-{lang}.json`,
+ * `src/pages/desk-tips-[lang].json.ts` — top-level, see that route's own
+ * header for why), and cycles through it with a
+ * shuffled, no-repeat queue (`@lib/ui/deskHelperQueue`) from then on.
+ *
+ * Two small scripts refine the server render, in order of how fast they
+ * MUST run:
  *
  *  1. A tiny classic (non-module) `is:inline` script, right below the
  *     markup, decides the FOLD state before first paint (phones below the
@@ -29,20 +39,26 @@
  *     one thing here that cannot wait for the deferred module below.
  *  2. `@lib/ui/deskHelper.ts` (`initDeskHelper`, wired from `index.astro`'s
  *     own script element next to `initDeskWidgets`) owns everything that is
- *     fine to settle in just after first paint: correcting the shown tip to
- *     the VISITOR's own local calendar day (the server's clock cannot know
- *     their timezone), "Otro tip" cycling, the close/reopen toggle,
- *     persisting the fold choice for the rest of the browser session, and
- *     lifting the widget clear of the footer bar while it is on screen.
+ *     fine to settle in just after first paint: "Otro tip" cycling, the
+ *     close/reopen toggle, persisting the fold choice for the rest of the
+ *     browser session, lifting the widget clear of the footer bar while it
+ *     is on screen, AND (polish pass 2026-10-06, owner report
+ *     `dock-three-chips.png`) a DYNAMIC collision check against the levels
+ *     dock's own box — the fixed 1100-1440px range above only covers the
+ *     width-driven case; the dock can also widen enough to collide at wider
+ *     widths once it carries several minimized-window chips. That check
+ *     either folds the bubble (never explicitly opened this session) or
+ *     lifts it clear via `--desk-helper-dock-lift` (explicitly opened) —
+ *     summed into the same `bottom` calc as the footer's own
+ *     `--desk-helper-lift` below.
  *
- * `#desk-helper-data` carries every tip pre-resolved for THIS locale (name +
- * HTML, already picked from `CHARACTERS`/`DESK_HELPER_TIPS` server-side) as
- * plain JSON data — never a function prop, never a second framework island;
- * this stays a plain Astro component + a small script, same posture as
- * every other desk widget except the one deliberate player island.
+ * No hidden JSON data island anymore — the server-picked tip's `id` lives in
+ * a plain `data-tip-id` attribute (the dedupe key the client-side queue
+ * needs so "Otro tip" never immediately re-shows it), and its name/HTML/
+ * avatar are already painted directly into the markup below.
  */
-import { CHARACTERS, characterFallbackSrc, characterSrcSet, type CharacterSlug } from '@/content/characters';
-import { DESK_HELPER_TIPS, pickDailyTipIndex } from '@/content/deskHelperTips';
+import { CHARACTERS, characterFallbackSrc, characterSrcSet } from '@/content/characters';
+import { DESK_HELPER_TIPS, pickRandomTipIndex } from '@/content/deskHelperTips';
 import type { Lang } from '@lib/i18n';
 
 interface Props {
@@ -56,28 +72,21 @@ interface Props {
 const { lang, landmarkLabel, avatarLabelTemplate, otherTipLabel, closeLabel } = Astro.props;
 
 const tips = DESK_HELPER_TIPS;
-const defaultIndex = pickDailyTipIndex(new Date(), tips.length);
+const defaultIndex = pickRandomTipIndex(tips.length);
 const defaultTip = tips[defaultIndex];
 const defaultName = CHARACTERS[defaultTip.character].alt[lang];
 const defaultHtml = defaultTip[lang];
 const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
-
-/** Every tip, pre-resolved for this locale — the ONLY data the client script needs (never the full `CHARACTERS` registry or `@lib/i18n`). `<` is escaped so authored `<em>` markup round-trips through `JSON.parse` + `innerHTML` unchanged while a closing script element tag can never appear literally inside the JSON text node. */
-const clientTips: { slug: CharacterSlug; name: string; html: string }[] = tips.map((tip) => ({
-  slug: tip.character,
-  name: CHARACTERS[tip.character].alt[lang],
-  html: tip[lang],
-}));
-const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
 ---
 
 <aside
   id="desk-helper"
   data-desk-helper
   aria-label={landmarkLabel}
-  data-tip-index={defaultIndex}
+  data-tip-id={defaultTip.id}
+  data-lang={lang}
   data-avatar-label-template={avatarLabelTemplate}
-  class="fixed bottom-[calc(10px+var(--desk-helper-lift,0px))] left-5 z-[5] flex items-end transition-[bottom] duration-200 ease-out motion-reduce:transition-none"
+  class="fixed bottom-[calc(10px+var(--desk-helper-lift,0px)+var(--desk-helper-dock-lift,0px))] left-5 z-[5] flex items-end transition-[bottom] duration-200 ease-out motion-reduce:transition-none"
 >
   <button
     type="button"
@@ -108,7 +117,7 @@ const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
     data-desk-helper-bubble
     role="status"
     aria-live="polite"
-    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground before:absolute before:-bottom-[11px] before:left-[18px] before:h-[18px] before:w-[18px] before:rotate-[35deg] before:skew-x-[-10deg] before:border-r-2 before:border-b-2 before:border-foreground before:bg-card before:content-[''] [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
+    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
   >
     <b data-desk-helper-name class="mb-0.5 block font-semibold">{defaultName}</b>
     <span data-desk-helper-tip set:html={defaultHtml} />
@@ -130,9 +139,37 @@ const clientTipsJson = JSON.stringify(clientTips).replace(/</g, '\\u003c');
     >
       &times;
     </button>
-  </div>
 
-  <script is:inline type="application/json" id="desk-helper-data" set:html={clientTipsJson} />
+    {/* Speech-bubble tail — style B from the approved mockup
+        (`ChuyoCode_others/propuestas/globo-tips/index.html`'s `.b .tail`),
+        replacing the old rotated/skewed bordered square (owner report: it
+        looked cut/misaligned where it met the bubble). ONE curved path,
+        drawn starting at y=-3 (three units above the viewBox, past the
+        bubble's own 2px border) so its WHITE FILL bleeds up over the seam
+        instead of butting against it; a SEPARATE stroke-only path traces
+        just the two curved outer edges, never the straight top edge the
+        fill already shares with the border. `overflow-visible` is required
+        for that negative-y portion to actually paint — Astro clips an
+        `<svg>` to its own box by default. Pinned to the bubble's
+        lower-left corner at every breakpoint (same posture as the old
+        tail, which never had a `desk:` override either) so it keeps
+        curving down toward the avatar regardless of font-size/width. */}
+    <svg
+      class="absolute -bottom-[19px] left-[22px] h-[21px] w-[26px] overflow-visible"
+      viewBox="0 0 26 21"
+      aria-hidden="true"
+    >
+      <path d="M3 -3 L3 2 C 6 10 4 16 1 19.5 C 10 18 18 11 22 2 L22 -3 Z" class="fill-card" />
+      <path
+        d="M3 2 C 6 10 4 16 1 19.5 C 10 18 18 11 22 2"
+        fill="none"
+        class="stroke-foreground"
+        stroke-width="2"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
+    </svg>
+  </div>
 </aside>
 
 <script is:inline>

@@ -150,6 +150,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
     />
     <a
       href={`/${lang}/crear`}
+      data-desk-window-open="create"
       class="group grid w-full justify-items-center gap-1.5 rounded-2xl px-2 py-2 text-center transition-colors hover:bg-pop-sky/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:w-[148px]"
     >
       <span class="relative block h-[77px] w-24 desk:h-24 desk:w-[120px]">
@@ -193,47 +194,88 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       city={weatherCity}
       label={weatherLabel}
       unavailableLabel={t.weatherUnavailable}
+      attributionLabel={t.weatherAttribution}
     />
   </section>
 
   {/* Levels dock — bottom centre on desktop, a horizontal scroller on
-      phones. */}
-  <div
-    class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2"
-  >
+      phones — PLUS the minimized-windows tray (owner feedback 2026-10-06,
+      polish pass 2026-10-06: "como el dock de macOS", chips INSIDE the SAME
+      glass shelf as the level tiles, after a vertical hairline, instead of
+      sitting loose next to it). Always server-rendered (empty, `hidden`) so
+      a no-JS visit degrades to exactly today's dock —
+      `@lib/ui/minimizedWindows#initMinimizedWindowsTray` is what actually
+      fills/unhides it, from `sessionStorage`, once it runs. The whole shelf
+      (levels + hairline + tray) is ONE `overflow-x-auto` row, so phones keep
+      scrolling horizontally exactly like the levels-only dock already did —
+      there is no more separate "tray row above the dock" on phones. */}
+  {/* `desk:w-max`: an absolutely positioned box at `left: 50%` may only grow to the remaining half of its container, so without it the dock shrank and scrolled (hiding A1) once chips were added. */}
+  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:w-max desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
-    <nav
-      aria-label={t.levelShortcutTitle}
-      class="ingles-glass flex max-w-full gap-2.5 overflow-x-auto rounded-[26px] p-2.5"
+    <div
+      data-desk-dock
+      class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5 desk:max-w-none desk:overflow-visible"
     >
-      {
-        LEVELS.map((level, index) => {
-          const band = bandOf(level);
-          return (
-            <a
-              href={`/${lang}/ingles/propuestos?nivel=${level}`}
-              aria-label={`${level}, ${levelLabels[level]}`}
-              class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]">
-                {BAR_HEIGHTS.map((height, barIndex) => (
-                  <i
-                    class:list={[
-                      'block w-[5px] rounded-sm',
-                      barIndex <= index ? BAND_FILL_CLASS[band] : 'bg-muted',
-                    ]}
-                    style={`height:${height}px`}
-                  />
-                ))}
-              </span>
-              <b class="text-[13px] leading-none text-foreground">{level}</b>
-              <small class="text-center text-[11px] leading-tight text-muted-foreground">
-                {levelLabels[level]}
-              </small>
-            </a>
-          );
-        })
-      }
-    </nav>
+      <nav aria-label={t.levelShortcutTitle} class="flex shrink-0 gap-2.5">
+        {
+          LEVELS.map((level, index) => {
+            const band = bandOf(level);
+            return (
+              <a
+                href={`/${lang}/ingles/propuestos?nivel=${level}`}
+                aria-label={`${level}, ${levelLabels[level]}`}
+                class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]">
+                  {BAR_HEIGHTS.map((height, barIndex) => (
+                    <i
+                      class:list={[
+                        'block w-[5px] rounded-sm',
+                        barIndex <= index ? BAND_FILL_CLASS[band] : 'bg-muted',
+                      ]}
+                      style={`height:${height}px`}
+                    />
+                  ))}
+                </span>
+                <b class="text-[13px] leading-none text-foreground">{level}</b>
+                <small class="text-center text-[11px] leading-tight text-muted-foreground">
+                  {levelLabels[level]}
+                </small>
+              </a>
+            );
+          })
+        }
+      </nav>
+
+      <div
+        aria-hidden="true"
+        data-minimized-tray-hairline
+        data-testid="minimized-tray-hairline"
+        hidden
+        class="h-auto w-px shrink-0 self-stretch bg-border"
+      ></div>
+      <nav
+        data-minimized-tray
+        data-testid="minimized-tray"
+        data-remove-label={t.trayRemoveLabel}
+        data-more-label={t.trayMoreLabel}
+        hidden
+        aria-label={t.trayLabel}
+        class="flex shrink-0 gap-2.5"
+      ></nav>
+    </div>
   </div>
 </section>
+
+<script>
+  import { initMinimizedWindowsTray } from '@lib/ui/minimizedWindows';
+
+  const run = () => initMinimizedWindowsTray();
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  document.addEventListener('astro:page-load', run);
+</script>

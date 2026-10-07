@@ -43,6 +43,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
 import { CaretRightIcon } from '@phosphor-icons/react/dist/ssr/CaretRight';
 import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
+import { QrCodeIcon } from '@phosphor-icons/react/dist/ssr/QrCode';
 import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
@@ -151,11 +152,16 @@ export default function PresentationIsland({
   const slides = useMemo(() => buildPresentationSlides(blocks), [blocks]);
   const revealable = useMemo(() => revealableSlides(slides), [slides]);
 
+  // Opens directly on the first content slide (owner feedback 2026-10-06,
+  // replacing the old "always the cover/QR screen") — the cover's title/
+  // level/count screen is still reachable via `prev` from there, it just is
+  // not where a presentation BEGINS anymore. See `presentationReducer.ts`'s
+  // own header on `startIndex`.
   const [state, dispatch] = useReducer(
     presentationReducer,
     slides.length,
     (slideCount): ReturnType<typeof presentationReducer> =>
-      presentationReducer(createPresentationState(slideCount, revealable), { type: 'start' }),
+      presentationReducer(createPresentationState(slideCount, revealable, true), { type: 'start' }),
   );
   const currentSlide: PresentationSlide | undefined = isContentSlide(state) ? slides[state.index - 1] : undefined;
 
@@ -271,6 +277,19 @@ export default function PresentationIsland({
     if (practiceUrl) window.location.assign(practiceUrl);
   }, [onExit, practiceUrl]);
 
+  // ---- QR overlay, on demand (owner feedback 2026-10-06, replacing the old
+  // cover-only QR): "Mostrar QR" in the control bar, and the same `Q`
+  // shortcut from any slide — the QR is still exactly one press away, it
+  // just no longer gates what the presentation opens on. Only offered when
+  // there IS a QR to show (`qrSvg`, absent for the editor's in-editor
+  // preview, which has no real published URL to encode — same gate the old
+  // cover slide used). ----
+  const [qrOverlayOpen, setQrOverlayOpen] = useState(false);
+  const toggleQrOverlay = useCallback(() => {
+    if (!qrSvg) return;
+    setQrOverlayOpen((open) => !open);
+  }, [qrSvg]);
+
   // ---- Keyboard map (section 6) — global: a presenter's clicker sends
   // PageDown/PageUp with focus wherever it happens to land, so this listens
   // on the window rather than a specific element. ----
@@ -308,7 +327,19 @@ export default function PresentationIsland({
         case 'F':
           toggleFullscreen();
           return;
+        case 'q':
+        case 'Q':
+          toggleQrOverlay();
+          return;
         case 'Escape':
+          // The QR overlay is a lightweight on-demand layer, not a separate
+          // slide — Escape closes IT first (same "undo the last thing you
+          // opened" expectation as closing any other overlay), and only
+          // exits the presentation once it is already closed.
+          if (qrOverlayOpen) {
+            setQrOverlayOpen(false);
+            return;
+          }
           exit();
           return;
         default:
@@ -319,7 +350,7 @@ export default function PresentationIsland({
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [toggleFullscreen, exit, showControls]);
+  }, [toggleFullscreen, toggleQrOverlay, qrOverlayOpen, exit, showControls]);
 
   // ---- Accessibility: a polite live region announces every slide change
   // (section 7; generalized from "Pregunta" to "Diapositiva" once a slide
@@ -370,9 +401,7 @@ export default function PresentationIsland({
           className="flex h-full w-full flex-col items-center justify-center overflow-hidden"
           style={{ padding: `${STAGE_SAFE_AREA_Y}px ${STAGE_SAFE_AREA_X}px` }}
         >
-          {isCoverSlide(state) && (
-            <CoverSlide title={title} levelLabel={levelLabel} countLabel={countLabel} qrSvg={qrSvg ?? null} t={t} />
-          )}
+          {isCoverSlide(state) && <CoverSlide title={title} levelLabel={levelLabel} countLabel={countLabel} />}
           {currentSlide?.kind === 'question' && (
             <QuestionSlide question={currentSlide} revealed={state.revealed} t={t} />
           )}
@@ -395,6 +424,42 @@ export default function PresentationIsland({
             <WorksheetStageLayer slide={currentSlide} revealed={state.revealed} reducedMotion={reducedMotion} t={t} />
           </div>
         )}
+
+        {/* QR overlay, on demand (owner feedback 2026-10-06) — see this
+            file's own `toggleQrOverlay` for why it is a layer over whatever
+            slide is current, not a slide of its own. Sized to the stage's
+            own virtual pixels (`STAGE_WIDTH`/`STAGE_HEIGHT`), same
+            coordinate space every other absolutely-positioned stage layer
+            above uses. */}
+        {qrOverlayOpen && qrSvg && (
+          <div
+            data-testid="presentation-qr-overlay"
+            role="dialog"
+            aria-label={t.showQr}
+            className="absolute left-0 top-0 flex flex-col items-center justify-center gap-10 bg-black/85"
+            style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
+          >
+            <div
+              role="img"
+              aria-label={t.qrAlt}
+              data-testid="presentation-qr-overlay-image"
+              className="rounded-xl bg-white p-6 shadow-elevation-2 [&>svg]:h-72 [&>svg]:w-72"
+              dangerouslySetInnerHTML={{ __html: qrSvg }}
+            />
+            <p style={{ fontSize: 28 }} className="text-white/90">
+              {t.scanHint}
+            </p>
+            <button
+              type="button"
+              data-testid="presentation-qr-overlay-close"
+              onClick={toggleQrOverlay}
+              style={{ fontSize: 24 }}
+              className="rounded-full bg-white/10 px-8 py-3 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t.hideQr}
+            </button>
+          </div>
+        )}
       </div>
 
       <ControlBar
@@ -407,6 +472,9 @@ export default function PresentationIsland({
         revealDisabled={!isRevealable(state)}
         onFullscreen={toggleFullscreen}
         isFullscreen={isFullscreen}
+        qrAvailable={Boolean(qrSvg)}
+        qrOverlayOpen={qrOverlayOpen}
+        onToggleQr={toggleQrOverlay}
         exitHref={practiceUrl}
         onExit={onExit}
         progress={slideProgress(state)}
@@ -417,18 +485,22 @@ export default function PresentationIsland({
   );
 }
 
+/**
+ * The title/level/count "title card" — no longer where a presentation
+ * OPENS (owner feedback 2026-10-06, `PresentationIsland`'s own header on
+ * `startIndex`), but still reachable via `prev` from the first content
+ * slide. Its QR moved to the on-demand overlay (`toggleQrOverlay`,
+ * reachable from ANY slide including this one) — rendering it here too
+ * would just be a second, redundant QR UI.
+ */
 function CoverSlide({
   title,
   levelLabel,
   countLabel,
-  qrSvg,
-  t,
 }: {
   title: string;
   levelLabel: string;
   countLabel: string;
-  qrSvg: string | null;
-  t: PresentCopy;
 }) {
   return (
     <div
@@ -446,20 +518,6 @@ function CoverSlide({
           {levelLabel} · {countLabel}
         </p>
       </div>
-      {qrSvg && (
-        <div className="flex flex-col items-center gap-4">
-          <div
-            role="img"
-            aria-label={t.qrAlt}
-            data-testid="presentation-cover-qr"
-            className="rounded-xl bg-white p-4 shadow-elevation-2 [&>svg]:h-56 [&>svg]:w-56"
-            dangerouslySetInnerHTML={{ __html: qrSvg }}
-          />
-          <p style={{ fontSize: 24 }} className="text-muted-foreground">
-            {t.scanHint}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -780,6 +838,9 @@ function ControlBar({
   revealDisabled,
   onFullscreen,
   isFullscreen,
+  qrAvailable,
+  qrOverlayOpen,
+  onToggleQr,
   exitHref,
   onExit,
   progress,
@@ -795,6 +856,10 @@ function ControlBar({
   revealDisabled: boolean;
   onFullscreen: () => void;
   isFullscreen: boolean;
+  /** Whether there is a QR to show at all (`qrSvg`, absent for the editor's in-editor preview) — the button itself is omitted, not just disabled, when there is none. */
+  qrAvailable: boolean;
+  qrOverlayOpen: boolean;
+  onToggleQr: () => void;
   /** The real practice page to exit to, when there is one — see `PresentationIslandProps.practiceUrl`. */
   exitHref?: string;
   /** The editor overlay's own close callback — takes priority over `exitHref` when given. See `PresentationIslandProps.onExit`. */
@@ -829,6 +894,18 @@ function ControlBar({
       <button type="button" aria-label={t.next} data-testid="presentation-next" onClick={onNext} className={CONTROL_BUTTON_CLASS}>
         <CaretRightIcon aria-hidden="true" size={22} />
       </button>
+      {qrAvailable && (
+        <button
+          type="button"
+          aria-label={qrOverlayOpen ? t.hideQr : t.showQr}
+          aria-pressed={qrOverlayOpen}
+          data-testid="presentation-qr-toggle"
+          onClick={onToggleQr}
+          className={cn(CONTROL_BUTTON_CLASS, qrOverlayOpen && 'bg-foreground/15')}
+        >
+          <QrCodeIcon aria-hidden="true" size={22} />
+        </button>
+      )}
       <span
         data-testid="presentation-progress"
         aria-label={`${t.progressPrefix} ${progress} ${t.ofLabel} ${total}`}

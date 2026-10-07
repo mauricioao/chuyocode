@@ -110,12 +110,15 @@ export const UI_LABELS = {
       soon: 'Pronto',
       switchTo: 'Cambiar a',
     },
+    // Footer simplification ("opción A", owner decision 2026-10-06): the
+    // footer itself only ever shows these three — `reembolsos`/`credits`
+    // link labels were removed from here (dead code) once their links moved
+    // out of the footer; both pages stay reachable from Premium/Terms
+    // instead (see `Footer.astro`'s own header).
     footer: {
       terms: 'Términos y Condiciones',
       privacy: 'Privacidad',
       premium: 'Premium',
-      reembolsos: 'Reembolsos',
-      credits: 'Créditos',
     },
     // Chrome shared by any page that mounts it (`BackButton`, `ScrollToTop`) —
     // not tied to one section, unlike `english`/`activities`/`legal` below.
@@ -582,6 +585,24 @@ export const UI_LABELS = {
           no_draft: 'No hay cambios nuevos para enviar a revisión.',
           submit_failed: 'No se pudo enviar la actividad. Inténtalo de nuevo.',
         },
+        // "Desktop" redesign PART 6b: the editor renders as a WINDOW over
+        // the desk, same shell as the practice page (PART 6a) — these three
+        // mirror `activities.practice`'s own `windowClose`/`windowMinimize`/
+        // `windowFullScreen` exactly (the traffic lights' accessible names).
+        windowClose: 'Cerrar',
+        windowMinimize: 'Minimizar',
+        windowFullScreen: 'Pantalla completa',
+        // The window title bar's own `<b>` when the activity has no title
+        // yet (brand-new, untitled) — `DeskWindow`'s `title` prop fallback.
+        titleFallback: 'Nueva actividad',
+        // The title bar's own muted autosave status (approved mockup
+        // `ventana-crear-1440.png`'s "Guardado hace un momento") — distinct
+        // from `savingStatus`/`savedStatus`/`errorStatus` above (the SIDE
+        // TOOLBAR's own indicator text): the title bar reads as ambient,
+        // more conversational copy, same two live states plus the shared
+        // `errorStatus` for the error one.
+        titlebarSaving: 'Guardando…',
+        titlebarSaved: 'Guardado hace un momento',
       },
       worksheet: {
         // Empty worksheet block's drop zone (creator polish round 4, owner
@@ -812,6 +833,11 @@ export const UI_LABELS = {
         viewedFirstTime: 'Primera vez',
         viewedBefore: 'Ya lo viste',
         viewedTimesMany: 'veces',
+        // Title-bar eye icon's accessible name (owner feedback 2026-10-06,
+        // `ActivityViewBadge`'s own header) — same count-phrase shape as
+        // `heartsOne`/`heartsMany` below.
+        viewsOne: 'vista',
+        viewsMany: 'vistas',
         // "Corazón" toggle (Descubrir/discovery). Two names, one per
         // direction — same reasoning as `LikeButton`'s own `COPY`: the
         // action the press performs, not the current state (`aria-pressed`
@@ -1074,6 +1100,11 @@ export const UI_LABELS = {
         worksheetCountMany: 'hojas',
         scanHint: 'Escanea el código para abrir esta actividad en el teléfono.',
         qrAlt: 'Código QR para abrir esta actividad en un teléfono',
+        // "Mostrar QR" control (owner feedback 2026-10-06): the QR moved
+        // from the old cover-only screen to an on-demand overlay, reachable
+        // from any slide via this button or the `Q` key.
+        showQr: 'Mostrar QR',
+        hideQr: 'Ocultar QR',
         summaryTitle: '¡Listo!',
         restart: 'Volver a empezar',
         prev: 'Anterior',
@@ -1307,6 +1338,12 @@ export const UI_LABELS = {
         weeklyPickLabel: 'Lo más querido de la semana',
         // Heading over the CEFR quick-jump row.
         levelShortcutTitle: 'Ir directo a tu nivel',
+        // Minimized-windows tray (owner feedback 2026-10-06): a slot next to
+        // the levels dock, `@lib/ui/minimizedWindows`'s own `<nav>` and each
+        // chip's "×" button.
+        trayLabel: 'Ventanas minimizadas',
+        trayRemoveLabel: 'Quitar de la bandeja',
+        trayMoreLabel: 'Ver {n} ventanas más',
         // "Desktop" redesign PART 1 (owner spec 2026-10-06, item B): the
         // hub-only "by ChuyoCode" header link's accessible name + tooltip.
         backToChuyoCode: 'Regresar a ChuyoCode',
@@ -1330,6 +1367,12 @@ export const UI_LABELS = {
         // header's "Ordenar escritorio" icon.
         weatherLabel: 'Clima en {city}',
         weatherUnavailable: 'Clima no disponible',
+        // Weather widget attribution (footer simplification "opción A",
+        // owner decision 2026-10-06): the MET Norway CC BY 4.0 credit now
+        // also sits next to the data it is about, not just on
+        // `/[lang]/creditos` (`CreditsContent.astro`'s own "Datos del
+        // clima" section, same URL).
+        weatherAttribution: 'Datos: MET Norway',
         playerTitle: 'Frase del día',
         playerPrev: 'Anterior',
         playerNext: 'Siguiente',
@@ -1511,8 +1554,6 @@ export const UI_LABELS = {
       terms: 'Terms & Conditions',
       privacy: 'Privacy',
       premium: 'Premium',
-      reembolsos: 'Refunds',
-      credits: 'Credits',
     },
     common: {
       back: 'Back',
@@ -1875,6 +1916,12 @@ export const UI_LABELS = {
           no_draft: 'There are no new changes to submit for review.',
           submit_failed: 'Could not submit the activity. Try again.',
         },
+        windowClose: 'Close',
+        windowMinimize: 'Minimize',
+        windowFullScreen: 'Full screen',
+        titleFallback: 'New activity',
+        titlebarSaving: 'Saving…',
+        titlebarSaved: 'Saved a moment ago',
       },
       worksheet: {
         uploadTitle: 'Drag your worksheet or PDF here',
@@ -2045,6 +2092,8 @@ export const UI_LABELS = {
         viewedFirstTime: 'First time',
         viewedBefore: "You've seen this",
         viewedTimesMany: 'times',
+        viewsOne: 'view',
+        viewsMany: 'views',
         heartAdd: 'Heart',
         heartRemove: 'Remove heart',
         heartsOne: 'heart',
@@ -2235,6 +2284,8 @@ export const UI_LABELS = {
         worksheetCountMany: 'sheets',
         scanHint: 'Scan the code to open this activity on a phone.',
         qrAlt: 'QR code to open this activity on a phone',
+        showQr: 'Show QR',
+        hideQr: 'Hide QR',
         summaryTitle: 'All done!',
         restart: 'Start over',
         prev: 'Previous',
@@ -2422,6 +2473,9 @@ export const UI_LABELS = {
         todayTitle: 'For you today',
         weeklyPickLabel: 'Most loved this week',
         levelShortcutTitle: 'Jump to your level',
+        trayLabel: 'Minimized windows',
+        trayRemoveLabel: 'Remove from tray',
+        trayMoreLabel: 'See {n} more windows',
         backToChuyoCode: 'Back to ChuyoCode',
         greetingNamed: 'Hi, {name}.',
         greetingFallback: 'Hi.',
@@ -2431,6 +2485,7 @@ export const UI_LABELS = {
         widgetsLabel: 'Your desktop',
         weatherLabel: 'Weather in {city}',
         weatherUnavailable: 'Weather not available',
+        weatherAttribution: 'Data: MET Norway',
         playerTitle: 'Phrase of the day',
         playerPrev: 'Previous',
         playerNext: 'Next',

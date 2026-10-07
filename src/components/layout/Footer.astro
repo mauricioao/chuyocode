@@ -2,24 +2,31 @@
 /**
  * Footer — site footer (spec 7: Footer requirement).
  *
- * Renders the copyright line and secondary links (Términos, Privacidad,
- * Reembolsos, Créditos). Simple zinc-900 background surface.
+ * Renders the copyright line and secondary links (Premium, Términos,
+ * Privacidad). Simple zinc-900 background surface.
  *
- * The secondary links point at the single localized legal route
+ * The legal links point at the single localized legal route
  * `/[lang]/legal/[page]` (design decision #9). They previously targeted
  * `/[lang]/terminos` and `/[lang]/privacidad`, which had no backing page and
- * 404'd; they now resolve to real `terms` / `privacy` / `reembolsos`
- * documents (the last one keeps its Spanish slug in both languages, same
- * convention as every other `[lang]`-scoped page segment).
+ * 404'd; they now resolve to real `terms` / `privacy` documents.
  *
  * i18n note: secondary link labels come from the shared `src/lib/i18n.ts`
  * (`UI_LABELS`). The previous inline FOOTER_LABELS map was removed once
  * i18n.ts landed (Phase 3).
  *
- * "Premium" link (pricing page, owner decision 2026-10-04): points at the
- * new `/[lang]/premium` route, listed first since it is a product link, not
- * legal boilerplate like the two links after it. Footer-only on purpose —
- * `Header.astro` is not touched by this change.
+ * FOOTER SIMPLIFICATION (owner decision, "opción A", 2026-10-06): the footer
+ * now shows exactly four items — copyright, Premium, Términos, Privacidad.
+ * "Reembolsos" and "Créditos" were REMOVED from here; their pages and routes
+ * stay live and stay in the sitemap, just no longer linked from every page's
+ * footer:
+ *  - the refund policy is reachable from the Premium FAQ
+ *    (`[lang]/premium.astro`'s own `t.faq` refund item) and from the Terms
+ *    page (`TermsContent.astro`'s section 7, "Premium: precios y pagos");
+ *  - the credits page is reachable from the Terms page's new final section
+ *    ("Créditos y licencias"/"Credits and licences").
+ * "Premium" gets its own eye-catching treatment to match (below): a yellow
+ * pill with a sparkle glyph, not a plain text link like Términos/Privacidad
+ * — it is a product link, not legal boilerplate.
  *
  * Cleaner transitions (navigation-without-flicker PR): `transition:animate
  * ="none"` excludes the footer from the page's fade animation — only
@@ -76,12 +83,30 @@ const base = `/${lang}`;
 const currentYear = new Date().getFullYear();
 
 const secondaryLinks = [
-  { href: `${base}/premium`, label: labels.premium },
   { href: `${base}/legal/terms`, label: labels.terms },
   { href: `${base}/legal/privacy`, label: labels.privacy },
-  { href: `${base}/legal/reembolsos`, label: labels.reembolsos },
-  { href: `${base}/creditos`, label: labels.credits },
 ];
+const premiumHref = `${base}/premium`;
+
+// Phosphor "Sparkle", regular weight, 256×256 viewBox — path copied verbatim
+// from `node_modules/@phosphor-icons/react/dist/defs/Sparkle.es.js` (MIT
+// licensed, credited on `/[lang]/creditos`), same "copy the geometry, skip
+// the React import" posture `@lib/skillIcons.ts`/`Header.astro`'s own
+// "Ordenar escritorio" icon already document — this file renders no React.
+const SPARKLE_PATH =
+  'M197.58,129.06,146,110l-19-51.62a15.92,15.92,0,0,0-29.88,0L78,110l-51.62,19a15.92,15.92,0,0,0,0,29.88L78,178l19,51.62a15.92,15.92,0,0,0,29.88,0L146,178l51.62-19a15.92,15.92,0,0,0,0-29.88ZM137,164.22a8,8,0,0,0-4.74,4.74L112,223.85,91.78,169A8,8,0,0,0,87,164.22L32.15,144,87,123.78A8,8,0,0,0,91.78,119L112,64.15,132.22,119a8,8,0,0,0,4.74,4.74L191.85,144ZM144,40a8,8,0,0,1,8-8h16V16a8,8,0,0,1,16,0V32h16a8,8,0,0,1,0,16H184V64a8,8,0,0,1-16,0V48H152A8,8,0,0,1,144,40ZM248,88a8,8,0,0,1-8,8h-8v8a8,8,0,0,1-16,0V96h-8a8,8,0,0,1,0-16h8V72a8,8,0,0,1,16,0v8h8A8,8,0,0,1,248,88Z';
+
+// Shared pill classes for the Premium link in BOTH branches below: the
+// ChuyoCode brand-accent FILL (`bg-accent`, `--color-accent: #facc15` in
+// both the dark brand and light Inglés palettes — `global.css`'s own
+// `@theme` header), ink text (`text-primary-foreground`, already the
+// correct dark ink in both palettes), a soft hover step one shade deeper
+// (`hover:bg-accent-hover`), and a visible keyboard focus ring — same
+// ring/offset pattern as every other interactive control (`premium.astro`'s
+// own `PRIMARY_CTA`). `transition-colors` only (no motion) respects
+// `prefers-reduced-motion` by construction: there is nothing to reduce.
+const PREMIUM_PILL =
+  'inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-primary-foreground transition-colors duration-theme hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 ---
 
 {ingles ? (
@@ -105,6 +130,12 @@ const secondaryLinks = [
         class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-end"
         aria-label="Secondary"
       >
+        <a href={premiumHref} class={PREMIUM_PILL}>
+          <svg viewBox="0 0 256 256" class="h-3 w-3" aria-hidden="true" fill="currentColor">
+            <path d={SPARKLE_PATH} />
+          </svg>
+          {labels.premium}
+        </a>
         {
           secondaryLinks.map((link) => (
             <a
@@ -129,12 +160,18 @@ const secondaryLinks = [
       class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row"
     >
       <p class="text-sm text-muted-foreground">&copy; {currentYear} ChuyoCode</p>
-      {/* Five links do not fit one row on a phone: the row wraps between
-          links and every label stays on one line (tests/e2e/mobile-overflow). */}
+      {/* The row wraps between items on a phone and every label stays on one
+          line (tests/e2e/mobile-overflow). */}
       <nav
         class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-end"
         aria-label="Secondary"
       >
+        <a href={premiumHref} class={PREMIUM_PILL}>
+          <svg viewBox="0 0 256 256" class="h-3 w-3" aria-hidden="true" fill="currentColor">
+            <path d={SPARKLE_PATH} />
+          </svg>
+          {labels.premium}
+        </a>
         {
           secondaryLinks.map((link) => (
             <a

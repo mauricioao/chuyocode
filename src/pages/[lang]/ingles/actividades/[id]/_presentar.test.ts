@@ -146,24 +146,28 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     expect(res.status).toBe(200);
   });
 
-  it('renders the activity title and level on the cover slide', async () => {
+  it('opens directly on the first content slide, not the cover (owner feedback 2026-10-06)', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
+    expect(html).toContain('data-testid="presentation-question-s1"');
+    expect(html).not.toContain('data-testid="presentation-slide-cover"');
+    // The title/level still ship to the client (for the cover, still reachable via "previous") — see the island's own serialized props.
     expect(html).toContain('Present simple: ir de compras');
     expect(html).toContain('A2');
-    expect(html).toContain('data-testid="presentation-slide-cover"');
   });
 
-  it('renders the cover QR code, pointing at the practice page (not this presentation page)', async () => {
+  it('offers "Mostrar QR" in the controls instead of a cover QR shown automatically (owner feedback 2026-10-06)', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="presentation-cover-qr"');
+    expect(html).toContain('data-testid="presentation-qr-toggle"');
+    expect(html).not.toContain('data-testid="presentation-cover-qr"');
+    expect(html).not.toContain('data-testid="presentation-qr-overlay"');
   });
 
   it('has no site header/footer chrome (bare layout)', async () => {
@@ -189,7 +193,7 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     // client-only `imagePreviewUrl()` resolution happens later, inside the
     // island itself, never during this server render.
     expect(html).toContain('activity-images/abc/img-1.webp');
-    expect(html).toContain('data-testid="presentation-slide-cover"');
+    expect(html).toContain('data-testid="presentation-worksheet-viewport"');
   });
 
   it('returns 200 in English', async () => {
@@ -216,7 +220,7 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — guest play (anonymou
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
     const html = await res.text();
-    expect(html).toContain('data-testid="presentation-slide-cover"');
+    expect(html).toContain('data-testid="presentation-question-s1"');
   });
 
   it('404s an anonymous visit to a draft/unpublished activity, same as a missing one', async () => {
@@ -228,14 +232,14 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — guest play (anonymou
     expect(res.status).toBe(404);
   });
 
-  it('still renders the cover QR (pointing at the now-public practice page) for an anonymous visitor', async () => {
+  it('still offers "Mostrar QR" (pointing at the now-public practice page) for an anonymous visitor', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: null },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="presentation-cover-qr"');
+    expect(html).toContain('data-testid="presentation-qr-toggle"');
     expect(html).toContain('/es/ingles/actividades/abc');
   });
 });

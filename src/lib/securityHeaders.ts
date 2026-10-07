@@ -30,9 +30,11 @@ const REPORT_ONLY_CSP = [
   "default-src 'self'",
   // Astro's inline per-island hydration bootstrap scripts have no nonce/hash
   // yet (that's a follow-up); 'unsafe-inline' keeps them working meanwhile.
-  // Cloudflare Turnstile (lands next) needs its widget script allowed ahead
-  // of time.
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+  // Cloudflare Turnstile needs its widget script allowed ahead of time.
+  // Cloudflare Web Analytics' beacon script (`BaseLayout.astro`) is allowed
+  // unconditionally too, same posture as every other directive here — it is
+  // simply unused while PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset.
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   // Astro/Tailwind emit inline <style> for component-scoped CSS; Google Fonts
   // is loaded as a <link> stylesheet.
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -53,7 +55,9 @@ const REPORT_ONLY_CSP = [
   // simply unused while PUBLIC_SENTRY_DSN is unset. Both known SaaS ingest
   // host shapes are covered: the plain `o<id>.ingest.sentry.io` and the
   // regionalized `o<id>.ingest.<region>.sentry.io` (today: us, de).
-  "connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
+  // Cloudflare Web Analytics' own reporting origin (unused while
+  // PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset, same posture as above).
+  "connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io https://cloudflareinsights.com",
   // Exercise audio playback streams from Sanity assets and Supabase storage.
   "media-src 'self' https://cdn.sanity.io https://*.supabase.co",
   // Course/news embeds (YouTube nocookie, Vimeo) and Turnstile's widget iframe.

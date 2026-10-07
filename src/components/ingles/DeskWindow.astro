@@ -13,10 +13,14 @@
  * Both "close" (red) and "minimize" (yellow) are plain `<a href={closeHref}>`
  * anchors, not buttons — same no-JS-first posture as `BackButton.astro`:
  * a visitor with scripting disabled still lands on the desk (or the
- * ChuyoCode home for a guest), just without the `history.back()` nicety
- * `@lib/ui/deskWindow.ts#initDeskWindow` layers on top once it runs. "Full
- * screen" (green) has no meaningful no-JS behaviour (there is no state to
- * toggle without a script) and stays a real `<button>`.
+ * ChuyoCode home for a guest) either way. Once `@lib/ui/deskWindow.ts
+ * #initDeskWindow` runs, the two diverge (owner feedback 2026-10-06): red
+ * still prefers `history.back()` and drops any tray chip for this activity;
+ * yellow REALLY minimizes — it remembers this window as a chip in the
+ * desk's own tray (`@lib/ui/minimizedWindows`), plays a short "shrink down"
+ * animation, then does a plain navigation to the hub. "Full screen" (green)
+ * has no meaningful no-JS behaviour (there is no state to toggle without a
+ * script) and stays a real `<button>`.
  *
  * RENDERED THROUGH `BaseLayout.astro`'s `overlay` SLOT (bugfix, 2026-10-06):
  * `[id].astro` passes this whole component (veil + dialog) with
@@ -59,6 +63,79 @@ interface Props {
    * script running. The green light still toggles from there normally.
    */
   forceFullScreen?: boolean;
+  /**
+   * Minimize-to-tray (owner feedback 2026-10-06): the activity id the yellow
+   * light remembers as a tray chip on the desk (`@lib/ui/minimizedWindows`).
+   * `null`/omitted for a GUEST — no desk/tray renders behind a guest's
+   * window (see the `forceFullScreen` doc above), so the yellow light there
+   * just falls back to doing exactly what the red one does
+   * (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`).
+   */
+  trayId?: string | null;
+  /**
+   * PART 6b (the activity editor, `src/pages/[lang]/crear/[id].astro`, is
+   * the first non-default caller): false for a window whose BODY already
+   * owns Escape for its own purpose (the editor deselects the current zone
+   * on Escape — `ActivityEditorIsland`'s own listener) — closing the whole
+   * window on top of that would both fight the editor's own shortcut AND
+   * discard an unsaved draft with no chance to confirm. `false` here simply
+   * skips registering the window's own Escape-closes listener entirely
+   * (`@lib/ui/deskWindow.ts#initDeskWindow`); the red light (or whatever
+   * shortcut the caller documents) is the only way to close that window.
+   * Defaults to `true` — every existing caller (the practice page) keeps
+   * today's behaviour unchanged.
+   */
+  closeOnEscape?: boolean;
+  /**
+   * PART 6b: an optional muted status string shown right after the title
+   * (and `levelChip`, if any) — the activity editor's own live autosave
+   * state ("Guardando…" / "Guardado hace un momento" / the error text),
+   * mirroring the approved mockup's `.wtitle .saved` span. Omitted entirely
+   * (no span at all) for every other caller, which has nothing to show
+   * there. This is the SSR-rendered initial value only — the editor island
+   * keeps it in sync afterwards with a direct `textContent` write on its own
+   * `status` state changes (same thin-DOM-wiring posture as `goToBlock`'s
+   * `document.getElementById`), since two separate hydration islands cannot
+   * otherwise share one React state.
+   */
+  status?: string | null;
+  /** The status span's own id, for the live-updating caller to target. */
+  statusId?: string;
+  /**
+   * PART 6b polish (owner report: "double framing" + a duplicated title —
+   * the editor's own body used to repeat the title as a second, separately
+   * boxed input right below this bar's plain text): true makes the title
+   * bar's own title area the EDITABLE title instead of static text — a
+   * visually-hidden `<span id={titleId}>` keeps `aria-labelledby` working
+   * (SSR text, kept in sync the SAME way the non-editable `<b>` always was —
+   * see `ActivityEditorIsland.tsx`'s own `DESK_WINDOW_TITLE_ID` effect),
+   * plus an EMPTY `#desk-window-title-group` slot the caller's own React
+   * island fills via `createPortal` with its real controlled title
+   * `<input>` (same technique, same reasoning, as `DESK_WINDOW_ACTIONS_ID`'s
+   * own slot below — two separate hydration islands cannot otherwise share
+   * one React state). `levelChip` (the practice window's own static pill) is
+   * never rendered on this path either — the editor portals an interactive
+   * level `<select>` plus its review-status badge into the SAME slot
+   * instead. Defaults to `false` — every existing caller (the practice
+   * window, the activities-creator PICKER) keeps today's plain-text title
+   * unchanged.
+   */
+  titleEditable?: boolean;
+  /**
+   * PART 6b polish (owner report: the red light always landed on the hub
+   * even when the author genuinely came from somewhere else, e.g.
+   * `/mis-actividades`): true makes the red light (and Escape, when enabled)
+   * prefer `history.back()` to WHATEVER screen this visitor actually came
+   * from (any known previous in-app screen, not just one that happens to
+   * equal `closeHref`) — {@link resolveTrackedCloseAction}
+   * (`@lib/ui/deskWindow.ts`), falling back to `closeHref` only when there is
+   * no such screen to return to. Defaults to `false`, the practice window's
+   * own ORIGINAL semantics ({@link resolveCloseAction}: "closing always ends
+   * up at the desk" — `history.back()` there is only a cosmetic shortcut for
+   * when it happens to coincide with `closeHref`), deliberately UNCHANGED
+   * for that caller. The activities-creator editor and picker both opt in.
+   */
+  closeUsesTrackedPath?: boolean;
 }
 
 const {
@@ -70,6 +147,12 @@ const {
   minimizeLabel,
   fullScreenLabel,
   forceFullScreen = false,
+  trayId = null,
+  closeOnEscape = true,
+  status = null,
+  statusId = 'desk-window-status',
+  titleEditable = false,
+  closeUsesTrackedPath = false,
 } = Astro.props;
 ---
 
@@ -79,6 +162,9 @@ const {
   id="desk-window"
   data-desk-window
   data-close-target={closeHref}
+  data-tray-id={trayId ?? undefined}
+  data-close-on-escape={closeOnEscape ? 'true' : 'false'}
+  data-close-tracked-path={closeUsesTrackedPath ? 'true' : undefined}
   data-fullscreen={forceFullScreen ? 'true' : undefined}
   role="dialog"
   aria-modal="true"
@@ -86,9 +172,19 @@ const {
   tabindex="-1"
   class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-16 desk:top-16 desk:bottom-8 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
 >
+  {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
+      como presentación"/"Enviar a revisión" — squeezed the title down to
+      zero width on a narrow phone, unlike the practice window's compact
+      ICON-only actions, which always fit one row): `flex-wrap` below
+      `desk:`, same breakpoint the window itself switches to a full-screen
+      sheet at, lets the actions drop to their own second row (still
+      right-aligned via `ml-auto`, which applies per flex LINE) instead of
+      collapsing the title. A no-op for every row that already fits one
+      line (the practice window, every width) — `flex-wrap` only ever
+      activates when content overflows. */}
   <div
     data-testid="desk-window-titlebar"
-    class={`flex flex-none flex-nowrap items-center gap-4 border-b border-border ${ROW_PADDING_X} py-3`}
+    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border desk:flex-nowrap ${ROW_PADDING_X} py-3`}
   >
     <div class="flex items-center gap-2">
       <a
@@ -100,7 +196,7 @@ const {
       ></a>
       <a
         href={closeHref}
-        data-desk-window-close
+        data-desk-window-minimize
         aria-label={minimizeLabel}
         title={minimizeLabel}
         class="h-3.5 w-3.5 rounded-full bg-pop-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -114,22 +210,72 @@ const {
         class="h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       ></button>
     </div>
-    <div class="flex min-w-0 flex-1 items-baseline gap-2.5">
-      <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
-        {title}
-      </b>
-      {levelChip && (
+    {/* PART 6b polish bugfix (owner-reported e2e regression: the PRACTICE
+        window's own title bar grew past one row on a narrow phone) —
+        `flex-wrap`/`items-center` are needed ONLY for the editor's own
+        title/level-select/status-badge group (so it can wrap internally
+        instead of overlapping, see the `min-w-[220px]` comment below); the
+        practice window's plain-text `<b>` title + static chip never needed
+        to wrap at all, and its ORIGINAL `items-baseline`, no-wrap layout
+        (text truncates/shrinks to fit one line instead) is kept byte
+        identical for it. */}
+    <div class={titleEditable ? 'flex min-w-0 flex-1 flex-wrap items-center gap-2.5' : 'flex min-w-0 flex-1 items-baseline gap-2.5'}>
+      {titleEditable ? (
+        <>
+          {/* SSR/no-JS + `aria-labelledby` fallback only — visually hidden,
+              kept in sync by the SAME effect that used to write the plain
+              `<b>` title's `textContent` (`ActivityEditorIsland.tsx`'s own
+              `DESK_WINDOW_TITLE_ID`). The VISIBLE, editable title lives in
+              the portal slot right after it. */}
+          <span id={titleId} class="sr-only">{title}</span>
+          {/* `min-w-[220px]` (not `min-w-0`, PART 6b polish bugfix — owner
+              report: "en el teléfono el selector de nivel se superpone con
+              el texto de guardado"): without a real minimum, the muted
+              autosave status span right after this (its own content-based
+              width, `~178px` for "Guardado hace un momento") competed for
+              the SAME flex line on a narrow phone and squeezed this slot
+              down to ~94px — too narrow for its own level `<select>`
+              (`shrink-0`, so it overflowed rather than shrinking) to fit,
+              overlapping the status text instead of wrapping cleanly. A
+              real minimum here claims its fair share FIRST, so the status
+              span is what wraps to its own line below once space is tight —
+              exactly the "lights never truncate, title/level/badge win the
+              row" priority the mockup wants. */}
+          <span
+            id="desk-window-title-group"
+            data-testid="desk-window-title-group"
+            class="flex min-w-[220px] flex-1 flex-wrap items-center gap-2.5"
+          />
+        </>
+      ) : (
+        <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
+          {title}
+        </b>
+      )}
+      {!titleEditable && levelChip && (
         <span class="shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43]">
           {levelChip}
         </span>
       )}
+      {status != null && (
+        <span id={statusId} data-testid="desk-window-status" class="min-w-0 shrink truncate text-sm text-muted-foreground">
+          {status}
+        </span>
+      )}
     </div>
-    <div class="ml-auto flex flex-none items-center gap-3">
+    <div class="ml-auto flex flex-none items-center gap-3" id="desk-window-actions">
       <slot name="actions" />
     </div>
   </div>
 
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  {/* `data-desk-window-body` (PART 6b polish): the ONE non-scrolling
+      ancestor the editor's own floating side toolbar (`EditorSideToolbar.tsx`
+      `measureBounds()`) anchors/clamps itself against instead of the full
+      viewport — see that component's own header on why `fixed` alone used to
+      let it escape past this window's own border at the `desk:` inset.
+      Harmless for every other caller (the practice window): nothing else
+      reads this attribute. */}
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden" data-desk-window-body>
     <slot />
   </div>
 </section>
@@ -141,7 +287,10 @@ const {
     const windowEl = document.getElementById('desk-window');
     const closeTarget = windowEl?.getAttribute('data-close-target');
     if (windowEl && closeTarget) {
-      initDeskWindow(windowEl, closeTarget);
+      const trayId = windowEl.getAttribute('data-tray-id');
+      const closeOnEscape = windowEl.getAttribute('data-close-on-escape') !== 'false';
+      const closeUsesTrackedPath = windowEl.getAttribute('data-close-tracked-path') === 'true';
+      initDeskWindow(windowEl, closeTarget, trayId, closeOnEscape, document, window, closeUsesTrackedPath);
     }
   };
 

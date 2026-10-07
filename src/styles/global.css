@@ -972,6 +972,52 @@ html[data-desk-behind] main {
   border-radius: 0 !important;
 }
 
+/* Minimize (yellow light), a REAL minimize (owner feedback 2026-10-06,
+ * replacing the old behaviour where it just navigated to the hub exactly
+ * like the red light): a short "shrink down toward the dock" animation,
+ * played by `@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()` BEFORE
+ * it navigates away — the window never actually reaches the tray (a real
+ * cross-page navigation happens right after), this is only the visual cue
+ * that something got tucked away rather than just closed. Skipped by the JS
+ * itself under reduced motion; the media query below is a defensive second
+ * line, same posture as `.ingles-window`'s own one above. */
+@keyframes ingles-window-minimize {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(40vh) scale(0.4);
+  }
+}
+
+.ingles-window--minimizing {
+  animation: ingles-window-minimize 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingles-window--minimizing {
+    animation: none;
+  }
+}
+
+/* Minimized-windows tray (owner feedback 2026-10-06, `DeskScene.astro`'s own
+ * `[data-minimized-tray]`): `@lib/ui/minimizedWindows.ts#initMinimizedWindowsTray`
+ * toggles the native `hidden` attribute, not a class — but the element also
+ * carries `sm:flex`/`desk:flex` Tailwind utilities for ITS OWN responsive
+ * layout (row above the dock on phones, inline with it on desktop). Author
+ * stylesheets (Tailwind's utilities included) win over the UA stylesheet's
+ * own `[hidden] { display: none }` regardless of specificity, so without
+ * this rule `sm:flex` would make the tray visible-but-empty on a wide
+ * viewport even while `hidden` is set. `!important` re-asserts `[hidden]`
+ * over those same-origin utility classes, same reasoning as the fullscreen
+ * override just above. */
+[data-minimized-tray][hidden],
+[data-minimized-tray-hairline][hidden] {
+  display: none !important;
+}
+
 /* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below `desk:`
  * the title bar has no room for six 44px/36px icon buttons in one row
  * (owner report: it used to wrap into a tall second row) — a plain

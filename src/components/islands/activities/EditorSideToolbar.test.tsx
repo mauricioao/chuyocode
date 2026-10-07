@@ -233,6 +233,64 @@ describe('EditorSideToolbar — floating: docked by default', () => {
     expect(screen.getByTestId('toolbar-drag-handle')).toBeTruthy();
     expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
   });
+
+  // PART 6b polish (owner report: "el riel se sale de la ventana, queda
+  // pegado al borde de la pantalla"): below the `desk:` breakpoint the
+  // window is itself full-screen (edge == viewport edge), so the plain
+  // `right-3` above is already correct there; `desk:right-7` only pulls the
+  // docked rail inward once the window gets its own 16px desktop inset.
+  it('carries a desk:-breakpoint inward offset so it stays inside the window\'s own desktop inset', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.className).toContain('desk:right-7');
+  });
+});
+
+// PART 6b polish: this component now ALWAYS renders inside `DeskWindow` —
+// `measureBounds()` prefers `[data-desk-window-body]`'s own rect (the
+// window's non-scrolling body wrapper) over the full viewport/header/footer
+// once one is mounted, so the floating rail can never drag/clamp/ghost-dock
+// itself past the window's own border.
+describe('EditorSideToolbar — contained within the desk window body (PART 6b polish)', () => {
+  function mountWindowBody(box: { left: number; top: number; width: number; height: number }) {
+    const body = document.createElement('div');
+    body.setAttribute('data-desk-window-body', '');
+    document.body.appendChild(body);
+    mockRect(body, box);
+    return body;
+  }
+
+  it('clamps a drag within the desk-window-body rect instead of the full viewport', () => {
+    const windowBody = mountWindowBody({ left: 16, top: 56, width: 900, height: 600 });
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 5000, 5000); // way past every edge
+    firePointer(handle, 'pointerup', 5000, 5000);
+
+    // maxX = 16 + 900 - 56 = 860; maxY = 56 + 600 - 300 = 356.
+    expect(rail.style.left).toBe('860px');
+    expect(rail.style.top).toBe('356px');
+    windowBody.remove();
+  });
+
+  it('falls back to the full viewport when no desk window body is mounted (every other caller)', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 5000, 5000);
+    firePointer(handle, 'pointerup', 5000, 5000);
+
+    // Same as the existing "clamps a drag" test: maxX = 1000-56=944, maxY = 700-300=400.
+    expect(rail.style.left).toBe('944px');
+    expect(rail.style.top).toBe('400px');
+  });
 });
 
 describe('EditorSideToolbar — floating: drag to undock/move', () => {

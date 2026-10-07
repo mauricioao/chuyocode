@@ -11,13 +11,50 @@
  * "does not exist" and "exists but is not yours" collapse to the identical
  * `null` and the identical 404 here. Neither confirms to a caller that some
  * OTHER author's activity id exists.
+ *
+ * "DESKTOP" REDESIGN PART 6b (owner spec 2026-10-06, same "la dirección
+ * cambia por detrás, pero vos nunca salís del escritorio" refinement PART 6a
+ * already gave the practice page): the editor now renders as a WINDOW over
+ * the SAME desk (`DeskScene.astro`) — always signed-in here (there is no
+ * guest editor; the gate above already redirects), so, unlike the practice
+ * window, there is no guest/no-desk branch to carry. The old back button
+ * (both this file's own floating `lg:` `BackButton` AND
+ * `ActivityEditorIsland`'s own mobile-inline copy) is GONE: the window's red
+ * light replaces it, exactly like PART 6a's red light replaced the practice
+ * page's own back button.
+ *
+ * The compact header row `ActivityEditorIsland` used to own (back button,
+ * title, level, the review-status badge, "Ver como presentación", "Enviar a
+ * revisión") is now the window's own title bar: the three traffic lights,
+ * the EDITABLE title (falling back to `t.titleFallback` — "Nueva
+ * actividad" — while empty), the level select and the review-status badge
+ * sit beside them, the live autosave status right after, and the two action
+ * buttons sit in the title bar's own `actions` slot — all via
+ * `ActivityEditorIsland` itself (a `createPortal`/direct DOM sync onto the
+ * window's own nodes — see that component's own header). Escape is the
+ * editor's OWN shortcut here (deselecting the current zone), so
+ * `closeOnEscape={false}` — only the red light (or the yellow one,
+ * minimizing) ever closes this window.
+ *
+ * PART 6b polish (owner report: "se ve el marco de la ventana y encima el
+ * marco de la tarjeta" — "double framing"): the window IS the frame now —
+ * `ActivityEditorIsland`'s own old card lost its border/`bg-card` — so the
+ * consistent horizontal inset (`ROW_PADDING_X`, the SAME token
+ * `DeskWindow`'s own title bar already uses — `src/lib/ui/layout.ts`'s own
+ * header on why every aligned row shares it) lives on THIS section instead,
+ * edge to edge at every breakpoint, with the approved mockup's own light
+ * desk-grey canvas (`bg-muted`) behind the (still white, `bg-card`) block
+ * cards.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import BackButton from '@components/ui/BackButton.astro';
+import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskWindow from '@components/ingles/DeskWindow.astro';
 import ActivityEditorIsland from '@components/islands/activities/ActivityEditorIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getActivityForEdit } from '@lib/activities/activities';
+import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { ROW_PADDING_X } from '@lib/ui/layout';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -56,6 +93,7 @@ if (!activity) {
 }
 
 const t = UI_LABELS[lang].activities.editor;
+const levelLabels = UI_LABELS[lang].english.levels;
 
 // "Duplicar y adaptar" credit line (D7) — `null` for an ordinary activity.
 // `href` is `null` once the source is no longer live, same rule as the
@@ -66,60 +104,125 @@ const sourceActivity = activity.source
       href: activity.source.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null,
     }
   : null;
+
+/**
+ * The window's red/yellow lights (PART 6b polish, owner report: "el botón
+ * de minimizar me lleva a mis actividades, no veo el chip en el
+ * escritorio"): both now target the HUB, not `/mis-actividades` — the
+ * MINIMIZE light always navigates straight here (so the tray chip it just
+ * left behind is actually visible, on the desk's own dock — see
+ * `DeskScene.astro`'s tray), while the CLOSE light only ever FALLS BACK to
+ * it: `closeUsesTrackedPath` below makes it prefer `history.back()` to
+ * whatever screen the author genuinely came from first (`/mis-actividades`,
+ * `/crear`, a shared link…) — see `resolveTrackedCloseAction`'s own header,
+ * `@lib/ui/deskWindow.ts`.
+ */
+const closeHref = `/${lang}/ingles`;
+
+/** The title bar's own `<b>` — falls back to `t.titleFallback` ("Nueva
+ * actividad") for a brand-new, still-untitled activity. `ActivityEditorIsland`
+ * keeps this in sync afterwards as the author types (see that component's
+ * own header on `DESK_WINDOW_TITLE_ID`). */
+const windowTitle = activity.title.trim() || t.titleFallback;
+
+/** The desk behind the window — same loader/component the hub and the
+ * practice window both use (`DeskScene.astro`'s own header). Always
+ * rendered here (the gate above already requires a signed-in visitor). */
+const desk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+const deskLabels = {
+  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
+  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
+  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
+  proposedTitle: UI_LABELS[lang].english.hub.proposedTitle,
+  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
+  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
+  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
+  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
+  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
+  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
+  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
+  trayLabel: UI_LABELS[lang].english.hub.trayLabel,
+  trayRemoveLabel: UI_LABELS[lang].english.hub.trayRemoveLabel,
+  trayMoreLabel: UI_LABELS[lang].english.hub.trayMoreLabel,
+};
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} fullHeight theme="ingles">
-  {/*
-    One-screen creator layout (desktop only, `lg:`), NO PAGE-LEVEL SCROLL
-    (floating side toolbar pass, owner request: the old dedicated
-    back-button row above this section was empty dead space once the back
-    button itself went floating/sticky — see `BackButton.astro`'s own
-    header — so it is gone at `lg:`; only the editor's OWN interior areas
-    (block list, properties panel) scroll, via `<BaseLayout fullHeight>`
-    above). Below `lg:`, the dedicated back-button row above this section is
-    ALSO gone now (mobile layout pass, owner request): `ActivityEditorIsland`
-    renders its own `lg:hidden` copy of this SAME back button INLINE, left of
-    the title, instead — see that component's own header on its title row.
-  */}
-  <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-8 pb-8 sm:px-6 sm:pt-12 sm:pb-12 lg:h-full lg:min-h-0 lg:flex-row lg:gap-0 lg:px-8 lg:py-6">
-    {/* `lg:`-only: the SAME `BackButton`, floating sticky in the left
-        gutter (see its own header) — the first item of this row. No reserved
-        height of its own: it overlaps into the gutter via its own `-ml-12`,
-        so the row's actual width is unaffected by its presence.
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind>
+  <DeskScene
+    lang={lang}
+    inert
+    greetingLine1={desk.greetingLine1}
+    exerciseCountLabel={desk.exerciseCountLabel}
+    activityCountLabel={desk.activityCountLabel}
+    dailyPickHref={desk.dailyPickHref}
+    dailyPickMeta={desk.dailyPickMeta}
+    dailyPickPeek={desk.dailyPickPeek}
+    weatherLat={desk.weatherLat}
+    weatherLon={desk.weatherLon}
+    weatherCity={desk.weatherCity}
+    weatherLabel={desk.weatherLabel}
+    playerLabels={desk.playerLabels}
+    levelLabels={levelLabels}
+    labels={deskLabels}
+  />
 
-        FULL-HEIGHT CARD FIX (owner report: "the card ends mid-screen, empty
-        space down to the footer"): this row used to force `lg:items-start`
-        on ITSELF — that also made `ActivityEditorIsland`'s own root div (the
-        row's OTHER item, immediately below) stretch only to ITS content
-        height instead of the row's full `lg:h-full`, since `items-start`
-        overrides the default cross-axis STRETCH for every item in the row,
-        not just this one. This div now gets its top alignment from its OWN
-        `lg:self-start` instead (its explicit `lg:h-(--card-header-h)` below
-        would have kept it unstretched either way, but self-start says so
-        directly) — leaving the row's `align-items` at its default `stretch`,
-        so the island's root (no explicit height of its own) fills the row's
-        real height end to end, and its OWN flex-column chain (root -> card
-        -> body -> block list -> the one focus-active block's canvas) can
-        then fill that height in turn instead of collapsing to content. */}
-    {/* `lg:h-(--card-header-h)` + `items-center` centers the 40px button
-        exactly inside a box the same height as the card's own 56px header
-        row (owner fix: "the back button sits above the title row" — it used
-        to inherit the row's old `items-start` directly and sit flush with
-        the row's top edge instead of centered against the header it belongs
-        next to). */}
-    <div class="hidden lg:flex lg:h-(--card-header-h) lg:flex-none lg:items-center lg:self-start">
-      <BackButton lang={lang} href={`/${lang}/mis-actividades`} />
-    </div>
-    <ActivityEditorIsland
-      client:load
-      lang={lang}
-      activityId={activity.id}
-      initialTitle={activity.title}
-      initialLevel={activity.level}
-      initialBlocks={activity.blocks}
-      initialStatus={activity.status}
-      initialReviewNote={activity.reviewNote}
-      sourceActivity={sourceActivity}
-    />
-  </section>
+  <DeskWindow
+    lang={lang}
+    title={windowTitle}
+    closeHref={closeHref}
+    closeLabel={t.windowClose}
+    minimizeLabel={t.windowMinimize}
+    fullScreenLabel={t.windowFullScreen}
+    trayId={activity.id}
+    closeOnEscape={false}
+    closeUsesTrackedPath
+    titleEditable
+    status={t.titlebarSaved}
+    slot="overlay"
+  >
+    {/* One-screen creator layout: NO page-level scroll — the window's own
+        body slot (`flex min-h-0 flex-1 flex-col overflow-hidden`,
+        `DeskWindow.astro`) is what bounds this section, not `BaseLayout`'s
+        `fullHeight` (unused here, same as the practice window — see this
+        file's own header). The OLD back-button row is gone (the red light
+        replaces it — see this file's own header), so this section now has
+        exactly one child, sized by `ActivityEditorIsland`'s own flex chain
+        (root -> card -> body -> block list), unchanged since the floating
+        side toolbar pass. Below `desk:` the window becomes a full-screen
+        sheet (`DeskWindow`'s own mockup-matched mobile treatment); this
+        section's own responsive classes keep today's stacked mobile
+        layout.
+
+        "Double framing" fix (PART 6b polish, owner report: "se ve el marco
+        de la ventana y encima el marco de la tarjeta"): the window itself
+        IS the frame now — `ActivityEditorIsland`'s own old card lost its
+        `border`/`bg-card` (see that component's own header), so the
+        consistent inset lives HERE instead, edge to edge at every
+        breakpoint — `ROW_PADDING_X`, the SAME token `DeskWindow`'s own
+        title bar already uses (`src/lib/ui/layout.ts`'s own header).
+        `bg-muted` is the light desk-grey backdrop the approved mockup's own
+        canvas uses — block cards keep their own `bg-card` (white) so they
+        still read against it.
+
+        "No side bands" polish (owner report: white bands on the left/right
+        of the editor window with the grey canvas centred as a column):
+        this section used to be `mx-auto max-w-6xl` — ONE surface now means
+        `bg-muted` itself spans the window's FULL body width, with
+        `ROW_PADDING_X` as the only inset either side, so the block cards'
+        canvas gets the full width instead of being capped at 6xl with the
+        window's own white body colour showing through on either side. */}
+    <section class={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-hidden`}>
+      <ActivityEditorIsland
+        client:load
+        lang={lang}
+        activityId={activity.id}
+        initialTitle={activity.title}
+        initialLevel={activity.level}
+        initialBlocks={activity.blocks}
+        initialStatus={activity.status}
+        initialReviewNote={activity.reviewNote}
+        sourceActivity={sourceActivity}
+      />
+    </section>
+  </DeskWindow>
 </BaseLayout>

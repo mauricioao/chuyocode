@@ -39,8 +39,8 @@
  * overlay and hands focus back to the button (`closePresentationPreview`).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -59,8 +59,6 @@ import {
 import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
-import { fieldClasses } from '@/lib/ui/field';
-import { ROW_PADDING_X } from '@/lib/ui/layout';
 import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
@@ -70,6 +68,47 @@ import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
+import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
+
+/**
+ * The window title bar's own `<span>` ids ("desktop" redesign PART 6b) —
+ * `DeskWindow.astro`'s own `titleId`/`statusId` DEFAULTS, which `[id].astro`
+ * relies on by never overriding them. Two separate hydration islands (this
+ * one and `DeskWindow`'s own inline script) cannot share one React state, so
+ * this is the one explicit, documented contract between them: this island
+ * writes `textContent` directly onto these two ids whenever the title or the
+ * autosave status changes, instead of a portal (unlike the title bar's
+ * EDITABLE title group and ACTIONS below, which this island owns entirely —
+ * see `DESK_WINDOW_TITLE_GROUP_ID`/`DESK_WINDOW_ACTIONS_ID`'s own doc).
+ * `DESK_WINDOW_TITLE_ID` targets a visually-hidden `aria-labelledby` span
+ * once `titleEditable` is set (PART 6b polish) — this effect itself needs no
+ * change either way, same id, same `textContent` write.
+ */
+const DESK_WINDOW_TITLE_ID = 'desk-window-title';
+const DESK_WINDOW_STATUS_ID = 'desk-window-status';
+/**
+ * The window title bar's own EDITABLE title group ("desktop" redesign PART
+ * 6b polish — owner report: a duplicated title, once in the title bar, once
+ * again in the card's own header row). `DeskWindow.astro` renders this slot
+ * (empty) only when its own `titleEditable` prop is set; this island
+ * `createPortal`s the REAL controlled title `<input>` (same value/onChange,
+ * same validation, same autosave as before — just relocated) plus the level
+ * `<select>` and the review-status badge right after it, same technique
+ * `DESK_WINDOW_ACTIONS_ID` below already uses. `null` for a standalone
+ * render with no `DeskWindow` shell (e.g. a test that mounts just this
+ * island) — nothing renders there, same posture as the actions portal.
+ */
+const DESK_WINDOW_TITLE_GROUP_ID = 'desk-window-title-group';
+/**
+ * The window title bar's own `actions` slot container — `DeskWindow.astro`
+ * renders it (empty) unconditionally; "Ver como presentación" and "Enviar a
+ * revisión" need the SAME React state (`doc`/`blocks`/`title`) this whole
+ * island already owns, so rather than duplicating that state into a second
+ * island, this one `createPortal`s its own buttons straight into that DOM
+ * node — same technique `WorksheetPracticePlayer.tsx` already uses to reach
+ * a header slot outside its own subtree.
+ */
+const DESK_WINDOW_ACTIONS_ID = 'desk-window-actions';
 
 export interface ActivityEditorIslandProps {
   lang: Lang;
@@ -128,8 +167,6 @@ export default function ActivityEditorIsland({
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
-  // Mobile layout pass: the inline back button's own labels — same source
-  // `BackButton.astro` itself reads.
   const tCommon = UI_LABELS[lang].common;
 
   const [history, setHistory] = useState<HistoryState<ActivityDoc>>(() =>
@@ -409,13 +446,33 @@ export default function ActivityEditorIsland({
   //  - `astro:before-preparation`, the ClientRouter's own pre-navigation
   //    event, cancelable via `preventDefault()` — belt and suspenders with
   //    the click listener above; whichever fires first wins, the other is
-  //    a no-op (the modal is already open for the same href).
-  const [navGuard, setNavGuard] = useState<{ open: boolean; href: string | null; saving: boolean; error: boolean }>(
-    { open: false, href: null, saving: false, error: false },
-  );
+  //    a no-op (the modal is already open for the same decision).
+  //
+  // RESOLVER-BASED (PART 6b, was `{ href, saving, error }` straight in
+  // state): the window's own red/yellow lights (`DeskWindow`'s traffic
+  // lights, now wrapping this whole island) ALSO need this exact modal —
+  // see `EditorWindowGuard`'s `confirmClose` below — but `deskWindow.ts`,
+  // not this component, decides what "close"/"minimize" means once the
+  // author answers. So the modal no longer performs its own navigation: it
+  // just resolves one `Promise<'save' | 'discard' | 'cancel'>` that EVERY
+  // caller (this click listener, `astro:before-preparation`, and the window
+  // guard) awaits and reacts to on its own terms. `'save'`/`'discard'` both
+  // mean "the author's decision is done — safe to proceed now" (the actual
+  // save, if any, already happened before the modal resolves); `'cancel'`
+  // means "stay right here". Ordinary in-app link navigation (the one case
+  // THIS component still performs itself) is below.
+  const [navGuard, setNavGuard] = useState<{ open: boolean; saving: boolean; error: boolean }>({
+    open: false,
+    saving: false,
+    error: false,
+  });
+  const navGuardResolveRef = useRef<((action: 'save' | 'discard' | 'cancel') => void) | null>(null);
 
-  const openNavGuard = useCallback((href: string | null) => {
-    setNavGuard({ open: true, href, saving: false, error: false });
+  const requestNavGuardDecision = useCallback((): Promise<'save' | 'discard' | 'cancel'> => {
+    return new Promise((resolve) => {
+      navGuardResolveRef.current = resolve;
+      setNavGuard({ open: true, saving: false, error: false });
+    });
   }, []);
 
   useEffect(() => {
@@ -439,41 +496,46 @@ export default function ActivityEditorIsland({
       if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
       e.preventDefault();
       e.stopPropagation();
-      openNavGuard(anchor.href);
+      const href = anchor.href;
+      void requestNavGuardDecision().then((action) => {
+        if (action === 'cancel') return;
+        window.location.href = href;
+      });
     }
     document.addEventListener('click', onDocumentClick, true);
     return () => document.removeEventListener('click', onDocumentClick, true);
-  }, [openNavGuard]);
+  }, [requestNavGuardDecision]);
 
   useEffect(() => {
     function onBeforePreparation(e: Event) {
       if (!isDirtyRef.current) return;
       e.preventDefault();
       const to = (e as unknown as { to?: URL | string }).to;
-      openNavGuard(typeof to === 'string' ? to : (to?.href ?? null));
+      const href = typeof to === 'string' ? to : (to?.href ?? null);
+      void requestNavGuardDecision().then((action) => {
+        if (action === 'cancel' || !href) return;
+        window.location.href = href;
+      });
     }
     document.addEventListener('astro:before-preparation', onBeforePreparation);
     return () => document.removeEventListener('astro:before-preparation', onBeforePreparation);
-  }, [openNavGuard]);
+  }, [requestNavGuardDecision]);
 
-  const closeNavGuard = useCallback(() => {
-    setNavGuard({ open: false, href: null, saving: false, error: false });
+  const resolveNavGuard = useCallback((action: 'save' | 'discard' | 'cancel') => {
+    navGuardResolveRef.current?.(action);
+    navGuardResolveRef.current = null;
   }, []);
 
   const handleLeaveWithoutSaving = useCallback(() => {
-    const href = navGuard.href;
-    closeNavGuard();
-    if (href) {
-      // Bug 3: gone immediately — nothing was saved, but the learner/author
-      // explicitly chose to discard the warning by picking this option, so
-      // the native prompt must not also ask the same question again.
-      removeBeforeUnloadGuard();
-      window.location.href = href;
-    }
-  }, [navGuard.href, closeNavGuard, removeBeforeUnloadGuard]);
+    // Bug 3: gone immediately — nothing was saved, but the learner/author
+    // explicitly chose to discard the warning by picking this option, so
+    // the native prompt must not also ask the same question again.
+    removeBeforeUnloadGuard();
+    setNavGuard({ open: false, saving: false, error: false });
+    resolveNavGuard('discard');
+  }, [removeBeforeUnloadGuard, resolveNavGuard]);
 
   const handleSaveAndLeave = useCallback(async () => {
-    const href = navGuard.href;
     setNavGuard((g) => ({ ...g, saving: true, error: false }));
     try {
       const value = docRef.current;
@@ -483,18 +545,102 @@ export default function ActivityEditorIsland({
         body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
       });
       if (!res.ok) throw new Error('save failed');
-      setNavGuard({ open: false, href: null, saving: false, error: false });
-      if (href) {
-        // Bug 3: only removed once the save actually succeeded — a FAILED
-        // save (the `catch` below) must leave it armed, since the work is
-        // still genuinely unsaved and no navigation happens either.
-        removeBeforeUnloadGuard();
-        window.location.href = href;
-      }
+      // Bug 3: only removed once the save actually succeeded — a FAILED
+      // save (the `catch` below) must leave it armed, since the work is
+      // still genuinely unsaved and no navigation happens either.
+      removeBeforeUnloadGuard();
+      setNavGuard({ open: false, saving: false, error: false });
+      resolveNavGuard('save');
     } catch {
       setNavGuard((g) => ({ ...g, saving: false, error: true }));
     }
-  }, [activityId, navGuard.href, removeBeforeUnloadGuard]);
+  }, [activityId, removeBeforeUnloadGuard, resolveNavGuard]);
+
+  const handleCancelNavGuard = useCallback(() => {
+    setNavGuard((g) => (g.saving ? g : { open: false, saving: false, error: false }));
+    resolveNavGuard('cancel');
+  }, [resolveNavGuard]);
+
+  /**
+   * The `EditorWindowGuard` bridge (PART 6b, `@lib/ui/deskWindow.ts`): the
+   * window shell is plain vanilla TS with no React state of its own, so it
+   * reads exactly these three functions off `window` to decide whether its
+   * own close()/minimize() may navigate away right now. Registered on every
+   * mount (never conditionally) — every window OTHER than this editor's own
+   * simply never reads this key, so there is nothing to gate here.
+   */
+  const flushForMinimize = useCallback(async (): Promise<boolean> => {
+    try {
+      const value = docRef.current;
+      const res = await fetch(`/api/actividades/${activityId}/guardar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
+      });
+      if (!res.ok) return false;
+      removeBeforeUnloadGuard();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [activityId, removeBeforeUnloadGuard]);
+
+  const confirmCloseForWindow = useCallback(async (): Promise<'saved' | 'discarded' | 'cancelled'> => {
+    const action = await requestNavGuardDecision();
+    if (action === 'save') return 'saved';
+    if (action === 'discard') return 'discarded';
+    return 'cancelled';
+  }, [requestNavGuardDecision]);
+
+  useEffect(() => {
+    const guard: EditorWindowGuard = {
+      isDirty: () => isDirtyRef.current,
+      flush: flushForMinimize,
+      confirmClose: confirmCloseForWindow,
+    };
+    (window as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    return () => {
+      delete (window as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY];
+    };
+  }, [flushForMinimize, confirmCloseForWindow]);
+
+  // The window title bar's own live title/status (PART 6b) — see
+  // `DESK_WINDOW_TITLE_ID`/`DESK_WINDOW_STATUS_ID`'s own doc above for why
+  // this is a direct `textContent` write rather than a portal.
+  useEffect(() => {
+    const el = document.getElementById(DESK_WINDOW_TITLE_ID);
+    if (el) el.textContent = title.trim() || t.titleFallback;
+  }, [title, t.titleFallback]);
+
+  useEffect(() => {
+    const el = document.getElementById(DESK_WINDOW_STATUS_ID);
+    if (!el) return;
+    if (saveState === 'saving') el.textContent = t.titlebarSaving;
+    else if (saveState === 'error') el.textContent = t.errorStatus;
+    // 'idle'/'pending'/'saved' all read as the SAME ambient "saved a moment
+    // ago" copy here (approved mockup) — the SIDE TOOLBAR's own indicator
+    // (`saveLabels` below) is where the finer-grained "unsaved" state still
+    // shows, unchanged.
+    else el.textContent = t.titlebarSaved;
+  }, [saveState, t.titlebarSaving, t.errorStatus, t.titlebarSaved]);
+
+  // The window title bar's own `actions` slot (PART 6b) — resolved once on
+  // mount; `DeskWindow.astro` always renders this node (empty) before this
+  // island ever hydrates, so it is never missing in practice. `null` only
+  // in a test that mounts this island with no `DeskWindow` shell around it.
+  const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setActionsPortalTarget(document.getElementById(DESK_WINDOW_ACTIONS_ID));
+  }, []);
+
+  // The window title bar's own EDITABLE title group slot (PART 6b polish) —
+  // same resolve-once-on-mount posture as the actions slot above; `null`
+  // for a standalone render with no `DeskWindow` shell (or one whose
+  // `titleEditable` prop is unset, e.g. the practice window).
+  const [titleGroupPortalTarget, setTitleGroupPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setTitleGroupPortalTarget(document.getElementById(DESK_WINDOW_TITLE_GROUP_ID));
+  }, []);
 
   const openSubmitDialog = useCallback(() => {
     setSubmitDialog({ open: true, submitting: false, error: null });
@@ -730,124 +876,33 @@ export default function ActivityEditorIsland({
       // rail and `lg:pr-16` (unchanged) reserves ITS docked slot instead.
       className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16"
     >
-      {/* THE card: everything below is inside it, one bordered/rounded
-          surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays
-          fully visible on screen" guarantee — the header row below is
-          `flex-none` (its own intrinsic height), the body below it is the
-          ONLY flexible, scrolling area, so the card as a whole can never
-          grow past the height the root above gives it. */}
+      {/* THE card (PART 6b polish, "double framing" fix — owner report:
+          "se ve el marco de la ventana y encima el marco de la tarjeta"):
+          this used to be its OWN bordered/rounded/`bg-card` surface nested
+          inside `DeskWindow`'s identical-looking frame — the WINDOW is the
+          frame now, so only the structural flex/scroll classes stay
+          (`lg:min-h-0` + `lg:overflow-hidden` are the actual "stays fully
+          visible on screen" guarantee); the consistent ~16px inset that
+          used to come from this card's own padding now lives on
+          `[id].astro`'s own section (one level up), edge to edge at every
+          breakpoint. The title/level/status-badge header row that used to
+          open this card is GONE too — "Desktop" redesign PART 6b/its own
+          polish pass moved the title into `DeskWindow`'s own title bar as
+          the window's now-EDITABLE title (a `createPortal`, see
+          `DESK_WINDOW_TITLE_GROUP_ID` below), level + the review-status
+          badge riding along right after it; "Ver como presentación"/"Enviar
+          a revisión" already lived in that same title bar's `actions` slot. */}
       <div
         data-testid="activity-editor-card"
-        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:bg-card"
+        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden"
       >
-        {/* Compact header row (owner request #1, creator polish round 2):
-            title + level, plus — PR D, "Activities practice" — the
-            review-state badge and "Enviar a revisión". `lg:min-h-14` (was a
-            hard `lg:h-12`) lets this row grow if the badge/note wrap onto a
-            second line instead of clipping. Creator polish round 3
-            (desktop only — below `lg:` this row keeps its own original box
-            untouched): the title becomes the visibly larger, semibold field
-            (it names the whole card), and at `lg:` this row IS the card's
-            own header (`border-b`, not a separate boxed element) — no other
-            action row lives here. */}
-        <div className={`flex flex-none flex-col gap-3 rounded-lg border border-border ${ROW_PADDING_X} py-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b`}>
-          <div className="flex flex-1 items-center gap-3">
-            {/* Mobile layout pass (owner request): below `lg:`, the back
-                button sits INLINE left of the title — the same "icon then
-                heading" row `PageTitle.astro` uses everywhere else — instead
-                of its own dedicated row above the card. `[id].astro` keeps
-                the ORIGINAL floating-gutter `BackButton` for `lg:` and up,
-                unchanged: this is a second, mobile-ONLY (`lg:hidden`) copy
-                with the exact same markup/behavior (`data-back-button` opts
-                it into the same site-wide `initBackButtons` history.back()
-                enhancement — see `BackButton.astro`'s own header), just
-                inline instead of floating. */}
-            <a
-              href={`/${lang}/mis-actividades`}
-              data-back-button
-              aria-label={tCommon.back}
-              title={tCommon.backTooltip}
-              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
-            >
-              <ArrowLeftIcon size={20} aria-hidden="true" />
-            </a>
-            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-              <span className="sr-only">{t.titleLabel}</span>
-              <input
-                type="text"
-                data-testid="activity-title-input"
-                aria-label={t.titleLabel}
-                value={title}
-                onChange={(e) => changeTitle(e.target.value)}
-                // The field system's own tokens at mobile (filled surface,
-                // subtle border, comfortable padding); at `lg:` it stays the
-                // card's OWN naked, larger heading-style field (transparent,
-                // no border until hover/focus) — deliberately not the
-                // standard field look there, since it names the whole card.
-                className={fieldClasses({
-                  size: 'sm',
-                  className:
-                    'text-base font-medium lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none lg:focus-visible:ring-0',
-                })}
-              />
-            </label>
-          </div>
-          {/* Mobile layout pass: title stays alone on its own line above
-              (the label right before this); level + status + "Enviar a
-              revisión" group onto the line below it, wrapping together if
-              they don't all fit at 360-430px. `lg:contents` un-wraps this
-              group at `lg:` so its three children become direct flex items
-              of the row above — the EXACT original desktop DOM shape/gaps,
-              unchanged. */}
-          <div className="flex flex-wrap items-center gap-2 lg:contents">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="sr-only">{t.levelLabel}</span>
-              <Select
-                data-testid="activity-level-select"
-                aria-label={t.levelLabel}
-                fieldSize="sm"
-                value={level ?? ''}
-                onChange={(e) => changeLevel(e.target.value)}
-              >
-                <option value="">{t.levelNone}</option>
-                {LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {levelLabels[lvl]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
-              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-                  : t.statusDraft}
-              </span>
-              {status === 'rejected' && initialReviewNote && (
-                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-                  {t.reviewNoteLabel}: {initialReviewNote}
-                </span>
-              )}
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="view-as-presentation-button"
-              onClick={openPresentationPreview}
-            >
-              {t.viewAsPresentation}
-            </Button>
-            <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
-              {t.submitForReview}
-            </Button>
-          </div>
-        </div>
-
         {/* "Duplicar y adaptar" credit line (D7) — only ever set for a
             duplicate's own editor; an ordinary activity never renders this. */}
+        {/* No horizontal padding of its own any more (PART 6b polish,
+            "double framing" fix): the side inset now lives once, on
+            `[id].astro`'s own section — this would only double it. */}
         {sourceActivity && (
-          <p data-testid="activity-based-on" className="flex-none px-3 pt-2 text-xs text-muted-foreground lg:px-3">
+          <p data-testid="activity-based-on" className="flex-none pt-2 text-xs text-muted-foreground">
             {sourceActivity.href ? (
               <>
                 {t.basedOnPrefix}
@@ -870,13 +925,10 @@ export default function ActivityEditorIsland({
           <div
             ref={previewScrollRef}
             data-testid="activity-preview"
-            // `lg:px-3` (not a runtime `lg:${ROW_PADDING_X}` interpolation):
-            // Tailwind's build-time scanner needs the exact utility class
-            // token to appear literally in source text, so a responsive
-            // variant can never be assembled from a dynamic prefix + an
-            // imported base token — see `ROW_PADDING_X`'s own header. Kept
-            // at the SAME value `ROW_PADDING_X` names (`px-3`) by hand.
-            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-3 lg:py-3"
+            // No `lg:px-*` of its own any more (PART 6b polish, "double
+            // framing" fix): the ~16px side inset now lives once, on
+            // `[id].astro`'s own section — this would only double it.
+            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-3"
           >
             {blocks
               // A brand-new worksheet block with no image yet (creator
@@ -905,7 +957,7 @@ export default function ActivityEditorIsland({
           // flexible height inside it. The add-block flow (picker/uploader)
           // scrolls into view here too, inside the same card, instead of
           // growing the page past it.
-          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:px-3 lg:py-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:py-3">
             <BlockList
               listRef={blockListRef}
               lang={lang}
@@ -961,24 +1013,32 @@ export default function ActivityEditorIsland({
         <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={preview ? previewScrollRef : blockListRef} />
       </div>
 
-      <EditorSideToolbar
-        lang={lang}
-        blocks={blocks}
-        onCollapseAll={collapseAllBlocks}
-        onExpandAll={expandAllBlocks}
-        onGoToBlock={goToBlock}
-        onAddBlock={() => setAddingBlock(true)}
-        preview={preview}
-        onTogglePreview={() => setPreview((p) => !p)}
-        canUndo={canUndo(history)}
-        canRedo={canRedo(history)}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onSave={handleSaveNow}
-        saveDisabled={saveState === 'saving'}
-        saveState={saveState}
-        saveLabels={saveLabels}
-      />
+      {/* Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the
+          "Elige con qué seguir" type picker (`showAddFlow` above, rendered
+          while `blocks.length === 0`) has nothing yet for collapse-all/
+          expand-all/block-index/undo/redo/preview to act on — the rail used
+          to render anyway, floating next to an editor with no content. It
+          now only mounts once the activity has at least one block. */}
+      {blocks.length > 0 && (
+        <EditorSideToolbar
+          lang={lang}
+          blocks={blocks}
+          onCollapseAll={collapseAllBlocks}
+          onExpandAll={expandAllBlocks}
+          onGoToBlock={goToBlock}
+          onAddBlock={() => setAddingBlock(true)}
+          preview={preview}
+          onTogglePreview={() => setPreview((p) => !p)}
+          canUndo={canUndo(history)}
+          canRedo={canRedo(history)}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onSave={handleSaveNow}
+          saveDisabled={saveState === 'saving'}
+          saveState={saveState}
+          saveLabels={saveLabels}
+        />
+      )}
 
       <UnsavedChangesModal
         open={navGuard.open}
@@ -987,7 +1047,7 @@ export default function ActivityEditorIsland({
         labels={navGuardLabels}
         onSaveAndLeave={() => void handleSaveAndLeave()}
         onLeaveWithoutSaving={handleLeaveWithoutSaving}
-        onCancel={closeNavGuard}
+        onCancel={handleCancelNavGuard}
       />
 
       <SubmitForReviewDialog
@@ -1014,6 +1074,97 @@ export default function ActivityEditorIsland({
           onExit={closePresentationPreview}
         />
       )}
+
+      {/* "Desktop" redesign PART 6b: the window's own title bar `actions`
+          slot (ghost "Ver como presentación" + yellow primary "Enviar a
+          revisión") — see `DESK_WINDOW_ACTIONS_ID`'s own doc above for why
+          this is a portal rather than plain JSX in the header row. */}
+      {actionsPortalTarget &&
+        createPortal(
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="view-as-presentation-button"
+              onClick={openPresentationPreview}
+            >
+              {t.viewAsPresentation}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              data-testid="submit-for-review-button"
+              className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+              onClick={openSubmitDialog}
+            >
+              {t.submitForReview}
+            </Button>
+          </>,
+          actionsPortalTarget,
+        )}
+
+      {/* "Desktop" redesign PART 6b polish: the window's own title bar
+          EDITABLE title group — the SAME controlled title `<input>` (value/
+          onChange/validation/autosave unchanged, just relocated out of the
+          card's own old header row), the level `<select>`, and the
+          review-status badge right after it. See `DESK_WINDOW_TITLE_GROUP_ID`'s
+          own doc above for why this is a portal. */}
+      {titleGroupPortalTarget &&
+        createPortal(
+          <>
+            <label className="flex min-w-0 flex-1 items-center">
+              <span className="sr-only">{t.titleLabel}</span>
+              <input
+                type="text"
+                data-testid="activity-title-input"
+                aria-label={t.titleLabel}
+                value={title}
+                onChange={(e) => changeTitle(e.target.value)}
+                placeholder={t.titleFallback}
+                // Matches the title bar's own static `<b>` typography
+                // (`DeskWindow.astro`) when idle — transparent, no border —
+                // and only reveals a field-like border on hover/focus, the
+                // click/keyboard-focus affordance for "this is editable now".
+                className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground outline-none placeholder:font-semibold placeholder:text-muted-foreground hover:border-border focus-visible:border-border focus-visible:bg-(--color-field) focus-visible:outline-none focus-visible:ring-0"
+              />
+            </label>
+            <label className="flex shrink-0 items-center gap-1 text-sm">
+              <span className="sr-only">{t.levelLabel}</span>
+              <Select
+                data-testid="activity-level-select"
+                aria-label={t.levelLabel}
+                fieldSize="sm"
+                value={level ?? ''}
+                onChange={(e) => changeLevel(e.target.value)}
+              >
+                <option value="">{t.levelNone}</option>
+                {LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {levelLabels[lvl]}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <div
+              className="flex shrink-0 flex-wrap items-center gap-2"
+              data-testid="activity-status-badge"
+              data-status={status}
+            >
+              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+                  : t.statusDraft}
+              </span>
+              {status === 'rejected' && initialReviewNote && (
+                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+                  {t.reviewNoteLabel}: {initialReviewNote}
+                </span>
+              )}
+            </div>
+          </>,
+          titleGroupPortalTarget,
+        )}
     </div>
   );
 }

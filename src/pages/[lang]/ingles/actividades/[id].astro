@@ -166,7 +166,11 @@ const deskLabels = desk && {
   createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
   widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
   weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
+  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
   levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
+  trayLabel: UI_LABELS[lang].english.hub.trayLabel,
+  trayRemoveLabel: UI_LABELS[lang].english.hub.trayRemoveLabel,
+  trayMoreLabel: UI_LABELS[lang].english.hub.trayMoreLabel,
 };
 
 /**
@@ -237,6 +241,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
     minimizeLabel={t.windowMinimize}
     fullScreenLabel={t.windowFullScreen}
     forceFullScreen={isGuest}
+    trayId={isGuest ? null : activity.id}
     slot="overlay"
   >
     <Fragment slot="actions">
@@ -262,6 +267,11 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
         </a>
       )}
+      {/* Eye icon + view count (owner feedback 2026-10-06): right next to
+          the hearts, same style/size — replaces the old "· Ya lo viste · N
+          veces" strip under the title bar. Signed-in visitors only, same
+          gate the old strip used (a guest's view is never tracked). */}
+      {user && <ActivityViewBadge client:load lang={lang} activityId={activity.id} />}
       {
         shareQr && (
           <ShareDialog
@@ -404,15 +414,10 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
       </div>
     </Fragment>
 
-    {/* Per-visitor view count + "Basado en" credit line — plain rows
-        directly under the title bar, inside the window body (owner-approved
-        design keeps these OFF the title bar itself, which only has room for
-        lights/title/chip/actions). */}
-    {user && (
-      <p class={`flex-none border-b border-border text-xs text-muted-foreground ${ROW_PADDING_X} py-1.5`}>
-        <ActivityViewBadge client:load lang={lang} activityId={activity.id} />
-      </p>
-    )}
+    {/* "Basado en" credit line — a plain, unobtrusive row directly under the
+        title bar, inside the window body (small/muted, same as before; the
+        view count moved up into the title bar itself, next to the hearts —
+        see the `actions` slot above). */}
     {activity.source && (
       <p class={`flex-none border-b border-border text-xs text-muted-foreground ${ROW_PADDING_X} py-1.5`} data-testid="activity-based-on">
         {sourceHref ? (

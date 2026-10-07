@@ -6,53 +6,71 @@
 // (`src/testSupport/vitestProjectSplit.ts`); splitting it into two files
 // just to keep the rest on the cheaper `node` project is not worth the
 // churn for one new describe block.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   resolveCloseAction,
+  resolveTrackedCloseAction,
   shouldStartFullScreen,
   readFullScreenPreference,
   writeFullScreenPreference,
   focusableElements,
+  initDeskWindow,
+  shouldProceedAfterGuardDecision,
+  EDITOR_WINDOW_GUARD_KEY,
+  type EditorWindowGuard,
 } from './deskWindow';
 
 describe('resolveCloseAction', () => {
-  const origin = 'https://chuyocode.test';
   const hub = '/es/ingles';
 
-  it('prefers history.back() when the previous page is exactly the close target, same origin', () => {
-    const action = resolveCloseAction('https://chuyocode.test/es/ingles', origin, 2, hub);
+  it('prefers history.back() when the previous SCREEN this visitor saw is exactly the close target', () => {
+    const action = resolveCloseAction('/es/ingles', 2, hub);
     expect(action).toEqual({ kind: 'back' });
   });
 
   it('falls back to a plain href when there is no previous history entry', () => {
-    const action = resolveCloseAction('https://chuyocode.test/es/ingles', origin, 1, hub);
+    const action = resolveCloseAction('/es/ingles', 1, hub);
     expect(action).toEqual({ kind: 'href', href: hub });
   });
 
-  it('falls back to a plain href when the referrer is a different path', () => {
-    const action = resolveCloseAction('https://chuyocode.test/es/ingles/actividades', origin, 2, hub);
+  it('falls back to a plain href when the previous screen was a different path', () => {
+    const action = resolveCloseAction('/es/ingles/actividades', 2, hub);
     expect(action).toEqual({ kind: 'href', href: hub });
   });
 
-  it('falls back to a plain href when the referrer is cross-origin', () => {
-    const action = resolveCloseAction('https://other.test/es/ingles', origin, 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href when there is no referrer at all (direct visit)', () => {
-    const action = resolveCloseAction('', origin, 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href on a malformed referrer, never throws', () => {
-    const action = resolveCloseAction('not a url', origin, 2, hub);
+  it('falls back to a plain href when the previous screen is unknown (null — no tracked path, no usable referrer)', () => {
+    const action = resolveCloseAction(null, 2, hub);
     expect(action).toEqual({ kind: 'href', href: hub });
   });
 
   it('resolves the guest close target (ChuyoCode home) the exact same way', () => {
     const home = '/es/';
-    const action = resolveCloseAction('https://chuyocode.test/es/', origin, 2, home);
+    const action = resolveCloseAction('/es/', 2, home);
     expect(action).toEqual({ kind: 'back' });
+  });
+});
+
+describe('resolveTrackedCloseAction (PART 6b polish, the editor/picker close resolution)', () => {
+  const hub = '/es/ingles';
+
+  it('prefers history.back() to ANY known previous screen, not just one that equals the target', () => {
+    const action = resolveTrackedCloseAction('/es/mis-actividades', 2, hub);
+    expect(action).toEqual({ kind: 'back' });
+  });
+
+  it('still prefers history.back() when the previous screen happens to equal the target', () => {
+    const action = resolveTrackedCloseAction(hub, 2, hub);
+    expect(action).toEqual({ kind: 'back' });
+  });
+
+  it('falls back to a plain href when there is no previous history entry', () => {
+    const action = resolveTrackedCloseAction('/es/mis-actividades', 1, hub);
+    expect(action).toEqual({ kind: 'href', href: hub });
+  });
+
+  it('falls back to a plain href when the previous screen is unknown', () => {
+    const action = resolveTrackedCloseAction(null, 2, hub);
+    expect(action).toEqual({ kind: 'href', href: hub });
   });
 });
 
@@ -126,5 +144,241 @@ describe('focusableElements', () => {
     const container = document.createElement('div');
     container.innerHTML = '<p>plain text</p>';
     expect(focusableElements(container)).toEqual([]);
+  });
+});
+
+describe('shouldProceedAfterGuardDecision', () => {
+  it('only "cancelled" ever says no', () => {
+    expect(shouldProceedAfterGuardDecision('saved')).toBe(true);
+    expect(shouldProceedAfterGuardDecision('discarded')).toBe(true);
+    expect(shouldProceedAfterGuardDecision('cancelled')).toBe(false);
+  });
+});
+
+/**
+ * `initDeskWindow` — the EDITOR-specific behaviour (PART 6b): the
+ * `closeOnEscape` policy, and the `EditorWindowGuard` bridge the
+ * close/minimize lights consult before navigating away. Uses the real
+ * (jsdom) `document` for `doc` — real event dispatch is what actually
+ * exercises the conditionally-registered Escape listener — and a small fake
+ * `win` for everything `deskWindow.ts` itself reads/writes on it, so a test
+ * never depends on a real navigation happening.
+ */
+describe('initDeskWindow — editor window (PART 6b)', () => {
+  function fakeStorage() {
+    const store = new Map<string, string>();
+    return {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: (key: string) => store.delete(key),
+    };
+  }
+
+  function fakeWin(historyLength = 1) {
+    return {
+      location: { href: '', pathname: '/es/crear/abc', search: '', origin: 'https://example.test' },
+      history: { length: historyLength, back: () => {} },
+      sessionStorage: fakeStorage(),
+      matchMedia: () => ({ matches: true }), // reduced-motion: skip the animation delay entirely
+      setTimeout: ((fn: () => void) => {
+        fn();
+        return 0;
+      }) as unknown as Window['setTimeout'],
+    } as unknown as Window;
+  }
+
+  function buildWindowEl(): HTMLElement {
+    const el = document.createElement('section');
+    el.innerHTML = `
+      <b id="t">Nueva actividad</b>
+      <a data-desk-window-close href="/es/mis-actividades"></a>
+      <a data-desk-window-minimize href="/es/mis-actividades"></a>
+      <button type="button" data-desk-window-fullscreen></button>
+    `;
+    el.setAttribute('aria-labelledby', 't');
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function click(el: Element) {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+  }
+
+  async function flushMicrotasks() {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    delete (window as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY];
+  });
+
+  it('closeOnEscape=false never registers the Escape-closes listener', () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    initDeskWindow(el, '/es/ingles', null, false, document, win);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+
+    expect(win.location.href).toBe('');
+  });
+
+  it('closeOnEscape=true (default) closes on Escape when there is no guard', () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    initDeskWindow(el, '/es/ingles', null, true, document, win);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+
+    expect(win.location.href).toBe('/es/ingles');
+  });
+
+  it('close(): a dirty editor guard that resolves "cancelled" blocks the navigation', async () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    const guard: EditorWindowGuard = {
+      isDirty: () => true,
+      flush: async () => true,
+      confirmClose: async () => 'cancelled',
+    };
+    (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+    click(el.querySelector('[data-desk-window-close]')!);
+    await flushMicrotasks();
+
+    expect(win.location.href).toBe('');
+  });
+
+  it('close(): a dirty editor guard that resolves "saved"/"discarded" proceeds with the navigation', async () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    const guard: EditorWindowGuard = {
+      isDirty: () => true,
+      flush: async () => true,
+      confirmClose: async () => 'discarded',
+    };
+    (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+    click(el.querySelector('[data-desk-window-close]')!);
+    await flushMicrotasks();
+
+    expect(win.location.href).toBe('/es/mis-actividades');
+  });
+
+  it('minimize(): a dirty editor guard is flushed SILENTLY — no confirmClose call when the flush succeeds', async () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    let confirmCloseCalls = 0;
+    const guard: EditorWindowGuard = {
+      isDirty: () => true,
+      flush: async () => true,
+      confirmClose: async () => {
+        confirmCloseCalls += 1;
+        return 'cancelled';
+      },
+    };
+    (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+    click(el.querySelector('[data-desk-window-minimize]')!);
+    await flushMicrotasks();
+
+    expect(confirmCloseCalls).toBe(0);
+    expect(win.location.href).toBe('/es/mis-actividades');
+  });
+
+  it('minimize(): falls back to confirmClose when the silent flush itself fails, and honours "cancelled"', async () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    const guard: EditorWindowGuard = {
+      isDirty: () => true,
+      flush: async () => false,
+      confirmClose: async () => 'cancelled',
+    };
+    (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+    click(el.querySelector('[data-desk-window-minimize]')!);
+    await flushMicrotasks();
+
+    expect(win.location.href).toBe('');
+  });
+
+  it('a clean (non-dirty) editor guard never blocks close or minimize', async () => {
+    const el = buildWindowEl();
+    const win = fakeWin();
+    const guard: EditorWindowGuard = {
+      isDirty: () => false,
+      flush: async () => true,
+      confirmClose: async () => 'cancelled',
+    };
+    (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+    click(el.querySelector('[data-desk-window-close]')!);
+    await flushMicrotasks();
+
+    expect(win.location.href).toBe('/es/mis-actividades');
+  });
+
+  // `closeUsesTrackedPath` (PART 6b polish) — the 7th, opt-in param;
+  // `fakeWin`'s own `sessionStorage` is where `readTrackedPreviousPath`
+  // (`@lib/backNavigation`) reads `trackPageVisit`'s own tracked path from.
+  describe('closeUsesTrackedPath=true (editor/picker close resolution)', () => {
+    it('close() prefers history.back() to ANY tracked previous screen, not just one matching the fallback target', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      let backCalls = 0;
+      win.history.back = () => {
+        backCalls += 1;
+      };
+      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      initDeskWindow(el, '/es/ingles', null, false, document, win, true);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(backCalls).toBe(1);
+      expect(win.location.href).toBe(''); // never set — back() was used, not a plain navigation.
+    });
+
+    it('close() falls back to the fallback target when there is no tracked previous path', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      initDeskWindow(el, '/es/ingles', null, false, document, win, true);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('/es/ingles');
+    });
+
+    it('minimize() still always navigates straight to the target (never history.back()), unaffected by this flag', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win, true);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('/es/ingles');
+    });
+  });
+
+  describe('closeUsesTrackedPath=false (default — practice window, unchanged)', () => {
+    it('close() only prefers history.back() when the tracked previous screen equals the target, same as before', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      initDeskWindow(el, '/es/ingles', null, false, document, win);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('/es/ingles'); // href fallback, not history.back() — unknown target mismatch.
+    });
   });
 });

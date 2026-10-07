@@ -236,7 +236,15 @@ if (exercise.topic) {
           height overflows the reserve, which was already the documented limit of
           that mechanism. */}
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <BackButton lang={lang} href={`/${lang}/ingles/propuestos`} />
+        {/* Bugfix, 2026-10-06 (owner report: back lost the level/focus filter,
+            landing on the whole unfiltered "Propuestos" catalog instead of
+            the exact exercise list this exercise came from): the logical
+            parent of a `[level]/[focus]/[slug]` exercise is its OWN
+            `[level]/[focus]` list, exactly two segments up — never
+            `propuestos` directly, which skips that whole level. Matches
+            `[level]/[focus]/index.astro`'s own `backHref` one level up
+            (which correctly preserves `?nivel=` back to `propuestos`). */}
+        <BackButton lang={lang} href={`/${lang}/ingles/${level}/${focus}`} />
 
         {/* The two page-level actions, grouped so they stay together when the
             row wraps — a like that wrapped away from the share control would
