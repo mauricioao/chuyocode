@@ -201,8 +201,16 @@ const deskLabels = {
         title bar already uses (`src/lib/ui/layout.ts`'s own header).
         `bg-muted` is the light desk-grey backdrop the approved mockup's own
         canvas uses — block cards keep their own `bg-card` (white) so they
-        still read against it. */}
-    <section class={`mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-hidden`}>
+        still read against it.
+
+        "No side bands" polish (owner report: white bands on the left/right
+        of the editor window with the grey canvas centred as a column):
+        this section used to be `mx-auto max-w-6xl` — ONE surface now means
+        `bg-muted` itself spans the window's FULL body width, with
+        `ROW_PADDING_X` as the only inset either side, so the block cards'
+        canvas gets the full width instead of being capped at 6xl with the
+        window's own white body colour showing through on either side. */}
+    <section class={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-hidden`}>
       <ActivityEditorIsland
         client:load
         lang={lang}

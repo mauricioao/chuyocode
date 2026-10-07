@@ -199,6 +199,30 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('Guardado hace un momento');
   });
 
+  // "No side bands" polish (owner report: the grey canvas sat as a centred
+  // column with the window's own white body colour showing through on
+  // either side at wide viewports) — the body surface must span the
+  // window's full width, with only the shared `ROW_PADDING_X` inset.
+  it('renders the body as one edge-to-edge grey surface, never a centred max-width column', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('max-w-6xl');
+    expect(html).toMatch(/class="[^"]*\bw-full\b[^"]*\bbg-muted\b[^"]*"/);
+  });
+
   it('falls back to "Nueva actividad" in the title bar for a brand-new, still-untitled activity', async () => {
     editableActivity.value = {
       id: 'abc',
