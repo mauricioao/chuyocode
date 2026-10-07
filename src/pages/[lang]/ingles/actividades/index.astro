@@ -310,7 +310,7 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
   {hostMode && desk && (
     <>
       <DeskHost lang={lang} desk={desk} />
-      <DeskWindowManager slot="overlay" initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={t.pageTitle} />
+      <DeskWindowManager slot="overlay" lang={lang} initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={t.pageTitle} />
     </>
   )}
 

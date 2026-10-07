@@ -121,6 +121,7 @@ if (hostMode) {
       <DeskHost lang={lang} desk={desk} />
       <DeskWindowManager
         slot="overlay"
+        lang={lang}
         initialHref={`${Astro.url.pathname}${Astro.url.search}`}
         initialTitle={editorT.titleFallback}
       />

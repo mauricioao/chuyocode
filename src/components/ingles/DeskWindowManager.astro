@@ -24,19 +24,26 @@
  * manager re-renders LIVE instead of from `sessionStorage` — see that
  * module's own header.
  */
+import { UI_LABELS, type Lang } from '@lib/i18n';
+
 interface Props {
+  lang: Lang;
   /** The initial window to open on mount — a window route's OWN url, rendering this shell instead of loading its data twice (see this file's own header). `null`/omitted on the hub (no initial window). */
   initialHref?: string | null;
   initialTitle?: string | null;
 }
 
-const { initialHref = null, initialTitle = null } = Astro.props;
+const { lang, initialHref = null, initialTitle = null } = Astro.props;
+
+/** Robustness pass (owner spec): the calm notice shown instead of opening a 9th window when none of the minimized ones could be closed to make room — see `@lib/ui/deskWindowManager.ts#openWindow`'s own header. */
+const maxWindowsNoticeLabel = UI_LABELS[lang].english.hub.maxWindowsNotice;
 ---
 
 <div
   data-desk-window-manager
   data-initial-href={initialHref ?? undefined}
   data-initial-title={initialTitle ?? undefined}
+  data-max-windows-notice-label={maxWindowsNoticeLabel}
 >
 </div>
 
@@ -56,12 +63,16 @@ const { initialHref = null, initialTitle = null } = Astro.props;
     const removeLabel = tray?.getAttribute('data-remove-label') ?? '';
     const initialHref = container.getAttribute('data-initial-href');
     const initialTitle = container.getAttribute('data-initial-title') ?? '';
+    const maxWindowsNoticeLabel = container.getAttribute('data-max-windows-notice-label') ?? '';
 
     initDeskWindowManager(
       container,
       tray,
       removeLabel,
       initialHref ? { href: initialHref, title: initialTitle } : null,
+      document,
+      window,
+      maxWindowsNoticeLabel,
     );
   };
 

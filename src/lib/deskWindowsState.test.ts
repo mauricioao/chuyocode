@@ -6,8 +6,10 @@ import {
   isWindowActive,
   visibleWindows,
   minimizedWindowsOf,
+  minimizedWindowsOldestFirst,
   initialDeskWindowsState,
   CASCADE_STEP_PX,
+  MAX_DESK_WINDOWS,
   type DeskWindowsState,
 } from './deskWindowsState';
 
@@ -178,5 +180,50 @@ describe('reduceDeskWindows', () => {
     expect(reduceDeskWindows(state, { type: 'restore', id: 'nope' })).toBe(state);
     expect(reduceDeskWindows(state, { type: 'maximizeToggle', id: 'nope' })).toBe(state);
     expect(reduceDeskWindows(state, { type: 'navigate', id: 'nope', href: '/x' })).toBe(state);
+  });
+});
+
+// Robustness pass (owner spec): the 8-window cap's own eviction order —
+// `deskWindowManager.ts#openAtCapacity` tries these, oldest-minimized first,
+// before giving up and showing a notice.
+describe('minimizedWindowsOldestFirst', () => {
+  it('is empty when nothing is minimized', () => {
+    const state = open(initialDeskWindowsState, 'community', 'community');
+    expect(minimizedWindowsOldestFirst(state)).toEqual([]);
+  });
+
+  it('orders minimized windows oldest (lowest z) first, ignoring visible ones', () => {
+    let state = open(initialDeskWindowsState, 'community', 'community');
+    state = open(state, 'activity:1', 'activity');
+    state = open(state, 'activity:2', 'activity');
+    // Minimize in a DIFFERENT order than they were opened, so this proves
+    // the sort is by `z` (recency), not array/insertion order.
+    state = reduceDeskWindows(state, { type: 'minimize', id: 'activity:2' });
+    state = reduceDeskWindows(state, { type: 'minimize', id: 'community' });
+
+    const ordered = minimizedWindowsOldestFirst(state);
+    expect(ordered.map((w) => w.id)).toEqual(['community', 'activity:2']);
+    // `activity:1` stayed visible — never a candidate at all.
+    expect(ordered.some((w) => w.id === 'activity:1')).toBe(false);
+  });
+
+  it('moving a minimized window back to front (reopen, then re-minimize) re-ages it to the back of the eviction order', () => {
+    let state = open(initialDeskWindowsState, 'community', 'community');
+    state = open(state, 'activity:1', 'activity');
+    state = reduceDeskWindows(state, { type: 'minimize', id: 'community' });
+    state = reduceDeskWindows(state, { type: 'minimize', id: 'activity:1' });
+    expect(minimizedWindowsOldestFirst(state).map((w) => w.id)).toEqual(['community', 'activity:1']);
+
+    // Reopen + re-minimize "community" — it is now the MOST recently
+    // touched, so it should evict LAST, not first.
+    state = open(state, 'community', 'community');
+    state = reduceDeskWindows(state, { type: 'minimize', id: 'community' });
+    expect(minimizedWindowsOldestFirst(state).map((w) => w.id)).toEqual(['activity:1', 'community']);
+  });
+});
+
+describe('MAX_DESK_WINDOWS', () => {
+  it('is 8 (owner spec)', () => {
+    expect(MAX_DESK_WINDOWS).toBe(8);
   });
 });

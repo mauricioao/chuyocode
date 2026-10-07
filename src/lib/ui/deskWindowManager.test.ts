@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { initDeskWindowManager, DESK_WINDOW_OPEN_ATTR, type DeskWindowManagerHandle } from './deskWindowManager';
+import { DESK_WINDOWS_STORAGE_KEY, serializePersistedDeskWindows } from './deskWindowsPersistence';
+import type { DeskWindowsState } from '../deskWindowsState';
+
+const toastSpy = vi.fn();
+vi.mock('sonner', () => ({ toast: (...args: unknown[]) => toastSpy(...args) }));
 
 const HEADER_RECT = { left: 0, top: 0, width: 1440, height: 64 };
 const WRAPPER_RECT = { left: 64, top: 76, width: 600, height: 500 };
@@ -16,6 +21,24 @@ function stubRects(): void {
   };
 }
 
+/** A tiny, ISOLATED in-memory `Storage` per `fakeWin()` call — never the
+ * real/shared jsdom `sessionStorage`, which persists across every test in
+ * this file and would otherwise leak one test's persisted windows into the
+ * next test's fresh manager (restore-after-reload, robustness pass). */
+function fakeSessionStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+    key: () => null,
+    get length() {
+      return store.size;
+    },
+  } as Storage;
+}
+
 function fakeWin(opts: { desktop?: boolean } = {}) {
   const listeners: Record<string, Array<(event: unknown) => void>> = {};
   const win = {
@@ -24,6 +47,7 @@ function fakeWin(opts: { desktop?: boolean } = {}) {
     innerHeight: 900,
     matchMedia: (query: string) => ({ matches: (opts.desktop ?? true) && query.includes('min-width') }),
     history: { replaceState: vi.fn() },
+    sessionStorage: fakeSessionStorage(),
     setTimeout: ((fn: () => void) => {
       fn();
       return 0;
@@ -60,6 +84,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   document.body.appendChild(trayWrapper);
   handle = null;
+  toastSpy.mockClear();
 });
 
 afterEach(() => {
@@ -388,5 +413,151 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     handle.openWindow('/es/crear', 'Crear actividad');
     const second = frameFor('create')!;
     expect(second.wrapper.style.translate).toBe('68px 38px'); // 40+28, 10+28
+  });
+});
+
+describe('initDeskWindowManager — restore-after-reload (robustness pass)', () => {
+  it('recreates every persisted window on mount, with its own geometry/minimized state', () => {
+    const win = fakeWin();
+    const persisted: DeskWindowsState = {
+      windows: [
+        { id: 'community', kind: 'community', href: '/es/ingles/actividades', title: 'Comunidad', minimized: false, maximized: false, offset: { x: 12, y: 8 }, z: 1 },
+        { id: 'activity:abc', kind: 'activity', href: '/es/ingles/actividades/abc', title: 'x', minimized: true, maximized: false, offset: { x: 0, y: 0 }, z: 2 },
+      ],
+      nextZ: 3,
+    };
+    win.sessionStorage.setItem(DESK_WINDOWS_STORAGE_KEY, serializePersistedDeskWindows(persisted));
+
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+
+    expect(frameFor('community')).not.toBeNull();
+    const activity = frameFor('activity:abc')!;
+    expect(activity.wrapper.style.visibility).toBe('hidden'); // restored minimized
+  });
+
+  it("dedupes the URL's own initial window against a restored one for the same id, through the ordinary reducer path", () => {
+    const win = fakeWin();
+    const persisted: DeskWindowsState = {
+      windows: [
+        { id: 'community', kind: 'community', href: '/es/ingles/actividades?nivel=A1', title: 'Comunidad', minimized: false, maximized: false, offset: { x: 0, y: 0 }, z: 1 },
+      ],
+      nextZ: 2,
+    };
+    win.sessionStorage.setItem(DESK_WINDOWS_STORAGE_KEY, serializePersistedDeskWindows(persisted));
+
+    handle = initDeskWindowManager(
+      container,
+      tray,
+      'Quitar',
+      { href: '/es/ingles/actividades?nivel=B1', title: 'Comunidad' },
+      document,
+      win,
+    );
+
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
+    expect(frameFor('community')!.iframe.src).toContain('nivel=B1');
+  });
+
+  it('a corrupted/absent sessionStorage value is simply no restore at all (first-visit behaviour)', () => {
+    const win = fakeWin();
+    win.sessionStorage.setItem(DESK_WINDOWS_STORAGE_KEY, '{not json');
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(0);
+  });
+
+  it('write-through: opening a window persists the full state, recoverable after this host page tears down (e.g. "Presentar"/"Imprimir", target="_top")', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+
+    const raw = win.sessionStorage.getItem(DESK_WINDOWS_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const persisted = JSON.parse(raw!) as DeskWindowsState;
+    expect(persisted.windows).toHaveLength(1);
+    expect(persisted.windows[0].id).toBe('community');
+  });
+
+  it('write-through also covers minimize/close, so the tray/desk reload exactly as left', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+    win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+
+    let persisted = JSON.parse(win.sessionStorage.getItem(DESK_WINDOWS_STORAGE_KEY)!) as DeskWindowsState;
+    expect(persisted.windows[0].minimized).toBe(true);
+
+    win.dispatchMessage({ source: 'desk-window', type: 'close' }, frame.iframe.contentWindow);
+    await flushMicrotasks();
+    persisted = JSON.parse(win.sessionStorage.getItem(DESK_WINDOWS_STORAGE_KEY)!) as DeskWindowsState;
+    expect(persisted.windows).toHaveLength(0);
+  });
+});
+
+describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
+  function openManyMinimized(win: ReturnType<typeof fakeWin>, count: number): void {
+    for (let i = 0; i < count; i += 1) {
+      handle!.openWindow(`/es/ingles/actividades/w${i}`, `w${i}`);
+      const frame = frameFor(`activity:w${i}`)!;
+      win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    }
+  }
+
+  it('opening a 9th window evicts the OLDEST minimized window to make room', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
+    openManyMinimized(win, 8);
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(8);
+
+    handle.openWindow('/es/ingles/actividades/w8', 'w8');
+    await flushMicrotasks();
+
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(8);
+    expect(frameFor('activity:w0')).toBeNull(); // the oldest-minimized one was evicted
+    expect(frameFor('activity:w8')).not.toBeNull(); // the new one opened in its place
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips a minimized window whose own deskWindowCanClose guard refuses, trying the next-oldest instead', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
+    openManyMinimized(win, 8);
+    const dirtiest = frameFor('activity:w0')!;
+    (dirtiest.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async () => false;
+
+    handle.openWindow('/es/ingles/actividades/w8', 'w8');
+    await flushMicrotasks();
+
+    expect(frameFor('activity:w0')).not.toBeNull(); // refused — stays
+    expect(frameFor('activity:w1')).toBeNull(); // next-oldest evicted instead
+    expect(frameFor('activity:w8')).not.toBeNull();
+  });
+
+  it('shows a calm notice instead of opening when every minimized window refuses to close', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
+    openManyMinimized(win, 8);
+    for (let i = 0; i < 8; i += 1) {
+      const frame = frameFor(`activity:w${i}`)!;
+      (frame.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async () => false;
+    }
+
+    handle.openWindow('/es/ingles/actividades/w8', 'w8');
+    await flushMicrotasks();
+
+    expect(frameFor('activity:w8')).toBeNull(); // never opened
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(8);
+    expect(toastSpy).toHaveBeenCalledWith('Demasiadas ventanas');
+  });
+
+  it('reopening/focusing an EXISTING window never triggers the cap, even already at 8', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
+    openManyMinimized(win, 8);
+
+    handle.openWindow('/es/ingles/actividades/w0', 'w0');
+
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(8);
+    expect(toastSpy).not.toHaveBeenCalled();
   });
 });

@@ -21,19 +21,24 @@
  * dirty guard, `deskWindow.ts`'s own header) and `data-window-inactive` (the
  * greyed-out traffic lights on every non-active window).
  */
+import { toast } from 'sonner';
 import {
   reduceDeskWindows,
   activeWindowId,
   minimizedWindowsOf,
+  minimizedWindowsOldestFirst,
   initialDeskWindowsState,
   classifyWindowRoute,
+  MAX_DESK_WINDOWS,
   type DeskWindowsState,
   type DeskWindowEntry,
   type DeskWindowOffset,
+  type WindowRouteMatch,
 } from '../deskWindowsState';
 import { clampWindowDragOffset, type WindowRect } from '../deskWindowDragMath';
 import { isDeskWindowMessageEnvelope } from './deskWindowMessaging';
 import { renderMinimizedWindowsTrayFrom, type MinimizedWindowEntry } from './minimizedWindows';
+import { readPersistedDeskWindows, writePersistedDeskWindows } from './deskWindowsPersistence';
 
 const HEADER_SELECTOR = '[data-chrome-header]';
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
@@ -194,8 +199,18 @@ export function initDeskWindowManager(
   initialWindow: { href: string; title: string } | null,
   doc: Document = document,
   win: Window = window,
+  maxWindowsNoticeLabel: string = '',
 ): DeskWindowManagerHandle {
-  let state: DeskWindowsState = initialDeskWindowsState;
+  // Restore-after-reload (robustness pass, owner spec): seeded here, BEFORE
+  // any of this closure's own functions are even defined, so the very first
+  // `render()` call below (if anything was restored) and the `initialWindow`
+  // open right after it both see the SAME state every later dispatch does —
+  // `initialWindow`'s own 'open' event then dedupes against a restored
+  // window for the SAME id through the ordinary reducer path
+  // (`reduceDeskWindows`'s own `case 'open'`), never a second, bespoke dedupe
+  // here.
+  const restored = readPersistedDeskWindows(win.sessionStorage);
+  let state: DeskWindowsState = restored && restored.windows.length > 0 ? restored : initialDeskWindowsState;
   const frames = new Map<string, ManagedWindow>();
 
   function applyGeometry(managed: ManagedWindow, entry: DeskWindowEntry): void {
@@ -465,11 +480,51 @@ export function initDeskWindowManager(
     } catch {
       // Best-effort — a sandboxed history API just leaves the URL as-is.
     }
+
+    // Restore-after-reload (robustness pass, owner spec): write-through on
+    // every render, so `sessionStorage` always holds the CURRENT state —
+    // including right before "Presentar"/"Imprimir" tear the whole host page
+    // down (`target="_top"`, escaping the iframe) and right before a plain
+    // reload. `readPersistedDeskWindows` is this exact function's own mount-
+    // time counterpart, above.
+    writePersistedDeskWindows(state, win.sessionStorage);
   }
 
   function dispatch(event: Parameters<typeof reduceDeskWindows>[1]): void {
     state = reduceDeskWindows(state, event);
     render();
+  }
+
+  /**
+   * The 8-window cap (robustness pass, owner spec): opening a window that
+   * would exceed {@link MAX_DESK_WINDOWS} tries to evict the OLDEST
+   * minimized window first (`minimizedWindowsOldestFirst` — lowest `z`,
+   * i.e. least recently minimized/reopened), asking its own
+   * `deskWindowCanClose` guard same as the tray chip's own "×"
+   * (`requestClose`'s own header); the first one that agrees is closed and
+   * the new window opens in its place. If NONE can close (every minimized
+   * window refuses, or there happen to be none), a calm notice shows
+   * instead of opening — never a silent no-op, and never force-closing a
+   * dirty editor's draft.
+   */
+  async function openAtCapacity(match: WindowRouteMatch, href: string, title: string): Promise<void> {
+    for (const candidate of minimizedWindowsOldestFirst(state)) {
+      const managed = frames.get(candidate.id);
+      let canClose = true;
+      try {
+        const fn = (managed?.iframe.contentWindow as unknown as { deskWindowCanClose?: () => Promise<boolean> })
+          ?.deskWindowCanClose;
+        if (fn) canClose = await fn();
+      } catch {
+        canClose = true;
+      }
+      if (canClose) {
+        dispatch({ type: 'close', id: candidate.id });
+        dispatch({ type: 'open', id: match.id, kind: match.kind, href, title });
+        return;
+      }
+    }
+    if (maxWindowsNoticeLabel) toast(maxWindowsNoticeLabel);
   }
 
   function openWindow(href: string, title: string): void {
@@ -481,7 +536,17 @@ export function initDeskWindowManager(
     }
     const match = classifyWindowRoute(url.pathname);
     if (!match) return;
-    dispatch({ type: 'open', id: match.id, kind: match.kind, href: `${url.pathname}${url.search}`, title });
+    const fullHref = `${url.pathname}${url.search}`;
+
+    // Reopening/focusing an EXISTING window never grows the desk — only a
+    // genuinely NEW id ever has to consider the cap below.
+    const existing = state.windows.some((w) => w.id === match.id);
+    if (existing || state.windows.length < MAX_DESK_WINDOWS) {
+      dispatch({ type: 'open', id: match.id, kind: match.kind, href: fullHref, title });
+      return;
+    }
+
+    void openAtCapacity(match, fullHref, title);
   }
 
   function onClickCapture(event: MouseEvent): void {
@@ -611,6 +676,14 @@ export function initDeskWindowManager(
     }
   }
   win.addEventListener('message', (event) => void onMessage(event));
+
+  // Restore-after-reload: materialize every restored window's own frame
+  // BEFORE `initialWindow` (this request's own route) is opened, so that
+  // open's dedupe sees them. A no-op (renders zero frames) when nothing was
+  // restored — see the `state` seed above.
+  if (state.windows.length > 0) {
+    render();
+  }
 
   if (initialWindow) {
     openWindow(initialWindow.href, initialWindow.title);

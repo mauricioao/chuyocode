@@ -1374,6 +1374,10 @@ export const UI_LABELS = {
         trayLabel: 'Ventanas minimizadas',
         trayRemoveLabel: 'Quitar de la bandeja',
         trayMoreLabel: 'Ver {n} ventanas más',
+        // Window-manager architecture, robustness pass (owner spec): the
+        // calm notice shown instead of opening a 9th window when none of
+        // the minimized ones could be closed to make room.
+        maxWindowsNotice: 'Ya tienes muchas ventanas abiertas. Cierra alguna para abrir otra.',
         // "Desktop" redesign PART 1 (owner spec 2026-10-06, item B): the
         // hub-only "by ChuyoCode" header link's accessible name + tooltip.
         backToChuyoCode: 'Regresar a ChuyoCode',
@@ -2521,6 +2525,7 @@ export const UI_LABELS = {
         trayLabel: 'Minimized windows',
         trayRemoveLabel: 'Remove from tray',
         trayMoreLabel: 'See {n} more windows',
+        maxWindowsNotice: 'You already have a lot of windows open. Close one to open another.',
         backToChuyoCode: 'Back to ChuyoCode',
         greetingNamed: 'Hi, {name}.',
         greetingFallback: 'Hi.',

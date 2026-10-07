@@ -170,7 +170,7 @@ if (!hostMode) {
   {hostMode && hostDesk && (
     <>
       <DeskHost lang={lang} desk={hostDesk} />
-      <DeskWindowManager slot="overlay" initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={windowTitle} />
+      <DeskWindowManager slot="overlay" lang={lang} initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={windowTitle} />
     </>
   )}
 

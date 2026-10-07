@@ -83,5 +83,5 @@ const desk = await loadDeskSceneData({
       editor link clicked from the desk) opens as a floating iframe over
       THIS SAME desk from here on — see `DeskWindowManager.astro`'s own
       header. No initial window on the hub itself. */}
-  <DeskWindowManager slot="overlay" />
+  <DeskWindowManager slot="overlay" lang={lang} />
 </BaseLayout>

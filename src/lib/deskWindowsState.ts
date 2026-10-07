@@ -231,3 +231,20 @@ export function visibleWindows(state: DeskWindowsState): DeskWindowEntry[] {
 export function minimizedWindowsOf(state: DeskWindowsState): DeskWindowEntry[] {
   return state.windows.filter((w) => w.minimized);
 }
+
+/**
+ * Restore-after-reload + the 8-window cap (robustness pass, owner spec):
+ * at most this many windows open at once, restored or freshly opened alike.
+ * Opening past it never silently grows the desk forever — the HOST
+ * (`deskWindowManager.ts#openWindow`) tries to evict the OLDEST minimized
+ * window first ({@link minimizedWindowsOldestFirst}), and shows a calm
+ * notice instead of opening when none can close.
+ */
+export const MAX_DESK_WINDOWS = 8;
+
+/** Minimized windows, OLDEST-minimized/reopened first (lowest `z` first) — the eviction order {@link MAX_DESK_WINDOWS}'s own cap tries, one at a time, before giving up and showing a notice. */
+export function minimizedWindowsOldestFirst(state: DeskWindowsState): DeskWindowEntry[] {
+  return minimizedWindowsOf(state)
+    .slice()
+    .sort((a, b) => a.z - b.z);
+}
