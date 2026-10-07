@@ -463,6 +463,8 @@ export const MINIMIZED_TRAY_WRAPPER_ATTR = 'data-minimized-tray-wrapper';
 
 /** Set on {@link MINIMIZED_TRAY_WRAPPER_ATTR} while the real site footer is in view — `global.css` fades the tray out while this is present. */
 export const TRAY_FOOTER_OVERLAP_ATTR = 'data-tray-footer-overlap';
+/** Root inset for {@link initFooterOverlapGuard}'s observer — see the comment at its options. */
+export const FOOTER_GUARD_ROOT_MARGIN = '0px 0px -1px 0px';
 
 /**
  * PART 6c polish (owner spec 2026-10-07, defect #3: "al bajar al footer en
@@ -495,7 +497,12 @@ export function initFooterOverlapGuard(wrapper: HTMLElement, doc: Document = doc
     ([entry]) => {
       wrapper.toggleAttribute(TRAY_FOOTER_OVERLAP_ATTR, entry?.isIntersecting ?? false);
     },
-    { threshold: 0 },
+    // The hub's footer starts exactly at the viewport's bottom edge, and an
+    // edge-adjacent target already counts as intersecting — the tray would be
+    // hidden on load and never re-shown. Insetting the root by 1px makes that
+    // edge contact a non-intersection, so the callback fires when the footer
+    // actually scrolls into view.
+    { threshold: 0, rootMargin: FOOTER_GUARD_ROOT_MARGIN },
   );
   observer.observe(footer);
 }

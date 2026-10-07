@@ -16,6 +16,7 @@ import {
   renderMinimizedWindowsTray,
   initMinimizedWindowsTray,
   initFooterOverlapGuard,
+  FOOTER_GUARD_ROOT_MARGIN,
   MAX_MINIMIZED_WINDOWS,
   MAX_VISIBLE_MINIMIZED_CHIPS,
   MINIMIZED_WINDOWS_STORAGE_KEY,
@@ -376,9 +377,11 @@ describe('initFooterOverlapGuard', () => {
   it('toggles TRAY_FOOTER_OVERLAP_ATTR on the wrapper while the footer intersects, via IntersectionObserver', () => {
     const observed: Element[] = [];
     let callback: IntersectionObserverCallback | null = null;
+    let options: IntersectionObserverInit | undefined;
     class FakeIntersectionObserver {
-      constructor(cb: IntersectionObserverCallback) {
+      constructor(cb: IntersectionObserverCallback, init?: IntersectionObserverInit) {
         callback = cb;
+        options = init;
       }
       observe(target: Element) {
         observed.push(target);
@@ -400,6 +403,11 @@ describe('initFooterOverlapGuard', () => {
 
       expect(observed).toEqual([footer]);
       expect(wrapper.hasAttribute(TRAY_FOOTER_OVERLAP_ATTR)).toBe(false);
+      // The hub's footer starts flush with the viewport's bottom edge; without
+      // the 1px root inset that edge contact counts as intersecting on load and
+      // the tray stays hidden. jsdom has no layout, so the option is pinned here
+      // and the real behaviour is checked in the browser.
+      expect(options?.rootMargin).toBe(FOOTER_GUARD_ROOT_MARGIN);
 
       callback!([{ isIntersecting: true } as IntersectionObserverEntry], null as unknown as IntersectionObserver);
       expect(wrapper.hasAttribute(TRAY_FOOTER_OVERLAP_ATTR)).toBe(true);
