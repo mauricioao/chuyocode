@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { initDeskHelper, DESK_HELPER_FOLDED_STORAGE_KEY, readStoredFold } from './deskHelper';
+import {
+  initDeskHelper,
+  DESK_HELPER_FOLDED_STORAGE_KEY,
+  DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY,
+  readStoredFold,
+} from './deskHelper';
 import { clearDeskHelperTipsCacheForTests } from './deskHelperTipsClient';
 import { DESK_HELPER_QUEUE_STORAGE_KEY } from './deskHelperQueue';
 import { CHARACTERS } from '@/content/characters';
@@ -45,6 +50,54 @@ function fakeStorage() {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
   };
+}
+
+/** Appends a `[data-desk-dock]` sibling with a controllable `getBoundingClientRect`, for the collision tests below. */
+function addDock(box: { left: number; top: number; right: number; bottom: number }): HTMLElement {
+  const dock = document.createElement('div');
+  dock.setAttribute('data-desk-dock', '');
+  document.body.appendChild(dock);
+  vi.spyOn(dock, 'getBoundingClientRect').mockReturnValue({
+    ...box,
+    width: box.right - box.left,
+    height: box.bottom - box.top,
+    x: box.left,
+    y: box.top,
+    toJSON() {
+      return {};
+    },
+  });
+  return dock;
+}
+
+function mockHelperRootBox(box: { left: number; top: number; right: number; bottom: number }): void {
+  const root = document.getElementById('desk-helper') as HTMLElement;
+  vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+    ...box,
+    width: box.right - box.left,
+    height: box.bottom - box.top,
+    x: box.left,
+    y: box.top,
+    toJSON() {
+      return {};
+    },
+  });
+}
+
+/** A controllable `ResizeObserver` stub (jsdom has none) — same posture as `WorksheetZoneEditor.test.tsx`'s own `MockResizeObserver`. */
+class MockResizeObserver {
+  static instances: MockResizeObserver[] = [];
+  callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    MockResizeObserver.instances.push(this);
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  fire() {
+    this.callback([], this as unknown as ResizeObserver);
+  }
 }
 
 beforeEach(() => {
@@ -221,6 +274,22 @@ describe('initDeskHelper — fold/unfold', () => {
     expect(sessionStorage.getItem(DESK_HELPER_FOLDED_STORAGE_KEY)).toBe('true');
   });
 
+  // Dock-collision pass (owner report, `dock-three-chips.png`): clicking the
+  // avatar to OPEN it (from folded) is the one signal that counts as "the
+  // user explicitly opened it in this session" — the default-open-at-1440px
+  // behaviour from the anti-flash script never sets this, only a real click
+  // does. See the "dock collision" describe block below for how this flag
+  // changes the fold-vs-lift decision.
+  it('marks the open as explicit (for the dock-collision decision) only when opening from folded, not when closing', () => {
+    setDom('tip-a', { folded: true });
+    const storage = fakeStorage();
+    initDeskHelper(document, fakeFetch(), storage);
+    const avatar = document.getElementById('desk-helper-avatar') as HTMLElement;
+
+    avatar.click(); // folded -> open: explicit
+    expect(storage.getItem(DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY)).toBe('true');
+  });
+
   // Regression test: `index.astro`'s own script calls `initDeskHelper` both
   // immediately AND on `astro:page-load` (which also fires for the very
   // first load) — a real bug caught by hand-testing in a browser, where a
@@ -281,5 +350,117 @@ describe('initDeskHelper — footer lift', () => {
     expect(root.style.getPropertyValue('--desk-helper-lift')).toBe('0px');
 
     vi.unstubAllGlobals();
+  });
+});
+
+// Polish pass 2026-10-06 (owner report `dock-three-chips.png`): the dock's
+// own box (level tiles + chips) can now collide with the open helper
+// bubble, dynamically — not just below the 1440px breakpoint the anti-flash
+// script already handles. `boxesIntersect` itself (the pure decision) is
+// unit-tested in `deskHelperCollision.test.ts`; these tests cover the DOM
+// wiring around it: which element it checks, when it rechecks, and the
+// fold-vs-lift branch.
+describe('initDeskHelper — dock collision (fold or lift)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver as unknown as typeof ResizeObserver);
+    MockResizeObserver.instances = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('folds the bubble when the dock collides with it and it was never explicitly opened', () => {
+    setDom('tip-a', { folded: false });
+    addDock({ left: 0, top: 500, right: 400, bottom: 560 });
+    mockHelperRootBox({ left: 20, top: 400, right: 300, bottom: 540 }); // overlaps the dock
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    const avatar = document.getElementById('desk-helper-avatar') as HTMLElement;
+    expect(bubble.hidden).toBe(true);
+    expect(avatar.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('lifts the bubble (sets --desk-helper-dock-lift) instead of folding when the user explicitly opened it', () => {
+    setDom('tip-a', { folded: true });
+    addDock({ left: 0, top: 500, right: 400, bottom: 560 });
+    const storage = fakeStorage();
+    initDeskHelper(document, fakeFetch(), storage);
+
+    const avatar = document.getElementById('desk-helper-avatar') as HTMLElement;
+    mockHelperRootBox({ left: 20, top: 400, right: 300, bottom: 540 }); // overlaps the dock, once open
+    avatar.click(); // explicit open
+
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    const root = document.getElementById('desk-helper') as HTMLElement;
+    expect(bubble.hidden).toBe(false); // never folded
+    const lift = parseInt(root.style.getPropertyValue('--desk-helper-dock-lift'), 10);
+    expect(lift).toBeGreaterThan(0);
+  });
+
+  it('resets the lift to 0px once there is no collision', () => {
+    setDom('tip-a', { folded: false });
+    addDock({ left: 0, top: 500, right: 400, bottom: 560 });
+    mockHelperRootBox({ left: 20, top: 400, right: 300, bottom: 540 }); // overlaps
+    const storage = fakeStorage();
+    storage.setItem(DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY, 'true');
+    initDeskHelper(document, fakeFetch(), storage);
+    const root = document.getElementById('desk-helper') as HTMLElement;
+    expect(root.style.getPropertyValue('--desk-helper-dock-lift')).not.toBe('0px');
+
+    mockHelperRootBox({ left: 20, top: 100, right: 300, bottom: 240 }); // moved clear of the dock
+    MockResizeObserver.instances[0]?.fire();
+
+    expect(root.style.getPropertyValue('--desk-helper-dock-lift')).toBe('0px');
+  });
+
+  it('observes the dock element with a ResizeObserver and rechecks when it fires', () => {
+    setDom('tip-a', { folded: false });
+    addDock({ left: 0, top: 500, right: 400, bottom: 560 });
+    mockHelperRootBox({ left: 20, top: 100, right: 300, bottom: 240 }); // clear at first
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    expect(bubble.hidden).toBe(false);
+
+    mockHelperRootBox({ left: 20, top: 400, right: 300, bottom: 540 }); // now overlaps
+    expect(MockResizeObserver.instances.length).toBeGreaterThan(0);
+    MockResizeObserver.instances[0].fire();
+
+    expect(bubble.hidden).toBe(true);
+  });
+
+  it('rechecks on a window resize event', () => {
+    setDom('tip-a', { folded: false });
+    addDock({ left: 0, top: 500, right: 400, bottom: 560 });
+    mockHelperRootBox({ left: 20, top: 100, right: 300, bottom: 240 });
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+
+    mockHelperRootBox({ left: 20, top: 400, right: 300, bottom: 540 });
+    window.dispatchEvent(new Event('resize'));
+
+    expect(bubble.hidden).toBe(true);
+  });
+
+  it("rechecks when the dock's own chips mutate (a MutationObserver on the dock, not just a size change)", async () => {
+    setDom('tip-a', { folded: false });
+    const dock = addDock({ left: 0, top: 500, right: 400, bottom: 560 });
+    mockHelperRootBox({ left: 20, top: 100, right: 300, bottom: 240 });
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    expect(bubble.hidden).toBe(false);
+
+    mockHelperRootBox({ left: 20, top: 400, right: 300, bottom: 540 });
+    const chip = document.createElement('a');
+    dock.appendChild(chip); // simulates a new minimized-window chip rendering in
+
+    // `MutationObserver` callbacks run as a microtask, not synchronously.
+    await vi.waitFor(() => expect(bubble.hidden).toBe(true));
+  });
+
+  it('does nothing when there is no [data-desk-dock] element on the page', () => {
+    setDom('tip-a', { folded: false });
+    expect(() => initDeskHelper(document, fakeFetch(), fakeStorage())).not.toThrow();
   });
 });

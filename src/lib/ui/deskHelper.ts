@@ -24,6 +24,7 @@
 import { CHARACTERS, characterFallbackSrc, characterSrcSet } from '@/content/characters';
 import { readTipQueue, takeNextTipId, writeTipQueue } from '@lib/ui/deskHelperQueue';
 import { loadFullTips, type DeskHelperClientTip } from '@lib/ui/deskHelperTipsClient';
+import { boxesIntersect } from '@lib/ui/deskHelperCollision';
 import type { Lang } from '@lib/i18n';
 
 /** Session-scoped fold choice, read by nothing here (the anti-flash `is:inline` script in `DeskHelper.astro` reads it before paint) but WRITTEN here on every toggle — same string literal, duplicated there on purpose, see that script's own comment. */
@@ -31,6 +32,37 @@ export const DESK_HELPER_FOLDED_STORAGE_KEY = 'ingles-desk-helper-folded';
 
 /** Below this width the open bubble can collide with the centred levels dock (owner spec: checked across the whole 1100-1440px desktop range) — duplicated as a literal in `DeskHelper.astro`'s own anti-flash script, which cannot import this module. */
 export const DESK_HELPER_OPEN_MIN_WIDTH = 1440;
+
+/**
+ * Session-scoped "the visitor clicked the avatar to OPEN it" flag (dock-
+ * collision pass, owner report `dock-three-chips.png`) — set only by a real
+ * click that opens the bubble FROM folded, never by the anti-flash script's
+ * own width-based default. {@link recheckDockCollision} reads it to decide
+ * between folding (never explicitly opened — a dynamic collision just wins)
+ * and lifting the bubble clear of the dock instead of covering it (the
+ * visitor asked for it, so it stays open).
+ */
+export const DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY = 'ingles-desk-helper-explicit-open';
+
+function readExplicitOpen(storage: Pick<Storage, 'getItem' | 'setItem'>): boolean {
+  try {
+    return storage.getItem(DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeExplicitOpen(storage: Pick<Storage, 'getItem' | 'setItem'>): void {
+  try {
+    storage.setItem(DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY, 'true');
+  } catch {
+    // Best-effort — worst case, a later collision folds it instead of
+    // lifting it, same as a first-time visitor who never opened it yet.
+  }
+}
+
+/** Extra clearance above the dock once lifted — never worth the bubble sitting flush against its own top edge. */
+const DOCK_LIFT_GAP_PX = 12;
 
 function readStoredFold(): string | null {
   try {
@@ -162,13 +194,74 @@ export function initDeskHelper(
     void handleOtroTip();
   });
 
+  /**
+   * Dock-collision pass (owner report `dock-three-chips.png`): the levels
+   * dock's own box (level tiles + the minimized-windows chips,
+   * `[data-desk-dock]` in `DeskScene.astro`) can grow wide enough to
+   * collide with the open bubble well above the anti-flash script's own
+   * 1440px cutoff, now that it can carry up to 3 chips plus a "+N" tile.
+   * Re-checked on every dock resize, every window resize, and every time
+   * the dock's own children change (a chip minimized/reopened/removed) —
+   * not just once at load.
+   *
+   * - No collision: clears any previous lift (`--desk-helper-dock-lift`
+   *   back to `0px`) and leaves the fold state alone.
+   * - Collision, never explicitly opened this session: folds it — a
+   *   dynamic/automatic fold, never persisted as the visitor's own choice
+   *   (so it is free to reopen on the next genuine click).
+   * - Collision, explicitly opened: stays open, lifted clear of the dock's
+   *   own top edge instead of covering it.
+   */
+  function recheckDockCollision(): void {
+    if (helperBubble.hidden) {
+      helperRoot.style.setProperty('--desk-helper-dock-lift', '0px');
+      return;
+    }
+    const dock = doc.querySelector<HTMLElement>('[data-desk-dock]');
+    if (!dock) return;
+
+    const dockBox = dock.getBoundingClientRect();
+    const rootBox = helperRoot.getBoundingClientRect();
+    if (!boxesIntersect(dockBox, rootBox)) {
+      helperRoot.style.setProperty('--desk-helper-dock-lift', '0px');
+      return;
+    }
+
+    if (readExplicitOpen(storage)) {
+      const overlap = rootBox.bottom - dockBox.top;
+      helperRoot.style.setProperty('--desk-helper-dock-lift', `${Math.max(0, Math.ceil(overlap + DOCK_LIFT_GAP_PX))}px`);
+    } else {
+      setFolded(helperRoot, helperBubble, helperAvatar, true);
+    }
+  }
+
   function toggle(folded: boolean): void {
     setFolded(helperRoot, helperBubble, helperAvatar, folded);
     writeStoredFold(folded);
   }
 
-  helperAvatar.addEventListener('click', () => toggle(!helperBubble.hidden));
-  closeButton.addEventListener('click', () => toggle(true));
+  helperAvatar.addEventListener('click', () => {
+    const wasFolded = helperBubble.hidden;
+    toggle(!helperBubble.hidden);
+    if (wasFolded) writeExplicitOpen(storage);
+    recheckDockCollision();
+  });
+  closeButton.addEventListener('click', () => {
+    toggle(true);
+    recheckDockCollision();
+  });
+
+  const dockEl = doc.querySelector<HTMLElement>('[data-desk-dock]');
+  if (dockEl) {
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => recheckDockCollision()).observe(dockEl);
+    }
+    if (typeof MutationObserver !== 'undefined') {
+      new MutationObserver(() => recheckDockCollision()).observe(dockEl, { childList: true, subtree: true });
+    }
+    window.addEventListener('resize', recheckDockCollision);
+    recheckDockCollision();
+  }
 
   // Lifts clear of the footer bar while it is on screen, so the helper
   // never covers it — the hub's own `[data-chrome-footer]` element, same
