@@ -32,9 +32,11 @@
  * vanilla-JS DOM wiring.
  *
  * Still ships no client-side JavaScript FRAMEWORK for the clock/calendar/
- * weather widgets: every interactive bit there is a plain link, PLUS their
- * own small inline module script (`@lib/ui/deskWidgets`, `@lib/ui/deskWeather`,
- * `@lib/ui/deskDrag`) — no island, no React, except the player above.
+ * weather widgets: every interactive bit there is a plain link, wired by
+ * small vanilla-JS modules (`@lib/ui/deskWidgets`, `@lib/ui/deskWeather`,
+ * `@lib/ui/deskDrag`, orchestrated by `@lib/ui/deskScene`) — no island, no
+ * React, except the player above. That wiring runs from `BaseLayout.astro`'s
+ * own script now, site-wide (bugfix 2026-10-07), not from this page.
  *
  * HELPER, PART 5 (owner spec 2026-10-06): a floating character ("desktop"
  * redesign's `.helper`/`.bubble`/`.who`) steps in from the bottom-left with
@@ -118,20 +120,17 @@ const desk = await loadDeskSceneData({
   />
 
   <script>
-    import { initDeskWidgets } from '@lib/ui/deskWidgets';
-    import { initDeskWeather } from '@lib/ui/deskWeather';
-    import { initDeskDrag } from '@lib/ui/deskDrag';
     import { initDeskHelper } from '@lib/ui/deskHelper';
     import { applyDeskWindowReturnFocus } from '@lib/ui/deskWindow';
 
-    // Drag enhancement runs AFTER the widgets/weather shells exist (it reads
-    // their current box with `getBoundingClientRect`), but does not need to
-    // wait on the weather fetch itself — `void` is deliberate, same posture
-    // as not awaiting `initDeskWeather` below.
+    // The desk's own clock/calendar/weather widgets + drag-to-rearrange are
+    // wired site-wide from `BaseLayout.astro`'s own script now (bugfix
+    // 2026-10-07, `@lib/ui/deskScene`'s own header) — a direct load of a
+    // page with the desk BEHIND a window never ran them otherwise. Only the
+    // hub-only bits stay here: the floating character helper never renders
+    // on a window page, and "refocus the folder that opened this window" has
+    // no meaning anywhere else.
     const run = () => {
-      initDeskWidgets();
-      void initDeskWeather();
-      initDeskDrag();
       initDeskHelper();
       // "Desktop" redesign PART 6a: refocuses whichever folder opened a
       // practice window, once the visitor is back on the hub — a no-op
@@ -148,8 +147,7 @@ const desk = await loadDeskSceneData({
     // `astro:page-load` fires for the initial load too, so this alone covers
     // both; the plain listener above is kept as a belt-and-suspenders no-JS-
     // framework-surprise fallback and is a harmless no-op on the second call
-    // (`initDeskWidgets`/`initDeskDrag` just re-query the same elements;
-    // `initDeskWeather` re-fetches, cheap thanks to its own edge cache).
+    // (`applyDeskWindowReturnFocus` is already idempotent).
     document.addEventListener('astro:page-load', run);
   </script>
 </BaseLayout>

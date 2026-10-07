@@ -457,6 +457,7 @@ const faviconSvg =
       import { initBackButtons, trackPageVisit } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
       import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
+      import { initDeskSceneWidgets } from '@lib/ui/deskScene';
 
       const run = () => initReveals();
 
@@ -499,6 +500,21 @@ const faviconSvg =
       // entry (including View Transitions) internally — see that module's
       // own header.
       initChromeVisibility();
+
+      // BUGFIX (owner report 2026-10-07): the desk's clock/calendar/weather
+      // widgets and its drag-to-rearrange used to be wired ONLY from the hub
+      // page's own script (`[lang]/ingles/index.astro`) — a direct load of a
+      // page that renders the SAME desk BEHIND a window (`deskBehind`:
+      // practice/community/create/editor) never ran it at all, leaving a
+      // hand-less clock and a date-less calendar. Site-wide and here
+      // instead, same "self-guards on a page with no desk" posture as
+      // `initDeskWindowOpeners` above — see `@lib/ui/deskScene`'s own
+      // header. Runs on first load AND every `astro:page-load` (a desk
+      // behind a window, or the hub itself, reached by a client-side
+      // navigation from another such page).
+      const runDeskSceneWidgets = () => initDeskSceneWidgets();
+      runDeskSceneWidgets();
+      document.addEventListener('astro:page-load', runDeskSceneWidgets);
     </script>
 
     {/* Overlay slot (PART 6a bugfix, 2026-10-06) — after the footer and
