@@ -143,6 +143,27 @@ describe('initDeskWindowDrag — pointer drag', () => {
     expect(stored).toEqual({ x: 40, y: 30 });
   });
 
+  it('cancels the pointerdown that starts a drag, so dragging never selects the title text', () => {
+    const win = fakeWin();
+    initDeskWindowDrag(windowEl(), document, win);
+
+    const down = new MouseEvent('pointerdown', { clientX: 100, clientY: 100, cancelable: true });
+    titlebarEl().dispatchEvent(down);
+
+    expect(down.defaultPrevented).toBe(true);
+  });
+
+  it('leaves the pointerdown on a title-bar control alone, so its click still works', () => {
+    const win = fakeWin();
+    initDeskWindowDrag(windowEl(), document, win);
+    const button = document.getElementById('inner-btn') as HTMLElement;
+
+    const down = new MouseEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true, cancelable: true });
+    button.dispatchEvent(down);
+
+    expect(down.defaultPrevented).toBe(false);
+  });
+
   it('clamps the offset so the window never goes above the header', () => {
     const win = fakeWin();
     initDeskWindowDrag(windowEl(), document, win);

@@ -123,6 +123,9 @@ export function initDeskWindowDrag(windowEl: HTMLElement, doc: Document = docume
     const target = event.target;
     if (target instanceof Element && target.closest(IGNORE_SELECTOR)) return;
 
+    // Without this the browser starts a text selection on the title and its
+    // chip, which stays highlighted for the whole drag.
+    event.preventDefault();
     const startX = event.clientX;
     const startY = event.clientY;
     const startOffset = offset;
