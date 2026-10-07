@@ -108,7 +108,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
     data-desk-helper-bubble
     role="status"
     aria-live="polite"
-    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground before:absolute before:-bottom-[11px] before:left-[18px] before:h-[18px] before:w-[18px] before:rotate-[35deg] before:skew-x-[-10deg] before:border-r-2 before:border-b-2 before:border-foreground before:bg-card before:content-[''] [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
+    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
   >
     <b data-desk-helper-name class="mb-0.5 block font-semibold">{defaultName}</b>
     <span data-desk-helper-tip set:html={defaultHtml} />
@@ -130,6 +130,36 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
     >
       &times;
     </button>
+
+    {/* Speech-bubble tail — style B from the approved mockup
+        (`ChuyoCode_others/propuestas/globo-tips/index.html`'s `.b .tail`),
+        replacing the old rotated/skewed bordered square (owner report: it
+        looked cut/misaligned where it met the bubble). ONE curved path,
+        drawn starting at y=-3 (three units above the viewBox, past the
+        bubble's own 2px border) so its WHITE FILL bleeds up over the seam
+        instead of butting against it; a SEPARATE stroke-only path traces
+        just the two curved outer edges, never the straight top edge the
+        fill already shares with the border. `overflow-visible` is required
+        for that negative-y portion to actually paint — Astro clips an
+        `<svg>` to its own box by default. Pinned to the bubble's
+        lower-left corner at every breakpoint (same posture as the old
+        tail, which never had a `desk:` override either) so it keeps
+        curving down toward the avatar regardless of font-size/width. */}
+    <svg
+      class="absolute -bottom-[19px] left-[22px] h-[21px] w-[26px] overflow-visible"
+      viewBox="0 0 26 21"
+      aria-hidden="true"
+    >
+      <path d="M3 -3 L3 2 C 6 10 4 16 1 19.5 C 10 18 18 11 22 2 L22 -3 Z" class="fill-card" />
+      <path
+        d="M3 2 C 6 10 4 16 1 19.5 C 10 18 18 11 22 2"
+        fill="none"
+        class="stroke-foreground"
+        stroke-width="2"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
+    </svg>
   </div>
 </aside>
 
