@@ -51,6 +51,8 @@ export interface DeskSceneLabels {
   createActivityLabel: string;
   widgetsLabel: string;
   weatherUnavailable: string;
+  /** The weather widget's own MET Norway credit ("Datos: MET Norway"). */
+  weatherAttribution: string;
   levelShortcutTitle: string;
   /** Minimized-windows tray (owner feedback 2026-10-06): the tray `<nav>`'s own accessible name, and the accessible name of each chip's "×" button. */
   trayLabel: string;
