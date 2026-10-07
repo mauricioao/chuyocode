@@ -54,6 +54,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import DeskScene from '@components/ingles/DeskScene.astro';
 import DeskHelper from '@components/ingles/DeskHelper.astro';
+import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 
@@ -79,7 +80,7 @@ const desk = await loadDeskSceneData({
 });
 ---
 
-<BaseLayout lang={lang} title={t.title} description={t.description} theme="ingles">
+<BaseLayout lang={lang} title={t.title} description={t.description} theme="ingles" windowManager>
   <DeskScene
     lang={lang}
     greetingLine1={desk.greetingLine1}
@@ -118,6 +119,12 @@ const desk = await loadDeskSceneData({
     otherTipLabel={t.helperOtherTip}
     closeLabel={t.helperClose}
   />
+
+  {/* Window-manager architecture: every window (a community/activity/create/
+      editor link clicked from the desk) opens as a floating iframe over
+      THIS SAME desk from here on — see `DeskWindowManager.astro`'s own
+      header. No initial window on the hub itself. */}
+  <DeskWindowManager slot="overlay" />
 
   <script>
     import { initDeskHelper } from '@lib/ui/deskHelper';

@@ -40,15 +40,26 @@ vi.mock('@lib/activities/storage', () => ({
 
 import PracticePage from './[id].astro';
 
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): this
+ * whole suite is about the WINDOW's own CONTENT (the activity, its hearts/
+ * report/duplicate actions, the title bar) — which only ever renders for an
+ * EMBEDDED request now (`?ventana=1`, `@lib/ui/embeddedWindow`'s own
+ * header), so `render` simulates one by default. `GET … — HOST shell`
+ * below is the one describe block that deliberately omits it, to cover the
+ * OTHER shape (desk + window manager) a plain signed-in visit now renders.
+ */
 async function render(
   url: string,
-  { params, locals }: { params: Record<string, string>; locals?: Record<string, unknown> },
+  { params, locals, embedded = true }: { params: Record<string, string>; locals?: Record<string, unknown>; embedded?: boolean },
 ) {
   const container = await createContainer();
+  const requestUrl = new URL(url);
+  if (embedded) requestUrl.searchParams.set('ventana', '1');
   return container.renderToResponse(PracticePage, {
     locals: { user: { id: 'user-1' }, ...locals } as unknown as App.Locals,
     params,
-    request: new Request(url),
+    request: new Request(requestUrl),
   });
 }
 
@@ -197,11 +208,16 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
 describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PART 6a)', () => {
   // PART 6c (owner spec 2026-10-07): never `inert` anymore — the floating
   // window is non-modal, and the desk behind it stays fully usable.
-  it('renders the desk behind the window, never inert, for a signed-in visitor', async () => {
-    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+  //
+  // Window-manager architecture: the desk no longer renders BEHIND an
+  // embedded window at all (embedded never has a desk — see this file's own
+  // header) — it renders behind the HOST shell instead, a plain signed-in
+  // visit with no `?ventana=1` (`embedded: false` below).
+  it('renders the desk behind the host shell, never inert, for a signed-in visitor', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: { id: 'user-1' } },
+      embedded: false,
     });
     const html = await res.text();
     expect(html).toContain('data-desk');
@@ -209,6 +225,8 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     // The hub's own folders/widgets landmarks, proving the SAME desk renders.
     expect(html).toContain('Para ti hoy');
     expect(html).toContain('Tu escritorio');
+    expect(html).toContain('data-desk-window-manager');
+    expect(html).not.toContain('role="dialog"'); // the window itself only renders embedded — getPublishedActivity was never even called.
   });
 
   it('renders no desk at all behind the window for a guest', async () => {
@@ -223,6 +241,27 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     // landmarks below, never via a bare `data-desk` substring.
     expect(html).not.toContain('Para ti hoy');
     expect(html).not.toContain('Tu escritorio');
+  });
+
+  it('never calls getPublishedActivity for the HOST shell (the manager loads the window data itself, not twice)', async () => {
+    const { getPublishedActivity } = await import('@lib/activities/activities');
+    vi.mocked(getPublishedActivity).mockClear();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    await res.text();
+    expect(getPublishedActivity).not.toHaveBeenCalled();
+  });
+
+  it('varies on Sec-Fetch-Dest, so a cache never serves the shell to the embedded request (or vice versa)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
   });
 
   it("sends a signed-in visitor's close/minimize lights to the Inglés hub", async () => {

@@ -316,7 +316,7 @@ const {
 </section>
 
 <script>
-  import { initDeskWindow } from '@lib/ui/deskWindow';
+  import { initDeskWindow, initDeskOpenWindowLinks } from '@lib/ui/deskWindow';
   import { initDeskWindowDrag } from '@lib/ui/deskWindowDrag';
 
   const run = () => {
@@ -328,6 +328,8 @@ const {
       initDeskWindow(windowEl, closeTarget, trayId, closeOnEscape, document, window);
       initDeskWindowDrag(windowEl, document, window);
     }
+    // Embedded only (self-guarded, a no-op otherwise) — see this function's own header.
+    initDeskOpenWindowLinks(document, window);
   };
 
   if (document.readyState === 'loading') {

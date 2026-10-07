@@ -265,6 +265,18 @@ export function initDeskWindowManager(
 
     applyActiveState();
 
+    // The manager owns body-scroll-lock and the tray's mobile-hide rule
+    // DYNAMICALLY now (`BaseLayout.astro`'s own `windowManager` prop doc):
+    // true the moment at least one of ITS OWN windows is actually open
+    // (non-minimized), false the moment the last one closes/minimizes —
+    // never a static per-page decision any more, since the manager's own
+    // window count changes with no new page load.
+    const anyVisible = state.windows.some((w) => !w.minimized);
+    doc.body.classList.toggle('overflow-hidden', anyVisible);
+    doc.body.classList.toggle('h-dvh', anyVisible);
+    const trayWrapper = trayContainer?.closest<HTMLElement>('[data-minimized-tray-wrapper]');
+    trayWrapper?.classList.toggle('max-desk:hidden', anyVisible);
+
     if (trayContainer) {
       const entries: MinimizedWindowEntry[] = minimizedWindowsOf(state).map((w) => ({
         id: w.id,
@@ -277,7 +289,7 @@ export function initDeskWindowManager(
         trayContainer,
         entries,
         trayRemoveLabel,
-        (id) => dispatch({ type: 'close', id }),
+        (id) => void requestClose(id),
         () => render(),
         doc,
       );
@@ -355,6 +367,31 @@ export function initDeskWindowManager(
     return new Promise((resolve) => win.setTimeout(resolve, CLOSE_ANIMATION_MS));
   }
 
+  /**
+   * Close, asking the window first — shared by the red light's own `close`
+   * message AND the tray chip's own "×" (owner spec: "its own '×' closes
+   * that window through the same guard"). `window.deskWindowCanClose` is a
+   * same-origin direct call on the iframe's own `contentWindow` (never a
+   * `postMessage` round trip for a value this needs to `await` —
+   * `deskWindow.ts`'s own header); a window with nothing to guard (every
+   * page except a dirty editor) resolves it `true` immediately.
+   */
+  async function requestClose(id: string): Promise<void> {
+    const managed = frames.get(id);
+    if (!managed) return;
+    let canClose = true;
+    try {
+      const fn = (managed.iframe.contentWindow as unknown as { deskWindowCanClose?: () => Promise<boolean> })
+        ?.deskWindowCanClose;
+      if (fn) canClose = await fn();
+    } catch {
+      canClose = true;
+    }
+    if (!canClose) return;
+    await playCloseAnimation(managed);
+    dispatch({ type: 'close', id });
+  }
+
   async function onMessage(event: MessageEvent): Promise<void> {
     if (event.origin !== win.location.origin) return;
     if (!isDeskWindowMessageEnvelope(event.data)) return;
@@ -364,20 +401,9 @@ export function initDeskWindowManager(
     const message = event.data;
 
     switch (message.type) {
-      case 'close': {
-        let canClose = true;
-        try {
-          const fn = (managed.iframe.contentWindow as unknown as { deskWindowCanClose?: () => Promise<boolean> })
-            ?.deskWindowCanClose;
-          if (fn) canClose = await fn();
-        } catch {
-          canClose = true;
-        }
-        if (!canClose) return;
-        await playCloseAnimation(managed);
-        dispatch({ type: 'close', id });
+      case 'close':
+        await requestClose(id);
         return;
-      }
       case 'minimize': {
         let canMinimize = true;
         try {

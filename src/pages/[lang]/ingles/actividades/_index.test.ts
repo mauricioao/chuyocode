@@ -41,15 +41,26 @@ vi.mock('@lib/activities/storage', () => ({
 
 import ExplorePage from './index.astro';
 
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): this
+ * whole suite is about the WINDOW's own CONTENT (the catalog, its filters,
+ * the daily pick, pagination) — which only ever renders for an EMBEDDED
+ * request now (`?ventana=1`, `@lib/ui/embeddedWindow`'s own header), so
+ * `render` simulates one by default, preserving whatever filter query
+ * string the caller already passed in `url`. `GET … — HOST shell` below is
+ * the one describe block that deliberately omits it.
+ */
 async function render(
   url: string,
-  { params, locals }: { params: Record<string, string>; locals?: Record<string, unknown> },
+  { params, locals, embedded = true }: { params: Record<string, string>; locals?: Record<string, unknown>; embedded?: boolean },
 ) {
   const container = await createContainer();
+  const requestUrl = new URL(url);
+  if (embedded) requestUrl.searchParams.set('ventana', '1');
   return container.renderToResponse(ExplorePage, {
     locals: { user: { id: 'user-1' }, ...locals } as unknown as App.Locals,
     params,
-    request: new Request(url),
+    request: new Request(requestUrl),
   });
 }
 
@@ -94,11 +105,27 @@ describe('GET /[lang]/ingles/actividades — renders as a window over the desk (
     expect(html).toContain('Actividades de la comunidad');
   });
 
-  it('renders the desk behind the window for a signed-in visitor, never inert', async () => {
-    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+  // Window-manager architecture: the desk no longer renders BEHIND an
+  // embedded window at all — it renders behind the HOST shell instead, a
+  // plain signed-in visit with no `?ventana=1` (`embedded: false` below).
+  it('renders the desk behind the HOST shell for a signed-in visitor, never inert', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', {
+      params: { lang: 'es' },
+      embedded: false,
+    });
     const html = await res.text();
-    expect(html).toContain('data-desk');
+    expect(html).toContain('Tu escritorio');
+    expect(html).toContain('data-desk-window-manager');
     expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).not.toContain('role="dialog"'); // the catalog itself only renders embedded.
+  });
+
+  it('varies on Sec-Fetch-Dest, so a cache never serves the shell to the embedded request', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', {
+      params: { lang: 'es' },
+      embedded: false,
+    });
+    expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
   });
 
   it('opens full screen with no desk behind it for a guest (TEMP/parity branch — unreachable in production, the route is gated)', async () => {
@@ -483,11 +510,14 @@ describe('GET /[lang]/ingles/actividades — actividad del día', () => {
     const html = await res.text();
     expect(html).not.toContain('Actividad del día');
     // The LIST's own candidates fetch is skipped entirely on a filtered/
-    // paged view — only ONE `orden=gustadas` call happens (the desk behind
-    // the window's own, independent "Para ti hoy" hearted-pool query, which
-    // always runs for a signed-in visitor regardless of this page's state).
+    // paged view. Window-manager architecture: an EMBEDDED request (this
+    // test's default — `render`'s own header) never has a desk behind it at
+    // all any more, so the desk's OWN independent "Para ti hoy" `orden=
+    // gustadas` query (which used to always run for a signed-in visitor
+    // regardless of this page's own state) does not run here either — ZERO
+    // `orden=gustadas` calls now, not one.
     const gustadasCalls = publishedMock.mock.calls.filter(([opts]) => opts.orden === 'gustadas');
-    expect(gustadasCalls).toHaveLength(1);
+    expect(gustadasCalls).toHaveLength(0);
   });
 
   it('is hidden when any filter is active', async () => {
@@ -496,7 +526,7 @@ describe('GET /[lang]/ingles/actividades — actividad del día', () => {
     const html = await res.text();
     expect(html).not.toContain('Actividad del día');
     const gustadasCalls = publishedMock.mock.calls.filter(([opts]) => opts.orden === 'gustadas');
-    expect(gustadasCalls).toHaveLength(1);
+    expect(gustadasCalls).toHaveLength(0);
   });
 });
 

@@ -601,3 +601,48 @@ export function initDeskWindow(
     win.addEventListener('pagehide', () => postDeskWindowMessage(win, { type: 'navigating' }));
   }
 }
+
+/** `[data-desk-open-window]`'s own marker attribute — see {@link initDeskOpenWindowLinks}'s own header. */
+export const DESK_OPEN_WINDOW_ATTR = 'data-desk-open-window';
+
+/**
+ * EMBEDDED-only (window-manager architecture): wires every
+ * `[data-desk-open-window]` link INSIDE this window's own content — a
+ * community card, the community window's own "+" shortcut, a future
+ * "Duplicar" result — to ask the HOST to open a NEW window instead of
+ * navigating (a plain in-window navigation otherwise, exactly the point of
+ * `[data-desk-window-open]`'s OWN host-side click interception —
+ * `@lib/ui/deskWindowManager.ts`'s own header — this is the embedded-side
+ * counterpart for a link that must open ANOTHER window rather than replace
+ * this one). A no-op outside embedded mode (every existing non-window page
+ * this attribute might ever reach — e.g. `ActivityCard` reused elsewhere —
+ * keeps today's plain navigation unchanged).
+ *
+ * Self-guards against double-wiring on `doc.documentElement`, same posture
+ * as every other desk script; safe to call unconditionally once per page
+ * (`DeskWindow.astro`'s own script already does, alongside `initDeskWindow`).
+ */
+export function initDeskOpenWindowLinks(doc: Document = document, win: Window = window): void {
+  if (!isEmbeddedWindowDom(doc)) return;
+  if (doc.documentElement.dataset.deskOpenWindowLinksReady === 'true') return;
+  doc.documentElement.dataset.deskOpenWindowLinksReady = 'true';
+
+  doc.addEventListener(
+    'click',
+    (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const opener = target.closest(`[${DESK_OPEN_WINDOW_ATTR}]`);
+      if (!(opener instanceof HTMLAnchorElement)) return;
+      const href = opener.getAttribute('href');
+      if (!href) return;
+
+      event.preventDefault();
+      const title = opener.getAttribute('aria-label')?.trim() || opener.textContent?.trim() || '';
+      postDeskWindowMessage(win, { type: 'open-window', href, title: title || null });
+    },
+    true,
+  );
+}

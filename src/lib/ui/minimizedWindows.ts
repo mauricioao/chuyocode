@@ -460,6 +460,14 @@ export function initMinimizedWindowsTray(doc: Document = document, win: Window =
   const container = doc.querySelector<HTMLElement>(`[${MINIMIZED_TRAY_ATTR.container}]`);
   if (!container) return;
 
+  // The window manager (window-manager architecture, `@lib/ui/deskWindowManager`)
+  // owns rendering THIS SAME container live, from its own in-memory state —
+  // a `sessionStorage`-driven render here would immediately be stale (or
+  // would stomp the manager's own render right back to whatever
+  // `sessionStorage` last held). `[data-desk-window-manager]` is only ever
+  // present on a page that mounted the manager.
+  if (doc.querySelector('[data-desk-window-manager]')) return;
+
   const removeLabel = container.getAttribute('data-remove-label') ?? '';
   const moreLabelTemplate = container.getAttribute('data-more-label') ?? '+{n}';
   const render = () =>

@@ -83,17 +83,23 @@ describe('GET /[lang]/crear — anonymous gate', () => {
   });
 });
 
-describe('GET /[lang]/crear — signed-in visitor', () => {
-  it('renders the start screen with the picker, no moderator gate required', async () => {
+// Window-manager architecture (`@lib/deskWindowsState`'s own header): a
+// plain signed-in visit is now the HOST shell (desk + the window manager,
+// which opens THIS SAME route again as its own embedded iframe) — the
+// window's own content (the picker, the dialog, the title bar) only ever
+// renders for an EMBEDDED request (`?ventana=1` — `@lib/ui/embeddedWindow`).
+describe('GET /[lang]/crear — signed-in visitor (HOST shell)', () => {
+  it('renders the desk plus the window manager, never the picker itself', async () => {
     const res = await render('https://chuyocode.test/es/crear', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
     });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('data-testid="activity-start-island"');
-    expect(html).toContain('data-testid="picker-worksheet"');
-    expect(html).toContain('data-testid="picker-questions"');
+    expect(html).toContain('data-desk');
+    expect(html).toContain('data-desk-window-manager');
+    expect(html).not.toContain('data-testid="activity-start-island"');
+    expect(html).not.toContain('role="dialog"');
   });
 
   it('is never publicly cacheable', async () => {
@@ -104,16 +110,54 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  // "Desktop" redesign PART 6b: this start screen renders as a WINDOW over
-  // the desk now too — the red light replaces the old `PageTitle`
-  // `backHref` (the hub), same as the editor's own window.
+  // PART 6c (owner spec 2026-10-07): the desk is never `inert` anymore — the
+  // floating window is non-modal, and the desk behind it stays fully usable.
+  it('renders the desk, never inert', async () => {
+    const res = await render('https://chuyocode.test/es/crear', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-desk');
+    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+  });
+
+  it('varies on Sec-Fetch-Dest, so a cache never serves this shell to the embedded request', async () => {
+    const res = await render('https://chuyocode.test/es/crear', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
+  });
+});
+
+describe('GET /[lang]/crear — embedded (the window manager\'s own iframe content)', () => {
+  it('renders the start screen with the picker, no moderator gate required, and no desk at all', async () => {
+    const res = await render('https://chuyocode.test/es/crear?ventana=1', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="activity-start-island"');
+    expect(html).toContain('data-testid="picker-worksheet"');
+    expect(html).toContain('data-testid="picker-questions"');
+    expect(html).not.toContain('data-desk-window-manager');
+    expect(html).not.toContain('data-desk>');
+  });
+
+  // "Desktop" redesign PART 6b: this start screen renders as a WINDOW now —
+  // the red light replaces the old `PageTitle` `backHref` (the hub), same as
+  // the editor's own window.
   //
   // PART 6c (owner spec 2026-10-07): closing ALWAYS navigates straight to
   // the hub now — never `history.back()` to wherever the author came from
   // (the old `closeUsesTrackedPath`/`resolveTrackedCloseAction` behaviour,
-  // removed — `@lib/ui/deskWindow.ts`).
+  // removed — `@lib/ui/deskWindow.ts`). Embedded, this is now a
+  // `postMessage` the host asks `window.deskWindowCanClose` before honouring
+  // — the `href` is still there for the no-JS/guest fallback.
   it('renders the window shell, closing to the Inglés hub (replacing the old back button)', async () => {
-    const res = await render('https://chuyocode.test/es/crear', {
+    const res = await render('https://chuyocode.test/es/crear?ventana=1', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
     });
@@ -126,7 +170,7 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
   });
 
   it('shows "Nueva actividad" in the window title bar', async () => {
-    const res = await render('https://chuyocode.test/es/crear', {
+    const res = await render('https://chuyocode.test/es/crear?ventana=1', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
     });
@@ -134,17 +178,5 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     const titleIndex = html.indexOf('id="desk-window-title"');
     expect(titleIndex).toBeGreaterThan(-1);
     expect(html.slice(titleIndex, titleIndex + 400)).toContain('Nueva actividad');
-  });
-
-  // PART 6c (owner spec 2026-10-07): the desk is never `inert` anymore — the
-  // floating window is non-modal, and the desk behind it stays fully usable.
-  it('renders the desk behind the window, never inert', async () => {
-    const res = await render('https://chuyocode.test/es/crear', {
-      params: { lang: 'es' },
-      locals: { user: { id: 'user-1' } },
-    });
-    const html = await res.text();
-    expect(html).toContain('data-desk');
-    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
   });
 });

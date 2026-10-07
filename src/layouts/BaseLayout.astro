@@ -168,6 +168,21 @@ interface Props {
    * `postMessage` the host instead of navigating/translating locally.
    */
   embedded?: boolean;
+  /**
+   * True when the `overlay` slot holds the window-manager's own container
+   * (`DeskWindowManager.astro`, window-manager architecture) rather than a
+   * single always-open `DeskWindow` (the model still used by an EMBEDDED
+   * page — see `embedded`'s own doc above — and by the unchanged guest
+   * path). The manager's own window count changes dynamically, client-side,
+   * with no new page load, so this file cannot decide body-scroll-lock or
+   * the tray's mobile-hide rule from slot presence alone the way it always
+   * has — the manager owns both itself instead, toggling them once at
+   * least one of its OWN windows is actually open (non-minimized) — see
+   * `deskWindowManager.ts`'s own header. Defaults to `false` — the
+   * embedded/guest single-window path keeps today's STATIC behavior,
+   * unchanged.
+   */
+  windowManager?: boolean;
 }
 
 const {
@@ -180,6 +195,7 @@ const {
   bare = false,
   deskBehind = false,
   embedded = false,
+  windowManager = false,
 } = Astro.props;
 
 // Every chrome wrapper `bare` already drops stays dropped for an embedded
@@ -207,6 +223,10 @@ const isIngles = theme === 'ingles';
  * now.
  */
 const hasOverlay = Astro.slots.has('overlay');
+// See the `windowManager` prop's own doc above — the manager owns the
+// scroll-lock/tray-hide decision dynamically once it exists; this file only
+// ever applies it STATICALLY for the single-always-open-window model.
+const staticOverlayLock = hasOverlay && !windowManager;
 
 // "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
 // the hub is the ONE Inglés page whose header stays always visible and
@@ -419,7 +439,7 @@ const faviconSvg =
       // the page itself so the desk behind a NON-MODAL window can never
       // scroll independently of it (it would otherwise drift out from under
       // a window that stays `fixed` to the viewport).
-      hasOverlay && 'overflow-hidden h-dvh',
+      staticOverlayLock && 'overflow-hidden h-dvh',
     ]}
   >
     {/* Navigation progress bar (navigation-without-flicker PR): fixed at the
@@ -616,6 +636,6 @@ const faviconSvg =
         (`MinimizedWindowsTray.astro`'s own header on the stacking/`z-index`
         reasoning). A no-op render (an empty, `hidden` tray) on a page with
         nothing minimized, same posture as every other desk script. */}
-    {isIngles && !embedded && <MinimizedWindowsTray lang={lang} hasOverlay={hasOverlay} />}
+    {isIngles && !embedded && <MinimizedWindowsTray lang={lang} hasOverlay={staticOverlayLock} />}
   </body>
 </html>

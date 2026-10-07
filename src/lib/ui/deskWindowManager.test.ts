@@ -51,10 +51,14 @@ let handle: DeskWindowManagerHandle | null;
 beforeEach(() => {
   stubRects();
   document.body.innerHTML = '<header data-chrome-header></header>';
+  document.body.className = '';
   container = document.createElement('div');
+  const trayWrapper = document.createElement('div');
+  trayWrapper.setAttribute('data-minimized-tray-wrapper', '');
   tray = document.createElement('nav');
+  trayWrapper.appendChild(tray);
   document.body.appendChild(container);
-  document.body.appendChild(tray);
+  document.body.appendChild(trayWrapper);
   handle = null;
 });
 
@@ -220,6 +224,38 @@ describe('initDeskWindowManager — postMessage bridge', () => {
 
     expect(() => win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, {})).not.toThrow();
     expect(frameFor('community')!.wrapper.style.visibility).not.toBe('hidden');
+  });
+
+  it('locks body scroll and hides the mobile tray dynamically, only while a window is actually visible', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    expect(document.body.classList.contains('overflow-hidden')).toBe(false);
+
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    expect(document.body.classList.contains('overflow-hidden')).toBe(true);
+    expect(document.body.classList.contains('h-dvh')).toBe(true);
+    const trayWrapper = tray.closest('[data-minimized-tray-wrapper]')!;
+    expect(trayWrapper.classList.contains('max-desk:hidden')).toBe(true);
+
+    const frame = frameFor('community')!;
+    win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    expect(document.body.classList.contains('overflow-hidden')).toBe(false);
+    expect(trayWrapper.classList.contains('max-desk:hidden')).toBe(false);
+  });
+
+  it("the tray chip's own remove calls window.deskWindowCanClose before actually closing", async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+    (frame.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async () => false;
+    win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+
+    const chipRemove = tray.querySelector<HTMLElement>('[data-minimized-chip="community"] button')!;
+    chipRemove.click();
+    await flushMicrotasks();
+
+    expect(frameFor('community')).not.toBeNull(); // still open — the guard refused to close it
   });
 
   it('drag-start/drag-move/drag-end moves the wrapper and commits the offset', () => {

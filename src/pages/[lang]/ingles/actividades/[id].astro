@@ -58,6 +58,7 @@
 import BaseLayout from '@layouts/BaseLayout.astro';
 import DeskScene from '@components/ingles/DeskScene.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
+import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import ActivityPracticeIsland from '@components/islands/activities/ActivityPracticeIsland';
 import ActivityViewBadge from '@components/islands/activities/ActivityViewBadge';
 import ReportActivityButton from '@components/islands/activities/ReportActivityButton';
@@ -79,6 +80,7 @@ import { hasHeartedActivity } from '@lib/activities/hearts';
 import { qrSvg, shareUrl } from '@lib/qr';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@lib/ui/iconTooltip';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -93,73 +95,40 @@ if (!id) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const activity = await getPublishedActivity(id);
-if (!activity) {
-  return new Response(null, { status: 404, statusText: 'Not Found' });
-}
+const user = Astro.locals.user;
+const isGuest = user === null;
+
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): is
+ * this request the window's own CONTENT, loaded inside the host's
+ * `<iframe>` — or a direct, HOST visit? See `@lib/ui/embeddedWindow`'s own
+ * header. `Vary` so a cache never serves one shape to a request that asked
+ * for the other.
+ *
+ * GUEST BEHAVIOR UNCHANGED (owner instruction: "keep that exactly as is"):
+ * a guest's window never renders through the manager — `hostMode` (desk +
+ * manager shell) never applies to one, regardless of any
+ * `Sec-Fetch-Dest`/`?ventana=1` signal a third party might send.
+ */
+const embedded = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
+Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+const hostMode = !isGuest && !embedded;
 
 const t = UI_LABELS[lang].activities.practice;
 const levelLabels = UI_LABELS[lang].english.levels;
 
-// Hidden for the activity's own author, and for an anonymous visitor (now a
-// real case, not just a defensive one — this route is guest-playable, see
-// file header). The endpoint refuses both cases again server-side
-// (`recordReport`'s header); this only decides whether the island is
-// mounted at all. A `null` user gets its OWN fallback below (a sign-in
-// link), separate from the author's read-only span.
-const user = Astro.locals.user;
-const isGuest = user === null;
-const canReport = user !== null && user.id !== activity.authorId;
-// Same gate as `canReport`: an author cannot heart their own activity
-// either (`toggleActivityHeart`'s own header) — this decides whether the
-// interactive island mounts at all; the read-only count badge covers the
-// author, and a guest gets its own clickable fallback (below) instead.
-const canHeart = user !== null && user.id !== activity.authorId;
-// One extra indexed lookup (`activity_hearts`'s own primary key), in the
-// same loader as the rest of this page's data — see `hasHeartedActivity`'s
-// own header.
-const hearted = canHeart ? await hasHeartedActivity(activity.id, user!.id) : false;
-
-// "Duplicar y adaptar" (D7): every signed-in visitor, author included — see
-// `DuplicateActivityButton`'s own header for why this gate differs from
-// `canHeart`/`canReport` above. `!canDuplicate` is exactly "no user" here
-// (never the author), so its fallback below is unconditionally the guest one.
-const canDuplicate = user !== null;
-
 /**
- * Guest play: where "sign in to do this" sends an anonymous visitor —
- * straight back to THIS exact page (`next`) once they are signed in. Built
- * from `Astro.url`, never from attacker-controlled input, so it skips the
- * `safeNextPath` guard `entrar.astro` applies to a query-string `next` — this
- * one is already a same-origin path by construction.
+ * HOST shell (signed-in, not embedded): desk + the window manager, which
+ * opens THIS SAME route again as its own `<iframe>` for its initial window
+ * — the activity itself is loaded by THAT request instead, never twice (see
+ * this file's own header above for the one tradeoff: the shell does not
+ * pre-validate the id exists, same as every other window route).
  */
-const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
-const guestSignInHref = `/${lang}/auth/entrar?next=${encodeURIComponent(currentPath)}`;
-/** Same destination, preselecting sign-up — the guest banner's own CTA. */
-const guestSignUpHref = `/${lang}/auth/entrar?mode=signup&next=${encodeURIComponent(currentPath)}`;
-
-/**
- * The window's red/yellow lights ("desktop" redesign PART 6a): the Inglés
- * hub/desk for a signed-in visitor, the ChuyoCode home for a guest — whose
- * hub would only ask them to sign in (see file header). PART 6c: both
- * ALWAYS navigate straight here (never `history.back()`) —
- * `@lib/ui/deskWindow.ts`'s own header.
- */
-const closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
-
-/** "A2 · Básico", or the "no level" copy — the title bar's own chip always renders, never conditionally omitted (same two states the old meta line already had). */
-const levelChip = activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel;
-
-/**
- * The desk behind the window — SIGNED-IN visitors only. A guest cannot see
- * the gated hub at all (`@lib/access#requiresLogin`), so no desk renders for
- * them; the window opens over a plain background instead (see file header).
- * Same loader, same data the hub itself uses — never a second, drifting copy.
- */
-const desk = isGuest
-  ? null
-  : await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
-const deskLabels = desk && {
+let hostDesk: Awaited<ReturnType<typeof loadDeskSceneData>> | null = null;
+if (hostMode) {
+  hostDesk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+}
+const hostDeskLabels = hostDesk && {
   greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
   greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
   foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
@@ -172,63 +141,158 @@ const deskLabels = desk && {
   levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
 };
 
-/**
- * "Presentar": shown whenever the activity has anything presentation mode
- * can show — a quiz question OR a worksheet zone (`hasPresentableContent`,
- * shared with `presentar.astro`'s own defensive 404,
- * `@lib/activities/presentationSlides`; broadened from the quiz-only
- * `hasPresentableQuiz` sprint week 3's worksheet zoom tour) — the single
- * source of truth for that, so this button's visibility can never drift
- * from what the route itself would actually serve.
- */
-const canPresent = hasPresentableContent(activity.blocks);
+// Everything below is the WINDOW's own content — embedded (signed-in) or a
+// guest (the old full-page behavior, unchanged). The host shell above never
+// reaches any of this.
+let activity: Awaited<ReturnType<typeof getPublishedActivity>> = null;
+let canReport = false;
+let canHeart = false;
+let hearted = false;
+let canDuplicate = false;
+let guestSignInHref = '';
+let guestSignUpHref = '';
+let closeHref = `/${lang}/`;
+let levelChip = '';
+let canPresent = false;
+let shareLink = '';
+let shareQr: string | null = null;
+let whatsappHref = '';
+let sourceHref: string | null = null;
+
+if (!hostMode) {
+  activity = await getPublishedActivity(id);
+  if (!activity) {
+    return new Response(null, { status: 404, statusText: 'Not Found' });
+  }
+
+  // Hidden for the activity's own author, and for an anonymous visitor (now
+  // a real case, not just a defensive one — this route is guest-playable,
+  // see file header). The endpoint refuses both cases again server-side
+  // (`recordReport`'s header); this only decides whether the island is
+  // mounted at all. A `null` user gets its OWN fallback below (a sign-in
+  // link), separate from the author's read-only span.
+  canReport = user !== null && user.id !== activity.authorId;
+  // Same gate as `canReport`: an author cannot heart their own activity
+  // either (`toggleActivityHeart`'s own header) — this decides whether the
+  // interactive island mounts at all; the read-only count badge covers the
+  // author, and a guest gets its own clickable fallback (below) instead.
+  canHeart = user !== null && user.id !== activity.authorId;
+  // One extra indexed lookup (`activity_hearts`'s own primary key), in the
+  // same loader as the rest of this page's data — see `hasHeartedActivity`'s
+  // own header.
+  hearted = canHeart ? await hasHeartedActivity(activity.id, user!.id) : false;
+
+  // "Duplicar y adaptar" (D7): every signed-in visitor, author included —
+  // see `DuplicateActivityButton`'s own header for why this gate differs
+  // from `canHeart`/`canReport` above. `!canDuplicate` is exactly "no user"
+  // here (never the author), so its fallback below is unconditionally the
+  // guest one.
+  canDuplicate = user !== null;
+
+  /**
+   * Guest play: where "sign in to do this" sends an anonymous visitor —
+   * straight back to THIS exact page (`next`) once they are signed in.
+   * Built from `Astro.url`, never from attacker-controlled input, so it
+   * skips the `safeNextPath` guard `entrar.astro` applies to a query-string
+   * `next` — this one is already a same-origin path by construction.
+   *
+   * `ventana` (window-manager architecture) is stripped first — a guest's
+   * window never renders through the manager (see this file's own header),
+   * so the embedded marker has no business surviving into a `next` redirect
+   * target they would land back on as a normal, full-chrome page.
+   */
+  const currentUrl = new URL(Astro.url);
+  currentUrl.searchParams.delete('ventana');
+  const currentPath = `${currentUrl.pathname}${currentUrl.search}`;
+  guestSignInHref = `/${lang}/auth/entrar?next=${encodeURIComponent(currentPath)}`;
+  /** Same destination, preselecting sign-up — the guest banner's own CTA. */
+  guestSignUpHref = `/${lang}/auth/entrar?mode=signup&next=${encodeURIComponent(currentPath)}`;
+
+  /**
+   * The window's red/yellow lights ("desktop" redesign PART 6a): the Inglés
+   * hub/desk for a signed-in visitor, the ChuyoCode home for a guest — whose
+   * hub would only ask them to sign in (see file header). PART 6c: both
+   * ALWAYS navigate straight here (never `history.back()`) —
+   * `@lib/ui/deskWindow.ts`'s own header.
+   */
+  closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
+
+  /** "A2 · Básico", or the "no level" copy — the title bar's own chip always renders, never conditionally omitted (same two states the old meta line already had). */
+  levelChip = activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel;
+
+  /**
+   * "Presentar": shown whenever the activity has anything presentation mode
+   * can show — a quiz question OR a worksheet zone (`hasPresentableContent`,
+   * shared with `presentar.astro`'s own defensive 404,
+   * `@lib/activities/presentationSlides`; broadened from the quiz-only
+   * `hasPresentableQuiz` sprint week 3's worksheet zoom tour) — the single
+   * source of truth for that, so this button's visibility can never drift
+   * from what the route itself would actually serve.
+   */
+  canPresent = hasPresentableContent(activity.blocks);
+
+  /**
+   * "Compartir" (D8): built on the server exactly like the curated exercise
+   * page (`[slug].astro`'s own header) — `Astro.url` follows whatever host
+   * actually served the page (production, a branch deploy, a Netlify
+   * preview), and generating the QR here means the dialog needs no network
+   * at all once it opens, and no third party ever learns which activities
+   * get shared.
+   */
+  shareLink = shareUrl(Astro.url);
+  shareQr = qrSvg(shareLink);
+  whatsappHref = `https://wa.me/?text=${encodeURIComponent(`${activity.title} ${shareLink}`)}`;
+
+  /**
+   * The duplicate's own credit line (D7): "Basado en «original»", linking to
+   * the source ONLY while it is still live — a source later unpublished or
+   * removed keeps the title (honest about provenance) but stops being a
+   * dead link. The ORIGINAL's own practice page shows nothing extra (task's
+   * own "keep it simple" instruction) — this activity's `source` is `null`
+   * unless IT is the duplicate.
+   */
+  sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null;
+}
 
 function heartsLabel(count: number): string {
   return `${count} ${count === 1 ? t.heartsOne : t.heartsMany}`;
 }
-
-/**
- * "Compartir" (D8): built on the server exactly like the curated exercise
- * page (`[slug].astro`'s own header) — `Astro.url` follows whatever host
- * actually served the page (production, a branch deploy, a Netlify
- * preview), and generating the QR here means the dialog needs no network at
- * all once it opens, and no third party ever learns which activities get
- * shared.
- */
-const shareLink = shareUrl(Astro.url);
-const shareQr = qrSvg(shareLink);
-const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`${activity.title} ${shareLink}`)}`;
-
-/**
- * The duplicate's own credit line (D7): "Basado en «original»", linking to
- * the source ONLY while it is still live — a source later unpublished or
- * removed keeps the title (honest about provenance) but stops being a dead
- * link. The ORIGINAL's own practice page shows nothing extra (task's own
- * "keep it simple" instruction) — this activity's `source` is `null` unless
- * IT is the duplicate.
- */
-const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null;
 ---
 
-<BaseLayout lang={lang} title={activity.title} description={t.pageDescription} theme="ingles" deskBehind={!isGuest}>
-  {desk && deskLabels && (
-    <DeskScene
-      lang={lang}
-      greetingLine1={desk.greetingLine1}
-      activityCountLabel={desk.activityCountLabel}
-      dailyPickHref={desk.dailyPickHref}
-      dailyPickMeta={desk.dailyPickMeta}
-      dailyPickPeek={desk.dailyPickPeek}
-      weatherLat={desk.weatherLat}
-      weatherLon={desk.weatherLon}
-      weatherCity={desk.weatherCity}
-      weatherLabel={desk.weatherLabel}
-      playerLabels={desk.playerLabels}
-      levelLabels={levelLabels}
-      labels={deskLabels}
-    />
+<BaseLayout
+  lang={lang}
+  title={hostMode ? UI_LABELS[lang].english.hub.title : (activity?.title ?? UI_LABELS[lang].english.hub.title)}
+  description={t.pageDescription}
+  theme="ingles"
+  deskBehind={hostMode}
+  embedded={embedded && !isGuest}
+  windowManager={hostMode}
+>
+  {hostMode && hostDesk && hostDeskLabels && (
+    <>
+      <DeskScene
+        lang={lang}
+        greetingLine1={hostDesk.greetingLine1}
+        activityCountLabel={hostDesk.activityCountLabel}
+        dailyPickHref={hostDesk.dailyPickHref}
+        dailyPickMeta={hostDesk.dailyPickMeta}
+        dailyPickPeek={hostDesk.dailyPickPeek}
+        weatherLat={hostDesk.weatherLat}
+        weatherLon={hostDesk.weatherLon}
+        weatherCity={hostDesk.weatherCity}
+        weatherLabel={hostDesk.weatherLabel}
+        playerLabels={hostDesk.playerLabels}
+        levelLabels={levelLabels}
+        labels={hostDeskLabels}
+      />
+      <DeskWindowManager
+        slot="overlay"
+        initialHref={`${Astro.url.pathname}${Astro.url.search}`}
+      />
+    </>
   )}
 
+  {!hostMode && activity && (
   <DeskWindow
     lang={lang}
     title={activity.title}
@@ -239,6 +303,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
     fullScreenLabel={t.windowFullScreen}
     forceFullScreen={isGuest}
     trayId={isGuest ? null : activity.id}
+    embedded={embedded && !isGuest}
     slot="overlay"
   >
     <Fragment slot="actions">
@@ -472,4 +537,5 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
 
     <ActivityPracticeIsland client:load lang={lang} blocks={activity.blocks} />
   </DeskWindow>
+  )}
 </BaseLayout>
