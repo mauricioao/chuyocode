@@ -33,7 +33,8 @@ test.describe('practice page as a window over the desk (PART 6a), guest (public)
     const dialog = page.locator('[data-desk-window]');
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveAttribute('role', 'dialog');
-    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    // PART 6c (owner spec 2026-10-07): non-modal floating window — no `aria-modal`.
+    await expect(dialog).not.toHaveAttribute('aria-modal');
     await expect(page.getByRole('link', { name: 'Cerrar' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Minimizar' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pantalla completa' })).toBeVisible();
@@ -150,7 +151,11 @@ test.describe('focus behaviour on open (PART 6a bugfix)', () => {
     await expect(page.locator('[data-desk-window]')).toBeFocused();
   });
 
-  test('Tab and Shift+Tab cycle within the dialog; Escape still closes', async ({ page }) => {
+  // PART 6c (owner spec 2026-10-07): the window is non-modal now — there is
+  // no focus trap anymore (`@lib/ui/deskWindow.ts`'s own header). Tab still
+  // reaches the red light first, same as before; it is just free to leave
+  // the dialog afterwards instead of being trapped inside it.
+  test('Tab reaches the red light first; Escape still closes', async ({ page }) => {
     const path = await findInglesActivityPath(page);
     test.skip(path === null, 'Need at least one published activity for a real guest-play id');
 
@@ -161,37 +166,6 @@ test.describe('focus behaviour on open (PART 6a bugfix)', () => {
     await page.keyboard.press('Tab');
     const onFirst = await page.evaluate(() => document.activeElement?.hasAttribute('data-desk-window-close') ?? false);
     expect(onFirst).toBe(true);
-
-    // Shift+Tab from the first element wraps to the dialog's own LAST
-    // focusable element instead of leaving the dialog entirely.
-    await page.keyboard.press('Shift+Tab');
-    const wrappedToLast = await page.evaluate(() => {
-      const dialog = document.querySelector('[data-desk-window]');
-      const focusable = dialog
-        ? Array.from(
-            dialog.querySelectorAll(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          )
-        : [];
-      return focusable.length > 0 && document.activeElement === focusable[focusable.length - 1];
-    });
-    expect(wrappedToLast).toBe(true);
-
-    // Tab from the last element wraps back to the first.
-    await page.keyboard.press('Tab');
-    const wrappedToFirst = await page.evaluate(() => {
-      const dialog = document.querySelector('[data-desk-window]');
-      const focusable = dialog
-        ? Array.from(
-            dialog.querySelectorAll(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          )
-        : [];
-      return focusable.length > 0 && document.activeElement === focusable[0];
-    });
-    expect(wrappedToFirst).toBe(true);
 
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(/\/es\/$/);

@@ -214,17 +214,21 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
     });
 
     // "Desktop" redesign PART 6a bugfix (owner report, 2026-10-06, superseding
-    // this test's old "the footer catches a real tap" premise): this page now
-    // opens as a true MODAL window (`role="dialog"` `aria-modal="true"`) that
-    // reliably paints ABOVE every other page element, including the footer
-    // (`DeskWindow.astro`/`BaseLayout.astro`'s own `overlay` slot fix) — and
-    // the footer is `inert` for as long as that window is open
-    // (`BaseLayout.astro`'s `hasOverlay`). A tap at the footer's own on-screen
-    // position must therefore resolve to the window/veil covering it, never
-    // to the footer itself — the OPPOSITE of what this test used to assert,
-    // back when the footer wrongly painted over the window (the very bug this
-    // fix closes: a student could not reach "Comprobar" because the footer
-    // sat on top of it).
+    // this test's old "the footer catches a real tap" premise): this page
+    // opens as a window (`DeskWindow.astro`) that reliably paints ABOVE every
+    // other page element, including the footer (`BaseLayout.astro`'s own
+    // `overlay` slot fix). A tap at the footer's own on-screen position must
+    // therefore resolve to the window covering it, never to the footer
+    // itself — the OPPOSITE of what this test used to assert, back when the
+    // footer wrongly painted over the window (the very bug this fix closes:
+    // a student could not reach "Comprobar" because the footer sat on top of
+    // it).
+    //
+    // PART 6c (owner spec 2026-10-07): the window is non-modal now — the
+    // footer is no longer `inert` while it is open (`BaseLayout.astro`'s own
+    // header), same as the header staying usable. It is still visually
+    // covered (the pointer-hit assertion above/below), just no longer
+    // keyboard-unreachable by construction.
     test('the footer never catches a tap while the window is open — the window covers it, "expanded" or not', async ({
       page,
     }) => {
@@ -247,24 +251,27 @@ function defineInglesChromeTests(viewportLabel: string, viewport: { width: numbe
       test.skip(hit === 'off-screen', 'Footer is below the fold on this activity');
       expect(hit).toBe('window');
 
-      // The footer is unreachable by keyboard too, while the window is open.
+      // PART 6c: no longer inert — the desk/header/footer all stay usable
+      // while a non-modal window is open.
       const footerInert = await page.evaluate(() => {
         const footer = document.querySelector('[data-chrome-footer]');
         return footer ? footer.closest('[inert]') != null : false;
       });
-      expect(footerInert).toBe(true);
+      expect(footerInert).toBe(false);
     });
 
     // "Desktop" redesign PART 6a (owner spec 2026-10-06, superseding this
     // test's old "tabbing into the header expands it" premise): this page
-    // now opens as a MODAL window over the desk (`DeskWindow.astro`), and
+    // opens as a window over the desk (`DeskWindow.astro`), and
     // `@lib/ui/deskWindow.ts#initDeskWindow` moves focus into it on open —
-    // correct accessibility posture for a modal dialog owning its own focus,
-    // not a regression. Tabbing from the top of the document no longer
-    // reaches the header AT ALL on this page (it starts already inside the
-    // window), so the header-reveal-via-tab affordance that still applies to
-    // every other Inglés page simply does not apply here anymore.
-    test('focus moves into the window on open, not the header, now that this page opens as a modal window', async ({ page }) => {
+    // still true now that the window is non-modal (PART 6c): initial focus
+    // landing on the window itself is a deliberate UX choice (no focus-ring
+    // flash on a pointer visit — `DeskWindow.astro`'s own header), not
+    // something modality decided. Tabbing from the top of the document no
+    // longer reaches the header AT ALL on this page (it starts already
+    // inside the window), so the header-reveal-via-tab affordance that still
+    // applies to every other Inglés page simply does not apply here anymore.
+    test('focus moves into the window on open, not the header', async ({ page }) => {
       const path = await findInglesActivityPath(page);
       test.skip(path === null, 'Need at least one published activity for a real guest-play id');
 

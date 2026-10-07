@@ -49,7 +49,11 @@ test.describe('activity editor window (PART 6b), signed-in', () => {
     await expect(page).toHaveURL(/\/es\/ingles$/);
   });
 
-  test('the editor opens as a window with the title bar actions, closing to /mis-actividades', async ({ page }) => {
+  // PART 6c (owner spec 2026-10-07): closing ALWAYS lands on the Inglés hub
+  // now — never `history.back()` to a tracked previous screen (the old
+  // `closeUsesTrackedPath` behaviour, removed — `@lib/ui/deskWindow.ts`'s
+  // own header).
+  test('the editor opens as a window with the title bar actions, closing to the Inglés hub', async ({ page }) => {
     // A real id would come from creating an activity first — skips the same
     // way until an auth fixture can actually drive that flow.
     const signedIn = await gotoOrSkipSignedIn(page, '/es/crear/some-id');
@@ -61,7 +65,7 @@ test.describe('activity editor window (PART 6b), signed-in', () => {
     await expect(page.getByTestId('submit-for-review-button')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Cerrar' })).toBeVisible();
     await page.getByRole('link', { name: 'Cerrar' }).click();
-    await expect(page).toHaveURL(/\/es\/mis-actividades$/);
+    await expect(page).toHaveURL(/\/es\/ingles$/);
   });
 
   test('Escape never closes the editor window (it is the editor\'s own shortcut)', async ({ page }) => {

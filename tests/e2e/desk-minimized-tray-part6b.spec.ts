@@ -6,8 +6,10 @@ import { test, expect, type Page } from '@playwright/test';
  * (`@lib/ui/minimizedWindows.ts`, `@lib/ui/deskWindow.ts#initDeskWindow`'s
  * own `minimize()`) instead of just doing exactly what the red light does.
  *
- * The tray itself lives on the desk (`DeskScene.astro`), which only renders
- * for a SIGNED-IN visitor — the practice page's own guest-play carve-out
+ * The tray itself (PART 6c: its own fixed bottom-right container,
+ * `MinimizedWindowsTray.astro`, mounted by `BaseLayout.astro` on every
+ * Inglés page) only ever has anything in it for a SIGNED-IN visitor's own
+ * minimized windows — the practice page's own guest-play carve-out
  * (`@lib/access.ts#isPublicActivityRoute`) means an anonymous Playwright
  * session reaches the PRACTICE page itself just fine (no redirect to sign-
  * in), but with no desk/tray behind it (`forceFullScreen`/`trayId=null`,
