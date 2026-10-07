@@ -4,7 +4,7 @@
 // (`document.createElement`) — same pragma reasoning as `deskWindow.test.ts`'s
 // own `focusableElements` block; the whole file routes to jsdom rather than
 // splitting one DOM-touching describe block into its own file.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   withMinimizedWindow,
   withoutMinimizedWindow,
@@ -17,9 +17,22 @@ import {
   initMinimizedWindowsTray,
   MAX_MINIMIZED_WINDOWS,
   MAX_VISIBLE_MINIMIZED_CHIPS,
+  NARROW_DESK_WIDTH,
+  visibleChipLimit,
   MINIMIZED_WINDOWS_STORAGE_KEY,
   type MinimizedWindowEntry,
 } from './minimizedWindows';
+
+// How many chips render depends on the viewport (`visibleChipLimit`) and
+// jsdom defaults to 1024px, so every test runs on a wide desktop unless it
+// pins a narrow one itself.
+const DEFAULT_TEST_WIDTH = window.innerWidth;
+beforeEach(() => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+});
+afterEach(() => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: DEFAULT_TEST_WIDTH });
+});
 
 const MORE_LABEL_TEMPLATE = '{n} ventanas más';
 
@@ -329,5 +342,24 @@ describe('initMinimizedWindowsTray', () => {
 
     expect(container.hidden).toBe(false);
     expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(1);
+  });
+});
+
+describe('visibleChipLimit / narrow desktops', () => {
+  it('shows three chips from the narrow-desk threshold up, one below it', () => {
+    expect(visibleChipLimit(NARROW_DESK_WIDTH)).toBe(MAX_VISIBLE_MINIMIZED_CHIPS);
+    expect(visibleChipLimit(1920)).toBe(MAX_VISIBLE_MINIMIZED_CHIPS);
+    expect(visibleChipLimit(NARROW_DESK_WIDTH - 1)).toBe(1);
+    expect(visibleChipLimit(390)).toBe(1);
+  });
+
+  it('renders one chip plus a "+N" tile on a narrow viewport, so the six level tiles keep their room', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1100 });
+    {
+      const container = document.createElement('nav');
+      renderMinimizedWindowsTray(container, [entry('a'), entry('b'), entry('c')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+      expect(container.querySelectorAll('a[data-minimized-chip]')).toHaveLength(1);
+      expect((container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement).textContent).toBe('+2');
+    }
   });
 });

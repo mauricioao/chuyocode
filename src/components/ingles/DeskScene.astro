@@ -209,11 +209,12 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       (levels + hairline + tray) is ONE `overflow-x-auto` row, so phones keep
       scrolling horizontally exactly like the levels-only dock already did —
       there is no more separate "tray row above the dock" on phones. */}
-  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
+  {/* `desk:w-max`: an absolutely positioned box at `left: 50%` may only grow to the remaining half of its container, so without it the dock shrank and scrolled (hiding A1) once chips were added. */}
+  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:w-max desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
     <div
       data-desk-dock
-      class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5"
+      class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5 desk:max-w-none desk:overflow-visible"
     >
       <nav aria-label={t.levelShortcutTitle} class="flex shrink-0 gap-2.5">
         {

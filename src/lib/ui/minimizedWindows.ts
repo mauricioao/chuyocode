@@ -30,6 +30,14 @@ export const MAX_MINIMIZED_WINDOWS = 5;
  */
 export const MAX_VISIBLE_MINIMIZED_CHIPS = 3;
 
+/** Below this viewport width the dock has no room for three chips next to the six level tiles (it would scroll and hide A1, or reach the folders column), so only one chip shows before the "+N" tile. */
+export const NARROW_DESK_WIDTH = 1280;
+
+/** How many chips render directly at a given viewport width — the rest collapse into the "+N" tile. */
+export function visibleChipLimit(viewportWidth: number): number {
+  return viewportWidth < NARROW_DESK_WIDTH ? 1 : MAX_VISIBLE_MINIMIZED_CHIPS;
+}
+
 export interface MinimizedWindowEntry {
   /** The activity id — also the dedupe key (re-minimizing the same activity moves it to the front instead of duplicating it). */
   id: string;
@@ -383,8 +391,9 @@ export function renderMinimizedWindowsTray(
   const hairline = container.parentElement?.querySelector<HTMLElement>('[data-minimized-tray-hairline]');
   if (hairline) hairline.hidden = isEmpty;
 
-  const visible = entries.slice(0, MAX_VISIBLE_MINIMIZED_CHIPS);
-  const overflow = entries.slice(MAX_VISIBLE_MINIMIZED_CHIPS);
+  const limit = visibleChipLimit(doc.defaultView?.innerWidth ?? Number.POSITIVE_INFINITY);
+  const visible = entries.slice(0, limit);
+  const overflow = entries.slice(limit);
 
   const rerender = () =>
     renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate);
@@ -412,12 +421,26 @@ export function initMinimizedWindowsTray(doc: Document = document, win: Window =
 
   const removeLabel = container.getAttribute('data-remove-label') ?? '';
   const moreLabelTemplate = container.getAttribute('data-more-label') ?? '+{n}';
-  renderMinimizedWindowsTray(
-    container,
-    readMinimizedWindows(win.sessionStorage),
-    removeLabel,
-    win.sessionStorage,
-    doc,
-    moreLabelTemplate,
-  );
+  const render = () =>
+    renderMinimizedWindowsTray(
+      container,
+      readMinimizedWindows(win.sessionStorage),
+      removeLabel,
+      win.sessionStorage,
+      doc,
+      moreLabelTemplate,
+    );
+  render();
+
+  // Re-render only when a resize crosses the narrow-desk threshold — once
+  // per container element, like every other desk script's wiring guard.
+  if (typeof win.addEventListener !== 'function' || container.hasAttribute('data-minimized-tray-resize')) return;
+  container.setAttribute('data-minimized-tray-resize', '');
+  let lastLimit = visibleChipLimit(win.innerWidth);
+  win.addEventListener('resize', () => {
+    const limit = visibleChipLimit(win.innerWidth);
+    if (limit === lastLimit || !container.isConnected) return;
+    lastLimit = limit;
+    render();
+  });
 }
