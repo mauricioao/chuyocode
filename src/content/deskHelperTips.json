@@ -1,0 +1,802 @@
+[
+  {
+    "id": "since-vs-for-present-perfect",
+    "character": "bruno",
+    "topic": "gramática",
+    "level": "A2",
+    "es": "Para algo que empezó y sigue, usa *since* con el presente perfecto: *I have lived here since 2019.*",
+    "en": "For something that started and continues, use *since* with the present perfect: *I have lived here since 2019.*"
+  },
+  {
+    "id": "people-is-plural",
+    "character": "luna",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "*People* ya es plural, no digas *peoples*: *People are nice*, nunca *People is nice*.",
+    "en": "*People* is already plural; say *People are nice*, never *People is nice* or *peoples*."
+  },
+  {
+    "id": "explain-to-me",
+    "character": "mia",
+    "topic": "gramática",
+    "level": "A2",
+    "es": "No digas *explain me*; el verbo necesita *to*: *Can you explain this to me?*",
+    "en": "Don't say *explain me*; the verb needs *to*: *Can you explain this to me?*"
+  },
+  {
+    "id": "depend-on",
+    "character": "paco",
+    "topic": "gramática",
+    "level": "B1",
+    "es": "*Depend* siempre va con *on*: *It depends on the weather*, nunca *depend of*.",
+    "en": "*Depend* always takes *on*: say *It depends on the weather*, never *depend of*."
+  },
+  {
+    "id": "third-person-s",
+    "character": "tobi",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "Con *he*, *she* o *it* en presente, el verbo lleva *-s*: *She works on Mondays.*",
+    "en": "With *he*, *she* or *it* in the present, add *-s*: *She works on Mondays.*"
+  },
+  {
+    "id": "do-does-questions",
+    "character": "bruno",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "Para preguntas en presente usa *do* o *does*: *Does she speak English?*, no *Speaks she English?*",
+    "en": "Use *do* or *does* for present-tense questions: *Does she speak English?*, not *Speaks she English?*"
+  },
+  {
+    "id": "a-an-by-sound",
+    "character": "luna",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "*A* o *an* dependen del sonido, no de la letra: *an hour*, pero *a university*.",
+    "en": "*A* or *an* depends on the sound, not the letter: *an hour*, but *a university*."
+  },
+  {
+    "id": "adjective-before-noun",
+    "character": "mia",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "En inglés el adjetivo va antes del sustantivo: *a red car*, no *a car red*.",
+    "en": "In English, the adjective goes before the noun: *a red car*, not *a car red*."
+  },
+  {
+    "id": "no-article-general-plural",
+    "character": "paco",
+    "topic": "gramática",
+    "level": "B1",
+    "es": "Para hablar en general, no uses artículo con plurales: *Dogs are loyal*, no *The dogs are loyal.*",
+    "en": "When speaking generally, skip the article with plurals: *Dogs are loyal*, not *The dogs are loyal.*"
+  },
+  {
+    "id": "uncountable-advice-information",
+    "character": "tobi",
+    "topic": "gramática",
+    "level": "A2",
+    "es": "*Advice* e *information* son incontables: di *some advice*, nunca *an advice* o *advices*.",
+    "en": "*Advice* and *information* are uncountable: say *some advice*, never *an advice* or *advices*."
+  },
+  {
+    "id": "uncountable-news",
+    "character": "bruno",
+    "topic": "gramática",
+    "level": "B1",
+    "es": "*News* se ve plural pero es incontable: *The news is good*, no *The news are good.*",
+    "en": "*News* looks plural but is uncountable: *The news is good*, not *The news are good.*"
+  },
+  {
+    "id": "present-perfect-vs-past-simple",
+    "character": "luna",
+    "topic": "gramática",
+    "level": "B1",
+    "es": "Usa *simple past* con una fecha exacta y *present perfect* cuando el momento no importa.",
+    "en": "Use the *simple past* for a specific time and the *present perfect* when the exact time doesn't matter."
+  },
+  {
+    "id": "used-to-past-habits",
+    "character": "mia",
+    "topic": "gramática",
+    "level": "B1",
+    "es": "Para hábitos pasados que ya no existen, usa *used to*: *I used to play football.*",
+    "en": "For past habits that no longer happen, use *used to*: *I used to play football.*"
+  },
+  {
+    "id": "comparatives-er-vs-more",
+    "character": "paco",
+    "topic": "gramática",
+    "level": "A2",
+    "es": "Adjetivos cortos usan *-er*: *bigger*; los largos usan *more*: *more interesting.*",
+    "en": "Short adjectives take *-er*: *bigger*; longer ones take *more*: *more interesting.*"
+  },
+  {
+    "id": "much-vs-many",
+    "character": "tobi",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "*Much* va con incontables y *many* con contables: *much time*, *many friends.*",
+    "en": "*Much* goes with uncountables and *many* with countables: *much time*, *many friends.*"
+  },
+  {
+    "id": "some-vs-any",
+    "character": "bruno",
+    "topic": "gramática",
+    "level": "A1",
+    "es": "Usa *some* en afirmaciones y *any* en negativas y preguntas: *I have some money* / *Do you have any money?*",
+    "en": "Use *some* in statements and *any* in negatives and questions: *I have some money* / *Do you have any money?*"
+  },
+  {
+    "id": "will-vs-going-to",
+    "character": "luna",
+    "topic": "gramática",
+    "level": "A2",
+    "es": "Usa *going to* para planes ya decididos y *will* para decisiones del momento.",
+    "en": "Use *going to* for plans already decided and *will* for decisions made on the spot."
+  },
+  {
+    "id": "first-conditional",
+    "character": "mia",
+    "topic": "gramática",
+    "level": "B1",
+    "es": "El primer condicional usa *if* + presente y *will*: *If it rains, I will stay home.*",
+    "en": "The first conditional uses *if* + present and *will*: *If it rains, I will stay home.*"
+  },
+  {
+    "id": "second-conditional",
+    "character": "paco",
+    "topic": "gramática",
+    "level": "B2",
+    "es": "Para situaciones hipotéticas usa *if* + pasado y *would*: *If I won the lottery, I would travel.*",
+    "en": "For hypothetical situations, use *if* + past and *would*: *If I won the lottery, I would travel.*"
+  },
+  {
+    "id": "passive-voice-basics",
+    "character": "tobi",
+    "topic": "gramática",
+    "level": "C1",
+    "es": "La voz pasiva usa *be* + participio: *The book was written in 1990*, cuando el agente no importa.",
+    "en": "The passive voice uses *be* + past participle: *The book was written in 1990*, when the agent doesn't matter."
+  },
+  {
+    "id": "make-vs-do",
+    "character": "bruno",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*Make* es crear algo y *do* es realizar una actividad: *make a cake*, *do homework.*",
+    "en": "*Make* means creating something and *do* means performing an activity: *make a cake*, *do homework.*"
+  },
+  {
+    "id": "say-vs-tell",
+    "character": "luna",
+    "topic": "vocabulario",
+    "level": "B1",
+    "es": "*Tell* necesita a quién: *tell me*; *say* no: *say something.*",
+    "en": "*Tell* needs an object: *tell me*; *say* doesn't: *say something.*"
+  },
+  {
+    "id": "borrow-vs-lend",
+    "character": "mia",
+    "topic": "vocabulario",
+    "level": "B1",
+    "es": "*Borrow* es pedir prestado y *lend* es prestar: *Can I borrow your pen?* / *I'll lend you mine.*",
+    "en": "*Borrow* means to take and *lend* means to give: *Can I borrow your pen?* / *I'll lend you mine.*"
+  },
+  {
+    "id": "bring-vs-take",
+    "character": "paco",
+    "topic": "vocabulario",
+    "level": "B1",
+    "es": "*Bring* es traer algo hacia aquí y *take* es llevarlo hacia allá.",
+    "en": "*Bring* means moving something here, and *take* means moving it there."
+  },
+  {
+    "id": "look-like-vs-look-at",
+    "character": "tobi",
+    "topic": "vocabulario",
+    "level": "B1",
+    "es": "*Look like* describe apariencia: *You look like your dad*; *look at* es mirar algo.",
+    "en": "*Look like* describes appearance: *You look like your dad*; *look at* means to view something."
+  },
+  {
+    "id": "hear-vs-listen",
+    "character": "bruno",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*Hear* es oír sin querer y *listen* es escuchar con atención: *listen to music.*",
+    "en": "*Hear* means noticing a sound and *listen* means paying attention: *listen to music.*"
+  },
+  {
+    "id": "see-vs-watch",
+    "character": "luna",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*See* es ver algo y *watch* es observar algo que se mueve: *watch a movie.*",
+    "en": "*See* means noticing something, and *watch* means observing something moving: *watch a movie.*"
+  },
+  {
+    "id": "travel-trip-journey",
+    "character": "mia",
+    "topic": "vocabulario",
+    "level": "B2",
+    "es": "*Travel* es el verbo, *a trip* es el viaje de ida y vuelta, y *a journey* enfatiza el recorrido: *a long journey.*",
+    "en": "*Travel* is the verb, *a trip* is going somewhere and coming back, and *a journey* stresses the route: *a long journey.*"
+  },
+  {
+    "id": "job-vs-work",
+    "character": "paco",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*Job* es un empleo específico y *work* es la actividad en general: *I have a new job.*",
+    "en": "*A job* is a specific position and *work* is the activity in general: *I have a new job.*"
+  },
+  {
+    "id": "house-vs-home",
+    "character": "tobi",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*House* es el edificio y *home* es el hogar, con sentido emocional: *Home sweet home.*",
+    "en": "*House* is the building and *home* is where you belong emotionally: *Home sweet home.*"
+  },
+  {
+    "id": "clothes-vs-cloth",
+    "character": "bruno",
+    "topic": "vocabulario",
+    "level": "B1",
+    "es": "*Clothes* es la ropa, siempre plural, y *cloth* es la tela, la materia prima.",
+    "en": "*Clothes* means garments, always plural, and *cloth* means fabric, the raw material."
+  },
+  {
+    "id": "weather-vs-time",
+    "character": "luna",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*Weather* es el clima y *time* es el tiempo que pasa: no confundas ambos con *tiempo*.",
+    "en": "*Weather* means climate and *time* means duration: Spanish *tiempo* covers both words."
+  },
+  {
+    "id": "remember-vs-remind",
+    "character": "mia",
+    "topic": "vocabulario",
+    "level": "B1",
+    "es": "*Remember* es recordar tú mismo y *remind* es hacer que otro recuerde: *Remind me to call her.*",
+    "en": "*Remember* means recalling yourself and *remind* means making someone else recall: *Remind me to call her.*"
+  },
+  {
+    "id": "meet-vs-know",
+    "character": "paco",
+    "topic": "vocabulario",
+    "level": "A2",
+    "es": "*Meet* es conocer por primera vez y *know* es ya conocer a alguien.",
+    "en": "*Meet* means encountering someone for the first time, and *know* means already being acquainted."
+  },
+  {
+    "id": "false-friend-actually",
+    "character": "tobi",
+    "topic": "falsos amigos",
+    "level": "A2",
+    "es": "*Actually* no significa *actualmente*; significa *en realidad*: *Actually, I disagree.*",
+    "en": "*Actually* doesn't mean 'currently'; it means 'in fact': *Actually, I disagree.*"
+  },
+  {
+    "id": "false-friend-embarrassed",
+    "character": "bruno",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Embarrassed* significa *avergonzado*, no *embarazada*. Para eso usa *pregnant.*",
+    "en": "*Embarrassed* means ashamed, not pregnant. For that meaning, use *pregnant.*"
+  },
+  {
+    "id": "false-friend-library",
+    "character": "luna",
+    "topic": "falsos amigos",
+    "level": "A2",
+    "es": "*Library* es la *biblioteca*; la librería donde compras libros es *bookstore.*",
+    "en": "*Library* means a place to borrow books; a shop that sells them is a *bookstore.*"
+  },
+  {
+    "id": "false-friend-assist",
+    "character": "mia",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Assist* significa *ayudar*, no *asistir* a un evento; para eso usa *attend.*",
+    "en": "*Assist* means to help, not to attend an event; for that, use *attend.*"
+  },
+  {
+    "id": "false-friend-attend",
+    "character": "paco",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Attend* significa *asistir* a algo, como una clase o reunión: *attend a meeting.*",
+    "en": "*Attend* means to be present at something, like a class or meeting: *attend a meeting.*"
+  },
+  {
+    "id": "false-friend-realize",
+    "character": "tobi",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Realize* significa *darse cuenta*, no *realizar* una tarea; para eso usa *carry out* o *do.*",
+    "en": "*Realize* means to become aware, not to carry out a task; for that, use *do* or *carry out.*"
+  },
+  {
+    "id": "false-friend-constipated",
+    "character": "bruno",
+    "topic": "falsos amigos",
+    "level": "B2",
+    "es": "*Constipated* significa *estreñido*; si tienes un resfriado, di *I have a cold.*",
+    "en": "*Constipated* refers to digestion; if you have a cold, say *I have a cold*, not *I'm constipated.*"
+  },
+  {
+    "id": "false-friend-exit",
+    "character": "luna",
+    "topic": "falsos amigos",
+    "level": "A2",
+    "es": "*Exit* es la *salida* de un lugar; el *éxito* en inglés se dice *success.*",
+    "en": "*Exit* means the way out; achievement in Spanish is *éxito*, which is *success* in English."
+  },
+  {
+    "id": "false-friend-success",
+    "character": "mia",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Success* es *éxito*; no lo confundas con *suceso*, que se traduce como *event.*",
+    "en": "*Success* means achievement; don't confuse it with *suceso*, an event, which is *event* in English."
+  },
+  {
+    "id": "false-friend-carpet",
+    "character": "paco",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Carpet* es la *alfombra*; la carpeta de documentos se dice *folder* o *file.*",
+    "en": "*Carpet* means a rug; a document folder is a *folder*, not a *carpet.*"
+  },
+  {
+    "id": "false-friend-fabric",
+    "character": "tobi",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Fabric* significa *tela*; una fábrica donde se produce algo es *factory.*",
+    "en": "*Fabric* means cloth; a place that manufactures goods is a *factory.*"
+  },
+  {
+    "id": "false-friend-lecture",
+    "character": "bruno",
+    "topic": "falsos amigos",
+    "level": "B2",
+    "es": "*Lecture* es una clase magistral o charla, no una lectura; para leer usa *reading.*",
+    "en": "*Lecture* means a formal talk, not reading; the act of reading is simply *reading.*"
+  },
+  {
+    "id": "false-friend-pretend",
+    "character": "luna",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Pretend* significa *fingir*, no *pretender*; para eso usa *intend* o *try to.*",
+    "en": "*Pretend* means to fake something, not to intend; for that, use *intend* or *try to.*"
+  },
+  {
+    "id": "false-friend-sensible",
+    "character": "mia",
+    "topic": "falsos amigos",
+    "level": "B2",
+    "es": "*Sensible* significa sensato; para la persona sensible o delicada usa *sensitive*: *She is very sensitive.*",
+    "en": "*Sensible* means practical and wise; for the emotional sense, use *sensitive* instead."
+  },
+  {
+    "id": "false-friend-eventually",
+    "character": "paco",
+    "topic": "falsos amigos",
+    "level": "B1",
+    "es": "*Eventually* significa *finalmente*, no *eventualmente*; para eso usa *occasionally.*",
+    "en": "*Eventually* means 'in the end', not 'occasionally'; for that sense, use *occasionally.*"
+  },
+  {
+    "id": "false-friend-career",
+    "character": "tobi",
+    "topic": "falsos amigos",
+    "level": "C1",
+    "es": "*Career* es la *carrera profesional*; una carrera universitaria se dice *degree* o *major.*",
+    "en": "*Career* means your professional path; a university degree program is called a *degree* or *major.*"
+  },
+  {
+    "id": "age-with-be-not-have",
+    "character": "bruno",
+    "topic": "errores comunes",
+    "level": "A1",
+    "es": "La edad se dice con *to be*, no *have*: *I am 20 years old*, nunca *I have 20 years.*",
+    "en": "Say your age with *to be*, not *have*: *I am 20 years old*, never *I have 20 years.*"
+  },
+  {
+    "id": "have-breakfast-not-take",
+    "character": "luna",
+    "topic": "errores comunes",
+    "level": "A2",
+    "es": "Para las comidas usa *have*, no *take*: *I have breakfast at 7*, no *I take breakfast.*",
+    "en": "Use *have* for meals, not *take*: *I have breakfast at 7*, not *I take breakfast.*"
+  },
+  {
+    "id": "i-agree-not-i-am-agree",
+    "character": "mia",
+    "topic": "errores comunes",
+    "level": "A2",
+    "es": "*Agree* es un verbo por sí mismo: di *I agree*, nunca *I am agree.*",
+    "en": "*Agree* is a verb on its own: say *I agree*, never *I am agree.*"
+  },
+  {
+    "id": "ask-a-question-not-make",
+    "character": "paco",
+    "topic": "errores comunes",
+    "level": "A2",
+    "es": "Las preguntas se hacen con *ask*, no con *make*: *ask a question*, nunca *make a question.*",
+    "en": "Use *ask* with questions, not *make*: *ask a question*, never *make a question.*"
+  },
+  {
+    "id": "bored-vs-boring",
+    "character": "tobi",
+    "topic": "errores comunes",
+    "level": "B1",
+    "es": "*Bored* describe cómo te sientes y *boring* describe la cosa aburrida: *I'm bored because the movie is boring.*",
+    "en": "*Bored* describes how you feel and *boring* describes the dull thing: *I'm bored because the movie is boring.*"
+  },
+  {
+    "id": "no-double-negatives",
+    "character": "bruno",
+    "topic": "errores comunes",
+    "level": "B1",
+    "es": "En inglés evita la doble negación: di *I don't have any money*, no *I don't have no money.*",
+    "en": "English avoids double negatives: say *I don't have any money*, not *I don't have no money.*"
+  },
+  {
+    "id": "i-think-so-not-i-think-yes",
+    "character": "luna",
+    "topic": "errores comunes",
+    "level": "B1",
+    "es": "Para responder, usa *I think so* o *I don't think so*, no *I think yes.*",
+    "en": "To answer briefly, use *I think so* or *I don't think so*, not *I think yes.*"
+  },
+  {
+    "id": "no-article-after-possessive",
+    "character": "mia",
+    "topic": "errores comunes",
+    "level": "A1",
+    "es": "No pongas artículo con posesivo: di *my book*, nunca *my the book.*",
+    "en": "Don't add an article with a possessive: say *my book*, never *my the book.*"
+  },
+  {
+    "id": "dont-overuse-very",
+    "character": "paco",
+    "topic": "errores comunes",
+    "level": "B1",
+    "es": "No abuses de *very*; usa palabras más fuertes: *huge* en vez de *very big*, *exhausted* en vez de *very tired.*",
+    "en": "Don’t overuse *very*; pick stronger words: *huge* instead of *very big*, *exhausted* instead of *very tired.*"
+  },
+  {
+    "id": "adverb-of-frequency-order",
+    "character": "tobi",
+    "topic": "errores comunes",
+    "level": "A2",
+    "es": "Los adverbios de frecuencia van antes del verbo principal: *I always drink coffee*, no *I drink always coffee.*",
+    "en": "Frequency adverbs go before the main verb: *I always drink coffee*, not *I drink always coffee.*"
+  },
+  {
+    "id": "want-to-not-want-bare-verb",
+    "character": "bruno",
+    "topic": "errores comunes",
+    "level": "A1",
+    "es": "Después de *want* usa *to*: *I want to go*, nunca *I want go.*",
+    "en": "After the verb *want*, use *to*: *I want to go*, never *I want go.*"
+  },
+  {
+    "id": "can-plus-bare-verb",
+    "character": "luna",
+    "topic": "errores comunes",
+    "level": "A1",
+    "es": "Después de *can* el verbo va sin *to*: *I can swim*, nunca *I can to swim.*",
+    "en": "After *can*, the verb has no *to*: *I can swim*, never *I can to swim.*"
+  },
+  {
+    "id": "good-vs-well",
+    "character": "mia",
+    "topic": "errores comunes",
+    "level": "B1",
+    "es": "*Good* es adjetivo y *well* es adverbio: *She sings well*, no *She sings good.*",
+    "en": "*Good* is an adjective and *well* is an adverb: *She sings well*, not *She sings good.*"
+  },
+  {
+    "id": "enjoy-plus-gerund",
+    "character": "paco",
+    "topic": "errores comunes",
+    "level": "A2",
+    "es": "Después de *enjoy* siempre usa *-ing*: *I enjoy swimming*, nunca *I enjoy to swim.*",
+    "en": "After *enjoy*, always use *-ing*: *I enjoy swimming*, never *I enjoy to swim.*"
+  },
+  {
+    "id": "excited-vs-exciting",
+    "character": "tobi",
+    "topic": "errores comunes",
+    "level": "B1",
+    "es": "*Excited* describe cómo te sientes y *exciting* describe lo emocionante: *The trip is exciting, so I'm excited.*",
+    "en": "*Excited* describes your feeling and *exciting* describes the thing: *The trip is exciting, so I'm excited.*"
+  },
+  {
+    "id": "im-hungry-not-i-have-hunger",
+    "character": "bruno",
+    "topic": "errores comunes",
+    "level": "A1",
+    "es": "Sensaciones como hambre o frío se dicen con *to be*: *I'm hungry*, *I'm cold*, nunca *I have hunger.*",
+    "en": "Feelings like hunger or cold use *to be*: *I'm hungry*, *I'm cold*, never *I have hunger.*"
+  },
+  {
+    "id": "ed-ending-three-sounds",
+    "character": "luna",
+    "topic": "pronunciación",
+    "level": "B1",
+    "es": "El final *-ed* suena /t/, /d/ o /ɪd/: *worked* con /t/, *played* con /d/, *wanted* con /ɪd/.",
+    "en": "The *-ed* ending sounds like /t/, /d/, or /ɪd/: *worked* with /t/, *played* with /d/, *wanted* with /ɪd/."
+  },
+  {
+    "id": "th-sound-think-sink",
+    "character": "mia",
+    "topic": "pronunciación",
+    "level": "A2",
+    "es": "El sonido *th* no existe en español: pon la lengua entre los dientes para *think*, distinto de *sink.*",
+    "en": "The *th* sound has no Spanish equivalent: put your tongue between your teeth for *think*, unlike *sink.*"
+  },
+  {
+    "id": "silent-letters-knife-honest",
+    "character": "paco",
+    "topic": "pronunciación",
+    "level": "A2",
+    "es": "Muchas palabras tienen letras mudas: la *k* de *knife* y la *h* de *honest* no se pronuncian.",
+    "en": "Many words have silent letters: the *k* in *knife* and the *h* in *honest* aren't pronounced."
+  },
+  {
+    "id": "stress-shift-record-present",
+    "character": "tobi",
+    "topic": "pronunciación",
+    "level": "C1",
+    "es": "Algunas palabras cambian el acento según sean sustantivo o verbo: *RECord* como sustantivo y *reCORD* como verbo.",
+    "en": "Some words shift stress between noun and verb: *RECord* as a noun versus *reCORD* as a verb."
+  },
+  {
+    "id": "v-vs-b-sound",
+    "character": "bruno",
+    "topic": "pronunciación",
+    "level": "A2",
+    "es": "La *v* y la *b* suenan distinto en inglés: en *very*, los dientes de arriba tocan el labio de abajo.",
+    "en": "*V* and *b* sound different in English: in *very*, your top teeth touch your bottom lip."
+  },
+  {
+    "id": "h-sound-pronounced",
+    "character": "luna",
+    "topic": "pronunciación",
+    "level": "A1",
+    "es": "La *h* inglesa casi siempre suena, como una *j* suave: *hotel*, *house*. Excepciones: *hour*, *honest.*",
+    "en": "The English *h* is usually pronounced, like a soft breath: *hotel*, *house*. Exceptions: *hour*, *honest.*"
+  },
+  {
+    "id": "final-s-three-sounds",
+    "character": "mia",
+    "topic": "pronunciación",
+    "level": "B1",
+    "es": "La *s* final suena distinto según la palabra: *cats* con /s/, *dogs* con /z/, *watches* con /ɪz/.",
+    "en": "The final *s* has different sounds: *cats* with /s/, *dogs* with /z/, *watches* with /ɪz/."
+  },
+  {
+    "id": "short-i-vs-long-ee",
+    "character": "paco",
+    "topic": "pronunciación",
+    "level": "B1",
+    "es": "*Ship* y *sheep* suenan distinto: una *i* corta frente a un sonido *ee* largo.",
+    "en": "*Ship* and *sheep* sound different: a short *i* sound versus a long *ee* sound."
+  },
+  {
+    "id": "w-sound-woman",
+    "character": "tobi",
+    "topic": "pronunciación",
+    "level": "A2",
+    "es": "La *w* en inglés no suena como *gu* en español: redondea los labios para *woman*, no digas *guoman.*",
+    "en": "English *w* isn't a Spanish *gu* sound: round your lips for *woman*, not *guoman.*"
+  },
+  {
+    "id": "r-sound-different",
+    "character": "bruno",
+    "topic": "pronunciación",
+    "level": "A1",
+    "es": "La *r* en inglés no se vibra como en español: en *red*, la lengua no toca el paladar.",
+    "en": "English *r* isn't rolled like Spanish: in *red*, your tongue doesn't touch the roof of your mouth."
+  },
+  {
+    "id": "look-for",
+    "character": "luna",
+    "topic": "phrasal verbs",
+    "level": "A2",
+    "es": "*Look for* significa *buscar algo*: *I'm looking for my keys everywhere.*",
+    "en": "*Look for* means to search for something: *I'm looking for my keys everywhere.*"
+  },
+  {
+    "id": "turn-off",
+    "character": "mia",
+    "topic": "phrasal verbs",
+    "level": "A1",
+    "es": "*Turn off* significa *apagar*: *Turn off the lights before you leave.*",
+    "en": "*Turn off* means to switch something off: *Turn off the lights before you leave.*"
+  },
+  {
+    "id": "give-up",
+    "character": "paco",
+    "topic": "phrasal verbs",
+    "level": "A2",
+    "es": "*Give up* significa *rendirse* o *dejar algo*: *Don't give up on your dreams.*",
+    "en": "*Give up* means to quit or stop trying: *Don't give up on your dreams.*"
+  },
+  {
+    "id": "find-out",
+    "character": "tobi",
+    "topic": "phrasal verbs",
+    "level": "B1",
+    "es": "*Find out* significa *descubrir* información: *I found out the truth yesterday.*",
+    "en": "*Find out* means to discover information: *I found out the truth yesterday.*"
+  },
+  {
+    "id": "run-out-of",
+    "character": "bruno",
+    "topic": "phrasal verbs",
+    "level": "B1",
+    "es": "*Run out of* significa *quedarse sin algo*: *We ran out of milk.*",
+    "en": "*Run out of* means to have no more of something: *We ran out of milk.*"
+  },
+  {
+    "id": "get-up",
+    "character": "luna",
+    "topic": "phrasal verbs",
+    "level": "A1",
+    "es": "*Get up* significa *levantarse* de la cama: *I get up at 7 every day.*",
+    "en": "*Get up* means to rise from bed: *I get up at 7 o'clock every day.*"
+  },
+  {
+    "id": "put-off",
+    "character": "mia",
+    "topic": "phrasal verbs",
+    "level": "B1",
+    "es": "*Put off* significa *posponer*: *Don't put off your homework until tomorrow.*",
+    "en": "*Put off* means to postpone: *Don't put off your homework until tomorrow.*"
+  },
+  {
+    "id": "come-across",
+    "character": "paco",
+    "topic": "phrasal verbs",
+    "level": "B2",
+    "es": "*Come across* significa *encontrarse con algo* por casualidad: *I came across an old photo.*",
+    "en": "*Come across* means to find something by chance: *I came across an old photo.*"
+  },
+  {
+    "id": "look-after",
+    "character": "tobi",
+    "topic": "phrasal verbs",
+    "level": "A2",
+    "es": "*Look after* significa *cuidar de alguien*: *Can you look after my dog?*",
+    "en": "*Look after* means to take care of someone: *Can you look after my dog?*"
+  },
+  {
+    "id": "break-down",
+    "character": "bruno",
+    "topic": "phrasal verbs",
+    "level": "B1",
+    "es": "*Break down* significa *dejar de funcionar*: *My car broke down on the highway.*",
+    "en": "*Break down* means to stop working: *My car broke down on the highway.*"
+  },
+  {
+    "id": "could-you-politeness",
+    "character": "luna",
+    "topic": "expresiones",
+    "level": "A2",
+    "es": "*Could you...?* suena más cortés que *Can you...?* para pedir favores: *Could you help me, please?*",
+    "en": "*Could you...?* sounds more polite than *Can you...?* for asking favors: *Could you help me, please?*"
+  },
+  {
+    "id": "how-come",
+    "character": "mia",
+    "topic": "expresiones",
+    "level": "B1",
+    "es": "*How come?* significa *¿cómo es que...?* y va seguido del orden normal: *How come you're here?*",
+    "en": "*How come?* means 'why' in a casual way, followed by normal word order: *How come you're here?*"
+  },
+  {
+    "id": "im-afraid-not",
+    "character": "paco",
+    "topic": "expresiones",
+    "level": "B1",
+    "es": "*I'm afraid not* es una forma educada de decir *no*: *Can you come? I'm afraid not.*",
+    "en": "*I'm afraid not* is a polite way to say no: *Can you come? I'm afraid not.*"
+  },
+  {
+    "id": "its-up-to-you",
+    "character": "tobi",
+    "topic": "expresiones",
+    "level": "B1",
+    "es": "*It's up to you* significa *la decisión es tuya*: *We can go now or later, it's up to you.*",
+    "en": "*It's up to you* means the choice is yours: *We can go now or later, it's up to you.*"
+  },
+  {
+    "id": "long-time-no-see",
+    "character": "bruno",
+    "topic": "expresiones",
+    "level": "A2",
+    "es": "*Long time no see* se usa para saludar a alguien que no ves hace tiempo.",
+    "en": "*Long time no see* is a casual greeting for someone you haven't seen in a while."
+  },
+  {
+    "id": "take-your-time",
+    "character": "luna",
+    "topic": "expresiones",
+    "level": "A2",
+    "es": "*Take your time* significa *tómate tu tiempo*: nadie te está apurando, así que relájate.",
+    "en": "*Take your time* means there's no rush at all, so relax and go at your own pace."
+  },
+  {
+    "id": "no-worries",
+    "character": "mia",
+    "topic": "expresiones",
+    "level": "A2",
+    "es": "*No worries* es una forma informal de decir *no te preocupes* o *de nada.*",
+    "en": "*No worries* is a casual way to say *don't worry* or *you're welcome.*"
+  },
+  {
+    "id": "let-me-know",
+    "character": "paco",
+    "topic": "expresiones",
+    "level": "A2",
+    "es": "*Let me know* significa *avísame*: *Let me know if you need anything.*",
+    "en": "*Let me know* means 'tell me later': *Let me know if you need anything.*"
+  },
+  {
+    "id": "its-vs-its-apostrophe",
+    "character": "tobi",
+    "topic": "ortografía",
+    "level": "B1",
+    "es": "*Its* es posesivo y *it's* es *it is*: *The dog wagged its tail* vs *It's raining.*",
+    "en": "*Its* is possessive and *it's* means *it is*: *The dog wagged its tail* vs *It's raining.*"
+  },
+  {
+    "id": "then-vs-than",
+    "character": "bruno",
+    "topic": "ortografía",
+    "level": "B1",
+    "es": "*Then* indica tiempo y *than* se usa en comparaciones: *First this, then that* vs *better than this.*",
+    "en": "*Then* refers to time and *than* is for comparisons: *First this, then that* vs *better than this.*"
+  },
+  {
+    "id": "capital-letters-i-days-months",
+    "character": "luna",
+    "topic": "ortografía",
+    "level": "A1",
+    "es": "En inglés, *I*, los días y los meses siempre van con mayúscula: *Monday*, *January.*",
+    "en": "In English, *I*, days, and months are always capitalized: *Monday*, *January.*"
+  },
+  {
+    "id": "double-consonants-stopped-running",
+    "character": "mia",
+    "topic": "ortografía",
+    "level": "A2",
+    "es": "Si un verbo corto termina en consonante-vocal-consonante, dobla la última: *stop* → *stopped*, *run* → *running.*",
+    "en": "If a short verb ends consonant-vowel-consonant, double the last letter: *stop* → *stopped*, *run* → *running.*"
+  },
+  {
+    "id": "silent-e-drop-before-ing",
+    "character": "paco",
+    "topic": "ortografía",
+    "level": "A2",
+    "es": "Si el verbo termina en *e* muda, quítala antes de *-ing*: *write* se vuelve *writing.*",
+    "en": "If a verb ends in a silent *e*, drop it before *-ing*: *write* becomes *writing.*"
+  },
+  {
+    "id": "there-their-theyre",
+    "character": "tobi",
+    "topic": "ortografía",
+    "level": "B1",
+    "es": "*There*, *their* y *they're* suenan igual pero significan distinto: lugar, posesión y *they are.*",
+    "en": "*There*, *their*, and *they're* sound the same but differ: place, possession, and *they are.*"
+  }
+]
