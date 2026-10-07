@@ -17,6 +17,7 @@ import {
   EDITOR_WINDOW_GUARD_KEY,
   type EditorWindowGuard,
 } from './deskWindow';
+import { MINIMIZED_WINDOWS_STORAGE_KEY, parseMinimizedWindows } from './minimizedWindows';
 
 describe('shouldStartFullScreen', () => {
   it('starts full screen only when the stored value is exactly "true"', () => {
@@ -118,9 +119,9 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
     };
   }
 
-  function fakeWin(historyLength = 1) {
+  function fakeWin(historyLength = 1, pathname = '/es/crear/abc', search = '') {
     return {
-      location: { href: '', pathname: '/es/crear/abc', search: '', origin: 'https://example.test' },
+      location: { href: '', pathname, search, origin: 'https://example.test' },
       history: { length: historyLength, back: () => {} },
       sessionStorage: fakeStorage(),
       matchMedia: () => ({ matches: true }), // reduced-motion: skip the animation delay entirely
@@ -265,6 +266,56 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
     await flushMicrotasks();
 
     expect(win.location.href).toBe('/es/mis-actividades');
+  });
+
+  // Community-list-as-a-window pass (owner spec 2026-10-07): minimizing the
+  // community window must restore the SAME filtered list, not a plain
+  // unfiltered one — the whole point of a tray chip is reopening to exactly
+  // where the visitor left off. `minimizeNow` builds the stored `href` from
+  // `win.location.pathname` + `win.location.search`, so whatever filters
+  // are in the URL at minimize time are what the chip reopens to; this
+  // locks that contract down directly, rather than only through the
+  // generic flush/guard tests above (none of which inspect the stored
+  // entry's own `href`/`title`).
+  describe('minimize(): stores the exact current URL (filters included) and the title bar\'s own text', () => {
+    it('stores href as pathname + search — reopening the chip restores the same filtered list', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(1, '/es/ingles/actividades', '?nivel=B1&orden=gustadas');
+      initDeskWindow(el, '/es/ingles', 'community-activities', true, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      const stored = parseMinimizedWindows(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY));
+      expect(stored).toHaveLength(1);
+      expect(stored[0].href).toBe('/es/ingles/actividades?nivel=B1&orden=gustadas');
+      expect(stored[0].id).toBe('community-activities');
+    });
+
+    it('stores the title bar\'s own text (always "Actividades de la comunidad" for the community window, regardless of filters)', async () => {
+      const el = buildWindowEl();
+      el.querySelector('#t')!.textContent = 'Actividades de la comunidad';
+      const win = fakeWin(1, '/es/ingles/actividades', '?q=present');
+      initDeskWindow(el, '/es/ingles', 'community-activities', true, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      const stored = parseMinimizedWindows(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY));
+      expect(stored[0].title).toBe('Actividades de la comunidad');
+    });
+
+    it('stores a bare pathname (no trailing "?") when there is no query string at all', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(1, '/es/ingles/actividades', '');
+      initDeskWindow(el, '/es/ingles', 'community-activities', true, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      const stored = parseMinimizedWindows(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY));
+      expect(stored[0].href).toBe('/es/ingles/actividades');
+    });
   });
 
   // PART 6c (owner spec 2026-10-07): closing ALWAYS navigates straight to

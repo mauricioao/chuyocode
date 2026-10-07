@@ -499,3 +499,50 @@ describe('GET /[lang]/ingles/actividades — actividad del día', () => {
     expect(gustadasCalls).toHaveLength(1);
   });
 });
+
+// Community-list-as-a-window pass (owner spec 2026-10-07) — three contracts
+// the window must keep regardless of active filters: (1) minimizing it
+// restores the SAME list, because the tray id/title stay fixed and the
+// yellow light stores the CURRENT href (filters included) — see
+// `deskWindow.test.ts`'s own `minimize()` suite for the storage mechanics
+// this only needs to wire the right props INTO; (2) Escape still closes it
+// (the default `closeOnEscape`, never turned off here); (3) no in-window
+// link (a filter chip, a pagination link, an `ActivityCard`) ever carries
+// `data-desk-window-open`, which is what would wrongly replay the scale-in
+// open animation on an ordinary in-window navigation.
+describe('GET /[lang]/ingles/actividades — minimize/restore and no-replay (community-list-as-a-window pass)', () => {
+  it('keeps the same tray id and title with filters active, so the minimized chip always reopens to this exact window', async () => {
+    pageResult.value = { activities: [card()], total: 1 };
+    const filtered = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1&orden=gustadas', {
+      params: { lang: 'es' },
+    });
+    const filteredHtml = await filtered.text();
+    const unfiltered = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const unfilteredHtml = await unfiltered.text();
+
+    for (const html of [filteredHtml, unfilteredHtml]) {
+      expect(html).toContain('data-tray-id="community-activities"');
+      expect(html).toContain('Actividades de la comunidad');
+    }
+  });
+
+  it('never disables Escape — data-close-on-escape stays at its default (true), unlike the editor', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).not.toContain('data-close-on-escape="false"');
+  });
+
+  it('never marks a filter/pagination/card link as a desk-window opener (would wrongly replay the open animation)', async () => {
+    pageResult.value = { activities: [card({ id: 'act-1', title: 'Mi actividad' })], total: 45 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1&page=2', { params: { lang: 'es' } });
+    const html = await res.text();
+    const windowHtml = html.slice(html.indexOf('id="desk-window"'));
+    // The ONLY `data-desk-window-open` opener anywhere on this page is the
+    // title bar's own "+" shortcut to the SEPARATE creator window — never a
+    // filter chip, a pagination link, or an activity card.
+    const openers = windowHtml.match(/data-desk-window-open(="[^"]*")?/g) ?? [];
+    expect(openers).toHaveLength(1);
+    expect(windowHtml).toContain('data-desk-window-open="create"');
+    expect(html).toContain('data-testid="activity-card"');
+  });
+});
