@@ -57,8 +57,6 @@
  */
 import type { Lang } from '@lib/i18n';
 import { ROW_PADDING_X } from '@lib/ui/layout';
-import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
-import { ICON_TOOLTIP_BUBBLE_CLASS } from '@lib/ui/iconTooltip';
 
 interface Props {
   lang: Lang;
@@ -139,24 +137,6 @@ interface Props {
    * unchanged.
    */
   titleEditable?: boolean;
-  /**
-   * "Actividades de la comunidad" back arrow (owner spec 2026-10-07, "ya no
-   * tendremos ejercicios propuestos separados de actividades de la
-   * comunidad"): a small `‹` right after the traffic lights, for a window
-   * whose content is one level BELOW a list the visitor can go back to (the
-   * practice window -> the community list, today). A plain
-   * `<a href={backHref} data-back-button>` — same no-JS-first posture as
-   * every other control here — that opts into the SAME site-wide
-   * progressive enhancement `BackButton.astro` uses
-   * (`@lib/backNavigation#initBackButtons`, wired once from
-   * `BaseLayout.astro`'s own script): `history.back()` when the visitor's
-   * tracked previous screen is genuinely that list, a plain navigation to
-   * `backHref` otherwise. Omitted entirely (`null`, the default) for every
-   * caller with nothing to go back to (the list window itself, the editor).
-   */
-  backHref?: string | null;
-  /** Accessible name AND tooltip for {@link backHref} — required together with it. */
-  backLabel?: string;
 }
 
 const {
@@ -173,26 +153,7 @@ const {
   status = null,
   statusId = 'desk-window-status',
   titleEditable = false,
-  backHref = null,
-  backLabel = '',
 } = Astro.props;
-
-/**
- * The back arrow's own trigger box (owner report, 2026-10-07: "the back
- * arrow is a tiny, faint glyph" — it used to be a bare `h-5 w-5` circle with
- * a plain `‹` character, no border, barely visible next to the lights). A
- * real ~32px hit target (bigger than the 14px lights it sits beside, same
- * `rounded-full` shape so it still reads as part of that circular cluster)
- * with the SAME bordered/background/hover/focus idiom
- * `@lib/ui/iconTooltip#ICON_TOOLTIP_TRIGGER_CLASS` gives every OTHER icon
- * button in this window's own title bar (the present/print/share/duplicate/
- * report/"…" actions, `[id].astro`) — just sized down to fit this tight
- * `gap-2` cluster rather than that shared constant's own 36/44px boxes. The
- * tooltip bubble itself is still the literal shared
- * `ICON_TOOLTIP_BUBBLE_CLASS`, so it looks and behaves exactly like theirs.
- */
-const BACK_BUTTON_TRIGGER_CLASS =
-  'group relative inline-flex size-8 flex-none items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 ---
 
 <section
@@ -251,29 +212,6 @@ const BACK_BUTTON_TRIGGER_CLASS =
         aria-pressed={forceFullScreen ? 'true' : 'false'}
         class="hidden h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:inline-block"
       ></button>
-      {/* "‹" back arrow (owner spec 2026-10-07): grouped INSIDE the lights'
-          own tight `gap-2` cluster, not as a separate top-level child of the
-          title bar's `gap-4` row — on the narrowest phones, where this row
-          is already tight (title/chip/actions all competing for one line,
-          PART 6a phone layout fix), a second `gap-4` boundary left the
-          title truncated down to a single letter. Sharing the lights'
-          own spacing keeps "right after the traffic lights" literally true
-          while costing the title noticeably less room. */}
-      {backHref && (
-        <a
-          href={backHref}
-          data-back-button
-          data-testid="desk-window-back"
-          aria-label={backLabel}
-          aria-describedby="desk-window-back-tooltip"
-          class={BACK_BUTTON_TRIGGER_CLASS}
-        >
-          <CaretLeftIcon aria-hidden="true" size={18} weight="bold" />
-          <span role="tooltip" id="desk-window-back-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
-            {backLabel}
-          </span>
-        </a>
-      )}
     </div>
     {/* PART 6b polish bugfix (owner-reported e2e regression: the PRACTICE
         window's own title bar grew past one row on a narrow phone) —

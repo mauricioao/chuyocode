@@ -44,10 +44,11 @@
  * half of "feels like one window": it is GATED to a genuine folder/desk
  * opener click (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`'s own header)
  * and never replays for any of these plain in-window links, only for a
- * fresh open from the hub's own folder. The practice window's `‹` back arrow
- * returns here with `history.back()` when it can (`DeskWindow.astro`'s own
- * `backHref` doc), landing back on the exact filtered/scrolled state the
- * visitor left.
+ * fresh open from the hub's own folder. The practice window's own `‹` back
+ * arrow (which used to return here) is GONE (owner spec 2026-10-07, "ya no
+ * será necesario el botón de regresar... tiene los 3 botones de colores") —
+ * the red/yellow lights already close/minimize back to the hub; reaching
+ * THIS list again is one more click from there, same as any other folder.
  *
  * UNIFIED SEARCH HEADER (community-search-unify pass, carried over
  * unchanged): search + the compact filters panel now sit in the window's
