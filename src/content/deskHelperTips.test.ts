@@ -44,6 +44,66 @@ describe('DESK_HELPER_TIPS', () => {
     const ids = DESK_HELPER_TIPS.map((tip) => tip.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  // Polish pass 2026-10-06 (owner report: several `es` tips highlight the
+  // SPANISH meaning instead of the English term/example, flooding the
+  // bubble with yellow on words a Spanish-speaking visitor already knows).
+  // Heuristic, kept deliberately simple: a highlighted `<em>` span in `es` is
+  // flagged as likely-Spanish when it either (a) contains a character that
+  // only appears in Spanish spelling (á/é/í/ó/ú/ñ/¿/¡, either case), or
+  // (b) case-insensitively matches one of the specific Spanish meanings this
+  // very pass converted to plain quoted text — a small, documented list, not
+  // a general Spanish detector. English `*…*` terms/examples are expected to
+  // stay highlighted in `es` (e.g. `*Look for*`, `*attend*`) and are not
+  // flagged by either rule.
+  const SPANISH_ONLY_CHARS = /[áéíóúñ¿¡]/i;
+  const KNOWN_SPANISH_MEANINGS = [
+    'actualmente',
+    'en realidad',
+    'avergonzado',
+    'embarazada',
+    'biblioteca',
+    'ayudar',
+    'asistir',
+    'darse cuenta',
+    'realizar',
+    'alfombra',
+    'tela',
+    'fingir',
+    'pretender',
+    'finalmente',
+    'eventualmente',
+    'carrera profesional',
+    'buscar algo',
+    'apagar',
+    'rendirse',
+    'dejar algo',
+    'descubrir',
+    'quedarse sin algo',
+    'levantarse',
+    'posponer',
+    'encontrarse con algo',
+    'cuidar de alguien',
+    'dejar de funcionar',
+    'no te preocupes',
+    'de nada',
+    'suceso',
+  ].map((phrase) => phrase.toLowerCase());
+
+  function likelySpanish(span: string): boolean {
+    return SPANISH_ONLY_CHARS.test(span) || KNOWN_SPANISH_MEANINGS.includes(span.toLowerCase());
+  }
+
+  it('never highlights a likely-Spanish span inside the "es" copy', () => {
+    const offenders: string[] = [];
+    for (const tip of DESK_HELPER_TIPS) {
+      for (const match of tip.es.matchAll(/<em>([^<]+)<\/em>/g)) {
+        const span = match[1];
+        if (likelySpanish(span)) offenders.push(`${tip.id}: "${span}"`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('pickRandomTipIndex', () => {

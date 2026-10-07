@@ -252,7 +252,7 @@
     "character": "luna",
     "topic": "vocabulario",
     "level": "A2",
-    "es": "*Weather* es el clima y *time* es el tiempo que pasa: no confundas ambos con *tiempo*.",
+    "es": "*Weather* es el clima y *time* es el tiempo que pasa: no confundas ambos con \"tiempo\".",
     "en": "*Weather* means climate and *time* means duration: Spanish *tiempo* covers both words."
   },
   {
@@ -276,7 +276,7 @@
     "character": "tobi",
     "topic": "falsos amigos",
     "level": "A2",
-    "es": "*Actually* no significa *actualmente*; significa *en realidad*: *Actually, I disagree.*",
+    "es": "*Actually* no significa \"actualmente\"; significa \"en realidad\": *Actually, I disagree.*",
     "en": "*Actually* doesn't mean 'currently'; it means 'in fact': *Actually, I disagree.*"
   },
   {
@@ -284,7 +284,7 @@
     "character": "bruno",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Embarrassed* significa *avergonzado*, no *embarazada*. Para eso usa *pregnant.*",
+    "es": "*Embarrassed* significa \"avergonzado\", no \"embarazada\". Para eso usa *pregnant.*",
     "en": "*Embarrassed* means ashamed, not pregnant. For that meaning, use *pregnant.*"
   },
   {
@@ -292,7 +292,7 @@
     "character": "luna",
     "topic": "falsos amigos",
     "level": "A2",
-    "es": "*Library* es la *biblioteca*; la librería donde compras libros es *bookstore.*",
+    "es": "*Library* es la \"biblioteca\"; la librería donde compras libros es *bookstore.*",
     "en": "*Library* means a place to borrow books; a shop that sells them is a *bookstore.*"
   },
   {
@@ -300,7 +300,7 @@
     "character": "mia",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Assist* significa *ayudar*, no *asistir* a un evento; para eso usa *attend.*",
+    "es": "*Assist* significa \"ayudar\", no \"asistir\" a un evento; para eso usa *attend.*",
     "en": "*Assist* means to help, not to attend an event; for that, use *attend.*"
   },
   {
@@ -308,7 +308,7 @@
     "character": "paco",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Attend* significa *asistir* a algo, como una clase o reunión: *attend a meeting.*",
+    "es": "*Attend* significa \"asistir\" a algo, como una clase o reunión: *attend a meeting.*",
     "en": "*Attend* means to be present at something, like a class or meeting: *attend a meeting.*"
   },
   {
@@ -316,7 +316,7 @@
     "character": "tobi",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Realize* significa *darse cuenta*, no *realizar* una tarea; para eso usa *carry out* o *do.*",
+    "es": "*Realize* significa \"darse cuenta\", no \"realizar\" una tarea; para eso usa *carry out* o *do.*",
     "en": "*Realize* means to become aware, not to carry out a task; for that, use *do* or *carry out.*"
   },
   {
@@ -324,7 +324,7 @@
     "character": "bruno",
     "topic": "falsos amigos",
     "level": "B2",
-    "es": "*Constipated* significa *estreñido*; si tienes un resfriado, di *I have a cold.*",
+    "es": "*Constipated* significa \"estreñido\"; si tienes un resfriado, di *I have a cold.*",
     "en": "*Constipated* refers to digestion; if you have a cold, say *I have a cold*, not *I'm constipated.*"
   },
   {
@@ -332,7 +332,7 @@
     "character": "luna",
     "topic": "falsos amigos",
     "level": "A2",
-    "es": "*Exit* es la *salida* de un lugar; el *éxito* en inglés se dice *success.*",
+    "es": "*Exit* es la \"salida\" de un lugar; el \"éxito\" en inglés se dice *success.*",
     "en": "*Exit* means the way out; achievement in Spanish is *éxito*, which is *success* in English."
   },
   {
@@ -340,7 +340,7 @@
     "character": "mia",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Success* es *éxito*; no lo confundas con *suceso*, que se traduce como *event.*",
+    "es": "*Success* es \"éxito\"; no lo confundas con \"suceso\", que se traduce como *event.*",
     "en": "*Success* means achievement; don't confuse it with *suceso*, an event, which is *event* in English."
   },
   {
@@ -348,7 +348,7 @@
     "character": "paco",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Carpet* es la *alfombra*; la carpeta de documentos se dice *folder* o *file.*",
+    "es": "*Carpet* es la \"alfombra\"; la carpeta de documentos se dice *folder* o *file.*",
     "en": "*Carpet* means a rug; a document folder is a *folder*, not a *carpet.*"
   },
   {
@@ -356,7 +356,7 @@
     "character": "tobi",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Fabric* significa *tela*; una fábrica donde se produce algo es *factory.*",
+    "es": "*Fabric* significa \"tela\"; una fábrica donde se produce algo es *factory.*",
     "en": "*Fabric* means cloth; a place that manufactures goods is a *factory.*"
   },
   {
@@ -372,7 +372,7 @@
     "character": "luna",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Pretend* significa *fingir*, no *pretender*; para eso usa *intend* o *try to.*",
+    "es": "*Pretend* significa \"fingir\", no \"pretender\"; para eso usa *intend* o *try to.*",
     "en": "*Pretend* means to fake something, not to intend; for that, use *intend* or *try to.*"
   },
   {
@@ -388,7 +388,7 @@
     "character": "paco",
     "topic": "falsos amigos",
     "level": "B1",
-    "es": "*Eventually* significa *finalmente*, no *eventualmente*; para eso usa *occasionally.*",
+    "es": "*Eventually* significa \"finalmente\", no \"eventualmente\"; para eso usa *occasionally.*",
     "en": "*Eventually* means 'in the end', not 'occasionally'; for that sense, use *occasionally.*"
   },
   {
@@ -396,7 +396,7 @@
     "character": "tobi",
     "topic": "falsos amigos",
     "level": "C1",
-    "es": "*Career* es la *carrera profesional*; una carrera universitaria se dice *degree* o *major.*",
+    "es": "*Career* es la \"carrera profesional\"; una carrera universitaria se dice *degree* o *major.*",
     "en": "*Career* means your professional path; a university degree program is called a *degree* or *major.*"
   },
   {
@@ -612,7 +612,7 @@
     "character": "luna",
     "topic": "phrasal verbs",
     "level": "A2",
-    "es": "*Look for* significa *buscar algo*: *I'm looking for my keys everywhere.*",
+    "es": "*Look for* significa \"buscar algo\": *I'm looking for my keys everywhere.*",
     "en": "*Look for* means to search for something: *I'm looking for my keys everywhere.*"
   },
   {
@@ -620,7 +620,7 @@
     "character": "mia",
     "topic": "phrasal verbs",
     "level": "A1",
-    "es": "*Turn off* significa *apagar*: *Turn off the lights before you leave.*",
+    "es": "*Turn off* significa \"apagar\": *Turn off the lights before you leave.*",
     "en": "*Turn off* means to switch something off: *Turn off the lights before you leave.*"
   },
   {
@@ -628,7 +628,7 @@
     "character": "paco",
     "topic": "phrasal verbs",
     "level": "A2",
-    "es": "*Give up* significa *rendirse* o *dejar algo*: *Don't give up on your dreams.*",
+    "es": "*Give up* significa \"rendirse\" o \"dejar algo\": *Don't give up on your dreams.*",
     "en": "*Give up* means to quit or stop trying: *Don't give up on your dreams.*"
   },
   {
@@ -636,7 +636,7 @@
     "character": "tobi",
     "topic": "phrasal verbs",
     "level": "B1",
-    "es": "*Find out* significa *descubrir* información: *I found out the truth yesterday.*",
+    "es": "*Find out* significa \"descubrir\" información: *I found out the truth yesterday.*",
     "en": "*Find out* means to discover information: *I found out the truth yesterday.*"
   },
   {
@@ -644,7 +644,7 @@
     "character": "bruno",
     "topic": "phrasal verbs",
     "level": "B1",
-    "es": "*Run out of* significa *quedarse sin algo*: *We ran out of milk.*",
+    "es": "*Run out of* significa \"quedarse sin algo\": *We ran out of milk.*",
     "en": "*Run out of* means to have no more of something: *We ran out of milk.*"
   },
   {
@@ -652,7 +652,7 @@
     "character": "luna",
     "topic": "phrasal verbs",
     "level": "A1",
-    "es": "*Get up* significa *levantarse* de la cama: *I get up at 7 every day.*",
+    "es": "*Get up* significa \"levantarse\" de la cama: *I get up at 7 every day.*",
     "en": "*Get up* means to rise from bed: *I get up at 7 o'clock every day.*"
   },
   {
@@ -660,7 +660,7 @@
     "character": "mia",
     "topic": "phrasal verbs",
     "level": "B1",
-    "es": "*Put off* significa *posponer*: *Don't put off your homework until tomorrow.*",
+    "es": "*Put off* significa \"posponer\": *Don't put off your homework until tomorrow.*",
     "en": "*Put off* means to postpone: *Don't put off your homework until tomorrow.*"
   },
   {
@@ -668,7 +668,7 @@
     "character": "paco",
     "topic": "phrasal verbs",
     "level": "B2",
-    "es": "*Come across* significa *encontrarse con algo* por casualidad: *I came across an old photo.*",
+    "es": "*Come across* significa \"encontrarse con algo\" por casualidad: *I came across an old photo.*",
     "en": "*Come across* means to find something by chance: *I came across an old photo.*"
   },
   {
@@ -676,7 +676,7 @@
     "character": "tobi",
     "topic": "phrasal verbs",
     "level": "A2",
-    "es": "*Look after* significa *cuidar de alguien*: *Can you look after my dog?*",
+    "es": "*Look after* significa \"cuidar de alguien\": *Can you look after my dog?*",
     "en": "*Look after* means to take care of someone: *Can you look after my dog?*"
   },
   {
@@ -684,7 +684,7 @@
     "character": "bruno",
     "topic": "phrasal verbs",
     "level": "B1",
-    "es": "*Break down* significa *dejar de funcionar*: *My car broke down on the highway.*",
+    "es": "*Break down* significa \"dejar de funcionar\": *My car broke down on the highway.*",
     "en": "*Break down* means to stop working: *My car broke down on the highway.*"
   },
   {
@@ -700,7 +700,7 @@
     "character": "mia",
     "topic": "expresiones",
     "level": "B1",
-    "es": "*How come?* significa *¿cómo es que...?* y va seguido del orden normal: *How come you're here?*",
+    "es": "*How come?* significa \"¿cómo es que...?\" y va seguido del orden normal: *How come you're here?*",
     "en": "*How come?* means 'why' in a casual way, followed by normal word order: *How come you're here?*"
   },
   {
@@ -716,7 +716,7 @@
     "character": "tobi",
     "topic": "expresiones",
     "level": "B1",
-    "es": "*It's up to you* significa *la decisión es tuya*: *We can go now or later, it's up to you.*",
+    "es": "*It's up to you* significa \"la decisión es tuya\": *We can go now or later, it's up to you.*",
     "en": "*It's up to you* means the choice is yours: *We can go now or later, it's up to you.*"
   },
   {
@@ -732,7 +732,7 @@
     "character": "luna",
     "topic": "expresiones",
     "level": "A2",
-    "es": "*Take your time* significa *tómate tu tiempo*: nadie te está apurando, así que relájate.",
+    "es": "*Take your time* significa \"tómate tu tiempo\": nadie te está apurando, así que relájate.",
     "en": "*Take your time* means there's no rush at all, so relax and go at your own pace."
   },
   {
@@ -740,7 +740,7 @@
     "character": "mia",
     "topic": "expresiones",
     "level": "A2",
-    "es": "*No worries* es una forma informal de decir *no te preocupes* o *de nada.*",
+    "es": "*No worries* es una forma informal de decir \"no te preocupes\" o \"de nada\".",
     "en": "*No worries* is a casual way to say *don't worry* or *you're welcome.*"
   },
   {
@@ -748,7 +748,7 @@
     "character": "paco",
     "topic": "expresiones",
     "level": "A2",
-    "es": "*Let me know* significa *avísame*: *Let me know if you need anything.*",
+    "es": "*Let me know* significa \"avísame\": *Let me know if you need anything.*",
     "en": "*Let me know* means 'tell me later': *Let me know if you need anything.*"
   },
   {
