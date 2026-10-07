@@ -809,6 +809,31 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
     expect(html).toContain('role="tooltip"');
   });
 
+  // "Modo enfoque" (full-screen exercise mode, owner spec 2026-10-07): a
+  // plain vanilla `<button>` (no `href` — nothing to navigate to), wired up
+  // by id from `ActivityPracticeIsland`'s own separate hydration island.
+  // Deliberately NOT labeled "Pantalla completa" like the window's own green
+  // light — see `i18n.ts`'s own comment on why that would collide.
+  it('renders the "Modo enfoque" toggle button, wired by id, never labeled the same as the window\'s own full-screen light', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/<button[^>]*id="activity-focus-mode-toggle"[^>]*>/);
+    expect(html).toContain('data-testid="activity-focus-mode-toggle"');
+    expect(html).toContain('aria-label="Modo enfoque"');
+    expect(html).toContain('aria-pressed="false"');
+    // The window's own green "full screen" light still exists, as a SEPARATE
+    // control — this button never reuses its exact accessible name.
+    const greenLightIndex = html.indexOf('data-desk-window-fullscreen');
+    const toggleIndex = html.indexOf('id="activity-focus-mode-toggle"');
+    expect(greenLightIndex).toBeGreaterThan(-1);
+    expect(toggleIndex).toBeGreaterThan(-1);
+    expect(greenLightIndex).not.toBe(toggleIndex);
+  });
+
   it('the Duplicar/Reportar guest fallback links also carry an accessible name and a linked tooltip', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {

@@ -526,3 +526,145 @@ describe('ActivityPracticeIsland — hydration (Bug 1, React error #418)', () =>
     expect(recoverableErrors).toEqual([]);
   });
 });
+
+describe('ActivityPracticeIsland — "Modo enfoque" (full-screen exercise mode, owner spec 2026-10-07)', () => {
+  // The real toggle is a plain `<button>` `[id].astro` renders in the
+  // window's title bar — a SEPARATE hydration island from this one, wired
+  // here by `id` (`FOCUS_MODE_TOGGLE_ID`). Simulated here exactly the way
+  // it really exists on the page: a bare DOM node, not part of this
+  // component's own render tree.
+  function mountToggleButton(): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.id = 'activity-focus-mode-toggle';
+    button.setAttribute('aria-pressed', 'false');
+    document.body.appendChild(button);
+    return button;
+  }
+
+  afterEach(() => {
+    document.getElementById('activity-focus-mode-toggle')?.remove();
+  });
+
+  it('is not rendered until toggled on', () => {
+    mountToggleButton();
+    renderIsland([WORKSHEET]);
+    expect(screen.queryByTestId('practice-focus-mode')).toBeNull();
+  });
+
+  it('opens on a click of the external toggle button, and keeps aria-pressed in sync', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('practice-focus-mode')).toBeTruthy();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId('practice-focus-mode')).toBeNull();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('renders the active block inside it — the same practice player, not a placeholder', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    const focusMode = screen.getByTestId('practice-focus-mode');
+    expect(focusMode.querySelector('[data-testid="worksheet-player"]')).toBeTruthy();
+  });
+
+  it('shows no page bar for a single-block activity, but always shows Comprobar', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId('practice-focus-mode-prev')).toBeNull();
+    expect(screen.queryByTestId('practice-focus-mode-next')).toBeNull();
+    expect(screen.getByTestId('practice-focus-mode-check')).toBeTruthy();
+  });
+
+  it('shows the page bar for a multi-block activity, and only shows Comprobar on the LAST page', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET, QUIZ]);
+    fireEvent.click(toggle);
+
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+    expect(screen.queryByTestId('practice-focus-mode-check')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('practice-focus-mode-next'));
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('2 / 2');
+    expect(screen.getByTestId('practice-focus-mode-check')).toBeTruthy();
+
+    // ‹/› wrap around, same as the normal tab row's own ArrowLeft/Right.
+    fireEvent.click(screen.getByTestId('practice-focus-mode-next'));
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+  });
+
+  it('shares its answers/results with the normal view — nothing resets on enter or exit', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+
+    const normalInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(normalInput, { target: { value: 'cat' } });
+
+    fireEvent.click(toggle); // enter focus mode
+    const focusModeInput = screen
+      .getByTestId('practice-focus-mode')
+      .querySelector('[data-testid="player-zone-z1"] input') as HTMLInputElement;
+    expect(focusModeInput.value).toBe('cat');
+
+    fireEvent.click(screen.getByTestId('practice-focus-mode-check'));
+    // WORKSHEET has two zones (z1 filled correctly, z2 left blank).
+    expect(screen.getByTestId('practice-focus-mode-score').textContent).toContain('1 / 2');
+
+    fireEvent.click(toggle); // exit focus mode
+    // The SAME grading is still reflected in the normal footer — Comprobar
+    // was never reset by entering/exiting.
+    expect(screen.getByTestId('practice-score').textContent).toContain('1 / 2');
+  });
+
+  it('Escape exits focus mode', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('practice-focus-mode')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('practice-focus-mode')).toBeNull();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('the exit control closes it', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('practice-focus-mode-exit'));
+    expect(screen.queryByTestId('practice-focus-mode')).toBeNull();
+  });
+
+  it('ArrowRight/ArrowLeft change the page while focus mode is active', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET, QUIZ]);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('2 / 2');
+
+    fireEvent.keyDown(document, { key: 'ArrowLeft' });
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+  });
+
+  it('never hijacks ArrowLeft/ArrowRight while typing in an answer field', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET, QUIZ]);
+    fireEvent.click(toggle);
+
+    const input = screen
+      .getByTestId('practice-focus-mode')
+      .querySelector('[data-testid="player-zone-z1"] input') as HTMLInputElement;
+    input.focus();
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+
+    // Still page 1 — the key reached the input (cursor movement), not the pager.
+    expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+  });
+});

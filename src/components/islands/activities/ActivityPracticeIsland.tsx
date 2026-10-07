@@ -45,11 +45,26 @@
  * this component only wires state to them and back. Answers are NEVER
  * stored — every piece of state below is plain component state, gone the
  * moment this island unmounts.
+ *
+ * "MODO ENFOQUE" (full-screen exercise mode, owner spec 2026-10-07): a
+ * SEPARATE, borderless view of the same active block — no window chrome, no
+ * tab row, just the exercise and a minimal bottom bar (page nav + the final
+ * Comprobar). Toggled from a plain `<button>` this component does not
+ * render itself (`[id].astro`'s own title-bar actions, a different
+ * hydration island — wired by id, see `FOCUS_MODE_TOGGLE_ID`). Portaled
+ * straight to `document.body` (see that block's own header for why), using
+ * the real Fullscreen API where available and a `position: fixed` overlay
+ * otherwise. Shares every bit of state with the normal view (`values`,
+ * `quizResponses`, `results`, `activeTab`) — nothing resets on enter/exit.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ImageIcon } from '@phosphor-icons/react/dist/ssr/Image';
 import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
+import { CaretRightIcon } from '@phosphor-icons/react/dist/ssr/CaretRight';
+import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import type { Block, ImageRef, QuizBlock, WorksheetBlock } from '@/lib/activities/blocks';
@@ -70,6 +85,16 @@ export interface ActivityPracticeIslandProps {
   lang: Lang;
   blocks: Block[];
 }
+
+/**
+ * "Modo enfoque" button's own id (owner spec 2026-10-07, full-screen
+ * exercise mode) — a plain, server-rendered `<button>` in `[id].astro`'s
+ * title-bar actions, a SEPARATE hydration island from this one. Wired here
+ * by `id`, same thin-DOM posture `ActivityEditorIsland.tsx`'s own
+ * `DESK_WINDOW_TITLE_ID` sync uses — two islands cannot otherwise share one
+ * React state.
+ */
+const FOCUS_MODE_TOGGLE_ID = 'activity-focus-mode-toggle';
 
 /** This tab's own default name — the author's own `block.name`, or a positional/type default (owner-approved design: "Hoja N" for a worksheet, "Preguntas" for a quiz). */
 function tabLabel(
@@ -242,6 +267,134 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
     [activateByIndex, blocks.length],
   );
 
+  // "Modo enfoque" — full-screen exercise mode (owner spec 2026-10-07:
+  // "quiero uno de pantalla completa que solo muestre el ejercicio sin
+  // bordes y abajo los botones mínimos para pasar página... y con su
+  // comprobación final").
+  //
+  // THE HOST IS A DEDICATED NODE APPENDED STRAIGHT TO `document.body`, never
+  // nested inside this island's own tree — two real constraints forced this:
+  //   1. The window can be DRAGGED (`deskWindowDrag.ts`), which sets a CSS
+  //      `translate` on it; `translate`/`transform`/`scale`/`rotate`, whenever
+  //      not `none`, establish a new containing block for any `position:
+  //      fixed` DESCENDANT — so a `fixed inset-0` div nested inside a dragged
+  //      window would only ever cover that window's own box, never the real
+  //      viewport, breaking "pantalla completa" the moment the window had
+  //      been moved even once.
+  //   2. `Element.requestFullscreen()` itself has no such problem, but using
+  //      the SAME host for both the real Fullscreen API AND its fallback
+  //      keeps one code path instead of two.
+  // A real `<WorksheetPracticePlayer>`/`<QuizBlockPractice>` instance is
+  // mounted FRESH here (not the same instance portaled over from the normal
+  // view) — simpler than keeping one instance alive across two possible
+  // parents, and the only thing that resets is a worksheet's own camera
+  // pan/zoom (arguably desirable: entering a bigger viewport, it should
+  // re-fit rather than keep a zoom level calibrated for the small window).
+  // The answers themselves (`values`/`quizResponses`) and results
+  // never reset — they already live in THIS component's own state, read by
+  // both the normal and focus-mode views alike (owner requirement: "las
+  // respuestas... son el mismo estado que la vista normal").
+  const [focusModeActive, setFocusModeActive] = useState(false);
+  const [focusModeHost] = useState<HTMLDivElement | null>(() =>
+    typeof document === 'undefined' ? null : document.createElement('div'),
+  );
+
+  useEffect(() => {
+    if (!focusModeHost) return undefined;
+    document.body.appendChild(focusModeHost);
+    return () => {
+      document.body.removeChild(focusModeHost);
+    };
+  }, [focusModeHost]);
+
+  const exitFocusMode = useCallback(() => {
+    if (focusModeHost && document.fullscreenElement === focusModeHost) {
+      void document.exitFullscreen?.().catch(() => {
+        // Nothing left to do — the CSS fallback below (`focusModeActive`
+        // going false) still visually exits either way.
+      });
+    }
+    setFocusModeActive(false);
+  }, [focusModeHost]);
+
+  const toggleFocusMode = useCallback(() => {
+    if (focusModeActive) {
+      exitFocusMode();
+      return;
+    }
+    setFocusModeActive(true);
+    if (focusModeHost && typeof focusModeHost.requestFullscreen === 'function') {
+      // Best-effort: rejected inside e.g. an iframe with no
+      // `allow="fullscreen"` (the next stage adds that attribute) — the
+      // fixed-overlay CSS below still makes this look/behave full screen
+      // either way, see this block's own header.
+      void focusModeHost.requestFullscreen().catch(() => {});
+    }
+  }, [focusModeActive, focusModeHost]);
+
+  // External exits this component did not itself trigger (the browser's own
+  // fullscreen UI, or the OS) — keep the toggle button's `aria-pressed` and
+  // this state in sync either way.
+  useEffect(() => {
+    if (!focusModeHost) return undefined;
+    function onFullScreenChange() {
+      if (document.fullscreenElement !== focusModeHost) setFocusModeActive(false);
+    }
+    document.addEventListener('fullscreenchange', onFullScreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullScreenChange);
+  }, [focusModeHost]);
+
+  // The title bar's own plain `<button>` (`[id].astro`) — a separate
+  // hydration island, wired here by id (see `FOCUS_MODE_TOGGLE_ID`'s own
+  // header).
+  useEffect(() => {
+    const button = document.getElementById(FOCUS_MODE_TOGGLE_ID);
+    if (!button) return undefined;
+    button.addEventListener('click', toggleFocusMode);
+    return () => button.removeEventListener('click', toggleFocusMode);
+  }, [toggleFocusMode]);
+
+  useEffect(() => {
+    const button = document.getElementById(FOCUS_MODE_TOGGLE_ID);
+    button?.setAttribute('aria-pressed', String(focusModeActive));
+  }, [focusModeActive]);
+
+  const activeIndex = Math.max(
+    0,
+    blocks.findIndex((b) => b.id === activeTab),
+  );
+  const isLastPage = activeIndex === blocks.length - 1;
+
+  // Esc (both the native exit AND the CSS fallback, which has no native exit
+  // of its own to rely on) and ←/→ to change page — document-level so it
+  // works no matter what currently has focus, EXCEPT inside an editable
+  // field (a worksheet/quiz text answer): arrow keys there must keep moving
+  // the text cursor, never the page.
+  useEffect(() => {
+    if (!focusModeActive) return undefined;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        exitFocusMode();
+        return;
+      }
+      const target = event.target;
+      const isEditable =
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (isEditable || blocks.length <= 1) return;
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        activateByIndex((activeIndex + 1) % blocks.length);
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        activateByIndex((activeIndex - 1 + blocks.length) % blocks.length);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [focusModeActive, exitFocusMode, activateByIndex, activeIndex, blocks.length]);
+
   let worksheetPosition = -1;
 
   return (
@@ -408,6 +561,116 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
           </div>
         </div>
       )}
+
+      {/* "Modo enfoque" (full-screen exercise mode) — portaled straight to
+          `document.body`, never rendered in place; see this file's own
+          header on `focusModeHost` for why. Calm and borderless on purpose
+          (owner spec: "sin bordes... mantenlo simple, sin decoración
+          nueva") — no transition/animation of its own either way, so there
+          is nothing extra `prefers-reduced-motion: reduce` needs to turn
+          off here. */}
+      {focusModeActive &&
+        focusModeHost &&
+        activeBlock &&
+        createPortal(
+          <div
+            data-testid="practice-focus-mode"
+            className="fixed inset-0 z-[80] flex flex-col bg-background"
+          >
+            <button
+              type="button"
+              data-testid="practice-focus-mode-exit"
+              aria-label={t.focusModeExit}
+              onClick={exitFocusMode}
+              className="absolute right-3 top-3 z-10 inline-flex size-9 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <XIcon aria-hidden="true" size={18} />
+            </button>
+
+            <div className="flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10">
+              {activeBlock.type === 'worksheet' ? (
+                <WorksheetPracticePlayer
+                  lang={lang}
+                  block={activeBlock as WorksheetBlock & { image: ImageRef }}
+                  imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock & { image: ImageRef }).image.path)}
+                  practice={{ values, onChange: handleChange, results, disabled: graded }}
+                  toolbarSlot={null}
+                />
+              ) : (
+                <QuizBlockPractice
+                  lang={lang}
+                  block={activeBlock as QuizBlock}
+                  response={quizResponses[activeBlock.id] ?? {}}
+                  onChange={(slotId, value) => handleQuizChange(activeBlock.id, slotId, value)}
+                  outcomes={quizResults?.[activeBlock.id]?.slots}
+                  disabled={graded}
+                  mode={quizModes[activeBlock.id] ?? 'quiz'}
+                  onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
+                />
+              )}
+            </div>
+
+            {/* Minimal bottom bar (owner spec): page nav only when there is
+                more than one page, the final Comprobar/Reintentar only on
+                the last page — always, for a single-page activity. */}
+            <div
+              data-testid="practice-focus-mode-bar"
+              className={cn('flex flex-none flex-wrap items-center gap-3 border-t border-border py-3', ROW_PADDING_X)}
+            >
+              {blocks.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-testid="practice-focus-mode-prev"
+                    aria-label={t.focusModePrev}
+                    onClick={() => activateByIndex((activeIndex - 1 + blocks.length) % blocks.length)}
+                    className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <CaretLeftIcon aria-hidden="true" size={18} />
+                  </button>
+                  <span data-testid="practice-focus-mode-page" className="min-w-[3.5rem] text-center text-sm tabular-nums text-muted-foreground">
+                    {activeIndex + 1} / {blocks.length}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="practice-focus-mode-next"
+                    aria-label={t.focusModeNext}
+                    onClick={() => activateByIndex((activeIndex + 1) % blocks.length)}
+                    className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <CaretRightIcon aria-hidden="true" size={18} />
+                  </button>
+                </div>
+              )}
+
+              {hasGradableContent && isLastPage && (
+                <div className="ml-auto flex flex-wrap items-center gap-3">
+                  {graded && (
+                    <p data-testid="practice-focus-mode-score" className="text-sm font-medium text-foreground">
+                      {t.score}: {correctCount} / {totalCount}
+                    </p>
+                  )}
+                  {!graded ? (
+                    <Button type="button" data-testid="practice-focus-mode-check" className="min-h-11" onClick={handleCheck}>
+                      {t.check}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      data-testid="practice-focus-mode-retry"
+                      className="min-h-11"
+                      onClick={handleRetry}
+                    >
+                      {t.retry}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>,
+          focusModeHost,
+        )}
     </div>
   );
 }

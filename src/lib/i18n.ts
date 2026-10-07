@@ -900,6 +900,19 @@ export const UI_LABELS = {
         // behind this one trigger so the title bar's actions fit one row —
         // see `DeskWindow.astro`'s own header.
         windowMore: 'Más',
+        // "Modo enfoque" (full-screen exercise mode, owner spec 2026-10-07:
+        // "quiero uno de pantalla completa que solo muestre el ejercicio sin
+        // bordes"): deliberately NOT named "Pantalla completa" like
+        // `windowFullScreen` above — that is a DIFFERENT, already-shipped
+        // control (the green light, which just maximizes the WINDOW, chrome
+        // and all) living in the SAME title bar; reusing its exact name here
+        // would give two differently-behaving buttons the identical
+        // accessible name. This one hides every bit of chrome (window, tabs,
+        // title) and shows only the exercise.
+        focusMode: 'Modo enfoque',
+        focusModeExit: 'Salir del modo enfoque',
+        focusModePrev: 'Página anterior',
+        focusModeNext: 'Página siguiente',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -2135,6 +2148,13 @@ export const UI_LABELS = {
         windowMinimize: 'Minimize',
         windowFullScreen: 'Full screen',
         windowMore: 'More',
+        // "Focus mode" (full-screen exercise mode) — see the `es` copy's own
+        // comment for why this is deliberately NOT named "Full screen" like
+        // `windowFullScreen` above (a different, already-shipped control).
+        focusMode: 'Focus mode',
+        focusModeExit: 'Exit focus mode',
+        focusModePrev: 'Previous page',
+        focusModeNext: 'Next page',
       },
       report: {
         button: 'Report',
