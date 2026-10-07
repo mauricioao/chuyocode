@@ -223,6 +223,14 @@ export function initDeskWindowManager(
   let state: DeskWindowsState = restored && restored.windows.length > 0 ? restored : initialDeskWindowsState;
   const frames = new Map<string, ManagedWindow>();
   let pendingOpen: PendingOpen = null;
+  // Focus management (robustness pass, owner spec: "opening a window moves
+  // keyboard focus into it; closing returns focus to the next window or to
+  // the desk item that opened it"). Keyed by window id, populated ONLY by a
+  // real HOST-level `[data-desk-window-open]` click (`onClickCapture`'s own
+  // header) — a `postMessage`'d open from inside an embedded window, or the
+  // initial `initialWindow` open, has no host-level element to return focus
+  // to, so those simply have no entry here.
+  const openerElements = new Map<string, HTMLElement>();
 
   function applyGeometry(managed: ManagedWindow, entry: DeskWindowEntry): void {
     managed.wrapper.style.zIndex = String(1000 + entry.z);
@@ -394,6 +402,25 @@ export function initDeskWindowManager(
         );
       } catch {
         // Cross-origin — should never happen (see this file's own header).
+      }
+
+      // Focus management (robustness pass, owner spec: "opening a window
+      // moves keyboard focus into it"): every real content load for the
+      // CURRENTLY active window moves focus into it — covers a brand new
+      // open (this is the only window, or just became the topmost one), an
+      // in-window navigation while already active (a filter/pagination
+      // link), and restoring persisted windows after a reload (the one that
+      // was active when the session was last saved). Never for a window
+      // that loaded in the BACKGROUND (minimized, or no longer the topmost
+      // one by the time its own content finished loading) — that would
+      // steal focus from whatever the visitor is actually looking at.
+      if (activeWindowId(state) === entry.id) {
+        try {
+          iframe.focus();
+        } catch {
+          // Best-effort — a sandboxed/cross-origin frame just keeps
+          // whatever focus it already had.
+        }
       }
 
       // Fool-proofing a chrome-less frame (robustness pass, owner report):
@@ -659,6 +686,10 @@ export function initDeskWindowManager(
     // chip, the levels dock…) — captured BEFORE the frame exists, same-
     // document/same-origin, no `postMessage` round trip needed.
     const rect = opener.getBoundingClientRect();
+    // Focus management (robustness pass): remembered so closing THIS window
+    // (with no other window left to focus instead) can send focus back to
+    // the exact desk item that opened it — `requestClose`'s own header.
+    openerElements.set(match.id, opener);
     openWindow(href, title, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
   }
   doc.addEventListener('click', onClickCapture, true);
@@ -711,6 +742,30 @@ export function initDeskWindowManager(
     if (!canClose) return;
     await playCloseAnimation(managed);
     dispatch({ type: 'close', id });
+
+    // Focus management (robustness pass, owner spec: "closing returns focus
+    // to the next window or to the desk item that opened it"): `state` is
+    // already POST-close here (`dispatch` above is synchronous) — prefer
+    // whatever window the reducer now considers active (the next one down
+    // the stack), falling back to the exact desk item that opened THIS one,
+    // if it is still on the page. Neither existing is a quiet no-op: focus
+    // simply stays wherever the browser already put it (the closed frame
+    // itself, which is no longer in the document).
+    const nextActive = activeWindowId(state);
+    const nextManaged = nextActive ? frames.get(nextActive) : null;
+    if (nextManaged) {
+      try {
+        nextManaged.iframe.focus();
+      } catch {
+        // Best-effort.
+      }
+    } else {
+      const opener = openerElements.get(id);
+      if (opener && doc.contains(opener)) {
+        opener.focus();
+      }
+    }
+    openerElements.delete(id);
   }
 
   async function onMessage(event: MessageEvent): Promise<void> {

@@ -664,3 +664,79 @@ describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
     expect(toastSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('initDeskWindowManager — focus management (robustness pass)', () => {
+  it('opening a window moves keyboard focus into it once its content loads', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    expect(document.activeElement).toBe(frame.iframe);
+  });
+
+  it('a window that loads in the background (no longer the active one) never steals focus', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const community = frameFor('community')!;
+    community.iframe.dispatchEvent(new Event('load'));
+    document.body.focus(); // simulate focus having moved elsewhere since
+
+    // Re-fires this SAME frame's own 'load' (e.g. a slow in-window
+    // navigation resolving) after a DIFFERENT window has since become active.
+    handle.openWindow('/es/crear', 'Crear actividad');
+    frameFor('create')!.iframe.dispatchEvent(new Event('load'));
+    community.iframe.dispatchEvent(new Event('load'));
+
+    expect(document.activeElement).toBe(frameFor('create')!.iframe);
+  });
+
+  it('closing a window sends focus to the next window down the stack', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    handle.openWindow('/es/crear', 'Crear actividad');
+    const community = frameFor('community')!;
+    const create = frameFor('create')!;
+
+    win.dispatchMessage({ source: 'desk-window', type: 'close' }, create.iframe.contentWindow);
+    await flushMicrotasks();
+
+    expect(document.activeElement).toBe(community.iframe);
+  });
+
+  it('closing the last window sends focus back to the exact desk item that opened it', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+
+    const anchor = document.createElement('a');
+    anchor.href = '/es/ingles/actividades';
+    anchor.setAttribute(DESK_WINDOW_OPEN_ATTR, 'community');
+    anchor.textContent = 'Comunidad';
+    document.body.appendChild(anchor);
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    const frame = frameFor('community')!;
+
+    win.dispatchMessage({ source: 'desk-window', type: 'close' }, frame.iframe.contentWindow);
+    await flushMicrotasks();
+
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it('closing the last window is a quiet no-op for focus when there is no opener to return to (e.g. a postMessage-driven open)', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad'); // no origin -> no tracked opener element
+    const frame = frameFor('community')!;
+    document.body.tabIndex = -1;
+    document.body.focus();
+
+    win.dispatchMessage({ source: 'desk-window', type: 'close' }, frame.iframe.contentWindow);
+    await flushMicrotasks();
+
+    expect(document.activeElement).toBe(document.body);
+  });
+});
