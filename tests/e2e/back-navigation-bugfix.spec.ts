@@ -37,14 +37,20 @@ import { test, expect, type Page } from '@playwright/test';
  * after.
  */
 async function closeAnyDialog(page: Page): Promise<void> {
+  // Under a loaded full e2e run the dialog can open well after a fixed
+  // ~750 ms window, so first let the page settle, then require the overlay
+  // to stay absent for several consecutive checks (bounded at ~6 s).
+  await page.waitForLoadState('networkidle');
   const overlay = page.locator('[data-slot="dialog-overlay"]');
-  for (let attempt = 0; attempt < 5; attempt++) {
+  let clearChecks = 0;
+  for (let attempt = 0; attempt < 30 && clearChecks < 4; attempt++) {
     if (await overlay.count()) {
+      clearChecks = 0;
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(150);
     } else {
-      await page.waitForTimeout(150);
+      clearChecks += 1;
     }
+    await page.waitForTimeout(200);
   }
   await expect(overlay).toHaveCount(0);
 }
