@@ -61,6 +61,7 @@ import PageTitle from '@components/ui/PageTitle.astro';
 import AuthPanel from '@components/islands/AuthPanel';
 import { SpinnerGapIcon } from '@phosphor-icons/react/dist/ssr/SpinnerGap';
 import { markPrivate } from '@lib/httpCache';
+import { windowAuthBounceResponse } from '@lib/windowAuthBounce';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   AUTH_ERROR_PARAM,
@@ -92,14 +93,14 @@ if (!lang) {
  * Instead: a minimal, chrome-less shell whose only job is to bounce the
  * REAL browser tab (`window.top`) to this exact page — a genuine top-level
  * navigation, so it renders its full normal chrome — with `next` set to
- * `window.top`'s OWN current address (the host page the iframe sits inside,
- * e.g. the hub or the activity it was showing). That is client-side-only
- * information (the server never sees the parent frame's URL), hence the
- * inline script rather than a server-computed redirect; the plain `<a
- * target="_top">` is the no-JS/script-blocked fallback, degrading to a bare
- * top-level sign-in with no `next` rather than leaving the visitor stuck.
+ * `window.top`'s own path (the host page the iframe sits inside, e.g. the
+ * hub or the activity it was showing). That is client-side-only information
+ * (the server never sees the parent frame's URL), hence a script rather than
+ * a server-computed redirect; the plain `<a target="_top">` is the
+ * no-JS/script-blocked fallback. The shell lives in `@lib/windowAuthBounce`.
  */
-if (Astro.request.headers.get('sec-fetch-dest') === 'iframe') {
+const inWindowFrame = Astro.request.headers.get('sec-fetch-dest') === 'iframe';
+if (inWindowFrame) {
   Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
   markPrivate(Astro.response.headers);
   // `Astro.response.headers` (NOT a fresh `Headers` object): the `Vary` and
@@ -107,42 +108,22 @@ if (Astro.request.headers.get('sec-fetch-dest') === 'iframe') {
   // exact object is the one handed to `Response` — same `Astro.redirect()`
   // pitfall this file's own header documents for the signed-in 303 below.
   Astro.response.headers.set('content-type', 'text/html; charset=utf-8');
-  // 🔴 EVERYTHING IS INLINED HERE, DELIBERATELY, INCLUDING THE WHOLE
-  // TEMPLATE LITERAL — `astro check` reports a FALSE `ts(6133)` against any
-  // binding (even one named `html`/a response variable) whose only use sits
-  // inside a `Response(...)` literal returned from an `if` in `.astro`
-  // frontmatter (`admin/ejercicios/index.astro`'s identical note).
-  return new Response(
-    `<!doctype html>
-<html lang="${lang}">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${UI_LABELS[lang].auth.title}</title>
-</head>
-<body style="font-family: system-ui, sans-serif; display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; padding: 24px;">
-<p>
-  ${UI_LABELS[lang].auth.windowRedirecting}
-  <br />
-  <a id="desk-window-auth-continue" href="/${lang}/auth/entrar" target="_top">${UI_LABELS[lang].auth.windowRedirectingContinue}</a>
-</p>
-<script type="module">
-  try {
-    if (window.top && window.top !== window.self) {
-      const next = encodeURIComponent(window.top.location.href);
-      const url = new URL(${JSON.stringify(`/${lang}/auth/entrar`)}, window.location.origin);
-      url.searchParams.set('next', next);
-      window.top.location.href = url.toString();
-    }
-  } catch (e) {
-    // Best-effort — a sandboxed embedding context just leaves the plain
-    // target="_top" link above as the only way out.
-  }
-</script>
-</body>
-</html>`,
-    { status: 200, headers: Astro.response.headers },
-  );
+}
+// Built outside the `if` on purpose: `astro check` reports a false `ts(6133)`
+// for an import whose only use is a value returned from an `if` block.
+const windowBounce = inWindowFrame
+  ? windowAuthBounceResponse(
+      lang,
+      {
+        title: UI_LABELS[lang].auth.title,
+        redirecting: UI_LABELS[lang].auth.windowRedirecting,
+        continueLabel: UI_LABELS[lang].auth.windowRedirectingContinue,
+      },
+      Astro.response.headers,
+    )
+  : null;
+if (windowBounce) {
+  return windowBounce;
 }
 
 // See the file header: this response varies by `Astro.locals.user` and must
