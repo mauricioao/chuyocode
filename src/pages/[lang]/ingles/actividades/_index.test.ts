@@ -562,8 +562,14 @@ describe('GET /[lang]/ingles/actividades — actividad del día', () => {
 
     const responsePromise = render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
 
-    // Flush pending micro/macrotasks without resolving the main query yet.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Flush pending micro/macrotasks without resolving the main query yet —
+    // POLLED (bounded by iteration count, not wall time) so this stays
+    // reliable under a loaded test run (the full suite, many workers) where
+    // a single fixed tick is not always enough for the render pipeline to
+    // reach the two query calls.
+    for (let i = 0; i < 200 && callOrder.length < 2; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
 
     expect(callOrder).toEqual(expect.arrayContaining(['main-start', 'daily-start']));
     expect(callOrder).toHaveLength(2);
