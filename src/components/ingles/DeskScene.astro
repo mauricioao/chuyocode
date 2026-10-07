@@ -23,6 +23,7 @@
  * `DeskWindow.astro`'s own header), and the desk stays fully visible AND
  * interactive around it, same as the hub itself.
  */
+import DeskChrome from '@components/ingles/DeskChrome.astro';
 import DeskFolder from '@components/ingles/DeskFolder.astro';
 import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
 import DeskCalendarWidget from '@components/ingles/DeskCalendarWidget.astro';
@@ -34,6 +35,8 @@ import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSce
 
 interface Props {
   lang: Lang;
+  /** True only on the Inglés hub — forwarded straight to `DeskChrome`'s own `isHub`. */
+  isHub: boolean;
   greetingLine1: string;
   activityCountLabel: string | null;
   dailyPickHref: string;
@@ -50,6 +53,7 @@ interface Props {
 
 const {
   lang,
+  isHub,
   greetingLine1,
   activityCountLabel,
   dailyPickHref,
@@ -82,8 +86,15 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
 <section
   data-desk
   transition:persist="desk-scene"
-  class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-[calc(100dvh-96px)] desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-3 desk:pb-0"
+  class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-dvh desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-(--desk-chrome-offset) desk:pb-0"
 >
+  {/* Desk-integrated logo + account control row ("desktop" redesign, owner
+      spec 2026-10-07) — FIRST child so it sits earliest in this stacking
+      context; `desk:absolute` there (see its own header) is what lets a
+      window or a dragged widget, both later in source order, paint over
+      it. */}
+  <DeskChrome lang={lang} isHub={isHub} />
+
   {/* Shared gradients for every `DeskFolder`'s back/front SVG layers —
       defined ONCE here, referenced by id, same `url(#…)` pattern the
       approved mockup itself uses (`index.html`'s `#fb`/`#ff`). */}
@@ -126,8 +137,9 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       abrirá una ventana dentro del escritorio") — its own curated-exercise
       count is gone from the desk for the same reason. `openerId="community"`
       gives it the SAME folder-origin scale-in the daily-pick folder already
-      has (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`) — its destination
-      (`/[lang]/ingles/actividades`) now renders as a window too. */}
+      has (`@lib/ui/deskWindowManager.ts#onClickCapture`/`applyOpenAnimation`)
+      — its destination (`/[lang]/ingles/actividades`) now renders as a
+      window too. */}
   <nav
     aria-label={t.foldersLabel}
     class="order-2 grid grid-cols-2 gap-1 desk:order-none desk:col-start-2 desk:row-start-1 desk:flex desk:flex-col desk:items-end desk:gap-[18px] desk:pt-1"
@@ -216,6 +228,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
             return (
               <a
                 href={`/${lang}/ingles/actividades?nivel=${level}`}
+                data-desk-window-open="community"
                 aria-label={`${level}, ${levelLabels[level]}`}
                 class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

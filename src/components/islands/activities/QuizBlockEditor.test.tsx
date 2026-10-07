@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
@@ -164,6 +164,38 @@ describe('QuizBlockEditor — removing a question', () => {
     fireEvent.click(screen.getByTestId('question-delete-s1'));
     expect(screen.getByTestId('quiz-empty-b1')).toBeTruthy();
     expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+});
+
+describe('QuizBlockEditor — scrolling a newly added/selected question into view (owner report: "se rompe el scroll y no deja llegar a la parte superior")', () => {
+  // ROOT CAUSE, confirmed with a real browser (Playwright against the live
+  // editor, not jsdom — `scrollIntoView` does not exist in jsdom): `block:
+  // 'center'` asks EVERY scrollable ancestor along the DOM chain to
+  // re-center the target, not just this column — including several
+  // wrappers further up (`activity-editor-card` in
+  // `ActivityEditorIsland.tsx`, confirmed the culprit; `DeskWindow.astro`'s
+  // own window body/section) that exist ONLY to clip their content
+  // (`overflow: hidden`, no visible scrollbar for a visitor to scroll back
+  // with) and were never meant to scroll at all. Those are now `overflow:
+  // clip` (verified elsewhere — `BlockList.test.tsx`,
+  // `ActivityEditorIsland.test.tsx`), which makes them immune to a
+  // programmatic scroll regardless of the option passed here; `block:
+  // 'nearest'` is the other half of the fix — it only ever moves the ONE
+  // real scroll container (this column), the minimum needed, instead of
+  // re-centering it on every add/select.
+  it('passes `block: "nearest"`, never "center", to `scrollIntoView`', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+      scrollIntoView.mockClear();
+      fireEvent.click(screen.getByTestId('add-question-b1'));
+      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest' }));
+      expect(scrollIntoView).not.toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 });
 

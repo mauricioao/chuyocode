@@ -41,7 +41,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { MagnifyingGlassPlusIcon } from '@phosphor-icons/react/dist/ssr/MagnifyingGlassPlus';
+import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -898,7 +898,7 @@ export default function ActivityEditorIsland({
           a revisión" already lived in that same title bar's `actions` slot. */}
       <div
         data-testid="activity-editor-card"
-        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden"
+        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-clip"
       >
         {/* "Duplicar y adaptar" credit line (D7) — only ever set for a
             duplicate's own editor; an ordinary activity never renders this. */}
@@ -1094,7 +1094,7 @@ export default function ActivityEditorIsland({
               className={ICON_TOOLTIP_TRIGGER_CLASS}
               onClick={openPresentationPreview}
             >
-              <MagnifyingGlassPlusIcon aria-hidden="true" size={16} />
+              <PresentationIcon aria-hidden="true" size={16} />
               <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
                 {t.viewAsPresentation}
               </span>

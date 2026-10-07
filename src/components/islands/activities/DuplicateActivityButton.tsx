@@ -21,6 +21,7 @@ import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { SpinnerGapIcon } from '@phosphor-icons/react/dist/ssr/SpinnerGap';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
+import { isEmbeddedWindowDom, postDeskWindowMessage } from '@/lib/ui/deskWindowMessaging';
 
 export interface DuplicateActivityButtonProps {
   lang: Lang;
@@ -31,7 +32,21 @@ export interface DuplicateActivityButtonProps {
 
 type Status = 'idle' | 'duplicating' | 'error';
 
+/**
+ * Window-manager architecture: embedded (the practice window is itself an
+ * iframe — `@lib/ui/embeddedWindow`'s own header), a plain in-window
+ * navigation would REPLACE the practice window with the new draft's editor
+ * — owner spec instead wants the editor to open as its OWN new window,
+ * stacked over the practice window, exactly like any other
+ * `[data-desk-open-window]` link. `title: null` — the host shows a generic
+ * placeholder until the editor's own `deskWindow.ts` posts its real title on
+ * mount, same as every other freshly-opened window with no known title yet.
+ */
 function defaultNavigate(url: string): void {
+  if (isEmbeddedWindowDom(document)) {
+    postDeskWindowMessage(window, { type: 'open-window', href: url, title: null });
+    return;
+  }
   window.location.href = url;
 }
 

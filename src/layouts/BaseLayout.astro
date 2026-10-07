@@ -146,6 +146,43 @@ interface Props {
    * `data-chrome-hub`).
    */
   deskBehind?: boolean;
+  /**
+   * EMBEDDED mode (window-manager architecture, replacing the
+   * one-SSR-route-per-window model — `@lib/deskWindowsState`'s own header on
+   * WHY: opening a window used to navigate the desk route away, resetting
+   * the helper's tip bubble). True when a window route's own frontmatter
+   * decided the request is for its window CONTENT, loaded inside the host's
+   * `<iframe>` (`@lib/ui/embeddedWindow#isEmbeddedWindowRequest`) — never
+   * set directly by a page; every window route derives it the same way.
+   *
+   * Implies `bare` (no nav progress bar/header/footer/global scroll-to-top —
+   * the host page owns all of that) PLUS three things `bare` alone does not:
+   * no `ClientRouter` (so in-window navigations stay real iframe
+   * navigations, which is what keeps `Sec-Fetch-Dest: iframe` — and
+   * therefore embedded mode itself — "sticky" across them with no extra
+   * wiring), no `MinimizedWindowsTray` (the host renders ONE live tray from
+   * its own window-manager state, not a per-page one reading
+   * `sessionStorage`), and no analytics beacon (an iframe's own page view is
+   * not a visit in its own right). `data-desk-window-embedded` is also set
+   * on `<html>` — `deskWindow.ts`/`deskWindowDrag.ts` read it client-side to
+   * `postMessage` the host instead of navigating/translating locally.
+   */
+  embedded?: boolean;
+  /**
+   * True when the `overlay` slot holds the window-manager's own container
+   * (`DeskWindowManager.astro`, window-manager architecture) rather than a
+   * single always-open `DeskWindow` (the model still used by an EMBEDDED
+   * page — see `embedded`'s own doc above — and by the unchanged guest
+   * path). The manager's own window count changes dynamically, client-side,
+   * with no new page load, so this file cannot decide body-scroll-lock or
+   * the tray's mobile-hide rule from slot presence alone the way it always
+   * has — the manager owns both itself instead, toggling them once at
+   * least one of its OWN windows is actually open (non-minimized) — see
+   * `deskWindowManager.ts`'s own header. Defaults to `false` — the
+   * embedded/guest single-window path keeps today's STATIC behavior,
+   * unchanged.
+   */
+  windowManager?: boolean;
 }
 
 const {
@@ -157,9 +194,30 @@ const {
   theme,
   bare = false,
   deskBehind = false,
+  embedded = false,
+  windowManager = false,
 } = Astro.props;
 
+// Every chrome wrapper `bare` already drops stays dropped for an embedded
+// window too — see the `embedded` prop's own doc above for the three EXTRA
+// things embedded mode drops on top of that (ClientRouter, the tray, analytics).
+const effectiveBare = bare || embedded;
+
 const isIngles = theme === 'ingles';
+
+/**
+ * "Desktop" redesign (owner spec 2026-10-07, "prescindir del header
+ * normal"): true for every desk HOST page — the hub, and every window
+ * route's host shell for a SIGNED-IN visitor (`windowManager`/`deskBehind`
+ * are only ever both true together, only ever for that exact case — see
+ * each page's own frontmatter). Those pages drop the site `<Header>`
+ * entirely; `DeskHost.astro` renders its own desk-integrated logo/account
+ * row instead (`DeskChrome.astro`). The one Inglés page this does NOT cover
+ * is a GUEST's window (`hostMode` false there) — its header keeps rendering
+ * exactly as before, simply hidden behind that window's own full-screen
+ * veil (owner instruction: "keep that exactly as is").
+ */
+const isDeskHost = isIngles && (windowManager || deskBehind);
 
 /**
  * Does this page pass anything into the `overlay` slot below — the
@@ -179,6 +237,10 @@ const isIngles = theme === 'ingles';
  * now.
  */
 const hasOverlay = Astro.slots.has('overlay');
+// See the `windowManager` prop's own doc above — the manager owns the
+// scroll-lock/tray-hide decision dynamically once it exists; this file only
+// ever applies it STATICALLY for the single-always-open-window model.
+const staticOverlayLock = hasOverlay && !windowManager;
 
 // "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item C):
 // the hub is the ONE Inglés page whose header stays always visible and
@@ -235,6 +297,7 @@ const faviconSvg =
   data-full-height={fullHeight ? '' : undefined}
   data-chrome-hub={isInglesHub ? '' : undefined}
   data-desk-behind={deskBehind ? '' : undefined}
+  data-desk-window-embedded={embedded ? '' : undefined}
   class:list={['scroll-smooth', !isIngles && 'dark']}
 >
   <head>
@@ -272,6 +335,105 @@ const faviconSvg =
         html.setAttribute('data-footer-visible', 'false');
       })();
     </script>
+    {/* Recursion guard (window-manager architecture): a HOST page (one that
+        was NOT rendered embedded — no `data-desk-window-embedded` above)
+        must never itself end up running INSIDE an iframe. The one way that
+        could happen here is the window manager's own `<iframe>` loading a
+        plain in-window link that, for whatever reason, did not carry
+        `Sec-Fetch-Dest: iframe` (an older browser — this header is the
+        PRIMARY signal, see `@lib/ui/embeddedWindow`'s own header) — this is
+        the fallback net under that primary signal, not a replacement for it.
+        `location.replace` (never a plain navigation) so the detour never
+        enters this tab's own history. Classic/`is:inline`, same reasoning as
+        the script above: must run before first paint, so a host page never
+        flashes its own full chrome inside the iframe first.
+
+        BUG FIX (owner report, verified in a real browser): NEVER retries
+        once `?ventana=1` is already on the URL — a page whose own
+        frontmatter never calls `isEmbeddedWindowRequest` at all (`404.astro`
+        is the one that actually reproduced this) never sets
+        `data-desk-window-embedded` no matter how many times it reloads with
+        that param present, so the old unconditional retry replaced the
+        frame's own location with the SAME url forever: an infinite reload
+        loop that never let the frame's own `load` event settle, which is
+        what the host's own chrome-less fallback bar
+        (`@lib/ui/deskWindowManager.ts`) needs to ever show at all. This exact
+        decision is also a tested, pure function
+        (`@lib/ui/embeddedWindow#shouldRetryAsEmbeddedFrame`) — duplicated
+        here rather than imported, since a classic `is:inline` script has no
+        module system to import one with. */}
+    <script is:inline>
+      (function () {
+        if (document.documentElement.hasAttribute('data-desk-window-embedded')) return;
+        try {
+          if (window.self === window.top) return;
+          var url = new URL(window.location.href);
+          if (url.searchParams.get('ventana') === '1') return;
+          url.searchParams.set('ventana', '1');
+          window.location.replace(url.toString());
+        } catch (e) {
+          // Same-origin by construction (the window manager only ever opens
+          // routes on this site) — a thrown `window.top` access would mean
+          // something unexpected embedded this page; nothing safe to do
+          // about that here.
+        }
+      })();
+    </script>
+    {/* Click-race bugfix (robustness pass, owner report): right after a
+        window loads, a fast click on a `[data-desk-open-window]` link (an
+        `ActivityCard`, the community window's own "+" shortcut) could
+        navigate the IFRAME IN PLACE instead of asking the host to open a new
+        window — `@lib/ui/deskWindow.ts#initDeskOpenWindowLinks` wires its own
+        capture-phase listener from a `type="module"` script
+        (`DeskWindow.astro`'s own), which is deferred past first paint, so
+        there was always a small window where a click could land before it
+        ever ran. This is the SAME interception, duplicated here (same
+        reasoning as the recursion-guard script above) as a plain classic
+        `is:inline` script — parsed and run synchronously, before the browser
+        can dispatch any click at all. It sets the exact same
+        `data-desk-open-window-links-ready` marker that module function
+        checks, so once THIS has wired the listener, the later module import
+        is a harmless no-op rather than a second listener. */}
+    <script is:inline>
+      (function () {
+        var html = document.documentElement;
+        if (!html.hasAttribute('data-desk-window-embedded')) return;
+        if (html.dataset.deskOpenWindowLinksReady === 'true') return;
+        html.dataset.deskOpenWindowLinksReady = 'true';
+
+        document.addEventListener(
+          'click',
+          function (event) {
+            if (event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            var target = event.target;
+            if (!(target instanceof Element)) return;
+            var opener = target.closest('[data-desk-open-window]');
+            if (!opener || opener.tagName !== 'A') return;
+            var href = opener.getAttribute('href');
+            if (!href) return;
+
+            event.preventDefault();
+            var ariaLabel = (opener.getAttribute('aria-label') || '').trim();
+            var text = (opener.textContent || '').trim();
+            var title = ariaLabel || text;
+            try {
+              var parent = window.parent;
+              if (!parent || parent === window) return;
+              parent.postMessage(
+                { source: 'desk-window', type: 'open-window', href: href, title: title || null },
+                window.location.origin,
+              );
+            } catch (e) {
+              // Best-effort — a sandboxed or otherwise unusual embedding
+              // context just loses this one message, same posture as
+              // `deskWindowMessaging.ts#postDeskWindowMessage`.
+            }
+          },
+          true,
+        );
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
 
@@ -296,8 +458,14 @@ const faviconSvg =
 
     {/* SPA-feel navigation via native View Transitions (frontend-v3 PR3.5).
         reveal.ts already re-runs on astro:after-swap, so scroll reveals keep
-        working across client-side navigations. */}
-    <ClientRouter />
+        working across client-side navigations. EMBEDDED (window-manager
+        architecture): dropped entirely — a `ClientRouter`-driven swap would
+        intercept a plain in-window link client-side instead of letting it be
+        a REAL iframe navigation, which is exactly what keeps
+        `Sec-Fetch-Dest: iframe` (and therefore embedded mode itself) sticky
+        across filters/pagination/cards with no extra wiring — see
+        `@lib/ui/embeddedWindow`'s own header. */}
+    {!embedded && <ClientRouter />}
 
     <meta property="og:title" content={title} />
     <meta property="og:description" content={metaDescription} />
@@ -332,8 +500,13 @@ const faviconSvg =
         prop would add a second switch to reason about for no behavioral
         gain. `webAnalyticsBeacon` is `null` (see `@lib/webAnalytics`) —
         and this renders nothing at all, on EVERY page — until the owner
-        sets PUBLIC_CF_WEB_ANALYTICS_TOKEN at build time. */}
-    {webAnalyticsBeacon && (
+        sets PUBLIC_CF_WEB_ANALYTICS_TOKEN at build time.
+
+        EMBEDDED is the one exception (window-manager architecture): an
+        iframe loading a window's own content is not a visit in its own
+        right — the HOST page (already rendering this same beacon, non-
+        embedded) is what actually counts as the page view. */}
+    {!embedded && webAnalyticsBeacon && (
       <script
         is:inline
         defer
@@ -351,7 +524,7 @@ const faviconSvg =
       // the page itself so the desk behind a NON-MODAL window can never
       // scroll independently of it (it would otherwise drift out from under
       // a window that stays `fixed` to the viewport).
-      hasOverlay && 'overflow-hidden h-dvh',
+      staticOverlayLock && 'overflow-hidden h-dvh',
     ]}
   >
     {/* Navigation progress bar (navigation-without-flicker PR): fixed at the
@@ -366,8 +539,8 @@ const faviconSvg =
         box of its own), so it is transparent to `NavProgressBar`'s `fixed`
         positioning. BARE mode (presentation mode v1) drops this wrapper
         along with the other three chrome pieces below — see `bare`'s own
-        prop doc above. */}
-    {!bare && (
+        prop doc above. EMBEDDED implies `bare` — see that prop's own doc. */}
+    {!effectiveBare && (
       <div data-theme="brand" class="dark contents">
         <NavProgressBar />
       </div>
@@ -390,7 +563,7 @@ const faviconSvg =
         semantic tokens every other Inglés surface already uses. Every other
         page is completely unaffected — this branch only ever runs when
         `isIngles` is true. */}
-    {!bare &&
+    {!effectiveBare && !isDeskHost &&
       (isIngles ? <Header lang={lang} ingles /> : (
         <div data-theme="brand" class="dark contents">
           <Header lang={lang} />
@@ -410,7 +583,7 @@ const faviconSvg =
     {/* Brand chrome (visual-theme pass) — see the nav progress bar's own
         note above. BARE mode drops it. INGLÉS: same unwrapped treatment as
         the header above — see that block's own comment. */}
-    {!bare &&
+    {!effectiveBare &&
       (isIngles ? <Footer lang={lang} ingles /> : (
         <div data-theme="brand" class="dark contents">
           <Footer lang={lang} />
@@ -436,7 +609,7 @@ const faviconSvg =
         no long page to scroll back up FROM, it has no job to do there
         either. Every other Inglés page (and every non-Inglés page) keeps
         it unchanged. */}
-    {!bare && !isInglesHub && (
+    {!effectiveBare && !isInglesHub && (
       <div data-theme="brand" class="dark contents">
         <ScrollToTop client:load labels={scrollToTopLabels} />
       </div>
@@ -456,8 +629,17 @@ const faviconSvg =
       import { initReveals } from '@lib/reveal';
       import { initBackButtons, trackPageVisit } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
-      import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
       import { initDeskSceneWidgets } from '@lib/ui/deskScene';
+      import { isEmbeddedWindowDom } from '@lib/ui/deskWindowMessaging';
+
+      // EMBEDDED (window-manager architecture): none of this site-chrome
+      // wiring has anything to do inside a window's own iframe — no reveal
+      // animations worth running behind a window that fills the whole
+      // viewport, no header/footer to show/hide, no desk/helper. Self-
+      // guarded here (rather than dropping the whole script element) — same
+      // low-risk posture as every other desk script's own double-wiring
+      // guard.
+      if (!isEmbeddedWindowDom(document)) {
 
       const run = () => initReveals();
 
@@ -486,15 +668,6 @@ const faviconSvg =
       // (unlike reveals) this needs no re-init on `astro:after-swap`.
       initBackButtons();
 
-      // "Desktop" redesign PART 6a: captures a `[data-desk-window-open]`
-      // folder's own rect just before navigation, for the practice window's
-      // scale-in — site-wide (like `initBackButtons`) since the desk only
-      // ever renders under Inglés, and the attribute selector simply never
-      // matches elsewhere. Self-guards against double-wiring on its own
-      // (`@lib/ui/deskWindow.ts`'s own header), so it is safe to call here
-      // unconditionally, once per session.
-      initDeskWindowOpeners();
-
       // Smart header/footer visibility (chrome-visibility feature): binds
       // its own listeners exactly once and re-picks the mode on every page
       // entry (including View Transitions) internally — see that module's
@@ -508,13 +681,15 @@ const faviconSvg =
       // practice/community/create/editor) never ran it at all, leaving a
       // hand-less clock and a date-less calendar. Site-wide and here
       // instead, same "self-guards on a page with no desk" posture as
-      // `initDeskWindowOpeners` above — see `@lib/ui/deskScene`'s own
+      // `initBackButtons` above — see `@lib/ui/deskScene`'s own
       // header. Runs on first load AND every `astro:page-load` (a desk
       // behind a window, or the hub itself, reached by a client-side
       // navigation from another such page).
       const runDeskSceneWidgets = () => initDeskSceneWidgets();
       runDeskSceneWidgets();
       document.addEventListener('astro:page-load', runDeskSceneWidgets);
+
+      } // isEmbeddedWindowDom guard
     </script>
 
     {/* Overlay slot (PART 6a bugfix, 2026-10-06) — after the footer and
@@ -527,11 +702,14 @@ const faviconSvg =
         everywhere else. */}
     <slot name="overlay" />
 
-    {/* Minimized-windows tray (PART 6c) — mounted on every Inglés page,
-        AFTER the overlay slot, so it stays above an open window
+    {/* Minimized-windows tray (PART 6c) — mounted on every Inglés HOST page
+        (never an embedded window's own iframe — the host renders ONE live
+        tray from its own window-manager state, not a per-page one reading
+        `sessionStorage`; see `embedded`'s own prop doc above), AFTER the
+        overlay slot, so it stays above an open window
         (`MinimizedWindowsTray.astro`'s own header on the stacking/`z-index`
         reasoning). A no-op render (an empty, `hidden` tray) on a page with
         nothing minimized, same posture as every other desk script. */}
-    {isIngles && <MinimizedWindowsTray lang={lang} hasOverlay={hasOverlay} />}
+    {isIngles && !embedded && <MinimizedWindowsTray lang={lang} hasOverlay={staticOverlayLock} />}
   </body>
 </html>

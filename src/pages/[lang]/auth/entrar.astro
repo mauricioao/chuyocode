@@ -61,6 +61,7 @@ import PageTitle from '@components/ui/PageTitle.astro';
 import AuthPanel from '@components/islands/AuthPanel';
 import { SpinnerGapIcon } from '@phosphor-icons/react/dist/ssr/SpinnerGap';
 import { markPrivate } from '@lib/httpCache';
+import { windowAuthBounceResponse } from '@lib/windowAuthBounce';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import {
   AUTH_ERROR_PARAM,
@@ -77,6 +78,52 @@ const lang: Lang | undefined =
 
 if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+/**
+ * Fool-proofing a chrome-less frame (robustness pass, owner report): a
+ * session that expires WHILE a desk window's own iframe is open makes the
+ * middleware's login gate 303 straight to THIS page — inside that same
+ * iframe (`Sec-Fetch-Dest: iframe` survives a redirect fetched from within
+ * it, same signal `@lib/ui/embeddedWindow#isEmbeddedWindowRequest` already
+ * relies on). Rendering the normal sign-in form there would cram it into a
+ * tiny window with no traffic lights to close it, and signing back in would
+ * leave the visitor stranded on this bare page instead of back on the desk.
+ *
+ * Instead: a minimal, chrome-less shell whose only job is to bounce the
+ * REAL browser tab (`window.top`) to this exact page — a genuine top-level
+ * navigation, so it renders its full normal chrome — with `next` set to
+ * `window.top`'s own path (the host page the iframe sits inside, e.g. the
+ * hub or the activity it was showing). That is client-side-only information
+ * (the server never sees the parent frame's URL), hence a script rather than
+ * a server-computed redirect; the plain `<a target="_top">` is the
+ * no-JS/script-blocked fallback. The shell lives in `@lib/windowAuthBounce`.
+ */
+const inWindowFrame = Astro.request.headers.get('sec-fetch-dest') === 'iframe';
+if (inWindowFrame) {
+  Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+  markPrivate(Astro.response.headers);
+  // `Astro.response.headers` (NOT a fresh `Headers` object): the `Vary` and
+  // `markPrivate` mutations above only land on the actual response when this
+  // exact object is the one handed to `Response` — same `Astro.redirect()`
+  // pitfall this file's own header documents for the signed-in 303 below.
+  Astro.response.headers.set('content-type', 'text/html; charset=utf-8');
+}
+// Built outside the `if` on purpose: `astro check` reports a false `ts(6133)`
+// for an import whose only use is a value returned from an `if` block.
+const windowBounce = inWindowFrame
+  ? windowAuthBounceResponse(
+      lang,
+      {
+        title: UI_LABELS[lang].auth.title,
+        redirecting: UI_LABELS[lang].auth.windowRedirecting,
+        continueLabel: UI_LABELS[lang].auth.windowRedirectingContinue,
+      },
+      Astro.response.headers,
+    )
+  : null;
+if (windowBounce) {
+  return windowBounce;
 }
 
 // See the file header: this response varies by `Astro.locals.user` and must

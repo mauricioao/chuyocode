@@ -42,12 +42,13 @@
  * `deskWindowDrag.ts`'s own header), never in in-memory DOM state that a
  * fresh page render would lose. The scale-in open animation is the other
  * half of "feels like one window": it is GATED to a genuine folder/desk
- * opener click (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`'s own header)
- * and never replays for any of these plain in-window links, only for a
- * fresh open from the hub's own folder. The practice window's `‹` back arrow
- * returns here with `history.back()` when it can (`DeskWindow.astro`'s own
- * `backHref` doc), landing back on the exact filtered/scrolled state the
- * visitor left.
+ * opener click, now the HOST's own (`@lib/ui/deskWindowManager.ts#onClickCapture`'s
+ * own header) — and never replays for any of these plain in-window links,
+ * only for a fresh open from the hub's own folder. The practice window's own `‹` back
+ * arrow (which used to return here) is GONE (owner spec 2026-10-07, "ya no
+ * será necesario el botón de regresar... tiene los 3 botones de colores") —
+ * the red/yellow lights already close/minimize back to the hub; reaching
+ * THIS list again is one more click from there, same as any other folder.
  *
  * UNIFIED SEARCH HEADER (community-search-unify pass, carried over
  * unchanged): search + the compact filters panel now sit in the window's
@@ -73,8 +74,9 @@
  * activities by heart count. Hidden entirely when there are no candidates.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
+import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import ActivityCard from '@components/ui/ActivityCard.astro';
 import Emoji from '@components/ui/Emoji.astro';
 import SearchFilter from '@components/ui/SearchFilter.astro';
@@ -89,6 +91,7 @@ import { pickDailyActivity } from '@lib/activities/dailyPick';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@lib/ui/iconTooltip';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -103,6 +106,19 @@ const levelLabels = UI_LABELS[lang].english.levels;
 const user = Astro.locals.user;
 const isGuest = user === null;
 const viewerId = user?.id ?? null;
+
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): is
+ * this request the window's own CONTENT, loaded inside the host's
+ * `<iframe>` — or a direct, HOST visit? See `@lib/ui/embeddedWindow`'s own
+ * header. `Vary` so a cache never serves one shape to a request that asked
+ * for the other. In production `isGuest` is always `false` here (see this
+ * file's own header), so `hostMode` is effectively just `!embedded` — the
+ * `isGuest` term is kept for parity with every other window route anyway.
+ */
+const embedded = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
+Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+const hostMode = !isGuest && !embedded;
 
 // Every filter defaults to "off"/"none" for an invalid or absent value — the
 // same lenient posture the level filter already had: a bad URL shows the
@@ -127,15 +143,23 @@ const requestedPage = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam :
 
 const anyFilterActive = activeLevel !== null || activeTipo !== null || activeQuery !== null || novistas;
 
-const { activities, total } = await getPublishedActivities({
-  level: activeLevel,
-  page: requestedPage,
-  q: activeQuery,
-  tipo: activeTipo,
-  orden,
-  novistas,
-  viewerId,
-});
+// Window-manager architecture: the HOST shell never renders this list at
+// all (the manager opens THIS SAME route again, embedded, for its initial
+// window — see this file's own header) — these DB round trips are skipped
+// entirely rather than loaded twice.
+let activities: PublishedActivityCard[] = [];
+let total = 0;
+if (!hostMode) {
+  ({ activities, total } = await getPublishedActivities({
+    level: activeLevel,
+    page: requestedPage,
+    q: activeQuery,
+    tipo: activeTipo,
+    orden,
+    novistas,
+    viewerId,
+  }));
+}
 const totalPages = Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE));
 // A page beyond the last one still renders (empty grid + pagination back to
 // the real range) rather than 404ing — the same "URL always answers" rule
@@ -148,7 +172,7 @@ const currentPage = Math.min(requestedPage, totalPages);
 // page 1 with nothing else filtering the feed.
 const showDailyPick = currentPage === 1 && !anyFilterActive;
 let dailyPick: PublishedActivityCard | null = null;
-if (showDailyPick) {
+if (!hostMode && showDailyPick) {
   const candidates = await getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId });
   dailyPick = pickDailyActivity(candidates.activities, new Date());
 }
@@ -252,28 +276,18 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
 const closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
 
 /**
- * The desk behind the window — SIGNED-IN visitors only, same loader/
- * component the hub and the practice window use. In production `isGuest`
- * is always `false` here (the middleware already redirects an anonymous
- * visitor away from every `ingles/**` route before this page ever runs),
- * so this branch exists only for parity with `[id].astro` and the TEMP
- * local-dev screenshot override.
+ * The desk behind the HOST shell — window-manager architecture: embedded
+ * never has a desk behind it any more (the manager owns that, over on the
+ * HOST page), and neither did a guest's window. Same loader/component the
+ * hub and every other window route use. In production `isGuest` is always
+ * `false` here (the middleware already redirects an anonymous visitor away
+ * from every `ingles/**` route before this page ever runs), so this branch
+ * exists only for parity with `[id].astro` and the TEMP local-dev
+ * screenshot override.
  */
-const desk = isGuest
-  ? null
-  : await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
-const deskLabels = desk && {
-  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
-  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
-  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
-  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
-  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
-  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
-  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
-  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
-  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-};
+const desk = hostMode
+  ? await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo })
+  : null;
 
 /** Minimize-to-tray (`@lib/ui/minimizedWindows`): ONE stable id for this
  * window regardless of its current filters — re-minimizing it just moves
@@ -284,25 +298,23 @@ const COMMUNITY_TRAY_ID = 'community-activities';
 const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind={!isGuest}>
-  {desk && deskLabels && (
-    <DeskScene
-      lang={lang}
-      greetingLine1={desk.greetingLine1}
-      activityCountLabel={desk.activityCountLabel}
-      dailyPickHref={desk.dailyPickHref}
-      dailyPickMeta={desk.dailyPickMeta}
-      dailyPickPeek={desk.dailyPickPeek}
-      weatherLat={desk.weatherLat}
-      weatherLon={desk.weatherLon}
-      weatherCity={desk.weatherCity}
-      weatherLabel={desk.weatherLabel}
-      playerLabels={desk.playerLabels}
-      levelLabels={levelLabels}
-      labels={deskLabels}
-    />
+<BaseLayout
+  lang={lang}
+  title={t.pageTitle}
+  description={t.pageDescription}
+  theme="ingles"
+  deskBehind={hostMode}
+  embedded={embedded && !isGuest}
+  windowManager={hostMode}
+>
+  {hostMode && desk && (
+    <>
+      <DeskHost lang={lang} desk={desk} />
+      <DeskWindowManager slot="overlay" lang={lang} initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={t.pageTitle} />
+    </>
   )}
 
+  {!hostMode && (
   <DeskWindow
     lang={lang}
     title={UI_LABELS[lang].english.hub.communityTitle}
@@ -312,6 +324,7 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
     fullScreenLabel={t.windowFullScreen}
     forceFullScreen={isGuest}
     trayId={isGuest ? null : COMMUNITY_TRAY_ID}
+    embedded={embedded && !isGuest}
     slot="overlay"
   >
     <Fragment slot="actions">
@@ -349,6 +362,7 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
       <a
         href={`/${lang}/crear`}
         data-desk-window-open="create"
+        data-desk-open-window
         data-testid="community-create-link"
         aria-label={createActivityLabel}
         aria-describedby="action-create-tooltip"
@@ -473,4 +487,5 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
       </div>
     </div>
   </DeskWindow>
+  )}
 </BaseLayout>

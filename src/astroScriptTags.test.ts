@@ -42,4 +42,19 @@ describe('.astro script tags', () => {
 
     expect(unbalanced).toEqual([]);
   });
+
+  // A balanced pair is not enough: a script element inside a frontmatter
+  // string (an HTML response built in a template literal) still gets parsed,
+  // and its `${...}` placeholders are not valid JavaScript to the scanner.
+  // Build such HTML in a `.ts` module, which the scanner never reads as HTML.
+  it('keeps script tags out of the frontmatter', () => {
+    const offenders = listAstroFiles(SRC_DIR)
+      .filter((path) => {
+        const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(path, 'utf8'))?.[1] ?? '';
+        return count(frontmatter, OPENING) > 0;
+      })
+      .map((path) => relative(SRC_DIR, path));
+
+    expect(offenders).toEqual([]);
+  });
 });

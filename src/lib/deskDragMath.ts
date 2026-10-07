@@ -35,19 +35,25 @@ export const ARROW_STEP_PX = 16;
 /** Shift+arrow nudge, in CSS pixels. */
 export const ARROW_STEP_SHIFT_PX = 64;
 
+/** Minimum gap (px) kept between a dragged widget's own top edge and the desk's own top edge — "desktop" redesign (owner spec 2026-10-07): the desk no longer sits below a header, so a widget can be dragged all the way to the top of the screen, same small edge margin the floating desk window uses (`@lib/deskWindowDragMath#WINDOW_EDGE_MARGIN`). */
+export const WIDGET_TOP_MARGIN_PX = 8;
+
 /**
- * Keeps a widget fully inside the desk's own bounds. When the desk is
+ * Keeps a widget fully inside the desk's own bounds. The left/right/bottom
+ * edges stay flush with `0`/the desk's own far edge (unchanged); `topMargin`
+ * only affects the TOP bound — defaults to `0` (every existing caller/test),
+ * the desk hub passes {@link WIDGET_TOP_MARGIN_PX} instead. When the desk is
  * narrower/shorter than the widget itself (a transient layout moment, or a
- * saved position from a wider screen), clamps to the top-left corner (`0`)
- * rather than producing a negative size that would push the widget further
- * out of view.
+ * saved position from a wider screen), clamps to the top-left corner
+ * (`0`/`topMargin`) rather than producing a negative size that would push
+ * the widget further out of view.
  */
-export function clampPosition(pos: Position, widget: Size, desk: Size): Position {
+export function clampPosition(pos: Position, widget: Size, desk: Size, topMargin: number = 0): Position {
   const maxX = Math.max(0, desk.w - widget.w);
-  const maxY = Math.max(0, desk.h - widget.h);
+  const maxY = Math.max(topMargin, desk.h - widget.h);
   return {
     x: Math.min(Math.max(0, pos.x), maxX),
-    y: Math.min(Math.max(0, pos.y), maxY),
+    y: Math.min(Math.max(topMargin, pos.y), maxY),
   };
 }
 

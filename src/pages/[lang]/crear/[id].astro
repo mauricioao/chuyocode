@@ -47,14 +47,16 @@
  * cards.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
+import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import ActivityEditorIsland from '@components/islands/activities/ActivityEditorIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getActivityForEdit } from '@lib/activities/activities';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 import { ROW_PADDING_X } from '@lib/ui/layout';
+import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -83,27 +85,37 @@ if (!id) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const activity = await getActivityForEdit(id, user.id);
-if (!activity) {
-  return new Response(null, {
-    status: 404,
-    statusText: 'Not Found',
-    headers: { 'cache-control': 'private, no-store' },
-  });
-}
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): is
+ * this request the window's own CONTENT, loaded inside the host's
+ * `<iframe>` — or a direct, HOST visit (signed in, same as every visit here
+ * — the gate above already redirects a guest away, so there is no guest
+ * branch to preserve, unlike the practice/community routes)? See
+ * `@lib/ui/embeddedWindow`'s own header. `Vary` so a cache never serves one
+ * shape to a request that asked for the other.
+ */
+const embedded = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
+Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+const hostMode = !embedded;
 
 const t = UI_LABELS[lang].activities.editor;
-const levelLabels = UI_LABELS[lang].english.levels;
 
-// "Duplicar y adaptar" credit line (D7) — `null` for an ordinary activity.
-// `href` is `null` once the source is no longer live, same rule as the
-// practice page's own credit line (`[id].astro` under `ingles/actividades`).
-const sourceActivity = activity.source
-  ? {
-      title: activity.source.title,
-      href: activity.source.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null,
-    }
-  : null;
+/**
+ * HOST shell: desk + the window manager, which opens THIS SAME route again
+ * as its own `<iframe>` for its initial window — the activity itself is
+ * loaded by THAT request instead, never twice (known tradeoff: the shell
+ * does not pre-validate the id exists, same as every other window route).
+ */
+let hostDesk: Awaited<ReturnType<typeof loadDeskSceneData>> | null = null;
+if (hostMode) {
+  hostDesk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+}
+
+// Everything below is the WINDOW's own content — embedded only (there is no
+// guest editor). The host shell above never reaches any of this.
+let activity: Awaited<ReturnType<typeof getActivityForEdit>> = null;
+let sourceActivity: { title: string; href: string | null } | null = null;
+let windowTitle: string = t.titleFallback;
 
 /**
  * The window's red/yellow lights (PART 6b polish, owner report: "el botón
@@ -117,47 +129,52 @@ const sourceActivity = activity.source
  */
 const closeHref = `/${lang}/ingles`;
 
-/** The title bar's own `<b>` — falls back to `t.titleFallback` ("Nueva
- * actividad") for a brand-new, still-untitled activity. `ActivityEditorIsland`
- * keeps this in sync afterwards as the author types (see that component's
- * own header on `DESK_WINDOW_TITLE_ID`). */
-const windowTitle = activity.title.trim() || t.titleFallback;
+if (!hostMode) {
+  activity = await getActivityForEdit(id, user.id);
+  if (!activity) {
+    return new Response(null, {
+      status: 404,
+      statusText: 'Not Found',
+      headers: { 'cache-control': 'private, no-store' },
+    });
+  }
 
-/** The desk behind the window — same loader/component the hub and the
- * practice window both use (`DeskScene.astro`'s own header). Always
- * rendered here (the gate above already requires a signed-in visitor). */
-const desk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
-const deskLabels = {
-  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
-  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
-  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
-  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
-  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
-  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
-  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
-  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
-  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-};
+  // "Duplicar y adaptar" credit line (D7) — `null` for an ordinary
+  // activity. `href` is `null` once the source is no longer live, same
+  // rule as the practice page's own credit line (`[id].astro` under
+  // `ingles/actividades`).
+  sourceActivity = activity.source
+    ? {
+        title: activity.source.title,
+        href: activity.source.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null,
+      }
+    : null;
+
+  /** The title bar's own `<b>` — falls back to `t.titleFallback` ("Nueva
+   * actividad") for a brand-new, still-untitled activity.
+   * `ActivityEditorIsland` keeps this in sync afterwards as the author
+   * types (see that component's own header on `DESK_WINDOW_TITLE_ID`). */
+  windowTitle = activity.title.trim() || t.titleFallback;
+}
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind>
-  <DeskScene
-    lang={lang}
-    greetingLine1={desk.greetingLine1}
-    activityCountLabel={desk.activityCountLabel}
-    dailyPickHref={desk.dailyPickHref}
-    dailyPickMeta={desk.dailyPickMeta}
-    dailyPickPeek={desk.dailyPickPeek}
-    weatherLat={desk.weatherLat}
-    weatherLon={desk.weatherLon}
-    weatherCity={desk.weatherCity}
-    weatherLabel={desk.weatherLabel}
-    playerLabels={desk.playerLabels}
-    levelLabels={levelLabels}
-    labels={deskLabels}
-  />
+<BaseLayout
+  lang={lang}
+  title={hostMode ? UI_LABELS[lang].english.hub.title : windowTitle}
+  description={t.pageDescription}
+  theme="ingles"
+  deskBehind={hostMode}
+  embedded={embedded}
+  windowManager={hostMode}
+>
+  {hostMode && hostDesk && (
+    <>
+      <DeskHost lang={lang} desk={hostDesk} />
+      <DeskWindowManager slot="overlay" lang={lang} initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={windowTitle} />
+    </>
+  )}
 
+  {!hostMode && activity && (
   <DeskWindow
     lang={lang}
     title={windowTitle}
@@ -169,6 +186,7 @@ const deskLabels = {
     closeOnEscape={false}
     titleEditable
     status={t.titlebarSaved}
+    embedded={embedded}
     slot="overlay"
   >
     {/* One-screen creator layout: NO page-level scroll — the window's own
@@ -202,7 +220,7 @@ const deskLabels = {
         `ROW_PADDING_X` as the only inset either side, so the block cards'
         canvas gets the full width instead of being capped at 6xl with the
         window's own white body colour showing through on either side. */}
-    <section class={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-hidden`}>
+    <section class={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-clip`}>
       <ActivityEditorIsland
         client:load
         lang={lang}
@@ -216,4 +234,5 @@ const deskLabels = {
       />
     </section>
   </DeskWindow>
+  )}
 </BaseLayout>

@@ -16,6 +16,7 @@
  * assert on directly.
  */
 import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
+import { isEmbeddedWindowDom, postDeskWindowMessage } from './deskWindowMessaging';
 
 /**
  * Editor <-> window bridge (PART 6b). `DeskWindow`/`deskWindow.ts` are plain
@@ -64,14 +65,44 @@ export function shouldProceedAfterGuardDecision(decision: 'saved' | 'discarded' 
   return decision !== 'cancelled';
 }
 
+/**
+ * The CLOSE half of the editor guard, factored out of `close()` below so it
+ * can ALSO be exposed as `window.deskWindowCanClose` (window-manager
+ * architecture): embedded, the red light/Escape no longer resolve this
+ * themselves — they just tell the host "close me" (`postDeskWindowMessage`)
+ * and the HOST calls this exact function directly on the iframe's own
+ * `contentWindow` (same-origin, no `postMessage` round trip needed for a
+ * value it needs to `await`) before actually removing the frame. `true`
+ * means "safe to close right now".
+ */
+async function canCloseNow(win: Window): Promise<boolean> {
+  const guard = getEditorWindowGuard(win);
+  if (guard && guard.isDirty()) {
+    const decision = await guard.confirmClose();
+    return shouldProceedAfterGuardDecision(decision);
+  }
+  return true;
+}
+
+/**
+ * The MINIMIZE half — same split as {@link canCloseNow}, exposed as
+ * `window.deskWindowCanMinimize`. A silent flush first (minimizing is "put
+ * this aside", never "leave" — see `minimize()`'s own header below); only a
+ * FAILED flush falls back to the same confirm modal `canCloseNow` uses.
+ */
+async function canMinimizeNow(win: Window): Promise<boolean> {
+  const guard = getEditorWindowGuard(win);
+  if (guard && guard.isDirty()) {
+    const flushed = await guard.flush();
+    if (!flushed) {
+      const decision = await guard.confirmClose();
+      return shouldProceedAfterGuardDecision(decision);
+    }
+  }
+  return true;
+}
+
 const FULLSCREEN_STORAGE_KEY = 'ingles-desk-window-fullscreen';
-const ORIGIN_STORAGE_KEY = 'ingles-desk-window-origin';
-const RETURN_FOCUS_STORAGE_KEY = 'ingles-desk-window-return-focus';
-/** An origin/return-focus entry older than this is treated as stale (e.g. a
- * folder click that led somewhere other than a window, or a browser tab left
- * open for a while) and ignored rather than mis-applied to an unrelated
- * later visit. */
-const ORIGIN_MAX_AGE_MS = 5000;
 
 /** How long the "minimize" CSS animation (`.ingles-window--minimizing`,
  * `global.css`) runs before the actual navigation fires — long enough to
@@ -159,147 +190,6 @@ export function writeFullScreenPreference(
   }
 }
 
-interface OriginEntry {
-  id: string;
-  x: number;
-  y: number;
-  t: number;
-}
-
-function isOriginEntry(value: unknown): value is OriginEntry {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return typeof v.id === 'string' && typeof v.x === 'number' && typeof v.y === 'number' && typeof v.t === 'number';
-}
-
-/**
- * Hub-side (and anywhere else a `[data-desk-window-open]` opener lives):
- * capture the clicked opener's own viewport rect BEFORE the browser
- * navigates away, so the window page can scale in FROM that spot (mockup's
- * own `--from` custom property) instead of always from the screen's centre.
- * Does not call `preventDefault` — the real navigation proceeds exactly as
- * the plain `<a href>` already describes; this only ever writes a few bytes
- * to `sessionStorage` alongside it.
- */
-export function initDeskWindowOpeners(doc: Document = document, win: Window = window): void {
-  // Guard against double-wiring (same posture as `deskHelper.ts#initDeskHelper`):
-  // this listener is bound to `document`, which survives every client-side
-  // navigation for the whole session, while the hub's own script re-runs
-  // `initDeskWindowOpeners` every time a visitor RETURNS to the hub — without
-  // this flag, each return trip would stack another full-document click
-  // listener on top of the last.
-  const root = doc.documentElement;
-  if (root.dataset.deskWindowOpenersReady === 'true') return;
-  root.dataset.deskWindowOpenersReady = 'true';
-
-  doc.addEventListener('click', (event) => {
-    if (event.defaultPrevented || event.button !== 0) return;
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const opener = target.closest(`[${DESK_WINDOW_ATTR.opener}]`);
-    if (!(opener instanceof HTMLElement)) return;
-    const id = opener.getAttribute(DESK_WINDOW_ATTR.opener);
-    if (!id) return;
-
-    const rect = opener.getBoundingClientRect();
-    const entry: OriginEntry = {
-      id,
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-      t: Date.now(),
-    };
-    try {
-      win.sessionStorage.setItem(ORIGIN_STORAGE_KEY, JSON.stringify(entry));
-    } catch {
-      // Best-effort — the window just opens centred instead.
-    }
-  });
-}
-
-/**
- * The scale-in entrance animation's own marker attribute — `global.css`'s
- * own `.ingles-window[${DESK_WINDOW_OPENING_ATTR}]` rule, NOT the unconditional
- * `.ingles-window` class. See {@link applyDeskWindowOrigin}'s own header for
- * why this is gated rather than always playing.
- */
-export const DESK_WINDOW_OPENING_ATTR = 'data-desk-window-opening';
-
-/**
- * Window-side, on mount: consume a fresh (not stale) opener entry, if any,
- * to set the scale-in's transform-origin, and arm the entrance animation
- * itself ({@link DESK_WINDOW_OPENING_ATTR}) — then move the entry to the
- * return-focus key (same id) so the hub can refocus that exact opener once
- * the window closes.
- *
- * ONLY A FRESH OPEN FROM A FOLDER/DESK OPENER EVER ANIMATES (owner spec
- * 2026-10-07, carried over from the community-list-as-a-window pass): a
- * direct visit (no entry at all — a QR scan, a shared link, a new tab) and,
- * now that `/[lang]/ingles/actividades` itself opens as a window with its
- * OWN in-window links (a card, a filter, a page of results, the practice
- * window's own `‹` back arrow), every IN-WINDOW navigation between two
- * window pages all leave no fresh entry behind either — `initDeskWindowOpeners`
- * only ever writes one for a click on a REAL `[data-desk-window-open]`
- * opener, never a plain link — so none of them arm the animation. Without
- * this gate, `.ingles-window`'s animation used to play on EVERY mount
- * unconditionally, which would have replayed the scale-in on every filter
- * change, every page of results, and every card opened from the list.
- */
-export function applyDeskWindowOrigin(
-  windowEl: HTMLElement,
-  win: Window = window,
-): void {
-  let raw: string | null;
-  try {
-    raw = win.sessionStorage.getItem(ORIGIN_STORAGE_KEY);
-    win.sessionStorage.removeItem(ORIGIN_STORAGE_KEY);
-  } catch {
-    return;
-  }
-  if (!raw) return;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  if (!isOriginEntry(parsed)) return;
-  if (Date.now() - parsed.t > ORIGIN_MAX_AGE_MS) return;
-
-  windowEl.style.setProperty('--ingles-window-from', `${parsed.x}px ${parsed.y}px`);
-  windowEl.setAttribute(DESK_WINDOW_OPENING_ATTR, '');
-  try {
-    win.sessionStorage.setItem(RETURN_FOCUS_STORAGE_KEY, parsed.id);
-  } catch {
-    // Best-effort — the hub just leaves focus wherever it already is.
-  }
-}
-
-/**
- * Hub-side, on mount (first load AND every `astro:page-load`, since the hub
- * is exactly where a closed window returns to): refocus the opener the
- * window remembers closing back to, if it still exists on the page.
- * Always clears the key, found or not, so a later unrelated visit never
- * inherits a stale focus target.
- */
-export function applyDeskWindowReturnFocus(doc: Document = document, win: Window = window): void {
-  let id: string | null;
-  try {
-    id = win.sessionStorage.getItem(RETURN_FOCUS_STORAGE_KEY);
-    win.sessionStorage.removeItem(RETURN_FOCUS_STORAGE_KEY);
-  } catch {
-    return;
-  }
-  if (!id) return;
-
-  const opener = doc.querySelector(`[${DESK_WINDOW_ATTR.opener}="${id}"]`);
-  if (opener instanceof HTMLElement) {
-    opener.focus();
-  }
-}
-
 /**
  * Window-side: wires the three "traffic light" buttons, Escape, and initial
  * focus. `windowEl` is the `role="dialog"` element itself; `closeTargetPath`
@@ -328,16 +218,34 @@ export function initDeskWindow(
   if (windowEl.dataset.deskWindowReady === 'true') return;
   windowEl.dataset.deskWindowReady = 'true';
 
-  applyDeskWindowOrigin(windowEl, win);
+  // EMBEDDED (window-manager architecture): the host renders the entrance
+  // animation (`deskWindowManager.ts#applyOpenAnimation`) and owns full-
+  // screen/maximize state itself — see this file's own header on
+  // `isEmbedded`/`postDeskWindowMessage` below. GUEST (never embedded): no
+  // desk/folder exists for its window to have scaled in from either — a
+  // guest always lands on this window directly (a QR code, a shared link),
+  // never by clicking a `[data-desk-window-open]` desk item — so there has
+  // never been an entrance animation to play here for either case.
+  const embedded = isEmbeddedWindowDom(doc);
 
   const fullscreenButton = windowEl.querySelector<HTMLElement>(`[${DESK_WINDOW_ATTR.fullscreen}]`);
   // "Remembered per browser" (owner spec): applied on mount, before anything
   // else, so a visitor who left it full screen sees it that way immediately
-  // rather than flashing open small first.
-  if (fullscreenButton && readFullScreenPreference()) {
+  // rather than flashing open small first. Embedded: the host decides
+  // maximize state fresh on every open — a stale per-browser preference
+  // would otherwise flash a window maximized that the host never asked for.
+  if (fullscreenButton && !embedded && readFullScreenPreference()) {
     windowEl.setAttribute('data-fullscreen', 'true');
     fullscreenButton.setAttribute('aria-pressed', 'true');
   }
+
+  // `window.deskWindowCanClose`/`deskWindowCanMinimize` (window-manager
+  // architecture): exposed UNCONDITIONALLY (harmless outside an iframe —
+  // nothing else ever calls them) so the HOST can call them directly on
+  // `iframe.contentWindow` before honouring a `close`/`minimize` message,
+  // same-origin, no `postMessage` round trip needed for a value it awaits.
+  (win as unknown as Record<string, unknown>).deskWindowCanClose = () => canCloseNow(win);
+  (win as unknown as Record<string, unknown>).deskWindowCanMinimize = () => canMinimizeNow(win);
 
   function prefersReducedMotion(): boolean {
     try {
@@ -373,7 +281,23 @@ export function initDeskWindow(
   // first (`confirmClose`) and only actually closes once the author picked
   // "save and leave" or "leave without saving"; "cancel" leaves the window
   // open with nothing navigated.
+  //
+  // EMBEDDED (window-manager architecture): the guard check moves to the
+  // HOST (it calls `window.deskWindowCanClose` directly on this frame,
+  // exposed above) — this just asks it to close, with no local animation or
+  // navigation of its own; the host plays the close animation on its own
+  // frame element and removes it once (if) it actually honours the request.
   async function close(): Promise<void> {
+    if (embedded) {
+      postDeskWindowMessage(win, { type: 'close' });
+      return;
+    }
+    // Inlined rather than calling `canCloseNow` (same logic): a clean guard
+    // (or no guard at all) must resolve `closeNow()` SYNCHRONOUSLY, with no
+    // extra microtask tick — `canCloseNow`'s own `await` on an
+    // already-resolved `Promise.resolve(true)` would still defer one tick,
+    // which is observable (and was never true of this function before the
+    // embedded branch above existed).
     const guard = getEditorWindowGuard(win);
     if (guard && guard.isDirty()) {
       const decision = await guard.confirmClose();
@@ -425,7 +349,17 @@ export function initDeskWindow(
   // fall back to the SAME `confirmClose` modal `close()` uses above — by
   // then something is genuinely wrong with saving, and silently minimizing
   // over it would risk losing the draft for real.
+  // EMBEDDED: same split as `close()` above — the host calls
+  // `window.deskWindowCanMinimize` directly before honouring this, and owns
+  // the tray entry/animation itself (the iframe stays alive, just hidden —
+  // see `deskWindowManager.ts`'s own header), so there is nothing left for
+  // this frame to write to `sessionStorage` or animate locally.
   async function minimize(): Promise<void> {
+    if (embedded) {
+      postDeskWindowMessage(win, { type: 'minimize' });
+      return;
+    }
+    // Inlined, same reasoning as `close()` above — a clean guard resolves synchronously.
     const guard = getEditorWindowGuard(win);
     if (guard && guard.isDirty()) {
       const flushed = await guard.flush();
@@ -468,7 +402,15 @@ export function initDeskWindow(
       const next = windowEl.getAttribute('data-fullscreen') !== 'true';
       windowEl.setAttribute('data-fullscreen', String(next));
       fullscreenButton.setAttribute('aria-pressed', String(next));
-      writeFullScreenPreference(next);
+      // Embedded: "full screen" means filling the HOST's own viewport (its
+      // frame element), a host-owned layout decision with no meaningful
+      // per-browser preference to remember inside the iframe — ask the host
+      // instead of writing to `localStorage`.
+      if (embedded) {
+        postDeskWindowMessage(win, { type: 'maximize-toggle' });
+      } else {
+        writeFullScreenPreference(next);
+      }
     });
   }
 
@@ -494,4 +436,66 @@ export function initDeskWindow(
   // kept (still exported/tested) as a small, generic, reusable query — it
   // simply has no caller inside this function anymore.
   windowEl.focus();
+
+  // EMBEDDED (window-manager architecture): tell the host what to show in
+  // its OWN title bar/tray chip/`history.replaceState` — the host never
+  // loads this window's data itself (`@lib/ui/embeddedWindow`'s own header),
+  // so this is the only way it learns the real title, e.g. for the very
+  // FIRST window a direct visit opens, before any `[data-desk-window-open]`
+  // anchor text was there to seed it from. `navigating` on `pagehide` is
+  // what re-arms the host's loader for every later IN-WINDOW navigation
+  // (there is no `ClientRouter` here — each one is a real iframe navigation,
+  // so this script re-runs fresh on the next page and posts its own title
+  // again once mounted).
+  if (embedded) {
+    const titleEl = doc.getElementById(windowEl.getAttribute('aria-labelledby') ?? '');
+    const initialTitle = titleEl?.textContent?.trim();
+    if (initialTitle) postDeskWindowMessage(win, { type: 'title', text: initialTitle });
+    win.addEventListener('pagehide', () => postDeskWindowMessage(win, { type: 'navigating' }));
+  }
+}
+
+/** `[data-desk-open-window]`'s own marker attribute — see {@link initDeskOpenWindowLinks}'s own header. */
+export const DESK_OPEN_WINDOW_ATTR = 'data-desk-open-window';
+
+/**
+ * EMBEDDED-only (window-manager architecture): wires every
+ * `[data-desk-open-window]` link INSIDE this window's own content — a
+ * community card, the community window's own "+" shortcut, a future
+ * "Duplicar" result — to ask the HOST to open a NEW window instead of
+ * navigating (a plain in-window navigation otherwise, exactly the point of
+ * `[data-desk-window-open]`'s OWN host-side click interception —
+ * `@lib/ui/deskWindowManager.ts`'s own header — this is the embedded-side
+ * counterpart for a link that must open ANOTHER window rather than replace
+ * this one). A no-op outside embedded mode (every existing non-window page
+ * this attribute might ever reach — e.g. `ActivityCard` reused elsewhere —
+ * keeps today's plain navigation unchanged).
+ *
+ * Self-guards against double-wiring on `doc.documentElement`, same posture
+ * as every other desk script; safe to call unconditionally once per page
+ * (`DeskWindow.astro`'s own script already does, alongside `initDeskWindow`).
+ */
+export function initDeskOpenWindowLinks(doc: Document = document, win: Window = window): void {
+  if (!isEmbeddedWindowDom(doc)) return;
+  if (doc.documentElement.dataset.deskOpenWindowLinksReady === 'true') return;
+  doc.documentElement.dataset.deskOpenWindowLinksReady = 'true';
+
+  doc.addEventListener(
+    'click',
+    (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const opener = target.closest(`[${DESK_OPEN_WINDOW_ATTR}]`);
+      if (!(opener instanceof HTMLAnchorElement)) return;
+      const href = opener.getAttribute('href');
+      if (!href) return;
+
+      event.preventDefault();
+      const title = opener.getAttribute('aria-label')?.trim() || opener.textContent?.trim() || '';
+      postDeskWindowMessage(win, { type: 'open-window', href, title: title || null });
+    },
+    true,
+  );
 }

@@ -1,0 +1,85 @@
+---
+/**
+ * DeskWindowManager — the HOST container every Inglés HOST page mounts
+ * (window-manager architecture, `@lib/deskWindowsState`'s own header on
+ * WHY): the hub, and every window route when it is NOT rendering EMBEDDED
+ * (`@lib/ui/embeddedWindow`'s own header — a signed-in visitor's direct
+ * visit to a window route renders this SAME shell, passing its own URL as
+ * `initialHref` rather than loading its own data twice). A GUEST never
+ * mounts this — see each window route's own frontmatter; a guest's window
+ * stays the old single-always-open `DeskWindow`, unchanged.
+ *
+ * Rendered via `BaseLayout.astro`'s `overlay` slot — same stacking-context
+ * reasoning the old single `DeskWindow` already needed (`DeskWindow.astro`'s
+ * own header: a window rendered inside `<main>` risked being painted OVER by
+ * the footer, a stacking-context trap, not a z-index problem by itself).
+ * `BaseLayout`'s own `windowManager` prop must be passed alongside this, so
+ * it knows to let THIS component own body-scroll-lock/the tray's mobile-hide
+ * rule dynamically instead of deciding them itself from slot presence.
+ *
+ * The actual DOM wiring (creating/positioning iframe frames, the
+ * `postMessage` bridge, the live tray) is `@lib/ui/deskWindowManager.ts`;
+ * this component is just its mount point plus the one existing tray
+ * container (`MinimizedWindowsTray.astro`, mounted once by `BaseLayout`) the
+ * manager re-renders LIVE instead of from `sessionStorage` — see that
+ * module's own header.
+ */
+import { UI_LABELS, type Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  /** The initial window to open on mount — a window route's OWN url, rendering this shell instead of loading its data twice (see this file's own header). `null`/omitted on the hub (no initial window). */
+  initialHref?: string | null;
+  initialTitle?: string | null;
+}
+
+const { lang, initialHref = null, initialTitle = null } = Astro.props;
+
+/** Robustness pass (owner spec): the calm notice shown instead of opening a 9th window when none of the minimized ones could be closed to make room — see `@lib/ui/deskWindowManager.ts#openWindow`'s own header. */
+const maxWindowsNoticeLabel = UI_LABELS[lang].english.hub.maxWindowsNotice;
+---
+
+<div
+  data-desk-window-manager
+  data-initial-href={initialHref ?? undefined}
+  data-initial-title={initialTitle ?? undefined}
+  data-max-windows-notice-label={maxWindowsNoticeLabel}
+>
+</div>
+
+<script>
+  import { initDeskWindowManager } from '@lib/ui/deskWindowManager';
+
+  const run = () => {
+    const container = document.querySelector<HTMLElement>('[data-desk-window-manager]');
+    if (!container) return;
+    // Double-wiring guard, same posture as every other desk script — this
+    // runs both immediately AND on `astro:page-load` (a real top-level/
+    // View-Transitions visit TO this exact host page from elsewhere).
+    if (container.dataset.deskWindowManagerReady === 'true') return;
+    container.dataset.deskWindowManagerReady = 'true';
+
+    const tray = document.querySelector<HTMLElement>('[data-minimized-tray]');
+    const removeLabel = tray?.getAttribute('data-remove-label') ?? '';
+    const initialHref = container.getAttribute('data-initial-href');
+    const initialTitle = container.getAttribute('data-initial-title') ?? '';
+    const maxWindowsNoticeLabel = container.getAttribute('data-max-windows-notice-label') ?? '';
+
+    initDeskWindowManager(
+      container,
+      tray,
+      removeLabel,
+      initialHref ? { href: initialHref, title: initialTitle } : null,
+      document,
+      window,
+      maxWindowsNoticeLabel,
+    );
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  document.addEventListener('astro:page-load', run);
+</script>

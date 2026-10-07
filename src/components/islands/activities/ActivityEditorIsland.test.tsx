@@ -276,6 +276,22 @@ describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "dou
     // own header for why.
     expect(toolbar.parentElement).toBe(document.body);
   });
+
+  // Scroll bug fix (owner report: "se rompe el scroll y no deja llegar a la
+  // parte superior", confirmed root cause with a real browser — this card
+  // was the ancestor that actually absorbed the stray scroll offset, see
+  // `QuizBlockEditor.test.tsx`'s own header): this card's own comment
+  // already says it must "stay fully visible on screen" — `overflow-hidden`
+  // let a descendant's `scrollIntoView()` still scroll it programmatically
+  // despite that, with no visible scrollbar for a visitor to undo it with.
+  // `overflow-clip` keeps the exact same visual clipping but can never be
+  // scrolled.
+  it('is overflow-clip, never overflow-hidden — it must stay fully visible, not scrollable', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const card = screen.getByTestId('activity-editor-card');
+    expect(card.className).toContain('overflow-clip');
+    expect(card.className).not.toContain('overflow-hidden');
+  });
 });
 
 // Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the

@@ -1,0 +1,117 @@
+---
+/**
+ * DeskHost — the desk + floating helper every Inglés HOST page mounts
+ * (window-manager architecture, `@lib/deskWindowsState`'s own header on
+ * WHY): the hub, and every window route's own host branch (practice,
+ * community, create, editor — all four `!embedded` branches under
+ * `src/pages/[lang]/ingles/**` and `src/pages/[lang]/crear/**`).
+ *
+ * BUGFIX (owner report, robustness pass): a direct visit to a window route
+ * (e.g. `/[lang]/ingles/actividades/<id>`) used to render `DeskScene` but
+ * NOT `DeskHelper` — only the hub's own frontmatter rendered the helper and
+ * wired its init script (`initDeskHelper`), so every OTHER host branch
+ * silently diverged from the hub the moment it was reached directly rather
+ * than by opening a window FROM the hub. Four
+ * near-identical copies of "the desk behind a host page" (`DeskScene` +
+ * labels built from `UI_LABELS[lang]`) already existed across
+ * `ingles/index.astro`, `ingles/actividades/index.astro`,
+ * `ingles/actividades/[id].astro`, `crear/index.astro` and `crear/[id].astro`
+ * — this component is the single place that assembly lives from now on, so
+ * the hub and every window route's host branch can never drift apart again.
+ *
+ * `DeskWindowManager` is deliberately NOT folded in here even though it is
+ * part of "the host": it is rendered through `BaseLayout`'s own `overlay`
+ * slot (`DeskWindowManager.astro`'s own header on the stacking-context
+ * reasoning), and Astro only resolves a named `slot` on an element that is a
+ * DIRECT child of the component invocation that owns that slot — nesting it
+ * one level deeper, inside this component's own template, would just render
+ * it inline inside `<main>` instead of after the footer. Every host branch
+ * still renders `<DeskWindowManager slot="overlay" .../>` itself, directly
+ * under `<BaseLayout>`, right alongside `<DeskHost />` — its own
+ * `initialHref`/`initialTitle` differ per route anyway, so there is nothing
+ * to centralize there.
+ */
+import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskHelper from '@components/ingles/DeskHelper.astro';
+import { isInglesHubPath } from '@lib/backNavigation';
+import { UI_LABELS, type Lang } from '@lib/i18n';
+import type { DeskSceneData } from '@lib/ingles/deskSceneData';
+
+interface Props {
+  lang: Lang;
+  desk: DeskSceneData;
+}
+
+const { lang, desk } = Astro.props;
+
+const english = UI_LABELS[lang].english;
+const hub = english.hub;
+
+/** Same hub-path check `Header.astro` used to drive its own `isHub` split — forwarded to `DeskScene`/`DeskChrome` now that the desk itself renders the logo + account control. */
+const isHub = isInglesHubPath(Astro.url.pathname);
+---
+
+<DeskScene
+  lang={lang}
+  isHub={isHub}
+  greetingLine1={desk.greetingLine1}
+  activityCountLabel={desk.activityCountLabel}
+  dailyPickHref={desk.dailyPickHref}
+  dailyPickMeta={desk.dailyPickMeta}
+  dailyPickPeek={desk.dailyPickPeek}
+  weatherLat={desk.weatherLat}
+  weatherLon={desk.weatherLon}
+  weatherCity={desk.weatherCity}
+  weatherLabel={desk.weatherLabel}
+  playerLabels={desk.playerLabels}
+  levelLabels={english.levels}
+  labels={{
+    greetingQuestion: hub.greetingQuestion,
+    greetingSubtitle: hub.greetingSubtitle,
+    foldersLabel: hub.foldersLabel,
+    communityTitle: hub.communityTitle,
+    todayTitle: hub.todayTitle,
+    createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
+    widgetsLabel: hub.widgetsLabel,
+    weatherUnavailable: hub.weatherUnavailable,
+    weatherAttribution: hub.weatherAttribution,
+    levelShortcutTitle: hub.levelShortcutTitle,
+  }}
+/>
+
+{/* Floating character helper (PART 5) — every HOST page now, not just the
+    hub (see this file's own header on the bug this fixes). Practice/editor/
+    presentation pages rendered EMBEDDED (inside the host's own iframe) still
+    never render it — only the host shell, which is always a signed-in
+    desk-behind-a-window visit, ever reaches this component at all. */}
+<DeskHelper
+  lang={lang}
+  landmarkLabel={hub.helperLandmarkLabel}
+  avatarLabelTemplate={hub.helperAvatarLabel}
+  otherTipLabel={hub.helperOtherTip}
+  closeLabel={hub.helperClose}
+/>
+
+<script>
+  import { initDeskHelper } from '@lib/ui/deskHelper';
+  import { initDeskChromeOffset } from '@lib/ui/deskChrome';
+
+  // Same wiring the hub's own script used to own alone — see this file's
+  // header. Idempotent/self-guarded (`deskHelper.ts#initDeskHelper`), so
+  // re-running it on every `astro:page-load` (including the very first one)
+  // is always safe.
+  const run = () => {
+    initDeskHelper();
+    // The desk-integrated logo/account row's own measured offset (see that
+    // module's own header) — every desk host page needs this, not just the
+    // hub, since every one of them drops the site header now.
+    initDeskChromeOffset();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  document.addEventListener('astro:page-load', run);
+</script>

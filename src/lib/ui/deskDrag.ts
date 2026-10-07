@@ -55,6 +55,7 @@ import {
   nudgePosition,
   isArrowKey,
   DESK_DRAG_STORAGE_KEY,
+  WIDGET_TOP_MARGIN_PX,
   type Position,
   type Size,
 } from '../deskDragMath';
@@ -170,7 +171,7 @@ export function initDeskDrag(doc: Document = document): void {
     const fallback = defaults.get(id);
     const size = fallback?.size ?? sizeOf(widget);
     const desired = state.positions[id] ?? fallback?.pos ?? { x: 0, y: 0 };
-    const clamped = clampPosition(desired, size, deskSize());
+    const clamped = clampPosition(desired, size, deskSize(), WIDGET_TOP_MARGIN_PX);
 
     widget.style.position = 'absolute';
     widget.style.margin = '0';
@@ -209,6 +210,7 @@ export function initDeskDrag(doc: Document = document): void {
           { x: startLeft + (ev.clientX - startX), y: startTop + (ev.clientY - startY) },
           sizeOf(widget),
           deskSize(),
+          WIDGET_TOP_MARGIN_PX,
         );
         widget.style.left = `${clamped.x}px`;
         widget.style.top = `${clamped.y}px`;
@@ -245,7 +247,12 @@ export function initDeskDrag(doc: Document = document): void {
         x: parseFloat(widget.style.left || '0'),
         y: parseFloat(widget.style.top || '0'),
       };
-      const clamped = clampPosition(nudgePosition(current, event.key, event.shiftKey), sizeOf(widget), deskSize());
+      const clamped = clampPosition(
+        nudgePosition(current, event.key, event.shiftKey),
+        sizeOf(widget),
+        deskSize(),
+        WIDGET_TOP_MARGIN_PX,
+      );
       widget.style.left = `${clamped.x}px`;
       widget.style.top = `${clamped.y}px`;
       persist(id, clamped);

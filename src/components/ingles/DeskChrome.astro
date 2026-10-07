@@ -1,0 +1,115 @@
+---
+/**
+ * DeskChrome — the desk-integrated logo + account control row ("desktop"
+ * redesign, owner spec 2026-10-07: "integrar las opciones del header a
+ * nuestro escritorio para hacerlo parte de él y prescindir del header
+ * normal"). Every desk HOST page (`BaseLayout.astro`'s own `isDeskHost`:
+ * the hub, and every window route's host shell for a signed-in visitor)
+ * drops the site `<Header>` bar entirely and renders THIS instead — same
+ * visuals/behaviour as `Header.astro`'s own `ingles` branch (the logo card,
+ * hover-link byline on the hub, the "Ordenar escritorio" icon, the
+ * `UserMenu` account control), just no longer a separate `<header>` element
+ * reserving its own space above the desk.
+ *
+ * Z-ORDER: rendered as the FIRST child of `DeskScene.astro`'s own
+ * `[data-desk]` section, `absolute` at the `desk:` breakpoint (phones keep
+ * it in normal flow — nothing drags there) — so it sits BELOW a floating
+ * desk window (`DeskWindowManager`'s own wrapper, `z-[1000+]`) and below a
+ * desk widget once dragged on top of it (later in source order, same
+ * stacking context): both can be dragged OVER this row, same as a real
+ * desktop metaphor. `[data-desk-chrome-row]` is this row's own measurement
+ * hook — `@lib/ui/deskChrome.ts#initDeskChromeOffset` reads its rendered
+ * bottom edge so a freshly-opened window/the desk's own content both start
+ * just below it, with no hard-coded height anywhere.
+ *
+ * The account menu's own dropdown (`UserMenu.tsx`) is portaled to
+ * `document.body` already and carries a z-index comfortably above any
+ * window, so it stays reachable (and keyboard-focusable) even while a
+ * window covers part of the desk.
+ */
+import { UI_LABELS, type Lang } from '@lib/i18n';
+import { ICON_TOOLTIP_BUBBLE_CLASS } from '@lib/ui/iconTooltip';
+import UserMenu from '@components/islands/UserMenu';
+
+interface Props {
+  lang: Lang;
+  /** True only on the Inglés hub — the ONE desk page whose logo byline gets its own link back to ChuyoCode (`Header.astro`'s own former `isHub` split, item B). */
+  isHub: boolean;
+}
+
+const { lang, isHub } = Astro.props;
+
+const base = `/${lang}`;
+const inglesHref = `${base}/ingles`;
+const english = UI_LABELS[lang].english;
+const backToChuyoCodeLabel = english.hub.backToChuyoCode;
+const arrangeDesktopLabel = english.hub.arrangeDesktop;
+const userMenuLabels = UI_LABELS[lang].auth.userMenu;
+---
+
+{/* `data-desk-chrome-row` — MUST match `@lib/ui/deskChrome.ts`'s own `DESK_CHROME_ROW_SELECTOR` literal; that module measures this exact row. */}
+<div
+  data-desk-chrome-row
+  class="relative z-0 flex w-full flex-wrap items-center justify-between gap-3 px-4 py-4 desk:absolute desk:inset-x-0 desk:top-0 desk:px-7"
+>
+  {isHub ? (
+    <div class="flex flex-none flex-col items-start gap-1 rounded-card border border-border bg-card px-4 py-2 shadow-elevation-1 transition-theme duration-theme">
+      <a
+        href={inglesHref}
+        aria-label="Inglés"
+        class="font-display text-2xl leading-none font-extrabold tracking-tight text-foreground transition-theme duration-theme hover:text-accent-ink sm:text-3xl"
+      >
+        Inglés
+      </a>
+      <a
+        href={`${base}/`}
+        aria-label={backToChuyoCodeLabel}
+        aria-describedby="desk-chrome-back-to-chuyocode-tooltip"
+        class="group relative flex items-center gap-1 text-[11px] leading-none font-medium text-muted-foreground transition-colors duration-theme hover:text-accent-ink hover:underline"
+      >
+        by
+        <img src="/chuyocode.svg" alt="" class="h-3 w-3" />
+        ChuyoCode
+        <span role="tooltip" id="desk-chrome-back-to-chuyocode-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {backToChuyoCodeLabel}
+        </span>
+      </a>
+    </div>
+  ) : (
+    <a
+      href={inglesHref}
+      aria-label="Inglés by ChuyoCode"
+      class="flex flex-none flex-col items-start gap-1 rounded-card border border-border bg-card px-4 py-2 shadow-elevation-1 transition-theme duration-theme hover:border-accent-ink"
+    >
+      <span class="font-display text-2xl leading-none font-extrabold tracking-tight text-foreground sm:text-3xl">
+        Inglés
+      </span>
+      <span class="flex items-center gap-1 text-[11px] leading-none font-medium text-muted-foreground">
+        by
+        <img src="/chuyocode.svg" alt="" class="h-3 w-3" />
+        ChuyoCode
+      </span>
+    </a>
+  )}
+
+  <div class="flex flex-none items-center gap-1" data-header-actions>
+    {isHub && (
+      <button
+        type="button"
+        id="desk-arrange-button"
+        hidden
+        aria-label={arrangeDesktopLabel}
+        aria-describedby="desk-chrome-arrange-tooltip"
+        class="group relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-theme hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 max-desk:hidden"
+      >
+        <svg viewBox="0 0 256 256" class="h-[19px] w-[19px]" aria-hidden="true" fill="currentColor">
+          <path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z" />
+        </svg>
+        <span role="tooltip" id="desk-chrome-arrange-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {arrangeDesktopLabel}
+        </span>
+      </button>
+    )}
+    <UserMenu lang={lang} labels={userMenuLabels} client:load />
+  </div>
+</div>

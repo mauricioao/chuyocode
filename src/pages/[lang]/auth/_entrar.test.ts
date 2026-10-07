@@ -14,7 +14,7 @@ import EntrarPage from './entrar.astro';
 /** Render the sign-in page with route params + middleware locals. */
 async function render(
   url: string,
-  { params, locals }: { params: Record<string, string>; locals?: Record<string, unknown> },
+  { params, locals, headers }: { params: Record<string, string>; locals?: Record<string, unknown>; headers?: Record<string, string> },
 ) {
   const container = await createContainer();
   return container.renderToResponse(EntrarPage, {
@@ -22,7 +22,7 @@ async function render(
     // same convention as `src/pages/[lang]/libros/libros.test.ts`.
     locals: { user: null, ...locals },
     params,
-    request: new Request(url),
+    request: new Request(url, { headers }),
   });
 }
 
@@ -53,6 +53,66 @@ describe('GET /[lang]/auth/entrar — response mechanics', () => {
 
     expect(res.status).toBe(303);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+describe('GET /[lang]/auth/entrar — fool-proofing a chrome-less frame (robustness pass)', () => {
+  // A session that expires WHILE a desk window's own iframe is open makes
+  // the middleware's login gate 303 straight to this page — inside that
+  // same iframe (`Sec-Fetch-Dest: iframe` survives the redirect). Rendering
+  // the normal sign-in form there would cram it into a tiny window with no
+  // traffic lights; this page instead ships a minimal shell that bounces
+  // the REAL browser tab here.
+  it('ships a minimal, chrome-less shell instead of the normal sign-in form', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+      headers: { 'sec-fetch-dest': 'iframe' },
+    });
+
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="google-signin-form"');
+    expect(html).not.toContain('id="content"'); // never goes through BaseLayout
+  });
+
+  it('is never publicly cacheable and varies on Sec-Fetch-Dest', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+      headers: { 'sec-fetch-dest': 'iframe' },
+    });
+
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
+  });
+
+  it('carries a script that bounces window.top to a plain top-level sign-in, with next set to window.top\'s own URL', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+      headers: { 'sec-fetch-dest': 'iframe' },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('window.top.location.href');
+    expect(html).toContain(JSON.stringify('/es/auth/entrar'));
+  });
+
+  it('gives a plain target="_top" link to the bare sign-in page as the no-JS fallback', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+      headers: { 'sec-fetch-dest': 'iframe' },
+    });
+    const html = await res.text();
+
+    expect(html).toMatch(/<a[^>]+href="\/es\/auth\/entrar"[^>]+target="_top"[^>]*>/);
+  });
+
+  it('renders the normal full sign-in page for a plain top-level request (no Sec-Fetch-Dest: iframe)', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="google-signin-form"');
   });
 });
 

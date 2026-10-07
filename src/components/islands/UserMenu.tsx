@@ -485,7 +485,15 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
             role="menu"
             data-testid="user-menu-dropdown"
             style={{ position: 'fixed', top: menuCoords.top, right: menuCoords.right }}
-            className="z-50 w-56 rounded-md border border-border bg-background p-3 shadow-lg"
+            // "Desktop" redesign (owner spec 2026-10-07): on a desk host page
+            // this trigger is no longer inside a separate `<header>` above
+            // everything — it is a desk item, and a floating desk window can
+            // now cover part of the desk (`@lib/ui/deskWindowManager.ts`'s
+            // own wrapper z-index, `1000 + entry.z`). The dropdown must stay
+            // reachable (and keyboard-focusable) even then, so it carries a
+            // z-index comfortably above any realistic window stack instead
+            // of the old plain `z-50`.
+            className="z-[999999] w-56 rounded-md border border-border bg-background p-3 shadow-lg"
           >
             <p className="truncate text-sm font-medium text-foreground">{profile.name}</p>
             <p className="truncate text-xs text-muted-foreground">{profile.email}</p>

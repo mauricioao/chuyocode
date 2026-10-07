@@ -306,6 +306,14 @@ export const UI_LABELS = {
       googleUnavailable:
         'El acceso con Google no está disponible en este momento. Prueba con correo y contraseña.',
       orDivider: 'o',
+      // Window-manager architecture, robustness pass (owner report): a
+      // session that expires WHILE a desk window's own iframe is open lands
+      // this exact page there — too small/chrome-less a place to sign back
+      // in. Shown only in that one case (`Sec-Fetch-Dest: iframe`), with a
+      // script that bounces the REAL browser tab here instead; this text is
+      // its no-JS fallback / the instant before that script runs.
+      windowRedirecting: 'Tu sesión expiró. Te llevamos a la pantalla de acceso…',
+      windowRedirectingContinue: 'Continuar',
       nuevaClave: {
         title: 'Nueva contraseña',
         description: 'Elegir una nueva contraseña para la cuenta.',
@@ -900,6 +908,19 @@ export const UI_LABELS = {
         // behind this one trigger so the title bar's actions fit one row —
         // see `DeskWindow.astro`'s own header.
         windowMore: 'Más',
+        // "Modo enfoque" (full-screen exercise mode, owner spec 2026-10-07:
+        // "quiero uno de pantalla completa que solo muestre el ejercicio sin
+        // bordes"): deliberately NOT named "Pantalla completa" like
+        // `windowFullScreen` above — that is a DIFFERENT, already-shipped
+        // control (the green light, which just maximizes the WINDOW, chrome
+        // and all) living in the SAME title bar; reusing its exact name here
+        // would give two differently-behaving buttons the identical
+        // accessible name. This one hides every bit of chrome (window, tabs,
+        // title) and shows only the exercise.
+        focusMode: 'Modo enfoque',
+        focusModeExit: 'Salir del modo enfoque',
+        focusModePrev: 'Página anterior',
+        focusModeNext: 'Página siguiente',
       },
       // "Reportar" button + dialog on the practice page (PR E, "Moderation").
       // Hidden for the activity's own author and for anonymous visitors —
@@ -1353,6 +1374,10 @@ export const UI_LABELS = {
         trayLabel: 'Ventanas minimizadas',
         trayRemoveLabel: 'Quitar de la bandeja',
         trayMoreLabel: 'Ver {n} ventanas más',
+        // Window-manager architecture, robustness pass (owner spec): the
+        // calm notice shown instead of opening a 9th window when none of
+        // the minimized ones could be closed to make room.
+        maxWindowsNotice: 'Ya tienes muchas ventanas abiertas. Cierra alguna para abrir otra.',
         // "Desktop" redesign PART 1 (owner spec 2026-10-06, item B): the
         // hub-only "by ChuyoCode" header link's accessible name + tooltip.
         backToChuyoCode: 'Regresar a ChuyoCode',
@@ -1729,6 +1754,10 @@ export const UI_LABELS = {
       googleUnavailable:
         'Google sign-in is not available right now. Try email and password instead.',
       orDivider: 'or',
+      // Window-manager architecture, robustness pass — see the Spanish
+      // string's own comment.
+      windowRedirecting: 'Your session expired. Taking you to sign in…',
+      windowRedirectingContinue: 'Continue',
       nuevaClave: {
         title: 'New password',
         description: 'Choose a new password for the account.',
@@ -2135,6 +2164,13 @@ export const UI_LABELS = {
         windowMinimize: 'Minimize',
         windowFullScreen: 'Full screen',
         windowMore: 'More',
+        // "Focus mode" (full-screen exercise mode) — see the `es` copy's own
+        // comment for why this is deliberately NOT named "Full screen" like
+        // `windowFullScreen` above (a different, already-shipped control).
+        focusMode: 'Focus mode',
+        focusModeExit: 'Exit focus mode',
+        focusModePrev: 'Previous page',
+        focusModeNext: 'Next page',
       },
       report: {
         button: 'Report',
@@ -2489,6 +2525,7 @@ export const UI_LABELS = {
         trayLabel: 'Minimized windows',
         trayRemoveLabel: 'Remove from tray',
         trayMoreLabel: 'See {n} more windows',
+        maxWindowsNotice: 'You already have a lot of windows open. Close one to open another.',
         backToChuyoCode: 'Back to ChuyoCode',
         greetingNamed: 'Hi, {name}.',
         greetingFallback: 'Hi.',

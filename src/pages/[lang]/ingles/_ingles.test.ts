@@ -369,7 +369,11 @@ describe('ingles/index.astro (hub)', () => {
       expect(html).toMatch(/id="desk-helper-avatar"[^>]+aria-expanded="true"/);
     });
 
-    it('never renders on the community activities window (hub-only scope)', async () => {
+    // Robustness fix (owner report): a direct visit to a window route used to
+    // show no helper at all — only the hub's own frontmatter rendered it.
+    // `DeskHost.astro` (shared by the hub and every window route's host
+    // shell) now renders it everywhere a signed-in visitor sees the desk.
+    it('renders on the community activities window host shell too, not hub-only anymore', async () => {
       const res = await renderPage(
         CommunityListPage,
         { lang: 'es' },
@@ -377,7 +381,7 @@ describe('ingles/index.astro (hub)', () => {
       );
       const html = await res.text();
 
-      expect(html).not.toContain('id="desk-helper"');
+      expect(html).toContain('id="desk-helper"');
     });
   });
 

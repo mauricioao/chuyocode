@@ -4,7 +4,6 @@ import { initDeskWindowDrag } from './deskWindowDrag';
 import { DESK_WINDOW_OFFSET_STORAGE_KEY } from '../deskWindowDragMath';
 
 const RECTS: Record<string, { left: number; top: number; width: number; height: number }> = {
-  header: { left: 0, top: 0, width: 1440, height: 64 },
   window: { left: 64, top: 76, width: 600, height: 500 },
 };
 
@@ -16,10 +15,6 @@ const RECTS: Record<string, { left: number; top: number; width: number; height: 
  * "moved", breaking the module's own idempotency assumption purely as a test
  * artifact. */
 function rectFor(el: Element) {
-  if (el.hasAttribute('data-chrome-header')) {
-    const r = RECTS.header;
-    return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON() {} };
-  }
   if (el.id === 'desk-window') {
     const r = RECTS.window;
     const translate = windowEl().style.translate || '0px 0px';
@@ -33,7 +28,6 @@ function rectFor(el: Element) {
 
 function setDom(): void {
   document.body.innerHTML = `
-    <header data-chrome-header></header>
     <section id="desk-window" data-fullscreen="false">
       <div data-desk-window-titlebar data-testid="desk-window-titlebar">
         <button type="button" id="inner-btn">x</button>
@@ -164,15 +158,15 @@ describe('initDeskWindowDrag — pointer drag', () => {
     expect(down.defaultPrevented).toBe(false);
   });
 
-  it('clamps the offset so the window never goes above the header', () => {
+  it('clamps the offset so the window never goes above the top edge margin — the whole screen is usable', () => {
     const win = fakeWin();
     initDeskWindowDrag(windowEl(), document, win);
 
     titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0 }));
     titlebarEl().dispatchEvent(new MouseEvent('pointermove', { clientX: 0, clientY: -5000 }));
 
-    // window.top (76) + offset.y must equal header.bottom (64).
-    expect(windowEl().style.translate).toBe('0px -12px');
+    // window.top (76) + offset.y must equal the 8px edge margin.
+    expect(windowEl().style.translate).toBe('0px -68px');
   });
 
   it('keeps the whole window on screen when dragged far past the right/bottom edges', () => {
@@ -263,5 +257,56 @@ describe('initDeskWindowDrag — double-wiring guard', () => {
 
     // A double-wired drag would double the delta.
     expect(windowEl().style.translate).toBe('40px 0px');
+  });
+});
+
+// Window-manager architecture: embedded, there is no local window box to
+// translate — the title bar posts SCREEN-space deltas to the host instead
+// (`screenX`/`screenY`, never `clientX`/`clientY` — those are relative to
+// THIS iframe's own viewport and meaningless once the drag crosses the
+// frame boundary into the host document).
+describe('initDeskWindowDrag — embedded mode (posts screen deltas to the host)', () => {
+  function fakeEmbeddedWin(posted: Array<{ message: unknown; origin: string }>) {
+    const win = fakeWin();
+    (win as unknown as { location: unknown }).location = { origin: 'https://example.test' };
+    (win as unknown as { parent: unknown }).parent = {
+      postMessage: (message: unknown, origin: string) => posted.push({ message, origin }),
+    };
+    return win;
+  }
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-desk-window-embedded');
+  });
+
+  it('posts drag-start/drag-move/drag-end with screen-space deltas, and never sets a local translate', () => {
+    document.documentElement.setAttribute('data-desk-window-embedded', '');
+    const posted: Array<{ message: unknown; origin: string }> = [];
+    const win = fakeEmbeddedWin(posted);
+    initDeskWindowDrag(windowEl(), document, win);
+
+    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointermove', { screenX: 140, screenY: 170 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointerup', { screenX: 140, screenY: 170 }));
+
+    expect(windowEl().style.translate).toBe('');
+    expect(posted.map((p) => p.message)).toEqual([
+      { source: 'desk-window', type: 'drag-start' },
+      { source: 'desk-window', type: 'drag-move', dx: 40, dy: -30 },
+      { source: 'desk-window', type: 'drag-end' },
+    ]);
+    expect(posted.every((p) => p.origin === 'https://example.test')).toBe(true);
+  });
+
+  it('still respects the breakpoint/fullscreen guards when embedded', () => {
+    document.documentElement.setAttribute('data-desk-window-embedded', '');
+    windowEl().setAttribute('data-fullscreen', 'true');
+    const posted: Array<{ message: unknown; origin: string }> = [];
+    const win = fakeEmbeddedWin(posted);
+    initDeskWindowDrag(windowEl(), document, win);
+
+    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200 }));
+
+    expect(posted).toEqual([]);
   });
 });

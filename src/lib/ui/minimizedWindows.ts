@@ -212,9 +212,10 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
  * still carry the UNtruncated title for anyone who needs it.
  *
  * The chip is a plain `<a href>` carrying `data-desk-window-open` with the
- * SAME id `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already listens for
- * — reopening a chip gets the exact scale-in-from-this-spot treatment any
- * other opener gets, with no new wiring. Its own "×" is a `<button>` that
+ * SAME id the HOST's own window manager already listens for
+ * (`@lib/ui/deskWindowManager.ts#onClickCapture`) — reopening a chip gets
+ * the exact scale-in-from-this-spot treatment any other opener gets, with
+ * no new wiring. Its own "×" is a `<button>` that
  * stops the click from reaching the anchor (`stopPropagation` +
  * `preventDefault`) so hovering/clicking it removes the chip instead of
  * reopening the window; it is visible on hover/focus only, but — being a
@@ -224,7 +225,7 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
 function createChip(
   entry: MinimizedWindowEntry,
   removeLabel: string,
-  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  onRemove: (id: string) => void,
   doc: Document,
   onRemoved: () => void,
 ): HTMLAnchorElement {
@@ -266,7 +267,7 @@ function createChip(
   closeButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    removeMinimizedWindow(entry.id, storage);
+    onRemove(entry.id);
     onRemoved();
   });
   chip.appendChild(closeButton);
@@ -376,8 +377,18 @@ function wireOverflowEscapeClose(doc: Document): void {
 }
 
 /**
- * DOM: (re)render `container`'s chips from `entries`. Clears and rebuilds
- * every time rather than diffing — the list is at most
+ * DOM: (re)render `container`'s chips from `entries`, against an arbitrary
+ * `onRemove`/`rerender` pair rather than `sessionStorage` directly — this is
+ * what lets the SAME chip/overflow-menu UI serve two different owners of
+ * "the list of minimized windows":
+ *   - {@link renderMinimizedWindowsTray} below — `sessionStorage`, the
+ *     per-page tray every Inglés HOST page still mounts.
+ *   - the window manager (`@lib/ui/deskWindowManager`, window-manager
+ *     architecture) — its own in-memory `DeskWindowsState`, since a
+ *     minimized window there is a REAL iframe kept alive in the DOM, not
+ *     just a remembered URL to reopen.
+ *
+ * Clears and rebuilds every time rather than diffing — the list is at most
  * {@link MAX_MINIMIZED_WINDOWS} long, so a full rebuild is cheap, and it
  * keeps this function simple enough to trust at a glance.
  *
@@ -386,11 +397,12 @@ function wireOverflowEscapeClose(doc: Document): void {
  * own header for why (owner report `dock-three-chips.png`: the dock used to
  * widen under the open helper bubble to fit every chip).
  */
-export function renderMinimizedWindowsTray(
+export function renderMinimizedWindowsTrayFrom(
   container: HTMLElement,
   entries: readonly MinimizedWindowEntry[],
   removeLabel: string,
-  storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
+  onRemove: (id: string) => void,
+  rerender: () => void,
   doc: Document = document,
   moreLabelTemplate = '+{n}',
 ): void {
@@ -409,16 +421,33 @@ export function renderMinimizedWindowsTray(
   const visible = entries.slice(0, MAX_VISIBLE_MINIMIZED_CHIPS);
   const overflow = entries.slice(MAX_VISIBLE_MINIMIZED_CHIPS);
 
-  const rerender = () =>
-    renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate);
-
   for (const entry of visible) {
-    container.appendChild(createChip(entry, removeLabel, storage, doc, rerender));
+    container.appendChild(createChip(entry, removeLabel, onRemove, doc, rerender));
   }
 
   if (overflow.length > 0) {
     container.appendChild(createOverflowTile(overflow, moreLabelTemplate, doc));
   }
+}
+
+/** The `sessionStorage`-backed tray every Inglés HOST page mounts — see {@link renderMinimizedWindowsTrayFrom}'s own header. */
+export function renderMinimizedWindowsTray(
+  container: HTMLElement,
+  entries: readonly MinimizedWindowEntry[],
+  removeLabel: string,
+  storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
+  doc: Document = document,
+  moreLabelTemplate = '+{n}',
+): void {
+  renderMinimizedWindowsTrayFrom(
+    container,
+    entries,
+    removeLabel,
+    (id) => removeMinimizedWindow(id, storage),
+    () => renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate),
+    doc,
+    moreLabelTemplate,
+  );
 }
 
 /**
@@ -431,6 +460,14 @@ export function renderMinimizedWindowsTray(
 export function initMinimizedWindowsTray(doc: Document = document, win: Window = window): void {
   const container = doc.querySelector<HTMLElement>(`[${MINIMIZED_TRAY_ATTR.container}]`);
   if (!container) return;
+
+  // The window manager (window-manager architecture, `@lib/ui/deskWindowManager`)
+  // owns rendering THIS SAME container live, from its own in-memory state —
+  // a `sessionStorage`-driven render here would immediately be stale (or
+  // would stomp the manager's own render right back to whatever
+  // `sessionStorage` last held). `[data-desk-window-manager]` is only ever
+  // present on a page that mounted the manager.
+  if (doc.querySelector('[data-desk-window-manager]')) return;
 
   const removeLabel = container.getAttribute('data-remove-label') ?? '';
   const moreLabelTemplate = container.getAttribute('data-more-label') ?? '+{n}';

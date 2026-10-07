@@ -34,14 +34,26 @@
  * (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`), same as a
  * GUEST's practice window. `closeOnEscape` stays at its default (`true`) —
  * this screen has no competing use for Escape, unlike the editor.
+ *
+ * WINDOW-MANAGER ARCHITECTURE (owner report: opening a window used to
+ * navigate the desk away, resetting the helper's tip bubble): a signed-in
+ * HOST visit now renders the desk plus `DeskWindowManager`, which opens THIS
+ * SAME route again as its own `<iframe>` (`?ventana=1` /
+ * `Sec-Fetch-Dest: iframe` — `@lib/ui/embeddedWindow`) instead of this file
+ * loading anything itself; the EMBEDDED branch below is exactly what that
+ * iframe renders — `DeskWindow` alone, no desk, `embedded` dropping the
+ * desktop inset/shadow (the host frame draws those now). See
+ * `@lib/ui/deskWindowManager.ts`'s own header for the DOM/`postMessage` side.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
+import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import ActivityStartIsland from '@components/islands/activities/ActivityStartIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -68,55 +80,68 @@ if (!user) {
   });
 }
 
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): is
+ * this request the window's own CONTENT, loaded inside the host's
+ * `<iframe>` — or a direct, HOST visit (signed in, same as every visit here
+ * — the gate above already redirects a guest away)? See
+ * `@lib/ui/embeddedWindow`'s own header. `Vary` so a cache never serves one
+ * shape to a request that asked for the other.
+ */
+const embedded = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
+Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+const hostMode = !embedded;
+
 const t = UI_LABELS[lang].activities.start;
 const editorT = UI_LABELS[lang].activities.editor;
-const levelLabels = UI_LABELS[lang].english.levels;
 
 /** The desk behind the window — same loader/component the hub, the
- * practice window, and the editor window all use. */
-const desk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
-const deskLabels = {
-  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
-  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
-  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
-  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
-  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
-  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
-  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
-  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
-  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-};
+ * practice window, and the editor window all use. Loaded ONLY in host
+ * mode: the embedded content below never has a desk behind it, and the
+ * host never loads a window's own data itself (this route's own content
+ * is simply `ActivityStartIsland` — nothing to double-load either way,
+ * but every window route follows the same shape for consistency). */
+let desk: Awaited<ReturnType<typeof loadDeskSceneData>> | null = null;
+if (hostMode) {
+  desk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+}
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind>
-  <DeskScene
-    lang={lang}
-    greetingLine1={desk.greetingLine1}
-    activityCountLabel={desk.activityCountLabel}
-    dailyPickHref={desk.dailyPickHref}
-    dailyPickMeta={desk.dailyPickMeta}
-    dailyPickPeek={desk.dailyPickPeek}
-    weatherLat={desk.weatherLat}
-    weatherLon={desk.weatherLon}
-    weatherCity={desk.weatherCity}
-    weatherLabel={desk.weatherLabel}
-    playerLabels={desk.playerLabels}
-    levelLabels={levelLabels}
-    labels={deskLabels}
-  />
+<BaseLayout
+  lang={lang}
+  title={t.pageTitle}
+  description={t.pageDescription}
+  theme="ingles"
+  deskBehind={hostMode}
+  embedded={embedded}
+  windowManager={hostMode}
+>
+  {hostMode && desk && (
+    <>
+      <DeskHost lang={lang} desk={desk} />
+      <DeskWindowManager
+        slot="overlay"
+        lang={lang}
+        initialHref={`${Astro.url.pathname}${Astro.url.search}`}
+        initialTitle={editorT.titleFallback}
+      />
+    </>
+  )}
 
-  <DeskWindow
-    lang={lang}
-    title={editorT.titleFallback}
-    closeHref={`/${lang}/ingles`}
-    closeLabel={editorT.windowClose}
-    minimizeLabel={editorT.windowMinimize}
-    fullScreenLabel={editorT.windowFullScreen}
-    slot="overlay"
-  >
-    <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-      <ActivityStartIsland client:load lang={lang} />
-    </section>
-  </DeskWindow>
+  {!hostMode && (
+    <DeskWindow
+      lang={lang}
+      title={editorT.titleFallback}
+      closeHref={`/${lang}/ingles`}
+      closeLabel={editorT.windowClose}
+      minimizeLabel={editorT.windowMinimize}
+      fullScreenLabel={editorT.windowFullScreen}
+      embedded
+      slot="overlay"
+    >
+      <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <ActivityStartIsland client:load lang={lang} />
+      </section>
+    </DeskWindow>
+  )}
 </BaseLayout>

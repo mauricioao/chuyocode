@@ -821,6 +821,16 @@ h3 {
    * `initChromeVisibility` otherwise keeps in sync (see that module's own
    * header and `BackButton.astro`'s). */
   --chrome-header-offset: 5rem;
+
+  /* Default (pre-JS) desk-chrome offset — a reasonable estimate of the
+   * desk-integrated logo/account row's own rendered height
+   * (`DeskChrome.astro`), overwritten the instant JS measures the real one
+   * (`@lib/ui/deskChrome.ts#initDeskChromeOffset`). Used by a freshly-opened
+   * desk window's default top inset (`@lib/ui/deskWindowManager.ts`) and by
+   * the desk's own content top padding (`DeskScene.astro`) — see
+   * `DeskChrome.astro`'s own header. Never a stand-in for the removed site
+   * `<Header>`: a desk host page renders no header at all any more. */
+  --desk-chrome-offset: 4.75rem;
 }
 
 /* SITE mode only (owner spec 2026-10-05 moved INGLÉS to its own "blocks"
@@ -977,40 +987,6 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
-@keyframes ingles-window-open {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.ingles-window {
-  transform-origin: var(--ingles-window-from, 50% 50%);
-}
-
-/* GATED, not unconditional (community-list-as-a-window pass, owner spec
- * 2026-10-07): only a FRESH open from a folder/desk opener ever plays this —
- * `@lib/ui/deskWindow.ts#applyDeskWindowOrigin` is the one place that sets
- * `data-desk-window-opening`, and only when it just consumed a genuine,
- * non-stale opener entry. A direct visit and every IN-WINDOW navigation
- * (a filter change, a page of results, opening an activity card from the
- * community list, the practice window's own `‹` back arrow) leave this
- * attribute unset, so the window simply appears with no scale-in — it would
- * otherwise have replayed on every one of those, which is not an "opening". */
-.ingles-window[data-desk-window-opening] {
-  animation: ingles-window-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ingles-window[data-desk-window-opening] {
-    animation: none;
-  }
-}
-
 /* Full screen (green light), remembered per browser — forces the full-bleed
  * sheet regardless of the `desk:` breakpoint's own inset. `!important`
  * because it must win over the SAME-specificity Tailwind utility classes
@@ -1095,6 +1071,53 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
+/* Window-manager HOST entrance animation (robustness pass, owner spec:
+ * "windows opened from a desk item scale in from that item... others
+ * fade/scale in subtly from the cascade spot"): plays on the HOST's own
+ * `[data-desk-window-frame]` wrapper (`deskWindowManager.ts`'s own
+ * `WRAPPER_CLASS` div) — a DIFFERENT element from `.ingles-window` above
+ * (that one is the EMBEDDED page's own dialog section, inside the iframe;
+ * this one is the floating frame the host positions/drags/stacks). Same
+ * delicate "settle in" curve/duration the single-window model's own
+ * (now-removed) entrance animation used.
+ *
+ * ONE keyframe serves BOTH variants `deskWindowManager.ts#applyOpenAnimation`
+ * produces: a genuine desk-item open sets `--desk-window-manager-from` to
+ * that item's own screen point, relative to this wrapper's own box
+ * (`transform-origin` is always element-relative, never viewport-relative —
+ * `applyOpenAnimation`'s own header on why it subtracts the wrapper's own
+ * `getBoundingClientRect()` first); any OTHER open (reopening from inside an
+ * embedded window, e.g. an `ActivityCard`'s `data-desk-open-window` ->
+ * `postMessage`) leaves it unset, which falls back to `50% 50%` — scaling in
+ * from the window's own centre, i.e. "the cascade spot" it already landed
+ * at. Restoring persisted windows after a reload never sets
+ * `data-desk-window-manager-opening` at all (that is not an "opening"), so
+ * nothing here ever plays for them. */
+@keyframes ingles-window-manager-open {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-desk-window-frame] {
+  transform-origin: var(--desk-window-manager-from, 50% 50%);
+}
+
+[data-desk-window-frame][data-desk-window-manager-opening] {
+  animation: ingles-window-manager-open 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-desk-window-frame][data-desk-window-manager-opening] {
+    animation: none;
+  }
+}
+
 /* Minimized-windows tray (PART 6b, moved to a standalone fixed bottom-right
  * container in PART 6c — `MinimizedWindowsTray.astro`'s own
  * `[data-minimized-tray]`): `@lib/ui/minimizedWindows.ts#initMinimizedWindowsTray`
@@ -1141,20 +1164,29 @@ html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome
  * `[data-chrome-hub]` is server-rendered by `BaseLayout.astro` (no JS
  * dependency — see that file's own header) — true ONLY for the hub, whose
  * content is one screen tall. Two snap points at the page's own natural
- * scroll extremes: `[data-chrome-header]` (start) is the TOP (the hub's own
- * header + one-screen content, both always visible there); `[data-chrome-
- * footer]` (end) is the BOTTOM (the footer fully visible) — "si se baja se
- * mira completo, si se sube se mira toda la pantalla" (owner's words).
- * `proximity`, not `mandatory`: a gentle rest at either end, never a forced
- * jump mid-scroll. Deliberately scoped to the hub alone — a long Inglés
- * page (the practice player, the editor, a long activity list) must never
- * fight a visitor trying to read partway down it. Reduced motion drops the
- * snap entirely, in favor of plain, un-snapped scrolling. */
+ * scroll extremes: `[data-desk]` (start) is the TOP (the desk itself, with
+ * its own desk-integrated logo/account row — "desktop" redesign, owner spec
+ * 2026-10-07 — always visible there); `[data-chrome-footer]` (end) is the
+ * BOTTOM (the footer fully visible) — "si se baja se mira completo, si se
+ * sube se mira toda la pantalla" (owner's words). `proximity`, not
+ * `mandatory`: a gentle rest at either end, never a forced jump mid-scroll.
+ * Deliberately scoped to the hub alone — a long Inglés page (the practice
+ * player, the editor, a long activity list) must never fight a visitor
+ * trying to read partway down it. Reduced motion drops the snap entirely,
+ * in favor of plain, un-snapped scrolling.
+ *
+ * BUGFIX (own regression, "desktop" redesign, owner spec 2026-10-07): this
+ * used to snap-align `[data-chrome-header]` as the start point — now that
+ * the hub renders no `<Header>` at all, that selector matched nothing, so
+ * the snap container had only an END point and the page auto-snapped
+ * straight to the BOTTOM on load. `[data-desk]` (the desk section itself,
+ * never absolutely positioned, so it is always a valid snap area) restores
+ * the top anchor. */
 @media (prefers-reduced-motion: no-preference) {
   html[data-chrome-hub] {
     scroll-snap-type: y proximity;
   }
-  html[data-chrome-hub] [data-chrome-header] {
+  html[data-chrome-hub] [data-desk] {
     scroll-snap-align: start;
   }
   html[data-chrome-hub] [data-chrome-footer] {

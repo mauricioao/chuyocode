@@ -25,10 +25,10 @@ import {
   type Offset,
   type WindowRect,
 } from '../deskWindowDragMath';
+import { isEmbeddedWindowDom, postDeskWindowMessage } from './deskWindowMessaging';
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 const TITLEBAR_SELECTOR = '[data-desk-window-titlebar]';
-const HEADER_SELECTOR = '[data-chrome-header]';
 /** Pointerdowns on any of these (including the editor's own portaled title `<input>`) never start a drag. */
 const IGNORE_SELECTOR = 'button, a, input, textarea, select, [contenteditable="true"]';
 const DRAGGING_CLASS = 'ingles-window--dragging';
@@ -58,11 +58,6 @@ function isFullScreen(windowEl: HTMLElement): boolean {
   return windowEl.getAttribute('data-fullscreen') === 'true';
 }
 
-function headerBottom(doc: Document): number {
-  const header = doc.querySelector<HTMLElement>(HEADER_SELECTOR);
-  return header ? header.getBoundingClientRect().bottom : 0;
-}
-
 /** The whole window element's own rect WITHOUT `current` (the offset already applied to it) — so repeated clamps never compound onto an already-offset measurement. */
 function unoffsetWindowRect(windowEl: HTMLElement, current: Offset): WindowRect {
   const rect = windowEl.getBoundingClientRect();
@@ -82,6 +77,41 @@ export function initDeskWindowDrag(windowEl: HTMLElement, doc: Document = docume
   const titlebar = windowEl.querySelector<HTMLElement>(TITLEBAR_SELECTOR);
   if (!titlebar) return;
 
+  // EMBEDDED (window-manager architecture, validated prototype: a title bar
+  // INSIDE an iframe can drag its PARENT frame — the iframe captures the
+  // pointer and posts screen-space deltas, `screenX`/`screenY` — never
+  // `clientX`/`clientY`, which are relative to the iframe's own viewport and
+  // meaningless once the drag crosses the frame boundary; the host applies
+  // them as a `translate` on its own frame element instead). No local
+  // `translate`/`sessionStorage` at all here — there is nothing of this
+  // window's own box to move (it already fills the iframe), and the host
+  // keeps the offset in memory for the life of the window.
+  if (isEmbeddedWindowDom(doc)) {
+    titlebar.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || !isDesktop(win) || isFullScreen(windowEl)) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest(IGNORE_SELECTOR)) return;
+
+      event.preventDefault();
+      const startX = event.screenX;
+      const startY = event.screenY;
+      titlebar.setPointerCapture(event.pointerId);
+      postDeskWindowMessage(win, { type: 'drag-start' });
+
+      function move(ev: PointerEvent): void {
+        postDeskWindowMessage(win, { type: 'drag-move', dx: ev.screenX - startX, dy: ev.screenY - startY });
+      }
+      function up(): void {
+        titlebar!.removeEventListener('pointermove', move);
+        titlebar!.removeEventListener('pointerup', up);
+        postDeskWindowMessage(win, { type: 'drag-end' });
+      }
+      titlebar.addEventListener('pointermove', move);
+      titlebar.addEventListener('pointerup', up, { once: true });
+    });
+    return;
+  }
+
   let offset: Offset = { x: 0, y: 0 };
 
   function applyOffset(next: Offset): void {
@@ -91,7 +121,7 @@ export function initDeskWindowDrag(windowEl: HTMLElement, doc: Document = docume
 
   function clampAndApply(next: Offset): void {
     const rect = unoffsetWindowRect(windowEl, offset);
-    const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
+    const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
     applyOffset(clamped);
   }
 

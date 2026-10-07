@@ -42,15 +42,25 @@ vi.mock('@lib/activities/storage', () => ({
 
 import EditPage from './[id].astro';
 
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): this
+ * whole suite is about the WINDOW's own CONTENT (the editor island, the
+ * title bar, the dirty guard) — which only ever renders for an EMBEDDED
+ * request now (`?ventana=1`, `@lib/ui/embeddedWindow`'s own header), so
+ * `render` simulates one by default. `GET … — HOST shell` below is the one
+ * describe block that deliberately omits it.
+ */
 async function render(
   url: string,
-  { params, locals }: { params: Record<string, string>; locals?: Record<string, unknown> },
+  { params, locals, embedded = true }: { params: Record<string, string>; locals?: Record<string, unknown>; embedded?: boolean },
 ) {
   const container = await createContainer();
+  const requestUrl = new URL(url);
+  if (embedded) requestUrl.searchParams.set('ventana', '1');
   return container.renderToResponse(EditPage, {
     locals: { user: null, ...locals },
     params,
-    request: new Request(url),
+    request: new Request(requestUrl),
   });
 }
 
@@ -173,6 +183,35 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('href="/es/ingles"');
     expect(html).not.toContain('href="/es/mis-actividades"');
     expect(html).not.toContain('data-back-button');
+  });
+
+  // Scroll bug fix (owner report: "se rompe el scroll y no deja llegar a la
+  // parte superior" — confirmed root cause: a descendant's `scrollIntoView()`
+  // can still scroll an `overflow: hidden` ancestor programmatically, with no
+  // visible scrollbar for a visitor to undo it with — see
+  // `QuizBlockEditor.test.tsx`'s own header). This section exists only to
+  // clip its content, never to scroll (the editor island owns its own
+  // internal scroll chain) — `overflow: clip` keeps the same visual clipping
+  // but can never be scrolled.
+  it("clips the editor's own body section with overflow-clip at desk:, never overflow-hidden", async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const sectionMatch = html.match(/<section class="([^"]*overflow-y-auto bg-muted[^"]*)"/);
+    expect(sectionMatch?.[1]).toContain('lg:overflow-clip');
+    expect(sectionMatch?.[1]).not.toContain('overflow-hidden');
   });
 
   it('shows the activity title in the window title bar, and the muted autosave status next to it', async () => {
@@ -320,26 +359,45 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
 describe('GET /[lang]/crear/[id] — the desk behind the window (PART 6b)', () => {
   // PART 6c (owner spec 2026-10-07): never `inert` anymore — the floating
   // window is non-modal, and the desk behind it stays fully usable.
-  it('renders the SAME desk behind the window, never inert, as the hub/practice window', async () => {
-    editableActivity.value = {
-      id: 'abc',
-      title: 'x',
-      level: null,
-      blocks: [],
-      revisionId: 'rev-1',
-      revisionStatus: 'draft',
-      status: 'draft',
-      reviewNote: null,
-    };
+  // Window-manager architecture: the desk no longer renders BEHIND an
+  // embedded editor window at all — it renders behind the HOST shell
+  // instead, a plain signed-in visit with no `?ventana=1` (`embedded: false`
+  // below), same as every other window route.
+  it('renders the SAME desk behind the HOST shell, never inert, as the hub/practice window', async () => {
     const res = await render('https://chuyocode.test/es/crear/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: { id: 'user-1' } },
+      embedded: false,
     });
     const html = await res.text();
-    expect(html).toContain('data-desk');
+    expect(html).toContain('data-desk-window-manager');
     expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
     expect(html).toContain('Para ti hoy');
     expect(html).toContain('Tu escritorio');
+    expect(html).not.toContain('role="dialog"'); // the editor itself only renders embedded — getActivityForEdit was never even called.
+  });
+
+  it('varies on Sec-Fetch-Dest, so a cache never serves the shell to the embedded request', async () => {
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
+  });
+
+  // Robustness fix (owner report): a direct visit to a window route used to
+  // show no helper at all — only the hub's own frontmatter rendered it.
+  // `DeskHost.astro` (shared by the hub and every window route's host shell)
+  // now renders it everywhere a signed-in visitor sees the desk.
+  it('renders the floating helper on the host shell too, not hub-only anymore', async () => {
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    const html = await res.text();
+    expect(html).toContain('id="desk-helper"');
   });
 });
 
