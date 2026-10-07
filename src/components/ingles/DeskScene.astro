@@ -196,18 +196,12 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </section>
 
   {/* Levels dock — bottom centre on desktop, a horizontal scroller on
-      phones — PLUS the minimized-windows tray (owner feedback 2026-10-06,
-      polish pass 2026-10-06: "como el dock de macOS", chips INSIDE the SAME
-      glass shelf as the level tiles, after a vertical hairline, instead of
-      sitting loose next to it). Always server-rendered (empty, `hidden`) so
-      a no-JS visit degrades to exactly today's dock —
-      `@lib/ui/minimizedWindows#initMinimizedWindowsTray` is what actually
-      fills/unhides it, from `sessionStorage`, once it runs. The whole shelf
-      (levels + hairline + tray) is ONE `overflow-x-auto` row, so phones keep
-      scrolling horizontally exactly like the levels-only dock already did —
-      there is no more separate "tray row above the dock" on phones. */}
-  {/* `desk:w-max`: an absolutely positioned box at `left: 50%` may only grow to the remaining half of its container, so without it the dock shrank and scrolled (hiding A1) once chips were added. */}
-  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:w-max desk:-translate-x-1/2">
+      phones. LEVELS ONLY again (PART 6c, owner spec 2026-10-07): the
+      minimized-windows tray moved OUT to its own fixed bottom-right
+      container (`MinimizedWindowsTray.astro`, mounted once by
+      `BaseLayout.astro`) — a small rectangle per window, not a chip squeezed
+      in here next to the level tiles. */}
+  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
     <div
       data-desk-dock
@@ -243,36 +237,6 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
           })
         }
       </nav>
-
-      <div
-        aria-hidden="true"
-        data-minimized-tray-hairline
-        data-testid="minimized-tray-hairline"
-        hidden
-        class="h-auto w-px shrink-0 self-stretch bg-border"
-      ></div>
-      <nav
-        data-minimized-tray
-        data-testid="minimized-tray"
-        data-remove-label={t.trayRemoveLabel}
-        data-more-label={t.trayMoreLabel}
-        hidden
-        aria-label={t.trayLabel}
-        class="flex shrink-0 gap-2.5"
-      ></nav>
     </div>
   </div>
 </section>
-
-<script>
-  import { initMinimizedWindowsTray } from '@lib/ui/minimizedWindows';
-
-  const run = () => initMinimizedWindowsTray();
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', run, { once: true });
-  } else {
-    run();
-  }
-  document.addEventListener('astro:page-load', run);
-</script>

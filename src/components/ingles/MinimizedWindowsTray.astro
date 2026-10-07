@@ -1,0 +1,77 @@
+---
+/**
+ * MinimizedWindowsTray — the desk's "minimized windows" tray, as its own
+ * fixed bottom-right container ("desktop" redesign PART 6c, owner spec
+ * 2026-10-07: "si se minimiza se baja en un pequeño rectángulo en la parte
+ * inferior derecha"). Mounted ONCE by `BaseLayout.astro` on every Inglés
+ * page — not by `DeskScene.astro` anymore (PART 6b had it living inside the
+ * levels dock itself; the dock is levels-only again, see that component's
+ * own header) — so it exists whether or not a window happens to be open.
+ *
+ * WHY HERE, NOT INSIDE `DeskScene.astro` (owner spec: "the tray must render
+ * ABOVE an open window on desktop"): the window itself renders through
+ * `BaseLayout.astro`'s own `overlay` slot — a sibling of `<main>`, not a
+ * descendant — specifically to escape `<main>`'s own stacking context (see
+ * `global.css`'s `.ingles-window` comment). `DeskScene.astro` lives INSIDE
+ * `<main>`; a tray nested there would risk being trapped behind that same
+ * stacking context regardless of its own `z-index`. Rendering this
+ * component as `BaseLayout`'s own LAST element instead — AFTER the overlay
+ * slot — sidesteps the question entirely: it is a plain positioned sibling
+ * at the body level, at `z-[60]` (one above the window's own `z-50`), so it
+ * always wins the stacking comparison.
+ *
+ * RESPONSIVE (owner spec): below the `desk:` breakpoint, windows are full
+ * screen (there is no desk to reach behind them, and the tray would cover
+ * the window's own bottom action bar) — `hasOverlay` (true on every page
+ * that renders a `DeskWindow`) hides the tray there with `max-desk:hidden`.
+ * On a page with NO window (the hub, on a phone) the tray still shows
+ * bottom-right with safe-area insets, so a visitor can reopen a minimized
+ * window from the hub on mobile too. At `desk:` and up it always shows,
+ * window or not.
+ *
+ * `pointer-events-none` on the outer (viewport-spanning on mobile) wrapper
+ * plus `pointer-events-auto` on the actual tray keeps the empty margin
+ * around the chips from ever intercepting a click/drag meant for the desk
+ * underneath.
+ */
+import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+interface Props {
+  lang: Lang;
+  /** True on a page that renders a `DeskWindow` — see this file's own header on the mobile hide/show rule. */
+  hasOverlay: boolean;
+}
+
+const { lang, hasOverlay } = Astro.props;
+const t = UI_LABELS[isValidLang(lang) ? lang : 'es'].english.hub;
+---
+
+<div
+  class:list={[
+    'pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-end px-4 pb-[max(16px,env(safe-area-inset-bottom))] desk:inset-x-auto desk:right-6 desk:bottom-[10px] desk:px-0 desk:pb-0',
+    hasOverlay && 'max-desk:hidden',
+  ]}
+>
+  <nav
+    data-minimized-tray
+    data-testid="minimized-tray"
+    data-remove-label={t.trayRemoveLabel}
+    data-more-label={t.trayMoreLabel}
+    hidden
+    aria-label={t.trayLabel}
+    class="pointer-events-auto flex flex-row-reverse flex-wrap justify-end gap-2.5"
+  ></nav>
+</div>
+
+<script>
+  import { initMinimizedWindowsTray } from '@lib/ui/minimizedWindows';
+
+  const run = () => initMinimizedWindowsTray();
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  document.addEventListener('astro:page-load', run);
+</script>

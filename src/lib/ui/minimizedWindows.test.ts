@@ -186,19 +186,18 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
     expect(chips[0].querySelector('button')?.getAttribute('aria-label')).toBe('Quitar');
   });
 
-  // Polish pass 2026-10-06 (owner report, `dock-three-chips.png`): chips used
-  // to carry a visible title underneath the preview, which got cut off at
-  // the dock's own width. They are now icon-only tiles — the title lives in
-  // the existing tooltip pattern (`title`, a native tooltip) plus the
-  // anchor's own accessible name (`aria-label`), never visible chip text.
-  it('each chip is an icon-only tile: a document glyph preview (no thumbnail yet), no visible text label', () => {
+  // PART 6c (owner spec 2026-10-07): each chip is now a small rectangle —
+  // a document-glyph (or thumbnail) preview PLUS a visible, truncated
+  // title — now that it lives in its own fixed corner tray instead of
+  // squeezed into the levels dock.
+  it('each chip shows a document glyph preview (no thumbnail yet) plus a visible title', () => {
     const container = document.createElement('nav');
     renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
     const chip = container.querySelector('a[data-desk-window-open]') as HTMLAnchorElement;
 
     expect(chip.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(chip.querySelector('img')).toBeNull();
-    expect(chip.querySelector('small')).toBeNull();
+    expect(chip.textContent).toContain('Title a');
     expect(chip.title).toBe('Title a');
     expect(chip.getAttribute('aria-label')).toBe('Title a');
   });
@@ -301,23 +300,6 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     expect(moreButton.getAttribute('aria-expanded')).toBe('false');
     container.remove();
     menu.remove();
-  });
-});
-
-describe('renderMinimizedWindowsTray — the hairline sibling', () => {
-  it('unhides a sibling [data-minimized-tray-hairline] when there is something to show, and hides it again once empty', () => {
-    const wrapper = document.createElement('div');
-    const hairline = document.createElement('div');
-    hairline.setAttribute('data-minimized-tray-hairline', '');
-    hairline.hidden = true;
-    const container = document.createElement('nav');
-    wrapper.append(hairline, container);
-
-    renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
-    expect(hairline.hidden).toBe(false);
-
-    renderMinimizedWindowsTray(container, [], 'Quitar');
-    expect(hairline.hidden).toBe(true);
   });
 });
 

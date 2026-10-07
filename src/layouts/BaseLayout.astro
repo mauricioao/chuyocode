@@ -73,6 +73,7 @@ import { ClientRouter, fade } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
 import Footer from '@components/layout/Footer.astro';
 import NavProgressBar from '@components/layout/NavProgressBar.astro';
+import MinimizedWindowsTray from '@components/ingles/MinimizedWindowsTray.astro';
 import ScrollToTop from '@components/islands/ScrollToTop';
 import Toaster from '@components/islands/Toaster';
 // Visual-identity styles (PR 2). `fonts.css` self-hosts Raleway Variable
@@ -492,15 +493,21 @@ const faviconSvg =
       initChromeVisibility();
     </script>
 
-    {/* Overlay slot (PART 6a bugfix, 2026-10-06) — the LAST thing in
-        `<body>`, after the footer and every other chrome piece above,
-        outside `<main>` entirely. Today's one caller is the practice page's
-        own `DeskWindow` (`[id].astro`, `slot="overlay"`): rendering it here
-        instead of in the default slot is what stops the footer from
-        painting OVER the window (see `global.css`'s own
-        `.ingles-window-veil` comment for the stacking-context mechanics).
-        Nothing else currently uses this slot, so it is a no-op everywhere
-        else. */}
+    {/* Overlay slot (PART 6a bugfix, 2026-10-06) — after the footer and
+        every other chrome piece above, outside `<main>` entirely. Today's
+        callers are the practice/creator pages' own `DeskWindow`
+        (`slot="overlay"`): rendering it here instead of in the default slot
+        is what stops the footer from painting OVER the window (see
+        `global.css`'s own `.ingles-window` comment for the stacking-context
+        mechanics). Nothing else currently uses this slot, so it is a no-op
+        everywhere else. */}
     <slot name="overlay" />
+
+    {/* Minimized-windows tray (PART 6c) — mounted on every Inglés page,
+        AFTER the overlay slot, so it stays above an open window
+        (`MinimizedWindowsTray.astro`'s own header on the stacking/`z-index`
+        reasoning). A no-op render (an empty, `hidden` tray) on a page with
+        nothing minimized, same posture as every other desk script. */}
+    {isIngles && <MinimizedWindowsTray lang={lang} hasOverlay={hasOverlay} />}
   </body>
 </html>

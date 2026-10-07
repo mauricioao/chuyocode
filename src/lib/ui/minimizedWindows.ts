@@ -1,19 +1,25 @@
 /**
- * Minimized-windows tray — the desk's own "minimized windows" dock slot
- * (owner feedback 2026-10-06, replacing the old behaviour where the yellow
- * light just navigated to the hub exactly like the red one). A real minimize:
- * the practice window's own id/title/url get remembered for the rest of the
- * browser SESSION (`sessionStorage`, never `localStorage` — this is not a
- * "remember forever" feature), so the hub's own dock can render a small chip
- * for each one, next to the levels dock, separated by a hairline (approved
- * mockup direction: "like macOS's dock").
+ * Minimized-windows tray — the desk's own "minimized windows" tray (owner
+ * feedback 2026-10-06, replacing the old behaviour where the yellow light
+ * just navigated to the hub exactly like the red one). A real minimize: the
+ * window's own id/title/url get remembered for the rest of the browser
+ * SESSION (`sessionStorage`, never `localStorage` — this is not a "remember
+ * forever" feature), so a small rectangle renders for each one.
+ *
+ * PART 6c (owner spec 2026-10-07, "se baja en un pequeño rectángulo en la
+ * parte inferior derecha"): the tray moved OUT of the levels dock into its
+ * own fixed bottom-right container (`MinimizedWindowsTray.astro`), and each
+ * chip grew from an icon-only 56px squircle back into a small ~200×44px
+ * rectangle with a visible (truncated) title — easier to tell apart at a
+ * glance once they are not all crammed into one shelf next to six level
+ * tiles anymore.
  *
  * Split the same way `deskWindow.ts`/`backNavigation.ts` are: pure, zero-DOM
  * list operations ({@link withMinimizedWindow}, {@link withoutMinimizedWindow},
  * {@link parseMinimizedWindows}) that are fully unit-testable, plus thin
  * Storage-reading/writing wrappers (`try`/`catch`-guarded, every access —
  * private browsing, quota, disabled storage) and a DOM-rendering function for
- * `DeskScene.astro`'s own tray element.
+ * `MinimizedWindowsTray.astro`'s own tray element.
  */
 
 export const MINIMIZED_WINDOWS_STORAGE_KEY = 'ingles-desk-minimized-windows';
@@ -169,11 +175,12 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
   const svg = doc.createElementNS(NS, 'svg') as SVGSVGElement;
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('class', 'h-6 w-6 text-muted-foreground');
+  svg.setAttribute('class', 'h-4 w-4 text-muted-foreground');
 
   const path = doc.createElementNS(NS, 'path');
   // A page with a folded top-right corner, plus two text lines — legible at
-  // 24px inside the 56px squircle without reading as a random glyph.
+  // this size inside the chip's own small preview square without reading
+  // as a random glyph.
   path.setAttribute(
     'd',
     'M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z M14 2.5v4h4 M8.5 13h7 M8.5 16.5h5',
@@ -188,18 +195,17 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
 }
 
 /**
- * Builds one chip tile — shared by the directly-visible chips and (in a
- * simpler form) nothing else; factored out purely to keep
+ * Builds one chip — shared by the directly-visible chips and (in a simpler
+ * form) nothing else; factored out purely to keep
  * {@link renderMinimizedWindowsTray} readable.
  *
- * ICON-ONLY (polish pass 2026-10-06, owner report `dock-three-chips.png`):
- * a 56px squircle preview (the activity's thumbnail when known, else a
- * document glyph), matching the levels dock's own level tiles ("como el
- * dock de macOS"). The title no longer renders as visible text underneath
- * (it used to get cut off at the dock's own width) — it lives in the
- * existing tooltip pattern (`title`, a native tooltip on hover) PLUS the
- * anchor's own accessible name (`aria-label`), so it is still announced to
- * assistive tech with nothing to truncate.
+ * A SMALL RECTANGLE (PART 6c, owner spec 2026-10-07: "un pequeño rectángulo
+ * en la parte inferior derecha" — ~200×44px): a preview square (the
+ * activity's thumbnail when known, else a document glyph) plus the
+ * (truncated) title, visible again now that each chip lives in its own
+ * fixed corner tray rather than squeezed into the levels dock next to six
+ * level tiles. `title` (a native tooltip) + the anchor's own `aria-label`
+ * still carry the UNtruncated title for anyone who needs it.
  *
  * The chip is a plain `<a href>` carrying `data-desk-window-open` with the
  * SAME id `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already listens for
@@ -207,8 +213,9 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
  * other opener gets, with no new wiring. Its own "×" is a `<button>` that
  * stops the click from reaching the anchor (`stopPropagation` +
  * `preventDefault`) so hovering/clicking it removes the chip instead of
- * reopening the window; it keeps the old pill's "visible on hover/focus
- * only" posture, now pinned to the squircle's own top-right corner.
+ * reopening the window; it is visible on hover/focus only, but — being a
+ * real, always-present `<button>` in the DOM, never `display:none` — stays
+ * reachable by keyboard regardless (`focus-visible:opacity-100` below).
  */
 function createChip(
   entry: MinimizedWindowEntry,
@@ -224,23 +231,33 @@ function createChip(
   chip.title = entry.title;
   chip.setAttribute('aria-label', entry.title);
   chip.className =
-    'group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[13px] bg-gradient-to-b from-card to-muted shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'ingles-glass group relative flex h-11 w-[200px] shrink-0 items-center gap-2 overflow-hidden px-2.5 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
+  const preview = doc.createElement('span');
+  preview.setAttribute('aria-hidden', 'true');
+  preview.className =
+    'flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[9px] bg-gradient-to-b from-card to-muted';
   if (entry.thumbnail) {
     const img = doc.createElement('img');
     img.src = entry.thumbnail;
     img.alt = '';
     img.className = 'h-full w-full object-cover';
-    chip.appendChild(img);
+    preview.appendChild(img);
   } else {
-    chip.appendChild(createDocumentGlyph(doc));
+    preview.appendChild(createDocumentGlyph(doc));
   }
+  chip.appendChild(preview);
+
+  const titleEl = doc.createElement('span');
+  titleEl.className = 'min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground';
+  titleEl.textContent = entry.title;
+  chip.appendChild(titleEl);
 
   const closeButton = doc.createElement('button');
   closeButton.type = 'button';
   closeButton.setAttribute('aria-label', removeLabel);
   closeButton.className =
-    'absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-[0_1px_2px_rgb(28_28_30_/_0.12)] transition-opacity hover:bg-border hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover:opacity-100';
+    'absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-[0_1px_2px_rgb(28_28_30_/_0.12)] transition-opacity hover:bg-border hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover:opacity-100';
   closeButton.textContent = '×';
   closeButton.addEventListener('click', (event) => {
     event.preventDefault();
@@ -257,24 +274,23 @@ function createChip(
 const OVERFLOW_MENU_ATTR = 'data-minimized-tray-menu';
 
 /**
- * Builds the "+N" overflow tile — same 56px squircle footprint as a chip,
- * but a `<button>` (not an opener) that toggles a small `role="menu"`
- * popover listing every entry past {@link MAX_VISIBLE_MINIMIZED_CHIPS} as a
- * plain link (accessible: `aria-haspopup`/`aria-expanded`, a list of links,
- * Escape closes — owner spec 2026-10-06). Each link still carries
- * `data-desk-window-open`, so reopening from inside the menu gets the exact
- * same treatment as a directly-visible chip, with no extra wiring.
+ * Builds the "+N" overflow tile — same 44px-tall "glass" footprint as a
+ * chip (just square, no title to show), but a `<button>` (not an opener)
+ * that toggles a small `role="menu"` popover listing every entry past
+ * {@link MAX_VISIBLE_MINIMIZED_CHIPS} as a plain link (accessible:
+ * `aria-haspopup`/`aria-expanded`, a list of links, Escape closes — owner
+ * spec 2026-10-06). Each link still carries `data-desk-window-open`, so
+ * reopening from inside the menu gets the exact same treatment as a
+ * directly-visible chip, with no extra wiring.
  *
  * The menu is appended to `doc.body`, positioned with `position: fixed`
  * from the button's own `getBoundingClientRect()` at OPEN time, rather than
- * nested `position: absolute` inside the button's own wrapper — the dock
- * shelf itself scrolls horizontally (`overflow-x-auto`, for the phone
- * layout), which also computes its own `overflow-y` to `auto` per the CSS
- * spec the moment only one axis is set to non-`visible`, clipping anything
- * that tried to escape it vertically. Returns the button alone (the tray's
- * own flex child); the caller is responsible for clearing any previous
- * menu from `doc.body` before building a new one — see
- * {@link renderMinimizedWindowsTray}.
+ * nested `position: absolute` inside the button's own wrapper — the tray
+ * container itself may be narrower than the menu (and sits right at the
+ * viewport's own edge), so an ancestor-relative popover would risk being
+ * clipped. Returns the button alone (the tray's own flex child); the caller
+ * is responsible for clearing any previous menu from `doc.body` before
+ * building a new one — see {@link renderMinimizedWindowsTray}.
  */
 function createOverflowTile(
   overflowEntries: readonly MinimizedWindowEntry[],
@@ -292,7 +308,7 @@ function createOverflowTile(
   button.title = moreLabel;
   button.textContent = `+${overflowEntries.length}`;
   button.className =
-    'flex h-14 w-14 shrink-0 items-center justify-center rounded-[13px] bg-gradient-to-b from-card to-muted text-sm font-semibold text-foreground shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'ingles-glass flex h-11 w-11 shrink-0 items-center justify-center text-sm font-semibold text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   const menu = doc.createElement('div');
   menu.setAttribute(OVERFLOW_MENU_ATTR, '');
@@ -385,11 +401,6 @@ export function renderMinimizedWindowsTray(
   container.replaceChildren();
   const isEmpty = entries.length === 0;
   container.hidden = isEmpty;
-  // The hairline next to the tray (`DeskScene.astro`'s own sibling element)
-  // follows the SAME empty/non-empty state — there is nothing to separate
-  // the dock from when the tray itself is empty.
-  const hairline = container.parentElement?.querySelector<HTMLElement>('[data-minimized-tray-hairline]');
-  if (hairline) hairline.hidden = isEmpty;
 
   const limit = visibleChipLimit(doc.defaultView?.innerWidth ?? Number.POSITIVE_INFINITY);
   const visible = entries.slice(0, limit);
@@ -408,12 +419,11 @@ export function renderMinimizedWindowsTray(
 }
 
 /**
- * Wire the tray on the desk (`DeskScene.astro`, both the hub and — inert —
- * the practice window's own backdrop): read whatever is in `sessionStorage`
- * right now and render it. Idempotent per element, same double-wiring guard
- * every other desk script uses (`deskHelper.ts`'s own posture) — this is
- * called both on first load AND every `astro:page-load`, including the very
- * first one.
+ * Wire the tray (`MinimizedWindowsTray.astro`, mounted once per page by
+ * `BaseLayout.astro`): read whatever is in `sessionStorage` right now and
+ * render it. Idempotent per element, same double-wiring guard every other
+ * desk script uses (`deskHelper.ts`'s own posture) — this is called both on
+ * first load AND every `astro:page-load`, including the very first one.
  */
 export function initMinimizedWindowsTray(doc: Document = document, win: Window = window): void {
   const container = doc.querySelector<HTMLElement>(`[${MINIMIZED_TRAY_ATTR.container}]`);
