@@ -147,10 +147,33 @@ const anyFilterActive = activeLevel !== null || activeTipo !== null || activeQue
 // all (the manager opens THIS SAME route again, embedded, for its initial
 // window — see this file's own header) — these DB round trips are skipped
 // entirely rather than loaded twice.
+//
+// The grid query and the "actividad del día" candidates query are
+// INDEPENDENT reads (different `orden`, no data from one feeds the other),
+// so they are fired together with `Promise.all` — exactly like
+// `loadDeskSceneData`'s own count+hearted-pool pair — instead of one
+// `await` after another: this was the slowest window to open (TTFB
+// ~1.3-1.5s vs ~0.3s for an activity window) because the two round trips to
+// Supabase used to run back-to-back.
+//
+// Whether the daily pick actually SHOWS depends on `currentPage`, which in
+// turn depends on `total` from the grid query — but `requestedPage` (the raw
+// `?page=` the visitor asked for, before it is clamped to the real range) is
+// known up front and already decides the same thing for every case that
+// matters in practice: start the candidates query only for an unfiltered
+// page-1 request, and discard its result below if `currentPage` ends up not
+// being 1 after all (never run it at all otherwise — a filtered or
+// `page>1` request must fire ZERO `orden=gustadas` reads, same as before).
+// The one edge case this simplifies away is a page number far beyond what
+// exists on an almost-empty feed (`total` small enough that `currentPage`
+// collapses back to 1 even though `requestedPage` was not 1) — there the
+// daily pick now stays hidden instead of showing, a deliberate, documented
+// tradeoff for running the common case concurrently.
 let activities: PublishedActivityCard[] = [];
 let total = 0;
+let dailyPickCandidates: PublishedActivityCard[] | null = null;
 if (!hostMode) {
-  ({ activities, total } = await getPublishedActivities({
+  const activitiesPromise = getPublishedActivities({
     level: activeLevel,
     page: requestedPage,
     q: activeQuery,
@@ -158,7 +181,14 @@ if (!hostMode) {
     orden,
     novistas,
     viewerId,
-  }));
+  });
+  const dailyPickPromise = anyFilterActive || requestedPage !== 1
+    ? Promise.resolve(null)
+    : getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId });
+
+  const [activitiesResult, dailyPickResult] = await Promise.all([activitiesPromise, dailyPickPromise]);
+  ({ activities, total } = activitiesResult);
+  dailyPickCandidates = dailyPickResult?.activities ?? null;
 }
 const totalPages = Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE));
 // A page beyond the last one still renders (empty grid + pagination back to
@@ -166,16 +196,12 @@ const totalPages = Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE));
 // `/[lang]/ingles/index.astro` follows for an empty level.
 const currentPage = Math.min(requestedPage, totalPages);
 
-// "Actividad del día" candidates: the top 20 live activities by heart count
-// — exactly `getPublishedActivities`' own page size under `orden=gustadas`,
-// so no separate query shape is needed for it. Fetched (and shown) only on
-// page 1 with nothing else filtering the feed.
+// "Actividad del día": shown only on page 1 with nothing else filtering the
+// feed. `dailyPickCandidates` is `null` whenever a filter ruled the query out
+// up front (see above) or the host shell skipped both queries entirely.
 const showDailyPick = currentPage === 1 && !anyFilterActive;
-let dailyPick: PublishedActivityCard | null = null;
-if (!hostMode && showDailyPick) {
-  const candidates = await getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId });
-  dailyPick = pickDailyActivity(candidates.activities, new Date());
-}
+const dailyPick: PublishedActivityCard | null =
+  showDailyPick && dailyPickCandidates ? pickDailyActivity(dailyPickCandidates, new Date()) : null;
 
 const basePath = `/${lang}/ingles/actividades`;
 
