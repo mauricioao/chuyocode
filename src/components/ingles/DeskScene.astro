@@ -199,24 +199,20 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </section>
 
   {/* Levels dock — bottom centre on desktop, a horizontal scroller on
-      phones — PLUS the minimized-windows tray (owner feedback 2026-10-06),
-      a slot to its right on desktop, separated by a hairline "like macOS's
-      dock" (owner's own words); a compact row ABOVE the dock on phones (it
-      is first in DOM order, which is also visual order in the `flex-col`
-      phone layout), hidden below `sm:` where there is no room for it to sit
-      cleanly above a horizontally-scrolling dock. Always server-rendered
-      (empty, `hidden`) so a no-JS visit degrades to exactly today's dock —
+      phones — PLUS the minimized-windows tray (owner feedback 2026-10-06,
+      polish pass 2026-10-06: "como el dock de macOS", chips INSIDE the SAME
+      glass shelf as the level tiles, after a vertical hairline, instead of
+      sitting loose next to it). Always server-rendered (empty, `hidden`) so
+      a no-JS visit degrades to exactly today's dock —
       `@lib/ui/minimizedWindows#initMinimizedWindowsTray` is what actually
-      fills/unhides it, from `sessionStorage`, once it runs. */}
-  <div
-    class="order-4 flex flex-col items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2 desk:flex-row desk:items-stretch"
-  >
-    <div class="grid justify-items-center gap-2">
-      <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
-      <nav
-        aria-label={t.levelShortcutTitle}
-        class="ingles-glass flex max-w-full gap-2.5 overflow-x-auto rounded-[26px] p-2.5"
-      >
+      fills/unhides it, from `sessionStorage`, once it runs. The whole shelf
+      (levels + hairline + tray) is ONE `overflow-x-auto` row, so phones keep
+      scrolling horizontally exactly like the levels-only dock already did —
+      there is no more separate "tray row above the dock" on phones. */}
+  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
+    <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
+    <div class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5">
+      <nav aria-label={t.levelShortcutTitle} class="flex shrink-0 gap-2.5">
         {
           LEVELS.map((level, index) => {
             const band = bandOf(level);
@@ -246,23 +242,23 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
           })
         }
       </nav>
-    </div>
 
-    <div
-      aria-hidden="true"
-      data-minimized-tray-hairline
-      data-testid="minimized-tray-hairline"
-      hidden
-      class="h-px w-10 self-center bg-border sm:order-first desk:order-none desk:h-auto desk:w-px desk:self-stretch"
-    ></div>
-    <nav
-      data-minimized-tray
-      data-testid="minimized-tray"
-      data-remove-label={t.trayRemoveLabel}
-      hidden
-      aria-label={t.trayLabel}
-      class="order-first hidden max-w-full flex-wrap items-center justify-center gap-2 sm:order-none sm:flex desk:flex-nowrap desk:justify-start"
-    ></nav>
+      <div
+        aria-hidden="true"
+        data-minimized-tray-hairline
+        data-testid="minimized-tray-hairline"
+        hidden
+        class="h-auto w-px shrink-0 self-stretch bg-border"
+      ></div>
+      <nav
+        data-minimized-tray
+        data-testid="minimized-tray"
+        data-remove-label={t.trayRemoveLabel}
+        hidden
+        aria-label={t.trayLabel}
+        class="flex shrink-0 gap-2.5"
+      ></nav>
+    </div>
   </div>
 </section>
 

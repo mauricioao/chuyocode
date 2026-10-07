@@ -171,6 +171,28 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
     expect(chips[0].querySelector('button')?.getAttribute('aria-label')).toBe('Quitar');
   });
 
+  it('each chip is a tile: a document glyph preview (no thumbnail yet) with the title underneath', () => {
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
+    const chip = container.querySelector('a[data-desk-window-open]') as HTMLElement;
+
+    expect(chip.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(chip.querySelector('img')).toBeNull();
+    expect(chip.querySelector('small')?.textContent).toBe('Title a');
+  });
+
+  it('shows the thumbnail image instead of the glyph once an entry has one', () => {
+    const withThumbnail: MinimizedWindowEntry = { ...entry('a'), thumbnail: 'https://img.example/a.webp' };
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, [withThumbnail], 'Quitar');
+    const chip = container.querySelector('a[data-desk-window-open]') as HTMLElement;
+
+    const img = chip.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://img.example/a.webp');
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(chip.querySelector('svg')).toBeNull();
+  });
+
   it("the chip's close button removes that entry from storage and re-renders without it, never navigating", () => {
     const storage = fakeStorage();
     writeMinimizedWindows([entry('a'), entry('b')], storage);

@@ -133,10 +133,48 @@ export const MINIMIZED_TRAY_ATTR = {
 } as const;
 
 /**
+ * A plain document-glyph SVG — the chip's preview when `entry.thumbnail` is
+ * `null` (every entry today; the field is reserved for a future real
+ * thumbnail, see {@link MinimizedWindowEntry}). Built with `createElementNS`
+ * rather than `innerHTML`/a template string: this file already builds every
+ * other element through the DOM API, and an inline SVG string would be the
+ * one exception.
+ */
+function createDocumentGlyph(doc: Document): SVGSVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = doc.createElementNS(NS, 'svg') as SVGSVGElement;
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', 'h-6 w-6 text-muted-foreground');
+
+  const path = doc.createElementNS(NS, 'path');
+  // A page with a folded top-right corner, plus two text lines — legible at
+  // 24px inside the 56px squircle without reading as a random glyph.
+  path.setAttribute(
+    'd',
+    'M6 2.5h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z M14 2.5v4h4 M8.5 13h7 M8.5 16.5h5',
+  );
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '1.5');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute('stroke-linecap', 'round');
+  svg.appendChild(path);
+  return svg;
+}
+
+/**
  * DOM: (re)render `container`'s chips from `entries`. Clears and rebuilds
  * every time rather than diffing — the list is at most
  * {@link MAX_MINIMIZED_WINDOWS} long, so a full rebuild is cheap, and it
  * keeps this function simple enough to trust at a glance.
+ *
+ * Each chip is a TILE matching the levels dock's own level tiles (owner
+ * feedback 2026-10-06: "como el dock de macOS" — chips belong INSIDE the
+ * same glass shelf, styled like its other tiles, not a separate pill):
+ * a 56px squircle preview (the activity's thumbnail when known, else a
+ * document glyph) with the truncated title in the label slot underneath,
+ * exactly like a level tile's bars + level code + name.
  *
  * Each chip is a plain `<a href>` carrying `data-desk-window-open` with the
  * SAME id `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already listens for
@@ -144,7 +182,8 @@ export const MINIMIZED_TRAY_ATTR = {
  * other opener gets, with no new wiring. Its own "×" is a `<button>` that
  * stops the click from reaching the anchor (`stopPropagation` +
  * `preventDefault`) so hovering/clicking it removes the chip instead of
- * reopening the window.
+ * reopening the window; it keeps the old pill's "visible on hover/focus
+ * only" posture, now pinned to the squircle's own top-right corner.
  */
 export function renderMinimizedWindowsTray(
   container: HTMLElement,
@@ -169,10 +208,24 @@ export function renderMinimizedWindowsTray(
     chip.setAttribute(MINIMIZED_TRAY_ATTR.chip, entry.id);
     chip.title = entry.title;
     chip.className =
-      'group relative flex h-11 items-center gap-1.5 rounded-full border border-border bg-card pl-3 pr-2 text-xs font-medium text-foreground shadow-[0_1px_2px_rgb(28_28_30_/_0.06)] transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+      'group relative flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-    const label = doc.createElement('span');
-    label.className = 'max-w-[10ch] truncate';
+    const preview = doc.createElement('span');
+    preview.className =
+      'flex h-14 w-14 items-center justify-center overflow-hidden rounded-[13px] bg-gradient-to-b from-card to-muted shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]';
+    if (entry.thumbnail) {
+      const img = doc.createElement('img');
+      img.src = entry.thumbnail;
+      img.alt = '';
+      img.className = 'h-full w-full object-cover';
+      preview.appendChild(img);
+    } else {
+      preview.appendChild(createDocumentGlyph(doc));
+    }
+    chip.appendChild(preview);
+
+    const label = doc.createElement('small');
+    label.className = 'max-w-full truncate text-center text-[11px] leading-tight text-foreground';
     label.textContent = entry.title;
     chip.appendChild(label);
 
@@ -180,7 +233,7 @@ export function renderMinimizedWindowsTray(
     closeButton.type = 'button';
     closeButton.setAttribute('aria-label', removeLabel);
     closeButton.className =
-      'ml-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-border hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover:opacity-100';
+      'absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-[0_1px_2px_rgb(28_28_30_/_0.12)] transition-opacity hover:bg-border hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover:opacity-100';
     closeButton.textContent = '×';
     closeButton.addEventListener('click', (event) => {
       event.preventDefault();
