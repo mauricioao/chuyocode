@@ -25,16 +25,25 @@ describe('ROW_PADDING_X', () => {
     expect(ROW_PADDING_X).toBe('px-3');
   });
 
-  it('activity editor card header, body and preview rows all use it (never an ad-hoc p-3/px-2)', () => {
-    const src = sourceOf('components/islands/activities/ActivityEditorIsland.tsx');
-    expect(src).toContain("import { ROW_PADDING_X } from '@/lib/ui/layout'");
-    // The card header row — unprefixed, so the shared token itself.
-    expect(src).toContain('${ROW_PADDING_X} py-3 lg:min-h-14');
-    // The body/preview wrappers only ever apply this at `lg:` — Tailwind
-    // needs the literal `lg:px-3` token (see ROW_PADDING_X's own header),
-    // so these are hand-written at the same value, twice.
-    expect(src.match(/lg:px-3 lg:py-3/g)?.length).toBe(2);
-    expect(src).not.toContain('border-border p-3 lg:min-h-14');
+  // PART 6b polish ("double framing" fix, owner report: "se ve el marco de
+  // la ventana y encima el marco de la tarjeta"): the card's own old header
+  // row (title/level/badge, `border-border ... ${ROW_PADDING_X} py-3
+  // lg:min-h-14`) is GONE — that content moved into `DeskWindow`'s own title
+  // bar (still covered by the "title bar uses the same token" case below,
+  // unchanged). The ~16px inset `ActivityEditorIsland.tsx`'s own body/
+  // preview wrappers used to apply via a hand-written `lg:px-3` now lives
+  // ONCE, on `[id].astro`'s own section (the window's real body/frame) —
+  // so THAT file is the one carrying the token now; the island itself needs
+  // no horizontal inset of its own any more (it would only double it).
+  it('activity editor window body ([id].astro) carries the shared horizontal inset, not the island', () => {
+    const island = sourceOf('components/islands/activities/ActivityEditorIsland.tsx');
+    expect(island).not.toContain('ROW_PADDING_X');
+    expect(island).not.toContain('border-border p-3 lg:min-h-14');
+    expect(island).not.toContain('lg:px-3');
+
+    const page = sourceOf("pages/[lang]/crear/[id].astro");
+    expect(page).toContain("import { ROW_PADDING_X } from '@lib/ui/layout'");
+    expect(page).toContain('${ROW_PADDING_X} py-4');
   });
 
   it('the activity block header and its expanded editor body share the same inset', () => {

@@ -9,6 +9,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   resolveCloseAction,
+  resolveTrackedCloseAction,
   shouldStartFullScreen,
   readFullScreenPreference,
   writeFullScreenPreference,
@@ -46,6 +47,30 @@ describe('resolveCloseAction', () => {
     const home = '/es/';
     const action = resolveCloseAction('/es/', 2, home);
     expect(action).toEqual({ kind: 'back' });
+  });
+});
+
+describe('resolveTrackedCloseAction (PART 6b polish, the editor/picker close resolution)', () => {
+  const hub = '/es/ingles';
+
+  it('prefers history.back() to ANY known previous screen, not just one that equals the target', () => {
+    const action = resolveTrackedCloseAction('/es/mis-actividades', 2, hub);
+    expect(action).toEqual({ kind: 'back' });
+  });
+
+  it('still prefers history.back() when the previous screen happens to equal the target', () => {
+    const action = resolveTrackedCloseAction(hub, 2, hub);
+    expect(action).toEqual({ kind: 'back' });
+  });
+
+  it('falls back to a plain href when there is no previous history entry', () => {
+    const action = resolveTrackedCloseAction('/es/mis-actividades', 1, hub);
+    expect(action).toEqual({ kind: 'href', href: hub });
+  });
+
+  it('falls back to a plain href when the previous screen is unknown', () => {
+    const action = resolveTrackedCloseAction(null, 2, hub);
+    expect(action).toEqual({ kind: 'href', href: hub });
   });
 });
 
@@ -296,5 +321,64 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
     await flushMicrotasks();
 
     expect(win.location.href).toBe('/es/mis-actividades');
+  });
+
+  // `closeUsesTrackedPath` (PART 6b polish) — the 7th, opt-in param;
+  // `fakeWin`'s own `sessionStorage` is where `readTrackedPreviousPath`
+  // (`@lib/backNavigation`) reads `trackPageVisit`'s own tracked path from.
+  describe('closeUsesTrackedPath=true (editor/picker close resolution)', () => {
+    it('close() prefers history.back() to ANY tracked previous screen, not just one matching the fallback target', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      let backCalls = 0;
+      win.history.back = () => {
+        backCalls += 1;
+      };
+      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      initDeskWindow(el, '/es/ingles', null, false, document, win, true);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(backCalls).toBe(1);
+      expect(win.location.href).toBe(''); // never set — back() was used, not a plain navigation.
+    });
+
+    it('close() falls back to the fallback target when there is no tracked previous path', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      initDeskWindow(el, '/es/ingles', null, false, document, win, true);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('/es/ingles');
+    });
+
+    it('minimize() still always navigates straight to the target (never history.back()), unaffected by this flag', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win, true);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('/es/ingles');
+    });
+  });
+
+  describe('closeUsesTrackedPath=false (default — practice window, unchanged)', () => {
+    it('close() only prefers history.back() when the tracked previous screen equals the target, same as before', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(2);
+      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      initDeskWindow(el, '/es/ingles', null, false, document, win);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(win.location.href).toBe('/es/ingles'); // href fallback, not history.back() — unknown target mismatch.
+    });
   });
 });

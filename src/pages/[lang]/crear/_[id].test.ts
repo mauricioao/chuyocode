@@ -141,7 +141,14 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
   // desk, same shell the practice page's own PART 6a already uses — the OLD
   // back button (both the floating `lg:` one and `ActivityEditorIsland`'s
   // own mobile-inline copy) is gone; the red light replaces it.
-  it('renders the window shell: a dialog with three named "traffic light" buttons, closing to /mis-actividades', async () => {
+  //
+  // PART 6b polish (owner report: "el botón de minimizar me lleva a mis
+  // actividades, no veo el chip en el escritorio"): both lights now target
+  // the HUB (`/es/ingles`), not `/es/mis-actividades` — minimize so the tray
+  // chip is actually visible there, close as its own tracked-previous-path
+  // FALLBACK only (`closeUsesTrackedPath`/`resolveTrackedCloseAction`,
+  // `@lib/ui/deskWindow.ts`).
+  it('renders the window shell: a dialog with three named "traffic light" buttons, closing to the hub with a tracked previous path', async () => {
     editableActivity.value = {
       id: 'abc',
       title: 'Mi actividad',
@@ -163,7 +170,9 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('aria-label="Cerrar"');
     expect(html).toContain('aria-label="Minimizar"');
     expect(html).toContain('aria-label="Pantalla completa"');
-    expect(html).toContain('href="/es/mis-actividades"');
+    expect(html).toContain('href="/es/ingles"');
+    expect(html).toContain('data-close-tracked-path="true"');
+    expect(html).not.toContain('href="/es/mis-actividades"');
     expect(html).not.toContain('data-back-button');
   });
 
@@ -250,7 +259,19 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('data-tray-id="abc"');
   });
 
-  it('seeds the review-state badge from the stored activity status and note', async () => {
+  // PART 6b polish: the review-state badge itself now renders INSIDE the
+  // window title bar's own EDITABLE title group — a `createPortal` target
+  // (`DESK_WINDOW_TITLE_GROUP_ID`, `ActivityEditorIsland.tsx`'s own header)
+  // that only resolves once this island actually hydrates client-side, same
+  // established posture as the title bar's own "Ver como presentación"/
+  // "Enviar a revisión" actions (`DESK_WINDOW_ACTIONS_ID`) — neither ever
+  // appears in the raw SSR markup either. What SSR DOES still guarantee is
+  // that the stored status/note reach the island at all: the Astro island's
+  // own serialized hydration props carry them verbatim (`initialStatus`,
+  // `initialReviewNote`) — `ActivityEditorIsland.test.tsx`'s own
+  // "review-state badge" suite is what proves the rendered badge text from
+  // those props.
+  it('seeds the review-state badge from the stored activity status and note (via the island\'s own hydration props)', async () => {
     editableActivity.value = {
       id: 'abc',
       title: 'Mi actividad',
@@ -267,7 +288,8 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    expect(html).toContain('Rechazada');
+    expect(html).toContain('initialStatus');
+    expect(html).toContain('rejected');
     expect(html).toContain('Falta una zona en la hoja 2.');
   });
 });

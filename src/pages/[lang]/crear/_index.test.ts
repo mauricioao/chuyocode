@@ -107,7 +107,13 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
   // "Desktop" redesign PART 6b: this start screen renders as a WINDOW over
   // the desk now too — the red light replaces the old `PageTitle`
   // `backHref` (the hub), same as the editor's own window.
-  it('renders the window shell, closing to the Inglés hub (replacing the old back button)', async () => {
+  //
+  // PART 6b polish (owner report: "este picker debería cerrar como una
+  // ventana, igual que el editor"): closing now prefers `history.back()` to
+  // whatever screen the author genuinely came from, falling back to the hub
+  // only when there is none (`closeUsesTrackedPath`/
+  // `resolveTrackedCloseAction`, `@lib/ui/deskWindow.ts`).
+  it('renders the window shell, closing to the Inglés hub (replacing the old back button), with a tracked previous path', async () => {
     const res = await render('https://chuyocode.test/es/crear', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
@@ -117,6 +123,7 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-label="Cerrar"');
     expect(html).toContain('href="/es/ingles"');
+    expect(html).toContain('data-close-tracked-path="true"');
     expect(html).not.toContain('data-back-button');
   });
 

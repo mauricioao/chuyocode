@@ -230,7 +230,13 @@ function SortableBlockItem({
       style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
       data-dragging={isDragging ? 'true' : undefined}
       data-focus-active={focusActive ? 'true' : undefined}
-      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border ${
+      // `bg-card` (PART 6b polish, "double framing" fix): the editor's own
+      // window body now sits on a light desk-grey backdrop (`bg-muted`,
+      // `[id].astro`'s own section) instead of a second white card behind
+      // this list — block cards need their OWN white background now to
+      // still read against it; they used to inherit it for free from that
+      // removed outer card.
+      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card ${
         focusActive ? 'lg:min-h-[22rem] lg:flex-1' : 'lg:flex-none'
       }`}
     >

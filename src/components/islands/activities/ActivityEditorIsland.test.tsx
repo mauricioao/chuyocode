@@ -56,16 +56,19 @@ beforeEach(() => {
   // object alone never satisfies.
   (window as unknown as { location: Location }).location = stubbedLocation;
 
-  // "Desktop" redesign PART 6b: the editor now ALWAYS renders inside
-  // `DeskWindow`, whose title bar provides these three DOM nodes (title,
-  // autosave status, and the `actions` slot `ActivityEditorIsland` itself
-  // `createPortal`s "Ver como presentación"/"Enviar a revisión" into — see
-  // `DESK_WINDOW_ACTIONS_ID`'s own doc there). A standalone render of just
-  // this island has no `DeskWindow` shell around it, so the tests build the
-  // same three stand-in nodes by hand.
+  // "Desktop" redesign PART 6b (+ its own polish pass): the editor now
+  // ALWAYS renders inside `DeskWindow`, whose title bar provides these four
+  // DOM nodes — the (now visually-hidden, `aria-labelledby`-only) title
+  // span, the autosave status span, the EDITABLE title/level/status-badge
+  // group `ActivityEditorIsland` itself `createPortal`s its real controlled
+  // `<input>`/`<Select>`/badge into (`DESK_WINDOW_TITLE_GROUP_ID`'s own doc
+  // there), and the `actions` slot ("Ver como presentación"/"Enviar a
+  // revisión", `DESK_WINDOW_ACTIONS_ID`). A standalone render of just this
+  // island has no `DeskWindow` shell around it, so the tests build the same
+  // four stand-in nodes by hand.
   document.body.insertAdjacentHTML(
     'beforeend',
-    '<b id="desk-window-title"></b><span id="desk-window-status"></span><div id="desk-window-actions"></div>',
+    '<span id="desk-window-title"></span><span id="desk-window-status"></span><div id="desk-window-title-group"></div><div id="desk-window-actions"></div>',
   );
 });
 
@@ -81,6 +84,7 @@ afterEach(() => {
   window.location.hash = '';
   document.getElementById('desk-window-title')?.remove();
   document.getElementById('desk-window-status')?.remove();
+  document.getElementById('desk-window-title-group')?.remove();
   document.getElementById('desk-window-actions')?.remove();
 });
 
@@ -237,23 +241,22 @@ describe('ActivityEditorIsland — open the first block on entry (creator polish
   });
 });
 
-describe('ActivityEditorIsland — one framed card (creator polish round 3)', () => {
-  it('wraps the title/level header row and the block list inside ONE bordered card', () => {
+describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "double framing" fix)', () => {
+  it('the card no longer carries its own border/rounded/bg-card — DeskWindow supplies the frame now', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     const card = screen.getByTestId('activity-editor-card');
-    expect(card.className).toContain('lg:rounded-lg');
-    expect(card.className).toContain('lg:border');
-    expect(card.className).toContain('lg:bg-card');
-    expect(card.contains(screen.getByTestId('activity-title-input'))).toBe(true);
+    expect(card.className).not.toContain('border');
+    expect(card.className).not.toContain('rounded-lg');
+    expect(card.className).not.toContain('bg-card');
     expect(card.contains(screen.getByTestId('block-list'))).toBe(true);
-    // The header row no longer carries its own separate box at `lg:` —
-    // only a bottom border, since the card itself supplies the frame.
-    // Mobile layout pass: the title `<label>` now sits one level deeper,
-    // inside the inline-back-button wrapper (`.parentElement` twice) —
-    // see `ActivityEditorIsland.tsx`'s own header on that title row.
-    const header = screen.getByTestId('activity-title-input').closest('label')?.parentElement?.parentElement;
-    expect(header?.className).toContain('lg:border-b');
-    expect(header?.className).toContain('lg:rounded-none');
+  });
+
+  it('the title/level/status-badge header row is gone from the card body — relocated into the title bar', () => {
+    renderEditor();
+    const card = screen.getByTestId('activity-editor-card');
+    expect(card.contains(screen.getByTestId('activity-title-input'))).toBe(false);
+    expect(card.contains(screen.getByTestId('activity-level-select'))).toBe(false);
+    expect(card.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
   });
 
   it('reserves safe-area-aware bottom room for the mobile bottom action bar, cleared at lg', () => {
@@ -269,6 +272,29 @@ describe('ActivityEditorIsland — one framed card (creator polish round 3)', ()
     const toolbar = screen.getByTestId('editor-side-toolbar');
     expect(card.contains(toolbar)).toBe(false);
     expect(toolbar.className).toContain('fixed');
+  });
+});
+
+describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b polish)', () => {
+  it('portals the real controlled title input, level select and status badge into the title group slot', () => {
+    renderEditor({ initialTitle: 'Mi actividad', initialLevel: 'B1' });
+    const group = document.getElementById('desk-window-title-group')!;
+    expect(group.contains(screen.getByTestId('activity-title-input'))).toBe(true);
+    expect(group.contains(screen.getByTestId('activity-level-select'))).toBe(true);
+    expect(group.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+  });
+
+  it('has "Nueva actividad" as its placeholder and an accessible label', () => {
+    renderEditor({ initialTitle: '' });
+    const input = screen.getByTestId('activity-title-input') as HTMLInputElement;
+    expect(input.placeholder).toBe('Nueva actividad');
+    expect(input.getAttribute('aria-label')).toBe('Título');
+  });
+
+  it('never throws, and simply renders no title group, when mounted without the DeskWindow shell', () => {
+    document.getElementById('desk-window-title-group')?.remove();
+    expect(() => renderEditor()).not.toThrow();
+    expect(screen.queryByTestId('activity-level-select')).toBeNull();
   });
 });
 

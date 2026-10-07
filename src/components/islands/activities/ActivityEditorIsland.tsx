@@ -59,8 +59,6 @@ import {
 import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
-import { fieldClasses } from '@/lib/ui/field';
-import { ROW_PADDING_X } from '@/lib/ui/layout';
 import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
@@ -73,18 +71,34 @@ import PresentationIsland from './PresentationIsland';
 import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 
 /**
- * The window title bar's own `<b>`/`<span>` ids ("desktop" redesign PART
- * 6b) — `DeskWindow.astro`'s own `titleId`/`statusId` DEFAULTS, which
- * `[id].astro` relies on by never overriding them. Two separate hydration
- * islands (this one and `DeskWindow`'s own inline script) cannot share one
- * React state, so this is the one explicit, documented contract between
- * them: this island writes `textContent` directly onto these two ids
- * whenever the title or the autosave status changes, instead of a portal
- * (unlike the title bar's ACTIONS below, which this island owns entirely —
- * see `DESK_WINDOW_ACTIONS_ID`'s own doc).
+ * The window title bar's own `<span>` ids ("desktop" redesign PART 6b) —
+ * `DeskWindow.astro`'s own `titleId`/`statusId` DEFAULTS, which `[id].astro`
+ * relies on by never overriding them. Two separate hydration islands (this
+ * one and `DeskWindow`'s own inline script) cannot share one React state, so
+ * this is the one explicit, documented contract between them: this island
+ * writes `textContent` directly onto these two ids whenever the title or the
+ * autosave status changes, instead of a portal (unlike the title bar's
+ * EDITABLE title group and ACTIONS below, which this island owns entirely —
+ * see `DESK_WINDOW_TITLE_GROUP_ID`/`DESK_WINDOW_ACTIONS_ID`'s own doc).
+ * `DESK_WINDOW_TITLE_ID` targets a visually-hidden `aria-labelledby` span
+ * once `titleEditable` is set (PART 6b polish) — this effect itself needs no
+ * change either way, same id, same `textContent` write.
  */
 const DESK_WINDOW_TITLE_ID = 'desk-window-title';
 const DESK_WINDOW_STATUS_ID = 'desk-window-status';
+/**
+ * The window title bar's own EDITABLE title group ("desktop" redesign PART
+ * 6b polish — owner report: a duplicated title, once in the title bar, once
+ * again in the card's own header row). `DeskWindow.astro` renders this slot
+ * (empty) only when its own `titleEditable` prop is set; this island
+ * `createPortal`s the REAL controlled title `<input>` (same value/onChange,
+ * same validation, same autosave as before — just relocated) plus the level
+ * `<select>` and the review-status badge right after it, same technique
+ * `DESK_WINDOW_ACTIONS_ID` below already uses. `null` for a standalone
+ * render with no `DeskWindow` shell (e.g. a test that mounts just this
+ * island) — nothing renders there, same posture as the actions portal.
+ */
+const DESK_WINDOW_TITLE_GROUP_ID = 'desk-window-title-group';
 /**
  * The window title bar's own `actions` slot container — `DeskWindow.astro`
  * renders it (empty) unconditionally; "Ver como presentación" and "Enviar a
@@ -619,6 +633,15 @@ export default function ActivityEditorIsland({
     setActionsPortalTarget(document.getElementById(DESK_WINDOW_ACTIONS_ID));
   }, []);
 
+  // The window title bar's own EDITABLE title group slot (PART 6b polish) —
+  // same resolve-once-on-mount posture as the actions slot above; `null`
+  // for a standalone render with no `DeskWindow` shell (or one whose
+  // `titleEditable` prop is unset, e.g. the practice window).
+  const [titleGroupPortalTarget, setTitleGroupPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setTitleGroupPortalTarget(document.getElementById(DESK_WINDOW_TITLE_GROUP_ID));
+  }, []);
+
   const openSubmitDialog = useCallback(() => {
     setSubmitDialog({ open: true, submitting: false, error: null });
   }, []);
@@ -853,97 +876,33 @@ export default function ActivityEditorIsland({
       // rail and `lg:pr-16` (unchanged) reserves ITS docked slot instead.
       className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16"
     >
-      {/* THE card: everything below is inside it, one bordered/rounded
-          surface. `lg:min-h-0` + `lg:overflow-hidden` are the actual "stays
-          fully visible on screen" guarantee — the header row below is
-          `flex-none` (its own intrinsic height), the body below it is the
-          ONLY flexible, scrolling area, so the card as a whole can never
-          grow past the height the root above gives it. */}
+      {/* THE card (PART 6b polish, "double framing" fix — owner report:
+          "se ve el marco de la ventana y encima el marco de la tarjeta"):
+          this used to be its OWN bordered/rounded/`bg-card` surface nested
+          inside `DeskWindow`'s identical-looking frame — the WINDOW is the
+          frame now, so only the structural flex/scroll classes stay
+          (`lg:min-h-0` + `lg:overflow-hidden` are the actual "stays fully
+          visible on screen" guarantee); the consistent ~16px inset that
+          used to come from this card's own padding now lives on
+          `[id].astro`'s own section (one level up), edge to edge at every
+          breakpoint. The title/level/status-badge header row that used to
+          open this card is GONE too — "Desktop" redesign PART 6b/its own
+          polish pass moved the title into `DeskWindow`'s own title bar as
+          the window's now-EDITABLE title (a `createPortal`, see
+          `DESK_WINDOW_TITLE_GROUP_ID` below), level + the review-status
+          badge riding along right after it; "Ver como presentación"/"Enviar
+          a revisión" already lived in that same title bar's `actions` slot. */}
       <div
         data-testid="activity-editor-card"
-        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:bg-card"
+        className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden"
       >
-        {/* Compact header row (owner request #1, creator polish round 2):
-            title + level, plus — PR D, "Activities practice" — the
-            review-state badge. `lg:min-h-14` (was a hard `lg:h-12`) lets this
-            row grow if the badge/note wrap onto a second line instead of
-            clipping. Creator polish round 3 (desktop only — below `lg:` this
-            row keeps its own original box untouched): the title becomes the
-            visibly larger, semibold field (it names the whole card), and at
-            `lg:` this row IS the card's own header (`border-b`, not a
-            separate boxed element) — no other action row lives here.
-            "Desktop" redesign PART 6b: the OLD back button that used to open
-            this row (both this mobile-inline copy AND `[id].astro`'s own
-            floating `lg:` one) is gone — this whole editor now renders
-            inside `DeskWindow`, whose red light replaces it; "Ver como
-            presentación" / "Enviar a revisión" moved into that SAME window's
-            title bar (a `createPortal`, see `DESK_WINDOW_ACTIONS_ID` above),
-            so neither lives in this row any more either. */}
-        <div className={`flex flex-none flex-col gap-3 rounded-lg border border-border ${ROW_PADDING_X} py-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b`}>
-          <div className="flex flex-1 items-center gap-3">
-            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-              <span className="sr-only">{t.titleLabel}</span>
-              <input
-                type="text"
-                data-testid="activity-title-input"
-                aria-label={t.titleLabel}
-                value={title}
-                onChange={(e) => changeTitle(e.target.value)}
-                // The field system's own tokens at mobile (filled surface,
-                // subtle border, comfortable padding); at `lg:` it stays the
-                // card's OWN naked, larger heading-style field (transparent,
-                // no border until hover/focus) — deliberately not the
-                // standard field look there, since it names the whole card.
-                className={fieldClasses({
-                  size: 'sm',
-                  className:
-                    'text-base font-medium lg:h-10 lg:border-transparent lg:bg-transparent lg:px-1 lg:text-xl lg:font-semibold lg:hover:border-border lg:focus-visible:border-border lg:focus-visible:outline-none lg:focus-visible:ring-0',
-                })}
-              />
-            </label>
-          </div>
-          {/* Mobile layout pass: title stays alone on its own line above
-              (the label right before this); level + status group onto the
-              line below it, wrapping together if they don't all fit at
-              360-430px. `lg:contents` un-wraps this group at `lg:` so its
-              children become direct flex items of the row above. */}
-          <div className="flex flex-wrap items-center gap-2 lg:contents">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="sr-only">{t.levelLabel}</span>
-              <Select
-                data-testid="activity-level-select"
-                aria-label={t.levelLabel}
-                fieldSize="sm"
-                value={level ?? ''}
-                onChange={(e) => changeLevel(e.target.value)}
-              >
-                <option value="">{t.levelNone}</option>
-                {LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {levelLabels[lvl]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
-              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-                  : t.statusDraft}
-              </span>
-              {status === 'rejected' && initialReviewNote && (
-                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-                  {t.reviewNoteLabel}: {initialReviewNote}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* "Duplicar y adaptar" credit line (D7) — only ever set for a
             duplicate's own editor; an ordinary activity never renders this. */}
+        {/* No horizontal padding of its own any more (PART 6b polish,
+            "double framing" fix): the side inset now lives once, on
+            `[id].astro`'s own section — this would only double it. */}
         {sourceActivity && (
-          <p data-testid="activity-based-on" className="flex-none px-3 pt-2 text-xs text-muted-foreground lg:px-3">
+          <p data-testid="activity-based-on" className="flex-none pt-2 text-xs text-muted-foreground">
             {sourceActivity.href ? (
               <>
                 {t.basedOnPrefix}
@@ -966,13 +925,10 @@ export default function ActivityEditorIsland({
           <div
             ref={previewScrollRef}
             data-testid="activity-preview"
-            // `lg:px-3` (not a runtime `lg:${ROW_PADDING_X}` interpolation):
-            // Tailwind's build-time scanner needs the exact utility class
-            // token to appear literally in source text, so a responsive
-            // variant can never be assembled from a dynamic prefix + an
-            // imported base token — see `ROW_PADDING_X`'s own header. Kept
-            // at the SAME value `ROW_PADDING_X` names (`px-3`) by hand.
-            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-3 lg:py-3"
+            // No `lg:px-*` of its own any more (PART 6b polish, "double
+            // framing" fix): the ~16px side inset now lives once, on
+            // `[id].astro`'s own section — this would only double it.
+            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-3"
           >
             {blocks
               // A brand-new worksheet block with no image yet (creator
@@ -1001,7 +957,7 @@ export default function ActivityEditorIsland({
           // flexible height inside it. The add-block flow (picker/uploader)
           // scrolls into view here too, inside the same card, instead of
           // growing the page past it.
-          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:px-3 lg:py-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:py-3">
             <BlockList
               listRef={blockListRef}
               lang={lang}
@@ -1138,6 +1094,68 @@ export default function ActivityEditorIsland({
             </Button>
           </>,
           actionsPortalTarget,
+        )}
+
+      {/* "Desktop" redesign PART 6b polish: the window's own title bar
+          EDITABLE title group — the SAME controlled title `<input>` (value/
+          onChange/validation/autosave unchanged, just relocated out of the
+          card's own old header row), the level `<select>`, and the
+          review-status badge right after it. See `DESK_WINDOW_TITLE_GROUP_ID`'s
+          own doc above for why this is a portal. */}
+      {titleGroupPortalTarget &&
+        createPortal(
+          <>
+            <label className="flex min-w-0 flex-1 items-center">
+              <span className="sr-only">{t.titleLabel}</span>
+              <input
+                type="text"
+                data-testid="activity-title-input"
+                aria-label={t.titleLabel}
+                value={title}
+                onChange={(e) => changeTitle(e.target.value)}
+                placeholder={t.titleFallback}
+                // Matches the title bar's own static `<b>` typography
+                // (`DeskWindow.astro`) when idle — transparent, no border —
+                // and only reveals a field-like border on hover/focus, the
+                // click/keyboard-focus affordance for "this is editable now".
+                className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground outline-none placeholder:font-semibold placeholder:text-muted-foreground hover:border-border focus-visible:border-border focus-visible:bg-(--color-field) focus-visible:outline-none focus-visible:ring-0"
+              />
+            </label>
+            <label className="flex shrink-0 items-center gap-1 text-sm">
+              <span className="sr-only">{t.levelLabel}</span>
+              <Select
+                data-testid="activity-level-select"
+                aria-label={t.levelLabel}
+                fieldSize="sm"
+                value={level ?? ''}
+                onChange={(e) => changeLevel(e.target.value)}
+              >
+                <option value="">{t.levelNone}</option>
+                {LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {levelLabels[lvl]}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <div
+              className="flex shrink-0 flex-wrap items-center gap-2"
+              data-testid="activity-status-badge"
+              data-status={status}
+            >
+              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+                  : t.statusDraft}
+              </span>
+              {status === 'rejected' && initialReviewNote && (
+                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+                  {t.reviewNoteLabel}: {initialReviewNote}
+                </span>
+              )}
+            </div>
+          </>,
+          titleGroupPortalTarget,
         )}
     </div>
   );

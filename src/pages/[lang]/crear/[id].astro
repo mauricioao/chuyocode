@@ -20,19 +20,31 @@
  * window, there is no guest/no-desk branch to carry. The old back button
  * (both this file's own floating `lg:` `BackButton` AND
  * `ActivityEditorIsland`'s own mobile-inline copy) is GONE: the window's red
- * light goes to `/mis-actividades` instead, replacing it exactly like PART
- * 6a's red light replaced the practice page's own back button.
+ * light replaces it, exactly like PART 6a's red light replaced the practice
+ * page's own back button.
  *
  * The compact header row `ActivityEditorIsland` used to own (back button,
- * title, "Ver como presentación", "Enviar a revisión") is now the window's
- * own title bar: the three traffic lights, the title (falling back to
- * `t.titleFallback` — "Nueva actividad" — while empty) plus the live
- * autosave status sit beside them, and the two action buttons move into the
- * title bar's own `actions` slot — all via `ActivityEditorIsland` itself
- * (a `createPortal`/direct DOM sync onto the window's own nodes — see that
- * component's own header). Escape is the editor's OWN shortcut here
- * (deselecting the current zone), so `closeOnEscape={false}` — only the red
- * light (or the yellow one, minimizing) ever closes this window.
+ * title, level, the review-status badge, "Ver como presentación", "Enviar a
+ * revisión") is now the window's own title bar: the three traffic lights,
+ * the EDITABLE title (falling back to `t.titleFallback` — "Nueva
+ * actividad" — while empty), the level select and the review-status badge
+ * sit beside them, the live autosave status right after, and the two action
+ * buttons sit in the title bar's own `actions` slot — all via
+ * `ActivityEditorIsland` itself (a `createPortal`/direct DOM sync onto the
+ * window's own nodes — see that component's own header). Escape is the
+ * editor's OWN shortcut here (deselecting the current zone), so
+ * `closeOnEscape={false}` — only the red light (or the yellow one,
+ * minimizing) ever closes this window.
+ *
+ * PART 6b polish (owner report: "se ve el marco de la ventana y encima el
+ * marco de la tarjeta" — "double framing"): the window IS the frame now —
+ * `ActivityEditorIsland`'s own old card lost its border/`bg-card` — so the
+ * consistent horizontal inset (`ROW_PADDING_X`, the SAME token
+ * `DeskWindow`'s own title bar already uses — `src/lib/ui/layout.ts`'s own
+ * header on why every aligned row shares it) lives on THIS section instead,
+ * edge to edge at every breakpoint, with the approved mockup's own light
+ * desk-grey canvas (`bg-muted`) behind the (still white, `bg-card`) block
+ * cards.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import DeskScene from '@components/ingles/DeskScene.astro';
@@ -42,6 +54,7 @@ import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getActivityForEdit } from '@lib/activities/activities';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { ROW_PADDING_X } from '@lib/ui/layout';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -93,11 +106,18 @@ const sourceActivity = activity.source
   : null;
 
 /**
- * The window's red/yellow lights (PART 6b, mirrors the practice window's
- * own `closeHref`): always `/mis-actividades` — there is no guest editor to
- * branch on here, unlike the practice page.
+ * The window's red/yellow lights (PART 6b polish, owner report: "el botón
+ * de minimizar me lleva a mis actividades, no veo el chip en el
+ * escritorio"): both now target the HUB, not `/mis-actividades` — the
+ * MINIMIZE light always navigates straight here (so the tray chip it just
+ * left behind is actually visible, on the desk's own dock — see
+ * `DeskScene.astro`'s tray), while the CLOSE light only ever FALLS BACK to
+ * it: `closeUsesTrackedPath` below makes it prefer `history.back()` to
+ * whatever screen the author genuinely came from first (`/mis-actividades`,
+ * `/crear`, a shared link…) — see `resolveTrackedCloseAction`'s own header,
+ * `@lib/ui/deskWindow.ts`.
  */
-const closeHref = `/${lang}/mis-actividades`;
+const closeHref = `/${lang}/ingles`;
 
 /** The title bar's own `<b>` — falls back to `t.titleFallback` ("Nueva
  * actividad") for a brand-new, still-untitled activity. `ActivityEditorIsland`
@@ -154,6 +174,8 @@ const deskLabels = {
     fullScreenLabel={t.windowFullScreen}
     trayId={activity.id}
     closeOnEscape={false}
+    closeUsesTrackedPath
+    titleEditable
     status={t.titlebarSaved}
     slot="overlay"
   >
@@ -168,8 +190,19 @@ const deskLabels = {
         side toolbar pass. Below `desk:` the window becomes a full-screen
         sheet (`DeskWindow`'s own mockup-matched mobile treatment); this
         section's own responsive classes keep today's stacked mobile
-        layout. */}
-    <section class="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-y-auto px-4 pt-6 pb-6 sm:px-6 lg:min-h-0 lg:overflow-hidden lg:px-8 lg:py-4">
+        layout.
+
+        "Double framing" fix (PART 6b polish, owner report: "se ve el marco
+        de la ventana y encima el marco de la tarjeta"): the window itself
+        IS the frame now — `ActivityEditorIsland`'s own old card lost its
+        `border`/`bg-card` (see that component's own header), so the
+        consistent inset lives HERE instead, edge to edge at every
+        breakpoint — `ROW_PADDING_X`, the SAME token `DeskWindow`'s own
+        title bar already uses (`src/lib/ui/layout.ts`'s own header).
+        `bg-muted` is the light desk-grey backdrop the approved mockup's own
+        canvas uses — block cards keep their own `bg-card` (white) so they
+        still read against it. */}
+    <section class={`mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-hidden`}>
       <ActivityEditorIsland
         client:load
         lang={lang}

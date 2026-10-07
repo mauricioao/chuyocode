@@ -15,7 +15,7 @@
  * function, never inlined into a listener nobody can assert on directly.
  */
 import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
-import { readTrackedPreviousPath, resolvePreviousPath } from '../backNavigation';
+import { readTrackedPreviousPath, resolvePreviousPath, shouldGoBack } from '../backNavigation';
 
 /**
  * Editor <-> window bridge (PART 6b). `DeskWindow`/`deskWindow.ts` are plain
@@ -137,6 +137,31 @@ export function resolveCloseAction(
   targetPath: string,
 ): { kind: 'back' } | { kind: 'href'; href: string } {
   if (historyLength > 1 && previousPath === targetPath) {
+    return { kind: 'back' };
+  }
+  return { kind: 'href', href: targetPath };
+}
+
+/**
+ * PART 6b polish (owner report: the editor's red light always landed on
+ * `/mis-actividades` even when the author genuinely came from somewhere
+ * else): the activities-creator editor/picker's own close resolution —
+ * unlike {@link resolveCloseAction} above (the practice window's own
+ * ORIGINAL, deliberately-unchanged semantics: "closing always ends up at the
+ * desk", `history.back()` only when it happens to coincide with
+ * `targetPath`), this prefers `history.back()` to WHATEVER screen this
+ * visitor actually came from — any known previous in-app screen
+ * ({@link shouldGoBack}, `@lib/backNavigation`, the same "genuinely previous
+ * screen + a previous history entry" check `BackButton` itself uses) —
+ * falling back to `targetPath` (the hub) only when there is no such screen
+ * to return to. Selected via `DeskWindow`'s own `closeUsesTrackedPath` prop.
+ */
+export function resolveTrackedCloseAction(
+  previousPath: string | null,
+  historyLength: number,
+  targetPath: string,
+): { kind: 'back' } | { kind: 'href'; href: string } {
+  if (shouldGoBack(previousPath, historyLength)) {
     return { kind: 'back' };
   }
   return { kind: 'href', href: targetPath };
@@ -308,6 +333,8 @@ export function initDeskWindow(
   closeOnEscape: boolean = true,
   doc: Document = document,
   win: Window = window,
+  /** `DeskWindow`'s own `closeUsesTrackedPath` prop — see {@link resolveTrackedCloseAction}'s own header. */
+  closeUsesTrackedPath: boolean = false,
 ): void {
   // Guard against double-wiring (same posture as `deskHelper.ts#initDeskHelper`):
   // `DeskWindow.astro`'s own script calls this both immediately AND on
@@ -336,7 +363,9 @@ export function initDeskWindow(
   function closeNow(): void {
     if (trayId) removeMinimizedWindow(trayId, win.sessionStorage);
     const previousPath = resolvePreviousPath(readTrackedPreviousPath(win.sessionStorage), doc.referrer, win.location.origin);
-    const action = resolveCloseAction(previousPath, win.history.length, closeTargetPath);
+    const action = closeUsesTrackedPath
+      ? resolveTrackedCloseAction(previousPath, win.history.length, closeTargetPath)
+      : resolveCloseAction(previousPath, win.history.length, closeTargetPath);
     if (action.kind === 'back') {
       win.history.back();
     } else {
