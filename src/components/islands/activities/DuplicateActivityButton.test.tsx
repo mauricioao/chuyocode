@@ -100,6 +100,65 @@ describe('DuplicateActivityButton', () => {
   });
 });
 
+// Window-manager architecture: the default `navigate` (no `navigate` prop —
+// every other test above injects its own) must ask the HOST to open the new
+// editor as its own window when embedded, instead of navigating the iframe
+// itself away from the practice window.
+describe('DuplicateActivityButton — default navigate (window-manager architecture)', () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-desk-window-embedded');
+  });
+
+  it('non-embedded: never posts to the host (falls back to a plain navigation instead)', async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'new-activity-1' }),
+    });
+    const posted: Array<{ message: unknown; origin: string }> = [];
+    const realParent = window.parent;
+    Object.defineProperty(window, 'parent', {
+      value: { postMessage: (message: unknown, origin: string) => posted.push({ message, origin }) },
+      configurable: true,
+    });
+
+    render(<DuplicateActivityButton lang="es" activityId={ACTIVITY_ID} />);
+    fireEvent.click(screen.getByTestId('duplicate-activity-button'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(posted).toEqual([]);
+
+    Object.defineProperty(window, 'parent', { value: realParent, configurable: true });
+  });
+
+  it('embedded: posts open-window to the host instead of navigating the iframe', async () => {
+    document.documentElement.setAttribute('data-desk-window-embedded', '');
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'new-activity-1' }),
+    });
+    const posted: Array<{ message: unknown; origin: string }> = [];
+    const realParent = window.parent;
+    Object.defineProperty(window, 'parent', {
+      value: { postMessage: (message: unknown, origin: string) => posted.push({ message, origin }) },
+      configurable: true,
+    });
+
+    render(<DuplicateActivityButton lang="es" activityId={ACTIVITY_ID} />);
+    fireEvent.click(screen.getByTestId('duplicate-activity-button'));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0].message).toEqual({
+      source: 'desk-window',
+      type: 'open-window',
+      href: '/es/crear/new-activity-1',
+      title: null,
+    });
+
+    Object.defineProperty(window, 'parent', { value: realParent, configurable: true });
+  });
+});
+
 describe('DuplicateActivityButton — hydration (Bug 1, React error #418)', () => {
   it('does not report a recoverable hydration error', async () => {
     const { recoverableErrors } = await renderThenHydrate(() => (

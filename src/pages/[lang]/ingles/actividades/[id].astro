@@ -443,7 +443,13 @@ function heartsLabel(count: number): string {
           {/* "Presentar" (presentation mode v1): a plain link to the
               full-screen, projector-facing deck — same access rules as this
               page, and hidden entirely when there is nothing to present
-              (`canPresent`, above). */}
+              (`canPresent`, above).
+
+              `target="_top"` (window-manager architecture): presentation
+              mode is a full PAGE, never a window the manager would open —
+              without it, clicking this while embedded would navigate the
+              IFRAME itself instead of the real top-level tab, squeezing the
+              projector-facing deck into the window's own small frame. */}
           {canPresent && (
             <a
               href={`/${lang}/ingles/actividades/${activity.id}/presentar`}
@@ -451,6 +457,7 @@ function heartsLabel(count: number): string {
               aria-label={t.present}
               aria-describedby="action-present-tooltip"
               class={ICON_TOOLTIP_TRIGGER_CLASS}
+              target="_top"
             >
               <PresentationIcon aria-hidden="true" size={16} />
               <span role="tooltip" id="action-present-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
@@ -487,13 +494,19 @@ function heartsLabel(count: number): string {
               — deliberately NOT exempted from the login wall (guest play is
               scoped to exactly this page and `presentar`, see file header),
               so a guest clicking this one still lands on sign-in, same as
-              any other gated page. */}
+              any other gated page.
+
+              `target="_top"` (window-manager architecture, same reasoning
+              as "Presentar" above): a full PAGE, never a window — without
+              it, clicking this while embedded would navigate the IFRAME
+              itself to the print page instead of the real top-level tab. */}
           <a
             href={`/${lang}/ingles/actividades/${activity.id}/imprimir`}
             data-testid="activity-print-link"
             aria-label={t.print}
             aria-describedby="action-print-tooltip"
             class={ICON_TOOLTIP_TRIGGER_CLASS}
+            target="_top"
           >
             <PrinterIcon aria-hidden="true" size={16} />
             <span role="tooltip" id="action-print-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
