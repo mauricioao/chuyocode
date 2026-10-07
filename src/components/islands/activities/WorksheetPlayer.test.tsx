@@ -331,7 +331,7 @@ describe('WorksheetPlayer — onZoneTap (mobile per-zone bottom sheet)', () => {
     expect(onZoneTap).toHaveBeenCalledWith('z1');
   });
 
-  it('shows the current answer, and the empty placeholder when unanswered', () => {
+  it('shows the current answer as visible text, but no visible text at all when unanswered (bugfix: a tiny "Sin responder" used to render inside every empty zone on phone)', () => {
     const { rerender } = render(
       <WorksheetPlayer
         lang="es"
@@ -342,7 +342,13 @@ describe('WorksheetPlayer — onZoneTap (mobile per-zone bottom sheet)', () => {
         onZoneTap={() => {}}
       />,
     );
-    expect(screen.getByTestId('player-zone-tap-z1').textContent).toContain('Sin responder');
+    // No visible "Sin responder" text — the zone reads as a plain empty tap
+    // target, same "clean zones" posture as the inline input's own
+    // placeholder being dropped below a minimum width.
+    expect(screen.getByTestId('player-zone-tap-z1').textContent).toBe('');
+    // The accessible name still carries the unanswered state, so a screen
+    // reader visitor is never told less than a sighted one.
+    expect(screen.getByTestId('player-zone-tap-z1').getAttribute('aria-label')).toContain('Sin responder');
 
     rerender(
       <WorksheetPlayer

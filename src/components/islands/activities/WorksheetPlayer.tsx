@@ -238,7 +238,17 @@ export default function WorksheetPlayer({
           // see `onZoneTap`'s own doc on `WorksheetPlayerProps`.
           if (onZoneTap) {
             const value = practice?.values[zone.id] ?? '';
-            const displayText = value || t.zoneEmpty;
+            // Bugfix (owner report, phone practice): an unanswered zone used
+            // to show `t.zoneEmpty` ("Sin responder") as its own VISIBLE
+            // text, squeezed into a box that can be as small as a few
+            // characters wide — a tiny, noisy label inside every empty
+            // blank. The accessible name (`accessibleLabel` below) already
+            // carries that same "unanswered" state for a screen reader
+            // visitor, so the visible content only ever shows a REAL
+            // answer; an unanswered zone renders as a plain, empty tap
+            // target (see `!value && 'text-muted-foreground'` below for its
+            // only visual cue).
+            const displayText = value;
             const isActive = activeZoneId === zone.id;
             const kindLabel = zone.kind === 'text' ? t.textPlaceholder : t.choicePlaceholder;
             const accessibleLabel = [kindLabel, value || t.zoneEmpty, statusLabel].filter(Boolean).join(' — ');
