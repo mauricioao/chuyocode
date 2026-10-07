@@ -63,7 +63,7 @@ function render(
   if (nameEl) nameEl.textContent = name;
 
   // `tip.html` is AUTHORED content (`DESK_HELPER_TIPS`, via the
-  // `/data/desk-tips-{lang}.json` endpoint), never visitor input — same
+  // `/desk-tips-{lang}.json` endpoint), never visitor input — same
   // posture as every other static copy string rendered with
   // `set:html`/`innerHTML` elsewhere in this codebase.
   const tipEl = root.querySelector<HTMLElement>('[data-desk-helper-tip]');

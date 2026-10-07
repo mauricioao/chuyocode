@@ -84,7 +84,7 @@ describe('initDeskHelper — "Otro tip"', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
     next.click();
     await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
-    expect(fetchImpl).toHaveBeenCalledWith('/data/desk-tips-es.json');
+    expect(fetchImpl).toHaveBeenCalledWith('/desk-tips-es.json');
 
     next.click();
     await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1)); // cached — no second fetch

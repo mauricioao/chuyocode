@@ -1,11 +1,21 @@
 /**
- * GET /data/desk-tips-{lang}.json — the desk helper's FULL per-language tip
- * list (owner spec PART 7: 100 reviewed tips, "Otro tip" cycles through all
- * of them without repeats). `DeskHelper.astro`'s own server render only ever
+ * GET /desk-tips-{lang}.json — the desk helper's FULL per-language tip list
+ * (owner spec PART 7: 100 reviewed tips, "Otro tip" cycles through all of
+ * them without repeats). `DeskHelper.astro`'s own server render only ever
  * embeds the ONE tip it picked, so the hub's page weight does not grow with
  * every tip added — this static, `immutable`-cacheable endpoint is what
  * `@lib/ui/deskHelper.ts` fetches lazily, once, on the visitor's FIRST "Otro
  * tip" click, caching the result in memory for the rest of that page's life.
+ *
+ * TOP-LEVEL on purpose (not `/data/desk-tips-{lang}.json`): `middleware.ts`'s
+ * own locale router (`isNonLocalePath`) only ever treats a FIRST path
+ * segment with a dot in it as a non-locale file (`/sitemap.xml`,
+ * `/robots.txt`) — a deeper dot belongs to a page slug on purpose (see that
+ * file's own header), so `/data/desk-tips-es.json` would have its first
+ * segment ("data") rejected as an unsupported "locale" before this route
+ * ever ran. Naming the file itself `desk-tips-[lang].json.ts`, same
+ * convention as `sitemap.xml.ts`/`robots.txt.ts`, puts the dot in that first
+ * segment and reaches this handler with no middleware change needed.
  *
  * `prerender = true` + `getStaticPaths` opts these two routes OUT of this
  * otherwise fully SSR site (`astro.config.mjs`'s `output: 'server'` — see

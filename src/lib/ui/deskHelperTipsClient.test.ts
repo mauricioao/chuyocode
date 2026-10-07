@@ -19,7 +19,7 @@ describe('loadFullTips', () => {
     const fetchImpl = fakeFetch(tips);
     const result = await loadFullTips('es', fetchImpl);
     expect(result).toEqual(tips);
-    expect(fetchImpl).toHaveBeenCalledWith('/data/desk-tips-es.json');
+    expect(fetchImpl).toHaveBeenCalledWith('/desk-tips-es.json');
   });
 
   it('caches the result: a second call for the same language does not fetch again', async () => {

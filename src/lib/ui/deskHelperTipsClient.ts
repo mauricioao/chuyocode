@@ -1,8 +1,9 @@
 /**
  * deskHelperTipsClient — lazily fetches the desk helper's FULL per-language
  * tip list (owner spec PART 7) from the static endpoint
- * `/data/desk-tips-{lang}.json` (`src/pages/data/desk-tips-[lang].json.ts`),
- * exactly once per language per page life: the hub's own server render only
+ * `/desk-tips-{lang}.json` (`src/pages/desk-tips-[lang].json.ts` — a
+ * top-level file, see that route's own header for why), exactly once per
+ * language per page life: the hub's own server render only
  * ever embeds the ONE tip it picked (see `DeskHelper.astro`), so this is
  * what `@lib/ui/deskHelper.ts` calls on the visitor's FIRST "Otro tip"
  * click — every later click within the same page life reuses the in-memory
@@ -44,7 +45,7 @@ export async function loadFullTips(
 
   const request = (async () => {
     try {
-      const res = await fetchImpl(`/data/desk-tips-${lang}.json`);
+      const res = await fetchImpl(`/desk-tips-${lang}.json`);
       if (!res.ok) throw new Error(`desk helper tips fetch failed: ${res.status}`);
       const body = (await res.json()) as DeskHelperClientTip[];
       cache.set(lang, body);

@@ -14,7 +14,7 @@ describe('getStaticPaths', () => {
   });
 });
 
-describe('GET /data/desk-tips-[lang].json', () => {
+describe('GET /desk-tips-[lang].json', () => {
   it('answers 200 with a JSON content type and a long-lived immutable cache header', async () => {
     const res = await GET(ctx('es'));
     expect(res.status).toBe(200);

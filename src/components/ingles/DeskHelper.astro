@@ -20,8 +20,9 @@
  * sees — but, unlike the old daily pick, this is the ONE tip embedded in the
  * page at all: shipping all 100 here would grow with every tip ever added.
  * `@lib/ui/deskHelper.ts` fetches the full per-language list lazily, only on
- * the visitor's FIRST "Otro tip" click (`/data/desk-tips-{lang}.json`,
- * `src/pages/data/desk-tips-[lang].json.ts`), and cycles through it with a
+ * the visitor's FIRST "Otro tip" click (`/desk-tips-{lang}.json`,
+ * `src/pages/desk-tips-[lang].json.ts` — top-level, see that route's own
+ * header for why), and cycles through it with a
  * shuffled, no-repeat queue (`@lib/ui/deskHelperQueue`) from then on.
  *
  * Two small scripts refine the server render, in order of how fast they

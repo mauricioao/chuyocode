@@ -14,7 +14,7 @@
  * Markdown-ish text, not hand-typed HTML); {@link renderHighlightMarkup}
  * converts it into the `<em>` highlight the bubble already styles, once,
  * here at module-load time — every consumer (`DeskHelper.astro`'s first,
- * server-picked tip; `/data/desk-tips-{lang}.json`'s full per-language list
+ * server-picked tip; `/desk-tips-{lang}.json`'s full per-language list
  * for "Otro tip") receives plain, render-ready HTML, exactly like the old
  * hand-authored `<em>` strings did.
  *
