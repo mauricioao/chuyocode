@@ -142,13 +142,13 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
   // back button (both the floating `lg:` one and `ActivityEditorIsland`'s
   // own mobile-inline copy) is gone; the red light replaces it.
   //
-  // PART 6b polish (owner report: "el botón de minimizar me lleva a mis
-  // actividades, no veo el chip en el escritorio"): both lights now target
-  // the HUB (`/es/ingles`), not `/es/mis-actividades` — minimize so the tray
-  // chip is actually visible there, close as its own tracked-previous-path
-  // FALLBACK only (`closeUsesTrackedPath`/`resolveTrackedCloseAction`,
-  // `@lib/ui/deskWindow.ts`).
-  it('renders the window shell: a dialog with three named "traffic light" buttons, closing to the hub with a tracked previous path', async () => {
+  // PART 6c (owner spec 2026-10-07): both lights now target the HUB
+  // (`/es/ingles`), not `/es/mis-actividades` — minimize so the tray chip is
+  // actually visible there, close ALWAYS (never `history.back()` to the old
+  // tracked-previous-path fallback — the removed `closeUsesTrackedPath`/
+  // `resolveTrackedCloseAction` behaviour, `@lib/ui/deskWindow.ts`). The
+  // window is also non-modal now — no `aria-modal`.
+  it('renders the window shell: a dialog with three named "traffic light" buttons, closing straight to the hub', async () => {
     editableActivity.value = {
       id: 'abc',
       title: 'Mi actividad',
@@ -166,12 +166,11 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     const html = await res.text();
     expect(html).toContain('data-desk-window');
     expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-modal="true"');
+    expect(html).not.toContain('aria-modal');
     expect(html).toContain('aria-label="Cerrar"');
     expect(html).toContain('aria-label="Minimizar"');
     expect(html).toContain('aria-label="Pantalla completa"');
     expect(html).toContain('href="/es/ingles"');
-    expect(html).toContain('data-close-tracked-path="true"');
     expect(html).not.toContain('href="/es/mis-actividades"');
     expect(html).not.toContain('data-back-button');
   });
@@ -319,7 +318,9 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
 });
 
 describe('GET /[lang]/crear/[id] — the desk behind the window (PART 6b)', () => {
-  it('renders the SAME desk behind the window, inert, as the hub/practice window', async () => {
+  // PART 6c (owner spec 2026-10-07): never `inert` anymore — the floating
+  // window is non-modal, and the desk behind it stays fully usable.
+  it('renders the SAME desk behind the window, never inert, as the hub/practice window', async () => {
     editableActivity.value = {
       id: 'abc',
       title: 'x',
@@ -336,7 +337,7 @@ describe('GET /[lang]/crear/[id] — the desk behind the window (PART 6b)', () =
     });
     const html = await res.text();
     expect(html).toContain('data-desk');
-    expect(html).toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
     expect(html).toContain('Para ti hoy');
     expect(html).toContain('Tu escritorio');
   });

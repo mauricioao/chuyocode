@@ -9,13 +9,13 @@
  * back button all depend on it), it just RENDERS as a window.
  *
  * Split the same way `backNavigation.ts` is: pure, zero-DOM decisions
- * ({@link resolveCloseAction}, {@link shouldStartFullScreen}) that are fully
- * unit-testable, and thin DOM-wiring functions that read `document`/`window`
- * and defer to them. Anything that could silently be WRONG belongs in a pure
- * function, never inlined into a listener nobody can assert on directly.
+ * ({@link shouldStartFullScreen}, {@link shouldProceedAfterGuardDecision})
+ * that are fully unit-testable, and thin DOM-wiring functions that read
+ * `document`/`window` and defer to them. Anything that could silently be
+ * WRONG belongs in a pure function, never inlined into a listener nobody can
+ * assert on directly.
  */
 import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
-import { readTrackedPreviousPath, resolvePreviousPath, shouldGoBack } from '../backNavigation';
 
 /**
  * Editor <-> window bridge (PART 6b). `DeskWindow`/`deskWindow.ts` are plain
@@ -79,6 +79,12 @@ const ORIGIN_MAX_AGE_MS = 5000;
  * click. Skipped entirely under `prefers-reduced-motion: reduce`. */
 const MINIMIZE_ANIMATION_MS = 180;
 
+/** Same posture for the red light's own "close" animation
+ * (`.ingles-window--closing`, `global.css`) — PART 6c (owner spec
+ * 2026-10-07): a subtle scale+fade, never a directional move (unlike
+ * minimize, closing is not "going" anywhere in particular). */
+const CLOSE_ANIMATION_MS = 160;
+
 export const DESK_WINDOW_ATTR = {
   close: 'data-desk-window-close',
   minimize: 'data-desk-window-minimize',
@@ -104,68 +110,23 @@ export function focusableElements(container: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Where the close/minimize "traffic lights" should send the visitor.
+ * Where the red light (always) and the yellow light (when there is no
+ * `trayId` to minimize to) send the visitor: a plain navigation to
+ * `targetPath` — the signed-in visitor's Inglés hub/desk, or the ChuyoCode
+ * home for a guest (whose hub would only ask them to sign in).
  *
- * Both lights do the exact same thing (owner spec: "closing the window
- * returns to the desk"): navigate to `targetPath` — the signed-in visitor's
- * Inglés hub, or the ChuyoCode home for a guest (whose hub would only ask
- * them to sign in). When the browser ALREADY has `targetPath` as the
- * immediately previous SCREEN this visitor actually saw, `history.back()`
- * is preferred over a fresh navigation to the same place — it is what lets
- * the desk's `transition:persist`-ed DOM come back exactly as it was, and
- * feels like "back" rather than a forward navigation that happens to land
- * on the same URL.
- *
- * `previousPath` — bugfix, 2026-10-06, same root cause as
- * `backNavigation.ts`'s own header: this used to take `document.referrer`
- * directly, which Astro's `<ClientRouter>` never updates after a tab's
- * first client-side navigation, so a visitor who entered the practice page
- * via several client-side hops never got the `history.back()` treatment
- * here even when the hub genuinely WAS the immediately previous screen.
- * Callers resolve this the same way `initBackButtons` does —
- * `resolvePreviousPath(readTrackedPreviousPath(...), doc.referrer, ...)`
- * (`backNavigation.ts`) — so both back-navigation surfaces share one source
- * of truth.
- *
- * @param previousPath - The screen this visitor actually just saw, resolved by `resolvePreviousPath` (`@lib/backNavigation`) — `null` when unknown.
- * @param historyLength - `window.history.length`.
- * @param targetPath - The close target's own pathname (e.g. `/es/ingles` or `/es/`).
+ * PART 6c (owner spec 2026-10-07, "si en la ventana se hace click en el
+ * botón rojo se cierra y deja la ventana del inglés main"): closing ALWAYS
+ * lands on the desk now, via a plain `href` navigation — never
+ * `history.back()`, regardless of whatever screen this visitor actually
+ * came from. This deliberately replaces the older "prefer `history.back()`
+ * to the tracked previous screen" behaviour (`resolveCloseAction`/
+ * `resolveTrackedCloseAction`, removed here, along with the
+ * `closeUsesTrackedPath` prop that selected between them): now that the
+ * desk itself stays visible and interactive behind every window (PART 6c's
+ * non-modal floating window), "closing" is unambiguously "go back to the
+ * desk", not "go back to wherever I was before" — see `closeNow` below.
  */
-export function resolveCloseAction(
-  previousPath: string | null,
-  historyLength: number,
-  targetPath: string,
-): { kind: 'back' } | { kind: 'href'; href: string } {
-  if (historyLength > 1 && previousPath === targetPath) {
-    return { kind: 'back' };
-  }
-  return { kind: 'href', href: targetPath };
-}
-
-/**
- * PART 6b polish (owner report: the editor's red light always landed on
- * `/mis-actividades` even when the author genuinely came from somewhere
- * else): the activities-creator editor/picker's own close resolution —
- * unlike {@link resolveCloseAction} above (the practice window's own
- * ORIGINAL, deliberately-unchanged semantics: "closing always ends up at the
- * desk", `history.back()` only when it happens to coincide with
- * `targetPath`), this prefers `history.back()` to WHATEVER screen this
- * visitor actually came from — any known previous in-app screen
- * ({@link shouldGoBack}, `@lib/backNavigation`, the same "genuinely previous
- * screen + a previous history entry" check `BackButton` itself uses) —
- * falling back to `targetPath` (the hub) only when there is no such screen
- * to return to. Selected via `DeskWindow`'s own `closeUsesTrackedPath` prop.
- */
-export function resolveTrackedCloseAction(
-  previousPath: string | null,
-  historyLength: number,
-  targetPath: string,
-): { kind: 'back' } | { kind: 'href'; href: string } {
-  if (shouldGoBack(previousPath, historyLength)) {
-    return { kind: 'back' };
-  }
-  return { kind: 'href', href: targetPath };
-}
 
 /**
  * Should the window start full screen (green light toggled on, remembered
@@ -320,11 +281,12 @@ export function applyDeskWindowReturnFocus(doc: Document = document, win: Window
 /**
  * Window-side: wires the three "traffic light" buttons, Escape, and initial
  * focus. `windowEl` is the `role="dialog"` element itself; `closeTargetPath`
- * is the hub (signed-in) or the ChuyoCode home (guest) — see
- * {@link resolveCloseAction}. `trayId` is the activity id the yellow light
- * minimizes TO a tray chip for — `null` for a guest (no desk/tray behind a
- * guest's window, see `DeskWindow.astro`'s own header), in which case the
- * yellow light just falls back to doing exactly what the red one does.
+ * is the hub/desk (signed-in) or the ChuyoCode home (guest) — see the
+ * comment above `closeNow` below. `trayId` is the activity id the yellow
+ * light minimizes TO a tray chip for — `null` for a guest (no desk/tray
+ * behind a guest's window, see `DeskWindow.astro`'s own header), in which
+ * case the yellow light just falls back to doing exactly what the red one
+ * does.
  */
 export function initDeskWindow(
   windowEl: HTMLElement,
@@ -333,8 +295,6 @@ export function initDeskWindow(
   closeOnEscape: boolean = true,
   doc: Document = document,
   win: Window = window,
-  /** `DeskWindow`'s own `closeUsesTrackedPath` prop — see {@link resolveTrackedCloseAction}'s own header. */
-  closeUsesTrackedPath: boolean = false,
 ): void {
   // Guard against double-wiring (same posture as `deskHelper.ts#initDeskHelper`):
   // `DeskWindow.astro`'s own script calls this both immediately AND on
@@ -357,20 +317,32 @@ export function initDeskWindow(
     fullscreenButton.setAttribute('aria-pressed', 'true');
   }
 
+  function prefersReducedMotion(): boolean {
+    try {
+      return win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  }
+
   // Closing for good (red light / Escape) drops any tray chip this activity
   // may have left behind from an earlier minimize — owner spec: "closing
-  // (red) removes any chip for that activity".
+  // (red) removes any chip for that activity" — then ALWAYS navigates
+  // straight to the desk (never `history.back()`, see this file's own
+  // comment above `closeTargetPath`'s header), with a subtle "close"
+  // animation (`.ingles-window--closing`, `global.css`) unless
+  // `prefers-reduced-motion: reduce`.
   function closeNow(): void {
     if (trayId) removeMinimizedWindow(trayId, win.sessionStorage);
-    const previousPath = resolvePreviousPath(readTrackedPreviousPath(win.sessionStorage), doc.referrer, win.location.origin);
-    const action = closeUsesTrackedPath
-      ? resolveTrackedCloseAction(previousPath, win.history.length, closeTargetPath)
-      : resolveCloseAction(previousPath, win.history.length, closeTargetPath);
-    if (action.kind === 'back') {
-      win.history.back();
-    } else {
-      win.location.href = action.href;
+    const navigate = () => {
+      win.location.href = closeTargetPath;
+    };
+    if (prefersReducedMotion()) {
+      navigate();
+      return;
     }
+    windowEl.classList.add('ingles-window--closing');
+    win.setTimeout(navigate, CLOSE_ANIMATION_MS);
   }
 
   // PART 6b: the editor-aware wrapper around `closeNow` — every other
@@ -386,14 +358,6 @@ export function initDeskWindow(
       if (!shouldProceedAfterGuardDecision(decision)) return;
     }
     closeNow();
-  }
-
-  function prefersReducedMotion(): boolean {
-    try {
-      return win.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    } catch {
-      return false;
-    }
   }
 
   // Minimizing (yellow light) — owner feedback 2026-10-06, replacing the old
@@ -457,7 +421,7 @@ export function initDeskWindow(
   // `backNavigation.ts#initBackButtons` uses) so Ctrl/Cmd/Shift-click and a
   // middle-click still open the hub normally, in a new tab. A plain click
   // calls `preventDefault` FIRST: without it, the anchor's own default
-  // navigation to `closeHref` would race the `history.back()`/animation
+  // navigation to `closeHref` would race the animated-close/minimize
   // branches above.
   windowEl.querySelectorAll<HTMLElement>(`[${DESK_WINDOW_ATTR.close}]`).forEach((button) => {
     button.addEventListener('click', (event) => {
@@ -496,40 +460,16 @@ export function initDeskWindow(
     });
   }
 
-  // Focus trap (bugfix, 2026-10-06): Tab/Shift+Tab cycle among the dialog's
-  // OWN focusable elements only, never escaping to the rest of the page.
-  // `inert` on the header/footer/desk (`BaseLayout.astro`/`DeskScene.astro`)
-  // already removes every one of THEIR elements from the tab order, so this
-  // is mostly a safety net for browsers/assistive tech that do not honour
-  // `inert` for sequential focus navigation — but it also fixes the one case
-  // `inert` cannot: wrapping Tab past the dialog's OWN last element (or
-  // Shift+Tab past its first) back around to the other end, instead of
-  // leaving the page/document entirely.
-  windowEl.addEventListener('keydown', (event) => {
-    if (event.key !== 'Tab' || event.defaultPrevented) return;
-    const elements = focusableElements(windowEl);
-    if (elements.length === 0) {
-      event.preventDefault();
-      return;
-    }
-    const first = elements[0];
-    const last = elements[elements.length - 1];
-    const active = doc.activeElement;
-    if (event.shiftKey) {
-      if (active === first || active === windowEl) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else if (active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  });
-
   // INITIAL FOCUS lands on the dialog element itself, never the red light —
   // see `DeskWindow.astro`'s own header for why (no focus ring flashes on a
   // pointer visit). `outline-none` on the element keeps it invisible even
-  // for a keyboard visit; the very next Tab reaches the red light exactly as
-  // before, via the trap above.
+  // for a keyboard visit.
+  //
+  // NO FOCUS TRAP (PART 6c, owner spec 2026-10-07): the window is no longer
+  // modal — the desk behind it stays visible AND usable, so Tab/Shift+Tab
+  // are free to leave the window and reach the desk (or the header) exactly
+  // like any other non-modal floating window. `focusableElements` above is
+  // kept (still exported/tested) as a small, generic, reusable query — it
+  // simply has no caller inside this function anymore.
   windowEl.focus();
 }

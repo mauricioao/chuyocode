@@ -144,7 +144,8 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     const html = await res.text();
     expect(html).toContain('data-desk-window');
     expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-modal="true"');
+    // PART 6c (owner spec 2026-10-07): non-modal floating window — no `aria-modal`.
+    expect(html).not.toContain('aria-modal');
     expect(html).toContain('aria-label="Cerrar"');
     expect(html).toContain('aria-label="Minimizar"');
     expect(html).toContain('aria-label="Pantalla completa"');
@@ -204,7 +205,9 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
 // itself uses) and NOT AT ALL for a guest, who cannot see the gated hub —
 // their red/yellow lights go to the ChuyoCode home instead.
 describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PART 6a)', () => {
-  it('renders the desk behind the window, inert, for a signed-in visitor', async () => {
+  // PART 6c (owner spec 2026-10-07): never `inert` anymore — the floating
+  // window is non-modal, and the desk behind it stays fully usable.
+  it('renders the desk behind the window, never inert, for a signed-in visitor', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -212,7 +215,7 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     });
     const html = await res.text();
     expect(html).toContain('data-desk');
-    expect(html).toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
     // The hub's own folders/widgets landmarks, proving the SAME desk renders.
     expect(html).toContain('Para ti hoy');
     expect(html).toContain('Tu escritorio');

@@ -36,8 +36,10 @@
  * RENDERS as a WINDOW over the desk (`DeskWindow.astro`). For a SIGNED-IN
  * visitor, the desk itself renders behind it (`DeskScene.astro`, the exact
  * same component/data the hub uses — `@lib/ingles/deskSceneData` — so a
- * direct visit shows a real desk, not a blank one) and is `inert` while the
- * window is open; `transition:persist`-ed (inside `DeskScene.astro` itself)
+ * direct visit shows a real desk, not a blank one) and stays fully visible
+ * AND interactive while the window is open (PART 6c: a non-modal floating
+ * window, `DeskWindow.astro`'s own header); `transition:persist`-ed (inside
+ * `DeskScene.astro` itself)
  * so a hub -> practice -> hub round trip via Astro's ClientRouter keeps its
  * DOM (widget positions, drag state) instead of discarding and re-rendering
  * it. For a GUEST — who cannot see the gated hub at all — no desk renders
@@ -137,10 +139,10 @@ const guestSignUpHref = `/${lang}/auth/entrar?mode=signup&next=${encodeURICompon
 
 /**
  * The window's red/yellow lights ("desktop" redesign PART 6a): the Inglés
- * hub for a signed-in visitor, the ChuyoCode home for a guest — whose hub
- * would only ask them to sign in (see file header). `@lib/ui/deskWindow.ts`
- * decides client-side whether this becomes a plain navigation or a
- * `history.back()` (when the referrer is already exactly this path).
+ * hub/desk for a signed-in visitor, the ChuyoCode home for a guest — whose
+ * hub would only ask them to sign in (see file header). PART 6c: both
+ * ALWAYS navigate straight here (never `history.back()`) —
+ * `@lib/ui/deskWindow.ts`'s own header.
  */
 const closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
 
@@ -215,7 +217,6 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
   {desk && deskLabels && (
     <DeskScene
       lang={lang}
-      inert
       greetingLine1={desk.greetingLine1}
       exerciseCountLabel={desk.exerciseCountLabel}
       activityCountLabel={desk.activityCountLabel}

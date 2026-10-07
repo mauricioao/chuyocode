@@ -17,10 +17,11 @@
  * component takes its data as plain props (`@lib/ingles/deskSceneData`)
  * instead of assuming a client-side hydration step will fill it in later.
  *
- * `inert` (new, PART 6a): true on the practice page, where the desk sits
- * BEHIND the open window and must not be interactive or reachable by
- * keyboard/AT (the window is `aria-modal`) — `false`/omitted on the hub,
- * where the desk is the whole page.
+ * NON-MODAL (PART 6c, owner spec 2026-10-07): the desk is never `inert`
+ * anymore, even on the practice/creator pages where it sits BEHIND an open
+ * window — that window floats on top of it now (non-modal, draggable,
+ * `DeskWindow.astro`'s own header), and the desk stays fully visible AND
+ * interactive around it, same as the hub itself.
  */
 import DeskFolder from '@components/ingles/DeskFolder.astro';
 import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
@@ -33,8 +34,6 @@ import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSce
 
 interface Props {
   lang: Lang;
-  /** True on the practice page, where the desk sits behind the open window. */
-  inert?: boolean;
   greetingLine1: string;
   exerciseCountLabel: string | null;
   activityCountLabel: string | null;
@@ -52,7 +51,6 @@ interface Props {
 
 const {
   lang,
-  inert = false,
   greetingLine1,
   exerciseCountLabel,
   activityCountLabel,
@@ -86,7 +84,6 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
 <section
   data-desk
   transition:persist="desk-scene"
-  inert={inert}
   class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-[calc(100dvh-96px)] desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-3 desk:pb-0"
 >
   {/* Shared gradients for every `DeskFolder`'s back/front SVG layers —
