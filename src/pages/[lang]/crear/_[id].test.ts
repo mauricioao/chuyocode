@@ -1,12 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
+// `loadDeskSceneData` (the desk behind the window, "desktop" redesign PART
+// 6b, same loader the practice window already uses) pulls in `@lib/profile`
+// -> `@lib/access` -> `@lib/supabase` -> `loadEnv`, which reads
+// `import.meta.env` — stub it before any module that calls it, same posture
+// as `src/pages/[lang]/ingles/actividades/_[id].test.ts`.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({
+    SANITY_PROJECT_ID: 'test-proj',
+    SANITY_DATASET: 'production',
+    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_ANON_KEY: 'test-anon',
+    SUPABASE_SERVICE_ROLE_KEY: '',
+    AD_HMAC_SECRET: '',
+  }),
+}));
+
 const { editableActivity } = vi.hoisted(() => ({
   editableActivity: { value: null as unknown },
 }));
 
+const getActivityCount = vi.fn();
+const getPublishedActivities = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
   getActivityForEdit: vi.fn(async () => editableActivity.value),
+  getActivityCount: (...args: unknown[]) => getActivityCount(...args),
+  getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+}));
+
+// The desk behind the window shares the hub's own exercise count — mocked
+// here so no network happens, same posture as the hub's own test file.
+const getExerciseCount = vi.fn();
+vi.mock('@lib/exercises', () => ({
+  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
+}));
+
+vi.mock('@lib/activities/storage', () => ({
+  publicImageUrl: (path: string) => `https://public.example/${path}`,
 }));
 
 import EditPage from './[id].astro';
@@ -25,6 +56,12 @@ async function render(
 
 beforeEach(() => {
   editableActivity.value = null;
+  getActivityCount.mockReset();
+  getPublishedActivities.mockReset();
+  getExerciseCount.mockReset();
+  getActivityCount.mockResolvedValue(null);
+  getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
+  getExerciseCount.mockResolvedValue(null);
 });
 
 describe('GET /[lang]/crear/[id] — routing', () => {
@@ -98,16 +135,39 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="activity-editor-island"');
     expect(html).toContain('Mi actividad');
-    expect(html).toContain('data-back-button');
+  });
+
+  // "Desktop" redesign PART 6b: the editor renders as a WINDOW over the
+  // desk, same shell the practice page's own PART 6a already uses — the OLD
+  // back button (both the floating `lg:` one and `ActivityEditorIsland`'s
+  // own mobile-inline copy) is gone; the red light replaces it.
+  it('renders the window shell: a dialog with three named "traffic light" buttons, closing to /mis-actividades', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-desk-window');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-label="Cerrar"');
+    expect(html).toContain('aria-label="Minimizar"');
+    expect(html).toContain('aria-label="Pantalla completa"');
     expect(html).toContain('href="/es/mis-actividades"');
+    expect(html).not.toContain('data-back-button');
   });
 
-  // Floating side toolbar pass, owner request: no page-level scroll on the
-  // editor, and no dead empty row above the card where the back button used
-  // to reserve its own space — see `BaseLayout.astro`'s `fullHeight` mode
-  // and `ActivityEditorIsland.tsx`'s own root, now sized by that real flex
-  // chain instead of a hardcoded calc tied to the site header's pixel height.
-  it('sizes the editor via the real flex chain (BaseLayout fullHeight), not a hardcoded header-height calc', async () => {
+  it('shows the activity title in the window title bar, and the muted autosave status next to it', async () => {
     editableActivity.value = {
       id: 'abc',
       title: 'Mi actividad',
@@ -123,33 +183,18 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    expect(html).not.toContain('65px');
-    expect(html).not.toContain('calc(100dvh');
-    // BaseLayout's opt-in non-scrolling mode is actually engaged for this page.
-    expect(html).toContain('lg:h-dvh');
-    expect(html).toContain('lg:overflow-hidden');
+    expect(html).toContain('id="desk-window-title"');
+    const titleIndex = html.indexOf('id="desk-window-title"');
+    expect(html.slice(titleIndex, titleIndex + 400)).toContain('Mi actividad');
+    expect(html).toContain('id="desk-window-status"');
+    expect(html).toContain('Guardado hace un momento');
   });
 
-  // Full-height card fix (owner report: "with one worksheet block the card
-  // ends mid-screen, empty space down to the footer"). Root cause: the row
-  // `[id].astro` lays the card out in used to force `lg:items-start` on
-  // ITSELF, which overrides flexbox's default cross-axis STRETCH for every
-  // item in that row — including `ActivityEditorIsland`'s own root div,
-  // which has no explicit height of its own and so collapsed to its content
-  // height instead of the row's `lg:h-full`. The fix moves the top-alignment
-  // onto the `BackButton` wrapper's own `lg:self-start` and leaves the row at
-  // the default stretch, so the island (and its whole internal flex-column
-  // chain: root -> card -> body -> block list -> the focus-active block's
-  // canvas) fills the row's real height end to end. Asserts the actual
-  // classes on that chain, not just the absence of a hardcoded calc, so a
-  // future edit that reintroduces a row-level `items-start` (or drops any
-  // link of the chain) fails this test instead of only showing up as empty
-  // space in a screenshot.
-  it('stretches the editor card to the row\'s full height instead of collapsing to content (structural flex chain)', async () => {
+  it('falls back to "Nueva actividad" in the title bar for a brand-new, still-untitled activity', async () => {
     editableActivity.value = {
       id: 'abc',
-      title: 'Mi actividad',
-      level: 'B1',
+      title: '',
+      level: null,
       blocks: [],
       revisionId: 'rev-1',
       revisionStatus: 'draft',
@@ -161,29 +206,48 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
+    const titleIndex = html.indexOf('id="desk-window-title"');
+    expect(html.slice(titleIndex, titleIndex + 400)).toContain('Nueva actividad');
+  });
 
-    // The row itself: `lg:h-full` (a real, bounded height from `main`), and
-    // crucially NO `lg:items-start` any more — that class name must not
-    // appear anywhere in the page (nothing else on this page has a reason to
-    // use it either).
-    expect(html).toContain('lg:h-full');
-    expect(html).not.toContain('lg:items-start');
+  // Escape is the editor's OWN shortcut (deselecting the current zone) —
+  // the window must never ALSO close on it.
+  it('never closes on Escape (closeOnEscape=false) — only the red/yellow lights do', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-close-on-escape="false"');
+  });
 
-    // The back button's OWN wrapper keeps itself top-aligned instead, via
-    // `lg:self-start` — the row's default stretch is what everything else
-    // (the island) now relies on.
-    expect(html).toContain(
-      'class="hidden lg:flex lg:h-(--card-header-h) lg:flex-none lg:items-center lg:self-start"',
-    );
-
-    // The island's root and the card inside it: both still `lg:min-h-0
-    // lg:flex-1` (a bounded flex item, not a growing one) — the two links
-    // that turn the row's real, now-stretched height into a bounded column
-    // the card can never grow past.
-    expect(html).toContain('data-testid="activity-editor-island"');
-    expect(html).toContain('lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16');
-    expect(html).toContain('data-testid="activity-editor-card"');
-    expect(html).toContain('lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-hidden');
+  it('minimizes to a tray chip keyed by the activity id', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-tray-id="abc"');
   });
 
   it('seeds the review-state badge from the stored activity status and note', async () => {
@@ -205,6 +269,30 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     const html = await res.text();
     expect(html).toContain('Rechazada');
     expect(html).toContain('Falta una zona en la hoja 2.');
+  });
+});
+
+describe('GET /[lang]/crear/[id] — the desk behind the window (PART 6b)', () => {
+  it('renders the SAME desk behind the window, inert, as the hub/practice window', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-desk');
+    expect(html).toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).toContain('Para ti hoy');
+    expect(html).toContain('Tu escritorio');
   });
 });
 

@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
 import type { WorksheetBlock } from '@/lib/activities/blocks';
-import { UI_LABELS } from '@/lib/i18n';
 
 const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
@@ -56,6 +55,18 @@ beforeEach(() => {
   // bare string, shorthand for navigating there), which a `Location`-shaped
   // object alone never satisfies.
   (window as unknown as { location: Location }).location = stubbedLocation;
+
+  // "Desktop" redesign PART 6b: the editor now ALWAYS renders inside
+  // `DeskWindow`, whose title bar provides these three DOM nodes (title,
+  // autosave status, and the `actions` slot `ActivityEditorIsland` itself
+  // `createPortal`s "Ver como presentación"/"Enviar a revisión" into — see
+  // `DESK_WINDOW_ACTIONS_ID`'s own doc there). A standalone render of just
+  // this island has no `DeskWindow` shell around it, so the tests build the
+  // same three stand-in nodes by hand.
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    '<b id="desk-window-title"></b><span id="desk-window-status"></span><div id="desk-window-actions"></div>',
+  );
 });
 
 afterEach(() => {
@@ -68,6 +79,9 @@ afterEach(() => {
   // hash-targeting — reset unconditionally so a later test never inherits a
   // leftover hash, even if one of those failed before its own cleanup line.
   window.location.hash = '';
+  document.getElementById('desk-window-title')?.remove();
+  document.getElementById('desk-window-status')?.remove();
+  document.getElementById('desk-window-actions')?.remove();
 });
 
 const WORKSHEET_BLOCK: WorksheetBlock = {
@@ -258,30 +272,166 @@ describe('ActivityEditorIsland — one framed card (creator polish round 3)', ()
   });
 });
 
-describe('ActivityEditorIsland — inline mobile back button (mobile layout pass)', () => {
-  it('renders inline, immediately left of the title, hidden at lg (desktop keeps its own floating gutter button instead)', () => {
+describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
+  it('mirrors the title into the window title bar, falling back to "Nueva actividad" when empty', () => {
+    renderEditor({ initialTitle: 'Mi actividad' });
+    expect(document.getElementById('desk-window-title')?.textContent).toBe('Mi actividad');
+
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: '' } });
+    expect(document.getElementById('desk-window-title')?.textContent).toBe('Nueva actividad');
+  });
+
+  it('localizes the empty-title fallback to English', () => {
+    renderEditor({ lang: 'en', initialTitle: '' });
+    expect(document.getElementById('desk-window-title')?.textContent).toBe('New activity');
+  });
+
+  it('shows the muted "saved a moment ago" status by default, "Guardando…" while saving, and the error text on failure', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
     renderEditor();
-    const titleInput = screen.getByTestId('activity-title-input');
-    const back = titleInput.closest('label')?.parentElement?.querySelector('a[data-back-button]');
-    expect(back).toBeTruthy();
-    expect(back?.className).toContain('lg:hidden');
-    // Immediately before the title's own <label> in the same row — "inline
-    // left of the title", not a separate row above it.
-    expect(back?.nextElementSibling).toBe(titleInput.closest('label'));
+    expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento');
+
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('save-button'));
+    });
+    expect(document.getElementById('desk-window-status')?.textContent).toBe('No se pudo guardar');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('save-retry'));
+    });
+    await waitFor(() =>
+      expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento'),
+    );
   });
 
-  it('links to /mis-actividades, lang-prefixed, with the same history.back() progressive enhancement every other BackButton uses', () => {
-    renderEditor({ lang: 'es' });
-    const back = screen.getByTestId('activity-title-input').closest('label')?.parentElement?.querySelector('a[data-back-button]');
-    expect(back?.getAttribute('href')).toBe('/es/mis-actividades');
-    expect(back?.hasAttribute('data-back-button')).toBe(true);
+  it('renders "Ver como presentación" and "Enviar a revisión" into the window title bar actions slot, not the header row', () => {
+    renderEditor();
+    const actionsSlot = document.getElementById('desk-window-actions');
+    expect(actionsSlot?.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
+    expect(actionsSlot?.contains(screen.getByTestId('submit-for-review-button'))).toBe(true);
+    expect(screen.getByTestId('activity-editor-card').contains(screen.getByTestId('submit-for-review-button'))).toBe(
+      false,
+    );
   });
 
-  it('localizes its accessible label to English', () => {
-    renderEditor({ lang: 'en', activityId: 'act-1' });
-    const back = screen.getByTestId('activity-title-input').closest('label')?.parentElement?.querySelector('a[data-back-button]');
-    expect(back?.getAttribute('aria-label')).toBe(UI_LABELS.en.common.back);
-    expect(back?.getAttribute('href')).toBe('/en/mis-actividades');
+  it('never throws, and simply renders no title-bar actions, when mounted without the DeskWindow shell', () => {
+    document.getElementById('desk-window-actions')?.remove();
+    expect(() => renderEditor()).not.toThrow();
+    expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+  });
+});
+
+describe('ActivityEditorIsland — EditorWindowGuard bridge (PART 6b)', () => {
+  it('registers window.__inglesEditorWindowGuard on mount and removes it on unmount', () => {
+    const { unmount } = renderEditor();
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as
+      | { isDirty: () => boolean }
+      | undefined;
+    expect(guard).toBeTruthy();
+    expect(guard?.isDirty()).toBe(false);
+    unmount();
+    expect((window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard']).toBeUndefined();
+  });
+
+  it('isDirty() reflects the same dirty state the save-status indicator shows', () => {
+    renderEditor();
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      isDirty: () => boolean;
+    };
+    expect(guard.isDirty()).toBe(false);
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    expect(guard.isDirty()).toBe(true);
+  });
+
+  it('flush() silently saves the current document and resolves true on success', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      flush: () => Promise<boolean>;
+    };
+    let resolved: boolean | undefined;
+    await act(async () => {
+      resolved = await guard.flush();
+    });
+
+    expect(resolved).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('/api/actividades/act-1/guardar', expect.objectContaining({ method: 'POST' }));
+    expect(screen.queryByTestId('unsaved-changes-modal')).toBeNull(); // never the modal — minimize is silent
+  });
+
+  it('flush() resolves false (never throws) when the save fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      flush: () => Promise<boolean>;
+    };
+    let resolved: boolean | undefined;
+    await act(async () => {
+      resolved = await guard.flush();
+    });
+
+    expect(resolved).toBe(false);
+  });
+
+  it('confirmClose() opens the SAME unsaved-changes modal, and maps each button to its own outcome', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      confirmClose: () => Promise<'saved' | 'discarded' | 'cancelled'>;
+    };
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose();
+    });
+    expect(screen.getByTestId('unsaved-changes-modal')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('unsaved-modal-cancel'));
+    expect(await pending).toBe('cancelled');
+    expect(screen.queryByTestId('unsaved-changes-modal')).toBeNull();
+  });
+
+  it('confirmClose() resolves "discarded" for "Salir sin guardar"', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      confirmClose: () => Promise<'saved' | 'discarded' | 'cancelled'>;
+    };
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose();
+    });
+    fireEvent.click(screen.getByTestId('unsaved-modal-leave'));
+    expect(await pending).toBe('discarded');
+  });
+
+  it('confirmClose() resolves "saved" only after "Guardar y salir" actually succeeds', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+    const guard = (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      confirmClose: () => Promise<'saved' | 'discarded' | 'cancelled'>;
+    };
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('unsaved-modal-save-and-leave'));
+    });
+    expect(await pending).toBe('saved');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

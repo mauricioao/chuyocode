@@ -110,7 +110,11 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
         {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely decorative, next to the empty message below. */}
         <Emoji name="llama" size={48} />
         <p>{t.empty}</p>
-        <a href={`/${lang}/crear`} className={buttonVariants({ variant: 'default' })}>
+        <a
+          href={`/${lang}/crear`}
+          data-desk-window-open="create"
+          className={buttonVariants({ variant: 'default' })}
+        >
           {t.createCta}
         </a>
       </div>
@@ -156,6 +160,7 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
             <a
               href={`/${lang}/crear/${activity.id}`}
               data-testid={`activity-edit-${activity.id}`}
+              data-desk-window-open={activity.id}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
               {t.edit}

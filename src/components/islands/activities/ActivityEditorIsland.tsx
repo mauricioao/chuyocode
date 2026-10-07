@@ -39,8 +39,8 @@
  * overlay and hands focus back to the button (`closePresentationPreview`).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { ArrowLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -70,6 +70,31 @@ import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
+import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
+
+/**
+ * The window title bar's own `<b>`/`<span>` ids ("desktop" redesign PART
+ * 6b) — `DeskWindow.astro`'s own `titleId`/`statusId` DEFAULTS, which
+ * `[id].astro` relies on by never overriding them. Two separate hydration
+ * islands (this one and `DeskWindow`'s own inline script) cannot share one
+ * React state, so this is the one explicit, documented contract between
+ * them: this island writes `textContent` directly onto these two ids
+ * whenever the title or the autosave status changes, instead of a portal
+ * (unlike the title bar's ACTIONS below, which this island owns entirely —
+ * see `DESK_WINDOW_ACTIONS_ID`'s own doc).
+ */
+const DESK_WINDOW_TITLE_ID = 'desk-window-title';
+const DESK_WINDOW_STATUS_ID = 'desk-window-status';
+/**
+ * The window title bar's own `actions` slot container — `DeskWindow.astro`
+ * renders it (empty) unconditionally; "Ver como presentación" and "Enviar a
+ * revisión" need the SAME React state (`doc`/`blocks`/`title`) this whole
+ * island already owns, so rather than duplicating that state into a second
+ * island, this one `createPortal`s its own buttons straight into that DOM
+ * node — same technique `WorksheetPracticePlayer.tsx` already uses to reach
+ * a header slot outside its own subtree.
+ */
+const DESK_WINDOW_ACTIONS_ID = 'desk-window-actions';
 
 export interface ActivityEditorIslandProps {
   lang: Lang;
@@ -128,8 +153,6 @@ export default function ActivityEditorIsland({
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
-  // Mobile layout pass: the inline back button's own labels — same source
-  // `BackButton.astro` itself reads.
   const tCommon = UI_LABELS[lang].common;
 
   const [history, setHistory] = useState<HistoryState<ActivityDoc>>(() =>
@@ -409,13 +432,33 @@ export default function ActivityEditorIsland({
   //  - `astro:before-preparation`, the ClientRouter's own pre-navigation
   //    event, cancelable via `preventDefault()` — belt and suspenders with
   //    the click listener above; whichever fires first wins, the other is
-  //    a no-op (the modal is already open for the same href).
-  const [navGuard, setNavGuard] = useState<{ open: boolean; href: string | null; saving: boolean; error: boolean }>(
-    { open: false, href: null, saving: false, error: false },
-  );
+  //    a no-op (the modal is already open for the same decision).
+  //
+  // RESOLVER-BASED (PART 6b, was `{ href, saving, error }` straight in
+  // state): the window's own red/yellow lights (`DeskWindow`'s traffic
+  // lights, now wrapping this whole island) ALSO need this exact modal —
+  // see `EditorWindowGuard`'s `confirmClose` below — but `deskWindow.ts`,
+  // not this component, decides what "close"/"minimize" means once the
+  // author answers. So the modal no longer performs its own navigation: it
+  // just resolves one `Promise<'save' | 'discard' | 'cancel'>` that EVERY
+  // caller (this click listener, `astro:before-preparation`, and the window
+  // guard) awaits and reacts to on its own terms. `'save'`/`'discard'` both
+  // mean "the author's decision is done — safe to proceed now" (the actual
+  // save, if any, already happened before the modal resolves); `'cancel'`
+  // means "stay right here". Ordinary in-app link navigation (the one case
+  // THIS component still performs itself) is below.
+  const [navGuard, setNavGuard] = useState<{ open: boolean; saving: boolean; error: boolean }>({
+    open: false,
+    saving: false,
+    error: false,
+  });
+  const navGuardResolveRef = useRef<((action: 'save' | 'discard' | 'cancel') => void) | null>(null);
 
-  const openNavGuard = useCallback((href: string | null) => {
-    setNavGuard({ open: true, href, saving: false, error: false });
+  const requestNavGuardDecision = useCallback((): Promise<'save' | 'discard' | 'cancel'> => {
+    return new Promise((resolve) => {
+      navGuardResolveRef.current = resolve;
+      setNavGuard({ open: true, saving: false, error: false });
+    });
   }, []);
 
   useEffect(() => {
@@ -439,41 +482,46 @@ export default function ActivityEditorIsland({
       if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
       e.preventDefault();
       e.stopPropagation();
-      openNavGuard(anchor.href);
+      const href = anchor.href;
+      void requestNavGuardDecision().then((action) => {
+        if (action === 'cancel') return;
+        window.location.href = href;
+      });
     }
     document.addEventListener('click', onDocumentClick, true);
     return () => document.removeEventListener('click', onDocumentClick, true);
-  }, [openNavGuard]);
+  }, [requestNavGuardDecision]);
 
   useEffect(() => {
     function onBeforePreparation(e: Event) {
       if (!isDirtyRef.current) return;
       e.preventDefault();
       const to = (e as unknown as { to?: URL | string }).to;
-      openNavGuard(typeof to === 'string' ? to : (to?.href ?? null));
+      const href = typeof to === 'string' ? to : (to?.href ?? null);
+      void requestNavGuardDecision().then((action) => {
+        if (action === 'cancel' || !href) return;
+        window.location.href = href;
+      });
     }
     document.addEventListener('astro:before-preparation', onBeforePreparation);
     return () => document.removeEventListener('astro:before-preparation', onBeforePreparation);
-  }, [openNavGuard]);
+  }, [requestNavGuardDecision]);
 
-  const closeNavGuard = useCallback(() => {
-    setNavGuard({ open: false, href: null, saving: false, error: false });
+  const resolveNavGuard = useCallback((action: 'save' | 'discard' | 'cancel') => {
+    navGuardResolveRef.current?.(action);
+    navGuardResolveRef.current = null;
   }, []);
 
   const handleLeaveWithoutSaving = useCallback(() => {
-    const href = navGuard.href;
-    closeNavGuard();
-    if (href) {
-      // Bug 3: gone immediately — nothing was saved, but the learner/author
-      // explicitly chose to discard the warning by picking this option, so
-      // the native prompt must not also ask the same question again.
-      removeBeforeUnloadGuard();
-      window.location.href = href;
-    }
-  }, [navGuard.href, closeNavGuard, removeBeforeUnloadGuard]);
+    // Bug 3: gone immediately — nothing was saved, but the learner/author
+    // explicitly chose to discard the warning by picking this option, so
+    // the native prompt must not also ask the same question again.
+    removeBeforeUnloadGuard();
+    setNavGuard({ open: false, saving: false, error: false });
+    resolveNavGuard('discard');
+  }, [removeBeforeUnloadGuard, resolveNavGuard]);
 
   const handleSaveAndLeave = useCallback(async () => {
-    const href = navGuard.href;
     setNavGuard((g) => ({ ...g, saving: true, error: false }));
     try {
       const value = docRef.current;
@@ -483,18 +531,93 @@ export default function ActivityEditorIsland({
         body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
       });
       if (!res.ok) throw new Error('save failed');
-      setNavGuard({ open: false, href: null, saving: false, error: false });
-      if (href) {
-        // Bug 3: only removed once the save actually succeeded — a FAILED
-        // save (the `catch` below) must leave it armed, since the work is
-        // still genuinely unsaved and no navigation happens either.
-        removeBeforeUnloadGuard();
-        window.location.href = href;
-      }
+      // Bug 3: only removed once the save actually succeeded — a FAILED
+      // save (the `catch` below) must leave it armed, since the work is
+      // still genuinely unsaved and no navigation happens either.
+      removeBeforeUnloadGuard();
+      setNavGuard({ open: false, saving: false, error: false });
+      resolveNavGuard('save');
     } catch {
       setNavGuard((g) => ({ ...g, saving: false, error: true }));
     }
-  }, [activityId, navGuard.href, removeBeforeUnloadGuard]);
+  }, [activityId, removeBeforeUnloadGuard, resolveNavGuard]);
+
+  const handleCancelNavGuard = useCallback(() => {
+    setNavGuard((g) => (g.saving ? g : { open: false, saving: false, error: false }));
+    resolveNavGuard('cancel');
+  }, [resolveNavGuard]);
+
+  /**
+   * The `EditorWindowGuard` bridge (PART 6b, `@lib/ui/deskWindow.ts`): the
+   * window shell is plain vanilla TS with no React state of its own, so it
+   * reads exactly these three functions off `window` to decide whether its
+   * own close()/minimize() may navigate away right now. Registered on every
+   * mount (never conditionally) — every window OTHER than this editor's own
+   * simply never reads this key, so there is nothing to gate here.
+   */
+  const flushForMinimize = useCallback(async (): Promise<boolean> => {
+    try {
+      const value = docRef.current;
+      const res = await fetch(`/api/actividades/${activityId}/guardar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: value.title, level: value.level, blocks: value.blocks }),
+      });
+      if (!res.ok) return false;
+      removeBeforeUnloadGuard();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [activityId, removeBeforeUnloadGuard]);
+
+  const confirmCloseForWindow = useCallback(async (): Promise<'saved' | 'discarded' | 'cancelled'> => {
+    const action = await requestNavGuardDecision();
+    if (action === 'save') return 'saved';
+    if (action === 'discard') return 'discarded';
+    return 'cancelled';
+  }, [requestNavGuardDecision]);
+
+  useEffect(() => {
+    const guard: EditorWindowGuard = {
+      isDirty: () => isDirtyRef.current,
+      flush: flushForMinimize,
+      confirmClose: confirmCloseForWindow,
+    };
+    (window as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = guard;
+    return () => {
+      delete (window as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY];
+    };
+  }, [flushForMinimize, confirmCloseForWindow]);
+
+  // The window title bar's own live title/status (PART 6b) — see
+  // `DESK_WINDOW_TITLE_ID`/`DESK_WINDOW_STATUS_ID`'s own doc above for why
+  // this is a direct `textContent` write rather than a portal.
+  useEffect(() => {
+    const el = document.getElementById(DESK_WINDOW_TITLE_ID);
+    if (el) el.textContent = title.trim() || t.titleFallback;
+  }, [title, t.titleFallback]);
+
+  useEffect(() => {
+    const el = document.getElementById(DESK_WINDOW_STATUS_ID);
+    if (!el) return;
+    if (saveState === 'saving') el.textContent = t.titlebarSaving;
+    else if (saveState === 'error') el.textContent = t.errorStatus;
+    // 'idle'/'pending'/'saved' all read as the SAME ambient "saved a moment
+    // ago" copy here (approved mockup) — the SIDE TOOLBAR's own indicator
+    // (`saveLabels` below) is where the finer-grained "unsaved" state still
+    // shows, unchanged.
+    else el.textContent = t.titlebarSaved;
+  }, [saveState, t.titlebarSaving, t.errorStatus, t.titlebarSaved]);
+
+  // The window title bar's own `actions` slot (PART 6b) — resolved once on
+  // mount; `DeskWindow.astro` always renders this node (empty) before this
+  // island ever hydrates, so it is never missing in practice. `null` only
+  // in a test that mounts this island with no `DeskWindow` shell around it.
+  const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setActionsPortalTarget(document.getElementById(DESK_WINDOW_ACTIONS_ID));
+  }, []);
 
   const openSubmitDialog = useCallback(() => {
     setSubmitDialog({ open: true, submitting: false, error: null });
@@ -742,35 +865,22 @@ export default function ActivityEditorIsland({
       >
         {/* Compact header row (owner request #1, creator polish round 2):
             title + level, plus — PR D, "Activities practice" — the
-            review-state badge and "Enviar a revisión". `lg:min-h-14` (was a
-            hard `lg:h-12`) lets this row grow if the badge/note wrap onto a
-            second line instead of clipping. Creator polish round 3
-            (desktop only — below `lg:` this row keeps its own original box
-            untouched): the title becomes the visibly larger, semibold field
-            (it names the whole card), and at `lg:` this row IS the card's
-            own header (`border-b`, not a separate boxed element) — no other
-            action row lives here. */}
+            review-state badge. `lg:min-h-14` (was a hard `lg:h-12`) lets this
+            row grow if the badge/note wrap onto a second line instead of
+            clipping. Creator polish round 3 (desktop only — below `lg:` this
+            row keeps its own original box untouched): the title becomes the
+            visibly larger, semibold field (it names the whole card), and at
+            `lg:` this row IS the card's own header (`border-b`, not a
+            separate boxed element) — no other action row lives here.
+            "Desktop" redesign PART 6b: the OLD back button that used to open
+            this row (both this mobile-inline copy AND `[id].astro`'s own
+            floating `lg:` one) is gone — this whole editor now renders
+            inside `DeskWindow`, whose red light replaces it; "Ver como
+            presentación" / "Enviar a revisión" moved into that SAME window's
+            title bar (a `createPortal`, see `DESK_WINDOW_ACTIONS_ID` above),
+            so neither lives in this row any more either. */}
         <div className={`flex flex-none flex-col gap-3 rounded-lg border border-border ${ROW_PADDING_X} py-3 lg:min-h-14 lg:flex-row lg:items-center lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b`}>
           <div className="flex flex-1 items-center gap-3">
-            {/* Mobile layout pass (owner request): below `lg:`, the back
-                button sits INLINE left of the title — the same "icon then
-                heading" row `PageTitle.astro` uses everywhere else — instead
-                of its own dedicated row above the card. `[id].astro` keeps
-                the ORIGINAL floating-gutter `BackButton` for `lg:` and up,
-                unchanged: this is a second, mobile-ONLY (`lg:hidden`) copy
-                with the exact same markup/behavior (`data-back-button` opts
-                it into the same site-wide `initBackButtons` history.back()
-                enhancement — see `BackButton.astro`'s own header), just
-                inline instead of floating. */}
-            <a
-              href={`/${lang}/mis-actividades`}
-              data-back-button
-              aria-label={tCommon.back}
-              title={tCommon.backTooltip}
-              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
-            >
-              <ArrowLeftIcon size={20} aria-hidden="true" />
-            </a>
             <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
               <span className="sr-only">{t.titleLabel}</span>
               <input
@@ -793,12 +903,10 @@ export default function ActivityEditorIsland({
             </label>
           </div>
           {/* Mobile layout pass: title stays alone on its own line above
-              (the label right before this); level + status + "Enviar a
-              revisión" group onto the line below it, wrapping together if
-              they don't all fit at 360-430px. `lg:contents` un-wraps this
-              group at `lg:` so its three children become direct flex items
-              of the row above — the EXACT original desktop DOM shape/gaps,
-              unchanged. */}
+              (the label right before this); level + status group onto the
+              line below it, wrapping together if they don't all fit at
+              360-430px. `lg:contents` un-wraps this group at `lg:` so its
+              children become direct flex items of the row above. */}
           <div className="flex flex-wrap items-center gap-2 lg:contents">
             <label className="flex flex-col gap-1 text-sm">
               <span className="sr-only">{t.levelLabel}</span>
@@ -829,18 +937,6 @@ export default function ActivityEditorIsland({
                 </span>
               )}
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="view-as-presentation-button"
-              onClick={openPresentationPreview}
-            >
-              {t.viewAsPresentation}
-            </Button>
-            <Button type="button" size="sm" data-testid="submit-for-review-button" onClick={openSubmitDialog}>
-              {t.submitForReview}
-            </Button>
           </div>
         </div>
 
@@ -987,7 +1083,7 @@ export default function ActivityEditorIsland({
         labels={navGuardLabels}
         onSaveAndLeave={() => void handleSaveAndLeave()}
         onLeaveWithoutSaving={handleLeaveWithoutSaving}
-        onCancel={closeNavGuard}
+        onCancel={handleCancelNavGuard}
       />
 
       <SubmitForReviewDialog
@@ -1014,6 +1110,35 @@ export default function ActivityEditorIsland({
           onExit={closePresentationPreview}
         />
       )}
+
+      {/* "Desktop" redesign PART 6b: the window's own title bar `actions`
+          slot (ghost "Ver como presentación" + yellow primary "Enviar a
+          revisión") — see `DESK_WINDOW_ACTIONS_ID`'s own doc above for why
+          this is a portal rather than plain JSX in the header row. */}
+      {actionsPortalTarget &&
+        createPortal(
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="view-as-presentation-button"
+              onClick={openPresentationPreview}
+            >
+              {t.viewAsPresentation}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              data-testid="submit-for-review-button"
+              className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+              onClick={openSubmitDialog}
+            >
+              {t.submitForReview}
+            </Button>
+          </>,
+          actionsPortalTarget,
+        )}
     </div>
   );
 }

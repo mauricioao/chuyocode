@@ -585,6 +585,24 @@ export const UI_LABELS = {
           no_draft: 'No hay cambios nuevos para enviar a revisión.',
           submit_failed: 'No se pudo enviar la actividad. Inténtalo de nuevo.',
         },
+        // "Desktop" redesign PART 6b: the editor renders as a WINDOW over
+        // the desk, same shell as the practice page (PART 6a) — these three
+        // mirror `activities.practice`'s own `windowClose`/`windowMinimize`/
+        // `windowFullScreen` exactly (the traffic lights' accessible names).
+        windowClose: 'Cerrar',
+        windowMinimize: 'Minimizar',
+        windowFullScreen: 'Pantalla completa',
+        // The window title bar's own `<b>` when the activity has no title
+        // yet (brand-new, untitled) — `DeskWindow`'s `title` prop fallback.
+        titleFallback: 'Nueva actividad',
+        // The title bar's own muted autosave status (approved mockup
+        // `ventana-crear-1440.png`'s "Guardado hace un momento") — distinct
+        // from `savingStatus`/`savedStatus`/`errorStatus` above (the SIDE
+        // TOOLBAR's own indicator text): the title bar reads as ambient,
+        // more conversational copy, same two live states plus the shared
+        // `errorStatus` for the error one.
+        titlebarSaving: 'Guardando…',
+        titlebarSaved: 'Guardado hace un momento',
       },
       worksheet: {
         // Empty worksheet block's drop zone (creator polish round 4, owner
@@ -1897,6 +1915,12 @@ export const UI_LABELS = {
           no_draft: 'There are no new changes to submit for review.',
           submit_failed: 'Could not submit the activity. Try again.',
         },
+        windowClose: 'Close',
+        windowMinimize: 'Minimize',
+        windowFullScreen: 'Full screen',
+        titleFallback: 'New activity',
+        titlebarSaving: 'Saving…',
+        titlebarSaved: 'Saved a moment ago',
       },
       worksheet: {
         uploadTitle: 'Drag your worksheet or PDF here',

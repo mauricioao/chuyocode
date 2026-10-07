@@ -72,6 +72,35 @@ interface Props {
    * (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`).
    */
   trayId?: string | null;
+  /**
+   * PART 6b (the activity editor, `src/pages/[lang]/crear/[id].astro`, is
+   * the first non-default caller): false for a window whose BODY already
+   * owns Escape for its own purpose (the editor deselects the current zone
+   * on Escape — `ActivityEditorIsland`'s own listener) — closing the whole
+   * window on top of that would both fight the editor's own shortcut AND
+   * discard an unsaved draft with no chance to confirm. `false` here simply
+   * skips registering the window's own Escape-closes listener entirely
+   * (`@lib/ui/deskWindow.ts#initDeskWindow`); the red light (or whatever
+   * shortcut the caller documents) is the only way to close that window.
+   * Defaults to `true` — every existing caller (the practice page) keeps
+   * today's behaviour unchanged.
+   */
+  closeOnEscape?: boolean;
+  /**
+   * PART 6b: an optional muted status string shown right after the title
+   * (and `levelChip`, if any) — the activity editor's own live autosave
+   * state ("Guardando…" / "Guardado hace un momento" / the error text),
+   * mirroring the approved mockup's `.wtitle .saved` span. Omitted entirely
+   * (no span at all) for every other caller, which has nothing to show
+   * there. This is the SSR-rendered initial value only — the editor island
+   * keeps it in sync afterwards with a direct `textContent` write on its own
+   * `status` state changes (same thin-DOM-wiring posture as `goToBlock`'s
+   * `document.getElementById`), since two separate hydration islands cannot
+   * otherwise share one React state.
+   */
+  status?: string | null;
+  /** The status span's own id, for the live-updating caller to target. */
+  statusId?: string;
 }
 
 const {
@@ -84,6 +113,9 @@ const {
   fullScreenLabel,
   forceFullScreen = false,
   trayId = null,
+  closeOnEscape = true,
+  status = null,
+  statusId = 'desk-window-status',
 } = Astro.props;
 ---
 
@@ -94,6 +126,7 @@ const {
   data-desk-window
   data-close-target={closeHref}
   data-tray-id={trayId ?? undefined}
+  data-close-on-escape={closeOnEscape ? 'true' : 'false'}
   data-fullscreen={forceFullScreen ? 'true' : undefined}
   role="dialog"
   aria-modal="true"
@@ -101,9 +134,19 @@ const {
   tabindex="-1"
   class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-16 desk:top-16 desk:bottom-8 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
 >
+  {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
+      como presentación"/"Enviar a revisión" — squeezed the title down to
+      zero width on a narrow phone, unlike the practice window's compact
+      ICON-only actions, which always fit one row): `flex-wrap` below
+      `desk:`, same breakpoint the window itself switches to a full-screen
+      sheet at, lets the actions drop to their own second row (still
+      right-aligned via `ml-auto`, which applies per flex LINE) instead of
+      collapsing the title. A no-op for every row that already fits one
+      line (the practice window, every width) — `flex-wrap` only ever
+      activates when content overflows. */}
   <div
     data-testid="desk-window-titlebar"
-    class={`flex flex-none flex-nowrap items-center gap-4 border-b border-border ${ROW_PADDING_X} py-3`}
+    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border desk:flex-nowrap ${ROW_PADDING_X} py-3`}
   >
     <div class="flex items-center gap-2">
       <a
@@ -138,8 +181,13 @@ const {
           {levelChip}
         </span>
       )}
+      {status != null && (
+        <span id={statusId} data-testid="desk-window-status" class="min-w-0 shrink truncate text-sm text-muted-foreground">
+          {status}
+        </span>
+      )}
     </div>
-    <div class="ml-auto flex flex-none items-center gap-3">
+    <div class="ml-auto flex flex-none items-center gap-3" id="desk-window-actions">
       <slot name="actions" />
     </div>
   </div>
@@ -157,7 +205,8 @@ const {
     const closeTarget = windowEl?.getAttribute('data-close-target');
     if (windowEl && closeTarget) {
       const trayId = windowEl.getAttribute('data-tray-id');
-      initDeskWindow(windowEl, closeTarget, trayId);
+      const closeOnEscape = windowEl.getAttribute('data-close-on-escape') !== 'false';
+      initDeskWindow(windowEl, closeTarget, trayId, closeOnEscape);
     }
   };
 

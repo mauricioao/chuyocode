@@ -17,6 +17,53 @@
 import { addMinimizedWindow, removeMinimizedWindow } from './minimizedWindows';
 import { readTrackedPreviousPath, resolvePreviousPath } from '../backNavigation';
 
+/**
+ * Editor <-> window bridge (PART 6b). `DeskWindow`/`deskWindow.ts` are plain
+ * DOM/vanilla TS with no idea a React island even exists; the activity
+ * editor (`ActivityEditorIsland`) is a SEPARATE hydration island with its
+ * own unsaved-changes state and its own `UnsavedChangesModal`. Neither one
+ * can reach into the other's React state directly, so the editor registers
+ * one small, explicit object on `window` while it is mounted — the only
+ * thing the window's own close()/minimize() ever read from it. Unset
+ * (every other window, e.g. the practice page) means "nothing to guard",
+ * exactly today's unconditional-navigate behaviour.
+ */
+export const EDITOR_WINDOW_GUARD_KEY = '__inglesEditorWindowGuard';
+
+export interface EditorWindowGuard {
+  /** True while there is something genuinely unsaved right now. */
+  isDirty(): boolean;
+  /**
+   * Silently flush (save) the current document — used by MINIMIZE, which is
+   * "put this aside", not "leave": never worth interrupting with a modal.
+   * Resolves `true` on a successful save, `false` on a failed one.
+   */
+  flush(): Promise<boolean>;
+  /**
+   * Ask the author via the editor's own `UnsavedChangesModal` (save-and-leave
+   * / leave-without-saving / cancel) — used by CLOSE, and as the fallback
+   * when `flush()` itself fails. Resolves once the author has answered the
+   * SAME modal `ActivityEditorIsland` already shows for an in-app
+   * navigation; `'saved'`/`'discarded'` both mean "safe to navigate now"
+   * (whichever one happened), `'cancelled'` means "stay on this window".
+   */
+  confirmClose(): Promise<'saved' | 'discarded' | 'cancelled'>;
+}
+
+function getEditorWindowGuard(win: Window): EditorWindowGuard | null {
+  const guard = (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY];
+  return guard && typeof guard === 'object' ? (guard as EditorWindowGuard) : null;
+}
+
+/**
+ * Pure: does a {@link EditorWindowGuard.confirmClose} outcome mean "go
+ * ahead and navigate now"? Only `'cancelled'` (the author explicitly chose
+ * to stay) ever says no.
+ */
+export function shouldProceedAfterGuardDecision(decision: 'saved' | 'discarded' | 'cancelled'): boolean {
+  return decision !== 'cancelled';
+}
+
 const FULLSCREEN_STORAGE_KEY = 'ingles-desk-window-fullscreen';
 const ORIGIN_STORAGE_KEY = 'ingles-desk-window-origin';
 const RETURN_FOCUS_STORAGE_KEY = 'ingles-desk-window-return-focus';
@@ -258,6 +305,7 @@ export function initDeskWindow(
   windowEl: HTMLElement,
   closeTargetPath: string,
   trayId: string | null = null,
+  closeOnEscape: boolean = true,
   doc: Document = document,
   win: Window = window,
 ): void {
@@ -285,7 +333,7 @@ export function initDeskWindow(
   // Closing for good (red light / Escape) drops any tray chip this activity
   // may have left behind from an earlier minimize — owner spec: "closing
   // (red) removes any chip for that activity".
-  function close(): void {
+  function closeNow(): void {
     if (trayId) removeMinimizedWindow(trayId, win.sessionStorage);
     const previousPath = resolvePreviousPath(readTrackedPreviousPath(win.sessionStorage), doc.referrer, win.location.origin);
     const action = resolveCloseAction(previousPath, win.history.length, closeTargetPath);
@@ -294,6 +342,21 @@ export function initDeskWindow(
     } else {
       win.location.href = action.href;
     }
+  }
+
+  // PART 6b: the editor-aware wrapper around `closeNow` — every other
+  // window (no guard ever registered on `win`) resolves this on the same
+  // tick, so nothing changes for them. A dirty editor asks its own modal
+  // first (`confirmClose`) and only actually closes once the author picked
+  // "save and leave" or "leave without saving"; "cancel" leaves the window
+  // open with nothing navigated.
+  async function close(): Promise<void> {
+    const guard = getEditorWindowGuard(win);
+    if (guard && guard.isDirty()) {
+      const decision = await guard.confirmClose();
+      if (!shouldProceedAfterGuardDecision(decision)) return;
+    }
+    closeNow();
   }
 
   function prefersReducedMotion(): boolean {
@@ -315,9 +378,9 @@ export function initDeskWindow(
   // this same URL) should feel symmetrical with how it got there. A guest
   // (`trayId === null`, no desk/tray behind their window) falls back to
   // `close()` outright — there is nowhere for a chip to live.
-  function minimize(): void {
+  function minimizeNow(): void {
     if (!trayId) {
-      close();
+      void close();
       return;
     }
 
@@ -340,6 +403,25 @@ export function initDeskWindow(
     win.setTimeout(navigate, MINIMIZE_ANIMATION_MS);
   }
 
+  // PART 6b: minimizing is "put this aside", never "leave" — a dirty editor
+  // gets a SILENT flush (`guard.flush()`) first, never the blocking modal,
+  // so the author never loses the chip-reopen round trip over a confirm
+  // dialog they did not expect here. Only if that flush itself fails do we
+  // fall back to the SAME `confirmClose` modal `close()` uses above — by
+  // then something is genuinely wrong with saving, and silently minimizing
+  // over it would risk losing the draft for real.
+  async function minimize(): Promise<void> {
+    const guard = getEditorWindowGuard(win);
+    if (guard && guard.isDirty()) {
+      const flushed = await guard.flush();
+      if (!flushed) {
+        const decision = await guard.confirmClose();
+        if (!shouldProceedAfterGuardDecision(decision)) return;
+      }
+    }
+    minimizeNow();
+  }
+
   // The traffic lights are plain `<a href={closeHref}>` anchors (see
   // `DeskWindow.astro`'s own header on why) — this progressive-enhancement
   // click handler intercepts only a plain, unmodified left click (same guard
@@ -353,7 +435,7 @@ export function initDeskWindow(
       if (event.defaultPrevented || !(event instanceof MouseEvent) || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      close();
+      void close();
     });
   });
 
@@ -362,7 +444,7 @@ export function initDeskWindow(
       if (event.defaultPrevented || !(event instanceof MouseEvent) || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      minimize();
+      void minimize();
     });
   });
 
@@ -375,9 +457,15 @@ export function initDeskWindow(
     });
   }
 
-  doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !event.defaultPrevented) close();
-  });
+  // PART 6b: skipped entirely for a window whose body already owns Escape
+  // for its own purpose (the editor) — see `closeOnEscape`'s own doc on
+  // `DeskWindow.astro`. Every existing caller passes `true` (the default)
+  // and keeps today's behaviour unchanged.
+  if (closeOnEscape) {
+    doc.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) void close();
+    });
+  }
 
   // Focus trap (bugfix, 2026-10-06): Tab/Shift+Tab cycle among the dialog's
   // OWN focusable elements only, never escaping to the rest of the page.

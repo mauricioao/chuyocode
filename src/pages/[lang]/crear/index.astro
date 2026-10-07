@@ -20,12 +20,26 @@
  *
  * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE: this page's HTML differs
  * by visitor (gated vs. redirect), so `markPrivate` runs unconditionally.
+ *
+ * "DESKTOP" REDESIGN PART 6b (owner spec 2026-10-06): this start screen now
+ * renders as a WINDOW over the desk too — the same shell `crear/[id].astro`
+ * (the actual editor) uses, opened by the hub's own "Crear actividad" icon
+ * (`DeskScene.astro`'s `data-desk-window-open="create"`). The red light
+ * replaces `PageTitle`'s old `backHref` (the hub). There is nothing to
+ * minimize yet (no activity id exists until a type is picked —
+ * `ActivityStartIsland`'s own `POST /api/actividades`), so no `trayId` is
+ * passed here: the yellow light simply falls back to doing exactly what the
+ * red one does (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`),
+ * same as a GUEST's practice window. `closeOnEscape` stays at its default
+ * (`true`) — this screen has no competing use for Escape, unlike the editor.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import PageTitle from '@components/ui/PageTitle.astro';
+import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskWindow from '@components/ingles/DeskWindow.astro';
 import ActivityStartIsland from '@components/islands/activities/ActivityStartIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
+import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -53,16 +67,59 @@ if (!user) {
 }
 
 const t = UI_LABELS[lang].activities.start;
+const editorT = UI_LABELS[lang].activities.editor;
+const levelLabels = UI_LABELS[lang].english.levels;
+
+/** The desk behind the window — same loader/component the hub, the
+ * practice window, and the editor window all use. */
+const desk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+const deskLabels = {
+  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
+  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
+  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
+  proposedTitle: UI_LABELS[lang].english.hub.proposedTitle,
+  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
+  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
+  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
+  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
+  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
+  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
+  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
+  trayLabel: UI_LABELS[lang].english.hub.trayLabel,
+  trayRemoveLabel: UI_LABELS[lang].english.hub.trayRemoveLabel,
+};
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
-  <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-    {/* Bugfix, 2026-10-06 (owner report: back went to the ChuyoCode home
-        instead of the Inglés hub): this page is Inglés-area
-        (`@lib/backNavigation.ts`'s own `INGLES_AREA_ROOTS` lists `crear`,
-        reachable from the hub's own "Crear actividad" tile) — its logical
-        parent is the hub, never the ChuyoCode home. */}
-    <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.pageTitle}</PageTitle>
-    <ActivityStartIsland client:load lang={lang} />
-  </section>
+<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind>
+  <DeskScene
+    lang={lang}
+    inert
+    greetingLine1={desk.greetingLine1}
+    exerciseCountLabel={desk.exerciseCountLabel}
+    activityCountLabel={desk.activityCountLabel}
+    dailyPickHref={desk.dailyPickHref}
+    dailyPickMeta={desk.dailyPickMeta}
+    dailyPickPeek={desk.dailyPickPeek}
+    weatherLat={desk.weatherLat}
+    weatherLon={desk.weatherLon}
+    weatherCity={desk.weatherCity}
+    weatherLabel={desk.weatherLabel}
+    playerLabels={desk.playerLabels}
+    levelLabels={levelLabels}
+    labels={deskLabels}
+  />
+
+  <DeskWindow
+    lang={lang}
+    title={editorT.titleFallback}
+    closeHref={`/${lang}/ingles`}
+    closeLabel={editorT.windowClose}
+    minimizeLabel={editorT.windowMinimize}
+    fullScreenLabel={editorT.windowFullScreen}
+    slot="overlay"
+  >
+    <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+      <ActivityStartIsland client:load lang={lang} />
+    </section>
+  </DeskWindow>
 </BaseLayout>
