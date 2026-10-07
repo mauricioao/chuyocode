@@ -34,14 +34,6 @@ vi.mock('@lib/activities/hearts', () => ({
   hasHeartedActivity: hasHeartedActivityMock,
 }));
 
-// The desk behind the window (signed-in visitors only) shares the hub's own
-// two counts — mocked here so no network happens, same posture as
-// `_ingles.test.ts`'s own mock for the hub itself.
-const getExerciseCount = vi.fn();
-vi.mock('@lib/exercises', () => ({
-  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
-}));
-
 vi.mock('@lib/activities/storage', () => ({
   publicImageUrl: (path: string) => `https://public.example/${path}`,
 }));
@@ -66,10 +58,8 @@ beforeEach(() => {
   hasHeartedActivityMock.mockClear();
   getActivityCount.mockReset();
   getPublishedActivities.mockReset();
-  getExerciseCount.mockReset();
   getActivityCount.mockResolvedValue(null);
   getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
-  getExerciseCount.mockResolvedValue(null);
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — routing', () => {
@@ -233,7 +223,6 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     // landmarks below, never via a bare `data-desk` substring.
     expect(html).not.toContain('Para ti hoy');
     expect(html).not.toContain('Tu escritorio');
-    expect(getExerciseCount).not.toHaveBeenCalled();
   });
 
   it("sends a signed-in visitor's close/minimize lights to the Inglés hub", async () => {

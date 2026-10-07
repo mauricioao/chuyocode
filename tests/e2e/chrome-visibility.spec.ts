@@ -347,7 +347,10 @@ test.describe('INGLÉS HUB mode — /es/ingles (desktop redesign PART 1, item C)
   });
 
   test('a non-hub Inglés page does NOT carry data-chrome-hub', async ({ page }) => {
-    await page.goto('/es/ingles/propuestos');
+    // `/propuestos` folded into the community catalog (owner spec
+    // 2026-10-07) and is now a redirect there — go straight to the
+    // canonical non-hub route instead of relying on the redirect.
+    await page.goto('/es/ingles/actividades');
     if (page.url().includes('/auth/entrar')) {
       test.skip(true, 'Inglés subroutes are sign-in gated; no e2e auth fixture in this repo yet');
     }

@@ -92,7 +92,7 @@ describe('PlacementIsland', () => {
     answerDontKnow(PLACEMENT_ITEMS.length);
 
     const link = screen.getByTestId('placement-practice-link') as HTMLAnchorElement;
-    expect(link.getAttribute('href')).toBe('/es/ingles/propuestos?nivel=A1');
+    expect(link.getAttribute('href')).toBe('/es/ingles/actividades?nivel=A1');
   });
 
   it('offers "Repetir el test" on the result screen, which restarts the quiz', () => {

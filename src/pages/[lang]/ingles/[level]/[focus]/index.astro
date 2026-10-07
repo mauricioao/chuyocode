@@ -2,33 +2,19 @@
 /**
  * Exercise listing — `/[lang]/ingles/[level]/[focus]` (SSR).
  *
- * The screen between the entry chips and a single exercise. It answers one
- * question: what can I practise at this level, on this LANGUAGE POINT?
- *
- * The page is scoped to one focus, so what distinguishes the cards on it is the
- * slug, the skill and — when there is one — the vocabulary CONTEXT the exercise
- * is set in. That context is optional by design: a pure grammar drill has none,
- * and the card then shows nothing rather than an empty badge.
- *
- * The status codes carry a real distinction:
- *   - a segment OUTSIDE the closed taxonomy is a URL that can never exist -> 404
- *   - a valid pair with nothing published EXISTS and is simply empty -> 200
- * Collapsing the second into a 404 would tell the user the page is wrong when
- * the truth is only that the shelf has not been stocked. A Supabase outage
- * fail-safes to the same empty array and therefore renders the same honest
- * screen instead of an error.
- *
- * Zero JavaScript: cards are links, and links do not need hydration.
+ * REMOVED (owner spec 2026-10-07, same pass as `propuestos/index.astro`'s
+ * own header): curated exercises folded into the community catalog. This
+ * route is now a permanent redirect to `/[lang]/ingles/actividades`,
+ * carrying over `?nivel=` when `level` is a real CEFR level — the community
+ * list has no equivalent to `focus` (a language-point axis the discovery
+ * feed never filtered by), so that segment is simply dropped. An
+ * out-of-taxonomy `level` (the old 404 case) redirects to the unfiltered
+ * feed instead — a never-indexed route disappearing is not worth a 404 of
+ * its own; see `propuestos/index.astro`'s own note on the sitemap/noindex
+ * posture this inherits unchanged.
  */
-import BaseLayout from '@layouts/BaseLayout.astro';
-import PageTitle from '@components/ui/PageTitle.astro';
-import ExerciseCard from '@components/ui/ExerciseCard.astro';
-import Emoji from '@components/ui/Emoji.astro';
-import { badgeVariants } from '@components/ui/badge';
-import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { isLevel, isFocus, FOCUS_LABELS } from '@lib/exerciseTaxonomy';
-import { getPublishedExercises } from '@lib/exercises';
-import { humanizeSlug } from '@lib/exerciseCopy';
+import { isValidLang, type Lang } from '@lib/i18n';
+import { isLevel } from '@lib/exerciseTaxonomy';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -38,92 +24,14 @@ if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const { level, focus } = Astro.params;
+const { level } = Astro.params;
+// Tested in an `if` below, not inlined inside a `return`'s own expression —
+// see `propuestos/index.astro`'s identical note on the false `ts(6133)`
+// this avoids.
+const validLevel = isLevel(level) ? level : null;
 
-// Taxonomy guards run BEFORE the query, mirroring the detail route: an unknown
-// segment cannot match a row, so spending a round trip on it only makes the 404
-// slower. This is also what keeps the 404/200 split above meaningful.
-//
-// `isFocus` also rejects every OLD topic slug, so a link shared before the axis
-// moved lands on a 404 rather than quietly resolving to the wrong screen.
-if (!isLevel(level) || !isFocus(focus)) {
-  return new Response(null, { status: 404, statusText: 'Not Found' });
+if (validLevel) {
+  return Astro.redirect(`/${lang}/ingles/actividades?nivel=${validLevel}`, 301);
 }
-
-const exercises = await getPublishedExercises(level, focus);
-
-const t = UI_LABELS[lang].english;
-// English in every locale: the focus is exercise data, not chrome
-// (docs/exercise-model.md, "Authoring rules").
-const focusName = FOCUS_LABELS[focus];
-// Back to the curated-exercises picker ON THE LEVEL THE USER CAME FROM.
-// Dropping `?nivel=` would silently return them to the default level and
-// lose their place.
-const backHref = `/${lang}/ingles/propuestos?nivel=${level}`;
+return Astro.redirect(`/${lang}/ingles/actividades`, 301);
 ---
-
-<BaseLayout
-  lang={lang}
-  title={`${focusName} · ${level}`}
-  description={t.section.description}
-  theme="ingles"
->
-  <section class="reveal mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:py-12">
-    <header class="flex flex-col gap-3">
-      <PageTitle lang={lang} backHref={backHref}>{focusName}</PageTitle>
-      <div class="flex flex-wrap items-center gap-2">
-        <span class={badgeVariants({ variant: 'secondary' })}>
-          {`${t.exercise.level} ${level}`}
-        </span>
-        <span class={badgeVariants({ variant: 'outline' })}>
-          {t.levels[level]}
-        </span>
-      </div>
-    </header>
-
-    {
-      exercises.length === 0 ? (
-        /* A REAL pair with nothing in it. Distinct from the entry screen's
-           "nothing published anywhere" panel, and it always offers a way out —
-           an empty state with no exit is a dead end. */
-        <div class="flex flex-col items-start gap-4 rounded-lg border border-border bg-surface-soft p-6">
-          <Emoji name="llama" size={48} />
-          <p class="text-muted-foreground">{t.section.emptyPair}</p>
-          <a
-            href={backHref}
-            class="text-sm font-semibold text-accent-ink hover:text-accent-ink-hover"
-          >
-            {t.section.chooseLevel}
-          </a>
-        </div>
-      ) : (
-        <ul class="flex flex-col gap-4">
-          {/* The SLUG, not the prompt. These cards had the same problem as the
-              related-exercise cards: opening with the first slot's label gives
-              the exercise away before the learner starts it. The FOCUS cannot
-              lead here — it is the page's own <h1> and would repeat on every
-              card — so the slug does, which is English, permanent and
-              deliberately readable.
-
-              NO `levelBadge`: every exercise on this page shares the level with
-              the header above, so a level badge would print the same text on
-              every row. Skill and CONTEXT are what vary inside one
-              (level, focus) pair — the same grammar is practised in several
-              settings, and some rows have no setting at all — which is what
-              makes these cards distinguishable at a glance. Both labels are
-              derived by the card itself, in English. */}
-          {exercises.map((exercise) => (
-            <li>
-              <ExerciseCard
-                href={`/${lang}/ingles/${level}/${focus}/${exercise.slug}`}
-                title={humanizeSlug(exercise.slug) || exercise.slug}
-                skill={exercise.skill}
-                topic={exercise.topic}
-              />
-            </li>
-          ))}
-        </ul>
-      )
-    }
-  </section>
-</BaseLayout>

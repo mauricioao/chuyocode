@@ -35,7 +35,6 @@ import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSce
 interface Props {
   lang: Lang;
   greetingLine1: string;
-  exerciseCountLabel: string | null;
   activityCountLabel: string | null;
   dailyPickHref: string;
   dailyPickMeta: string | null;
@@ -52,7 +51,6 @@ interface Props {
 const {
   lang,
   greetingLine1,
-  exerciseCountLabel,
   activityCountLabel,
   dailyPickHref,
   dailyPickMeta,
@@ -120,22 +118,26 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </div>
 
   {/* Folders — a right-edge column on desktop, a home-screen grid on
-      phones (4 items: the 3 folders + "Crear actividad" fit a clean 2×2). */}
+      phones (3 items: "Actividades de la comunidad" + "Para ti hoy" +
+      "Crear actividad" fit a clean 2×2, one spot left over). "Ejercicios
+      propuestos" folded into the community folder below (owner spec
+      2026-10-07: "ya no tendremos ejercicios propuestos separados de
+      actividades de la comunidad... de igual manera será una carpeta y
+      abrirá una ventana dentro del escritorio") — its own curated-exercise
+      count is gone from the desk for the same reason. `openerId="community"`
+      gives it the SAME folder-origin scale-in the daily-pick folder already
+      has (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`) — its destination
+      (`/[lang]/ingles/actividades`) now renders as a window too. */}
   <nav
     aria-label={t.foldersLabel}
     class="order-2 grid grid-cols-2 gap-1 desk:order-none desk:col-start-2 desk:row-start-1 desk:flex desk:flex-col desk:items-end desk:gap-[18px] desk:pt-1"
   >
     <DeskFolder
-      href={`/${lang}/ingles/propuestos`}
-      label={t.proposedTitle}
-      meta={exerciseCountLabel}
-      icon="books"
-    />
-    <DeskFolder
       href={`/${lang}/ingles/actividades`}
       label={t.communityTitle}
       meta={activityCountLabel}
       icon="busts-in-silhouette"
+      openerId="community"
     />
     <DeskFolder
       href={dailyPickHref}
@@ -213,7 +215,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
             const band = bandOf(level);
             return (
               <a
-                href={`/${lang}/ingles/propuestos?nivel=${level}`}
+                href={`/${lang}/ingles/actividades?nivel=${level}`}
                 aria-label={`${level}, ${levelLabels[level]}`}
                 class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
