@@ -308,6 +308,71 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
   });
 
+  /** Synchronously replaces an iframe's own document content via the classic
+   * `document.open/write/close` API — reliable in jsdom, unlike setting
+   * `.src` (which schedules a real, unimplemented navigation). */
+  function writeFrameDoc(iframe: HTMLIFrameElement, html: string): void {
+    const doc = iframe.contentDocument!;
+    doc.open();
+    // The single-string overload is deprecated in favour of variadic
+    // `...text`, which is exactly what is passed — `astro check` still flags
+    // it (a lib.dom.d.ts quirk unrelated to this call's own correctness).
+    (doc.write as (...text: string[]) => void)(html);
+    doc.close();
+  }
+
+  it("shows a fallback title bar when the loaded document is NOT a genuine desk window, and its close button still closes the frame", async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    // Simulate a chrome-less document landing in the frame (a 404/500 error
+    // page, or a login page the top-navigation bounce somehow missed) —
+    // no `[data-desk-window]` marker, a plain error title.
+    writeFrameDoc(frame.iframe, '<!doctype html><html><head><title>Error</title></head><body></body></html>');
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+    expect(bar.hidden).toBe(false);
+    expect(bar.querySelector('[data-desk-window-fallback-title]')?.textContent).toBe('Error');
+
+    frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-close]')!.click();
+    await flushMicrotasks();
+    expect(frameFor('community')).toBeNull();
+  });
+
+  it('hides the fallback bar again once a later navigation lands back on a genuine desk window document', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    writeFrameDoc(frame.iframe, '<!doctype html><html><head><title>Error</title></head><body></body></html>');
+    frame.iframe.dispatchEvent(new Event('load'));
+    const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+    expect(bar.hidden).toBe(false);
+
+    writeFrameDoc(frame.iframe, '<!doctype html><html><body><div data-desk-window></div></body></html>');
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    expect(bar.hidden).toBe(true);
+  });
+
+  it("the fallback bar's minimize button minimizes the frame (hides/inert, no DOM-side guard to ask)", () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    writeFrameDoc(frame.iframe, '<!doctype html><html><head><title>Error</title></head><body></body></html>');
+    frame.iframe.dispatchEvent(new Event('load'));
+    frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-minimize]')!.click();
+
+    expect(frame.wrapper.style.visibility).toBe('hidden');
+    expect(frame.wrapper.hasAttribute('inert')).toBe(true);
+  });
+
   it('drag-start/drag-move/drag-end moves the wrapper and commits the offset', () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);

@@ -306,6 +306,14 @@ export const UI_LABELS = {
       googleUnavailable:
         'El acceso con Google no está disponible en este momento. Prueba con correo y contraseña.',
       orDivider: 'o',
+      // Window-manager architecture, robustness pass (owner report): a
+      // session that expires WHILE a desk window's own iframe is open lands
+      // this exact page there — too small/chrome-less a place to sign back
+      // in. Shown only in that one case (`Sec-Fetch-Dest: iframe`), with a
+      // script that bounces the REAL browser tab here instead; this text is
+      // its no-JS fallback / the instant before that script runs.
+      windowRedirecting: 'Tu sesión expiró. Te llevamos a la pantalla de acceso…',
+      windowRedirectingContinue: 'Continuar',
       nuevaClave: {
         title: 'Nueva contraseña',
         description: 'Elegir una nueva contraseña para la cuenta.',
@@ -1742,6 +1750,10 @@ export const UI_LABELS = {
       googleUnavailable:
         'Google sign-in is not available right now. Try email and password instead.',
       orDivider: 'or',
+      // Window-manager architecture, robustness pass — see the Spanish
+      // string's own comment.
+      windowRedirecting: 'Your session expired. Taking you to sign in…',
+      windowRedirectingContinue: 'Continue',
       nuevaClave: {
         title: 'New password',
         description: 'Choose a new password for the account.',

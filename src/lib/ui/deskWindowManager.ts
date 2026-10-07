@@ -38,6 +38,9 @@ import { renderMinimizedWindowsTrayFrom, type MinimizedWindowEntry } from './min
 const HEADER_SELECTOR = '[data-chrome-header]';
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 
+/** `DeskWindow.astro`'s own root element marker — present on every genuine desk-window document. Its absence is what {@link buildFallbackBar}'s own bar guards against. */
+const DESK_WINDOW_MARKER_SELECTOR = '[data-desk-window]';
+
 /** Marks a link anywhere on the HOST page (a desk folder, a tray chip, the levels dock…) as something the manager should open as a window rather than navigate to. Same attribute `@lib/ui/deskWindow.ts#initDeskWindowOpeners` already looked for (its own scale-in capture) — a manager click handler that `preventDefault()`s in the CAPTURE phase makes that older bubble-phase listener a no-op for free (it already bails out on `event.defaultPrevented`). */
 export const DESK_WINDOW_OPEN_ATTR = 'data-desk-window-open';
 
@@ -126,6 +129,64 @@ function deriveOpenerTitle(opener: Element): string | null {
   return text ? text : null;
 }
 
+/**
+ * Fool-proofing a chrome-less frame (robustness pass, owner report): a
+ * frame whose loaded document is NOT a genuine desk window (a login page
+ * after a session-expiry redirect that the early top-navigation bounce
+ * somehow did not catch, a 404/500 error page, anything else without
+ * {@link DESK_WINDOW_MARKER_SELECTOR}'s own marker) otherwise has no traffic
+ * lights at all and can never be closed, minimized or dragged — it just sits
+ * there, stuck, until the whole tab reloads.
+ *
+ * A host-owned minimal title bar, entirely OUTSIDE the iframe's own
+ * document (so it works regardless of how broken that content is):
+ * overlaid on TOP of the iframe (last child, same stacking-context posture
+ * as `buildLoader`'s own loader), hidden by default and shown only once a
+ * `load` finds the marker missing (`createManagedWindow`'s own `load`
+ * listener). Close/minimize call straight into this module's own
+ * `dispatch`/`requestClose` (there is no in-frame guard to ask — a broken
+ * page can never be a dirty editor); dragging mirrors
+ * `deskWindowDrag.ts`'s own non-embedded, `clientX`-based math, since this
+ * bar already lives in the HOST document (no `postMessage` round trip
+ * needed).
+ */
+function buildFallbackBar(doc: Document): {
+  bar: HTMLElement;
+  title: HTMLElement;
+  closeButton: HTMLButtonElement;
+  minimizeButton: HTMLButtonElement;
+} {
+  const bar = doc.createElement('div');
+  bar.hidden = true;
+  bar.dataset.deskWindowFallbackBar = '';
+  bar.className =
+    'absolute inset-x-0 top-0 z-10 flex h-11 flex-none items-center gap-3 border-b border-border bg-card px-4 desk:cursor-grab';
+
+  const lights = doc.createElement('div');
+  lights.className = 'flex flex-none items-center gap-2';
+
+  const closeButton = doc.createElement('button');
+  closeButton.type = 'button';
+  closeButton.dataset.deskWindowFallbackClose = '';
+  closeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-red';
+  lights.appendChild(closeButton);
+
+  const minimizeButton = doc.createElement('button');
+  minimizeButton.type = 'button';
+  minimizeButton.dataset.deskWindowFallbackMinimize = '';
+  minimizeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-yellow';
+  lights.appendChild(minimizeButton);
+
+  bar.appendChild(lights);
+
+  const title = doc.createElement('b');
+  title.dataset.deskWindowFallbackTitle = '';
+  title.className = 'min-w-0 truncate text-[13px] font-semibold text-foreground';
+  bar.appendChild(title);
+
+  return { bar, title, closeButton, minimizeButton };
+}
+
 export function initDeskWindowManager(
   container: HTMLElement,
   trayContainer: HTMLElement | null,
@@ -200,6 +261,44 @@ export function initDeskWindowManager(
       loader.classList.remove('opacity-0');
       loader.classList.remove('pointer-events-none');
     };
+
+    // Fool-proofing a chrome-less frame — see `buildFallbackBar`'s own
+    // header. Hidden by default; the `load` handler below shows it only once
+    // it finds the loaded document missing `DeskWindow`'s own marker.
+    const { bar: fallbackBar, title: fallbackTitle, closeButton: fallbackClose, minimizeButton: fallbackMinimize } =
+      buildFallbackBar(doc);
+    fallbackClose.addEventListener('click', () => void requestClose(entry.id));
+    fallbackMinimize.addEventListener('click', () => dispatch({ type: 'minimize', id: entry.id }));
+    let fallbackDrag: { x: number; y: number; offset: DeskWindowOffset } | null = null;
+    fallbackBar.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || !isDesktop(win)) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('button')) return;
+      dispatch({ type: 'focus', id: entry.id });
+      const current = state.windows.find((w) => w.id === entry.id);
+      if (current?.maximized) return;
+      event.preventDefault();
+      fallbackBar.setPointerCapture(event.pointerId);
+      fallbackDrag = { x: event.clientX, y: event.clientY, offset: current?.offset ?? { x: 0, y: 0 } };
+    });
+    fallbackBar.addEventListener('pointermove', (event) => {
+      if (!fallbackDrag) return;
+      const next = {
+        x: fallbackDrag.offset.x + (event.clientX - fallbackDrag.x),
+        y: fallbackDrag.offset.y + (event.clientY - fallbackDrag.y),
+      };
+      const rect = unoffsetWrapperRect(wrapper, { x: 0, y: 0 });
+      const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight }, headerBottom(doc));
+      wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
+    });
+    fallbackBar.addEventListener('pointerup', () => {
+      if (!fallbackDrag) return;
+      fallbackDrag = null;
+      const translate = wrapper.style.translate || '0px 0px';
+      const [x, y] = translate.split(' ').map((v) => Number.parseFloat(v) || 0);
+      dispatch({ type: 'move', id: entry.id, offset: { x, y } });
+    });
+
     iframe.addEventListener('load', () => {
       // Click-race defensive net (robustness pass, owner report): under
       // normal operation every in-iframe navigation INSIDE this frame stays
@@ -254,12 +353,30 @@ export function initDeskWindowManager(
       } catch {
         // Cross-origin — should never happen (see this file's own header).
       }
+
+      // Fool-proofing a chrome-less frame (robustness pass, owner report):
+      // show the fallback title bar exactly when the loaded document is
+      // NOT a genuine desk window (a login page after a session-expiry
+      // redirect, a 404/500 error page, …) — hidden again the moment a
+      // later navigation lands back on a real one.
+      try {
+        const innerDoc = iframe.contentDocument;
+        const isDeskWindow = !!innerDoc?.querySelector(DESK_WINDOW_MARKER_SELECTOR);
+        fallbackBar.hidden = isDeskWindow;
+        if (!isDeskWindow) {
+          fallbackTitle.textContent = innerDoc?.title?.trim() || entry.title || '';
+        }
+      } catch {
+        // Cross-origin — should never happen (see this file's own header);
+        // optimistically assume a genuine window rather than flash the bar.
+      }
     });
 
     wrapper.addEventListener('pointerdown', () => dispatch({ type: 'focus', id: entry.id }), true);
 
     wrapper.appendChild(iframe);
     wrapper.appendChild(loader);
+    wrapper.appendChild(fallbackBar);
     container.appendChild(wrapper);
 
     const managed: ManagedWindow = { wrapper, iframe, loader, dragStartOffset: null };
