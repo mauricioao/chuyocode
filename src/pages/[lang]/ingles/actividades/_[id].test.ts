@@ -34,14 +34,6 @@ vi.mock('@lib/activities/hearts', () => ({
   hasHeartedActivity: hasHeartedActivityMock,
 }));
 
-// The desk behind the window (signed-in visitors only) shares the hub's own
-// two counts — mocked here so no network happens, same posture as
-// `_ingles.test.ts`'s own mock for the hub itself.
-const getExerciseCount = vi.fn();
-vi.mock('@lib/exercises', () => ({
-  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
-}));
-
 vi.mock('@lib/activities/storage', () => ({
   publicImageUrl: (path: string) => `https://public.example/${path}`,
 }));
@@ -66,10 +58,8 @@ beforeEach(() => {
   hasHeartedActivityMock.mockClear();
   getActivityCount.mockReset();
   getPublishedActivities.mockReset();
-  getExerciseCount.mockReset();
   getActivityCount.mockResolvedValue(null);
   getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
-  getExerciseCount.mockResolvedValue(null);
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — routing', () => {
@@ -144,7 +134,8 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
     const html = await res.text();
     expect(html).toContain('data-desk-window');
     expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-modal="true"');
+    // PART 6c (owner spec 2026-10-07): non-modal floating window — no `aria-modal`.
+    expect(html).not.toContain('aria-modal');
     expect(html).toContain('aria-label="Cerrar"');
     expect(html).toContain('aria-label="Minimizar"');
     expect(html).toContain('aria-label="Pantalla completa"');
@@ -204,7 +195,9 @@ describe('GET /[lang]/ingles/actividades/[id] — published render', () => {
 // itself uses) and NOT AT ALL for a guest, who cannot see the gated hub —
 // their red/yellow lights go to the ChuyoCode home instead.
 describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PART 6a)', () => {
-  it('renders the desk behind the window, inert, for a signed-in visitor', async () => {
+  // PART 6c (owner spec 2026-10-07): never `inert` anymore — the floating
+  // window is non-modal, and the desk behind it stays fully usable.
+  it('renders the desk behind the window, never inert, for a signed-in visitor', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -212,7 +205,7 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     });
     const html = await res.text();
     expect(html).toContain('data-desk');
-    expect(html).toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
     // The hub's own folders/widgets landmarks, proving the SAME desk renders.
     expect(html).toContain('Para ti hoy');
     expect(html).toContain('Tu escritorio');
@@ -230,7 +223,6 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     // landmarks below, never via a bare `data-desk` substring.
     expect(html).not.toContain('Para ti hoy');
     expect(html).not.toContain('Tu escritorio');
-    expect(getExerciseCount).not.toHaveBeenCalled();
   });
 
   it("sends a signed-in visitor's close/minimize lights to the Inglés hub", async () => {
@@ -274,6 +266,40 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     const html = await res.text();
     expect(html).not.toContain('data-fullscreen');
     expect(html).toContain('aria-pressed="false"');
+  });
+
+  // "‹" back arrow to the community list (community-list-as-a-window pass,
+  // owner spec 2026-10-07) — `DeskWindow.astro`'s own `backHref` doc.
+  it('shows a "‹" back arrow to the community list, right after the traffic lights, for a signed-in visitor', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="desk-window-back"');
+
+    const testidIndex = html.indexOf('data-testid="desk-window-back"');
+    const start = html.lastIndexOf('<a', testidIndex);
+    const backArrow = html.slice(start, html.indexOf('</a>', testidIndex));
+    expect(backArrow).toContain('href="/es/ingles/actividades"');
+    expect(backArrow).toContain('aria-label="Actividades de la comunidad"');
+    expect(backArrow).toContain('data-back-button');
+
+    const titlebar = html.slice(html.indexOf('data-desk-window-titlebar'));
+    expect(titlebar.indexOf('data-desk-window-fullscreen')).toBeLessThan(
+      titlebar.indexOf('data-testid="desk-window-back"'),
+    );
+  });
+
+  it('hides the back arrow for a guest — the community list is gated and unreachable to them', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="desk-window-back"');
   });
 });
 

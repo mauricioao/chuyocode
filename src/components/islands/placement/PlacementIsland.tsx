@@ -198,7 +198,7 @@ export default function PlacementIsland({ lang }: PlacementIslandProps) {
   // --------------------------------------------------------------- result
   const r = result!;
   const allPassed = r.breakdown.every((entry) => entry.passed);
-  const practiceHref = `/${lang}/ingles/propuestos?nivel=${r.recommendedLevel}`;
+  const practiceHref = `/${lang}/ingles/actividades?nivel=${r.recommendedLevel}`;
 
   return (
     <div

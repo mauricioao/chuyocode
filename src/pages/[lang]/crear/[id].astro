@@ -109,13 +109,11 @@ const sourceActivity = activity.source
  * The window's red/yellow lights (PART 6b polish, owner report: "el botón
  * de minimizar me lleva a mis actividades, no veo el chip en el
  * escritorio"): both now target the HUB, not `/mis-actividades` — the
- * MINIMIZE light always navigates straight here (so the tray chip it just
- * left behind is actually visible, on the desk's own dock — see
- * `DeskScene.astro`'s tray), while the CLOSE light only ever FALLS BACK to
- * it: `closeUsesTrackedPath` below makes it prefer `history.back()` to
- * whatever screen the author genuinely came from first (`/mis-actividades`,
- * `/crear`, a shared link…) — see `resolveTrackedCloseAction`'s own header,
- * `@lib/ui/deskWindow.ts`.
+ * MINIMIZE light navigates straight here so the tray chip it just left
+ * behind is actually visible. PART 6c: the CLOSE light ALSO always
+ * navigates straight here now — never `history.back()` to wherever the
+ * author came from (the old `closeUsesTrackedPath` behaviour) — see
+ * `@lib/ui/deskWindow.ts`'s own header.
  */
 const closeHref = `/${lang}/ingles`;
 
@@ -133,7 +131,6 @@ const deskLabels = {
   greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
   greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
   foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  proposedTitle: UI_LABELS[lang].english.hub.proposedTitle,
   communityTitle: UI_LABELS[lang].english.hub.communityTitle,
   todayTitle: UI_LABELS[lang].english.hub.todayTitle,
   createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
@@ -141,18 +138,13 @@ const deskLabels = {
   weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
   weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
   levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-  trayLabel: UI_LABELS[lang].english.hub.trayLabel,
-  trayRemoveLabel: UI_LABELS[lang].english.hub.trayRemoveLabel,
-  trayMoreLabel: UI_LABELS[lang].english.hub.trayMoreLabel,
 };
 ---
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind>
   <DeskScene
     lang={lang}
-    inert
     greetingLine1={desk.greetingLine1}
-    exerciseCountLabel={desk.exerciseCountLabel}
     activityCountLabel={desk.activityCountLabel}
     dailyPickHref={desk.dailyPickHref}
     dailyPickMeta={desk.dailyPickMeta}
@@ -175,7 +167,6 @@ const deskLabels = {
     fullScreenLabel={t.windowFullScreen}
     trayId={activity.id}
     closeOnEscape={false}
-    closeUsesTrackedPath
     titleEditable
     status={t.titlebarSaved}
     slot="overlay"

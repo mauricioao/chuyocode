@@ -33,7 +33,8 @@ test.describe('practice page as a window over the desk (PART 6a), guest (public)
     const dialog = page.locator('[data-desk-window]');
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveAttribute('role', 'dialog');
-    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    // PART 6c (owner spec 2026-10-07): non-modal floating window — no `aria-modal`.
+    await expect(dialog).not.toHaveAttribute('aria-modal');
     await expect(page.getByRole('link', { name: 'Cerrar' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Minimizar' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pantalla completa' })).toBeVisible();
@@ -150,7 +151,11 @@ test.describe('focus behaviour on open (PART 6a bugfix)', () => {
     await expect(page.locator('[data-desk-window]')).toBeFocused();
   });
 
-  test('Tab and Shift+Tab cycle within the dialog; Escape still closes', async ({ page }) => {
+  // PART 6c (owner spec 2026-10-07): the window is non-modal now — there is
+  // no focus trap anymore (`@lib/ui/deskWindow.ts`'s own header). Tab still
+  // reaches the red light first, same as before; it is just free to leave
+  // the dialog afterwards instead of being trapped inside it.
+  test('Tab reaches the red light first; Escape still closes', async ({ page }) => {
     const path = await findInglesActivityPath(page);
     test.skip(path === null, 'Need at least one published activity for a real guest-play id');
 
@@ -161,37 +166,6 @@ test.describe('focus behaviour on open (PART 6a bugfix)', () => {
     await page.keyboard.press('Tab');
     const onFirst = await page.evaluate(() => document.activeElement?.hasAttribute('data-desk-window-close') ?? false);
     expect(onFirst).toBe(true);
-
-    // Shift+Tab from the first element wraps to the dialog's own LAST
-    // focusable element instead of leaving the dialog entirely.
-    await page.keyboard.press('Shift+Tab');
-    const wrappedToLast = await page.evaluate(() => {
-      const dialog = document.querySelector('[data-desk-window]');
-      const focusable = dialog
-        ? Array.from(
-            dialog.querySelectorAll(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          )
-        : [];
-      return focusable.length > 0 && document.activeElement === focusable[focusable.length - 1];
-    });
-    expect(wrappedToLast).toBe(true);
-
-    // Tab from the last element wraps back to the first.
-    await page.keyboard.press('Tab');
-    const wrappedToFirst = await page.evaluate(() => {
-      const dialog = document.querySelector('[data-desk-window]');
-      const focusable = dialog
-        ? Array.from(
-            dialog.querySelectorAll(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          )
-        : [];
-      return focusable.length > 0 && document.activeElement === focusable[0];
-    });
-    expect(wrappedToFirst).toBe(true);
 
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(/\/es\/$/);
@@ -227,7 +201,7 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     expect(gap).toBeLessThan(8);
   });
 
-  test('the title bar stays one row (hearts, Compartir and the "Más" trigger fit) and the page never scrolls horizontally', async ({
+  test('the title bar stays one row (hearts and the "Más" trigger fit) and the page never scrolls horizontally', async ({
     page,
   }) => {
     const path = await findInglesActivityPath(page);
@@ -239,19 +213,22 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     const titlebar = page.locator('[data-testid="desk-window-titlebar"]');
     const box = await titlebar.boundingBox();
     expect(box).not.toBeNull();
-    // A single row (lights/title/chip + hearts/Compartir/Más, `py-3` +
-    // 36px icons) comfortably fits under 64px; the pre-fix wrap measured
-    // over 110px (two stacked rows).
+    // A single row (lights/title + hearts/Más, `py-3` + 36px icons)
+    // comfortably fits under 64px; the pre-fix wrap measured over 110px
+    // (two stacked rows).
     if (box) expect(box.height).toBeLessThan(64);
 
     await expect(page.locator('[data-testid="activity-heart-guest"]')).toBeVisible();
-    await expect(page.locator('[data-testid="exercise-share"]')).toBeVisible();
+    // "Compartir" moved into the "Más" overflow menu on phone (bugfix,
+    // owner report: the title bar had no room left) — not directly visible
+    // in the row anymore; see the "move behind the Más menu" test below.
+    await expect(page.locator('[data-testid="exercise-share"]')).toBeHidden();
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(360);
   });
 
-  test('"Duplicar"/"Reportar"/"Presentar"/"Imprimir" move behind the "Más" menu, reachable once opened', async ({
+  test('"Compartir"/"Duplicar"/"Reportar"/"Presentar"/"Imprimir" move behind the "Más" menu, reachable once opened', async ({
     page,
   }) => {
     const path = await findInglesActivityPath(page);
@@ -260,12 +237,15 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(path!);
 
+    const shareTrigger = page.locator('[data-testid="exercise-share"]');
     const printLink = page.locator('[data-testid="activity-print-link"]');
+    await expect(shareTrigger).toBeHidden();
     await expect(printLink).toBeHidden();
 
     const moreTrigger = page.locator('[data-testid="activity-window-more-trigger"]');
     await expect(moreTrigger).toBeVisible();
     await moreTrigger.click();
+    await expect(shareTrigger).toBeVisible();
     await expect(printLink).toBeVisible();
   });
 
@@ -279,6 +259,7 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     await page.goto(path!);
 
     await expect(page.locator('[data-testid="activity-window-more-trigger"]')).toBeHidden();
+    await expect(page.locator('[data-testid="exercise-share"]')).toBeVisible();
     await expect(page.locator('[data-testid="activity-print-link"]')).toBeVisible();
   });
 });

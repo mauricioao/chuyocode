@@ -17,10 +17,11 @@
  * component takes its data as plain props (`@lib/ingles/deskSceneData`)
  * instead of assuming a client-side hydration step will fill it in later.
  *
- * `inert` (new, PART 6a): true on the practice page, where the desk sits
- * BEHIND the open window and must not be interactive or reachable by
- * keyboard/AT (the window is `aria-modal`) — `false`/omitted on the hub,
- * where the desk is the whole page.
+ * NON-MODAL (PART 6c, owner spec 2026-10-07): the desk is never `inert`
+ * anymore, even on the practice/creator pages where it sits BEHIND an open
+ * window — that window floats on top of it now (non-modal, draggable,
+ * `DeskWindow.astro`'s own header), and the desk stays fully visible AND
+ * interactive around it, same as the hub itself.
  */
 import DeskFolder from '@components/ingles/DeskFolder.astro';
 import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
@@ -33,10 +34,7 @@ import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSce
 
 interface Props {
   lang: Lang;
-  /** True on the practice page, where the desk sits behind the open window. */
-  inert?: boolean;
   greetingLine1: string;
-  exerciseCountLabel: string | null;
   activityCountLabel: string | null;
   dailyPickHref: string;
   dailyPickMeta: string | null;
@@ -52,9 +50,7 @@ interface Props {
 
 const {
   lang,
-  inert = false,
   greetingLine1,
-  exerciseCountLabel,
   activityCountLabel,
   dailyPickHref,
   dailyPickMeta,
@@ -86,7 +82,6 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
 <section
   data-desk
   transition:persist="desk-scene"
-  inert={inert}
   class="flex w-full flex-col gap-8 px-4 pb-8 desk:relative desk:grid desk:min-h-[calc(100dvh-96px)] desk:grid-cols-[minmax(0,1fr)_auto] desk:items-start desk:justify-items-start desk:gap-6 desk:px-7 desk:pt-3 desk:pb-0"
 >
   {/* Shared gradients for every `DeskFolder`'s back/front SVG layers —
@@ -123,22 +118,26 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </div>
 
   {/* Folders — a right-edge column on desktop, a home-screen grid on
-      phones (4 items: the 3 folders + "Crear actividad" fit a clean 2×2). */}
+      phones (3 items: "Actividades de la comunidad" + "Para ti hoy" +
+      "Crear actividad" fit a clean 2×2, one spot left over). "Ejercicios
+      propuestos" folded into the community folder below (owner spec
+      2026-10-07: "ya no tendremos ejercicios propuestos separados de
+      actividades de la comunidad... de igual manera será una carpeta y
+      abrirá una ventana dentro del escritorio") — its own curated-exercise
+      count is gone from the desk for the same reason. `openerId="community"`
+      gives it the SAME folder-origin scale-in the daily-pick folder already
+      has (`@lib/ui/deskWindow.ts#applyDeskWindowOrigin`) — its destination
+      (`/[lang]/ingles/actividades`) now renders as a window too. */}
   <nav
     aria-label={t.foldersLabel}
     class="order-2 grid grid-cols-2 gap-1 desk:order-none desk:col-start-2 desk:row-start-1 desk:flex desk:flex-col desk:items-end desk:gap-[18px] desk:pt-1"
   >
     <DeskFolder
-      href={`/${lang}/ingles/propuestos`}
-      label={t.proposedTitle}
-      meta={exerciseCountLabel}
-      icon="books"
-    />
-    <DeskFolder
       href={`/${lang}/ingles/actividades`}
       label={t.communityTitle}
       meta={activityCountLabel}
       icon="busts-in-silhouette"
+      openerId="community"
     />
     <DeskFolder
       href={dailyPickHref}
@@ -199,18 +198,12 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </section>
 
   {/* Levels dock — bottom centre on desktop, a horizontal scroller on
-      phones — PLUS the minimized-windows tray (owner feedback 2026-10-06,
-      polish pass 2026-10-06: "como el dock de macOS", chips INSIDE the SAME
-      glass shelf as the level tiles, after a vertical hairline, instead of
-      sitting loose next to it). Always server-rendered (empty, `hidden`) so
-      a no-JS visit degrades to exactly today's dock —
-      `@lib/ui/minimizedWindows#initMinimizedWindowsTray` is what actually
-      fills/unhides it, from `sessionStorage`, once it runs. The whole shelf
-      (levels + hairline + tray) is ONE `overflow-x-auto` row, so phones keep
-      scrolling horizontally exactly like the levels-only dock already did —
-      there is no more separate "tray row above the dock" on phones. */}
-  {/* `desk:w-max`: an absolutely positioned box at `left: 50%` may only grow to the remaining half of its container, so without it the dock shrank and scrolled (hiding A1) once chips were added. */}
-  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:w-max desk:-translate-x-1/2">
+      phones. LEVELS ONLY again (PART 6c, owner spec 2026-10-07): the
+      minimized-windows tray moved OUT to its own fixed bottom-right
+      container (`MinimizedWindowsTray.astro`, mounted once by
+      `BaseLayout.astro`) — a small rectangle per window, not a chip squeezed
+      in here next to the level tiles. */}
+  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
     <div
       data-desk-dock
@@ -222,7 +215,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
             const band = bandOf(level);
             return (
               <a
-                href={`/${lang}/ingles/propuestos?nivel=${level}`}
+                href={`/${lang}/ingles/actividades?nivel=${level}`}
                 aria-label={`${level}, ${levelLabels[level]}`}
                 class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -246,36 +239,6 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
           })
         }
       </nav>
-
-      <div
-        aria-hidden="true"
-        data-minimized-tray-hairline
-        data-testid="minimized-tray-hairline"
-        hidden
-        class="h-auto w-px shrink-0 self-stretch bg-border"
-      ></div>
-      <nav
-        data-minimized-tray
-        data-testid="minimized-tray"
-        data-remove-label={t.trayRemoveLabel}
-        data-more-label={t.trayMoreLabel}
-        hidden
-        aria-label={t.trayLabel}
-        class="flex shrink-0 gap-2.5"
-      ></nav>
     </div>
   </div>
 </section>
-
-<script>
-  import { initMinimizedWindowsTray } from '@lib/ui/minimizedWindows';
-
-  const run = () => initMinimizedWindowsTray();
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', run, { once: true });
-  } else {
-    run();
-  }
-  document.addEventListener('astro:page-load', run);
-</script>

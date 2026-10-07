@@ -421,11 +421,20 @@ export const CHROME_INSTANT_ATTR = 'data-chrome-instant';
 /**
  * "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item
  * C): server-rendered by `BaseLayout.astro` (true only on the Inglés hub) —
- * this module only ever READS it (`detectHub`), never writes it; it never
- * changes for the life of a page view. `global.css` also reads it directly
- * for the hub's scroll-snap rules, with no JS dependency at all.
+ * this module only ever READS it (`headerAlwaysVisible`), never writes it;
+ * it never changes for the life of a page view. `global.css` also reads it
+ * directly for the hub's scroll-snap rules, with no JS dependency at all.
  */
 export const CHROME_HUB_ATTR = 'data-chrome-hub';
+/**
+ * PART 6c bugfix (owner spec 2026-10-07, defect #1: "la vista detrás de la
+ * ventana debe verse exactamente como el hub"): server-rendered by
+ * `BaseLayout.astro`'s own `deskBehind` prop — true on a page that renders
+ * the desk BEHIND an open `DeskWindow` (today, only the signed-in practice
+ * page). See {@link headerAlwaysVisible}'s own comment for why this module
+ * treats it exactly like {@link CHROME_HUB_ATTR}.
+ */
+export const CHROME_DESK_BEHIND_ATTR = 'data-desk-behind';
 /** Approximates today's literal `top-20` gap below the ~4rem header once JS takes over the offset. */
 const HEADER_OFFSET_GAP_PX = 16;
 /** How often `tick` is dispatched while waiting out the footer's dwell — well under the ~1s window so the reveal never feels late. */
@@ -439,9 +448,22 @@ function detectMode(doc: Document): ChromeMode {
  * "Desktop" redesign PART 1 scope extension (item C): reads the attribute
  * `BaseLayout.astro` already set server-side — see {@link CHROME_HUB_ATTR}'s
  * own comment for why this module never re-derives it from the URL itself.
+ *
+ * PART 6c bugfix (owner spec 2026-10-07, defect #1): a `data-desk-behind`
+ * page (`CHROME_DESK_BEHIND_ATTR`) gets the EXACT same "header never
+ * collapses, always starts visible" treatment as the hub — reusing the
+ * `ChromeState.isHub` branches below (rather than adding a parallel set of
+ * rules) is what makes that free. That page's own `<body>` also locks all
+ * page scroll while the window is open (`BaseLayout.astro`'s own
+ * `hasOverlay`), so there is no scroll/pull/tap gesture left that should
+ * ever hide it anyway — and the owner's spec is that the area around the
+ * window must look pixel-identical to the hub at scroll-top: same header,
+ * same desk geometry (`DeskScene.astro`'s own `desk:min-h-[calc(100dvh-
+ * 96px)]` assumes exactly the hub's header height).
  */
-function detectHub(doc: Document): boolean {
-  return doc.documentElement.hasAttribute(CHROME_HUB_ATTR);
+function headerAlwaysVisible(doc: Document): boolean {
+  const html = doc.documentElement;
+  return html.hasAttribute(CHROME_HUB_ATTR) || html.hasAttribute(CHROME_DESK_BEHIND_ATTR);
 }
 
 /**
@@ -502,7 +524,7 @@ export function initChromeVisibility(doc: Document = document, win: Window = win
   wired = true;
 
   const html = doc.documentElement;
-  let state = createInitialChromeState(detectMode(doc), detectHub(doc));
+  let state = createInitialChromeState(detectMode(doc), headerAlwaysVisible(doc));
   let frameScheduled = false;
 
   function apply(): void {
@@ -597,7 +619,7 @@ export function initChromeVisibility(doc: Document = document, win: Window = win
   }
 
   function handlePageEnter(): void {
-    dispatch({ type: 'pageEnter', mode: detectMode(doc), isHub: detectHub(doc) });
+    dispatch({ type: 'pageEnter', mode: detectMode(doc), isHub: headerAlwaysVisible(doc) });
     measureAndDispatchScroll();
   }
 

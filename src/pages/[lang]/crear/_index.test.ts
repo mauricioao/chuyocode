@@ -108,12 +108,11 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
   // the desk now too — the red light replaces the old `PageTitle`
   // `backHref` (the hub), same as the editor's own window.
   //
-  // PART 6b polish (owner report: "este picker debería cerrar como una
-  // ventana, igual que el editor"): closing now prefers `history.back()` to
-  // whatever screen the author genuinely came from, falling back to the hub
-  // only when there is none (`closeUsesTrackedPath`/
-  // `resolveTrackedCloseAction`, `@lib/ui/deskWindow.ts`).
-  it('renders the window shell, closing to the Inglés hub (replacing the old back button), with a tracked previous path', async () => {
+  // PART 6c (owner spec 2026-10-07): closing ALWAYS navigates straight to
+  // the hub now — never `history.back()` to wherever the author came from
+  // (the old `closeUsesTrackedPath`/`resolveTrackedCloseAction` behaviour,
+  // removed — `@lib/ui/deskWindow.ts`).
+  it('renders the window shell, closing to the Inglés hub (replacing the old back button)', async () => {
     const res = await render('https://chuyocode.test/es/crear', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
@@ -123,7 +122,6 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-label="Cerrar"');
     expect(html).toContain('href="/es/ingles"');
-    expect(html).toContain('data-close-tracked-path="true"');
     expect(html).not.toContain('data-back-button');
   });
 
@@ -138,13 +136,15 @@ describe('GET /[lang]/crear — signed-in visitor', () => {
     expect(html.slice(titleIndex, titleIndex + 400)).toContain('Nueva actividad');
   });
 
-  it('renders the desk behind the window, inert', async () => {
+  // PART 6c (owner spec 2026-10-07): the desk is never `inert` anymore — the
+  // floating window is non-modal, and the desk behind it stays fully usable.
+  it('renders the desk behind the window, never inert', async () => {
     const res = await render('https://chuyocode.test/es/crear', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
     expect(html).toContain('data-desk');
-    expect(html).toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
   });
 });

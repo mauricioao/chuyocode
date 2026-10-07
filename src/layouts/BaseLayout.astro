@@ -73,6 +73,7 @@ import { ClientRouter, fade } from 'astro:transitions';
 import Header from '@components/layout/Header.astro';
 import Footer from '@components/layout/Footer.astro';
 import NavProgressBar from '@components/layout/NavProgressBar.astro';
+import MinimizedWindowsTray from '@components/ingles/MinimizedWindowsTray.astro';
 import ScrollToTop from '@components/islands/ScrollToTop';
 import Toaster from '@components/islands/Toaster';
 // Visual-identity styles (PR 2). `fonts.css` self-hosts Raleway Variable
@@ -161,13 +162,21 @@ const {
 const isIngles = theme === 'ingles';
 
 /**
- * PART 6a bugfix (owner spec 2026-10-06): does this page pass anything into
- * the `overlay` slot below — the practice page's own `DeskWindow`, rendered
- * with `slot="overlay"` (`[id].astro`'s own header) rather than the default
- * slot, so it paints OUTSIDE `<main>` and after the footer (see that slot's
- * own comment). While it does, the header/footer sit BEHIND the window's own
- * veil and must be `inert` — unreachable by keyboard/AT, same posture
- * `DeskScene.astro`'s own `inert` prop already gives the desk.
+ * Does this page pass anything into the `overlay` slot below — the
+ * practice/creator pages' own `DeskWindow`, rendered with `slot="overlay"`
+ * (`[id].astro`'s own header) rather than the default slot, so it paints
+ * OUTSIDE `<main>` and after the footer (see that slot's own comment).
+ *
+ * Two things key off this, both PART 6c (owner spec 2026-10-07) now that the
+ * window is a non-modal FLOATING window rather than a full-viewport modal:
+ * the `<body>` below locks page scroll while it is true (the window handles
+ * its own internal scrolling — nothing behind it should also scroll), and
+ * `MinimizedWindowsTray.astro` hides itself below the `desk:` breakpoint
+ * while it is true (a window there is still full screen and would have its
+ * own bottom action bar covered by the tray). The header/footer are no
+ * longer `inert` here — PART 6a-6b's modal window made them unreachable
+ * while a window was open; the desk and the header both stay fully usable
+ * now.
  */
 const hasOverlay = Astro.slots.has('overlay');
 
@@ -247,11 +256,19 @@ const faviconSvg =
         // re-deriving it from the URL here, so there is only ONE place that
         // decides "is this the hub" (`isInglesHubPath`, `backNavigation.ts`).
         var hub = html.hasAttribute('data-chrome-hub');
+        // PART 6c bugfix (owner spec 2026-10-07, defect #1): a page that
+        // renders the desk BEHIND an open `DeskWindow` (`data-desk-behind`,
+        // server-rendered by this same file's own `deskBehind` prop) must
+        // look exactly like the hub around that window — same header,
+        // always visible, never collapsed — see `chromeVisibility.ts`'s own
+        // matching `headerAlwaysVisible` for why.
+        var deskBehind = html.hasAttribute('data-desk-behind');
         html.setAttribute('data-chrome-js', '');
         html.setAttribute('data-chrome-mode', ingles ? 'ingles' : 'site');
         // "Desktop" redesign PART 1, item C: the hub's header starts
-        // visible immediately — no flash of it being hidden first.
-        html.setAttribute('data-header-visible', ingles ? (hub ? 'true' : 'false') : 'true');
+        // visible immediately — no flash of it being hidden first. Same for
+        // a desk-behind page now (defect #1 above).
+        html.setAttribute('data-header-visible', ingles ? (hub || deskBehind ? 'true' : 'false') : 'true');
         html.setAttribute('data-footer-visible', 'false');
       })();
     </script>
@@ -329,6 +346,12 @@ const faviconSvg =
     class:list={[
       'flex min-h-screen flex-col bg-surface text-foreground antialiased transition-theme duration-theme dark:bg-surface',
       fullHeight && 'lg:h-dvh lg:overflow-hidden',
+      // PART 6c (owner spec 2026-10-07): the floating desk window handles its
+      // own internal scrolling (`DeskWindow.astro`'s own body slot) — lock
+      // the page itself so the desk behind a NON-MODAL window can never
+      // scroll independently of it (it would otherwise drift out from under
+      // a window that stays `fixed` to the viewport).
+      hasOverlay && 'overflow-hidden h-dvh',
     ]}
   >
     {/* Navigation progress bar (navigation-without-flicker PR): fixed at the
@@ -368,9 +391,9 @@ const faviconSvg =
         page is completely unaffected — this branch only ever runs when
         `isIngles` is true. */}
     {!bare &&
-      (isIngles ? <Header lang={lang} ingles inert={hasOverlay} /> : (
+      (isIngles ? <Header lang={lang} ingles /> : (
         <div data-theme="brand" class="dark contents">
-          <Header lang={lang} inert={hasOverlay} />
+          <Header lang={lang} />
         </div>
       ))}
     {/* Cleaner transitions (navigation-without-flicker PR): ONLY the main
@@ -388,9 +411,9 @@ const faviconSvg =
         note above. BARE mode drops it. INGLÉS: same unwrapped treatment as
         the header above — see that block's own comment. */}
     {!bare &&
-      (isIngles ? <Footer lang={lang} ingles inert={hasOverlay} /> : (
+      (isIngles ? <Footer lang={lang} ingles /> : (
         <div data-theme="brand" class="dark contents">
-          <Footer lang={lang} inert={hasOverlay} />
+          <Footer lang={lang} />
         </div>
       ))}
 
@@ -434,6 +457,7 @@ const faviconSvg =
       import { initBackButtons, trackPageVisit } from '@lib/backNavigation';
       import { initChromeVisibility } from '@lib/chromeVisibility';
       import { initDeskWindowOpeners } from '@lib/ui/deskWindow';
+      import { initDeskSceneWidgets } from '@lib/ui/deskScene';
 
       const run = () => initReveals();
 
@@ -476,17 +500,38 @@ const faviconSvg =
       // entry (including View Transitions) internally — see that module's
       // own header.
       initChromeVisibility();
+
+      // BUGFIX (owner report 2026-10-07): the desk's clock/calendar/weather
+      // widgets and its drag-to-rearrange used to be wired ONLY from the hub
+      // page's own script (`[lang]/ingles/index.astro`) — a direct load of a
+      // page that renders the SAME desk BEHIND a window (`deskBehind`:
+      // practice/community/create/editor) never ran it at all, leaving a
+      // hand-less clock and a date-less calendar. Site-wide and here
+      // instead, same "self-guards on a page with no desk" posture as
+      // `initDeskWindowOpeners` above — see `@lib/ui/deskScene`'s own
+      // header. Runs on first load AND every `astro:page-load` (a desk
+      // behind a window, or the hub itself, reached by a client-side
+      // navigation from another such page).
+      const runDeskSceneWidgets = () => initDeskSceneWidgets();
+      runDeskSceneWidgets();
+      document.addEventListener('astro:page-load', runDeskSceneWidgets);
     </script>
 
-    {/* Overlay slot (PART 6a bugfix, 2026-10-06) — the LAST thing in
-        `<body>`, after the footer and every other chrome piece above,
-        outside `<main>` entirely. Today's one caller is the practice page's
-        own `DeskWindow` (`[id].astro`, `slot="overlay"`): rendering it here
-        instead of in the default slot is what stops the footer from
-        painting OVER the window (see `global.css`'s own
-        `.ingles-window-veil` comment for the stacking-context mechanics).
-        Nothing else currently uses this slot, so it is a no-op everywhere
-        else. */}
+    {/* Overlay slot (PART 6a bugfix, 2026-10-06) — after the footer and
+        every other chrome piece above, outside `<main>` entirely. Today's
+        callers are the practice/creator pages' own `DeskWindow`
+        (`slot="overlay"`): rendering it here instead of in the default slot
+        is what stops the footer from painting OVER the window (see
+        `global.css`'s own `.ingles-window` comment for the stacking-context
+        mechanics). Nothing else currently uses this slot, so it is a no-op
+        everywhere else. */}
     <slot name="overlay" />
+
+    {/* Minimized-windows tray (PART 6c) — mounted on every Inglés page,
+        AFTER the overlay slot, so it stays above an open window
+        (`MinimizedWindowsTray.astro`'s own header on the stacking/`z-index`
+        reasoning). A no-op render (an empty, `hidden` tray) on a page with
+        nothing minimized, same posture as every other desk script. */}
+    {isIngles && <MinimizedWindowsTray lang={lang} hasOverlay={hasOverlay} />}
   </body>
 </html>

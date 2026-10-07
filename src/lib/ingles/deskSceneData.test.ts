@@ -14,11 +14,6 @@ vi.mock('@lib/env', () => ({
   }),
 }));
 
-const getExerciseCount = vi.fn();
-vi.mock('@lib/exercises', () => ({
-  getExerciseCount: (...args: unknown[]) => getExerciseCount(...args),
-}));
-
 const getActivityCount = vi.fn();
 const getPublishedActivities = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
@@ -37,10 +32,8 @@ function userFixture(displayName: string) {
 }
 
 beforeEach(() => {
-  getExerciseCount.mockReset();
   getActivityCount.mockReset();
   getPublishedActivities.mockReset();
-  getExerciseCount.mockResolvedValue(null);
   getActivityCount.mockResolvedValue(null);
   getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -64,17 +57,14 @@ describe('loadDeskSceneData', () => {
     expect(data.firstName).toBeNull();
   });
 
-  it('degrades counts to null (never "0 …") when a query fails', async () => {
+  it('degrades the count to null (never "0 …") when the query fails', async () => {
     const data = await loadDeskSceneData({ lang: 'es', user: null, geo: undefined });
-    expect(data.exerciseCountLabel).toBeNull();
     expect(data.activityCountLabel).toBeNull();
   });
 
-  it('formats counts with the singular noun for exactly one', async () => {
-    getExerciseCount.mockResolvedValue(1);
+  it('formats the count with the singular noun for exactly one', async () => {
     getActivityCount.mockResolvedValue(1);
     const data = await loadDeskSceneData({ lang: 'es', user: null, geo: undefined });
-    expect(data.exerciseCountLabel).toBe('1 ejercicio');
     expect(data.activityCountLabel).toBe('1 actividad');
   });
 

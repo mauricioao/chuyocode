@@ -898,46 +898,82 @@ html[data-desk-behind] main {
   view-transition-name: none;
 }
 
-/* ── Desk window ("desktop" redesign PART 6a, owner spec 2026-10-06) ───────
- * The practice page renders as a WINDOW over the desk — approved mockup
- * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.veil` /
- * `.window`. Tailwind utilities express the box itself (`DeskWindow.astro`'s
- * own classes); only the one-shot open animation and the two OS-preference
- * fallbacks need hand-written CSS, same posture as `.ingles-glass` above.
- *
- * STACKING FIX (PART 6a bugfix, 2026-10-06): both the veil and the window
- * itself now render through `BaseLayout.astro`'s `overlay` slot — the LAST
- * thing in `<body>`, after the footer, outside `<main>` — instead of inside
- * the default slot. That alone stops the footer from painting over the
- * window (it used to inherit `<main>`'s own stacking context, created by its
- * `transition:animate`-driven `view-transition-name`, which trapped the
- * window's `z-30` UNDER the footer — a later DOM sibling with no stacking
- * context of its own always wins ties like that). Moving the markup is not
- * enough on its own, though: `Header` (`z-40`, `sticky`) and
- * `NavProgressBar` (`z-50`, `fixed`) are explicit, non-auto z-indexed
- * stacking contexts of their own — being LAST in the document does not beat
- * them, only an equal-or-higher z-index does. `z-50` here ties
- * `NavProgressBar`'s own value; the tie resolves by DOM order (this slot is
- * always last), so the window wins. It deliberately stays AT 50, not above
- * it: a Radix dialog opened FROM WITHIN the window (`ShareDialog`'s own
- * `DialogContent`) portals to `document.body` at the SAME `z-50` and mounts
- * later still, so it keeps nesting correctly on top of the window — going
- * any higher here would bury that nested dialog instead. */
-.ingles-window-veil {
-  position: fixed;
-  inset: 0;
-  z-index: 49;
-  background: rgb(243 244 246 / 0.55);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+/* PART 6c bugfix (owner spec 2026-10-07, defect #1): the window's backdrop
+ * must look pixel-identical to the hub. The footer is always in normal flow
+ * everywhere else (item C above) — on the hub that is fine, it is simply
+ * off-screen until the visitor scrolls to it. A `data-desk-behind` page has
+ * its scroll LOCKED for as long as the window is open
+ * (`BaseLayout.astro`'s own `hasOverlay` — `overflow-hidden h-dvh` on
+ * `<body>`), so there is no "scroll down to reach it" left: left in normal
+ * flow, the footer's own real height would instead eat into the ONE
+ * viewport `<body>` has to show `<main>` in, squeezing/shifting the desk
+ * behind the window out of alignment with the hub's own geometry. Dropping
+ * it out of the flex column entirely (rather than relying on an unreachable
+ * scroll) is what keeps `<main>`'s available height identical to the hub's
+ * at scroll-top. Harmless even if this rule ever ran before `data-chrome-js`
+ * (progressive enhancement, same posture as the rest of this section): a
+ * no-JS visitor still gets the real `<body>` scroll lock from `hasOverlay`'s
+ * own Tailwind classes, just without this extra polish. */
+html[data-desk-behind] [data-chrome-footer] {
+  display: none;
 }
 
-/* `prefers-reduced-transparency` (same fallback posture as `.ingles-glass`). */
-@media (prefers-reduced-transparency: reduce) {
-  .ingles-window-veil {
-    background: var(--color-surface-soft);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+/* ── Desk window ("desktop" redesign PART 6a, owner spec 2026-10-06) ───────
+ * The practice/creator pages render as a WINDOW over the desk — approved
+ * mockup `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s
+ * `.window`. Tailwind utilities express the box itself (`DeskWindow.astro`'s
+ * own classes); only the one-shot open/close/minimize animations and the
+ * fullscreen/mobile `translate` resets need hand-written CSS, same posture
+ * as `.ingles-glass` above.
+ *
+ * NON-MODAL (PART 6c, owner spec 2026-10-07): the window used to render a
+ * dimming/blurring veil behind it (`.ingles-window-veil`, removed here) —
+ * that only ever made sense for a MODAL window. Now that the desk behind it
+ * stays visible and fully interactive (`BaseLayout.astro`'s own header),
+ * there is nothing to dim: the window is just a floating, draggable box
+ * with its own shadow, no backdrop at all.
+ *
+ * STACKING FIX (PART 6a bugfix, 2026-10-06): the window itself renders
+ * through `BaseLayout.astro`'s `overlay` slot — in `<body>`, after the
+ * footer, outside `<main>` — instead of inside the default slot. That alone
+ * stops the footer from painting over the window (it used to inherit
+ * `<main>`'s own stacking context, created by its `transition:animate`-
+ * driven `view-transition-name`, which trapped the window's `z-30` UNDER
+ * the footer — a later DOM sibling with no stacking context of its own
+ * always wins ties like that). Moving the markup is not enough on its own,
+ * though: `Header` (`z-40`, `sticky`) and `NavProgressBar` (`z-50`,
+ * `fixed`) are explicit, non-auto z-indexed stacking contexts of their own —
+ * being LAST in the document does not beat them, only an equal-or-higher
+ * z-index does. `z-50` here ties `NavProgressBar`'s own value; the tie
+ * resolves by DOM order (this slot renders before the minimized-windows
+ * tray but after everything else), so the window wins over the header/nav
+ * bar. It deliberately stays AT 50, not above it: a Radix dialog opened
+ * FROM WITHIN the window (`ShareDialog`'s own `DialogContent`) portals to
+ * `document.body` at the SAME `z-50` and mounts later still, so it keeps
+ * nesting correctly on top of the window — going any higher here would
+ * bury that nested dialog instead. The minimized-windows tray
+ * (`MinimizedWindowsTray.astro`) renders AFTER this slot, at `z-[60]`, so it
+ * stays reachable above an open window on desktop — see that component's
+ * own header. */
+
+/* Minimized-windows tray — footer overlap guard (PART 6c polish, owner spec
+ * 2026-10-07, defect #3): `@lib/ui/minimizedWindows#initFooterOverlapGuard`
+ * toggles `data-tray-footer-overlap` on the tray's own OUTER fixed wrapper
+ * (`[data-minimized-tray-wrapper]`, `MinimizedWindowsTray.astro`) while the
+ * hub's real footer is scrolled into view, so the tray never sits on top of
+ * the footer's own Premium/Términos/Privacidad links. Purely additive
+ * opacity/`pointer-events` on an element that is already `fixed` — nothing
+ * else in the layout moves either way, so there is no jump when it fades. */
+[data-minimized-tray-wrapper] {
+  transition: opacity 160ms var(--ease-control);
+}
+[data-minimized-tray-wrapper][data-tray-footer-overlap] {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-minimized-tray-wrapper] {
+    transition: none;
   }
 }
 
@@ -954,11 +990,23 @@ html[data-desk-behind] main {
 
 .ingles-window {
   transform-origin: var(--ingles-window-from, 50% 50%);
+}
+
+/* GATED, not unconditional (community-list-as-a-window pass, owner spec
+ * 2026-10-07): only a FRESH open from a folder/desk opener ever plays this —
+ * `@lib/ui/deskWindow.ts#applyDeskWindowOrigin` is the one place that sets
+ * `data-desk-window-opening`, and only when it just consumed a genuine,
+ * non-stale opener entry. A direct visit and every IN-WINDOW navigation
+ * (a filter change, a page of results, opening an activity card from the
+ * community list, the practice window's own `‹` back arrow) leave this
+ * attribute unset, so the window simply appears with no scale-in — it would
+ * otherwise have replayed on every one of those, which is not an "opening". */
+.ingles-window[data-desk-window-opening] {
   animation: ingles-window-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ingles-window {
+  .ingles-window[data-desk-window-opening] {
     animation: none;
   }
 }
@@ -966,15 +1014,32 @@ html[data-desk-behind] main {
 /* Full screen (green light), remembered per browser — forces the full-bleed
  * sheet regardless of the `desk:` breakpoint's own inset. `!important`
  * because it must win over the SAME-specificity Tailwind utility classes
- * that set the desktop inset, regardless of stylesheet order. */
+ * that set the desktop inset, regardless of stylesheet order. `translate:
+ * none` drops any drag offset (`@lib/ui/deskWindowDrag`) for as long as the
+ * window stays full screen — there is nothing left to drag it away from. */
 .ingles-window[data-fullscreen='true'] {
   inset: 0 !important;
   border-radius: 0 !important;
+  translate: none !important;
+}
+
+/* No drag below the `desk:` breakpoint either (PART 6c, owner spec
+ * 2026-10-07) — the window is always full screen there, same reasoning as
+ * the fullscreen override just above. `@lib/ui/deskWindowDrag` itself never
+ * sets a translate below this breakpoint (and clears one on a resize that
+ * crosses it), but this is a defensive second line, same posture as
+ * `.ingles-window`'s/`.ingles-window--minimizing`'s own reduced-motion
+ * fallbacks. */
+@media (max-width: 1099.98px) {
+  .ingles-window {
+    translate: none !important;
+  }
 }
 
 /* Minimize (yellow light), a REAL minimize (owner feedback 2026-10-06,
  * replacing the old behaviour where it just navigated to the hub exactly
- * like the red light): a short "shrink down toward the dock" animation,
+ * like the red light): a short "shrink toward the bottom-right tray"
+ * animation (PART 6c: the tray moved there, `MinimizedWindowsTray.astro`),
  * played by `@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()` BEFORE
  * it navigates away — the window never actually reaches the tray (a real
  * cross-page navigation happens right after), this is only the visual cue
@@ -988,7 +1053,7 @@ html[data-desk-behind] main {
   }
   to {
     opacity: 0;
-    transform: translateY(40vh) scale(0.4);
+    transform: translate(35vw, 40vh) scale(0.15);
   }
 }
 
@@ -1002,19 +1067,45 @@ html[data-desk-behind] main {
   }
 }
 
-/* Minimized-windows tray (owner feedback 2026-10-06, `DeskScene.astro`'s own
+/* Close (red light), PART 6c (owner spec 2026-10-07): a subtle scale+fade —
+ * never a directional move like minimize's, closing is not "going"
+ * anywhere in particular — played by
+ * `@lib/ui/deskWindow.ts#initDeskWindow`'s own `closeNow()` BEFORE it
+ * navigates away. Skipped by the JS itself under reduced motion; the media
+ * query below is a defensive second line, same posture as the other two
+ * window animations above. */
+@keyframes ingles-window-close {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.ingles-window--closing {
+  animation: ingles-window-close 0.16s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingles-window--closing {
+    animation: none;
+  }
+}
+
+/* Minimized-windows tray (PART 6b, moved to a standalone fixed bottom-right
+ * container in PART 6c — `MinimizedWindowsTray.astro`'s own
  * `[data-minimized-tray]`): `@lib/ui/minimizedWindows.ts#initMinimizedWindowsTray`
  * toggles the native `hidden` attribute, not a class — but the element also
- * carries `sm:flex`/`desk:flex` Tailwind utilities for ITS OWN responsive
- * layout (row above the dock on phones, inline with it on desktop). Author
- * stylesheets (Tailwind's utilities included) win over the UA stylesheet's
- * own `[hidden] { display: none }` regardless of specificity, so without
- * this rule `sm:flex` would make the tray visible-but-empty on a wide
- * viewport even while `hidden` is set. `!important` re-asserts `[hidden]`
- * over those same-origin utility classes, same reasoning as the fullscreen
- * override just above. */
-[data-minimized-tray][hidden],
-[data-minimized-tray-hairline][hidden] {
+ * carries Tailwind utilities for ITS OWN layout. Author stylesheets
+ * (Tailwind's utilities included) win over the UA stylesheet's own `[hidden]
+ * { display: none }` regardless of specificity, so without this rule those
+ * utilities would make the tray visible-but-empty even while `hidden` is
+ * set. `!important` re-asserts `[hidden]` over those same-origin utility
+ * classes, same reasoning as the fullscreen override above. */
+[data-minimized-tray][hidden] {
   display: none !important;
 }
 

@@ -4,7 +4,7 @@
 // (`document.createElement`) — same pragma reasoning as `deskWindow.test.ts`'s
 // own `focusableElements` block; the whole file routes to jsdom rather than
 // splitting one DOM-touching describe block into its own file.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   withMinimizedWindow,
   withoutMinimizedWindow,
@@ -15,24 +15,15 @@ import {
   removeMinimizedWindow,
   renderMinimizedWindowsTray,
   initMinimizedWindowsTray,
+  initFooterOverlapGuard,
+  FOOTER_GUARD_ROOT_MARGIN,
   MAX_MINIMIZED_WINDOWS,
   MAX_VISIBLE_MINIMIZED_CHIPS,
-  NARROW_DESK_WIDTH,
-  visibleChipLimit,
   MINIMIZED_WINDOWS_STORAGE_KEY,
+  MINIMIZED_TRAY_WRAPPER_ATTR,
+  TRAY_FOOTER_OVERLAP_ATTR,
   type MinimizedWindowEntry,
 } from './minimizedWindows';
-
-// How many chips render depends on the viewport (`visibleChipLimit`) and
-// jsdom defaults to 1024px, so every test runs on a wide desktop unless it
-// pins a narrow one itself.
-const DEFAULT_TEST_WIDTH = window.innerWidth;
-beforeEach(() => {
-  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
-});
-afterEach(() => {
-  Object.defineProperty(window, 'innerWidth', { configurable: true, value: DEFAULT_TEST_WIDTH });
-});
 
 const MORE_LABEL_TEMPLATE = '{n} ventanas más';
 
@@ -175,30 +166,29 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
     expect(container.children).toHaveLength(0);
   });
 
-  it('renders one chip per entry, unhidden, each an opener anchor with an accessible name and a close button', () => {
+  it('renders a chip, unhidden, as an opener anchor with an accessible name and a close button', () => {
     const container = document.createElement('nav');
-    renderMinimizedWindowsTray(container, [entry('a'), entry('b')], 'Quitar');
+    renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
     expect(container.hidden).toBe(false);
     const chips = container.querySelectorAll('a[data-desk-window-open]');
-    expect(chips).toHaveLength(2);
+    expect(chips).toHaveLength(1);
     expect(chips[0].getAttribute('data-desk-window-open')).toBe('a');
     expect(chips[0].getAttribute('href')).toBe('/es/ingles/actividades/a');
     expect(chips[0].querySelector('button')?.getAttribute('aria-label')).toBe('Quitar');
   });
 
-  // Polish pass 2026-10-06 (owner report, `dock-three-chips.png`): chips used
-  // to carry a visible title underneath the preview, which got cut off at
-  // the dock's own width. They are now icon-only tiles — the title lives in
-  // the existing tooltip pattern (`title`, a native tooltip) plus the
-  // anchor's own accessible name (`aria-label`), never visible chip text.
-  it('each chip is an icon-only tile: a document glyph preview (no thumbnail yet), no visible text label', () => {
+  // PART 6c (owner spec 2026-10-07): each chip is now a small rectangle —
+  // a document-glyph (or thumbnail) preview PLUS a visible, truncated
+  // title — now that it lives in its own fixed corner tray instead of
+  // squeezed into the levels dock.
+  it('each chip shows a document glyph preview (no thumbnail yet) plus a visible title', () => {
     const container = document.createElement('nav');
     renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
     const chip = container.querySelector('a[data-desk-window-open]') as HTMLAnchorElement;
 
     expect(chip.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(chip.querySelector('img')).toBeNull();
-    expect(chip.querySelector('small')).toBeNull();
+    expect(chip.textContent).toContain('Title a');
     expect(chip.title).toBe('Title a');
     expect(chip.getAttribute('aria-label')).toBe('Title a');
   });
@@ -231,26 +221,27 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
   });
 });
 
-// Polish pass 2026-10-06 (owner report, `dock-three-chips.png`): the dock
-// used to widen under the open helper bubble to fit every minimized chip.
-// It now shows at most `MAX_VISIBLE_MINIMIZED_CHIPS` (3) chips; the rest
-// collapse into one "+N" tile that opens a small menu listing them.
+// PART 6c polish (owner feedback 2026-10-07, defect #2): the tray used to
+// show up to 3 chips ≥1280px wide (1 below it) — a row that ran under/over
+// the hub's levels dock and its footer. It now shows at most
+// `MAX_VISIBLE_MINIMIZED_CHIPS` (1) chip, at EVERY viewport width; the rest
+// still collapse into one "+N" tile that opens a small menu listing them.
 describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () => {
   it('shows every chip, no overflow tile, when at or under the visible cap', () => {
     const container = document.createElement('nav');
-    renderMinimizedWindowsTray(container, [entry('a'), entry('b'), entry('c')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
-    expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(3);
+    renderMinimizedWindowsTray(container, [entry('a')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+    expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(1);
     expect(container.querySelector('[data-minimized-tray-more]')).toBeNull();
   });
 
-  it('shows only the first MAX_VISIBLE_MINIMIZED_CHIPS chips plus a "+N" tile once there are more', () => {
+  it('shows only the first MAX_VISIBLE_MINIMIZED_CHIPS chip plus a "+N" tile once there are more, regardless of viewport width', () => {
     const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
     const container = document.createElement('nav');
     renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
 
     const visibleChips = container.querySelectorAll('a[data-minimized-chip]');
     expect(visibleChips).toHaveLength(MAX_VISIBLE_MINIMIZED_CHIPS);
-    expect([...visibleChips].map((c) => c.getAttribute('data-desk-window-open'))).toEqual(['id-0', 'id-1', 'id-2']);
+    expect([...visibleChips].map((c) => c.getAttribute('data-desk-window-open'))).toEqual(['id-0']);
 
     const overflowCount = entries.length - MAX_VISIBLE_MINIMIZED_CHIPS;
     const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
@@ -258,6 +249,18 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     expect(moreButton.getAttribute('aria-expanded')).toBe('false');
     expect(moreButton.getAttribute('aria-label')).toBe(`${overflowCount} ventanas más`);
     expect(moreButton.textContent).toBe(`+${overflowCount}`);
+  });
+
+  it('a wide viewport still gets only ONE visible chip (the old ≥1280px/3-chip rule is gone)', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+    try {
+      const container = document.createElement('nav');
+      renderMinimizedWindowsTray(container, [entry('a'), entry('b'), entry('c')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+      expect(container.querySelectorAll('a[data-minimized-chip]')).toHaveLength(1);
+      expect((container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement).textContent).toBe('+2');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: window.innerWidth });
+    }
   });
 
   it('the "+N" tile is a button that opens a hidden menu listing every remaining entry as a link', () => {
@@ -275,8 +278,8 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     expect(moreButton.getAttribute('aria-expanded')).toBe('true');
     expect(menu.hidden).toBe(false);
     const items = menu.querySelectorAll('a[role="menuitem"][data-desk-window-open]');
-    expect([...items].map((a) => a.getAttribute('data-desk-window-open'))).toEqual(['id-3', 'id-4']);
-    expect(items[0].textContent).toBe('Title id-3');
+    expect([...items].map((a) => a.getAttribute('data-desk-window-open'))).toEqual(['id-1', 'id-2', 'id-3', 'id-4']);
+    expect(items[0].textContent).toBe('Title id-1');
 
     moreButton.click();
     expect(moreButton.getAttribute('aria-expanded')).toBe('false');
@@ -304,23 +307,6 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
   });
 });
 
-describe('renderMinimizedWindowsTray — the hairline sibling', () => {
-  it('unhides a sibling [data-minimized-tray-hairline] when there is something to show, and hides it again once empty', () => {
-    const wrapper = document.createElement('div');
-    const hairline = document.createElement('div');
-    hairline.setAttribute('data-minimized-tray-hairline', '');
-    hairline.hidden = true;
-    const container = document.createElement('nav');
-    wrapper.append(hairline, container);
-
-    renderMinimizedWindowsTray(container, [entry('a')], 'Quitar');
-    expect(hairline.hidden).toBe(false);
-
-    renderMinimizedWindowsTray(container, [], 'Quitar');
-    expect(hairline.hidden).toBe(true);
-  });
-});
-
 describe('initMinimizedWindowsTray', () => {
   it('does nothing when the tray container is not on the page', () => {
     const doc = document.implementation.createHTMLDocument('');
@@ -343,23 +329,132 @@ describe('initMinimizedWindowsTray', () => {
     expect(container.hidden).toBe(false);
     expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(1);
   });
+
+  // PART 6c polish (owner spec 2026-10-07, defect #3): wires the footer
+  // overlap guard against the tray's own OUTER wrapper, found as an
+  // ancestor of the `<nav>` container — see `initFooterOverlapGuard`'s own
+  // describe block below for the guard's actual behavior.
+  it('wires the footer overlap guard onto the tray wrapper ancestor, when present', () => {
+    // jsdom has no real `IntersectionObserver` — same minimal fake as
+    // `initFooterOverlapGuard`'s own describe block below.
+    class FakeIntersectionObserver {
+      constructor(_cb: IntersectionObserverCallback) {}
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    const original = globalThis.IntersectionObserver;
+    // @ts-expect-error — a minimal fake, not the full browser interface.
+    globalThis.IntersectionObserver = FakeIntersectionObserver;
+
+    try {
+      const doc = document.implementation.createHTMLDocument('');
+      const wrapper = doc.createElement('div');
+      wrapper.setAttribute(MINIMIZED_TRAY_WRAPPER_ATTR, '');
+      const container = doc.createElement('nav');
+      container.setAttribute('data-minimized-tray', '');
+      container.setAttribute('data-remove-label', 'Quitar');
+      wrapper.appendChild(container);
+      doc.body.appendChild(wrapper);
+      const footer = doc.createElement('footer');
+      footer.setAttribute('data-chrome-footer', '');
+      doc.body.appendChild(footer);
+
+      const fakeWin = { sessionStorage: fakeStorage() } as unknown as Window;
+      initMinimizedWindowsTray(doc, fakeWin);
+
+      expect(wrapper.dataset.trayFooterGuardReady).toBe('true');
+    } finally {
+      globalThis.IntersectionObserver = original;
+    }
+  });
 });
 
-describe('visibleChipLimit / narrow desktops', () => {
-  it('shows three chips from the narrow-desk threshold up, one below it', () => {
-    expect(visibleChipLimit(NARROW_DESK_WIDTH)).toBe(MAX_VISIBLE_MINIMIZED_CHIPS);
-    expect(visibleChipLimit(1920)).toBe(MAX_VISIBLE_MINIMIZED_CHIPS);
-    expect(visibleChipLimit(NARROW_DESK_WIDTH - 1)).toBe(1);
-    expect(visibleChipLimit(390)).toBe(1);
+// PART 6c polish (owner spec 2026-10-07, defect #3): the hub's fixed
+// bottom-right tray must not sit on top of the footer's own
+// Premium/Términos/Privacidad links once the visitor scrolls down to it.
+describe('initFooterOverlapGuard', () => {
+  it('toggles TRAY_FOOTER_OVERLAP_ATTR on the wrapper while the footer intersects, via IntersectionObserver', () => {
+    const observed: Element[] = [];
+    let callback: IntersectionObserverCallback | null = null;
+    let options: IntersectionObserverInit | undefined;
+    class FakeIntersectionObserver {
+      constructor(cb: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+        callback = cb;
+        options = init;
+      }
+      observe(target: Element) {
+        observed.push(target);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    const original = globalThis.IntersectionObserver;
+    // @ts-expect-error — a minimal fake, not the full browser interface.
+    globalThis.IntersectionObserver = FakeIntersectionObserver;
+
+    try {
+      const wrapper = document.createElement('div');
+      const footer = document.createElement('footer');
+      footer.setAttribute('data-chrome-footer', '');
+      document.body.appendChild(footer);
+
+      initFooterOverlapGuard(wrapper, document);
+
+      expect(observed).toEqual([footer]);
+      expect(wrapper.hasAttribute(TRAY_FOOTER_OVERLAP_ATTR)).toBe(false);
+      // The hub's footer starts flush with the viewport's bottom edge; without
+      // the 1px root inset that edge contact counts as intersecting on load and
+      // the tray stays hidden. jsdom has no layout, so the option is pinned here
+      // and the real behaviour is checked in the browser.
+      expect(options?.rootMargin).toBe(FOOTER_GUARD_ROOT_MARGIN);
+
+      callback!([{ isIntersecting: true } as IntersectionObserverEntry], null as unknown as IntersectionObserver);
+      expect(wrapper.hasAttribute(TRAY_FOOTER_OVERLAP_ATTR)).toBe(true);
+
+      callback!([{ isIntersecting: false } as IntersectionObserverEntry], null as unknown as IntersectionObserver);
+      expect(wrapper.hasAttribute(TRAY_FOOTER_OVERLAP_ATTR)).toBe(false);
+
+      footer.remove();
+    } finally {
+      globalThis.IntersectionObserver = original;
+    }
   });
 
-  it('renders one chip plus a "+N" tile on a narrow viewport, so the six level tiles keep their room', () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1100 });
-    {
-      const container = document.createElement('nav');
-      renderMinimizedWindowsTray(container, [entry('a'), entry('b'), entry('c')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
-      expect(container.querySelectorAll('a[data-minimized-chip]')).toHaveLength(1);
-      expect((container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement).textContent).toBe('+2');
+  it('is idempotent — a second call never attaches a second observer', () => {
+    let observeCalls = 0;
+    class FakeIntersectionObserver {
+      constructor(_cb: IntersectionObserverCallback) {}
+      observe() {
+        observeCalls++;
+      }
+      unobserve() {}
+      disconnect() {}
     }
+    const original = globalThis.IntersectionObserver;
+    // @ts-expect-error — a minimal fake, not the full browser interface.
+    globalThis.IntersectionObserver = FakeIntersectionObserver;
+
+    try {
+      const wrapper = document.createElement('div');
+      const footer = document.createElement('footer');
+      footer.setAttribute('data-chrome-footer', '');
+      document.body.appendChild(footer);
+
+      initFooterOverlapGuard(wrapper, document);
+      initFooterOverlapGuard(wrapper, document);
+
+      expect(observeCalls).toBe(1);
+      footer.remove();
+    } finally {
+      globalThis.IntersectionObserver = original;
+    }
+  });
+
+  it('is a no-op when there is no real footer on the page', () => {
+    const doc = document.implementation.createHTMLDocument('');
+    const wrapper = doc.createElement('div');
+    expect(() => initFooterOverlapGuard(wrapper, doc)).not.toThrow();
+    expect(wrapper.dataset.trayFooterGuardReady).toBeUndefined();
   });
 });

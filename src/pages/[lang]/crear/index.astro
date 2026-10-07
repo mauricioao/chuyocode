@@ -25,13 +25,15 @@
  * renders as a WINDOW over the desk too — the same shell `crear/[id].astro`
  * (the actual editor) uses, opened by the hub's own "Crear actividad" icon
  * (`DeskScene.astro`'s `data-desk-window-open="create"`). The red light
- * replaces `PageTitle`'s old `backHref` (the hub). There is nothing to
- * minimize yet (no activity id exists until a type is picked —
- * `ActivityStartIsland`'s own `POST /api/actividades`), so no `trayId` is
- * passed here: the yellow light simply falls back to doing exactly what the
- * red one does (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`),
- * same as a GUEST's practice window. `closeOnEscape` stays at its default
- * (`true`) — this screen has no competing use for Escape, unlike the editor.
+ * replaces `PageTitle`'s old `backHref` (the hub) — PART 6c: it ALWAYS
+ * navigates straight there now, never `history.back()`
+ * (`@lib/ui/deskWindow.ts`'s own header). There is nothing to minimize yet
+ * (no activity id exists until a type is picked — `ActivityStartIsland`'s
+ * own `POST /api/actividades`), so no `trayId` is passed here: the yellow
+ * light simply falls back to doing exactly what the red one does
+ * (`@lib/ui/deskWindow.ts#initDeskWindow`'s own `minimize()`), same as a
+ * GUEST's practice window. `closeOnEscape` stays at its default (`true`) —
+ * this screen has no competing use for Escape, unlike the editor.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import DeskScene from '@components/ingles/DeskScene.astro';
@@ -77,7 +79,6 @@ const deskLabels = {
   greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
   greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
   foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  proposedTitle: UI_LABELS[lang].english.hub.proposedTitle,
   communityTitle: UI_LABELS[lang].english.hub.communityTitle,
   todayTitle: UI_LABELS[lang].english.hub.todayTitle,
   createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
@@ -85,18 +86,13 @@ const deskLabels = {
   weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
   weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
   levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-  trayLabel: UI_LABELS[lang].english.hub.trayLabel,
-  trayRemoveLabel: UI_LABELS[lang].english.hub.trayRemoveLabel,
-  trayMoreLabel: UI_LABELS[lang].english.hub.trayMoreLabel,
 };
 ---
 
 <BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles" deskBehind>
   <DeskScene
     lang={lang}
-    inert
     greetingLine1={desk.greetingLine1}
-    exerciseCountLabel={desk.exerciseCountLabel}
     activityCountLabel={desk.activityCountLabel}
     dailyPickHref={desk.dailyPickHref}
     dailyPickMeta={desk.dailyPickMeta}
@@ -117,7 +113,6 @@ const deskLabels = {
     closeLabel={editorT.windowClose}
     minimizeLabel={editorT.windowMinimize}
     fullScreenLabel={editorT.windowFullScreen}
-    closeUsesTrackedPath
     slot="overlay"
   >
     <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">

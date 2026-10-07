@@ -11,17 +11,48 @@
  * needs a visible text caption, matching `SaveStatusIndicator`'s own
  * icon-only posture.
  *
- * FLOATING (this pass): a `docked` boolean plus an `{ x, y }` `position`
- * (meaningful only while undocked) drive the rail's own placement. DOCKED —
- * the default, and every existing caller's prior behavior — renders the
- * ORIGINAL fixed/centered/right-aligned classes unchanged, no inline style,
- * no measurement, no localStorage read even attempted. Only dragging the
- * handle (or a keyboard nudge) actually undocks it; from then on the rail is
- * `fixed` at an explicit `{ left, top }` inline style, clamped by
- * `src/lib/activities/toolbarPosition.ts` (pure, unit-tested there) to stay
- * fully within the visible area BETWEEN the site header and footer — this
- * component only measures the real `<header>`/`<footer>` elements and the
- * rail's own box, then hands plain numbers to that module.
+ * DOCKED/FLOATING split (desk window dock pass): a `docked` boolean plus a
+ * `{ x, y }` `position` — ALWAYS live, in BOTH states — drive the rail's own
+ * placement. The rail (and its ghost dock-target) is ALWAYS portaled
+ * straight to `document.body` (`createPortal`, `railAndGhost`'s own header
+ * below) — the container NEVER changes based on `docked`, for two compounding
+ * reasons: `#desk-window` gets a non-`none` CSS `translate` the instant it
+ * has ever been dragged (`deskWindowDrag.ts`'s own `applyOffset`, persisted
+ * across reloads), which — per the CSS spec — makes it the containing block
+ * for ANY `position: fixed`/`absolute` DESCENDANT instead of the real
+ * viewport; and React tears a portaled subtree down and remounts it
+ * (confirmed empirically — losing `railRef`, any in-flight drag, and every
+ * DOM reference a test already holds) the moment its OWN container target
+ * changes between renders, even outside a live gesture. One stable target
+ * for this component's whole lifetime is the only shape that is
+ * simultaneously correct (truly viewport-relative while floating) and
+ * remount-free.
+ *
+ * DOCKED — the default: `position` is kept synced to the WINDOW's own
+ * current dock slot (`dockTargetPosition(size, measureBounds())` —
+ * `measureBounds` prefers `[data-desk-window-body]`'s real rect) by a
+ * `MutationObserver` on `#desk-window`'s own `style` attribute (dragging or
+ * maximizing the window writes `style.translate`/classes there) plus a
+ * `resize` listener — so it still visually tracks the window being dragged,
+ * maximized, or resized, just via an explicit, event-driven resync instead
+ * of a free CSS containing-block trick (which a single stable portal target
+ * rules out — see above).
+ *
+ * UNDOCKED — released by dragging the handle, a keyboard nudge, or the
+ * dock/float toggle (the "clip", `toolbar-dock-toggle`, pinned ⇄ unpinned —
+ * `aria-pressed` mirrors `docked` so the state reads at a glance): `position`
+ * is clamped by `src/lib/activities/toolbarPosition.ts` (pure, unit-tested
+ * there) to the full VIEWPORT (`measureViewportBounds`, header-to-footer) —
+ * NOT the window — so it can float anywhere, including over the desk outside
+ * the window entirely. The ghost "dock" target shown while undocked (and the
+ * snap-back distance check) still targets the WINDOW's own current slot
+ * (`measureBounds`) — floating is viewport-wide, but re-docking always aims
+ * back at the window, wherever it currently sits on screen.
+ *
+ * Z-INDEX: `z-[60]`, one above the window's own `z-50` — same convention
+ * `MinimizedWindowsTray.astro` uses for the same reason (a plain
+ * `document.body`-level sibling of the window must always win the stacking
+ * comparison against it) — applies in BOTH states now, not just floating.
  *
  * PERSISTENCE: `{ docked, x, y }` in `localStorage`, wrapped in try/catch on
  * every read AND write (a private window, blocked storage, or a corrupted
@@ -37,6 +68,7 @@
  * floating anywhere else — see that component's own header.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ListBulletsIcon } from '@phosphor-icons/react/dist/ssr/ListBullets';
@@ -49,6 +81,7 @@ import { KeyboardIcon } from '@phosphor-icons/react/dist/ssr/Keyboard';
 import { FloppyDiskIcon } from '@phosphor-icons/react/dist/ssr/FloppyDisk';
 import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVertical';
 import { PushPinIcon } from '@phosphor-icons/react/dist/ssr/PushPin';
+import { PushPinSlashIcon } from '@phosphor-icons/react/dist/ssr/PushPinSlash';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import type { AutosaveStatus } from '@/lib/activities/autosave';
@@ -80,26 +113,35 @@ const STORAGE_KEY = 'chuyocode:editor-side-toolbar';
 /** The ghost dock target's own rendered size (`h-8 w-8`, 2rem). */
 const DOCK_TARGET_SIZE = 32;
 
+/** The full viewport, minus the site `<header>`/`<footer>` when present — shared by {@link measureBounds} (its own fallback) and {@link measureViewportBounds} (always). */
+function headerFooterBounds(): Bounds {
+  const header = document.querySelector('header');
+  const footer = document.querySelector('footer');
+  return {
+    left: 0,
+    right: window.innerWidth,
+    top: header?.getBoundingClientRect().bottom ?? 0,
+    bottom: footer?.getBoundingClientRect().top ?? window.innerHeight,
+  };
+}
+
 /**
- * The visible area the floating rail (and the ghost dock target) may occupy.
+ * Where the editor window's own DOCKED slot currently sits on screen — used
+ * ONLY for the ghost dock-target's position and the drag-release snap-back
+ * check (`shouldSnapToDock`/`dockTargetPosition`), never to clamp the
+ * floating rail itself any more (see {@link measureViewportBounds}).
  *
- * PART 6b polish (owner report: "el riel se sale de la ventana, queda
- * pegado al borde de la pantalla"): this component now ALWAYS renders
- * inside `DeskWindow` (the activity editor's only caller) — a plain `fixed`
- * rail measured against the full viewport/header/footer used to clamp
- * itself past the window's own `desk:` inset border, since the window is
- * itself inset from the viewport there. `[data-desk-window-body]`
- * (`DeskWindow.astro`'s own body wrapper, the one non-scrolling ancestor at
- * `desk:`) is checked FIRST and, when present, is the bounds — the rail then
- * stays fully inside the window's own body, on every axis, instead of the
- * screen. Falls back to the original header-to-footer/full-width
- * measurement when no desk window is mounted (every other, non-editor
- * caller of this component, and this file's own tests). Only ever called
- * client-side (inside an effect or an event handler, never during the
- * render body while `docked` could still be the server-matching default) —
- * `document`/`window` don't exist during SSR, and the guard below is
- * defensive insurance on top of that, not the only thing preventing an SSR
- * crash.
+ * `[data-desk-window-body]` (`DeskWindow.astro`'s own body wrapper) is
+ * checked first and, when present, is the bounds — real docking is now pure
+ * CSS against that same element (its own header), but the GHOST still needs
+ * real viewport pixels to draw itself and to judge "close enough to
+ * re-dock". Falls back to the header-to-footer measurement when no desk
+ * window is mounted (every other, non-editor caller of this component, and
+ * this file's own tests). Only ever called client-side (inside an effect or
+ * an event handler, never during the render body while `docked` could still
+ * be the server-matching default) — `document`/`window` don't exist during
+ * SSR, and the guard below is defensive insurance on top of that, not the
+ * only thing preventing an SSR crash.
  */
 function measureBounds(): Bounds {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -110,14 +152,22 @@ function measureBounds(): Bounds {
     const rect = windowBody.getBoundingClientRect();
     return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
   }
-  const header = document.querySelector('header');
-  const footer = document.querySelector('footer');
-  return {
-    left: 0,
-    right: window.innerWidth,
-    top: header?.getBoundingClientRect().bottom ?? 0,
-    bottom: footer?.getBoundingClientRect().top ?? window.innerHeight,
-  };
+  return headerFooterBounds();
+}
+
+/**
+ * The FLOATING (undocked) rail's own clamp bounds — always the full
+ * viewport (header-to-footer), NEVER the window: releasing the rail lets it
+ * sit anywhere on the desk, including outside the window entirely (the
+ * component's own header). Used for every undocked clamp: the initial
+ * restore-from-`localStorage`, every live drag frame, the release, the
+ * keyboard nudge, and the resize/scroll re-clamp.
+ */
+function measureViewportBounds(): Bounds {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { left: 0, right: 0, top: 0, bottom: 0 };
+  }
+  return headerFooterBounds();
 }
 
 /** The rail's own current rendered size, or `{0,0}` before it has ever mounted. */
@@ -152,6 +202,7 @@ function ToolbarIconButton({
   testId,
   disabled,
   loading,
+  pressed,
   onClick,
   children,
 }: {
@@ -160,6 +211,8 @@ function ToolbarIconButton({
   disabled?: boolean;
   /** Shows the shared `Button`'s own spinner in place of the icon — the manual save button's own in-flight state (coherent loading states, item 3). Every other toolbar icon leaves this unset. */
   loading?: boolean;
+  /** Toggle buttons only (the dock/float "clip") — forwarded as `aria-pressed`, with a subtle pinned-looking fill so the state reads at a glance (`aria-pressed:` is a built-in Tailwind 4 variant, same pattern `aria-expanded:` already uses on `Button`'s own `ghost` variant). Every other toolbar icon leaves this unset, which renders byte-identical to before. */
+  pressed?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -170,6 +223,8 @@ function ToolbarIconButton({
       variant="ghost"
       aria-label={label}
       title={label}
+      aria-pressed={pressed}
+      className={pressed !== undefined ? 'aria-pressed:bg-muted aria-pressed:text-foreground' : undefined}
       data-testid={testId}
       disabled={disabled}
       loading={loading}
@@ -349,37 +404,80 @@ export default function EditorSideToolbar({
   // drag never commits a stale position.
   const latestDragPositionRef = useRef<Point>({ x: 0, y: 0 });
 
-  // Mount-only: measure the rail's own size once, and hydrate `docked`/
-  // `position` from `localStorage` (wrapped in try/catch — a private
-  // window, blocked storage, or corrupted JSON must never crash the
-  // editor; anything invalid/missing reads back as the DOCKED default via
-  // `parsePersistedToolbarState`, so `docked`/`position`'s own `useState`
-  // defaults above already ARE that fallback). `useLayoutEffect` so an
-  // undocked restore applies before the first paint, not after a visible
-  // docked flash.
+  // ONE unified effect for both "hydrate from localStorage on mount" and
+  // "keep `position` synced to the window's own dock slot while docked" —
+  // deliberately NOT two separate effects: a `useLayoutEffect`-triggered
+  // state update forces a synchronous re-render before paint, but a
+  // SEPARATE `useEffect` already scheduled for the ORIGINAL (pre-update)
+  // render still fires against that original render's own closed-over
+  // `docked` value, not the updated one — confirmed empirically (an
+  // undocked restore kept getting clobbered back to the docked slot by a
+  // second, stale-`docked` effect run). One effect, one sequential function
+  // body, no such race: the mount-only localStorage branch `return`s
+  // immediately when it restores undocked, skipping the dock-sync branch
+  // below ENTIRELY on that same call, rather than relying on two effects
+  // somehow agreeing on ordering.
+  //
+  // `useLayoutEffect` so the FIRST real position (restored, or the window's
+  // own dock slot) applies before the first paint, never after a visible
+  // flash at `{0,0}` — and so every LATER resync (the window being dragged,
+  // maximized, or the viewport resizing) stays equally flash-free.
+  //
+  // `mountedOnceRef` is what makes `[docked]` a safe dependency here without
+  // re-reading `localStorage` (and re-fighting an in-progress drag/the
+  // persist effect) on every docked<->undocked transition: the hydration
+  // branch only ever runs on the true first call.
+  const mountedOnceRef = useRef(false);
   useLayoutEffect(() => {
     const size = measureSize(railRef.current);
     setRailSize(size);
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      const restored = parsePersistedToolbarState(parsed);
-      if (!restored.docked) {
-        const clamped = clampToolbarPosition({ x: restored.x, y: restored.y }, size, measureBounds());
-        setPosition(clamped);
-        setDocked(false);
+
+    if (!mountedOnceRef.current) {
+      mountedOnceRef.current = true;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        const restored = parsePersistedToolbarState(parsed);
+        if (!restored.docked) {
+          const clamped = clampToolbarPosition({ x: restored.x, y: restored.y }, size, measureViewportBounds());
+          setPosition(clamped);
+          setDocked(false);
+          return undefined; // restored undocked -> no dock-sync/observer this run.
+        }
+      } catch {
+        // Invalid/missing -> fall through to the DOCKED sync below (already
+        // the default `docked`/`useState`).
       }
-    } catch {
-      // Invalid/missing -> stay at the DOCKED default already set above.
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    if (!docked) return undefined;
+
+    // Keep `position` synced to the WINDOW's own current dock slot: a
+    // `MutationObserver` on the window's own `style` attribute
+    // (`deskWindowDrag.ts`'s own `applyOffset` writes `style.translate`
+    // there) plus a `resize` listener — event-driven, never polled: the
+    // window never fires its own custom "moved" event, but it DOES always
+    // touch its own `style` when it moves, which this observes directly.
+    function resync() {
+      setPosition(dockTargetPosition(measureSize(railRef.current), measureBounds()));
+    }
+    resync();
+    const windowEl = document.getElementById('desk-window');
+    const observer = windowEl ? new MutationObserver(resync) : null;
+    if (windowEl && observer) {
+      observer.observe(windowEl, { attributes: true, attributeFilter: ['style'] });
+    }
+    window.addEventListener('resize', resync);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', resync);
+    };
+  }, [docked]);
 
   // Persist on every `docked`/`position` change — EXCEPT the very first run
   // (mount), which would otherwise write the not-yet-hydrated DOCKED default
-  // right over a real persisted value before the hydration effect above's
-  // own state updates have had a chance to land (both effects run in the
-  // same initial commit, in declaration order — this one second).
+  // right over a real persisted value before the hydration+sync effect
+  // above's own state updates (from the SAME initial commit) have landed.
   const skipNextPersistRef = useRef(true);
   useEffect(() => {
     if (skipNextPersistRef.current) {
@@ -403,7 +501,7 @@ export default function EditorSideToolbar({
     if (docked) return undefined;
     function reclamp() {
       const size = measureSize(railRef.current);
-      setPosition((prev) => clampToolbarPosition(prev, size, measureBounds()));
+      setPosition((prev) => clampToolbarPosition(prev, size, measureViewportBounds()));
     }
     window.addEventListener('resize', reclamp);
     window.addEventListener('scroll', reclamp, true);
@@ -435,10 +533,26 @@ export default function EditorSideToolbar({
 
   const dock = useCallback(() => setDocked(true), []);
 
+  // Release to float, from the "clip" toggle (not a drag): captures the
+  // rail's REAL, live on-screen rect (not just the last synced `position` —
+  // self-correcting even if a resync is somehow stale) so undocking never
+  // jumps, same "measure, don't assume" posture as `handlePointerDown`.
+  const undock = useCallback(() => {
+    const rect = railRef.current?.getBoundingClientRect();
+    if (rect) setPosition({ x: rect.left, y: rect.top });
+    setDocked(false);
+  }, []);
+
+  /** The "clip": pinned (docked) <-> released (floating) — `toolbar-dock-toggle`'s own `onClick`. */
+  const toggleDocked = useCallback(() => {
+    if (docked) undock();
+    else dock();
+  }, [docked, undock, dock]);
+
   // Pointer-drag undock/move — the handle's own `onPointerDown`/Move/Up.
-  // Dragging FROM docked captures the rail's actual on-screen position
-  // first (it has no JS-tracked position while docked — the CSS classes
-  // place it), so undocking never jumps: it detaches exactly where it
+  // Dragging FROM docked captures the rail's REAL on-screen rect (not just
+  // the last synced `position` — self-correcting even if a resync is
+  // somehow stale), so undocking never jumps: it detaches exactly where it
   // already visually was.
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -474,7 +588,7 @@ export default function EditorSideToolbar({
       x: drag.startPosition.x + (e.clientX - drag.startClientX),
       y: drag.startPosition.y + (e.clientY - drag.startClientY),
     };
-    const clamped = clampToolbarPosition(proposed, size, measureBounds());
+    const clamped = clampToolbarPosition(proposed, size, measureViewportBounds());
     latestDragPositionRef.current = clamped;
     setPosition(clamped);
   }, []);
@@ -485,9 +599,11 @@ export default function EditorSideToolbar({
     setIsDragging(false);
     if (!drag) return;
     const size = measureSize(railRef.current);
-    const bounds = measureBounds();
-    const finalPosition = clampToolbarPosition(latestDragPositionRef.current, size, bounds);
-    const target = dockTargetPosition(size, bounds);
+    // Final resting spot: clamped to the VIEWPORT (floating is viewport-wide
+    // now) — but "close enough to re-dock" still targets the WINDOW's own
+    // current slot (`measureBounds`), wherever it is on screen.
+    const finalPosition = clampToolbarPosition(latestDragPositionRef.current, size, measureViewportBounds());
+    const target = dockTargetPosition(size, measureBounds());
     if (shouldSnapToDock(finalPosition, target)) {
       setDocked(true);
     } else {
@@ -521,9 +637,16 @@ export default function EditorSideToolbar({
       e.preventDefault();
       const step = keyboardStep(e.shiftKey);
       const size = measureSize(railRef.current);
-      const bounds = measureBounds();
-      const current = docked ? dockTargetPosition(size, bounds) : position;
-      const clamped = clampToolbarPosition({ x: current.x + delta.x * step, y: current.y + delta.y * step }, size, bounds);
+      // Starting point: the WINDOW's own docked slot when nudging FROM
+      // docked (`measureBounds`) — but the nudged result is a floating
+      // position, clamped to the full VIEWPORT like every other undocked
+      // move.
+      const current = docked ? dockTargetPosition(size, measureBounds()) : position;
+      const clamped = clampToolbarPosition(
+        { x: current.x + delta.x * step, y: current.y + delta.y * step },
+        size,
+        measureViewportBounds(),
+      );
       setDocked(false);
       setPosition(clamped);
     },
@@ -597,7 +720,17 @@ export default function EditorSideToolbar({
     </div>
   );
 
-  const desktopRail = (
+  // ALWAYS PORTALED TO `document.body`, NEVER CONDITIONALLY (dock pass
+  // bugfix — see the file's own header: a single stable target is the only
+  // shape that is both truly viewport-relative while floating AND
+  // remount-free). Gated on `hydrated` (the SAME flag the mobile/desktop
+  // SSR split already uses below), not a raw `typeof document` check: a
+  // `renderToStaticMarkup` call still has `document` as a jsdom global in
+  // this file's OWN tests despite never running an effect, and
+  // `ReactDOMServer` refuses to render a portal at all — `hydrated` only
+  // flips once a real client commit has happened, which is exactly when
+  // `document.body` is both safe AND meaningful to target.
+  const railAndGhost = (
     <>
     {!docked && ghostPosition && (
       // Floating affordance (hovers over the page like `BackButton`/
@@ -611,7 +744,11 @@ export default function EditorSideToolbar({
         aria-label={t.dockToolbar}
         title={t.dockToolbar}
         onClick={dock}
-        className="glass-floating fixed z-40 flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        // `z-[60]`: one above the window's own `z-50` — same convention
+        // `MinimizedWindowsTray.astro` uses — so this (now body-portaled,
+        // see `railAndGhost`'s own header) ghost always wins the stacking
+        // comparison wherever it lands, including directly over the window.
+        className="glass-floating fixed z-[60] flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ left: ghostPosition.x, top: ghostPosition.y }}
       >
         <PushPinIcon aria-hidden="true" />
@@ -622,24 +759,34 @@ export default function EditorSideToolbar({
       data-testid="editor-side-toolbar"
       data-docked={docked}
       className={
-        // DOCKED: an ordinary opaque system surface, anchored to the card's
-        // own edge — never glass (glass reads as "floating above the page",
-        // which a docked rail is not). FLOATING (undocked): the same
+        // Both states are `fixed` at an explicit `{ left, top }` now (see
+        // the file header) — `position` is kept live either way, so there is
+        // no more separate "pure CSS" docked branch. DOCKED: an ordinary
+        // opaque system surface (never glass — glass reads as "floating
+        // above the page", which a docked rail is not). UNDOCKED: the same
         // glass-floating recipe `BackButton`/`ScrollToTop` use, since once
-        // dragged free it IS a floating control.
-        // `desk:right-7` (PART 6b polish): the window's own `desk:inset-x-16`
-        // border sits 16px in from the viewport edge at that breakpoint —
-        // `right-3` (12px) alone landed the docked rail OUTSIDE it. 28px
-        // (16+12) keeps the exact same `right-3` look everywhere the window
-        // is already full-screen (below `desk:`, where window edge ==
-        // viewport edge, so `right-3` was already correct) and pulls it
-        // inward only once the window itself gets that 16px desktop inset.
+        // released it IS a floating control. `z-[60]` in both: one above the
+        // window's own `z-50` (`MinimizedWindowsTray.astro`'s own
+        // convention) — this is a plain `document.body`-level sibling of
+        // `#desk-window` now, not a descendant, so without it the window
+        // would win ordinary stacking comparisons wherever the two overlap.
         docked
-          ? 'fixed top-1/2 right-3 desk:right-7 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
-          : 'glass-floating fixed z-40 flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)'
+          ? 'fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
+          : 'glass-floating fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)'
       }
-      style={docked ? undefined : { left: position.x, top: position.y }}
+      style={{ left: position.x, top: position.y }}
     >
+      <ToolbarIconButton
+        label={docked ? t.undockToolbar : t.dockToolbar}
+        testId="toolbar-dock-toggle"
+        pressed={docked}
+        onClick={toggleDocked}
+      >
+        {docked ? <PushPinIcon aria-hidden="true" /> : <PushPinSlashIcon aria-hidden="true" />}
+      </ToolbarIconButton>
+
+      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+
       <div
         ref={handleRef}
         role="button"
@@ -710,6 +857,8 @@ export default function EditorSideToolbar({
     </div>
     </>
   );
+
+  const desktopRail = hydrated ? createPortal(railAndGhost, document.body) : railAndGhost;
 
   // No-flash split (mobile layout pass, priority fix): `isDesktop` alone
   // used to pick DOM structure directly, which defaults to `true` before

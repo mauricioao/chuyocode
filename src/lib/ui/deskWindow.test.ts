@@ -8,8 +8,6 @@
 // churn for one new describe block.
 import { describe, it, expect, afterEach } from 'vitest';
 import {
-  resolveCloseAction,
-  resolveTrackedCloseAction,
   shouldStartFullScreen,
   readFullScreenPreference,
   writeFullScreenPreference,
@@ -19,60 +17,7 @@ import {
   EDITOR_WINDOW_GUARD_KEY,
   type EditorWindowGuard,
 } from './deskWindow';
-
-describe('resolveCloseAction', () => {
-  const hub = '/es/ingles';
-
-  it('prefers history.back() when the previous SCREEN this visitor saw is exactly the close target', () => {
-    const action = resolveCloseAction('/es/ingles', 2, hub);
-    expect(action).toEqual({ kind: 'back' });
-  });
-
-  it('falls back to a plain href when there is no previous history entry', () => {
-    const action = resolveCloseAction('/es/ingles', 1, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href when the previous screen was a different path', () => {
-    const action = resolveCloseAction('/es/ingles/actividades', 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href when the previous screen is unknown (null — no tracked path, no usable referrer)', () => {
-    const action = resolveCloseAction(null, 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('resolves the guest close target (ChuyoCode home) the exact same way', () => {
-    const home = '/es/';
-    const action = resolveCloseAction('/es/', 2, home);
-    expect(action).toEqual({ kind: 'back' });
-  });
-});
-
-describe('resolveTrackedCloseAction (PART 6b polish, the editor/picker close resolution)', () => {
-  const hub = '/es/ingles';
-
-  it('prefers history.back() to ANY known previous screen, not just one that equals the target', () => {
-    const action = resolveTrackedCloseAction('/es/mis-actividades', 2, hub);
-    expect(action).toEqual({ kind: 'back' });
-  });
-
-  it('still prefers history.back() when the previous screen happens to equal the target', () => {
-    const action = resolveTrackedCloseAction(hub, 2, hub);
-    expect(action).toEqual({ kind: 'back' });
-  });
-
-  it('falls back to a plain href when there is no previous history entry', () => {
-    const action = resolveTrackedCloseAction('/es/mis-actividades', 1, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-
-  it('falls back to a plain href when the previous screen is unknown', () => {
-    const action = resolveTrackedCloseAction(null, 2, hub);
-    expect(action).toEqual({ kind: 'href', href: hub });
-  });
-});
+import { MINIMIZED_WINDOWS_STORAGE_KEY, parseMinimizedWindows } from './minimizedWindows';
 
 describe('shouldStartFullScreen', () => {
   it('starts full screen only when the stored value is exactly "true"', () => {
@@ -174,9 +119,9 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
     };
   }
 
-  function fakeWin(historyLength = 1) {
+  function fakeWin(historyLength = 1, pathname = '/es/crear/abc', search = '') {
     return {
-      location: { href: '', pathname: '/es/crear/abc', search: '', origin: 'https://example.test' },
+      location: { href: '', pathname, search, origin: 'https://example.test' },
       history: { length: historyLength, back: () => {} },
       sessionStorage: fakeStorage(),
       matchMedia: () => ({ matches: true }), // reduced-motion: skip the animation delay entirely
@@ -323,11 +268,64 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
     expect(win.location.href).toBe('/es/mis-actividades');
   });
 
-  // `closeUsesTrackedPath` (PART 6b polish) — the 7th, opt-in param;
-  // `fakeWin`'s own `sessionStorage` is where `readTrackedPreviousPath`
-  // (`@lib/backNavigation`) reads `trackPageVisit`'s own tracked path from.
-  describe('closeUsesTrackedPath=true (editor/picker close resolution)', () => {
-    it('close() prefers history.back() to ANY tracked previous screen, not just one matching the fallback target', async () => {
+  // Community-list-as-a-window pass (owner spec 2026-10-07): minimizing the
+  // community window must restore the SAME filtered list, not a plain
+  // unfiltered one — the whole point of a tray chip is reopening to exactly
+  // where the visitor left off. `minimizeNow` builds the stored `href` from
+  // `win.location.pathname` + `win.location.search`, so whatever filters
+  // are in the URL at minimize time are what the chip reopens to; this
+  // locks that contract down directly, rather than only through the
+  // generic flush/guard tests above (none of which inspect the stored
+  // entry's own `href`/`title`).
+  describe('minimize(): stores the exact current URL (filters included) and the title bar\'s own text', () => {
+    it('stores href as pathname + search — reopening the chip restores the same filtered list', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(1, '/es/ingles/actividades', '?nivel=B1&orden=gustadas');
+      initDeskWindow(el, '/es/ingles', 'community-activities', true, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      const stored = parseMinimizedWindows(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY));
+      expect(stored).toHaveLength(1);
+      expect(stored[0].href).toBe('/es/ingles/actividades?nivel=B1&orden=gustadas');
+      expect(stored[0].id).toBe('community-activities');
+    });
+
+    it('stores the title bar\'s own text (always "Actividades de la comunidad" for the community window, regardless of filters)', async () => {
+      const el = buildWindowEl();
+      el.querySelector('#t')!.textContent = 'Actividades de la comunidad';
+      const win = fakeWin(1, '/es/ingles/actividades', '?q=present');
+      initDeskWindow(el, '/es/ingles', 'community-activities', true, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      const stored = parseMinimizedWindows(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY));
+      expect(stored[0].title).toBe('Actividades de la comunidad');
+    });
+
+    it('stores a bare pathname (no trailing "?") when there is no query string at all', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(1, '/es/ingles/actividades', '');
+      initDeskWindow(el, '/es/ingles', 'community-activities', true, document, win);
+
+      click(el.querySelector('[data-desk-window-minimize]')!);
+      await flushMicrotasks();
+
+      const stored = parseMinimizedWindows(win.sessionStorage.getItem(MINIMIZED_WINDOWS_STORAGE_KEY));
+      expect(stored[0].href).toBe('/es/ingles/actividades');
+    });
+  });
+
+  // PART 6c (owner spec 2026-10-07): closing ALWAYS navigates straight to
+  // the target now — never `history.back()`, regardless of any tracked
+  // previous screen (the old `closeUsesTrackedPath` param/behaviour is
+  // gone). `fakeWin`'s own reduced-motion stub (`matches: true` for every
+  // query) means `closeNow`'s animation branch is skipped, so `location.href`
+  // is already set by the time `flushMicrotasks` resolves.
+  describe('close() always navigates to the target (PART 6c, never history.back())', () => {
+    it('ignores any tracked previous screen and navigates straight to the target', async () => {
       const el = buildWindowEl();
       const win = fakeWin(2);
       let backCalls = 0;
@@ -335,50 +333,61 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
         backCalls += 1;
       };
       win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
-      initDeskWindow(el, '/es/ingles', null, false, document, win, true);
+      initDeskWindow(el, '/es/ingles', null, false, document, win);
 
       click(el.querySelector('[data-desk-window-close]')!);
       await flushMicrotasks();
 
-      expect(backCalls).toBe(1);
-      expect(win.location.href).toBe(''); // never set — back() was used, not a plain navigation.
-    });
-
-    it('close() falls back to the fallback target when there is no tracked previous path', async () => {
-      const el = buildWindowEl();
-      const win = fakeWin(2);
-      initDeskWindow(el, '/es/ingles', null, false, document, win, true);
-
-      click(el.querySelector('[data-desk-window-close]')!);
-      await flushMicrotasks();
-
+      expect(backCalls).toBe(0);
       expect(win.location.href).toBe('/es/ingles');
     });
 
-    it('minimize() still always navigates straight to the target (never history.back()), unaffected by this flag', async () => {
+    it('navigates to the target even with no tracked previous path at all', async () => {
       const el = buildWindowEl();
       const win = fakeWin(2);
-      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
-      initDeskWindow(el, '/es/ingles', 'abc', false, document, win, true);
+      initDeskWindow(el, '/es/ingles', null, false, document, win);
 
-      click(el.querySelector('[data-desk-window-minimize]')!);
+      click(el.querySelector('[data-desk-window-close]')!);
       await flushMicrotasks();
 
       expect(win.location.href).toBe('/es/ingles');
     });
   });
 
-  describe('closeUsesTrackedPath=false (default — practice window, unchanged)', () => {
-    it('close() only prefers history.back() when the tracked previous screen equals the target, same as before', async () => {
+  describe('close()/minimize() animations (PART 6c, skipped under reduced motion)', () => {
+    it('close() plays the closing animation and defers the navigation under full motion', async () => {
       const el = buildWindowEl();
-      const win = fakeWin(2);
-      win.sessionStorage.setItem('chuyo-nav-previous-path', '/es/mis-actividades');
+      const win = fakeWin();
+      win.matchMedia = (() => ({ matches: false })) as unknown as Window['matchMedia']; // full motion: the animation branch actually runs.
+      let navigatedAfter = -1;
+      let timeoutMs = -1;
+      win.setTimeout = ((fn: () => void, ms: number) => {
+        timeoutMs = ms;
+        fn();
+        navigatedAfter = ms;
+        return 0;
+      }) as unknown as Window['setTimeout'];
       initDeskWindow(el, '/es/ingles', null, false, document, win);
 
       click(el.querySelector('[data-desk-window-close]')!);
       await flushMicrotasks();
 
-      expect(win.location.href).toBe('/es/ingles'); // href fallback, not history.back() — unknown target mismatch.
+      expect(el.classList.contains('ingles-window--closing')).toBe(true);
+      expect(timeoutMs).toBeGreaterThan(0);
+      expect(navigatedAfter).toBe(timeoutMs);
+      expect(win.location.href).toBe('/es/ingles');
+    });
+
+    it('close() skips the animation entirely under prefers-reduced-motion', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin(); // reduced motion by default (see fakeWin's own header).
+      initDeskWindow(el, '/es/ingles', null, false, document, win);
+
+      click(el.querySelector('[data-desk-window-close]')!);
+      await flushMicrotasks();
+
+      expect(el.classList.contains('ingles-window--closing')).toBe(false);
+      expect(win.location.href).toBe('/es/ingles');
     });
   });
 });

@@ -76,10 +76,25 @@ describe('ActivityCard.astro — default variant (unchanged)', () => {
     expect(html).toContain('aspect-video');
   });
 
-  it('renders the highlight label as an overlay chip on the thumbnail', async () => {
+  it('renders the highlight label as an overlay chip on the thumbnail, bottom-right (never over the top-anchored heading)', async () => {
     const html = await render({ ...baseProps, highlighted: true, highlightLabel: 'Actividad del día' });
-    expect(html).toContain('absolute top-2 left-2');
+    expect(html).toContain('absolute bottom-2 right-2');
+    expect(html).not.toContain('absolute top-2 left-2');
     expect(html).toContain('Actividad del día');
+  });
+
+  // Bugfix (owner report): the thumbnail showed the vertical middle of the
+  // worksheet image, cropping out its own heading.
+  it('anchors the thumbnail crop to the top of the image, so the worksheet heading shows', async () => {
+    const html = await render({
+      ...baseProps,
+      activity: {
+        ...baseActivity,
+        thumbnailPath: 'activity-images/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.webp',
+      },
+    });
+    const imgTag = html.slice(html.indexOf('<img'), html.indexOf('>', html.indexOf('<img')) + 1);
+    expect(imgTag).toContain('object-top');
   });
 
   it('defaults to the default variant when none is given', async () => {

@@ -1,32 +1,48 @@
 ---
 /**
- * DeskWindow — the practice page renders as a WINDOW over the Inglés desk
- * ("desktop" redesign PART 6a, owner spec 2026-10-06, approved mockup
- * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.veil` /
+ * DeskWindow — the practice/creator pages render as a WINDOW over the
+ * Inglés desk ("desktop" redesign PART 6a, owner spec 2026-10-06, approved
+ * mockup `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s
  * `.window` / `.titlebar` / `.lights` / `.wactions`). Owner's own words on
  * the refinement that makes this possible without losing real URLs: "la
  * dirección cambia por detrás, pero vos nunca salís del escritorio" — this
- * component is purely the SHELL (veil, lights, title, chip, an `actions`
- * slot, a body slot); the page behind it decides whether a desk renders at
- * all (`DeskScene.astro`, signed-in only — see `[id].astro`'s own header).
+ * component is purely the SHELL (lights, title, chip, an `actions` slot, a
+ * body slot); the page behind it decides whether a desk renders at all
+ * (`DeskScene.astro`, signed-in only — see `[id].astro`'s own header).
+ *
+ * NON-MODAL FLOATING WINDOW (PART 6c, owner spec 2026-10-07: "quiero que
+ * sea una ventana dentro de nuestro escritorio"): at the `desk:` breakpoint
+ * and up this is a real floating window — draggable by its own title bar
+ * (`@lib/ui/deskWindowDrag`), default-positioned just below the header
+ * (`desk:top-(--chrome-header-offset)` — the SAME custom property
+ * `BackButton.astro` already reads, `@lib/chromeVisibility.ts`'s own
+ * `HEADER_OFFSET_VAR`, kept in sync with the header's REAL rendered height
+ * rather than a literal pixel guess that would drift if that height ever
+ * changes) with a reserved band at the bottom for the minimized-windows
+ * tray (`MinimizedWindowsTray.astro`) — and the desk behind it stays fully
+ * visible AND interactive (no veil, no `inert`, no focus trap: see
+ * `BaseLayout.astro`'s own header). Below `desk:` it stays the full-screen
+ * sheet it always was (no desk visible there regardless, and no drag).
  *
  * Both "close" (red) and "minimize" (yellow) are plain `<a href={closeHref}>`
  * anchors, not buttons — same no-JS-first posture as `BackButton.astro`:
  * a visitor with scripting disabled still lands on the desk (or the
  * ChuyoCode home for a guest) either way. Once `@lib/ui/deskWindow.ts
- * #initDeskWindow` runs, the two diverge (owner feedback 2026-10-06): red
- * still prefers `history.back()` and drops any tray chip for this activity;
- * yellow REALLY minimizes — it remembers this window as a chip in the
- * desk's own tray (`@lib/ui/minimizedWindows`), plays a short "shrink down"
- * animation, then does a plain navigation to the hub. "Full screen" (green)
- * has no meaningful no-JS behaviour (there is no state to toggle without a
- * script) and stays a real `<button>`.
+ * #initDeskWindow` runs, the two diverge: red ALWAYS navigates straight to
+ * the desk (PART 6c — never `history.back()`, see that module's own
+ * header) and drops any tray chip for this activity, with a subtle "close"
+ * animation; yellow REALLY minimizes — it remembers this window as a chip
+ * in the desk's own tray, plays a short "shrink toward the tray" animation,
+ * then does a plain navigation to the hub. Both animations are skipped
+ * under `prefers-reduced-motion: reduce`. "Full screen" (green) has no
+ * meaningful no-JS behaviour (there is no state to toggle without a script)
+ * and stays a real `<button>`.
  *
  * RENDERED THROUGH `BaseLayout.astro`'s `overlay` SLOT (bugfix, 2026-10-06):
- * `[id].astro` passes this whole component (veil + dialog) with
- * `slot="overlay"` — the layout's own LAST element in `<body>`, after the
+ * `[id].astro` passes this component with `slot="overlay"` — the layout's
+ * own LAST element in `<body>` BEFORE the minimized-windows tray, after the
  * footer, outside `<main>` — never the default slot. See `global.css`'s own
- * `.ingles-window-veil` comment for why: rendering inside `<main>` let the
+ * `.ingles-window` comment for why: rendering inside `<main>` let the
  * footer paint OVER the dialog (a stacking-context trap, not a z-index
  * problem by itself), and `z-50` here only matters once the markup already
  * sits outside that trap.
@@ -35,12 +51,14 @@
  * `outline-none` — never visibly focus-ringed, this is a container, not a
  * control), not the red light: focusing a traffic light first showed a
  * focus ring on it even for a pointer visit, which this dialog never wants
- * on open. A keyboard user's very next Tab reaches the red light exactly as
- * before (`initDeskWindow`'s own focus trap, `@lib/ui/deskWindow.ts`, keeps
- * Tab/Shift+Tab cycling inside here).
+ * on open. There is no focus trap (PART 6c — the window is not modal): Tab
+ * is free to leave it for the desk or the header, same as any other
+ * non-modal floating window.
  */
 import type { Lang } from '@lib/i18n';
 import { ROW_PADDING_X } from '@lib/ui/layout';
+import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
+import { ICON_TOOLTIP_BUBBLE_CLASS } from '@lib/ui/iconTooltip';
 
 interface Props {
   lang: Lang;
@@ -122,20 +140,23 @@ interface Props {
    */
   titleEditable?: boolean;
   /**
-   * PART 6b polish (owner report: the red light always landed on the hub
-   * even when the author genuinely came from somewhere else, e.g.
-   * `/mis-actividades`): true makes the red light (and Escape, when enabled)
-   * prefer `history.back()` to WHATEVER screen this visitor actually came
-   * from (any known previous in-app screen, not just one that happens to
-   * equal `closeHref`) — {@link resolveTrackedCloseAction}
-   * (`@lib/ui/deskWindow.ts`), falling back to `closeHref` only when there is
-   * no such screen to return to. Defaults to `false`, the practice window's
-   * own ORIGINAL semantics ({@link resolveCloseAction}: "closing always ends
-   * up at the desk" — `history.back()` there is only a cosmetic shortcut for
-   * when it happens to coincide with `closeHref`), deliberately UNCHANGED
-   * for that caller. The activities-creator editor and picker both opt in.
+   * "Actividades de la comunidad" back arrow (owner spec 2026-10-07, "ya no
+   * tendremos ejercicios propuestos separados de actividades de la
+   * comunidad"): a small `‹` right after the traffic lights, for a window
+   * whose content is one level BELOW a list the visitor can go back to (the
+   * practice window -> the community list, today). A plain
+   * `<a href={backHref} data-back-button>` — same no-JS-first posture as
+   * every other control here — that opts into the SAME site-wide
+   * progressive enhancement `BackButton.astro` uses
+   * (`@lib/backNavigation#initBackButtons`, wired once from
+   * `BaseLayout.astro`'s own script): `history.back()` when the visitor's
+   * tracked previous screen is genuinely that list, a plain navigation to
+   * `backHref` otherwise. Omitted entirely (`null`, the default) for every
+   * caller with nothing to go back to (the list window itself, the editor).
    */
-  closeUsesTrackedPath?: boolean;
+  backHref?: string | null;
+  /** Accessible name AND tooltip for {@link backHref} — required together with it. */
+  backLabel?: string;
 }
 
 const {
@@ -152,11 +173,27 @@ const {
   status = null,
   statusId = 'desk-window-status',
   titleEditable = false,
-  closeUsesTrackedPath = false,
+  backHref = null,
+  backLabel = '',
 } = Astro.props;
----
 
-<div class="ingles-window-veil" aria-hidden="true"></div>
+/**
+ * The back arrow's own trigger box (owner report, 2026-10-07: "the back
+ * arrow is a tiny, faint glyph" — it used to be a bare `h-5 w-5` circle with
+ * a plain `‹` character, no border, barely visible next to the lights). A
+ * real ~32px hit target (bigger than the 14px lights it sits beside, same
+ * `rounded-full` shape so it still reads as part of that circular cluster)
+ * with the SAME bordered/background/hover/focus idiom
+ * `@lib/ui/iconTooltip#ICON_TOOLTIP_TRIGGER_CLASS` gives every OTHER icon
+ * button in this window's own title bar (the present/print/share/duplicate/
+ * report/"…" actions, `[id].astro`) — just sized down to fit this tight
+ * `gap-2` cluster rather than that shared constant's own 36/44px boxes. The
+ * tooltip bubble itself is still the literal shared
+ * `ICON_TOOLTIP_BUBBLE_CLASS`, so it looks and behaves exactly like theirs.
+ */
+const BACK_BUTTON_TRIGGER_CLASS =
+  'group relative inline-flex size-8 flex-none items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+---
 
 <section
   id="desk-window"
@@ -164,13 +201,11 @@ const {
   data-close-target={closeHref}
   data-tray-id={trayId ?? undefined}
   data-close-on-escape={closeOnEscape ? 'true' : 'false'}
-  data-close-tracked-path={closeUsesTrackedPath ? 'true' : undefined}
   data-fullscreen={forceFullScreen ? 'true' : undefined}
   role="dialog"
-  aria-modal="true"
   aria-labelledby={titleId}
   tabindex="-1"
-  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-16 desk:top-16 desk:bottom-8 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
+  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
 >
   {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
       como presentación"/"Enviar a revisión" — squeezed the title down to
@@ -184,7 +219,8 @@ const {
       activates when content overflows. */}
   <div
     data-testid="desk-window-titlebar"
-    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border desk:flex-nowrap ${ROW_PADDING_X} py-3`}
+    data-desk-window-titlebar
+    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border desk:flex-nowrap desk:cursor-grab ${ROW_PADDING_X} py-3`}
   >
     <div class="flex items-center gap-2">
       <a
@@ -201,14 +237,43 @@ const {
         title={minimizeLabel}
         class="h-3.5 w-3.5 rounded-full bg-pop-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       ></a>
+      {/* Green (full screen) light — hidden below `desk:` (owner report,
+          2026-10-07): every window is ALREADY full screen on a phone (the
+          whole `.ingles-window` itself, see this file's own header), so
+          there is no state left for this light to toggle there — showing it
+          anyway just crowded the title bar next to red/yellow, which stay
+          (closing/minimizing is always meaningful). */}
       <button
         type="button"
         data-desk-window-fullscreen
         aria-label={fullScreenLabel}
         title={fullScreenLabel}
         aria-pressed={forceFullScreen ? 'true' : 'false'}
-        class="h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="hidden h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:inline-block"
       ></button>
+      {/* "‹" back arrow (owner spec 2026-10-07): grouped INSIDE the lights'
+          own tight `gap-2` cluster, not as a separate top-level child of the
+          title bar's `gap-4` row — on the narrowest phones, where this row
+          is already tight (title/chip/actions all competing for one line,
+          PART 6a phone layout fix), a second `gap-4` boundary left the
+          title truncated down to a single letter. Sharing the lights'
+          own spacing keeps "right after the traffic lights" literally true
+          while costing the title noticeably less room. */}
+      {backHref && (
+        <a
+          href={backHref}
+          data-back-button
+          data-testid="desk-window-back"
+          aria-label={backLabel}
+          aria-describedby="desk-window-back-tooltip"
+          class={BACK_BUTTON_TRIGGER_CLASS}
+        >
+          <CaretLeftIcon aria-hidden="true" size={18} weight="bold" />
+          <span role="tooltip" id="desk-window-back-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+            {backLabel}
+          </span>
+        </a>
+      )}
     </div>
     {/* PART 6b polish bugfix (owner-reported e2e regression: the PRACTICE
         window's own title bar grew past one row on a narrow phone) —
@@ -252,8 +317,14 @@ const {
           {title}
         </b>
       )}
+      {/* Hidden below `sm:` (owner report, 2026-10-07: on a 390px phone the
+          title collapsed down to "C…" — lights/chip/actions all competing
+          for the same tight row left it almost no room). The level is not
+          needed in the title bar itself on a phone — it is not otherwise
+          surfaced anywhere in the window right now, a deliberate simpler
+          trade than adding a second place to show it just for this width. */}
       {!titleEditable && levelChip && (
-        <span class="shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43]">
+        <span class="hidden shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43] sm:inline-block">
           {levelChip}
         </span>
       )}
@@ -268,20 +339,23 @@ const {
     </div>
   </div>
 
-  {/* `data-desk-window-body` (PART 6b polish): the ONE non-scrolling
-      ancestor the editor's own floating side toolbar (`EditorSideToolbar.tsx`
-      `measureBounds()`) anchors/clamps itself against instead of the full
-      viewport — see that component's own header on why `fixed` alone used to
-      let it escape past this window's own border at the `desk:` inset.
-      Harmless for every other caller (the practice window): nothing else
-      reads this attribute. */}
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden" data-desk-window-body>
+  {/* `data-desk-window-body` (PART 6b polish; dock pass: now also `relative`):
+      the ONE non-scrolling ancestor the editor's own floating side toolbar
+      (`EditorSideToolbar.tsx`) measures against for its ghost dock-target/
+      snap-back check (`measureBounds()`), AND — `relative` — the real CSS
+      containing block its DOCKED `position: absolute` state anchors to, so
+      it moves/resizes with the window for free, no JS positioning while
+      docked. See that component's own header. Harmless for every other
+      caller (the practice window): nothing else reads this attribute or
+      relies on it being a positioning context. */}
+  <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-desk-window-body>
     <slot />
   </div>
 </section>
 
 <script>
   import { initDeskWindow } from '@lib/ui/deskWindow';
+  import { initDeskWindowDrag } from '@lib/ui/deskWindowDrag';
 
   const run = () => {
     const windowEl = document.getElementById('desk-window');
@@ -289,8 +363,8 @@ const {
     if (windowEl && closeTarget) {
       const trayId = windowEl.getAttribute('data-tray-id');
       const closeOnEscape = windowEl.getAttribute('data-close-on-escape') !== 'false';
-      const closeUsesTrackedPath = windowEl.getAttribute('data-close-tracked-path') === 'true';
-      initDeskWindow(windowEl, closeTarget, trayId, closeOnEscape, document, window, closeUsesTrackedPath);
+      initDeskWindow(windowEl, closeTarget, trayId, closeOnEscape, document, window);
+      initDeskWindowDrag(windowEl, document, window);
     }
   };
 

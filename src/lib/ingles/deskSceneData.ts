@@ -18,7 +18,6 @@
  */
 import type { User } from '@supabase/supabase-js';
 import { UI_LABELS, type Lang } from '@lib/i18n';
-import { getExerciseCount } from '@lib/exercises';
 import { getActivityCount, getPublishedActivities } from '@lib/activities/activities';
 import { pickDailyActivity } from '@lib/activities/dailyPick';
 import { publicImageUrl } from '@lib/activities/storage';
@@ -45,7 +44,6 @@ export interface DeskSceneLabels {
   greetingQuestion: string;
   greetingSubtitle: string;
   foldersLabel: string;
-  proposedTitle: string;
   communityTitle: string;
   todayTitle: string;
   createActivityLabel: string;
@@ -54,18 +52,12 @@ export interface DeskSceneLabels {
   /** The weather widget's own MET Norway credit ("Datos: MET Norway"). */
   weatherAttribution: string;
   levelShortcutTitle: string;
-  /** Minimized-windows tray (owner feedback 2026-10-06): the tray `<nav>`'s own accessible name, and the accessible name of each chip's "×" button. */
-  trayLabel: string;
-  trayRemoveLabel: string;
-  /** Polish pass 2026-10-06: the "+N" overflow tile's accessible name/tooltip template — `{n}` is filled with the overflow count. */
-  trayMoreLabel: string;
 }
 
 export interface DeskSceneData {
   /** First name only, already extracted from `nameFrom` — `null` for an anonymous visitor. */
   firstName: string | null;
   greetingLine1: string;
-  exerciseCountLabel: string | null;
   activityCountLabel: string | null;
   dailyPickHref: string;
   dailyPickMeta: string | null;
@@ -113,15 +105,16 @@ export async function loadDeskSceneData(opts: {
     unavailable: t.playerUnavailable,
   };
 
-  // Two cheap counts plus the top-hearted pool `pickDailyActivity` picks
-  // from, in parallel — same shape as `index.astro`'s original query.
-  const [exerciseCount, activityCount, heartedPool] = await Promise.all([
-    getExerciseCount(),
+  // One cheap count plus the top-hearted pool `pickDailyActivity` picks
+  // from, in parallel — same shape as `index.astro`'s original query. The
+  // curated-exercise count ("Ejercicios propuestos") was dropped here when
+  // that folder folded into "Actividades de la comunidad" — see
+  // `DeskScene.astro`'s own header.
+  const [activityCount, heartedPool] = await Promise.all([
     getActivityCount(),
     getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId: user?.id ?? null }),
   ]);
 
-  const exerciseCountLabel = formatCount(exerciseCount, t.exerciseCountOne, t.exerciseCountMany);
   const activityCountLabel = formatCount(activityCount, t.activityCountOne, t.activityCountMany);
 
   const dailyPick = pickDailyActivity(heartedPool.activities, new Date());
@@ -137,7 +130,6 @@ export async function loadDeskSceneData(opts: {
   return {
     firstName,
     greetingLine1,
-    exerciseCountLabel,
     activityCountLabel,
     dailyPickHref,
     dailyPickMeta,
