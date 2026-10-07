@@ -201,6 +201,45 @@ export function initDeskWindowManager(
       loader.classList.remove('pointer-events-none');
     };
     iframe.addEventListener('load', () => {
+      // Click-race defensive net (robustness pass, owner report): under
+      // normal operation every in-iframe navigation INSIDE this frame stays
+      // on ITS OWN window route (filters/pagination/a plain in-window link),
+      // and a click on a `[data-desk-open-window]` opener never reaches here
+      // at all — it is intercepted before navigating (`BaseLayout.astro`'s
+      // own early inline script, backed by `@lib/ui/deskWindow.ts
+      // #initDeskOpenWindowLinks`). If this frame EVER still ends up loaded
+      // on a DIFFERENT window's own route regardless (that interception
+      // failing to run in time, a server redirect, anything else), never
+      // silently keep rendering it as if it belonged to THIS window/id —
+      // open the real destination as its own (possibly new) window, and put
+      // this frame back on its own href.
+      try {
+        const loc = iframe.contentWindow?.location;
+        const match = loc ? classifyWindowRoute(loc.pathname) : null;
+        if (match && match.id !== entry.id) {
+          const title = iframe.contentWindow?.document.title || '';
+          openWindow(`${loc!.pathname}${loc!.search}`, title);
+          const current = state.windows.find((w) => w.id === entry.id);
+          const ownUrl = new URL(current?.href ?? entry.href, win.location.href);
+          ownUrl.searchParams.set('ventana', '1');
+          showLoading();
+          try {
+            // `location.replace` (never reassigning `iframe.src`): the
+            // in-frame navigation already happened without ever changing the
+            // `src` ATTRIBUTE string this element still holds, so setting it
+            // back to that same string would be a same-URL no-op in most
+            // browsers — this re-navigates the frame's own `Location`
+            // directly instead, which always takes effect.
+            iframe.contentWindow?.location.replace(ownUrl.toString());
+          } catch {
+            iframe.src = ownUrl.toString();
+          }
+          return;
+        }
+      } catch {
+        // Cross-origin — should never happen (see this file's own header).
+      }
+
       showLoaded();
       applyActiveState();
       try {

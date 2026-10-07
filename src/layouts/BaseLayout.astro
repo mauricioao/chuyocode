@@ -349,6 +349,61 @@ const faviconSvg =
         }
       })();
     </script>
+    {/* Click-race bugfix (robustness pass, owner report): right after a
+        window loads, a fast click on a `[data-desk-open-window]` link (an
+        `ActivityCard`, the community window's own "+" shortcut) could
+        navigate the IFRAME IN PLACE instead of asking the host to open a new
+        window — `@lib/ui/deskWindow.ts#initDeskOpenWindowLinks` wires its own
+        capture-phase listener from a `type="module"` script
+        (`DeskWindow.astro`'s own), which is deferred past first paint, so
+        there was always a small window where a click could land before it
+        ever ran. This is the SAME interception, duplicated here (same
+        reasoning as the recursion-guard script above) as a plain classic
+        `is:inline` script — parsed and run synchronously, before the browser
+        can dispatch any click at all. It sets the exact same
+        `data-desk-open-window-links-ready` marker that module function
+        checks, so once THIS has wired the listener, the later module import
+        is a harmless no-op rather than a second listener. */}
+    <script is:inline>
+      (function () {
+        var html = document.documentElement;
+        if (!html.hasAttribute('data-desk-window-embedded')) return;
+        if (html.dataset.deskOpenWindowLinksReady === 'true') return;
+        html.dataset.deskOpenWindowLinksReady = 'true';
+
+        document.addEventListener(
+          'click',
+          function (event) {
+            if (event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            var target = event.target;
+            if (!(target instanceof Element)) return;
+            var opener = target.closest('[data-desk-open-window]');
+            if (!opener || opener.tagName !== 'A') return;
+            var href = opener.getAttribute('href');
+            if (!href) return;
+
+            event.preventDefault();
+            var ariaLabel = (opener.getAttribute('aria-label') || '').trim();
+            var text = (opener.textContent || '').trim();
+            var title = ariaLabel || text;
+            try {
+              var parent = window.parent;
+              if (!parent || parent === window) return;
+              parent.postMessage(
+                { source: 'desk-window', type: 'open-window', href: href, title: title || null },
+                window.location.origin,
+              );
+            } catch (e) {
+              // Best-effort — a sandboxed or otherwise unusual embedding
+              // context just loses this one message, same posture as
+              // `deskWindowMessaging.ts#postDeskWindowMessage`.
+            }
+          },
+          true,
+        );
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
 

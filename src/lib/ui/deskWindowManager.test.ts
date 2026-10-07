@@ -258,6 +258,56 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(frameFor('community')).not.toBeNull(); // still open — the guard refused to close it
   });
 
+  it('an in-iframe navigation that lands on a DIFFERENT window route opens it as its own window instead of staying in place (click-race defensive net)', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    // Simulate this frame having navigated IN PLACE to a different window's
+    // own route (the click-race this defends against, or any other failure
+    // that let a real navigation through) — `location.replace` is spied so
+    // this frame's own recovery is directly assertable, never a real jsdom
+    // navigation attempt.
+    const replaceSpy = vi.fn();
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/ingles/actividades/abc', search: '', replace: replaceSpy },
+        document: { title: 'Present Simple' },
+      },
+    });
+
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    // The real destination opens as its OWN window…
+    expect(frameFor('activity:abc')).not.toBeNull();
+    // …and the original frame is sent back to its own href, never left
+    // showing the wrong window's content under the wrong id.
+    expect(replaceSpy).toHaveBeenCalledWith('https://example.test/es/ingles/actividades?ventana=1');
+  });
+
+  it('an in-iframe navigation that stays on the SAME window route (a filter/pagination link) is left alone', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    const replaceSpy = vi.fn();
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/ingles/actividades', search: '?nivel=A1', replace: replaceSpy },
+        document: { title: 'Comunidad', addEventListener: vi.fn() },
+      },
+    });
+
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
+  });
+
   it('drag-start/drag-move/drag-end moves the wrapper and commits the offset', () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
