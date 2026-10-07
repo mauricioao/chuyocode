@@ -203,6 +203,18 @@ const showDailyPick = currentPage === 1 && !anyFilterActive;
 const dailyPick: PublishedActivityCard | null =
   showDailyPick && dailyPickCandidates ? pickDailyActivity(dailyPickCandidates, new Date()) : null;
 
+/**
+ * Perf pass (`ActivityCard`'s own `eager` prop): how many of the grid's own
+ * cards render above the fold — the widest breakpoint this grid uses is
+ * `lg:grid-cols-3`, so its first full row is 3 cards. The daily pick (when
+ * shown) is always the grid's own first card, so it counts against this same
+ * budget rather than getting an extra eager image on top of it. A narrower
+ * viewport (`sm:grid-cols-2`, or 1 column below that) simply marks one or two
+ * MORE cards eager than its own first row strictly needs — harmless, never a
+ * missing eager image on the row that actually IS visible there.
+ */
+const FIRST_ROW_EAGER_COUNT = 3;
+
 const basePath = `/${lang}/ingles/actividades`;
 
 /** Build `/[lang]/ingles/actividades` with the CURRENT filters plus `overrides`, omitting any param at its default. */
@@ -464,10 +476,13 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
                       viewedLabel={t.viewedBadge}
                       highlighted
                       highlightLabel={t.dailyPickLabel}
+                      eager
                     />
                   </li>
                 )}
-                {activities.filter((activity) => !(showDailyPick && dailyPick && activity.id === dailyPick.id)).map((activity) => (
+                {activities
+                  .filter((activity) => !(showDailyPick && dailyPick && activity.id === dailyPick.id))
+                  .map((activity, index) => (
                   <li>
                     <ActivityCard
                       lang={lang}
@@ -477,6 +492,7 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
                       blockCountOne={t.blockCountOne}
                       blockCountMany={t.blockCountMany}
                       viewedLabel={t.viewedBadge}
+                      eager={index < FIRST_ROW_EAGER_COUNT - (showDailyPick && dailyPick ? 1 : 0)}
                     />
                   </li>
                 ))}

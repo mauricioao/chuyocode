@@ -42,6 +42,16 @@ interface Props {
   /** `default` (full card, unchanged) or `compact` (small horizontal row —
    * see the file header for where each is used). */
   variant?: 'default' | 'compact';
+  /**
+   * Perf pass (owner report: every card thumbnail — including the ones
+   * visible without scrolling — carried `loading="lazy"`, delaying their
+   * fetch behind the scroll-position check that attribute triggers):
+   * `true` for a thumbnail the caller already knows renders above the
+   * fold (the grid's own first row) — `loading="eager"` instead of the
+   * default `"lazy"`. The CALLER decides this (it is the one that knows
+   * its own layout/column count), never guessed here. Defaults to `false`.
+   */
+  eager?: boolean;
 }
 
 const {
@@ -55,7 +65,9 @@ const {
   highlighted = false,
   highlightLabel,
   variant = 'default',
+  eager = false,
 } = Astro.props;
+const loading = eager ? 'eager' : 'lazy';
 
 const compact = variant === 'compact';
 const thumbnailUrl = activity.thumbnailPath ? publicImageUrl(activity.thumbnailPath) : null;
@@ -87,10 +99,18 @@ function countLabel(count: number): string {
               <div class="absolute inset-0 flex items-center justify-center text-muted-foreground" aria-hidden="true">
                 <ImageBrokenIcon size={20} />
               </div>
+              {/* `width`/`height` (perf pass): a real, literal size here —
+                  this thumbnail IS exactly 96x96 CSS px (`w-24`/`aspect-square`
+                  right above) — so the browser reserves that box before the
+                  image itself ever loads, same as `decoding="async"` never
+                  blocking paint on decoding it. */}
               <img
                 src={thumbnailUrl}
                 alt=""
-                loading="lazy"
+                width="96"
+                height="96"
+                decoding="async"
+                loading={loading}
                 class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
                 onload="this.classList.remove('opacity-0')"
                 onerror="this.style.display='none'"
@@ -156,11 +176,19 @@ function countLabel(count: number): string {
                   of the worksheet, cropping out anything useful) — a
                   worksheet image's own heading sits at its top, so anchoring
                   the crop there instead of the default center shows that
-                  heading rather than an arbitrary strip of body content. */}
+                  heading rather than an arbitrary strip of body content.
+                  `width`/`height` (perf pass): this card's own width is
+                  fluid (a grid column, not a fixed box) — 640x360 is only a
+                  16:9 HINT, matching the `aspect-video` box right above, so
+                  the browser can reserve the right-shaped space immediately
+                  rather than reflowing once the real image loads. */}
               <img
                 src={thumbnailUrl}
                 alt=""
-                loading="lazy"
+                width="640"
+                height="360"
+                decoding="async"
+                loading={loading}
                 class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
                 onload="this.classList.remove('opacity-0')"
                 onerror="this.style.display='none'"
