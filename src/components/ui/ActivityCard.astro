@@ -90,7 +90,7 @@ function countLabel(count: number): string {
                 src={thumbnailUrl}
                 alt=""
                 loading="lazy"
-                class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+                class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
                 onload="this.classList.remove('opacity-0')"
                 onerror="this.style.display='none'"
               />
@@ -150,20 +150,31 @@ function countLabel(count: number): string {
               <div class="absolute inset-0 flex items-center justify-center text-muted-foreground" aria-hidden="true">
                 <ImageBrokenIcon size={32} />
               </div>
+              {/* `object-top` (owner report: the thumbnail showed the middle
+                  of the worksheet, cropping out anything useful) — a
+                  worksheet image's own heading sits at its top, so anchoring
+                  the crop there instead of the default center shows that
+                  heading rather than an arbitrary strip of body content. */}
               <img
                 src={thumbnailUrl}
                 alt=""
                 loading="lazy"
-                class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+                class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
                 onload="this.classList.remove('opacity-0')"
                 onerror="this.style.display='none'"
               />
             </>
           )
         }
+        {/* Moved from the top-left corner (owner report: it covered
+            worksheet text) to the bottom-right — now that the crop above
+            anchors to the TOP (the heading), a top-left badge would sit
+            directly over it instead. Still a corner chip with its own solid
+            background, just the one corner the thumbnail's own content
+            never needs. */}
         {
           highlighted && highlightLabel && (
-            <span class="absolute top-2 left-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-elevation-1">
+            <span class="absolute bottom-2 right-2 rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-elevation-1">
               {highlightLabel}
             </span>
           )
