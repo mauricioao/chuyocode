@@ -270,31 +270,6 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           veces" strip under the title bar. Signed-in visitors only, same
           gate the old strip used (a guest's view is never tracked). */}
       {user && <ActivityViewBadge client:load lang={lang} activityId={activity.id} />}
-      {
-        shareQr && (
-          <ShareDialog
-            client:idle
-            url={shareLink}
-            qr={shareQr}
-            whatsappHref={whatsappHref}
-            downloadFileName={`${activity.id}.svg`}
-            iconOnly
-            labels={{
-              trigger: t.share,
-              title: t.shareTitle,
-              hint: t.shareHint,
-              link: t.shareLink,
-              copy: t.shareCopy,
-              copied: t.shareCopied,
-              linkCopiedToast: UI_LABELS[lang].common.toast.linkCopied,
-              qrAlt: t.shareQrAlt,
-              whatsapp: t.shareWhatsapp,
-              downloadQr: t.shareDownloadQr,
-              native: t.shareNative,
-            }}
-          />
-        )
-      }
       {/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below
           `desk:` the title bar has no room for six 44px/36px icon buttons in
           one row (owner report: it used to wrap into a tall second row) —
@@ -335,6 +310,34 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
           data-desk-window-more-content
           class="hidden absolute right-0 top-full z-10 mt-2 w-max flex-col items-stretch gap-1 rounded-lg border border-border bg-background p-1.5 shadow-elevation-2 peer-checked:flex desk:static desk:mt-0 desk:flex desk:w-auto desk:flex-row desk:items-center desk:gap-3 desk:border-0 desk:bg-transparent desk:p-0 desk:shadow-none"
         >
+          {/* "Compartir" moved into this same overflow menu (owner report,
+              2026-10-07: on a 390px phone the title bar had no room left) —
+              this div is already a plain inline row at `desk:` (see the
+              class list above), so desktop keeps looking exactly as before;
+              only the phone dropdown gained this one extra entry. */}
+          {shareQr && (
+            <ShareDialog
+              client:idle
+              url={shareLink}
+              qr={shareQr}
+              whatsappHref={whatsappHref}
+              downloadFileName={`${activity.id}.svg`}
+              iconOnly
+              labels={{
+                trigger: t.share,
+                title: t.shareTitle,
+                hint: t.shareHint,
+                link: t.shareLink,
+                copy: t.shareCopy,
+                copied: t.shareCopied,
+                linkCopiedToast: UI_LABELS[lang].common.toast.linkCopied,
+                qrAlt: t.shareQrAlt,
+                whatsapp: t.shareWhatsapp,
+                downloadQr: t.shareDownloadQr,
+                native: t.shareNative,
+              }}
+            />
+          )}
           {canDuplicate ? (
             <DuplicateActivityButton client:load lang={lang} activityId={activity.id} />
           ) : (

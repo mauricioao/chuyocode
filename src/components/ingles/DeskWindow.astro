@@ -237,13 +237,19 @@ const BACK_BUTTON_TRIGGER_CLASS =
         title={minimizeLabel}
         class="h-3.5 w-3.5 rounded-full bg-pop-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       ></a>
+      {/* Green (full screen) light — hidden below `desk:` (owner report,
+          2026-10-07): every window is ALREADY full screen on a phone (the
+          whole `.ingles-window` itself, see this file's own header), so
+          there is no state left for this light to toggle there — showing it
+          anyway just crowded the title bar next to red/yellow, which stay
+          (closing/minimizing is always meaningful). */}
       <button
         type="button"
         data-desk-window-fullscreen
         aria-label={fullScreenLabel}
         title={fullScreenLabel}
         aria-pressed={forceFullScreen ? 'true' : 'false'}
-        class="h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="hidden h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:inline-block"
       ></button>
       {/* "‹" back arrow (owner spec 2026-10-07): grouped INSIDE the lights'
           own tight `gap-2` cluster, not as a separate top-level child of the
@@ -311,8 +317,14 @@ const BACK_BUTTON_TRIGGER_CLASS =
           {title}
         </b>
       )}
+      {/* Hidden below `sm:` (owner report, 2026-10-07: on a 390px phone the
+          title collapsed down to "C…" — lights/chip/actions all competing
+          for the same tight row left it almost no room). The level is not
+          needed in the title bar itself on a phone — it is not otherwise
+          surfaced anywhere in the window right now, a deliberate simpler
+          trade than adding a second place to show it just for this width. */}
       {!titleEditable && levelChip && (
-        <span class="shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43]">
+        <span class="hidden shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43] sm:inline-block">
           {levelChip}
         </span>
       )}
