@@ -3,9 +3,13 @@ import { describe, it, expect } from 'vitest';
 import {
   createInitialChromeState,
   reduceChromeVisibility,
+  initChromeVisibility,
   UP_SHOW_THRESHOLD_PX,
   PULL_SHOW_THRESHOLD_PX,
   FOOTER_DWELL_MS,
+  CHROME_HUB_ATTR,
+  CHROME_DESK_BEHIND_ATTR,
+  HEADER_VISIBLE_ATTR,
   type ChromeState,
   type ChromeEvent,
 } from './chromeVisibility';
@@ -64,6 +68,32 @@ describe('createInitialChromeState', () => {
     expect(state.headerVisible).toBe(true);
     expect(state.footerVisible).toBe(true);
     expect(state.isHub).toBe(true);
+  });
+});
+
+// PART 6c bugfix (owner spec 2026-10-07, defect #1: "la vista detrás de la
+// ventana debe verse exactamente como el hub"). `initChromeVisibility` only
+// ever wires its DOM listeners ONCE per module instance (`wired`, its own
+// header) — this is deliberately the ONLY test in this file that calls it,
+// so a second call elsewhere never silently no-ops against this one.
+describe('initChromeVisibility (DOM) — a data-desk-behind page gets the hub treatment', () => {
+  it('starts the header visible on a data-desk-behind page, even though it is not the literal hub', () => {
+    const doc = document.implementation.createHTMLDocument('');
+    const html = doc.documentElement;
+    html.setAttribute('data-theme', 'ingles');
+    html.setAttribute(CHROME_DESK_BEHIND_ATTR, '');
+    expect(html.hasAttribute(CHROME_HUB_ATTR)).toBe(false); // sanity: not the literal hub
+
+    const header = doc.createElement('header');
+    header.setAttribute('data-chrome-header', '');
+    doc.body.appendChild(header);
+    const footer = doc.createElement('footer');
+    footer.setAttribute('data-chrome-footer', '');
+    doc.body.appendChild(footer);
+
+    initChromeVisibility(doc, window);
+
+    expect(html.getAttribute(HEADER_VISIBLE_ATTR)).toBe('true');
   });
 });
 

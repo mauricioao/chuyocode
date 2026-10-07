@@ -256,11 +256,19 @@ const faviconSvg =
         // re-deriving it from the URL here, so there is only ONE place that
         // decides "is this the hub" (`isInglesHubPath`, `backNavigation.ts`).
         var hub = html.hasAttribute('data-chrome-hub');
+        // PART 6c bugfix (owner spec 2026-10-07, defect #1): a page that
+        // renders the desk BEHIND an open `DeskWindow` (`data-desk-behind`,
+        // server-rendered by this same file's own `deskBehind` prop) must
+        // look exactly like the hub around that window — same header,
+        // always visible, never collapsed — see `chromeVisibility.ts`'s own
+        // matching `headerAlwaysVisible` for why.
+        var deskBehind = html.hasAttribute('data-desk-behind');
         html.setAttribute('data-chrome-js', '');
         html.setAttribute('data-chrome-mode', ingles ? 'ingles' : 'site');
         // "Desktop" redesign PART 1, item C: the hub's header starts
-        // visible immediately — no flash of it being hidden first.
-        html.setAttribute('data-header-visible', ingles ? (hub ? 'true' : 'false') : 'true');
+        // visible immediately — no flash of it being hidden first. Same for
+        // a desk-behind page now (defect #1 above).
+        html.setAttribute('data-header-visible', ingles ? (hub || deskBehind ? 'true' : 'false') : 'true');
         html.setAttribute('data-footer-visible', 'false');
       })();
     </script>

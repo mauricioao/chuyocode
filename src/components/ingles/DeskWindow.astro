@@ -13,9 +13,13 @@
  * NON-MODAL FLOATING WINDOW (PART 6c, owner spec 2026-10-07: "quiero que
  * sea una ventana dentro de nuestro escritorio"): at the `desk:` breakpoint
  * and up this is a real floating window — draggable by its own title bar
- * (`@lib/ui/deskWindowDrag`), default-positioned just below the header with
- * a reserved band at the bottom for the minimized-windows tray
- * (`MinimizedWindowsTray.astro`) — and the desk behind it stays fully
+ * (`@lib/ui/deskWindowDrag`), default-positioned just below the header
+ * (`desk:top-(--chrome-header-offset)` — the SAME custom property
+ * `BackButton.astro` already reads, `@lib/chromeVisibility.ts`'s own
+ * `HEADER_OFFSET_VAR`, kept in sync with the header's REAL rendered height
+ * rather than a literal pixel guess that would drift if that height ever
+ * changes) with a reserved band at the bottom for the minimized-windows
+ * tray (`MinimizedWindowsTray.astro`) — and the desk behind it stays fully
  * visible AND interactive (no veil, no `inert`, no focus trap: see
  * `BaseLayout.astro`'s own header). Below `desk:` it stays the full-screen
  * sheet it always was (no desk visible there regardless, and no drag).
@@ -162,7 +166,7 @@ const {
   role="dialog"
   aria-labelledby={titleId}
   tabindex="-1"
-  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-[76px] desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
+  class="ingles-window fixed inset-0 z-50 flex flex-col overflow-hidden rounded-none bg-card outline-none desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]"
 >
   {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
       como presentación"/"Enviar a revisión" — squeezed the title down to

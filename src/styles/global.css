@@ -898,6 +898,26 @@ html[data-desk-behind] main {
   view-transition-name: none;
 }
 
+/* PART 6c bugfix (owner spec 2026-10-07, defect #1): the window's backdrop
+ * must look pixel-identical to the hub. The footer is always in normal flow
+ * everywhere else (item C above) — on the hub that is fine, it is simply
+ * off-screen until the visitor scrolls to it. A `data-desk-behind` page has
+ * its scroll LOCKED for as long as the window is open
+ * (`BaseLayout.astro`'s own `hasOverlay` — `overflow-hidden h-dvh` on
+ * `<body>`), so there is no "scroll down to reach it" left: left in normal
+ * flow, the footer's own real height would instead eat into the ONE
+ * viewport `<body>` has to show `<main>` in, squeezing/shifting the desk
+ * behind the window out of alignment with the hub's own geometry. Dropping
+ * it out of the flex column entirely (rather than relying on an unreachable
+ * scroll) is what keeps `<main>`'s available height identical to the hub's
+ * at scroll-top. Harmless even if this rule ever ran before `data-chrome-js`
+ * (progressive enhancement, same posture as the rest of this section): a
+ * no-JS visitor still gets the real `<body>` scroll lock from `hasOverlay`'s
+ * own Tailwind classes, just without this extra polish. */
+html[data-desk-behind] [data-chrome-footer] {
+  display: none;
+}
+
 /* ── Desk window ("desktop" redesign PART 6a, owner spec 2026-10-06) ───────
  * The practice/creator pages render as a WINDOW over the desk — approved
  * mockup `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s
