@@ -57,6 +57,8 @@
  */
 import type { Lang } from '@lib/i18n';
 import { ROW_PADDING_X } from '@lib/ui/layout';
+import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
+import { ICON_TOOLTIP_BUBBLE_CLASS } from '@lib/ui/iconTooltip';
 
 interface Props {
   lang: Lang;
@@ -174,6 +176,23 @@ const {
   backHref = null,
   backLabel = '',
 } = Astro.props;
+
+/**
+ * The back arrow's own trigger box (owner report, 2026-10-07: "the back
+ * arrow is a tiny, faint glyph" — it used to be a bare `h-5 w-5` circle with
+ * a plain `‹` character, no border, barely visible next to the lights). A
+ * real ~32px hit target (bigger than the 14px lights it sits beside, same
+ * `rounded-full` shape so it still reads as part of that circular cluster)
+ * with the SAME bordered/background/hover/focus idiom
+ * `@lib/ui/iconTooltip#ICON_TOOLTIP_TRIGGER_CLASS` gives every OTHER icon
+ * button in this window's own title bar (the present/print/share/duplicate/
+ * report/"…" actions, `[id].astro`) — just sized down to fit this tight
+ * `gap-2` cluster rather than that shared constant's own 36/44px boxes. The
+ * tooltip bubble itself is still the literal shared
+ * `ICON_TOOLTIP_BUBBLE_CLASS`, so it looks and behaves exactly like theirs.
+ */
+const BACK_BUTTON_TRIGGER_CLASS =
+  'group relative inline-flex size-8 flex-none items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 ---
 
 <section
@@ -240,10 +259,13 @@ const {
           data-back-button
           data-testid="desk-window-back"
           aria-label={backLabel}
-          title={backLabel}
-          class="flex h-5 w-5 flex-none items-center justify-center rounded-full text-base leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-describedby="desk-window-back-tooltip"
+          class={BACK_BUTTON_TRIGGER_CLASS}
         >
-          <span aria-hidden="true">‹</span>
+          <CaretLeftIcon aria-hidden="true" size={18} weight="bold" />
+          <span role="tooltip" id="desk-window-back-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
+            {backLabel}
+          </span>
         </a>
       )}
     </div>
