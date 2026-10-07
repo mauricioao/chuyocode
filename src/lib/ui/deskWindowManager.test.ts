@@ -39,13 +39,15 @@ function fakeSessionStorage(): Storage {
   } as Storage;
 }
 
-function fakeWin(opts: { desktop?: boolean } = {}) {
+function fakeWin(opts: { desktop?: boolean; reducedMotion?: boolean } = {}) {
   const listeners: Record<string, Array<(event: unknown) => void>> = {};
   const win = {
     location: { href: 'https://example.test/es/ingles', origin: 'https://example.test' },
     innerWidth: 1440,
     innerHeight: 900,
-    matchMedia: (query: string) => ({ matches: (opts.desktop ?? true) && query.includes('min-width') }),
+    matchMedia: (query: string) => ({
+      matches: query.includes('prefers-reduced-motion') ? (opts.reducedMotion ?? false) : (opts.desktop ?? true) && query.includes('min-width'),
+    }),
     history: { replaceState: vi.fn() },
     sessionStorage: fakeSessionStorage(),
     setTimeout: ((fn: () => void) => {
@@ -170,13 +172,14 @@ describe('initDeskWindowManager — click interception', () => {
 });
 
 describe('initDeskWindowManager — postMessage bridge', () => {
-  it('minimize hides the frame (visibility/inert) and renders a tray chip', () => {
+  it('minimize hides the frame (visibility/inert) and renders a tray chip', async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
     const frame = frameFor('community')!;
 
     win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before the dispatch commits.
 
     expect(frame.wrapper.style.visibility).toBe('hidden');
     expect(frame.wrapper.hasAttribute('inert')).toBe(true);
@@ -251,7 +254,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(frameFor('community')!.wrapper.style.visibility).not.toBe('hidden');
   });
 
-  it('locks body scroll and hides the mobile tray dynamically, only while a window is actually visible', () => {
+  it('locks body scroll and hides the mobile tray dynamically, only while a window is actually visible', async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
     expect(document.body.classList.contains('overflow-hidden')).toBe(false);
@@ -264,6 +267,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
 
     const frame = frameFor('community')!;
     win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before the dispatch commits.
     expect(document.body.classList.contains('overflow-hidden')).toBe(false);
     expect(trayWrapper.classList.contains('max-desk:hidden')).toBe(false);
   });
@@ -275,6 +279,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     const frame = frameFor('community')!;
     (frame.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async () => false;
     win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before the dispatch commits.
 
     const chipRemove = tray.querySelector<HTMLElement>('[data-minimized-chip="community"] button')!;
     chipRemove.click();
@@ -384,7 +389,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(bar.hidden).toBe(true);
   });
 
-  it("the fallback bar's minimize button minimizes the frame (hides/inert, no DOM-side guard to ask)", () => {
+  it("the fallback bar's minimize button minimizes the frame (hides/inert, no DOM-side guard to ask)", async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
@@ -393,6 +398,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     writeFrameDoc(frame.iframe, '<!doctype html><html><head><title>Error</title></head><body></body></html>');
     frame.iframe.dispatchEvent(new Event('load'));
     frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-minimize]')!.click();
+    await flushMicrotasks();
 
     expect(frame.wrapper.style.visibility).toBe('hidden');
     expect(frame.wrapper.hasAttribute('inert')).toBe(true);
@@ -483,6 +489,7 @@ describe('initDeskWindowManager — restore-after-reload (robustness pass)', () 
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
     const frame = frameFor('community')!;
     win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before the dispatch commits.
 
     let persisted = JSON.parse(win.sessionStorage.getItem(DESK_WINDOWS_STORAGE_KEY)!) as DeskWindowsState;
     expect(persisted.windows[0].minimized).toBe(true);
@@ -494,19 +501,115 @@ describe('initDeskWindowManager — restore-after-reload (robustness pass)', () 
   });
 });
 
+describe('initDeskWindowManager — entrance/exit motion (robustness pass)', () => {
+  it('opening from a desk item scales in FROM that item (transform-origin relative to the new frame, via onClickCapture)', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+
+    const anchor = document.createElement('a');
+    anchor.href = '/es/ingles/actividades';
+    anchor.setAttribute(DESK_WINDOW_OPEN_ATTR, 'community');
+    anchor.textContent = 'Comunidad';
+    document.body.appendChild(anchor);
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+
+    const frame = frameFor('community')!;
+    expect(frame.wrapper.hasAttribute('data-desk-window-manager-opening')).toBe(true);
+    // `stubRects()` gives every non-header element the same WRAPPER_RECT
+    // (left:64, top:76, width:600, height:500) — the opener's own CENTRE
+    // (364, 326) minus the new frame's own top-left (64, 76), since
+    // `transform-origin` is relative to the frame's own box, not the
+    // viewport.
+    expect(frame.wrapper.style.getPropertyValue('--desk-window-manager-from')).toBe('300px 250px');
+  });
+
+  it('any OTHER open (e.g. postMessage from inside an embedded window) scales in from the cascade spot — no explicit transform-origin override', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    expect(frame.wrapper.hasAttribute('data-desk-window-manager-opening')).toBe(true);
+    expect(frame.wrapper.style.getPropertyValue('--desk-window-manager-from')).toBe('');
+  });
+
+  it('plays no entrance animation at all under prefers-reduced-motion', () => {
+    const win = fakeWin({ reducedMotion: true });
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    expect(frame.wrapper.hasAttribute('data-desk-window-manager-opening')).toBe(false);
+  });
+
+  it('restoring a persisted window after a reload never plays the entrance animation (that is not an "opening")', () => {
+    const win = fakeWin();
+    const persisted: DeskWindowsState = {
+      windows: [
+        { id: 'community', kind: 'community', href: '/es/ingles/actividades', title: 'Comunidad', minimized: false, maximized: false, offset: { x: 0, y: 0 }, z: 1 },
+      ],
+      nextZ: 2,
+    };
+    win.sessionStorage.setItem(DESK_WINDOWS_STORAGE_KEY, serializePersistedDeskWindows(persisted));
+
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+
+    expect(frameFor('community')!.wrapper.hasAttribute('data-desk-window-manager-opening')).toBe(false);
+  });
+
+  it('reopening/focusing an already-open window never replays the entrance animation', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+    frame.wrapper.removeAttribute('data-desk-window-manager-opening'); // simulate the first entrance already having finished
+
+    handle.openWindow('/es/ingles/actividades?nivel=A1', 'Comunidad');
+
+    expect(frame.wrapper.hasAttribute('data-desk-window-manager-opening')).toBe(false);
+  });
+
+  it('minimize adds the shrink-toward-tray exit class before the dispatch commits', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+
+    // Synchronously, before the awaited exit animation resolves — the
+    // window is still fully visible/reachable (same reasoning the close
+    // animation already relies on), just mid-exit.
+    expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
+    expect(frame.wrapper.style.visibility).not.toBe('hidden');
+  });
+
+  it("the fallback bar's minimize button plays the same exit class", () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-minimize]')!.click();
+
+    expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
+  });
+});
+
 describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
-  function openManyMinimized(win: ReturnType<typeof fakeWin>, count: number): void {
+  async function openManyMinimized(win: ReturnType<typeof fakeWin>, count: number): Promise<void> {
     for (let i = 0; i < count; i += 1) {
       handle!.openWindow(`/es/ingles/actividades/w${i}`, `w${i}`);
       const frame = frameFor(`activity:w${i}`)!;
       win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+      await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before each dispatch commits.
     }
   }
 
   it('opening a 9th window evicts the OLDEST minimized window to make room', async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
-    openManyMinimized(win, 8);
+    await openManyMinimized(win, 8);
     expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(8);
 
     handle.openWindow('/es/ingles/actividades/w8', 'w8');
@@ -521,7 +624,7 @@ describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
   it('skips a minimized window whose own deskWindowCanClose guard refuses, trying the next-oldest instead', async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
-    openManyMinimized(win, 8);
+    await openManyMinimized(win, 8);
     const dirtiest = frameFor('activity:w0')!;
     (dirtiest.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async () => false;
 
@@ -536,7 +639,7 @@ describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
   it('shows a calm notice instead of opening when every minimized window refuses to close', async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
-    openManyMinimized(win, 8);
+    await openManyMinimized(win, 8);
     for (let i = 0; i < 8; i += 1) {
       const frame = frameFor(`activity:w${i}`)!;
       (frame.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async () => false;
@@ -550,10 +653,10 @@ describe('initDeskWindowManager — the 8-window cap (robustness pass)', () => {
     expect(toastSpy).toHaveBeenCalledWith('Demasiadas ventanas');
   });
 
-  it('reopening/focusing an EXISTING window never triggers the cap, even already at 8', () => {
+  it('reopening/focusing an EXISTING window never triggers the cap, even already at 8', async () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win, 'Demasiadas ventanas');
-    openManyMinimized(win, 8);
+    await openManyMinimized(win, 8);
 
     handle.openWindow('/es/ingles/actividades/w0', 'w0');
 

@@ -50,6 +50,16 @@ const DESK_WINDOW_MARKER_SELECTOR = '[data-desk-window]';
 export const DESK_WINDOW_OPEN_ATTR = 'data-desk-window-open';
 
 const CLOSE_ANIMATION_MS = 160;
+/** Matches `global.css`'s own `.ingles-window--minimizing` keyframe duration. */
+const MINIMIZE_ANIMATION_MS = 180;
+
+/** A pending entrance variant for the NEXT frame `render()`'s own loop
+ * creates — read-and-cleared by `applyOpenAnimation`, set only by
+ * `openWindow`/`openAtCapacity` right before their own `dispatch` call (see
+ * each one's own header). `null` (the default, and the only value a
+ * restore-after-reload `render()` call ever sees — that call never goes
+ * through `openWindow` at all) means "no entrance animation at all". */
+type PendingOpen = { kind: 'origin'; x: number; y: number } | { kind: 'cascade' } | null;
 
 /** The wrapper's own default (non-maximized) geometry — identical to `DeskWindow.astro`'s old desktop-inset treatment, now owned by the HOST frame instead of the embedded page itself. */
 const WRAPPER_CLASS =
@@ -212,6 +222,7 @@ export function initDeskWindowManager(
   const restored = readPersistedDeskWindows(win.sessionStorage);
   let state: DeskWindowsState = restored && restored.windows.length > 0 ? restored : initialDeskWindowsState;
   const frames = new Map<string, ManagedWindow>();
+  let pendingOpen: PendingOpen = null;
 
   function applyGeometry(managed: ManagedWindow, entry: DeskWindowEntry): void {
     managed.wrapper.style.zIndex = String(1000 + entry.z);
@@ -283,7 +294,23 @@ export function initDeskWindowManager(
     const { bar: fallbackBar, title: fallbackTitle, closeButton: fallbackClose, minimizeButton: fallbackMinimize } =
       buildFallbackBar(doc);
     fallbackClose.addEventListener('click', () => void requestClose(entry.id));
-    fallbackMinimize.addEventListener('click', () => dispatch({ type: 'minimize', id: entry.id }));
+    fallbackMinimize.addEventListener('click', () => {
+      // No in-frame guard to ask (a broken page can never be a dirty
+      // editor — same reasoning as `buildFallbackBar`'s own header), but
+      // still plays the SAME shrink-toward-the-tray exit every other
+      // minimize gets (`playMinimizeAnimation`'s own header) — `wrapper`
+      // directly (not `managed`, not yet constructed at this point in
+      // `createManagedWindow`), same posture the drag handlers right below
+      // already use.
+      const run = async () => {
+        if (!prefersReducedMotion(win)) {
+          wrapper.classList.add('ingles-window--minimizing');
+          await new Promise((resolve) => win.setTimeout(resolve, MINIMIZE_ANIMATION_MS));
+        }
+        dispatch({ type: 'minimize', id: entry.id });
+      };
+      void run();
+    });
     let fallbackDrag: { x: number; y: number; offset: DeskWindowOffset } | null = null;
     fallbackBar.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || !isDesktop(win)) return;
@@ -402,6 +429,40 @@ export function initDeskWindowManager(
     return managed;
   }
 
+  /**
+   * Entrance motion (robustness pass, owner spec: "windows opened from a
+   * desk item scale in from that item... others fade/scale in subtly from
+   * the cascade spot"). Called ONLY for a genuinely NEW frame, right after
+   * `applyGeometry` has already placed it at its real, final position
+   * (cascade offset included) — `getBoundingClientRect()` below would
+   * otherwise measure the wrong box for the `'origin'` variant.
+   *
+   * `pendingOpen` is read-and-cleared-by-convention here (the caller,
+   * `openWindow`/`openAtCapacity`, clears it right after its own `dispatch`
+   * returns) rather than reset inside this function itself, since a single
+   * `dispatch` can in principle only ever create ONE new frame per call.
+   */
+  function applyOpenAnimation(managed: ManagedWindow): void {
+    if (!pendingOpen || prefersReducedMotion(win)) return;
+    const wrapper = managed.wrapper;
+    if (pendingOpen.kind === 'origin') {
+      const rect = wrapper.getBoundingClientRect();
+      wrapper.style.setProperty(
+        '--desk-window-manager-from',
+        `${pendingOpen.x - rect.left}px ${pendingOpen.y - rect.top}px`,
+      );
+    }
+    wrapper.setAttribute('data-desk-window-manager-opening', '');
+    wrapper.addEventListener(
+      'animationend',
+      () => {
+        wrapper.removeAttribute('data-desk-window-manager-opening');
+        wrapper.style.removeProperty('--desk-window-manager-from');
+      },
+      { once: true },
+    );
+  }
+
   function render(): void {
     const ids = new Set(state.windows.map((w) => w.id));
     for (const [id, managed] of frames) {
@@ -413,6 +474,7 @@ export function initDeskWindowManager(
 
     for (const entry of state.windows) {
       let managed = frames.get(entry.id);
+      const isNew = !managed;
       if (!managed) {
         managed = createManagedWindow(entry);
         frames.set(entry.id, managed);
@@ -432,6 +494,11 @@ export function initDeskWindowManager(
         }
       }
       applyGeometry(managed, entry);
+      // Entrance motion (robustness pass, owner spec): only a genuinely NEW
+      // frame ever plays this — restoring a window after a reload reuses
+      // this SAME `render()` function but never sets `pendingOpen`
+      // (`applyOpenAnimation`'s own header), so it is always a no-op there.
+      if (isNew) applyOpenAnimation(managed);
     }
 
     applyActiveState();
@@ -507,7 +574,12 @@ export function initDeskWindowManager(
    * instead of opening — never a silent no-op, and never force-closing a
    * dirty editor's draft.
    */
-  async function openAtCapacity(match: WindowRouteMatch, href: string, title: string): Promise<void> {
+  async function openAtCapacity(
+    match: WindowRouteMatch,
+    href: string,
+    title: string,
+    origin: { x: number; y: number } | null,
+  ): Promise<void> {
     for (const candidate of minimizedWindowsOldestFirst(state)) {
       const managed = frames.get(candidate.id);
       let canClose = true;
@@ -520,14 +592,25 @@ export function initDeskWindowManager(
       }
       if (canClose) {
         dispatch({ type: 'close', id: candidate.id });
+        pendingOpen = origin ? { kind: 'origin', ...origin } : { kind: 'cascade' };
         dispatch({ type: 'open', id: match.id, kind: match.kind, href, title });
+        pendingOpen = null;
         return;
       }
     }
     if (maxWindowsNoticeLabel) toast(maxWindowsNoticeLabel);
   }
 
-  function openWindow(href: string, title: string): void {
+  /**
+   * @param origin - The clicked desk item's own screen-space centre point
+   * (`onClickCapture`'s own `getBoundingClientRect()`), when this open came
+   * from one — see `applyOpenAnimation`'s own header for how it is used.
+   * `null` for every other caller (a `postMessage`'d `open-window` from
+   * inside an embedded window, the initial `initialWindow` open, the
+   * click-race defensive net): those get the subtler 'cascade' variant
+   * instead.
+   */
+  function openWindow(href: string, title: string, origin: { x: number; y: number } | null = null): void {
     let url: URL;
     try {
       url = new URL(href, win.location.href);
@@ -542,11 +625,13 @@ export function initDeskWindowManager(
     // genuinely NEW id ever has to consider the cap below.
     const existing = state.windows.some((w) => w.id === match.id);
     if (existing || state.windows.length < MAX_DESK_WINDOWS) {
+      pendingOpen = origin ? { kind: 'origin', ...origin } : { kind: 'cascade' };
       dispatch({ type: 'open', id: match.id, kind: match.kind, href: fullHref, title });
+      pendingOpen = null;
       return;
     }
 
-    void openAtCapacity(match, fullHref, title);
+    void openAtCapacity(match, fullHref, title, origin);
   }
 
   function onClickCapture(event: MouseEvent): void {
@@ -570,7 +655,11 @@ export function initDeskWindowManager(
 
     event.preventDefault();
     const title = deriveOpenerTitle(opener) ?? '';
-    openWindow(href, title);
+    // Entrance motion (robustness pass): a REAL desk item (a folder, a tray
+    // chip, the levels dock…) — captured BEFORE the frame exists, same-
+    // document/same-origin, no `postMessage` round trip needed.
+    const rect = opener.getBoundingClientRect();
+    openWindow(href, title, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
   }
   doc.addEventListener('click', onClickCapture, true);
 
@@ -586,6 +675,17 @@ export function initDeskWindowManager(
     if (prefersReducedMotion(win)) return Promise.resolve();
     managed.wrapper.classList.add('ingles-window--closing');
     return new Promise((resolve) => win.setTimeout(resolve, CLOSE_ANIMATION_MS));
+  }
+
+  /** Minimize's own "shrink toward the tray" exit — reuses `global.css`'s
+   * existing `.ingles-window--minimizing` keyframe (a flat, standalone class
+   * selector, same posture as `.ingles-window--closing` above — it applies
+   * to this HOST wrapper exactly as it already does to the embedded page's
+   * own `.ingles-window` section, no new CSS needed). */
+  function playMinimizeAnimation(managed: ManagedWindow): Promise<void> {
+    if (prefersReducedMotion(win)) return Promise.resolve();
+    managed.wrapper.classList.add('ingles-window--minimizing');
+    return new Promise((resolve) => win.setTimeout(resolve, MINIMIZE_ANIMATION_MS));
   }
 
   /**
@@ -635,6 +735,7 @@ export function initDeskWindowManager(
           canMinimize = true;
         }
         if (!canMinimize) return;
+        await playMinimizeAnimation(managed);
         dispatch({ type: 'minimize', id });
         return;
       }

@@ -1095,6 +1095,52 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
+/* Window-manager HOST entrance animation (robustness pass, owner spec:
+ * "windows opened from a desk item scale in from that item... others
+ * fade/scale in subtly from the cascade spot"): plays on the HOST's own
+ * `[data-desk-window-frame]` wrapper (`deskWindowManager.ts`'s own
+ * `WRAPPER_CLASS` div) — a DIFFERENT element from `.ingles-window` above
+ * (that one is the EMBEDDED page's own dialog section, inside the iframe;
+ * this one is the floating frame the host positions/drags/stacks). Same
+ * delicate "settle in" curve/duration as the old single-window
+ * `ingles-window-open` above, reused here rather than duplicated.
+ *
+ * ONE keyframe serves BOTH variants `deskWindowManager.ts#applyOpenAnimation`
+ * produces: a genuine desk-item open sets `--desk-window-manager-from` to
+ * that item's own screen point (relative to this wrapper's own box, same
+ * "transform-origin is element-relative" reasoning `applyDeskWindowOrigin`'s
+ * old single-window version already had to account for); any OTHER open
+ * (reopening from inside an embedded window, e.g. an `ActivityCard`'s
+ * `data-desk-open-window` -> `postMessage`) leaves it unset, which falls
+ * back to `50% 50%` — scaling in from the window's own centre, i.e. "the
+ * cascade spot" it already landed at. Restoring persisted windows after a
+ * reload never sets `data-desk-window-manager-opening` at all (that is not
+ * an "opening"), so nothing here ever plays for them. */
+@keyframes ingles-window-manager-open {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-desk-window-frame] {
+  transform-origin: var(--desk-window-manager-from, 50% 50%);
+}
+
+[data-desk-window-frame][data-desk-window-manager-opening] {
+  animation: ingles-window-manager-open 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-desk-window-frame][data-desk-window-manager-opening] {
+    animation: none;
+  }
+}
+
 /* Minimized-windows tray (PART 6b, moved to a standalone fixed bottom-right
  * container in PART 6c — `MinimizedWindowsTray.astro`'s own
  * `[data-minimized-tray]`): `@lib/ui/minimizedWindows.ts#initMinimizedWindowsTray`
