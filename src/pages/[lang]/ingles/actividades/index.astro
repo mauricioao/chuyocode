@@ -74,7 +74,7 @@
  * activities by heart count. Hidden entirely when there are no candidates.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
 import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import ActivityCard from '@components/ui/ActivityCard.astro';
@@ -288,18 +288,6 @@ const closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
 const desk = hostMode
   ? await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo })
   : null;
-const deskLabels = desk && {
-  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
-  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
-  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
-  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
-  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
-  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
-  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
-  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
-  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-};
 
 /** Minimize-to-tray (`@lib/ui/minimizedWindows`): ONE stable id for this
  * window regardless of its current filters — re-minimizing it just moves
@@ -319,23 +307,9 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
   embedded={embedded && !isGuest}
   windowManager={hostMode}
 >
-  {hostMode && desk && deskLabels && (
+  {hostMode && desk && (
     <>
-      <DeskScene
-        lang={lang}
-        greetingLine1={desk.greetingLine1}
-        activityCountLabel={desk.activityCountLabel}
-        dailyPickHref={desk.dailyPickHref}
-        dailyPickMeta={desk.dailyPickMeta}
-        dailyPickPeek={desk.dailyPickPeek}
-        weatherLat={desk.weatherLat}
-        weatherLon={desk.weatherLon}
-        weatherCity={desk.weatherCity}
-        weatherLabel={desk.weatherLabel}
-        playerLabels={desk.playerLabels}
-        levelLabels={levelLabels}
-        labels={deskLabels}
-      />
+      <DeskHost lang={lang} desk={desk} />
       <DeskWindowManager slot="overlay" initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={t.pageTitle} />
     </>
   )}

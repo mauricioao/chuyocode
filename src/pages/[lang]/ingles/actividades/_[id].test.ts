@@ -229,6 +229,20 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     expect(html).not.toContain('role="dialog"'); // the window itself only renders embedded — getPublishedActivity was never even called.
   });
 
+  // Robustness fix (owner report): a direct visit to a window route used to
+  // render the desk WITHOUT the floating helper — only the hub's own
+  // frontmatter rendered it. `DeskHost.astro` now renders it on every host
+  // shell, not just the hub.
+  it('renders the floating helper on the host shell too, not hub-only anymore', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    const html = await res.text();
+    expect(html).toContain('id="desk-helper"');
+  });
+
   it('renders no desk at all behind the window for a guest', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {

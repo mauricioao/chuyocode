@@ -385,6 +385,20 @@ describe('GET /[lang]/crear/[id] — the desk behind the window (PART 6b)', () =
     });
     expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
   });
+
+  // Robustness fix (owner report): a direct visit to a window route used to
+  // show no helper at all — only the hub's own frontmatter rendered it.
+  // `DeskHost.astro` (shared by the hub and every window route's host shell)
+  // now renders it everywhere a signed-in visitor sees the desk.
+  it('renders the floating helper on the host shell too, not hub-only anymore', async () => {
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    const html = await res.text();
+    expect(html).toContain('id="desk-helper"');
+  });
 });
 
 describe('GET /[lang]/crear/[id] — "Duplicar y adaptar" credit line (D7)', () => {

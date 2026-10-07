@@ -47,7 +47,7 @@
  * cards.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import DeskScene from '@components/ingles/DeskScene.astro';
+import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
 import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import ActivityEditorIsland from '@components/islands/activities/ActivityEditorIsland';
@@ -99,7 +99,6 @@ Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
 const hostMode = !embedded;
 
 const t = UI_LABELS[lang].activities.editor;
-const levelLabels = UI_LABELS[lang].english.levels;
 
 /**
  * HOST shell: desk + the window manager, which opens THIS SAME route again
@@ -111,18 +110,6 @@ let hostDesk: Awaited<ReturnType<typeof loadDeskSceneData>> | null = null;
 if (hostMode) {
   hostDesk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
 }
-const hostDeskLabels = hostDesk && {
-  greetingQuestion: UI_LABELS[lang].english.hub.greetingQuestion,
-  greetingSubtitle: UI_LABELS[lang].english.hub.greetingSubtitle,
-  foldersLabel: UI_LABELS[lang].english.hub.foldersLabel,
-  communityTitle: UI_LABELS[lang].english.hub.communityTitle,
-  todayTitle: UI_LABELS[lang].english.hub.todayTitle,
-  createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
-  widgetsLabel: UI_LABELS[lang].english.hub.widgetsLabel,
-  weatherUnavailable: UI_LABELS[lang].english.hub.weatherUnavailable,
-  weatherAttribution: UI_LABELS[lang].english.hub.weatherAttribution,
-  levelShortcutTitle: UI_LABELS[lang].english.hub.levelShortcutTitle,
-};
 
 // Everything below is the WINDOW's own content — embedded only (there is no
 // guest editor). The host shell above never reaches any of this.
@@ -180,23 +167,9 @@ if (!hostMode) {
   embedded={embedded}
   windowManager={hostMode}
 >
-  {hostMode && hostDesk && hostDeskLabels && (
+  {hostMode && hostDesk && (
     <>
-      <DeskScene
-        lang={lang}
-        greetingLine1={hostDesk.greetingLine1}
-        activityCountLabel={hostDesk.activityCountLabel}
-        dailyPickHref={hostDesk.dailyPickHref}
-        dailyPickMeta={hostDesk.dailyPickMeta}
-        dailyPickPeek={hostDesk.dailyPickPeek}
-        weatherLat={hostDesk.weatherLat}
-        weatherLon={hostDesk.weatherLon}
-        weatherCity={hostDesk.weatherCity}
-        weatherLabel={hostDesk.weatherLabel}
-        playerLabels={hostDesk.playerLabels}
-        levelLabels={levelLabels}
-        labels={hostDeskLabels}
-      />
+      <DeskHost lang={lang} desk={hostDesk} />
       <DeskWindowManager slot="overlay" initialHref={`${Astro.url.pathname}${Astro.url.search}`} initialTitle={windowTitle} />
     </>
   )}
