@@ -38,9 +38,10 @@
  * `practiceUrl`/`qrSvg` here and an `onExit` instead, which only closes the
  * overlay and hands focus back to the button (`closePresentationPreview`).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { MagnifyingGlassPlusIcon } from '@phosphor-icons/react/dist/ssr/MagnifyingGlassPlus';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -69,6 +70,7 @@ import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
 import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
+import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 
 /**
  * The window title bar's own `<span>` ids ("desktop" redesign PART 6b) —
@@ -632,6 +634,8 @@ export default function ActivityEditorIsland({
   useEffect(() => {
     setActionsPortalTarget(document.getElementById(DESK_WINDOW_ACTIONS_ID));
   }, []);
+  /** "Ver como presentación" icon button's own tooltip id (icon-only pass, 2026-10-07) — same `ICON_TOOLTIP_*` pattern `ReportActivityButton`/`DuplicateActivityButton` already use. */
+  const viewAsPresentationTooltipId = useId();
 
   // The window title bar's own EDITABLE title group slot (PART 6b polish) —
   // same resolve-once-on-mount posture as the actions slot above; `null`
@@ -1082,15 +1086,19 @@ export default function ActivityEditorIsland({
       {actionsPortalTarget &&
         createPortal(
           <>
-            <Button
+            <button
               type="button"
-              size="sm"
-              variant="outline"
               data-testid="view-as-presentation-button"
+              aria-label={t.viewAsPresentation}
+              aria-describedby={viewAsPresentationTooltipId}
+              className={ICON_TOOLTIP_TRIGGER_CLASS}
               onClick={openPresentationPreview}
             >
-              {t.viewAsPresentation}
-            </Button>
+              <MagnifyingGlassPlusIcon aria-hidden="true" size={16} />
+              <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+                {t.viewAsPresentation}
+              </span>
+            </button>
             <Button
               type="button"
               size="sm"

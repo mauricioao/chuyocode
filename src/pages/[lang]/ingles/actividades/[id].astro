@@ -66,7 +66,7 @@ import DuplicateActivityButton from '@components/islands/activities/DuplicateAct
 import ShareDialog from '@components/islands/ShareDialog';
 import { HeartIcon } from '@phosphor-icons/react/dist/ssr/Heart';
 import { PrinterIcon } from '@phosphor-icons/react/dist/ssr/Printer';
-import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
+import { MagnifyingGlassPlusIcon } from '@phosphor-icons/react/dist/ssr/MagnifyingGlassPlus';
 import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
@@ -385,7 +385,7 @@ const sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${act
               aria-describedby="action-present-tooltip"
               class={ICON_TOOLTIP_TRIGGER_CLASS}
             >
-              <PresentationIcon aria-hidden="true" size={16} />
+              <MagnifyingGlassPlusIcon aria-hidden="true" size={16} />
               <span role="tooltip" id="action-present-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
                 {t.present}
               </span>
