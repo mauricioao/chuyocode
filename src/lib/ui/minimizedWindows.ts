@@ -224,7 +224,7 @@ function createDocumentGlyph(doc: Document): SVGSVGElement {
 function createChip(
   entry: MinimizedWindowEntry,
   removeLabel: string,
-  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  onRemove: (id: string) => void,
   doc: Document,
   onRemoved: () => void,
 ): HTMLAnchorElement {
@@ -266,7 +266,7 @@ function createChip(
   closeButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    removeMinimizedWindow(entry.id, storage);
+    onRemove(entry.id);
     onRemoved();
   });
   chip.appendChild(closeButton);
@@ -376,8 +376,18 @@ function wireOverflowEscapeClose(doc: Document): void {
 }
 
 /**
- * DOM: (re)render `container`'s chips from `entries`. Clears and rebuilds
- * every time rather than diffing — the list is at most
+ * DOM: (re)render `container`'s chips from `entries`, against an arbitrary
+ * `onRemove`/`rerender` pair rather than `sessionStorage` directly — this is
+ * what lets the SAME chip/overflow-menu UI serve two different owners of
+ * "the list of minimized windows":
+ *   - {@link renderMinimizedWindowsTray} below — `sessionStorage`, the
+ *     per-page tray every Inglés HOST page still mounts.
+ *   - the window manager (`@lib/ui/deskWindowManager`, window-manager
+ *     architecture) — its own in-memory `DeskWindowsState`, since a
+ *     minimized window there is a REAL iframe kept alive in the DOM, not
+ *     just a remembered URL to reopen.
+ *
+ * Clears and rebuilds every time rather than diffing — the list is at most
  * {@link MAX_MINIMIZED_WINDOWS} long, so a full rebuild is cheap, and it
  * keeps this function simple enough to trust at a glance.
  *
@@ -386,11 +396,12 @@ function wireOverflowEscapeClose(doc: Document): void {
  * own header for why (owner report `dock-three-chips.png`: the dock used to
  * widen under the open helper bubble to fit every chip).
  */
-export function renderMinimizedWindowsTray(
+export function renderMinimizedWindowsTrayFrom(
   container: HTMLElement,
   entries: readonly MinimizedWindowEntry[],
   removeLabel: string,
-  storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
+  onRemove: (id: string) => void,
+  rerender: () => void,
   doc: Document = document,
   moreLabelTemplate = '+{n}',
 ): void {
@@ -409,16 +420,33 @@ export function renderMinimizedWindowsTray(
   const visible = entries.slice(0, MAX_VISIBLE_MINIMIZED_CHIPS);
   const overflow = entries.slice(MAX_VISIBLE_MINIMIZED_CHIPS);
 
-  const rerender = () =>
-    renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate);
-
   for (const entry of visible) {
-    container.appendChild(createChip(entry, removeLabel, storage, doc, rerender));
+    container.appendChild(createChip(entry, removeLabel, onRemove, doc, rerender));
   }
 
   if (overflow.length > 0) {
     container.appendChild(createOverflowTile(overflow, moreLabelTemplate, doc));
   }
+}
+
+/** The `sessionStorage`-backed tray every Inglés HOST page mounts — see {@link renderMinimizedWindowsTrayFrom}'s own header. */
+export function renderMinimizedWindowsTray(
+  container: HTMLElement,
+  entries: readonly MinimizedWindowEntry[],
+  removeLabel: string,
+  storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
+  doc: Document = document,
+  moreLabelTemplate = '+{n}',
+): void {
+  renderMinimizedWindowsTrayFrom(
+    container,
+    entries,
+    removeLabel,
+    (id) => removeMinimizedWindow(id, storage),
+    () => renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate),
+    doc,
+    moreLabelTemplate,
+  );
 }
 
 /**
