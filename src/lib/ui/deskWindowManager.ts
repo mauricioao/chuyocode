@@ -53,6 +53,17 @@ const CLOSE_ANIMATION_MS = 160;
 /** Matches `global.css`'s own `.ingles-window--minimizing` keyframe duration. */
 const MINIMIZE_ANIMATION_MS = 180;
 
+/**
+ * Fool-proofing a NEVER-RESOLVING load (owner report, verified in a real
+ * browser: "a window can never get stuck"): if a frame's own navigation has
+ * not fired `load` within this long — a hung request, a blocked resource,
+ * anything — the fallback title bar shows anyway, same as a genuinely
+ * chrome-less document. Re-armed on every fresh navigation
+ * (`armFallbackTimeout`'s own header) and cleared the instant `load` DOES
+ * fire, whatever it turns out to be.
+ */
+const FALLBACK_LOAD_TIMEOUT_MS = 8000;
+
 /** A pending entrance variant for the NEXT frame `render()`'s own loop
  * creates — read-and-cleared by `applyOpenAnimation`, set only by
  * `openWindow`/`openAtCapacity` right before their own `dispatch` call (see
@@ -170,6 +181,7 @@ function buildFallbackBar(doc: Document): {
   title: HTMLElement;
   closeButton: HTMLButtonElement;
   minimizeButton: HTMLButtonElement;
+  maximizeButton: HTMLButtonElement;
 } {
   const bar = doc.createElement('div');
   bar.hidden = true;
@@ -192,6 +204,15 @@ function buildFallbackBar(doc: Document): {
   minimizeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-yellow';
   lights.appendChild(minimizeButton);
 
+  // Owner report (verified in a real browser): "working red/yellow/green" —
+  // the fallback bar is a full three-light title bar, same as a genuine
+  // desk window's own, not just close/minimize.
+  const maximizeButton = doc.createElement('button');
+  maximizeButton.type = 'button';
+  maximizeButton.dataset.deskWindowFallbackMaximize = '';
+  maximizeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-green';
+  lights.appendChild(maximizeButton);
+
   bar.appendChild(lights);
 
   const title = doc.createElement('b');
@@ -199,7 +220,7 @@ function buildFallbackBar(doc: Document): {
   title.className = 'min-w-0 truncate text-[13px] font-semibold text-foreground';
   bar.appendChild(title);
 
-  return { bar, title, closeButton, minimizeButton };
+  return { bar, title, closeButton, minimizeButton, maximizeButton };
 }
 
 export function initDeskWindowManager(
@@ -299,8 +320,39 @@ export function initDeskWindowManager(
     // Fool-proofing a chrome-less frame — see `buildFallbackBar`'s own
     // header. Hidden by default; the `load` handler below shows it only once
     // it finds the loaded document missing `DeskWindow`'s own marker.
-    const { bar: fallbackBar, title: fallbackTitle, closeButton: fallbackClose, minimizeButton: fallbackMinimize } =
-      buildFallbackBar(doc);
+    const {
+      bar: fallbackBar,
+      title: fallbackTitle,
+      closeButton: fallbackClose,
+      minimizeButton: fallbackMinimize,
+      maximizeButton: fallbackMaximize,
+    } = buildFallbackBar(doc);
+
+    /**
+     * Fool-proofing a NEVER-RESOLVING load — see {@link FALLBACK_LOAD_TIMEOUT_MS}'s
+     * own header. Re-armed every time this frame starts a fresh navigation
+     * (right after setting `iframe.src`/`contentWindow.location`, here and
+     * in `render()`'s own reuse branch) and cleared the instant `load` fires
+     * for it, whatever that load turns out to be — a genuine desk window
+     * hides the bar again right after, same as it always did.
+     */
+    let fallbackTimeoutId: ReturnType<typeof win.setTimeout> | null = null;
+    function armFallbackTimeout(): void {
+      clearFallbackTimeout();
+      fallbackTimeoutId = win.setTimeout(() => {
+        fallbackTimeoutId = null;
+        fallbackBar.hidden = false;
+        fallbackTitle.textContent = entry.title || '';
+      }, FALLBACK_LOAD_TIMEOUT_MS);
+    }
+    function clearFallbackTimeout(): void {
+      if (fallbackTimeoutId !== null) {
+        win.clearTimeout(fallbackTimeoutId);
+        fallbackTimeoutId = null;
+      }
+    }
+    armFallbackTimeout();
+
     fallbackClose.addEventListener('click', () => void requestClose(entry.id));
     fallbackMinimize.addEventListener('click', () => {
       // No in-frame guard to ask (a broken page can never be a dirty
@@ -319,6 +371,7 @@ export function initDeskWindowManager(
       };
       void run();
     });
+    fallbackMaximize.addEventListener('click', () => dispatch({ type: 'maximizeToggle', id: entry.id }));
     let fallbackDrag: { x: number; y: number; offset: DeskWindowOffset } | null = null;
     fallbackBar.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || !isDesktop(win)) return;
@@ -350,6 +403,13 @@ export function initDeskWindowManager(
     });
 
     iframe.addEventListener('load', () => {
+      // A real `load` fired — whatever it turns out to be, this frame is no
+      // longer "never resolving" (see {@link FALLBACK_LOAD_TIMEOUT_MS}'s own
+      // header). Cleared FIRST, unconditionally, before any of the branches
+      // below (including the click-race one, which re-arms it again itself
+      // right before its own recovery navigation).
+      clearFallbackTimeout();
+
       // Click-race defensive net (robustness pass, owner report): under
       // normal operation every in-iframe navigation INSIDE this frame stays
       // on ITS OWN window route (filters/pagination/a plain in-window link),
@@ -372,6 +432,7 @@ export function initDeskWindowManager(
           const ownUrl = new URL(current?.href ?? entry.href, win.location.href);
           ownUrl.searchParams.set('ventana', '1');
           showLoading();
+          armFallbackTimeout();
           try {
             // `location.replace` (never reassigning `iframe.src`): the
             // in-frame navigation already happened without ever changing the
@@ -453,6 +514,10 @@ export function initDeskWindowManager(
     // embedded page right as an in-window navigation starts) can re-arm this
     // exact loader without a second lookup.
     (managed as unknown as { showLoading: () => void }).showLoading = showLoading;
+    // Same reasoning, for the never-resolving-load fallback: `render()`'s own
+    // reuse branch re-navigates this SAME frame (a filter/pagination link, an
+    // in-window navigate) and must re-arm this exact timer too.
+    (managed as unknown as { armFallbackTimeout: () => void }).armFallbackTimeout = armFallbackTimeout;
     return managed;
   }
 
@@ -518,6 +583,7 @@ export function initDeskWindowManager(
         const nextSrc = url.toString();
         if (managed.iframe.src !== nextSrc) {
           managed.iframe.src = nextSrc;
+          (managed as unknown as { armFallbackTimeout: () => void }).armFallbackTimeout();
         }
       }
       applyGeometry(managed, entry);
@@ -826,6 +892,11 @@ export function initDeskWindowManager(
         return;
       case 'navigating':
         (managed as unknown as { showLoading: () => void }).showLoading();
+        // A plain in-window link (a filter, pagination, a card) navigates
+        // the iframe NATIVELY — the host never reassigns `iframe.src` for
+        // this, so this `pagehide`-signaled start is the only hook to
+        // re-arm the never-resolving-load timeout for it too.
+        (managed as unknown as { armFallbackTimeout: () => void }).armFallbackTimeout();
         return;
       default:
         return;

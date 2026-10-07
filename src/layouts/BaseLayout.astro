@@ -332,13 +332,29 @@ const faviconSvg =
         `location.replace` (never a plain navigation) so the detour never
         enters this tab's own history. Classic/`is:inline`, same reasoning as
         the script above: must run before first paint, so a host page never
-        flashes its own full chrome inside the iframe first. */}
+        flashes its own full chrome inside the iframe first.
+
+        BUG FIX (owner report, verified in a real browser): NEVER retries
+        once `?ventana=1` is already on the URL — a page whose own
+        frontmatter never calls `isEmbeddedWindowRequest` at all (`404.astro`
+        is the one that actually reproduced this) never sets
+        `data-desk-window-embedded` no matter how many times it reloads with
+        that param present, so the old unconditional retry replaced the
+        frame's own location with the SAME url forever: an infinite reload
+        loop that never let the frame's own `load` event settle, which is
+        what the host's own chrome-less fallback bar
+        (`@lib/ui/deskWindowManager.ts`) needs to ever show at all. This exact
+        decision is also a tested, pure function
+        (`@lib/ui/embeddedWindow#shouldRetryAsEmbeddedFrame`) — duplicated
+        here rather than imported, since a classic `is:inline` script has no
+        module system to import one with. */}
     <script is:inline>
       (function () {
         if (document.documentElement.hasAttribute('data-desk-window-embedded')) return;
         try {
           if (window.self === window.top) return;
           var url = new URL(window.location.href);
+          if (url.searchParams.get('ventana') === '1') return;
           url.searchParams.set('ventana', '1');
           window.location.replace(url.toString());
         } catch (e) {

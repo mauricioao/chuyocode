@@ -39,7 +39,7 @@ function fakeSessionStorage(): Storage {
   } as Storage;
 }
 
-function fakeWin(opts: { desktop?: boolean; reducedMotion?: boolean } = {}) {
+function fakeWin(opts: { desktop?: boolean; reducedMotion?: boolean; realTimers?: boolean } = {}) {
   const listeners: Record<string, Array<(event: unknown) => void>> = {};
   const win = {
     location: { href: 'https://example.test/es/ingles', origin: 'https://example.test' },
@@ -50,10 +50,19 @@ function fakeWin(opts: { desktop?: boolean; reducedMotion?: boolean } = {}) {
     }),
     history: { replaceState: vi.fn() },
     sessionStorage: fakeSessionStorage(),
-    setTimeout: ((fn: () => void) => {
-      fn();
-      return 0;
-    }) as unknown as Window['setTimeout'],
+    // `realTimers`: the never-resolving-load fallback test needs an actual
+    // delay it can fast-forward with `vi.advanceTimersByTime` — every other
+    // test wants its animations/waits to resolve immediately instead, which
+    // the default (synchronous, fires `fn` right away) gives them.
+    setTimeout: (opts.realTimers
+      ? ((fn: () => void, ms?: number) => globalThis.setTimeout(fn, ms))
+      : ((fn: () => void) => {
+          fn();
+          return 0;
+        })) as unknown as Window['setTimeout'],
+    clearTimeout: (opts.realTimers
+      ? ((id: number) => globalThis.clearTimeout(id))
+      : (() => {})) as unknown as Window['clearTimeout'],
     addEventListener: (type: string, fn: (event: unknown) => void) => {
       (listeners[type] ??= []).push(fn);
     },
@@ -593,6 +602,90 @@ describe('initDeskWindowManager — entrance/exit motion (robustness pass)', () 
     frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-minimize]')!.click();
 
     expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
+  });
+
+  // Owner report, verified in a real browser: "working red/yellow/green" —
+  // the fallback bar must be a full three-light title bar.
+  it("the fallback bar's maximize (green) button toggles maximized, same as a genuine window's", () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-maximize]')!.click();
+
+    expect(frame.wrapper.style.inset).toBe('0px');
+    expect(frame.wrapper.style.boxShadow).toBe('none');
+  });
+
+  describe('a never-resolving load (owner report: "a window can never get stuck")', () => {
+    it('shows the fallback bar after 8s when the frame never fires `load` at all', () => {
+      vi.useFakeTimers();
+      try {
+        const win = fakeWin({ realTimers: true });
+        handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+        handle.openWindow('/es/ingles/actividades', 'Comunidad');
+        const frame = frameFor('community')!;
+        const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+        expect(bar.hidden).toBe(true); // not yet — still well within budget
+
+        vi.advanceTimersByTime(8000);
+
+        expect(bar.hidden).toBe(false);
+        // Its traffic lights still work on a frame stuck like this.
+        frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-maximize]')!.click();
+        expect(frame.wrapper.style.inset).toBe('0px');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('never shows the fallback bar when `load` fires well within the 8s budget', () => {
+      vi.useFakeTimers();
+      try {
+        const win = fakeWin({ realTimers: true });
+        handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+        handle.openWindow('/es/ingles/actividades', 'Comunidad');
+        const frame = frameFor('community')!;
+
+        vi.advanceTimersByTime(500);
+        // A genuine desk window (carries the marker) loads well within budget.
+        const innerDoc = frame.iframe.contentDocument!;
+        innerDoc.open();
+        innerDoc.write('<!doctype html><html><body><div data-desk-window></div></body></html>');
+        innerDoc.close();
+        frame.iframe.dispatchEvent(new Event('load'));
+        const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+        expect(bar.hidden).toBe(true); // the marker was found — no fallback
+
+        // The 8s timer that would otherwise have fired at ~8000ms from OPEN
+        // was cleared by that `load` at 500ms — it must never fire "late".
+        vi.advanceTimersByTime(8000);
+        expect(bar.hidden).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('re-arms the timeout on an in-window navigation (the "navigating" postMessage), so a SECOND hang inside the same frame still gets caught', () => {
+      vi.useFakeTimers();
+      try {
+        const win = fakeWin({ realTimers: true });
+        handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+        handle.openWindow('/es/ingles/actividades', 'Comunidad');
+        const frame = frameFor('community')!;
+
+        vi.advanceTimersByTime(500);
+        frame.iframe.dispatchEvent(new Event('load')); // first load resolves fine, clearing the first timer
+        win.dispatchMessage({ source: 'desk-window', type: 'navigating' }, frame.iframe.contentWindow); // a new in-window navigation starts…
+        vi.advanceTimersByTime(8000); // …and THIS one never resolves
+
+        const bar = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-fallback-bar]')!;
+        expect(bar.hidden).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

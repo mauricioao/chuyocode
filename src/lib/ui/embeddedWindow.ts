@@ -33,3 +33,33 @@
 export function isEmbeddedWindowRequest(url: URL, headers: Headers): boolean {
   return url.searchParams.get('ventana') === '1' || headers.get('sec-fetch-dest') === 'iframe';
 }
+
+/**
+ * Recursion guard (`BaseLayout.astro`'s own early `is:inline` script, which
+ * duplicates this exact decision — a classic script cannot import a
+ * module): a HOST page that somehow rendered full chrome INSIDE an iframe
+ * retries itself once with `?ventana=1` appended, so a cache/CDN edge case
+ * or an older browser missing `Sec-Fetch-Dest` self-corrects into embedded
+ * mode. See {@link isEmbeddedWindowRequest}'s own header for the two signals
+ * that decide embedding server-side.
+ *
+ * BUG FIX (owner report, verified in a real browser): the retry must NEVER
+ * fire again once `?ventana=1` is ALREADY on the URL. A page whose own
+ * frontmatter never calls {@link isEmbeddedWindowRequest} at all — `404.astro`
+ * is the one that actually reproduced this, but the same is true of any
+ * route with no window-route frontmatter — never sets the embedded marker
+ * NO MATTER HOW MANY TIMES it is reloaded with that param already present.
+ * The old, unconditional retry replaced the frame's own location with the
+ * SAME url forever: an infinite reload loop that never let the frame's
+ * `load` event settle, which in turn meant the HOST's own chrome-less
+ * fallback bar (`deskWindowManager.ts`'s own `applyOpenAnimation`/load
+ * handler) never got a stable document to detect and rescue.
+ */
+export function shouldRetryAsEmbeddedFrame(params: {
+  alreadyEmbedded: boolean;
+  isTopFrame: boolean;
+  ventanaParam: string | null;
+}): boolean {
+  if (params.alreadyEmbedded || params.isTopFrame) return false;
+  return params.ventanaParam !== '1';
+}
