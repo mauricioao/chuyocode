@@ -66,6 +66,7 @@ import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
 import BlockList, { type BlocksChangeOptions } from './BlockList';
 import WorksheetPlayer from './WorksheetPlayer';
+import QuizLivePreview from './QuizLivePreview';
 import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
@@ -1170,26 +1171,47 @@ export default function ActivityEditorIsland({
             // `[id].astro`'s own section — this would only double it.
             className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-3"
           >
-            {blocks
-              // A brand-new worksheet block with no image yet (creator
-              // polish round 4, owner feedback #2) has nothing to preview —
-              // skipped here entirely rather than crashing `WorksheetPlayer`,
-              // which requires a real `image`.
-              .filter((b): b is WorksheetBlock & { image: NonNullable<WorksheetBlock['image']> } =>
-                b.type === 'worksheet' && b.image !== undefined,
-              )
-              .map((block) => (
-                <WorksheetPlayer
+            {/* IMMEDIATE PREVIEW (owner spec, build item 2: "para los demás
+                modelos no se ve el preview hasta que se envía a revisión y
+                se aprueba, esto no debe ser así, debe ser inmediato"): every
+                block type renders straight from the in-memory draft here —
+                a worksheet as `WorksheetPlayer` (unchanged), a quiz block as
+                the SAME real `QuizLivePreview` the per-block editor column
+                already mounts (`QuizBlockEditor.tsx`) — a template plays as
+                its own big game, Básico as its ordinary practice, exactly
+                as a learner will see it once published. Never filtered out
+                any more; only a worksheet with no image yet (an
+                in-progress upload) has nothing to show. */}
+            {blocks.map((block) => {
+              if (block.type === 'worksheet') {
+                // A brand-new worksheet block with no image yet (creator
+                // polish round 4, owner feedback #2) has nothing to preview
+                // — skipped rather than crashing `WorksheetPlayer`, which
+                // requires a real `image`.
+                if (!block.image) return null;
+                return (
+                  <WorksheetPlayer
+                    key={block.id}
+                    lang={lang}
+                    image={block.image}
+                    zones={block.zones}
+                    rotation={block.rotation}
+                    imageUrl={resolveImageUrl(block.image.path)}
+                    audio={block.audio}
+                    resolveAudioUrl={resolveAudioUrl}
+                  />
+                );
+              }
+              return (
+                <QuizLivePreview
                   key={block.id}
+                  blockId={block.id}
                   lang={lang}
-                  image={block.image}
-                  zones={block.zones}
-                  rotation={block.rotation}
-                  imageUrl={resolveImageUrl(block.image.path)}
-                  audio={block.audio}
-                  resolveAudioUrl={resolveAudioUrl}
+                  payload={block.payload}
+                  template={block.template}
                 />
-              ))}
+              );
+            })}
           </div>
         ) : showAddFlow ? (
           // The add-block flow (picker, then the worksheet uploader) —

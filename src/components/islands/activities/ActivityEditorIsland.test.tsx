@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
-import type { WorksheetBlock } from '@/lib/activities/blocks';
+import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
 
 const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
@@ -721,6 +721,53 @@ describe('ActivityEditorIsland — preview toggle', () => {
     expect(screen.getByTestId('worksheet-player')).toBeTruthy();
     fireEvent.click(screen.getByTestId('preview-toggle'));
     expect(screen.queryByTestId('activity-preview')).toBeNull();
+  });
+
+  // IMMEDIATE PREVIEW (owner spec, build item 2): a quiz block (Básico or
+  // templated) used to be filtered out of this preview entirely — only
+  // visible once submitted/approved. It now renders straight from the
+  // draft, the same real `QuizLivePreview` the per-block editor already
+  // uses.
+  it('renders a Básico quiz block immediately from the draft, with no submit/approval needed', () => {
+    const quizBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [quizBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
+  });
+
+  it('renders a templated quiz block as its own big game, immediately from the draft', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+          { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+          { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+        ],
+      },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+  });
+
+  it('renders both a worksheet and a quiz block together, in authored order', () => {
+    const quizBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, quizBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.getByTestId('worksheet-player')).toBeTruthy();
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
   });
 });
 
