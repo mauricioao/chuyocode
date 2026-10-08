@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GameMode } from '@/lib/activities/gameModes';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 
@@ -12,9 +12,13 @@ describe('QuizGameModeSwitcher', () => {
 
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(3);
-    expect(screen.getByText('Básico')).toBeTruthy();
-    expect(screen.getByText('Tarjetas')).toBeTruthy();
-    expect(screen.getByText('Parejas')).toBeTruthy();
+    // The active mode's own label also appears in the compact trigger
+    // ("Básico ▾", build item 3) — scope to the mode list itself so this
+    // assertion is not ambiguous about which "Básico" it means.
+    const list = screen.getByTestId('quiz-game-mode-switcher');
+    expect(within(list).getByText('Básico')).toBeTruthy();
+    expect(within(list).getByText('Tarjetas')).toBeTruthy();
+    expect(within(list).getByText('Parejas')).toBeTruthy();
   });
 
   it('only renders modes actually available for the block', () => {
@@ -40,9 +44,10 @@ describe('QuizGameModeSwitcher', () => {
 
   it('renders English labels for lang="en"', () => {
     render(<QuizGameModeSwitcher lang="en" modes={['quiz', 'cards', 'match']} active="quiz" onChange={vi.fn()} />);
-    expect(screen.getByText('Basic')).toBeTruthy();
-    expect(screen.getByText('Cards')).toBeTruthy();
-    expect(screen.getByText('Match')).toBeTruthy();
+    const list = screen.getByTestId('quiz-game-mode-switcher');
+    expect(within(list).getByText('Basic')).toBeTruthy();
+    expect(within(list).getByText('Cards')).toBeTruthy();
+    expect(within(list).getByText('Match')).toBeTruthy();
   });
 
   it('renders "Cartas" for the speak mode', () => {
