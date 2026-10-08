@@ -626,6 +626,25 @@ describe('initDeskWindowManager — entrance/exit motion (robustness pass)', () 
     expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
   });
 
+  it('restoring a minimized window clears the shrink-toward-tray exit class (regression: the frame stayed shrunk in the corner after restore)', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before the dispatch commits.
+    expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
+
+    // Reopening the SAME id (exactly what clicking its tray chip, or the
+    // fallback bar, does) is how a window is restored — see the `open`
+    // case in `reduceDeskWindows`.
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+
+    expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(false);
+    expect(frame.wrapper.style.visibility).not.toBe('hidden');
+  });
+
   // Owner report, verified in a real browser: "working red/yellow/green" —
   // the fallback bar must be a full three-light title bar.
   it("the fallback bar's maximize (green) button toggles maximized, same as a genuine window's", () => {

@@ -276,6 +276,24 @@ export function initDeskWindowManager(
       managed.wrapper.setAttribute('inert', '');
     } else {
       managed.wrapper.removeAttribute('inert');
+      // Regression fix: `playMinimizeAnimation` leaves `.ingles-window--minimizing`
+      // on the wrapper — its `forwards` fill keeps the shrunk-into-the-tray
+      // transform applied even after `visibility`/`inert` are restored above,
+      // so a "restored" window stayed stuck at 185×111px in the corner. Clear
+      // it here (the one place every restore path — a tray chip, the
+      // fallback bar, or re-opening the same id — ends up calling), and swap
+      // in a short reverse ("un-shrink") entrance, skipped under reduced
+      // motion same as every other desk-window animation.
+      if (managed.wrapper.classList.contains('ingles-window--minimizing')) {
+        managed.wrapper.classList.remove('ingles-window--minimizing');
+        if (!prefersReducedMotion(win)) {
+          const wrapper = managed.wrapper;
+          wrapper.classList.add('ingles-window--restoring');
+          wrapper.addEventListener('animationend', () => wrapper.classList.remove('ingles-window--restoring'), {
+            once: true,
+          });
+        }
+      }
     }
 
     if (entry.maximized) {

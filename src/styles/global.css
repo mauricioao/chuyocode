@@ -1051,6 +1051,33 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
+/* Restore (clicking a tray chip, or the fallback bar, for an already-open
+ * minimized window) — the exact reverse of the minimize exit above, played
+ * by `@lib/ui/deskWindowManager.ts#applyGeometry` right after it clears
+ * `.ingles-window--minimizing` (regression fix: that class's `forwards` fill
+ * otherwise left the frame stuck shrunk in the corner even once restored).
+ * Skipped under reduced motion, same posture as `.ingles-window--minimizing`. */
+@keyframes ingles-window-restore {
+  from {
+    opacity: 0;
+    transform: translate(35vw, 40vh) scale(0.15);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ingles-window--restoring {
+  animation: ingles-window-restore 0.18s cubic-bezier(0, 0, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingles-window--restoring {
+    animation: none;
+  }
+}
+
 /* Close (red light), PART 6c (owner spec 2026-10-07): a subtle scale+fade —
  * never a directional move like minimize's, closing is not "going"
  * anywhere in particular — played by
