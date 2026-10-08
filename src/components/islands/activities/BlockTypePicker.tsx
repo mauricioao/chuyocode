@@ -1,40 +1,56 @@
 /**
- * BlockTypePicker — the two-card "what do you want to start with?" chooser
- * (PR B, "Activities creator"; both cards selectable as of PR C, "Preguntas
- * (quiz) block"). Shared by the start screen (`/[lang]/crear`) and the
- * editor's own "+ Agregar bloque" inline picker: choosing a card is the same
- * decision in both places, so it is one component rather than two
+ * BlockTypePicker — the "what do you want to start with?" gallery (PR B,
+ * "Activities creator"; all three cards selectable as of the start-gallery
+ * redesign, build item 3). Shared by the start screen (`/[lang]/crear`) and
+ * the editor's own empty-block-list picker: choosing a card is the same
+ * decision in both places, so it is one component rather than several
  * near-identical ones.
+ *
+ * WORDWALL'S OWN "ELIGE EL PUNTO DE PARTIDA" GRID, in our visual language
+ * (owner spec: the iOS/macOS desk, not Wordwall's look) — a card per
+ * TEMPLATE that actually has a shipped practice experience ("only show
+ * templates that work"; a template plumbed but not built yet, see
+ * `blocks.ts`'s `QuizTemplate`, gets no card here until it ships one). Each
+ * card names the activity, states in ONE plain line what the student
+ * actually does, and carries a tiny illustrative preview — never Wordwall's
+ * own art, just its shape. 3 columns in a wide window, 2 in a narrower one,
+ * 1 on a phone (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`).
  *
  * Busy state (navigation-without-flicker PR, "create start screen" bullet):
  * `busyCard` names the card currently creating the activity — that card
- * swaps its icon for a spinning `CircleNotch` and gets `aria-busy`, the
- * OTHER card dims (and both become non-interactive) rather than the whole
+ * swaps its icon for a spinning `CircleNotch` and gets `aria-busy`, every
+ * OTHER card dims (and all become non-interactive) rather than the whole
  * picker just going generically `disabled`. There is no separate "Creando
  * la actividad…" text anymore; the spinner IS the busy indicator.
  *
  * EACH CARD'S TINY ANIMATED PREVIEW (owner build item 7, "Preguntas editor
- * redesign"): a few decorative bars/dots hinting at the actual result —
- * marks on a worksheet, a checked multiple-choice option — PURE CSS
- * (Tailwind's `motion-safe:`/`motion-reduce:` variants, same convention
- * `QuizWheel.tsx`/`SpeakButton.tsx` already use), so "reduced motion ->
- * static" needs no JS at all: the animation simply never applies under
- * `prefers-reduced-motion: reduce`, with zero risk of a server/client
- * mismatch (there is nothing here for React to hydrate differently).
+ * redesign"; extended for "Une las parejas" in the start-gallery redesign):
+ * a few decorative bars/dots hinting at the actual result — marks on a
+ * worksheet, a checked multiple-choice option, two columns of tiles
+ * swapping places — PURE CSS (Tailwind's `motion-safe:`/`motion-reduce:`
+ * variants, same convention `QuizWheel.tsx`/`SpeakButton.tsx` already use),
+ * so "reduced motion -> static" needs no JS at all: the animation simply
+ * never applies under `prefers-reduced-motion: reduce`, with zero risk of a
+ * server/client mismatch (there is nothing here for React to hydrate
+ * differently). Every preview only animates on the card's own `:hover`
+ * (`group-hover:`) — idle cards sit still, same restraint as the rest of
+ * this system's "pop accents, delicate shadows" posture.
  */
 import { FileTextIcon } from '@phosphor-icons/react/dist/ssr/FileText';
 import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
+import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRight';
 import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export type BlockTypeCard = 'worksheet' | 'questions';
+export type BlockTypeCard = 'worksheet' | 'questions' | 'match';
 
 export interface BlockTypePickerProps {
   lang: Lang;
   onSelectWorksheet: () => void;
   onSelectQuestions: () => void;
+  onSelectMatch: () => void;
   /** The card currently creating the activity, if any — see the file header. `null`/omitted: the picker is fully idle. */
   busyCard?: BlockTypeCard | null;
 }
@@ -92,10 +108,49 @@ function QuestionsCardPreview() {
   );
 }
 
+/**
+ * "Une las parejas" card's tiny result preview: two columns of three small
+ * tiles each, the middle pair's connecting line drawing itself in on hover
+ * (`group-hover:`) — hinting at "drag an answer onto its partner" without a
+ * real drag gesture.
+ */
+function MatchCardPreview() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="card-preview-match"
+      className="mt-2 flex h-11 w-full items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3"
+    >
+      <div className="flex flex-col gap-1">
+        <span className="h-1.5 w-6 rounded-full bg-foreground/15" />
+        <span className="h-1.5 w-6 rounded-full bg-primary/40" />
+        <span className="h-1.5 w-6 rounded-full bg-foreground/15" />
+      </div>
+      <svg aria-hidden="true" viewBox="0 0 24 8" className="h-2 w-6 flex-none overflow-visible">
+        <line
+          x1="0"
+          y1="4"
+          x2="24"
+          y2="4"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="motion-safe:group-hover:[stroke-dashoffset:0] stroke-primary/60 [stroke-dasharray:24] [stroke-dashoffset:24] transition-[stroke-dashoffset] duration-500 motion-reduce:[stroke-dashoffset:0]"
+        />
+      </svg>
+      <div className="flex flex-col gap-1">
+        <span className="h-1.5 w-6 rounded-full bg-foreground/15" />
+        <span className="h-1.5 w-6 rounded-full bg-primary/40" />
+        <span className="h-1.5 w-6 rounded-full bg-foreground/15" />
+      </div>
+    </div>
+  );
+}
+
 export default function BlockTypePicker({
   lang,
   onSelectWorksheet,
   onSelectQuestions,
+  onSelectMatch,
   busyCard = null,
 }: BlockTypePickerProps) {
   const t = UI_LABELS[lang].activities.start;
@@ -106,7 +161,7 @@ export default function BlockTypePicker({
       role="group"
       aria-label={t.heading}
       data-testid="block-type-picker"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
       <button
         type="button"
@@ -115,7 +170,7 @@ export default function BlockTypePicker({
         disabled={disabled}
         aria-busy={busyCard === 'worksheet'}
         className={cn(
-          'text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
           disabled && busyCard !== 'worksheet' && 'opacity-50',
         )}
       >
@@ -136,7 +191,7 @@ export default function BlockTypePicker({
         disabled={disabled}
         aria-busy={busyCard === 'questions'}
         className={cn(
-          'text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
           disabled && busyCard !== 'questions' && 'opacity-50',
         )}
       >
@@ -146,6 +201,27 @@ export default function BlockTypePicker({
             <CardTitle className="text-lg">{t.questions.title}</CardTitle>
             <CardDescription>{t.questions.description}</CardDescription>
             <QuestionsCardPreview />
+          </CardHeader>
+        </Card>
+      </button>
+
+      <button
+        type="button"
+        data-testid="picker-match"
+        onClick={onSelectMatch}
+        disabled={disabled}
+        aria-busy={busyCard === 'match'}
+        className={cn(
+          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+          disabled && busyCard !== 'match' && 'opacity-50',
+        )}
+      >
+        <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
+          <CardHeader>
+            <CardIcon busy={busyCard === 'match'} Icon={ArrowsLeftRightIcon} />
+            <CardTitle className="text-lg">{t.match.title}</CardTitle>
+            <CardDescription>{t.match.description}</CardDescription>
+            <MatchCardPreview />
           </CardHeader>
         </Card>
       </button>

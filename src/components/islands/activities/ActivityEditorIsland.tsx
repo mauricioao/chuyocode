@@ -758,6 +758,21 @@ export default function ActivityEditorIsland({
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
+  // "Une las parejas" (start-gallery redesign, build item 4): same shape as
+  // Questions above — appended immediately, empty, no upload step — just
+  // tagged with the `'match'` template (`blocks.ts`'s `QuizTemplate`) so the
+  // practice side opens straight into Parejas once there is enough content.
+  const handleMatchChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'match',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
       // `WorksheetUploader` always hands back exactly ONE image now —
@@ -971,6 +986,7 @@ export default function ActivityEditorIsland({
                 lang={lang}
                 onSelectWorksheet={handleWorksheetChosen}
                 onSelectQuestions={handleQuestionsChosen}
+                onSelectMatch={handleMatchChosen}
               />
             )}
 

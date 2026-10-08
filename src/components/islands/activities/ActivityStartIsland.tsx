@@ -92,6 +92,28 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
     }
   }, [createActivity, lang, navigate, t.createError]);
 
+  // "Une las parejas" (start-gallery redesign, build item 3/4): same shape
+  // as Questions above, tagged with the `'match'` template (`blocks.ts`'s
+  // `QuizTemplate`) so the editor/practice both know this block started as
+  // a matching activity from its very first save.
+  const handleSelectMatch = useCallback(async () => {
+    setBusyCard('match');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'match', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
   return (
     <div data-testid="activity-start-island" className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold text-foreground">{t.heading}</h2>
@@ -99,6 +121,7 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
         lang={lang}
         onSelectWorksheet={handleSelectWorksheet}
         onSelectQuestions={handleSelectQuestions}
+        onSelectMatch={handleSelectMatch}
         busyCard={busyCard}
       />
     </div>

@@ -457,6 +457,10 @@ export const UI_LABELS = {
           description:
             'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
         },
+        match: {
+          title: 'Une las parejas',
+          description: 'Arrastra cada respuesta junto a su pareja.',
+        },
         createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
@@ -1863,6 +1867,10 @@ export const UI_LABELS = {
           title: 'Basic',
           description:
             'Write questions; learners answer them and can also play them as flashcards, a wheel, hangman…',
+        },
+        match: {
+          title: 'Match the pairs',
+          description: 'Drag each answer next to its partner.',
         },
         createError: 'Could not create the activity. Try again.',
       },
