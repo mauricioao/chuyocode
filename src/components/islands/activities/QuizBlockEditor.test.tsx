@@ -45,6 +45,23 @@ function Harness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
+/** Same harness, authoring a `template: 'match'` block ("Une las parejas", build item 1). */
+function MatchHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="match"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
 describe('QuizBlockEditor — empty state (item 4, example-first)', () => {
   it('shows the empty-questions message, a 3-question example preview, and no question list or checklist', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
@@ -385,5 +402,99 @@ describe('QuizBlockEditor — hydration (useFirstRunTips reads localStorage, ite
     ));
     expect(recoverableErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
+  });
+});
+
+describe('QuizBlockEditor — "Une las parejas" (build item 1, match authoring)', () => {
+  it('renders the minimal Pregunta/Respuesta pair editor instead of the Básico question-card list', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('match-pairs-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least 3 pairs" hint until there are 3 complete pairs', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    expect(screen.getByTestId('match-pairs-hint-b1').textContent).toContain('Agrega al menos 3 parejas');
+  });
+
+  it('hides the hint once there are 3 complete pairs', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+        { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+        { kind: 'row', id: 'row-s3', slotId: 's3' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    expect(screen.queryByTestId('match-pairs-hint-b1')).toBeNull();
+  });
+
+  it('"+ Agregar pareja" adds a new row+slot (same storage addQuestion already writes)', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('match-add-pair-b1'));
+    expect(screen.getAllByTestId(/^match-pair-question-/)).toHaveLength(1);
+  });
+
+  it('Enter in the answer field adds another pair and focuses its question field', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('match-add-pair-b1'));
+    const [questionInput] = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    const [answerInput] = screen.getAllByTestId(/^match-pair-answer-/) as HTMLInputElement[];
+    fireEvent.change(questionInput, { target: { value: 'dog' } });
+    fireEvent.change(answerInput, { target: { value: 'perro' } });
+    fireEvent.keyDown(answerInput, { key: 'Enter' });
+
+    const questionInputs = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    expect(questionInputs).toHaveLength(2);
+    expect(document.activeElement).toBe(questionInputs[1]);
+  });
+
+  it('removing a pair ("×") deletes exactly its own row+slot', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    fireEvent.click(screen.getByTestId('match-pair-remove-s1'));
+    expect(screen.queryByTestId('match-pair-s1')).toBeNull();
+    expect(screen.getByTestId('match-pair-s2')).toBeTruthy();
+  });
+
+  it('typing a question/answer commits back through onPayloadChange', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: '', input: 'text', answer: [] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    fireEvent.change(screen.getByTestId('match-pair-question-s1'), { target: { value: 'dog' } });
+    fireEvent.change(screen.getByTestId('match-pair-answer-s1'), { target: { value: 'perro' } });
+    expect((screen.getByTestId('match-pair-question-s1') as HTMLInputElement).value).toBe('dog');
+    expect((screen.getByTestId('match-pair-answer-s1') as HTMLInputElement).value).toBe('perro');
   });
 });

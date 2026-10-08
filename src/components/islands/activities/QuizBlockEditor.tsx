@@ -85,12 +85,14 @@ import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionT
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
 import { createExampleDraft, EXAMPLE_QUESTION_PROMPTS } from '@/lib/quizExampleQuestions';
 import type { Payload } from '@/lib/exercisePayload';
+import type { QuizTemplate } from '@/lib/activities/blocks';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFirstRunTips } from '@/hooks/useFirstRunTips';
 import { cn } from '@/lib/utils';
 import QuestionCard from './QuestionCard';
 import QuizLivePreview from './QuizLivePreview';
 import QuizFirstRunTip from './QuizFirstRunTip';
+import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 
 /** Bumped only if the tour's steps/anchors change shape enough that a learner who dismissed the old one should see the new one. */
 const FIRST_RUN_TIPS_KEY = 'chuyo:quiz-editor-tips-v1';
@@ -163,6 +165,8 @@ export interface QuizBlockEditorProps {
   blockId: string;
   lang: string;
   payload: Payload;
+  /** The block's authoring preset (`blocks.ts`'s own `QuizTemplate`) — `'match'` swaps the whole question list for {@link MatchPairsEditor}; `undefined` ("Básico") keeps this file's own Google-Forms-style list. */
+  template?: QuizTemplate;
   selectedSlotId: string | null;
   onSelectSlot: (slotId: string | null) => void;
   onPayloadChange: (payload: Payload) => void;
@@ -224,6 +228,7 @@ export default function QuizBlockEditor({
   blockId,
   lang,
   payload,
+  template,
   selectedSlotId,
   onSelectSlot,
   onPayloadChange,
@@ -231,6 +236,7 @@ export default function QuizBlockEditor({
   incompleteMessage = null,
 }: QuizBlockEditorProps) {
   const t = copyFor(lang);
+  const isMatch = template === 'match';
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
@@ -346,6 +352,36 @@ export default function QuizBlockEditor({
   }, [selectedSlotId]);
 
   const hasQuestions = questions.length > 0;
+
+  // MATCH AUTHORING, SIMPLE (build item 1): a `match` block is a list of
+  // PAIRS, not questions — `MatchPairsEditor` renders the same `row`+`Slot`
+  // storage as a minimal "Pregunta | Respuesta" table instead of the full
+  // Básico question-card list, which offers controls (type/options) that
+  // make no sense for a pair. The underlying commits are UNCHANGED:
+  // `addQuestion`/`removeQuestion` already add/remove exactly one
+  // row+slot, and `setRowLabel`/`setSlotAnswer` already replace a slot's
+  // label/answer — only the rendering differs.
+  const matchPairs: MatchPair[] = isMatch
+    ? questions.flatMap((question): MatchPair[] => {
+        const slotId = rowSlotId(draft, question.id);
+        const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
+        if (!slot || !slotId) return [];
+        return [{ rowId: question.id, slotId, question: slot.label, answer: slot.answer[0] ?? '' }];
+      })
+    : [];
+
+  const matchColumn = (
+    <MatchPairsEditor
+      blockId={blockId}
+      lang={lang}
+      pairs={matchPairs}
+      focusSlotId={selectedSlotId}
+      onQuestionChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
+      onAnswerChange={(slotId, answer) => commit(setSlotAnswer(draft, slotId, answer.trim() === '' ? [] : [answer]))}
+      onAdd={addQuestion}
+      onRemove={removeQuestion}
+    />
+  );
 
   const questionsColumn = (
     <div className="flex flex-col gap-3">
@@ -555,7 +591,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {questionsColumn}
+        {isMatch ? matchColumn : questionsColumn}
       </div>
     );
   }
@@ -608,7 +644,7 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {questionsColumn}
+          {isMatch ? matchColumn : questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}

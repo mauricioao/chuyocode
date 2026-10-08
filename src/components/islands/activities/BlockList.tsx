@@ -409,6 +409,7 @@ export default function BlockList({
             blockId={activeBlock.id}
             lang={lang}
             payload={quiz.payload}
+            template={quiz.template}
             selectedSlotId={selectedZoneId}
             onSelectSlot={onSelectZone}
             onPayloadChange={(payload) => updateQuizPayload(activeBlock.id, payload)}
