@@ -107,8 +107,19 @@ export type DeskWindowEvent =
   | { type: 'maximizeToggle'; id: string }
   | { type: 'move'; id: string; offset: DeskWindowOffset }
   | { type: 'title'; id: string; title: string }
-  /** An in-window navigation (filters, pagination, search, create -> editor) — same window, new real URL/title. */
-  | { type: 'navigate'; id: string; href: string; title?: string };
+  /**
+   * An in-window navigation (filters, pagination, search) — same window,
+   * new real URL/title. `nextId`/`kind`, together, additionally
+   * RE-IDENTIFY the window itself — owner report: creating an activity
+   * used to open its editor as a SECOND window, leaving the "Nueva
+   * actividad" picker reverted to its own route behind it. The picker
+   * navigating itself straight to the new editor route is this exact
+   * window BECOMING the editor, in place (same position/z-order), not a
+   * second window — `deskWindowManager.ts`'s own "wrong identity" recovery
+   * dispatches this for exactly the `create` -> `editor:<id>` case. Omitted
+   * (every other caller), the window's own `id`/`kind` never change.
+   */
+  | { type: 'navigate'; id: string; href: string; title?: string; nextId?: string; kind?: DeskWindowKind };
 
 function findWindow(state: DeskWindowsState, id: string): DeskWindowEntry | undefined {
   return state.windows.find((w) => w.id === id);
@@ -202,7 +213,12 @@ export function reduceDeskWindows(state: DeskWindowsState, event: DeskWindowEven
     case 'navigate': {
       const existing = findWindow(state, event.id);
       if (!existing) return state;
-      return replaceWindow(state, event.id, { href: event.href, title: event.title ?? existing.title });
+      return replaceWindow(state, event.id, {
+        href: event.href,
+        title: event.title ?? existing.title,
+        ...(event.nextId ? { id: event.nextId } : {}),
+        ...(event.kind ? { kind: event.kind } : {}),
+      });
     }
 
     default:

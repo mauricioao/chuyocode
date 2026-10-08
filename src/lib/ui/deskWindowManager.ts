@@ -648,25 +648,65 @@ export function initDeskWindowManager(
         const loc = iframe.contentWindow?.location;
         const match = loc ? classifyWindowRoute(loc.pathname) : null;
         if (match && match.id !== entry.id) {
-          const title = iframe.contentWindow?.document.title || '';
-          openWindow(`${loc!.pathname}${loc!.search}`, title);
-          const current = state.windows.find((w) => w.id === entry.id);
-          const ownUrl = new URL(current?.href ?? entry.href, win.location.href);
-          ownUrl.searchParams.set('ventana', '1');
-          showLoading();
-          armFallbackTimeout();
-          try {
-            // `location.replace` (never reassigning `iframe.src`): the
-            // in-frame navigation already happened without ever changing the
-            // `src` ATTRIBUTE string this element still holds, so setting it
-            // back to that same string would be a same-URL no-op in most
-            // browsers — this re-navigates the frame's own `Location`
-            // directly instead, which always takes effect.
-            iframe.contentWindow?.location.replace(ownUrl.toString());
-          } catch {
-            iframe.src = ownUrl.toString();
+          // ALLOWED identity transition (owner report: creating an activity
+          // from "Crear actividad" opened the new editor as a SECOND
+          // window, leaving the picker reverted to its own `/crear` route
+          // behind it): the create picker navigating itself, in-window,
+          // straight to the brand-new activity's editor route is not a
+          // click race to recover from — it is THIS frame becoming the
+          // editor, in place (same wrapper, same iframe, same position/
+          // z-order). Re-identify it instead of opening a second window.
+          if (entry.kind === 'create' && match.kind === 'editor') {
+            const title = iframe.contentWindow?.document.title || '';
+            const oldId = entry.id;
+            const href = `${loc!.pathname}${loc!.search}`;
+            // Re-key the live frame/opener/DOM bookkeeping to match BEFORE
+            // dispatching below — `dispatch` calls `render()` synchronously,
+            // which looks up this frame by the renamed entry's `id` in
+            // `frames` and removes anything ELSE still keyed by the OLD id
+            // as "no longer in state" — reversing this order would have
+            // `render()` find no frame under the new id (creating a second,
+            // genuinely duplicate one) and then clean up this exact frame as
+            // orphaned under the old one.
+            frames.delete(oldId);
+            frames.set(match.id, managed);
+            managed.wrapper.dataset.deskWindowFrame = match.id;
+            const opener = openerElements.get(oldId);
+            if (opener) {
+              openerElements.delete(oldId);
+              openerElements.set(match.id, opener);
+            }
+            entry = { ...entry, id: match.id, kind: match.kind, href, title };
+            // Everything else in this closure (the fallback bar,
+            // `armFallbackTimeout`, the focus check right below) reads
+            // `entry` fresh every time, so reassigning it above keeps every
+            // one of them correct for this load AND any later one on this
+            // same frame.
+            dispatch({ type: 'navigate', id: oldId, href, title, nextId: match.id, kind: match.kind });
+            // Falls through to the rest of this handler below (showLoaded,
+            // active state, fallback-bar detection, drag-handle sync) — this
+            // IS a genuine successful load, never an early return.
+          } else {
+            const title = iframe.contentWindow?.document.title || '';
+            openWindow(`${loc!.pathname}${loc!.search}`, title);
+            const current = state.windows.find((w) => w.id === entry.id);
+            const ownUrl = new URL(current?.href ?? entry.href, win.location.href);
+            ownUrl.searchParams.set('ventana', '1');
+            showLoading();
+            armFallbackTimeout();
+            try {
+              // `location.replace` (never reassigning `iframe.src`): the
+              // in-frame navigation already happened without ever changing the
+              // `src` ATTRIBUTE string this element still holds, so setting it
+              // back to that same string would be a same-URL no-op in most
+              // browsers — this re-navigates the frame's own `Location`
+              // directly instead, which always takes effect.
+              iframe.contentWindow?.location.replace(ownUrl.toString());
+            } catch {
+              iframe.src = ownUrl.toString();
+            }
+            return;
           }
-          return;
         }
       } catch {
         // Cross-origin — should never happen (see this file's own header).

@@ -348,6 +348,73 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
   });
 
+  // Owner report: creating an activity from "Crear actividad" opened the new
+  // activity's editor as a SECOND window, leaving the "Nueva actividad"
+  // picker reverted to its own `/crear` route behind it. The picker
+  // navigating itself straight to the new editor route is an ALLOWED
+  // identity transition (`create` -> `editor:<id>`), not a click race to
+  // recover from — this exact frame becomes the editor in place.
+  it('creating an activity re-identifies the picker window as the editor, in place, instead of opening a second one', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/crear', 'Nueva actividad');
+    const frame = frameFor('create')!;
+
+    const replaceSpy = vi.fn();
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/crear/new-id', search: '', replace: replaceSpy },
+        document: { title: 'Present Simple', addEventListener: vi.fn() },
+      },
+    });
+
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    // Never reverted/duplicated...
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(frameFor('create')).toBeNull();
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
+    // ...the SAME wrapper/iframe, just re-identified as the editor.
+    const editorFrame = frameFor('editor:new-id');
+    expect(editorFrame).not.toBeNull();
+    expect(editorFrame!.wrapper).toBe(frame.wrapper);
+    expect(editorFrame!.iframe).toBe(frame.iframe);
+  });
+
+  it('a later load on the re-identified editor frame still detects wrong-identity correctly (the stale "create" id never lingers)', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/crear', 'Nueva actividad');
+    const frame = frameFor('create')!;
+
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/crear/new-id', search: '', replace: vi.fn() },
+        document: { title: 'Present Simple', addEventListener: vi.fn() },
+      },
+    });
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    // A SECOND in-frame navigation, now to an unrelated route — must be
+    // judged against the frame's NEW identity (`editor:new-id`), not the
+    // stale `create` one, or every later load on this exact frame would
+    // keep mis-firing the click-race recovery forever.
+    const replaceSpy2 = vi.fn();
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/ingles/actividades/abc', search: '', replace: replaceSpy2 },
+        document: { title: 'Comunidad' },
+      },
+    });
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    expect(frameFor('activity:abc')).not.toBeNull();
+    expect(replaceSpy2).toHaveBeenCalledWith('https://example.test/es/crear/new-id?ventana=1');
+  });
+
   /** Synchronously replaces an iframe's own document content via the classic
    * `document.open/write/close` API — reliable in jsdom, unlike setting
    * `.src` (which schedules a real, unimplemented navigation). */
