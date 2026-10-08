@@ -44,8 +44,16 @@ import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquar
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
 import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
+/**
+ * The left "illustration" column's own fixed width — every card's icon +
+ * tiny preview sits in the SAME width (Wordwall gallery reference: a small
+ * illustration left, name + one line right), so the six cards read as one
+ * consistent row instead of each sizing itself to its own content.
+ */
+const ILLUSTRATION_COLUMN = 'w-28 sm:w-32';
 
 export type BlockTypeCard = 'worksheet' | 'questions' | 'match' | 'reorder' | 'cloze' | 'groupsort';
 
@@ -237,7 +245,7 @@ export default function BlockTypePicker({
       role="group"
       aria-label={t.heading}
       data-testid="block-type-picker"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
       <button
         type="button"
@@ -251,12 +259,16 @@ export default function BlockTypePicker({
         )}
       >
         <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardHeader>
-            <CardIcon busy={busyCard === 'worksheet'} Icon={FileTextIcon} />
-            <CardTitle className="text-lg">{t.worksheet.title}</CardTitle>
-            <CardDescription>{t.worksheet.description}</CardDescription>
-            <WorksheetCardPreview />
-          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'worksheet'} Icon={FileTextIcon} />
+              <WorksheetCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.worksheet.title}</CardTitle>
+              <CardDescription className="mt-1">{t.worksheet.description}</CardDescription>
+            </div>
+          </CardContent>
         </Card>
       </button>
 
@@ -272,12 +284,16 @@ export default function BlockTypePicker({
         )}
       >
         <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardHeader>
-            <CardIcon busy={busyCard === 'questions'} Icon={ListChecksIcon} />
-            <CardTitle className="text-lg">{t.questions.title}</CardTitle>
-            <CardDescription>{t.questions.description}</CardDescription>
-            <QuestionsCardPreview />
-          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'questions'} Icon={ListChecksIcon} />
+              <QuestionsCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.questions.title}</CardTitle>
+              <CardDescription className="mt-1">{t.questions.description}</CardDescription>
+            </div>
+          </CardContent>
         </Card>
       </button>
 
@@ -293,12 +309,16 @@ export default function BlockTypePicker({
         )}
       >
         <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardHeader>
-            <CardIcon busy={busyCard === 'match'} Icon={ArrowsLeftRightIcon} />
-            <CardTitle className="text-lg">{t.match.title}</CardTitle>
-            <CardDescription>{t.match.description}</CardDescription>
-            <MatchCardPreview />
-          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'match'} Icon={ArrowsLeftRightIcon} />
+              <MatchCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.match.title}</CardTitle>
+              <CardDescription className="mt-1">{t.match.description}</CardDescription>
+            </div>
+          </CardContent>
         </Card>
       </button>
 
@@ -314,12 +334,16 @@ export default function BlockTypePicker({
         )}
       >
         <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardHeader>
-            <CardIcon busy={busyCard === 'reorder'} Icon={ArrowsDownUpIcon} />
-            <CardTitle className="text-lg">{t.reorder.title}</CardTitle>
-            <CardDescription>{t.reorder.description}</CardDescription>
-            <ReorderCardPreview />
-          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'reorder'} Icon={ArrowsDownUpIcon} />
+              <ReorderCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.reorder.title}</CardTitle>
+              <CardDescription className="mt-1">{t.reorder.description}</CardDescription>
+            </div>
+          </CardContent>
         </Card>
       </button>
 
@@ -335,12 +359,16 @@ export default function BlockTypePicker({
         )}
       >
         <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardHeader>
-            <CardIcon busy={busyCard === 'cloze'} Icon={BracketsSquareIcon} />
-            <CardTitle className="text-lg">{t.cloze.title}</CardTitle>
-            <CardDescription>{t.cloze.description}</CardDescription>
-            <ClozeCardPreview />
-          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'cloze'} Icon={BracketsSquareIcon} />
+              <ClozeCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.cloze.title}</CardTitle>
+              <CardDescription className="mt-1">{t.cloze.description}</CardDescription>
+            </div>
+          </CardContent>
         </Card>
       </button>
 
@@ -356,12 +384,16 @@ export default function BlockTypePicker({
         )}
       >
         <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardHeader>
-            <CardIcon busy={busyCard === 'groupsort'} Icon={SquaresFourIcon} />
-            <CardTitle className="text-lg">{t.groupsort.title}</CardTitle>
-            <CardDescription>{t.groupsort.description}</CardDescription>
-            <GroupSortCardPreview />
-          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'groupsort'} Icon={SquaresFourIcon} />
+              <GroupSortCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.groupsort.title}</CardTitle>
+              <CardDescription className="mt-1">{t.groupsort.description}</CardDescription>
+            </div>
+          </CardContent>
         </Card>
       </button>
     </div>

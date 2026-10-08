@@ -454,8 +454,7 @@ export const UI_LABELS = {
         },
         questions: {
           title: 'Básico',
-          description:
-            'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
+          description: 'Escribe preguntas y juégalas de muchas formas.',
         },
         match: {
           title: 'Une las parejas',
@@ -463,7 +462,7 @@ export const UI_LABELS = {
         },
         reorder: {
           title: 'Reordenar',
-          description: 'Arrastra y suelta palabras para reordenar cada oración correctamente.',
+          description: 'Arrastra las palabras para ordenar la oración.',
         },
         cloze: {
           title: 'Completar la frase',
@@ -1968,8 +1967,7 @@ export const UI_LABELS = {
         },
         questions: {
           title: 'Basic',
-          description:
-            'Write questions; learners answer them and can also play them as flashcards, a wheel, hangman…',
+          description: 'Write questions and play them many ways.',
         },
         match: {
           title: 'Match the pairs',
@@ -1977,7 +1975,7 @@ export const UI_LABELS = {
         },
         reorder: {
           title: 'Reorder',
-          description: 'Drag and drop words to put each sentence back in order.',
+          description: 'Drag the words to put the sentence in order.',
         },
         cloze: {
           title: 'Complete the sentence',

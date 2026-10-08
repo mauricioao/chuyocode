@@ -53,17 +53,28 @@ describe('BlockTypePicker', () => {
     expect(screen.getByTestId('picker-worksheet').textContent).toContain(
       'Sube una hoja o PDF y marca dónde van las respuestas.',
     );
+    expect(screen.getByTestId('picker-questions').textContent).toContain(
+      'Escribe preguntas y juégalas de muchas formas.',
+    );
     expect(screen.getByTestId('picker-match').textContent).toContain('Arrastra cada respuesta junto a su pareja.');
     expect(screen.getByTestId('picker-reorder').textContent).toContain(
-      'Arrastra y suelta palabras para reordenar cada oración correctamente.',
+      'Arrastra las palabras para ordenar la oración.',
     );
   });
 
-  it('lays the cards out as one responsive grid (6 columns wide, 2 narrower, 1 on a phone)', () => {
+  it('lays the cards out as one responsive grid (3 columns wide, 2 narrower, 1 on a phone)', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('block-type-picker').className).toContain('grid-cols-1');
     expect(screen.getByTestId('block-type-picker').className).toContain('sm:grid-cols-2');
-    expect(screen.getByTestId('block-type-picker').className).toContain('lg:grid-cols-6');
+    expect(screen.getByTestId('block-type-picker').className).toContain('lg:grid-cols-3');
+  });
+
+  it('lays each card out horizontally — a fixed-width illustration column beside the text', () => {
+    render(<BlockTypePicker lang="es" {...noopHandlers()} />);
+    const content = screen.getByTestId('picker-worksheet').querySelector('[data-slot="card-content"]');
+    expect(content?.className).toContain('items-center');
+    const illustrationColumn = screen.getByTestId('card-preview-worksheet').parentElement;
+    expect(illustrationColumn?.className).toContain('w-28');
   });
 
   it('renders the groupsort card, in Spanish', () => {
