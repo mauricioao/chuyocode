@@ -103,6 +103,33 @@ const REORDER_ACTIVITY = {
   ],
 };
 
+const GROUPSORT_ACTIVITY = {
+  id: 'groupsort-1',
+  title: 'Ordenar por grupos: categorías',
+  level: 'A1',
+  blocks: [
+    {
+      id: 'q1',
+      type: 'quiz',
+      template: 'groupsort',
+      payload: {
+        pools: {
+          p1: [
+            { id: 'dog', text: 'dog' },
+            { id: 'cat', text: 'cat' },
+            { id: 'bread', text: 'bread' },
+            { id: 'rice', text: 'rice' },
+          ],
+        },
+        slots: [
+          { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+          { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+        ],
+      },
+    },
+  ],
+};
+
 describe('GET /[lang]/ingles/actividades/[id]/imprimir — routing', () => {
   it('404s for an unsupported lang segment', async () => {
     const res = await render('https://chuyocode.test/fr/ingles/actividades/abc/imprimir', {
@@ -310,5 +337,35 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Reordenar"', () => {
     expect(html).toContain('data-testid="print-answer-reorder-s1"');
     expect(html).toContain('What are you doing');
     expect(html).toContain('She goes to school by bus');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Ordenar por grupos"', () => {
+  it('prints the shuffled item list plus one empty, numbered writing column per group', async () => {
+    activityResult.value = GROUPSORT_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/groupsort-1/imprimir', {
+      params: { lang: 'es', id: 'groupsort-1' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-groupsort-items-q1"');
+    expect(html).toContain('dog');
+    expect(html).toContain('data-testid="print-groupsort-group-g1"');
+    expect(html).toContain('>Animals<');
+    expect(html).toContain('data-testid="print-groupsort-group-g2"');
+    expect(html).toContain('>Food<');
+    expect(html).toContain('data-testid="print-groupsort-blank-dog"');
+  });
+
+  it('shows every group with its own items, comma-joined, in the answer key', async () => {
+    activityResult.value = GROUPSORT_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/groupsort-1/imprimir?respuestas=1', {
+      params: { lang: 'es', id: 'groupsort-1' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-answers-groupsort-q1"');
+    expect(html).toContain('data-testid="print-answer-groupsort-g1"');
+    expect(html).toContain('dog, cat');
+    expect(html).toContain('data-testid="print-answer-groupsort-g2"');
+    expect(html).toContain('bread, rice');
   });
 });

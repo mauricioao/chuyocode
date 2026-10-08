@@ -428,3 +428,58 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(input.value).toBe('sits');
   });
 });
+
+describe('QuizBlockPractice — "Ordenar por grupos" (groupsort) restricts its own modes', () => {
+  const GROUPSORT_BLOCK: QuizBlock = {
+    id: 'q1',
+    type: 'quiz',
+    template: 'groupsort',
+    payload: {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+    },
+  };
+
+  it('offers only "Básico" and "Ordenar por grupos" — not cards/match/anagram/etc., which would collapse a group to just its first item', () => {
+    render(<QuizBlockPractice lang="es" block={GROUPSORT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('quiz-game-mode-quiz')).toBeTruthy();
+    expect(screen.getByTestId('quiz-game-mode-groupsort')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-game-mode-cards')).toBeNull();
+    expect(screen.queryByTestId('quiz-game-mode-match')).toBeNull();
+    expect(screen.queryByTestId('quiz-game-mode-anagram')).toBeNull();
+  });
+
+  it('renders the groupsort board when mode="groupsort"', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={GROUPSORT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="groupsort"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-groupsort')).toBeTruthy();
+  });
+
+  it('degrades Básico to an "unavailable" placeholder per group, instead of crashing on the unknown "group" mechanic', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={GROUPSORT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="quiz"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-slot-g1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-groupsort')).toBeNull();
+  });
+});

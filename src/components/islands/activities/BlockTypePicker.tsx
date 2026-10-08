@@ -41,12 +41,13 @@ import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRight';
 import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
 import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquare';
+import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
 import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export type BlockTypeCard = 'worksheet' | 'questions' | 'match' | 'reorder' | 'cloze';
+export type BlockTypeCard = 'worksheet' | 'questions' | 'match' | 'reorder' | 'cloze' | 'groupsort';
 
 export interface BlockTypePickerProps {
   lang: Lang;
@@ -55,6 +56,7 @@ export interface BlockTypePickerProps {
   onSelectMatch: () => void;
   onSelectReorder: () => void;
   onSelectCloze: () => void;
+  onSelectGroupSort: () => void;
   /** The card currently creating the activity, if any — see the file header. `null`/omitted: the picker is fully idle. */
   busyCard?: BlockTypeCard | null;
 }
@@ -191,6 +193,32 @@ function ClozeCardPreview() {
   );
 }
 
+/**
+ * "Ordenar por grupos" card's tiny result preview: two small group boxes,
+ * each with a couple of item bars, plus one loose tile sliding into the
+ * first box on hover (`group-hover:`) — hinting at "drag each item into its
+ * group" without a real drag gesture, same restraint `ClozeCardPreview`'s
+ * own sliding tile uses.
+ */
+function GroupSortCardPreview() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="card-preview-groupsort"
+      className="mt-2 flex h-11 w-full items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5"
+    >
+      <div className="flex flex-1 flex-col gap-1 rounded-sm border border-dashed border-primary/40 p-1">
+        <span className="h-1.5 w-full rounded-full bg-foreground/15" />
+        <span className="h-1.5 w-2/3 rounded-full bg-foreground/15" />
+      </div>
+      <span className="h-3 w-5 shrink-0 rounded-sm bg-primary/40 transition-transform duration-500 motion-safe:group-hover:translate-x-0 motion-safe:-translate-x-2 motion-safe:group-hover:opacity-100 motion-safe:opacity-0" />
+      <div className="flex flex-1 flex-col gap-1 rounded-sm border border-dashed border-foreground/20 p-1">
+        <span className="h-1.5 w-full rounded-full bg-foreground/15" />
+      </div>
+    </div>
+  );
+}
+
 export default function BlockTypePicker({
   lang,
   onSelectWorksheet,
@@ -198,6 +226,7 @@ export default function BlockTypePicker({
   onSelectMatch,
   onSelectReorder,
   onSelectCloze,
+  onSelectGroupSort,
   busyCard = null,
 }: BlockTypePickerProps) {
   const t = UI_LABELS[lang].activities.start;
@@ -208,7 +237,7 @@ export default function BlockTypePicker({
       role="group"
       aria-label={t.heading}
       data-testid="block-type-picker"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6"
     >
       <button
         type="button"
@@ -311,6 +340,27 @@ export default function BlockTypePicker({
             <CardTitle className="text-lg">{t.cloze.title}</CardTitle>
             <CardDescription>{t.cloze.description}</CardDescription>
             <ClozeCardPreview />
+          </CardHeader>
+        </Card>
+      </button>
+
+      <button
+        type="button"
+        data-testid="picker-groupsort"
+        onClick={onSelectGroupSort}
+        disabled={disabled}
+        aria-busy={busyCard === 'groupsort'}
+        className={cn(
+          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+          disabled && busyCard !== 'groupsort' && 'opacity-50',
+        )}
+      >
+        <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
+          <CardHeader>
+            <CardIcon busy={busyCard === 'groupsort'} Icon={SquaresFourIcon} />
+            <CardTitle className="text-lg">{t.groupsort.title}</CardTitle>
+            <CardDescription>{t.groupsort.description}</CardDescription>
+            <GroupSortCardPreview />
           </CardHeader>
         </Card>
       </button>

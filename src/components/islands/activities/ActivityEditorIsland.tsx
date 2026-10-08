@@ -799,6 +799,19 @@ export default function ActivityEditorIsland({
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
+  // "Ordenar por grupos" (groupsort): same shape as Cloze above, just tagged
+  // with the `'groupsort'` template.
+  const handleGroupSortChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'groupsort',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
       // `WorksheetUploader` always hands back exactly ONE image now —
@@ -1015,6 +1028,7 @@ export default function ActivityEditorIsland({
                 onSelectMatch={handleMatchChosen}
                 onSelectReorder={handleReorderChosen}
                 onSelectCloze={handleClozeChosen}
+                onSelectGroupSort={handleGroupSortChosen}
               />
             )}
 

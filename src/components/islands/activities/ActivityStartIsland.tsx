@@ -156,6 +156,27 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
     }
   }, [createActivity, lang, navigate, t.createError]);
 
+  // "Ordenar por grupos" (groupsort): same shape as Cloze above, tagged with
+  // the `'groupsort'` template so the editor/practice both know this block
+  // started as a drag-each-item-into-its-group activity from its first save.
+  const handleSelectGroupSort = useCallback(async () => {
+    setBusyCard('groupsort');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'groupsort', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
   return (
     <div data-testid="activity-start-island" className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold text-foreground">{t.heading}</h2>
@@ -166,6 +187,7 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
         onSelectMatch={handleSelectMatch}
         onSelectReorder={handleSelectReorder}
         onSelectCloze={handleSelectCloze}
+        onSelectGroupSort={handleSelectGroupSort}
         busyCard={busyCard}
       />
     </div>

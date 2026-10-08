@@ -312,6 +312,50 @@ describe('buildPresentationSlides', () => {
     };
     expect(buildPresentationSlides([block])).toEqual([]);
   });
+
+  it('builds ONE "groupsort" slide for a template: groupsort block, carrying every group with its resolved items', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'groupsort',
+      name: 'Categorías',
+      payload: {
+        pools: {
+          p1: [
+            { id: 'dog', text: 'dog' },
+            { id: 'cat', text: 'cat' },
+            { id: 'bread', text: 'bread' },
+          ],
+        },
+        slots: [
+          { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+          { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+        ],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(slides).toEqual([
+      {
+        kind: 'groupsort',
+        blockId: 'q1',
+        name: 'Categorías',
+        groups: [
+          { id: 'g1', label: 'Animals', items: ['dog', 'cat'] },
+          { id: 'g2', label: 'Food', items: ['bread'] },
+        ],
+      },
+    ]);
+  });
+
+  it('skips an empty groupsort group (no items yet), and contributes no slide once every group is empty', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'groupsort',
+      payload: { pools: {}, slots: [{ id: 'g1', label: 'Animals', input: 'group', answer: [] }] },
+    };
+    expect(buildPresentationSlides([block])).toEqual([]);
+  });
 });
 
 describe('revealableSlides', () => {
@@ -326,6 +370,10 @@ describe('revealableSlides', () => {
 
   it('a "match" slide is revealable, same as "question"', () => {
     expect(revealableSlides([{ kind: 'match', blockId: 'q1', pairs: [] }])).toEqual([true]);
+  });
+
+  it('a "groupsort" slide is revealable, same as "question"', () => {
+    expect(revealableSlides([{ kind: 'groupsort', blockId: 'q1', groups: [] }])).toEqual([true]);
   });
 
   it('a "reorder" slide is revealable, same as "question"', () => {

@@ -51,7 +51,7 @@ import { rotatedSize } from '@lib/activities/canvasViewport';
 import { orderZonesForReading } from '@lib/activities/zoneGeometry';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@lib/activities/moderationPreview';
 import { splitLabelAtBlank, getSlotItems, type Slot } from '@lib/exercisePayload';
-import { seedFromString, shuffleWithSeed } from '@lib/activities/gameModes';
+import { deriveGroupSortGroups, groupSortPoolName, seedFromString, shuffleWithSeed } from '@lib/activities/gameModes';
 import { deriveClozeGameSentences } from '@lib/activities/clozeSentences';
 import type { Block } from '@lib/activities/blocks';
 import '@styles/global.css';
@@ -110,7 +110,16 @@ function blockLabel(block: Block, worksheetPosition: number): string {
   if (block.template === 'match') return t.matchLabel;
   if (block.template === 'reorder') return t.reorderLabel;
   if (block.template === 'cloze') return t.clozeLabel;
+  if (block.template === 'groupsort') return t.groupSortLabel;
   return t.quizLabel;
+}
+
+/** A groupsort item's resolved display text — same fallback chain `moderationPreview.ts`'s own helpers use (pool item text, then media, then the raw id). */
+function groupSortItemText(block: Extract<Block, { type: 'quiz' }>, itemId: string): string {
+  const poolName = groupSortPoolName(block.payload);
+  const pool = poolName ? (block.payload.pools[poolName] ?? []) : [];
+  const item = pool.find((candidate) => candidate.id === itemId);
+  return item?.text ?? item?.media ?? itemId;
 }
 
 /** A deterministic word shuffle that is never the sentence's own order — same anti-identity rule the reorder game/presentation slide both follow. */
@@ -329,6 +338,43 @@ function questionText(slot: Slot): string {
             );
           }
 
+          // "Ordenar por grupos" in print: the full item list (shuffled, so
+          // it is not already sorted by group), plus one empty, numbered
+          // writing column per group — a worksheet the student fills in by
+          // hand, same "nothing to fill-in-the-blank about this" reasoning
+          // `match`/`reorder`/`cloze` use above.
+          if (block.template === 'groupsort') {
+            const groups = deriveGroupSortGroups(block.payload);
+            const allItemIds = shuffleWithSeed(
+              groups.flatMap((group) => group.itemIds),
+              seedFromString(`${block.id}:groupsort:print`),
+            );
+            return (
+              <section data-testid={`print-block-${block.id}`} class="print-quiz">
+                <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+                {allItemIds.length > 0 && (
+                  <p data-testid={`print-groupsort-items-${block.id}`} class="mb-3 text-black">
+                    {t.groupSortItemsLabel}: {allItemIds.map((itemId) => groupSortItemText(block, itemId)).join('   ·   ')}
+                  </p>
+                )}
+                <div data-testid={`print-groupsort-groups-${block.id}`} class="flex flex-wrap gap-6 text-black">
+                  {groups.map((group) => (
+                    <div data-testid={`print-groupsort-group-${group.id}`} class="flex min-w-40 flex-1 flex-col gap-1">
+                      <p class="font-semibold">{group.label}</p>
+                      <ol class="flex flex-col gap-2">
+                        {group.itemIds.map((itemId, i) => (
+                          <li data-testid={`print-groupsort-blank-${itemId}`} class="border-b border-black/40">
+                            {i + 1}. &nbsp;
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          }
+
           return (
             <section data-testid={`print-block-${block.id}`} class="print-quiz">
               <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
@@ -402,6 +448,15 @@ function questionText(slot: Slot): string {
                       </li>
                     ))}
                   </ol>
+                ) : block.template === 'groupsort' ? (
+                  <div data-testid={`print-answers-groupsort-${block.id}`} class="flex flex-col gap-1 text-sm text-black">
+                    {deriveGroupSortGroups(block.payload).map((group) => (
+                      <div data-testid={`print-answer-groupsort-${group.id}`}>
+                        <span class="font-semibold">{group.label}:</span>{' '}
+                        {group.itemIds.map((itemId) => groupSortItemText(block, itemId)).join(', ')}
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <ol class="flex flex-col gap-1 text-sm text-black">
                     {block.payload.slots.map((slot, i) => (

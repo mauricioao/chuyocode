@@ -26,6 +26,7 @@ import {
   availableGameModes,
   deriveGameItems,
   initialGameMode,
+  modesForBlock,
   SELF_CHECKING_GAME_MODES,
   type GameMode,
 } from '@/lib/activities/gameModes';
@@ -95,9 +96,9 @@ export default function QuizLivePreview({ blockId, lang, payload, template }: Qu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, template]);
 
-  const modes = availableGameModes(gameItems, payload);
+  const modes = modesForBlock(availableGameModes(gameItems, payload), template);
 
-  const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload };
+  const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
 
   return (
     <div data-testid={`quiz-preview-${blockId}`} className="flex flex-col gap-3">

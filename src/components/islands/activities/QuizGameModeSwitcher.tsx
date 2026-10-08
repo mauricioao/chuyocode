@@ -35,6 +35,7 @@ import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import { PackageIcon } from '@phosphor-icons/react/dist/ssr/Package';
 import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquare';
 import { CaretDownIcon } from '@phosphor-icons/react/dist/ssr/CaretDown';
+import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
 import type { GameMode } from '@/lib/activities/gameModes';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -67,6 +68,7 @@ export const GAME_MODE_ICONS: Partial<Record<GameMode, typeof ListChecksIcon>> =
   truefalse: CheckCircleIcon,
   openbox: PackageIcon,
   cloze: BracketsSquareIcon,
+  groupsort: SquaresFourIcon,
 };
 
 export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: QuizGameModeSwitcherProps) {
@@ -83,6 +85,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
     truefalse: t.modeTrueFalse,
     openbox: t.modeOpenBox,
     cloze: t.modeCloze,
+    groupsort: t.modeGroupSort,
   };
 
   const [open, setOpen] = useState(false);

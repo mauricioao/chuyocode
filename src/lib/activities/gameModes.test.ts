@@ -12,7 +12,11 @@ import {
   trueFalseEligibleCount,
   deriveTrueFalseItems,
   initialGameMode,
+  deriveGroupSortGroups,
+  groupSortPoolName,
+  modesForBlock,
   type GameItem,
+  type GameMode,
   type TrueFalseItem,
 } from './gameModes';
 import type { Payload } from '@/lib/exercisePayload';
@@ -210,8 +214,19 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
     expect(initialGameMode('match', tooFewForMatch)).toBe('quiz');
   });
 
-  it('falls back to quiz for a reserved template with no shipped game yet', () => {
+  it('falls back to quiz for the groupsort template without a payload (no groups to check)', () => {
     expect(initialGameMode('groupsort', eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in groupsort for the groupsort template, when the payload has 2+ eligible groups', () => {
+    const payload = payloadWith(
+      [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+    );
+    expect(initialGameMode('groupsort', eligibleForMatch, payload)).toBe('groupsort');
   });
 
   it('falls back to quiz for the cloze template without a payload (no drop-gap slots to check)', () => {
@@ -292,6 +307,90 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
       { p1: [{ id: 'goes', text: 'goes' }] },
     );
     expect(availableGameModes([], payload)).toContain('cloze');
+  });
+
+  it('withholds groupsort without a payload', () => {
+    expect(availableGameModes([])).not.toContain('groupsort');
+  });
+
+  it('withholds groupsort with fewer than 2 groups', () => {
+    const payload = payloadWith(
+      [{ id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] }],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }] },
+    );
+    expect(availableGameModes([], payload)).not.toContain('groupsort');
+  });
+
+  it('withholds groupsort when any group has fewer than 2 items', () => {
+    const payload = payloadWith(
+      [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+    );
+    expect(availableGameModes([], payload)).not.toContain('groupsort');
+  });
+
+  it('offers groupsort once every group has >= 2 items and there are >= 2 groups', () => {
+    const payload = payloadWith(
+      [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+    );
+    expect(availableGameModes([], payload)).toContain('groupsort');
+  });
+});
+
+describe('deriveGroupSortGroups / groupSortPoolName', () => {
+  it('derives one group per "group"-mechanic slot, in authored order, ignoring any other slot', () => {
+    const payload = payloadWith([
+      { id: 'q1', label: 'Básico question', input: 'text', answer: ['x'] },
+      { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+      { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+    ]);
+    expect(deriveGroupSortGroups(payload)).toEqual([
+      { id: 'g1', label: 'Animals', itemIds: ['dog', 'cat'] },
+      { id: 'g2', label: 'Food', itemIds: ['bread'] },
+    ]);
+  });
+
+  it('resolves the shared pool name from the first group slot', () => {
+    const payload = payloadWith([
+      { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog'] },
+    ]);
+    expect(groupSortPoolName(payload)).toBe('p1');
+  });
+
+  it('is undefined for a payload with no group slot yet', () => {
+    expect(groupSortPoolName(payloadWith([]))).toBeUndefined();
+  });
+});
+
+describe('modesForBlock', () => {
+  const allModes: GameMode[] = [
+    'quiz',
+    'cards',
+    'match',
+    'speak',
+    'wheel',
+    'anagram',
+    'hangman',
+    'openbox',
+    'groupsort',
+  ];
+
+  it('restricts a groupsort-templated block to quiz and groupsort only — every other mode built from `deriveGameItems` would misleadingly collapse a group to just its first item', () => {
+    expect(modesForBlock(allModes, 'groupsort')).toEqual(['quiz', 'groupsort']);
+  });
+
+  it('leaves every other template (and Básico, undefined) unrestricted', () => {
+    expect(modesForBlock(allModes, 'match')).toEqual(allModes);
+    expect(modesForBlock(allModes, 'reorder')).toEqual(allModes);
+    expect(modesForBlock(allModes, 'cloze')).toEqual(allModes);
+    expect(modesForBlock(allModes, undefined)).toEqual(allModes);
   });
 });
 

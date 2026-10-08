@@ -13,6 +13,7 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import { zoneAnswerSummary, zoneOptionsSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import { deriveClozeGameSentences } from '@/lib/activities/clozeSentences';
+import { deriveGroupSortGroups } from '@/lib/activities/gameModes';
 import { FadeImage } from '@/components/ui/fade-image';
 
 export interface ModerationBlockPreviewProps {
@@ -151,6 +152,31 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
             {t.clozeDistractorsLabel}: {distractors.map((item) => item.text ?? item.id).join(', ')}
           </p>
         )}
+      </div>
+    );
+  }
+
+  // "Ordenar por grupos": each group printed plainly — its own name and its
+  // items (the authored content itself, not a hidden answer) — same "nothing
+  // to reveal behind `showAnswers`" reasoning `reorder`/`cloze` use above.
+  if (block.template === 'groupsort') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {deriveGroupSortGroups(block.payload).map((group) => (
+            <li
+              key={group.id}
+              data-testid={`moderation-group-${group.id}`}
+              className="rounded-md border border-border p-2 text-sm"
+            >
+              <span className="font-medium text-foreground">{group.label}</span>
+              <span className="text-muted-foreground">
+                {' '}
+                → {quizSlotAnswerSummary(block.payload, block.payload.slots.find((s) => s.id === group.id)!)}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     );
   }

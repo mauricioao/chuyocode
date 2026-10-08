@@ -30,7 +30,14 @@ import { orderZonesForReading } from './zoneGeometry';
 import { rotatedSize } from './canvasViewport';
 import { zoneExceedsMaxZoom, type Size } from './presentationCamera';
 import { STAGE_SAFE_WIDTH, STAGE_SAFE_HEIGHT } from './fitStage';
-import { deriveGameItems, seedFromString, shuffleWithSeed, type GameItem } from './gameModes';
+import {
+  deriveGameItems,
+  deriveGroupSortGroups,
+  groupSortPoolName,
+  seedFromString,
+  shuffleWithSeed,
+  type GameItem,
+} from './gameModes';
 import { deriveClozeGameSentences, type ClozeGameSegment } from './clozeSentences';
 
 /** A deterministic word shuffle that is never the sentence's own original order — same anti-identity rule `QuizReorder.tsx`'s own tile shuffle follows, applied here to plain words (no interactive tile ids needed for a static slide). */
@@ -197,6 +204,18 @@ export type PresentationSlide =
       segments: ClozeGameSegment[];
     }
   | {
+      /**
+       * "Ordenar por grupos" in presentation mode: ONE combined slide for
+       * the whole board, same posture as `'match'` above — every group
+       * listed with its name; "Mostrar respuesta" fills each group with its
+       * own items at once, no drag gesture needed in front of a class.
+       */
+      kind: 'groupsort';
+      blockId: string;
+      name?: string;
+      groups: { id: string; label: string; items: string[] }[];
+    }
+  | {
       kind: 'worksheet-overview';
       blockId: string;
       name?: string;
@@ -266,6 +285,26 @@ export function buildPresentationSlides(blocks: readonly Block[]): PresentationS
         // entry at all (`deriveClozeGameSentences` already skips it).
         for (const sentence of deriveClozeGameSentences(block.payload)) {
           slides.push({ kind: 'cloze', blockId: block.id, seq: sentence.seq, segments: sentence.segments });
+        }
+        continue;
+      }
+      if (block.template === 'groupsort') {
+        // ONE COMBINED SLIDE for the whole board — see this module's own
+        // `PresentationSlide` doc on `'groupsort'`. No group yet (an empty
+        // block) derives zero groups and contributes nothing, same as an
+        // empty `'match'`.
+        const groups = deriveGroupSortGroups(block.payload);
+        const poolName = groupSortPoolName(block.payload);
+        const pool = poolName ? (block.payload.pools[poolName] ?? []) : [];
+        const textFor = (itemId: string) => {
+          const item = pool.find((candidate) => candidate.id === itemId);
+          return item?.text ?? item?.media ?? itemId;
+        };
+        const resolved = groups
+          .filter((group) => group.itemIds.length > 0)
+          .map((group) => ({ id: group.id, label: group.label, items: group.itemIds.map(textFor) }));
+        if (resolved.length > 0) {
+          slides.push({ kind: 'groupsort', blockId: block.id, name: block.name, groups: resolved });
         }
         continue;
       }

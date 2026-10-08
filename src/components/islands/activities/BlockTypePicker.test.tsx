@@ -10,10 +10,18 @@ function noopHandlers() {
     onSelectMatch: vi.fn(),
     onSelectReorder: vi.fn(),
     onSelectCloze: vi.fn(),
+    onSelectGroupSort: vi.fn(),
   };
 }
 
-const ALL_CARDS = ['picker-worksheet', 'picker-questions', 'picker-match', 'picker-reorder', 'picker-cloze'];
+const ALL_CARDS = [
+  'picker-worksheet',
+  'picker-questions',
+  'picker-match',
+  'picker-reorder',
+  'picker-cloze',
+  'picker-groupsort',
+];
 
 describe('BlockTypePicker', () => {
   it('renders the worksheet, questions, match, reorder and cloze cards, in Spanish', () => {
@@ -51,11 +59,23 @@ describe('BlockTypePicker', () => {
     );
   });
 
-  it('lays the cards out as one responsive grid (5 columns wide, 2 narrower, 1 on a phone)', () => {
+  it('lays the cards out as one responsive grid (6 columns wide, 2 narrower, 1 on a phone)', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('block-type-picker').className).toContain('grid-cols-1');
     expect(screen.getByTestId('block-type-picker').className).toContain('sm:grid-cols-2');
-    expect(screen.getByTestId('block-type-picker').className).toContain('lg:grid-cols-5');
+    expect(screen.getByTestId('block-type-picker').className).toContain('lg:grid-cols-6');
+  });
+
+  it('renders the groupsort card, in Spanish', () => {
+    render(<BlockTypePicker lang="es" {...noopHandlers()} />);
+    expect(screen.getByTestId('picker-groupsort').textContent).toContain('Ordenar por grupos');
+  });
+
+  it('calls onSelectGroupSort when the groupsort card is chosen', () => {
+    const handlers = noopHandlers();
+    render(<BlockTypePicker lang="es" {...handlers} />);
+    fireEvent.click(screen.getByTestId('picker-groupsort'));
+    expect(handlers.onSelectGroupSort).toHaveBeenCalledTimes(1);
   });
 
   it('calls onSelectWorksheet when the worksheet card is chosen', () => {

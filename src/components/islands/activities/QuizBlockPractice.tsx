@@ -42,6 +42,7 @@ import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exerci
 import {
   deriveGameItems,
   availableGameModes,
+  modesForBlock,
   anagramEligible,
   hangmanEligible,
   reorderEligible,
@@ -63,6 +64,7 @@ import QuizHangman from './QuizHangman';
 import QuizTrueFalse from './QuizTrueFalse';
 import QuizOpenBox from './QuizOpenBox';
 import QuizCloze from './QuizCloze';
+import QuizGroupSort from './QuizGroupSort';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -92,6 +94,7 @@ const SUPPORTED_MODES: readonly GameMode[] = [
   'truefalse',
   'openbox',
   'cloze',
+  'groupsort',
 ];
 
 export default function QuizBlockPractice({
@@ -110,8 +113,9 @@ export default function QuizBlockPractice({
 
   const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
   const modes = useMemo(
-    () => availableGameModes(gameItems, payload).filter((m) => SUPPORTED_MODES.includes(m)),
-    [gameItems, payload],
+    () =>
+      modesForBlock(availableGameModes(gameItems, payload), block.template).filter((m) => SUPPORTED_MODES.includes(m)),
+    [gameItems, payload, block.template],
   );
   // A mode this block no longer offers (edited down since it was chosen)
   // falls back to `quiz` rather than rendering nothing.
@@ -127,7 +131,8 @@ export default function QuizBlockPractice({
     effectiveMode === 'hangman' ||
     effectiveMode === 'truefalse' ||
     effectiveMode === 'openbox' ||
-    effectiveMode === 'cloze'
+    effectiveMode === 'cloze' ||
+    effectiveMode === 'groupsort'
   ) {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
@@ -150,6 +155,7 @@ export default function QuizBlockPractice({
         )}
         {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
         {effectiveMode === 'cloze' && <QuizCloze lang={lang} payload={payload} seed={block.id} />}
+        {effectiveMode === 'groupsort' && <QuizGroupSort lang={lang} payload={payload} seed={block.id} />}
       </div>
     );
   }

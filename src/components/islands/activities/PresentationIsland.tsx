@@ -408,6 +408,9 @@ export default function PresentationIsland({
           {currentSlide?.kind === 'match' && <MatchSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {currentSlide?.kind === 'reorder' && <ReorderSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {currentSlide?.kind === 'cloze' && <ClozeSlide slide={currentSlide} revealed={state.revealed} t={t} />}
+          {currentSlide?.kind === 'groupsort' && (
+            <GroupSortSlide slide={currentSlide} revealed={state.revealed} t={t} />
+          )}
           {isSummarySlide(state) && (
             <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
           )}
@@ -796,6 +799,61 @@ function ClozeSlide({
           ),
         )}
       </p>
+    </div>
+  );
+}
+
+/**
+ * "Ordenar por grupos" in presentation mode — ONE combined slide for the
+ * whole board, same posture as `MatchSlide` above: every group's own name
+ * listed as a large labelled column; "Mostrar respuesta" fills each column
+ * with its items at once, right under its own name — no drag gesture needed
+ * in front of a class.
+ */
+function GroupSortSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'groupsort' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-groupsort-${slide.blockId}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 overflow-y-auto py-6"
+    >
+      <p style={{ fontSize: 64 }} className="text-center font-display font-bold leading-tight text-foreground">
+        {t.groupSortTitle}
+      </p>
+      <div className="flex w-full flex-col gap-6 sm:flex-row sm:flex-wrap sm:justify-center">
+        {slide.groups.map((group) => (
+          <div
+            key={group.id}
+            data-testid={`presentation-groupsort-group-${group.id}`}
+            className="flex min-w-56 flex-1 flex-col gap-3 rounded-2xl bg-surface-soft px-8 py-6"
+          >
+            <span style={{ fontSize: 44 }} className="text-center font-semibold text-foreground">
+              {group.label}
+            </span>
+            {revealed && (
+              <ul className="flex flex-col items-center gap-2">
+                {group.items.map((item, i) => (
+                  <li
+                    key={`${group.id}-${i}`}
+                    data-testid={`presentation-groupsort-item-${group.id}-${i}`}
+                    style={{ fontSize: 32 }}
+                    className="font-bold text-accent-ink"
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -175,3 +175,31 @@ describe('ModerationBlockPreview — "Reordenar" (sentence list)', () => {
     expect(screen.getByTestId('moderation-sentence-s1').textContent).toContain('Cats sleep');
   });
 });
+
+describe('ModerationBlockPreview — "Ordenar por grupos" (group list)', () => {
+  const GROUPSORT: Block = {
+    id: 'q4',
+    type: 'quiz',
+    template: 'groupsort',
+    payload: {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+    },
+  };
+
+  it('lists every group by name with its items, the same regardless of showAnswers (nothing hidden)', () => {
+    render(<ModerationBlockPreview lang="es" block={GROUPSORT} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('Animals');
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('dog');
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('cat');
+    expect(screen.getByTestId('moderation-group-g2').textContent).toContain('Food');
+    expect(screen.getByTestId('moderation-group-g2').textContent).toContain('bread');
+
+    cleanup();
+    render(<ModerationBlockPreview lang="es" block={GROUPSORT} resolveImageUrl={resolveImageUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('dog');
+  });
+});

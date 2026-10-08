@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
@@ -89,6 +89,23 @@ function ClozeHarness({ initialPayload }: { initialPayload: Payload }) {
       lang="es"
       payload={payload}
       template="cloze"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
+/** Same harness, authoring a `template: 'groupsort'` block ("Ordenar por grupos"). */
+function GroupSortHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="groupsort"
       selectedSlotId={selectedSlotId}
       onSelectSlot={setSelectedSlotId}
       onPayloadChange={setPayload}
@@ -691,5 +708,149 @@ describe('QuizBlockEditor — "Completar la frase" (cloze authoring)', () => {
     render(<ClozeHarness initialPayload={payload} />);
     fireEvent.change(screen.getByTestId('cloze-distractors-b1'), { target: { value: 'is, went' } });
     expect((screen.getByTestId('cloze-distractors-b1') as HTMLInputElement).value).toBe('is, went');
+  });
+});
+
+describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () => {
+  it('renders the group editor instead of the Básico question-card list', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('groupsort-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least 2 groups" hint until reached', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('groupsort-min-groups-hint-b1').textContent).toContain('Agrega al menos 2 grupos');
+  });
+
+  it('"+ Agregar grupo" adds a new, empty group row', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(1);
+  });
+
+  it('typing a group name commits it back through onPayloadChange', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const [nameInput] = screen.getAllByTestId(/^groupsort-name-/) as HTMLInputElement[];
+    fireEvent.change(nameInput, { target: { value: 'Animals' } });
+    expect((nameInput as HTMLInputElement).value).toBe('Animals');
+  });
+
+  it('Enter in the item field adds a chip and clears the field, without adding a new group', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+
+    fireEvent.change(itemInput, { target: { value: 'dog' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    const chips = within(screen.getByTestId(`groupsort-items-${slotId}`)).getAllByTestId(/^groupsort-item-/);
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.textContent).toContain('dog');
+    expect(itemInput.value).toBe('');
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(1);
+  });
+
+  it('a comma-separated paste adds several items in one go', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+
+    fireEvent.change(itemInput, { target: { value: 'dog, cat, horse' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    const chips = within(screen.getByTestId(`groupsort-items-${slotId}`)).getAllByTestId(/^groupsort-item-/);
+    expect(chips.map((c) => c.textContent?.trim())).toEqual([
+      expect.stringContaining('dog'),
+      expect.stringContaining('cat'),
+      expect.stringContaining('horse'),
+    ]);
+  });
+
+  it('shows the "add at least 2 items" hint per group until reached, hiding once satisfied', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    expect(screen.getByTestId(`groupsort-min-items-hint-${slotId}`)).toBeTruthy();
+
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+    fireEvent.change(itemInput, { target: { value: 'dog, cat' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    expect(screen.queryByTestId(`groupsort-min-items-hint-${slotId}`)).toBeNull();
+  });
+
+  it('removing an item chip ("×") removes exactly that item', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+    fireEvent.change(itemInput, { target: { value: 'dog, cat' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    const itemsContainer = screen.getByTestId(`groupsort-items-${slotId}`);
+    const [dogChip] = within(itemsContainer).getAllByTestId(/^groupsort-item-/);
+    const removeButton = dogChip!.querySelector('button')!;
+    fireEvent.click(removeButton);
+
+    const remaining = within(itemsContainer).getAllByTestId(/^groupsort-item-/);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.textContent).toContain('cat');
+  });
+
+  it('removing a group ("Quitar este grupo") deletes its row, slot, and items', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(2);
+
+    const [firstSlot] = screen.getAllByTestId(/^groupsort-name-/).map((n) => n.getAttribute('data-testid')!.replace('groupsort-name-', ''));
+    fireEvent.click(screen.getByTestId(`groupsort-remove-group-${firstSlot}`));
+
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(1);
+  });
+
+  it('stops offering "+ Agregar grupo" once 4 groups exist, showing the max-groups hint instead', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(4);
+    expect(screen.queryByTestId('groupsort-add-b1')).toBeNull();
+    expect(screen.getByTestId('groupsort-max-groups-hint-b1')).toBeTruthy();
+  });
+
+  it('round-trips a reloaded groupsort payload back into named groups with their items', () => {
+    const payload: Payload = {
+      pools: {
+        'b1-groupsort-pool': [
+          { id: 'i1', text: 'dog' },
+          { id: 'i2', text: 'cat' },
+          { id: 'i3', text: 'bread' },
+          { id: 'i4', text: 'rice' },
+        ],
+      },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'b1-groupsort-pool', answer: ['i1', 'i2'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'b1-groupsort-pool', answer: ['i3', 'i4'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-g1', slotId: 'g1' },
+        { kind: 'row', id: 'row-g2', slotId: 'g2' },
+      ],
+    };
+    render(<GroupSortHarness initialPayload={payload} />);
+
+    expect((screen.getByTestId('groupsort-name-g1') as HTMLInputElement).value).toBe('Animals');
+    expect((screen.getByTestId('groupsort-name-g2') as HTMLInputElement).value).toBe('Food');
+    expect(screen.getByTestId('groupsort-item-i1').textContent).toContain('dog');
+    expect(screen.getByTestId('groupsort-item-i4').textContent).toContain('rice');
+    expect(screen.queryByTestId('groupsort-min-groups-hint-b1')).toBeNull();
   });
 });

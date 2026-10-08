@@ -512,6 +512,21 @@ const REORDER_BLOCKS: Block[] = [
   },
 ];
 
+const GROUPSORT_BLOCKS: Block[] = [
+  {
+    id: 'q4',
+    type: 'quiz',
+    template: 'groupsort',
+    payload: {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+    },
+  },
+];
+
 describe('PresentationIsland — "Reordenar" (one slide per sentence)', () => {
   it('shows the scrambled words unrevealed, then the correct sentence once revealed', () => {
     render(<PresentationIsland {...BASE_PROPS} blocks={REORDER_BLOCKS} />);
@@ -523,6 +538,22 @@ describe('PresentationIsland — "Reordenar" (one slide per sentence)', () => {
 
     next(); // reveals, same "next reveals then advances" rule every other slide follows
     expect(screen.getByTestId('presentation-reorder-answer').textContent).toBe('Cats sleep');
+  });
+});
+
+describe('PresentationIsland — "Ordenar por grupos" (one combined slide for the whole board)', () => {
+  it('shows every group by name, unrevealed, then every group filled with its own items once revealed', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={GROUPSORT_BLOCKS} />);
+    const slide = screen.getByTestId('presentation-groupsort-q4');
+    expect(slide.textContent).toContain('Animals');
+    expect(slide.textContent).toContain('Food');
+    expect(slide.textContent).not.toContain('dog');
+    expect(screen.queryByTestId('presentation-groupsort-item-g1-0')).toBeNull();
+
+    next(); // reveals, same "next reveals then advances" rule every other slide follows
+    expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('dog');
+    expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('cat');
+    expect(screen.getByTestId('presentation-groupsort-group-g2').textContent).toContain('bread');
   });
 });
 

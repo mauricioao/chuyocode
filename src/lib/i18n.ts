@@ -469,6 +469,10 @@ export const UI_LABELS = {
           title: 'Completar la frase',
           description: 'Arrastra las palabras a los espacios en blanco de la frase.',
         },
+        groupsort: {
+          title: 'Ordenar por grupos',
+          description: 'Arrastra cada elemento a su grupo correcto.',
+        },
         createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
@@ -902,6 +906,20 @@ export const UI_LABELS = {
         clozeTrayLabel: 'Palabras disponibles',
         clozeBlankEmpty: 'Casilla vacía',
         clozeRemovePrefix: 'Quitar palabra',
+        // Ordenar por grupos (Wordwall "Group sort"): every item shuffled
+        // into a tray, the groups shown as large boxes to drag each item
+        // into. "Comprobar" grades the whole board at once.
+        modeGroupSort: 'Ordenar por grupos',
+        groupSortCheck: 'Comprobar',
+        groupSortRetry: 'Reintentar',
+        // "9 de 9 bien ubicados" — composed around the learner's score.
+        groupSortResultOf: 'de',
+        groupSortResultCorrect: 'bien ubicados',
+        groupSortSoundMute: 'Silenciar sonido',
+        groupSortSoundUnmute: 'Activar sonido',
+        groupSortTrayLabel: 'Elementos disponibles',
+        groupSortEmptyGroup: 'Grupo vacío',
+        groupSortRemovePrefix: 'Quitar elemento',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1200,6 +1218,9 @@ export const UI_LABELS = {
         // "Completar la frase" in print: same reasoning as `matchLabel`.
         clozeLabel: 'Completar la frase',
         clozeBankLabel: 'Banco de palabras',
+        // "Ordenar por grupos" in print: same reasoning as `matchLabel`.
+        groupSortLabel: 'Ordenar por grupos',
+        groupSortItemsLabel: 'Elementos',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -1259,6 +1280,10 @@ export const UI_LABELS = {
         // "Completar la frase" in presentation mode: one slide per sentence,
         // its blanks shown as lines; "Mostrar respuesta" fills them in.
         clozeTitle: 'Completar la frase',
+        // "Ordenar por grupos" in presentation mode: one combined slide,
+        // every group listed by name; "Mostrar respuesta" fills each with
+        // its own items.
+        groupSortTitle: 'Ordenar por grupos',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1958,6 +1983,10 @@ export const UI_LABELS = {
           title: 'Complete the sentence',
           description: 'Drag the words into the sentence\'s blanks.',
         },
+        groupsort: {
+          title: 'Group sort',
+          description: 'Drag each item into its correct group.',
+        },
         createError: 'Could not create the activity. Try again.',
       },
       editor: {
@@ -2267,6 +2296,20 @@ export const UI_LABELS = {
         clozeTrayLabel: 'Available words',
         clozeBlankEmpty: 'Empty slot',
         clozeRemovePrefix: 'Remove word',
+        // Group sort (Wordwall "Group sort"): every item shuffled into a
+        // tray, the groups shown as large boxes to drag each item into.
+        // "Check" grades the whole board at once.
+        modeGroupSort: 'Group sort',
+        groupSortCheck: 'Check',
+        groupSortRetry: 'Retry',
+        // "9 of 9 correctly sorted" — composed around the learner's score.
+        groupSortResultOf: 'of',
+        groupSortResultCorrect: 'correctly sorted',
+        groupSortSoundMute: 'Mute sound',
+        groupSortSoundUnmute: 'Unmute sound',
+        groupSortTrayLabel: 'Available items',
+        groupSortEmptyGroup: 'Empty group',
+        groupSortRemovePrefix: 'Remove item',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -2477,6 +2520,8 @@ export const UI_LABELS = {
         reorderLabel: 'Reorder',
         clozeLabel: 'Complete the sentence',
         clozeBankLabel: 'Word bank',
+        groupSortLabel: 'Group sort',
+        groupSortItemsLabel: 'Items',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
@@ -2510,6 +2555,7 @@ export const UI_LABELS = {
         matchTitle: 'Match the pairs',
         reorderTitle: 'Reorder',
         clozeTitle: 'Complete the sentence',
+        groupSortTitle: 'Group sort',
       },
     },
     notFound: {

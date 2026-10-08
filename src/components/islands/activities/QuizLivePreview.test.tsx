@@ -94,6 +94,20 @@ describe('QuizLivePreview — opens in the template\'s own game (owner review of
     render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} />);
     expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
   });
+
+  it('opens a "groupsort" block\'s preview in Ordenar por grupos, not Básico, and its own games badge counts only "Básico"/"Ordenar por grupos"', () => {
+    const GROUPSORT_PAYLOAD: Payload = {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+    };
+    render(<QuizLivePreview blockId="b1" lang="es" payload={GROUPSORT_PAYLOAD} template="groupsort" />);
+    expect(screen.getByTestId('quiz-groupsort')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-g1')).toBeNull();
+    expect(screen.getByTestId('quiz-preview-games-badge-b1').textContent).toContain('2 juegos');
+  });
 });
 
 describe('QuizLivePreview — resets on structural change', () => {

@@ -95,6 +95,7 @@ import QuizFirstRunTip from './QuizFirstRunTip';
 import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
 import ClozeEditor, { type ClozeSentenceInput } from './ClozeEditor';
+import GroupSortEditor from './GroupSortEditor';
 import {
   applyClozeSentenceText,
   applyDistractorsText,
@@ -102,6 +103,13 @@ import {
   deriveDistractorsText,
   removeClozeSentence,
 } from '@/lib/activities/clozeSentences';
+import {
+  addGroupSortGroup,
+  addGroupSortItems,
+  deriveGroupSortRows,
+  removeGroupSortGroup,
+  removeGroupSortItem,
+} from '@/lib/activities/groupSort';
 
 /** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
 const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
@@ -251,7 +259,9 @@ export default function QuizBlockEditor({
   const isMatch = template === 'match';
   const isReorder = template === 'reorder';
   const isCloze = template === 'cloze';
+  const isGroupSort = template === 'groupsort';
   const clozePoolName = `${blockId}-cloze-pool`;
+  const groupSortPoolName = `${blockId}-groupsort-pool`;
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
@@ -467,6 +477,39 @@ export default function QuizBlockEditor({
     />
   );
 
+  // GROUPSORT AUTHORING ("Ordenar por grupos", same posture as `matchPairs`/
+  // `reorderSentences`/`clozeRows` above): a `groupsort` block is a list of
+  // GROUPS, each its own `row`+`group`-mechanic `Slot` (`groupSort.ts`'s own
+  // pure commits) — `slot.label` is the group's name, `slot.answer` every
+  // pool item id it claims from the one pool every group in this block
+  // shares.
+  const groupSortRows = isGroupSort ? deriveGroupSortRows(draft, groupSortPoolName) : [];
+
+  function addGroupSortRow() {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    commit(addGroupSortGroup(draft, rowId, slotId, groupSortPoolName));
+    onSelectSlot(slotId);
+  }
+
+  function removeGroupSortRow(rowId: string) {
+    commit(removeGroupSortGroup(draft, rowId, groupSortPoolName));
+  }
+
+  const groupSortColumn = (
+    <GroupSortEditor
+      blockId={blockId}
+      lang={lang}
+      groups={groupSortRows}
+      focusSlotId={selectedSlotId}
+      onLabelChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
+      onAddItems={(slotId, text) => commit(addGroupSortItems(draft, slotId, groupSortPoolName, text, nextId))}
+      onRemoveItem={(slotId, itemId) => commit(removeGroupSortItem(draft, slotId, groupSortPoolName, itemId))}
+      onAdd={addGroupSortRow}
+      onRemove={removeGroupSortRow}
+    />
+  );
+
   const questionsColumn = (
     <div className="flex flex-col gap-3">
       {hasQuestions && (
@@ -675,7 +718,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : questionsColumn}
+        {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
       </div>
     );
   }
@@ -728,7 +771,7 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : questionsColumn}
+          {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}

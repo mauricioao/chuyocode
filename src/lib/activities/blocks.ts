@@ -102,10 +102,10 @@ export interface WorksheetBlock {
  * AND the practice's own DEFAULT game mode (`gameModes.ts`'s
  * `initialGameMode`) — the player can still switch to any other mode the
  * SAME payload is eligible for, a template never restricts `availableGameModes`.
- * `undefined` = "Básico", the plain quiz template this field predates.
- * Only `'match'` ("Une las parejas") has a shipped practice experience so
- * far; the other three names are reserved plumbing for templates not built
- * yet, kept here so a value authored today never has to migrate shape later.
+ * `undefined` = "Básico", the plain quiz template this field predates. Every
+ * named template here has a shipped practice experience: `'match'` ("Une
+ * las parejas"), `'reorder'` ("Reordenar"), `'cloze'` ("Completar la
+ * frase") and `'groupsort'` ("Ordenar por grupos").
  */
 export type QuizTemplate = 'match' | 'reorder' | 'cloze' | 'groupsort';
 
