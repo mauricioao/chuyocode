@@ -58,9 +58,12 @@ function quizBlock(id: string, overrides: Partial<QuizBlock> = {}): QuizBlock {
 function Harness({
   initialBlocks,
   initialActiveId = initialBlocks[0]?.id ?? null,
+  withAudio = false,
 }: {
   initialBlocks: Block[];
   initialActiveId?: string | null;
+  /** "Colocar un audio propio": wires `resolveAudioUrl` so the Audio tool actually shows. */
+  withAudio?: boolean;
 }) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(initialActiveId);
@@ -72,12 +75,47 @@ function Harness({
       activeBlockId={activeBlockId}
       selectedZoneId={selectedZoneId}
       resolveImageUrl={(path) => `/preview?path=${path}`}
+      resolveAudioUrl={withAudio ? (path) => `/audio?path=${path}` : undefined}
       onSetActiveBlock={setActiveBlockId}
       onSelectZone={setSelectedZoneId}
       onBlocksChange={setBlocks}
     />
   );
 }
+
+describe('BlockList — audio markers ("colocar un audio propio") threading', () => {
+  it('never shows the Audio tool when resolveAudioUrl is not given', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
+    expect(screen.queryByTestId('tool-audio')).toBeNull();
+  });
+
+  it('shows the Audio tool once resolveAudioUrl is given', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} withAudio />);
+    expect(screen.getByTestId('tool-audio')).toBeTruthy();
+  });
+
+  it('threads an existing marker through to the canvas, resolved via resolveAudioUrl', () => {
+    const block = worksheetBlock('b1', {
+      audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' }],
+    });
+    render(<Harness initialBlocks={[block]} withAudio />);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    fireEvent.pointerDown(screen.getByTestId('audio-marker-m1'));
+    const player = screen.getByTestId('audio-marker-player') as HTMLAudioElement;
+    expect(player.getAttribute('src')).toBe('/audio?path=activity-audio/a/m1.webm');
+  });
+
+  it("deleting an audio marker from the panel updates the worksheet block's own audio field", () => {
+    const block = worksheetBlock('b1', {
+      audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' }],
+    });
+    render(<Harness initialBlocks={[block]} withAudio />);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    fireEvent.pointerDown(screen.getByTestId('audio-marker-m1'));
+    fireEvent.click(screen.getByTestId('audio-delete'));
+    expect(screen.queryByTestId('audio-marker-m1')).toBeNull();
+  });
+});
 
 describe('BlockList — empty state', () => {
   it('shows the empty-state copy when there are no blocks', () => {

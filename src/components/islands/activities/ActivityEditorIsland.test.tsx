@@ -237,6 +237,11 @@ describe('ActivityEditorIsland — one active block on entry (owner decision 202
     expect(screen.getByTestId('worksheet-uploader')).toBeTruthy();
   });
 
+  it('wires the Audio tool ("colocar un audio propio") on a worksheet block', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(screen.getByTestId('tool-audio')).toBeTruthy();
+  });
+
   it('still shows the empty-blocks state (no block to activate) for a brand-new, zero-block activity', () => {
     renderEditor({ initialBlocks: [] });
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();

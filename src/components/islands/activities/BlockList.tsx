@@ -41,7 +41,7 @@ import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowC
 import { ArrowClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowClockwise';
 import { ImageIcon } from '@phosphor-icons/react/dist/ssr/Image';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block, QuizBlock, WorksheetBlock, Zone } from '@/lib/activities/blocks';
+import type { Block, QuizBlock, WorksheetBlock, Zone, AudioMarker } from '@/lib/activities/blocks';
 import type { Payload } from '@/lib/exercisePayload';
 import { rotateRects, turnRotation, type TurnDirection } from '@/lib/activities/zoneGeometry';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,13 @@ export interface BlockListProps {
   selectedZoneId: string | null;
   /** Resolves a stored `image.path` to a browser-loadable preview URL. */
   resolveImageUrl: (path: string) => string;
+  /**
+   * "Colocar un audio propio" — resolves a stored audio marker `path` to a
+   * browser-loadable URL, for the Audio tool's own properties panel
+   * (listen-back). Omitted = no Audio tool at all, same graceful fallback
+   * `WorksheetZoneEditor.tsx` itself already has for this prop.
+   */
+  resolveAudioUrl?: (path: string) => string;
   onSetActiveBlock: (blockId: string) => void;
   onSelectZone: (zoneId: string | null) => void;
   onBlocksChange: (blocks: Block[], opts?: BlocksChangeOptions) => void;
@@ -185,6 +192,7 @@ export default function BlockList({
   activeBlockId,
   selectedZoneId,
   resolveImageUrl,
+  resolveAudioUrl,
   onSetActiveBlock,
   onSelectZone,
   onBlocksChange,
@@ -210,6 +218,13 @@ export default function BlockList({
   const updateZones = (blockId: string, zones: Zone[], opts?: BlocksChangeOptions) => {
     onBlocksChange(
       blocks.map((b) => (b.id === blockId && isWorksheet(b) ? { ...b, zones } : b)),
+      opts,
+    );
+  };
+
+  const updateAudioMarkers = (blockId: string, audio: AudioMarker[], opts?: BlocksChangeOptions) => {
+    onBlocksChange(
+      blocks.map((b) => (b.id === blockId && isWorksheet(b) ? { ...b, audio } : b)),
       opts,
     );
   };
@@ -374,6 +389,11 @@ export default function BlockList({
               sideToolsPortalTarget={sideToolsPortalTarget}
               incompleteZoneId={activeBlock.id === incompleteBlockId ? incompleteZoneId : undefined}
               incompleteMessage={activeBlock.id === incompleteBlockId ? incompleteMessage : null}
+              audioMarkers={worksheet.audio ?? []}
+              onAudioMarkersChange={
+                resolveAudioUrl ? (audio, opts) => updateAudioMarkers(activeBlock.id, audio, opts) : undefined
+              }
+              resolveAudioUrl={resolveAudioUrl}
             />
           ) : (
             // Brand-new worksheet block with nothing uploaded yet, OR

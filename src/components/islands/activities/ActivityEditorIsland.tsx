@@ -45,7 +45,7 @@ import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
+import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
 import {
   initHistory,
   pushHistory,
@@ -138,6 +138,7 @@ interface ActivityDoc {
 }
 
 const resolveImageUrl = imagePreviewUrl;
+const resolveAudioUrl = audioPreviewUrl;
 
 function isMac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');
@@ -1010,6 +1011,7 @@ export default function ActivityEditorIsland({
                 activeBlockId={activeBlockId}
                 selectedZoneId={selectedZoneId}
                 resolveImageUrl={resolveImageUrl}
+                resolveAudioUrl={resolveAudioUrl}
                 onSetActiveBlock={setActiveBlockId}
                 onSelectZone={setSelectedZoneId}
                 onBlocksChange={changeBlocks}
@@ -1052,6 +1054,7 @@ export default function ActivityEditorIsland({
             activeBlockId={activeBlockId}
             selectedZoneId={selectedZoneId}
             resolveImageUrl={resolveImageUrl}
+            resolveAudioUrl={resolveAudioUrl}
             onSetActiveBlock={setActiveBlockId}
             onSelectZone={setSelectedZoneId}
             onBlocksChange={changeBlocks}
