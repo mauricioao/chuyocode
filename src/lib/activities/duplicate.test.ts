@@ -14,12 +14,16 @@ const {
   createActivityMock,
   copyToUploadsBucketMock,
   countUserUploadsMock,
+  copyAudioToUploadsBucketMock,
+  countUserAudioUploadsMock,
   countState,
 } = vi.hoisted(() => ({
   getPublishedActivityMock: vi.fn(),
   createActivityMock: vi.fn(),
   copyToUploadsBucketMock: vi.fn(),
   countUserUploadsMock: vi.fn(),
+  copyAudioToUploadsBucketMock: vi.fn(),
+  countUserAudioUploadsMock: vi.fn(),
   countState: { result: { count: 0 as number | null, error: null as unknown }, available: true },
 }));
 
@@ -34,6 +38,8 @@ vi.mock('./storage', async (importOriginal) => {
     ...actual,
     copyToUploadsBucket: copyToUploadsBucketMock,
     countUserUploads: countUserUploadsMock,
+    copyAudioToUploadsBucket: copyAudioToUploadsBucketMock,
+    countUserAudioUploads: countUserAudioUploadsMock,
   };
 });
 
@@ -50,7 +56,7 @@ vi.mock('../supabase', () => ({
 }));
 
 import { duplicateActivity, buildDuplicateTitle, MAX_DUPLICATES_PER_DAY, clearDuplicateClient } from './duplicate';
-import { MAX_UPLOADS_PER_USER } from './storage';
+import { MAX_UPLOADS_PER_USER, MAX_AUDIO_UPLOADS_PER_USER } from './storage';
 
 const ORIGINAL_ID = 'a1a1a1a1-0000-4000-8000-000000000001';
 const CALLER_ID = 'b2b2b2b2-0000-4000-8000-000000000002';
@@ -89,6 +95,8 @@ beforeEach(() => {
   createActivityMock.mockResolvedValue('new-activity-id');
   copyToUploadsBucketMock.mockResolvedValue(true);
   countUserUploadsMock.mockResolvedValue(0);
+  copyAudioToUploadsBucketMock.mockResolvedValue(true);
+  countUserAudioUploadsMock.mockResolvedValue(0);
   clearDuplicateClient();
 });
 
@@ -239,6 +247,67 @@ describe('duplicateActivity', () => {
     const quiz = newBlocks[0] as Extract<Block, { type: 'quiz' }>;
     expect(quiz.id).not.toBe('quiz-1');
     expect(quiz.payload.slots[0].id).toBe('slot-1');
+  });
+
+  describe('audio markers', () => {
+    const AUDIO_PATH = `activity-audio/${ORIGINAL_ID}/a1a1a1a1-0000-4000-8000-0000000000a1.webm`;
+
+    function worksheetWithAudio() {
+      return originalActivity({
+        blocks: [
+          {
+            id: 'block-1',
+            type: 'worksheet',
+            rotation: 0,
+            image: { path: `activity-images/${ORIGINAL_ID}/f1f1f1f1-0000-4000-8000-0000000000f1.webp`, width: 800, height: 600 },
+            zones: [],
+            audio: [{ id: 'audio-1', x: 0.2, y: 0.3, path: AUDIO_PATH }],
+          },
+        ],
+      });
+    }
+
+    it('returns upload_limit when copying every audio marker would exceed its own per-user cap', async () => {
+      getPublishedActivityMock.mockResolvedValue(worksheetWithAudio());
+      countUserAudioUploadsMock.mockResolvedValue(MAX_AUDIO_UPLOADS_PER_USER);
+      const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(result).toEqual({ ok: false, error: 'upload_limit' });
+      expect(copyAudioToUploadsBucketMock).not.toHaveBeenCalled();
+    });
+
+    it('fails CLOSED to upload_limit when the audio upload count itself cannot be read', async () => {
+      getPublishedActivityMock.mockResolvedValue(worksheetWithAudio());
+      countUserAudioUploadsMock.mockResolvedValue(null);
+      const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(result).toEqual({ ok: false, error: 'upload_limit' });
+    });
+
+    it('returns copy_failed when the audio storage copy fails, never creating the activity', async () => {
+      getPublishedActivityMock.mockResolvedValue(worksheetWithAudio());
+      copyAudioToUploadsBucketMock.mockResolvedValue(false);
+      const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(result).toEqual({ ok: false, error: 'copy_failed' });
+      expect(createActivityMock).not.toHaveBeenCalled();
+    });
+
+    it("copies the audio marker into the caller's own audio-uploads folder and rewrites its path, with a fresh marker id", async () => {
+      getPublishedActivityMock.mockResolvedValue(worksheetWithAudio());
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(copyAudioToUploadsBucketMock).toHaveBeenCalledTimes(1);
+      const [fromPath, toPath] = copyAudioToUploadsBucketMock.mock.calls[0] as [string, string];
+      expect(fromPath).toBe(AUDIO_PATH);
+      expect(toPath.startsWith(`activity-audio-uploads/${CALLER_ID}/`)).toBe(true);
+
+      const newBlocks = createActivityMock.mock.calls[0][1].blocks as Block[];
+      const worksheet = newBlocks[0] as Extract<Block, { type: 'worksheet' }>;
+      expect(worksheet.audio?.[0]?.path).toBe(toPath);
+      expect(worksheet.audio?.[0]?.id).not.toBe('audio-1');
+    });
+
+    it('does not touch the audio bucket at all for a worksheet with no audio markers', async () => {
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(copyAudioToUploadsBucketMock).not.toHaveBeenCalled();
+    });
   });
 
   it('returns not_found without touching storage/create when the service client is unavailable', async () => {

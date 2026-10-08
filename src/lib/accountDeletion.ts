@@ -8,9 +8,9 @@
  *    (`supabase/migrations/0020_account_deletion.sql`; nothing below runs —
  *    the RPC's own transaction already rolled back, the account is exactly
  *    as it was)
- * 2. the user's private uploads folder cannot be   -> storage_cleanup_failed
- *    fully cleared (`removeAllUserUploads`)           (🔴 see below — the DB
- *                                                       purge above already
+ * 2. the user's private uploads folder (images OR  -> storage_cleanup_failed
+ *    audio markers) cannot be fully cleared            (🔴 see below — the DB
+ *    (`removeAllUserUploads`/`removeAllUserAudioUploads`) purge above already
  *                                                       committed)
  * 3. auth.admin.deleteUser fails                   -> delete_user_failed
  *                                                       (🔴 same note)
@@ -41,7 +41,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from './supabase';
-import { removeAllUserUploads } from './activities/storage';
+import { removeAllUserUploads, removeAllUserAudioUploads } from './activities/storage';
 
 /** The SQL function name — must match `0020_account_deletion.sql`. */
 const TRANSFER_AND_PURGE_RPC = 'transfer_and_purge_user';
@@ -88,6 +88,17 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
   // DB purge already committed at this point — see the 🔴 note above.
   const storageCleared = await removeAllUserUploads(userId);
   if (!storageCleared) {
+    return { ok: false, error: 'storage_cleanup_failed' };
+  }
+
+  // Same cleanup for the user's private audio-uploads folder (worksheet
+  // audio markers) — same reasoning as the image uploads above: once
+  // approved, a marker's revision is rewritten to point at the PUBLIC
+  // `activity-audio/<activityId>/…` copy (`copyToAudioBucket`, called from
+  // `approveRevision`), so nothing a transferred/live activity still plays
+  // ever lives in this bucket.
+  const audioStorageCleared = await removeAllUserAudioUploads(userId);
+  if (!audioStorageCleared) {
     return { ok: false, error: 'storage_cleanup_failed' };
   }
 

@@ -60,6 +60,17 @@ import {
   IMAGES_BUCKET,
   uploadPath,
   approvedImagePath,
+  signedAudioReadUrl,
+  uploadToAudioUploadsBucket,
+  countUserAudioUploads,
+  removeAllUserAudioUploads,
+  copyToAudioBucket,
+  copyAudioToUploadsBucket,
+  MAX_AUDIO_UPLOADS_PER_USER,
+  AUDIO_UPLOADS_BUCKET,
+  AUDIO_BUCKET,
+  uploadAudioPath,
+  approvedAudioPath,
 } from './storage';
 
 const USER = 'a1b2c3d4-0000-4000-8000-000000000001';
@@ -339,5 +350,244 @@ describe('copyToUploadsBucket', () => {
   it('returns false when the service-role key is unconfigured', async () => {
     clientState.available = false;
     expect(await copyToUploadsBucket(from, to)).toBe(false);
+  });
+});
+
+const AUDIO_OBJECT = 'd4e5f6a7-0000-4000-8000-0000000000bb';
+
+describe('signedAudioReadUrl', () => {
+  it('signs a read URL for an audio-uploads path', async () => {
+    const url = await signedAudioReadUrl(uploadAudioPath(USER, AUDIO_OBJECT, 'webm'));
+    expect(url).toBe('https://signed/read');
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_UPLOADS_BUCKET);
+  });
+
+  it('signs a read URL for an audio (approved) path', async () => {
+    const url = await signedAudioReadUrl(approvedAudioPath(USER, AUDIO_OBJECT, 'mp3'));
+    expect(url).toBe('https://signed/read');
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_BUCKET);
+  });
+
+  it('returns null for a malformed path, without calling the client', async () => {
+    expect(await signedAudioReadUrl('../../etc/passwd')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the client errors', async () => {
+    results.createSignedUrl = { data: null, error: { message: 'down' } };
+    expect(await signedAudioReadUrl(uploadAudioPath(USER, AUDIO_OBJECT, 'webm'))).toBeNull();
+  });
+
+  it('returns null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await signedAudioReadUrl(uploadAudioPath(USER, AUDIO_OBJECT, 'webm'))).toBeNull();
+  });
+});
+
+describe('uploadToAudioUploadsBucket', () => {
+  const bytes = new Uint8Array([1, 2, 3]);
+
+  it('uploads to the caller-derived path (extension from content-type) and returns it', async () => {
+    const path = await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/webm');
+    expect(path).toBe(uploadAudioPath(USER, AUDIO_OBJECT, 'webm'));
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_UPLOADS_BUCKET);
+    expect(fromMock.upload).toHaveBeenCalledWith(`${USER}/${AUDIO_OBJECT}.webm`, bytes, {
+      contentType: 'audio/webm',
+      upsert: false,
+    });
+  });
+
+  it('maps every accepted content-type to its own extension', async () => {
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/mp4')).toBe(
+      uploadAudioPath(USER, AUDIO_OBJECT, 'm4a'),
+    );
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/x-m4a')).toBe(
+      uploadAudioPath(USER, AUDIO_OBJECT, 'm4a'),
+    );
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/mpeg')).toBe(
+      uploadAudioPath(USER, AUDIO_OBJECT, 'mp3'),
+    );
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/ogg')).toBe(
+      uploadAudioPath(USER, AUDIO_OBJECT, 'ogg'),
+    );
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/wav')).toBe(
+      uploadAudioPath(USER, AUDIO_OBJECT, 'wav'),
+    );
+  });
+
+  it('returns null for an unrecognized content-type, without calling the client', async () => {
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/flac')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null for a malformed id', async () => {
+    expect(await uploadToAudioUploadsBucket(USER, 'not-a-uuid', bytes, 'audio/webm')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the upload fails', async () => {
+    results.upload = { data: null, error: { message: 'bucket full' } };
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/webm')).toBeNull();
+  });
+
+  it('returns null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await uploadToAudioUploadsBucket(USER, AUDIO_OBJECT, bytes, 'audio/webm')).toBeNull();
+  });
+});
+
+describe('countUserAudioUploads', () => {
+  it('counts the objects listed in the user audio-uploads folder', async () => {
+    results.list = { data: [{ name: 'a' }, { name: 'b' }], error: null };
+    expect(await countUserAudioUploads(USER)).toBe(2);
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_UPLOADS_BUCKET);
+    expect(fromMock.list).toHaveBeenCalledWith(USER, { limit: MAX_AUDIO_UPLOADS_PER_USER });
+  });
+
+  it('returns null for a malformed userId', async () => {
+    expect(await countUserAudioUploads('not-a-uuid')).toBeNull();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED to null on a list error', async () => {
+    results.list = { data: null, error: { message: 'down' } };
+    expect(await countUserAudioUploads(USER)).toBeNull();
+  });
+
+  it('fails CLOSED to null when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await countUserAudioUploads(USER)).toBeNull();
+  });
+});
+
+describe('removeAllUserAudioUploads', () => {
+  it('lists then removes every object in the user audio-uploads folder', async () => {
+    results.list = { data: [{ name: 'a.webm' }, { name: 'b.webm' }], error: null };
+    expect(await removeAllUserAudioUploads(USER)).toBe(true);
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_UPLOADS_BUCKET);
+    expect(fromMock.remove).toHaveBeenCalledWith([`${USER}/a.webm`, `${USER}/b.webm`]);
+  });
+
+  it('returns true for an already-empty folder, without calling remove', async () => {
+    results.list = { data: [], error: null };
+    expect(await removeAllUserAudioUploads(USER)).toBe(true);
+    expect(fromMock.remove).not.toHaveBeenCalled();
+  });
+
+  it('paginates past the MAX_AUDIO_UPLOADS_PER_USER list limit', async () => {
+    const page1 = Array.from({ length: MAX_AUDIO_UPLOADS_PER_USER }, (_, i) => ({ name: `obj-${i}.webm` }));
+    const page2 = [{ name: 'obj-last.webm' }];
+    fromMock.list
+      .mockResolvedValueOnce({ data: page1, error: null })
+      .mockResolvedValueOnce({ data: page2, error: null });
+
+    expect(await removeAllUserAudioUploads(USER)).toBe(true);
+    expect(fromMock.list).toHaveBeenCalledTimes(2);
+    expect(fromMock.remove).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns false for a malformed userId', async () => {
+    expect(await removeAllUserAudioUploads('not-a-uuid')).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED to false on a list error', async () => {
+    results.list = { data: null, error: { message: 'down' } };
+    expect(await removeAllUserAudioUploads(USER)).toBe(false);
+  });
+
+  it('fails CLOSED to false on a remove error', async () => {
+    results.list = { data: [{ name: 'a.webm' }], error: null };
+    results.remove = { data: null, error: { message: 'denied' } };
+    expect(await removeAllUserAudioUploads(USER)).toBe(false);
+  });
+
+  it('fails CLOSED to false when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await removeAllUserAudioUploads(USER)).toBe(false);
+  });
+});
+
+describe('copyToAudioBucket', () => {
+  const activityId = 'b2c3d4e5-0000-4000-8000-000000000002';
+  const from = uploadAudioPath(USER, AUDIO_OBJECT, 'webm');
+  const to = approvedAudioPath(activityId, AUDIO_OBJECT, 'webm');
+
+  it('copies from the audio-uploads bucket to the audio bucket, destination-bucket only', async () => {
+    const ok = await copyToAudioBucket(from, to);
+    expect(ok).toBe(true);
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_BUCKET);
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_UPLOADS_BUCKET);
+    expect(fromMock.copy).toHaveBeenCalledWith(
+      `${USER}/${AUDIO_OBJECT}.webm`,
+      `${activityId}/${AUDIO_OBJECT}.webm`,
+      { destinationBucket: AUDIO_BUCKET },
+    );
+  });
+
+  it('is idempotent: skips the copy when the target already exists', async () => {
+    results.list = { data: [{ name: `${AUDIO_OBJECT}.webm` }], error: null };
+    const ok = await copyToAudioBucket(from, to);
+    expect(ok).toBe(true);
+    expect(fromMock.copy).not.toHaveBeenCalled();
+  });
+
+  it('returns false when fromPath is not an audio-uploads-bucket path', async () => {
+    expect(await copyToAudioBucket(to, to)).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false when toPath is not an audio-bucket path', async () => {
+    expect(await copyToAudioBucket(from, from)).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false when the copy fails', async () => {
+    results.copy = { data: null, error: { message: 'denied' } };
+    expect(await copyToAudioBucket(from, to)).toBe(false);
+  });
+
+  it('returns false when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await copyToAudioBucket(from, to)).toBe(false);
+  });
+});
+
+describe('copyAudioToUploadsBucket', () => {
+  const activityId = 'b2c3d4e5-0000-4000-8000-000000000002';
+  const otherUser = 'c3d4e5f6-0000-4000-8000-000000000003';
+  const newObject = 'a9b8c7d6-0000-4000-8000-0000000000aa';
+  const from = approvedAudioPath(activityId, AUDIO_OBJECT, 'webm');
+  const to = uploadAudioPath(otherUser, newObject, 'webm');
+
+  it('copies from the audio bucket to the audio-uploads bucket, destination-bucket only', async () => {
+    const ok = await copyAudioToUploadsBucket(from, to);
+    expect(ok).toBe(true);
+    expect(fromMock).toHaveBeenCalledWith(AUDIO_BUCKET);
+    expect(fromMock.copy).toHaveBeenCalledWith(
+      `${activityId}/${AUDIO_OBJECT}.webm`,
+      `${otherUser}/${newObject}.webm`,
+      { destinationBucket: AUDIO_UPLOADS_BUCKET },
+    );
+  });
+
+  it('returns false when fromPath is not an audio-bucket path', async () => {
+    expect(await copyAudioToUploadsBucket(to, to)).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false when toPath is not an audio-uploads-bucket path', async () => {
+    expect(await copyAudioToUploadsBucket(from, from)).toBe(false);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false when the copy fails', async () => {
+    results.copy = { data: null, error: { message: 'denied' } };
+    expect(await copyAudioToUploadsBucket(from, to)).toBe(false);
+  });
+
+  it('returns false when the service-role key is unconfigured', async () => {
+    clientState.available = false;
+    expect(await copyAudioToUploadsBucket(from, to)).toBe(false);
   });
 });

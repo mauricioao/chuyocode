@@ -67,12 +67,28 @@ const OTHER_UPLOAD_PATH =
 const THIS_ACTIVITY_IMAGE_PATH = `activity-images/${ACTIVITY_ID}/33333333-3333-3333-3333-333333333333.webp`;
 const OTHER_ACTIVITY_IMAGE_PATH = `activity-images/${OTHER_ACTIVITY_ID}/33333333-3333-3333-3333-333333333333.webp`;
 
+const OWN_AUDIO_UPLOAD_PATH = `activity-audio-uploads/${AUTHOR.id}/aaaaaaaa-0000-4000-8000-0000000000aa.webm`;
+const OTHER_AUDIO_UPLOAD_PATH =
+  'activity-audio-uploads/44444444-4444-4444-4444-444444444444/aaaaaaaa-0000-4000-8000-0000000000aa.webm';
+const THIS_ACTIVITY_AUDIO_PATH = `activity-audio/${ACTIVITY_ID}/aaaaaaaa-0000-4000-8000-0000000000aa.webm`;
+const OTHER_ACTIVITY_AUDIO_PATH = `activity-audio/${OTHER_ACTIVITY_ID}/aaaaaaaa-0000-4000-8000-0000000000aa.webm`;
+
 function worksheetBlock(path: string) {
   return {
     id: 'block-1',
     type: 'worksheet',
     image: { path, width: 800, height: 600 },
     zones: [],
+  };
+}
+
+function worksheetBlockWithAudio(imagePath: string, audioPath: string) {
+  return {
+    id: 'block-1',
+    type: 'worksheet',
+    image: { path: imagePath, width: 800, height: 600 },
+    zones: [],
+    audio: [{ id: 'audio-1', x: 0.2, y: 0.3, path: audioPath }],
   };
 }
 
@@ -312,6 +328,53 @@ describe('POST /api/actividades/[id]/guardar — image ownership', () => {
     const res = await POST(
       ctx({ body: saveInput({ blocks: [worksheetBlock(THIS_ACTIVITY_IMAGE_PATH)] }) }),
     );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/actividades/[id]/guardar — audio marker ownership', () => {
+  it("422s an audio marker that is neither the caller's own upload nor this activity's own audio path", async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({
+          blocks: [worksheetBlockWithAudio(OWN_UPLOAD_PATH, OTHER_AUDIO_UPLOAD_PATH)],
+        }),
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_audio_path');
+  });
+
+  it('422s an activity-audio path that belongs to a DIFFERENT activity', async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({
+          blocks: [worksheetBlockWithAudio(OWN_UPLOAD_PATH, OTHER_ACTIVITY_AUDIO_PATH)],
+        }),
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_audio_path');
+  });
+
+  it("accepts the caller's own audio upload path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [worksheetBlockWithAudio(OWN_UPLOAD_PATH, OWN_AUDIO_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts THIS activity's own activity-audio path", async () => {
+    const res = await POST(
+      ctx({
+        body: saveInput({ blocks: [worksheetBlockWithAudio(OWN_UPLOAD_PATH, THIS_ACTIVITY_AUDIO_PATH)] }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts a worksheet with no audio markers at all (backward compatible)', async () => {
+    const res = await POST(ctx({ body: saveInput({ blocks: [worksheetBlock(OWN_UPLOAD_PATH)] }) }));
     expect(res.status).toBe(200);
   });
 });

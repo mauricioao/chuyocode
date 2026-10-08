@@ -68,7 +68,7 @@ import {
   clearModerationClient,
 } from './moderation';
 import type { Block } from './blocks';
-import { UPLOADS_BUCKET } from './paths';
+import { UPLOADS_BUCKET, AUDIO_UPLOADS_BUCKET } from './paths';
 
 const AUTHOR = 'a1a1a1a1-0000-4000-8000-000000000001';
 const OTHER_USER = 'b2b2b2b2-0000-4000-8000-000000000002';
@@ -87,6 +87,13 @@ function worksheetBlocks(imagePath: string): Block[] {
       zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['hola'] }],
     },
   ];
+}
+
+const AUDIO_ID = 'a7a7a7a7-0000-4000-8000-000000000007';
+
+function worksheetBlocksWithAudio(imagePath: string, audioPath: string): Block[] {
+  const [block] = worksheetBlocks(imagePath);
+  return [{ ...(block as Extract<Block, { type: 'worksheet' }>), audio: [{ id: 'a1', x: 0.5, y: 0.5, path: audioPath }] }];
 }
 
 beforeEach(() => {
@@ -389,6 +396,82 @@ describe('approveRevision', () => {
     expect(state.rpcCalls).toHaveLength(0);
 
     copySpy.mockRestore();
+  });
+
+  it("refuses an audio marker referencing another user's audio-uploads folder", async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: worksheetBlocksWithAudio(
+          `${UPLOADS_BUCKET}/${AUTHOR}/${IMAGE_ID}.webp`,
+          `${AUDIO_UPLOADS_BUCKET}/${OTHER_USER}/${AUDIO_ID}.webm`,
+        ),
+      },
+      error: null,
+    });
+    const result = await approveRevision(REVISION, REVIEWER);
+    expect(result).toEqual({ ok: false, error: 'foreign_upload' });
+  });
+
+  it('approves: copies the own-uploaded audio marker and calls the RPC with its rewritten path', async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: worksheetBlocksWithAudio(
+          `${UPLOADS_BUCKET}/${AUTHOR}/${IMAGE_ID}.webp`,
+          `${AUDIO_UPLOADS_BUCKET}/${AUTHOR}/${AUDIO_ID}.webm`,
+        ),
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const imageCopySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+    const audioCopySpy = vi.spyOn(storageModule, 'copyToAudioBucket').mockResolvedValue(true);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+    expect(result).toEqual({ ok: true });
+    expect(audioCopySpy).toHaveBeenCalledWith(
+      `${AUDIO_UPLOADS_BUCKET}/${AUTHOR}/${AUDIO_ID}.webm`,
+      `activity-audio/${ACTIVITY}/${AUDIO_ID}.webm`,
+    );
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    const blocks = args.p_blocks as Array<{ audio?: Array<{ path: string }> }>;
+    expect(blocks[0].audio?.[0]?.path).toBe(`activity-audio/${ACTIVITY}/${AUDIO_ID}.webm`);
+
+    imageCopySpy.mockRestore();
+    audioCopySpy.mockRestore();
+  });
+
+  it('returns copy_failed when the audio storage copy fails, never calling the RPC', async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: worksheetBlocksWithAudio(
+          `${UPLOADS_BUCKET}/${AUTHOR}/${IMAGE_ID}.webp`,
+          `${AUDIO_UPLOADS_BUCKET}/${AUTHOR}/${AUDIO_ID}.webm`,
+        ),
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const imageCopySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+    const audioCopySpy = vi.spyOn(storageModule, 'copyToAudioBucket').mockResolvedValue(false);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+    expect(result).toEqual({ ok: false, error: 'copy_failed' });
+    expect(state.rpcCalls).toHaveLength(0);
+
+    imageCopySpy.mockRestore();
+    audioCopySpy.mockRestore();
   });
 
   it('returns approve_failed when the RPC errors', async () => {

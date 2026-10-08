@@ -7,16 +7,22 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { rpcMock, deleteUserMock, removeAllUserUploadsMock, clientState } = vi.hoisted(() => ({
-  rpcMock: vi.fn(),
-  deleteUserMock: vi.fn(),
-  removeAllUserUploadsMock: vi.fn(),
-  clientState: { available: true },
-}));
+const { rpcMock, deleteUserMock, removeAllUserUploadsMock, removeAllUserAudioUploadsMock, clientState } =
+  vi.hoisted(() => ({
+    rpcMock: vi.fn(),
+    deleteUserMock: vi.fn(),
+    removeAllUserUploadsMock: vi.fn(),
+    removeAllUserAudioUploadsMock: vi.fn(),
+    clientState: { available: true },
+  }));
 
 vi.mock('./activities/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./activities/storage')>();
-  return { ...actual, removeAllUserUploads: removeAllUserUploadsMock };
+  return {
+    ...actual,
+    removeAllUserUploads: removeAllUserUploadsMock,
+    removeAllUserAudioUploads: removeAllUserAudioUploadsMock,
+  };
 });
 
 vi.mock('./supabase', () => ({
@@ -40,12 +46,13 @@ beforeEach(() => {
   clientState.available = true;
   rpcMock.mockResolvedValue({ data: null, error: null });
   removeAllUserUploadsMock.mockResolvedValue(true);
+  removeAllUserAudioUploadsMock.mockResolvedValue(true);
   deleteUserMock.mockResolvedValue({ data: {}, error: null });
   clearAccountDeletionClient();
 });
 
 describe('deleteAccount — success', () => {
-  it('calls the RPC, clears storage, then deletes the auth user, in that order', async () => {
+  it('calls the RPC, clears image storage, clears audio storage, then deletes the auth user, in that order', async () => {
     const calls: string[] = [];
     rpcMock.mockImplementation(async () => {
       calls.push('rpc');
@@ -53,6 +60,10 @@ describe('deleteAccount — success', () => {
     });
     removeAllUserUploadsMock.mockImplementation(async () => {
       calls.push('storage');
+      return true;
+    });
+    removeAllUserAudioUploadsMock.mockImplementation(async () => {
+      calls.push('audio-storage');
       return true;
     });
     deleteUserMock.mockImplementation(async () => {
@@ -63,7 +74,7 @@ describe('deleteAccount — success', () => {
     const result = await deleteAccount(USER_ID);
 
     expect(result).toEqual({ ok: true });
-    expect(calls).toEqual(['rpc', 'storage', 'deleteUser']);
+    expect(calls).toEqual(['rpc', 'storage', 'audio-storage', 'deleteUser']);
   });
 
   it('calls the RPC with p_user set to the given userId', async () => {
@@ -71,9 +82,14 @@ describe('deleteAccount — success', () => {
     expect(rpcMock).toHaveBeenCalledWith('transfer_and_purge_user', { p_user: USER_ID });
   });
 
-  it('clears storage for the given userId', async () => {
+  it('clears image storage for the given userId', async () => {
     await deleteAccount(USER_ID);
     expect(removeAllUserUploadsMock).toHaveBeenCalledWith(USER_ID);
+  });
+
+  it('clears audio storage for the given userId', async () => {
+    await deleteAccount(USER_ID);
+    expect(removeAllUserAudioUploadsMock).toHaveBeenCalledWith(USER_ID);
   });
 
   it('deletes the auth user by the given userId', async () => {
@@ -112,17 +128,28 @@ describe('deleteAccount — failures stop everything after them', () => {
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it('returns storage_cleanup_failed and never calls deleteUser when storage cleanup fails (RPC already ran)', async () => {
+  it('returns storage_cleanup_failed and never calls audio cleanup or deleteUser when image storage cleanup fails (RPC already ran)', async () => {
     removeAllUserUploadsMock.mockResolvedValue(false);
 
     const result = await deleteAccount(USER_ID);
 
     expect(result).toEqual({ ok: false, error: 'storage_cleanup_failed' });
     expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(removeAllUserAudioUploadsMock).not.toHaveBeenCalled();
     expect(deleteUserMock).not.toHaveBeenCalled();
   });
 
-  it('returns delete_user_failed when auth.admin.deleteUser errors (RPC and storage already ran)', async () => {
+  it('returns storage_cleanup_failed and never calls deleteUser when audio storage cleanup fails (image storage already cleared)', async () => {
+    removeAllUserAudioUploadsMock.mockResolvedValue(false);
+
+    const result = await deleteAccount(USER_ID);
+
+    expect(result).toEqual({ ok: false, error: 'storage_cleanup_failed' });
+    expect(removeAllUserUploadsMock).toHaveBeenCalledTimes(1);
+    expect(deleteUserMock).not.toHaveBeenCalled();
+  });
+
+  it('returns delete_user_failed when auth.admin.deleteUser errors (RPC and both storage cleanups already ran)', async () => {
     deleteUserMock.mockResolvedValue({ data: null, error: { message: 'gone' } });
 
     const result = await deleteAccount(USER_ID);
@@ -130,6 +157,7 @@ describe('deleteAccount — failures stop everything after them', () => {
     expect(result).toEqual({ ok: false, error: 'delete_user_failed' });
     expect(rpcMock).toHaveBeenCalledTimes(1);
     expect(removeAllUserUploadsMock).toHaveBeenCalledTimes(1);
+    expect(removeAllUserAudioUploadsMock).toHaveBeenCalledTimes(1);
   });
 
   it('returns delete_user_failed when auth.admin.deleteUser throws', async () => {
