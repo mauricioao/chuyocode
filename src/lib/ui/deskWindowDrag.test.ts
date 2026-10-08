@@ -260,53 +260,30 @@ describe('initDeskWindowDrag — double-wiring guard', () => {
   });
 });
 
-// Window-manager architecture: embedded, there is no local window box to
-// translate — the title bar posts SCREEN-space deltas to the host instead
-// (`screenX`/`screenY`, never `clientX`/`clientY` — those are relative to
-// THIS iframe's own viewport and meaningless once the drag crosses the
-// frame boundary into the host document).
-describe('initDeskWindowDrag — embedded mode (posts screen deltas to the host)', () => {
-  function fakeEmbeddedWin(posted: Array<{ message: unknown; origin: string }>) {
-    const win = fakeWin();
-    (win as unknown as { location: unknown }).location = { origin: 'https://example.test' };
-    (win as unknown as { parent: unknown }).parent = {
-      postMessage: (message: unknown, origin: string) => posted.push({ message, origin }),
-    };
-    return win;
-  }
-
+// Structural fix (owner report: real-mouse shake — in-iframe drag produced
+// unstable coordinates with a real mouse, even though synthetic test input
+// was perfectly monotonic): dragging an embedded window is entirely
+// HOST-side now (`@lib/ui/deskWindowManager.ts#syncTitlebarDragHandles`,
+// `@lib/deskWindowTitlebarRegions`) — this module wires NOTHING at all for
+// an embedded title bar any more, not even a `postMessage`.
+describe('initDeskWindowDrag — embedded mode is a no-op (dragging is host-only now)', () => {
   afterEach(() => {
     document.documentElement.removeAttribute('data-desk-window-embedded');
   });
 
-  it('posts drag-start/drag-move/drag-end with screen-space deltas, and never sets a local translate', () => {
+  it('wires no pointer handling and posts nothing — the host drags this window from outside the iframe', () => {
     document.documentElement.setAttribute('data-desk-window-embedded', '');
-    const posted: Array<{ message: unknown; origin: string }> = [];
-    const win = fakeEmbeddedWin(posted);
+    const win = fakeWin();
+    (win as unknown as { location: unknown }).location = { origin: 'https://example.test' };
+    const posted: unknown[] = [];
+    (win as unknown as { parent: unknown }).parent = { postMessage: (m: unknown) => posted.push(m) };
     initDeskWindowDrag(windowEl(), document, win);
 
-    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200 }));
-    titlebarEl().dispatchEvent(new MouseEvent('pointermove', { screenX: 140, screenY: 170 }));
-    titlebarEl().dispatchEvent(new MouseEvent('pointerup', { screenX: 140, screenY: 170 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200, clientX: 100, clientY: 200 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointermove', { screenX: 140, screenY: 170, clientX: 140, clientY: 170 }));
+    titlebarEl().dispatchEvent(new MouseEvent('pointerup', { screenX: 140, screenY: 170, clientX: 140, clientY: 170 }));
 
     expect(windowEl().style.translate).toBe('');
-    expect(posted.map((p) => p.message)).toEqual([
-      { source: 'desk-window', type: 'drag-start' },
-      { source: 'desk-window', type: 'drag-move', dx: 40, dy: -30 },
-      { source: 'desk-window', type: 'drag-end' },
-    ]);
-    expect(posted.every((p) => p.origin === 'https://example.test')).toBe(true);
-  });
-
-  it('still respects the breakpoint/fullscreen guards when embedded', () => {
-    document.documentElement.setAttribute('data-desk-window-embedded', '');
-    windowEl().setAttribute('data-fullscreen', 'true');
-    const posted: Array<{ message: unknown; origin: string }> = [];
-    const win = fakeEmbeddedWin(posted);
-    initDeskWindowDrag(windowEl(), document, win);
-
-    titlebarEl().dispatchEvent(new MouseEvent('pointerdown', { screenX: 100, screenY: 200 }));
-
     expect(posted).toEqual([]);
   });
 });

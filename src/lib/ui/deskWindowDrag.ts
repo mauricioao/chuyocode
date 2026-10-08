@@ -16,6 +16,12 @@
  * dragging only ever sets the CSS `translate` property (NOT `transform`,
  * which the window's own open-animation keyframe already animates) as an
  * offset on top of that default box.
+ *
+ * EMBEDDED (window-manager architecture): this module is a NO-OP there now
+ * — see {@link initDeskWindowDrag}'s own header on the embedded branch.
+ * Dragging an embedded window happens entirely host-side,
+ * `@lib/ui/deskWindowManager.ts#syncTitlebarDragHandles`/
+ * `@lib/deskWindowTitlebarRegions`.
  */
 import {
   clampWindowDragOffset,
@@ -25,7 +31,7 @@ import {
   type Offset,
   type WindowRect,
 } from '../deskWindowDragMath';
-import { isEmbeddedWindowDom, postDeskWindowMessage } from './deskWindowMessaging';
+import { isEmbeddedWindowDom } from './deskWindowMessaging';
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 const TITLEBAR_SELECTOR = '[data-desk-window-titlebar]';
@@ -77,40 +83,21 @@ export function initDeskWindowDrag(windowEl: HTMLElement, doc: Document = docume
   const titlebar = windowEl.querySelector<HTMLElement>(TITLEBAR_SELECTOR);
   if (!titlebar) return;
 
-  // EMBEDDED (window-manager architecture, validated prototype: a title bar
-  // INSIDE an iframe can drag its PARENT frame — the iframe captures the
-  // pointer and posts screen-space deltas, `screenX`/`screenY` — never
-  // `clientX`/`clientY`, which are relative to the iframe's own viewport and
-  // meaningless once the drag crosses the frame boundary; the host applies
-  // them as a `translate` on its own frame element instead). No local
-  // `translate`/`sessionStorage` at all here — there is nothing of this
-  // window's own box to move (it already fills the iframe), and the host
-  // keeps the offset in memory for the life of the window.
-  if (isEmbeddedWindowDom(doc)) {
-    titlebar.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || !isDesktop(win) || isFullScreen(windowEl)) return;
-      const target = event.target;
-      if (target instanceof Element && target.closest(IGNORE_SELECTOR)) return;
-
-      event.preventDefault();
-      const startX = event.screenX;
-      const startY = event.screenY;
-      titlebar.setPointerCapture(event.pointerId);
-      postDeskWindowMessage(win, { type: 'drag-start' });
-
-      function move(ev: PointerEvent): void {
-        postDeskWindowMessage(win, { type: 'drag-move', dx: ev.screenX - startX, dy: ev.screenY - startY });
-      }
-      function up(): void {
-        titlebar!.removeEventListener('pointermove', move);
-        titlebar!.removeEventListener('pointerup', up);
-        postDeskWindowMessage(win, { type: 'drag-end' });
-      }
-      titlebar.addEventListener('pointermove', move);
-      titlebar.addEventListener('pointerup', up, { once: true });
-    });
-    return;
-  }
+  // EMBEDDED (window-manager architecture): host-only now. Structural fix
+  // (owner report: "el arrastre de las ventanas no es suave como el de los
+  // widgets, tiembla demasiado") — the title bar used to drag its own
+  // PARENT frame from INSIDE the iframe (pointer capture here, posting
+  // `screenX`/`screenY` deltas to the host). Synthetic test input showed
+  // perfectly monotonic deltas, but with a REAL mouse in Chromium/Brave the
+  // coordinates of pointer events inside an iframe that is itself moving
+  // under the pointer are unstable, so the window visibly shook. The host's
+  // own window manager (`@lib/ui/deskWindowManager.ts
+  // #syncTitlebarDragHandles`) now drags this window entirely from OUTSIDE
+  // the iframe, with transparent handles positioned directly over the title
+  // bar's own draggable regions (same-origin direct measurement, no
+  // `postMessage` round trip) — there is nothing left for the EMBEDDED
+  // document itself to wire.
+  if (isEmbeddedWindowDom(doc)) return;
 
   let offset: Offset = { x: 0, y: 0 };
 

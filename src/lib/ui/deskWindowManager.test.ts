@@ -85,6 +85,7 @@ let handle: DeskWindowManagerHandle | null;
 
 beforeEach(() => {
   stubRects();
+  (Element.prototype as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture = vi.fn();
   document.body.innerHTML = '<header data-chrome-header></header>';
   document.body.className = '';
   container = document.createElement('div');
@@ -413,17 +414,41 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(frame.wrapper.hasAttribute('inert')).toBe(true);
   });
 
-  it('drag-start/drag-move/drag-end moves the wrapper and commits the offset', () => {
+  /** Loads a genuine desk-window document into `iframe` with a title bar of
+   * the given size (own-property `getBoundingClientRect` override — jsdom's
+   * iframe document is its own realm, so a top-level `Element.prototype`
+   * stub never reaches it), so `syncTitlebarDragHandles` finds something
+   * real to measure and builds a drag handle on the HOST wrapper. */
+  function loadWindowWithTitlebar(iframe: HTMLIFrameElement, rect = { width: 300, height: 40 }): void {
+    const innerDoc = iframe.contentDocument!;
+    innerDoc.open();
+    innerDoc.write('<!doctype html><html><body><div data-desk-window></div><div data-desk-window-titlebar></div></body></html>');
+    innerDoc.close();
+    const titlebar = innerDoc.querySelector('[data-desk-window-titlebar]') as HTMLElement;
+    titlebar.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, width: rect.width, height: rect.height, top: 0, left: 0, right: rect.width, bottom: rect.height, toJSON() {} }) as DOMRect;
+    iframe.dispatchEvent(new Event('load'));
+  }
+
+  // Structural fix (owner report: "el arrastre de las ventanas no es suave
+  // ... tiembla demasiado" — real-mouse jitter from dragging inside a moving
+  // iframe): dragging is entirely HOST-side now, via a transparent handle
+  // positioned over the title bar's own measured region.
+  it('dragging a title bar handle moves the wrapper and commits the offset', () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
     const frame = frameFor('community')!;
+    loadWindowWithTitlebar(frame.iframe);
 
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-start' }, frame.iframe.contentWindow);
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-move', dx: 40, dy: 10 }, frame.iframe.contentWindow);
+    const dragHandle = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]');
+    expect(dragHandle).not.toBeNull();
+
+    dragHandle!.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100 }));
+    dragHandle!.dispatchEvent(new MouseEvent('pointermove', { clientX: 140, clientY: 110 }));
     expect(frame.wrapper.style.translate).toBe('40px 10px');
 
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-end' }, frame.iframe.contentWindow);
+    dragHandle!.dispatchEvent(new MouseEvent('pointerup', { clientX: 140, clientY: 110 }));
     // Committed into state — a later render (e.g. opening another window, which cascades off the topmost one) reflects it.
     handle.openWindow('/es/crear', 'Crear actividad');
     const second = frameFor('create')!;
@@ -431,7 +456,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
   });
 
   it('a long drag past the top-left corner stops exactly at the 8px edge margin', () => {
-    // Like a real browser: the measured rect moves with the applied `translate`.
+    // Like a real browser: the measured WRAPPER rect moves with the applied `translate`.
     Element.prototype.getBoundingClientRect = function (this: Element) {
       const [tx = 0, ty = 0] = ((this as HTMLElement).style?.translate || '0px 0px').split(' ').map((v) => Number.parseFloat(v) || 0);
       const r = { ...WRAPPER_RECT, left: WRAPPER_RECT.left + tx, top: WRAPPER_RECT.top + ty };
@@ -442,14 +467,50 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
     const frame = frameFor('community')!;
     frame.wrapper.style.translate = '';
+    loadWindowWithTitlebar(frame.iframe);
 
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-start' }, frame.iframe.contentWindow);
+    const dragHandle = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]')!;
+    dragHandle.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0 }));
     for (let step = 1; step <= 25; step++) {
-      win.dispatchMessage({ source: 'desk-window', type: 'drag-move', dx: -12 * step, dy: -12 * step }, frame.iframe.contentWindow);
+      dragHandle.dispatchEvent(new MouseEvent('pointermove', { clientX: -12 * step, clientY: -12 * step }));
     }
 
     // WRAPPER_RECT sits at left 64 / top 76 untranslated: 8 - 64, 8 - 76.
     expect(frame.wrapper.style.translate).toBe('-56px -68px');
+  });
+
+  it('never rebuilds the dragged window\'s own handle mid-drag, even when the drag\'s own "focus" dispatch re-renders every window', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad'); // not yet topmost once "Crear actividad" opens below
+    const community = frameFor('community')!;
+    loadWindowWithTitlebar(community.iframe);
+    handle.openWindow('/es/crear', 'Crear actividad'); // now topmost
+    loadWindowWithTitlebar(frameFor('create')!.iframe);
+
+    const dragHandle = community.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]')!;
+    // Pressing down on the BACKGROUND window's handle focuses it (a real
+    // state change — top-of-stack changes) — the resulting `render()` must
+    // not replace this exact node, or the pointer capture about to be
+    // requested on it would be silently dropped.
+    dragHandle.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100 }));
+    expect(community.wrapper.querySelector('[data-desk-window-drag-handle]')).toBe(dragHandle);
+
+    dragHandle.dispatchEvent(new MouseEvent('pointermove', { clientX: 150, clientY: 100 }));
+    expect(community.wrapper.style.translate).toBe('50px 0px');
+  });
+
+  it('double-clicking a title bar drag handle toggles maximize', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+    loadWindowWithTitlebar(frame.iframe);
+
+    const dragHandle = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]')!;
+    dragHandle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+    expect(frame.wrapper.style.inset).toBe('0px');
   });
 });
 
