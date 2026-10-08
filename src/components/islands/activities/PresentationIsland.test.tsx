@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { Block } from '@/lib/activities/blocks';
@@ -285,6 +285,44 @@ describe('PresentationIsland — the worksheet zoom tour (worksheet-only deck)',
     // next advances to the summary.
     next();
     expect(screen.getByTestId('presentation-slide-summary')).toBeTruthy();
+  });
+});
+
+describe('PresentationIsland — audio markers ("colocar un audio propio")', () => {
+  beforeEach(() => {
+    vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  });
+
+  it('renders a play button on the overview slide for each audio marker', () => {
+    const withAudio: Block = {
+      ...WORKSHEET_BLOCK,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    render(<PresentationIsland {...BASE_PROPS} blocks={[withAudio]} />);
+    expect(screen.getByTestId('presentation-overview-audio-a1')).toBeTruthy();
+  });
+
+  it('never shows an audio marker once past the overview (zoomed into a zone)', () => {
+    const withAudio: Block = {
+      ...WORKSHEET_BLOCK,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    render(<PresentationIsland {...BASE_PROPS} blocks={[withAudio]} />);
+    next();
+    expect(screen.queryByTestId('presentation-overview-audio-a1')).toBeNull();
+  });
+
+  it('clicking the marker plays it', async () => {
+    const withAudio: Block = {
+      ...WORKSHEET_BLOCK,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    render(<PresentationIsland {...BASE_PROPS} blocks={[withAudio]} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('presentation-overview-audio-a1'));
+    });
+    expect(screen.getByTestId('presentation-overview-audio-a1').getAttribute('aria-pressed')).toBe('true');
   });
 });
 

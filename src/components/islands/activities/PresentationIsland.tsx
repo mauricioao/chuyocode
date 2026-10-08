@@ -53,7 +53,9 @@ import { Emoji } from '@/components/ui/Emoji';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Level } from '@/lib/exerciseTaxonomy';
 import type { Block, Zone } from '@/lib/activities/blocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
+import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
+import { useAudioMarkerPlayback } from '@/lib/activities/useAudioMarkerPlayback';
+import AudioMarkerButton from './AudioMarkerButton';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import { getSlotItems, type Payload, type Slot } from '@/lib/exercisePayload';
@@ -884,6 +886,11 @@ function WorksheetStageLayer({
       ? cameraForPage(page, WORKSHEET_STAGE)
       : cameraForZone(slide.zone, page, WORKSHEET_STAGE);
   const imageUrl = imagePreviewUrl(slide.image.path);
+  // "Colocar un audio propio": played only from the overview slide (never
+  // on a zoomed-into per-zone slide — see `PresentationSlide`'s own
+  // `audio` doc). The hook itself is harmless to mount unconditionally (a
+  // zone slide's `audio` is simply `undefined`, so nothing renders).
+  const { playingId, toggle } = useAudioMarkerPlayback(audioPreviewUrl);
 
   return (
     <div
@@ -918,11 +925,26 @@ function WorksheetStageLayer({
           transform: `translate(-50%, -50%) rotate(${slide.rotation}deg)`,
         }}
       />
-      {slide.kind === 'worksheet-overview'
-        ? slide.zones.map((zone, i) => (
+      {slide.kind === 'worksheet-overview' ? (
+        <>
+          {slide.zones.map((zone, i) => (
             <WorksheetOverviewZoneBadge key={zone.id} zone={zone} number={i + 1} t={t} />
-          ))
-        : <WorksheetZoneHighlight zone={slide.zone} revealed={revealed} t={t} />}
+          ))}
+          {slide.audio?.map((marker) => (
+            <AudioMarkerButton
+              key={marker.id}
+              x={marker.x}
+              y={marker.y}
+              playing={playingId === marker.id}
+              label={playingId === marker.id ? t.audioPause : t.audioPlay}
+              data-testid={`presentation-overview-audio-${marker.id}`}
+              onToggle={() => toggle(marker.id, marker.path)}
+            />
+          ))}
+        </>
+      ) : (
+        <WorksheetZoneHighlight zone={slide.zone} revealed={revealed} t={t} />
+      )}
     </div>
   );
 }

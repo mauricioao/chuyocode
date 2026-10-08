@@ -218,6 +218,25 @@ describe('buildPresentationSlides', () => {
     expect(zoneSlide2.zoneCount).toBe(2);
   });
 
+  it("carries the worksheet's own audio markers on the overview slide only", () => {
+    const withAudio: Block = {
+      ...WORKSHEET_TWO_ZONES,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    const slides = buildPresentationSlides([withAudio]);
+    const overview = slides[0] as Extract<(typeof slides)[number], { kind: 'worksheet-overview' }>;
+    expect(overview.audio).toEqual([{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }]);
+
+    const zoneSlide = slides[1] as Extract<(typeof slides)[number], { kind: 'worksheet-zone' }>;
+    expect('audio' in zoneSlide).toBe(false);
+  });
+
+  it('leaves the overview slide with no `audio` field at all when the worksheet has no markers (backward compatible)', () => {
+    const slides = buildPresentationSlides([WORKSHEET_TWO_ZONES]);
+    const overview = slides[0] as Extract<(typeof slides)[number], { kind: 'worksheet-overview' }>;
+    expect(overview.audio).toBeUndefined();
+  });
+
   it('skips an unpresentable worksheet (no image/zones) entirely, contributing no slides', () => {
     expect(buildPresentationSlides([WORKSHEET_NO_IMAGE])).toEqual([]);
     expect(buildPresentationSlides([WORKSHEET_NO_ZONES])).toEqual([]);

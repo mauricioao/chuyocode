@@ -24,7 +24,7 @@
  * stays as its own narrower predicate (quiz questions only) — still correct
  * and still used on its own (the cover slide's own question count).
  */
-import type { Block, ImageRef, Rotation, Zone } from './blocks';
+import type { Block, ImageRef, Rotation, Zone, AudioMarker } from './blocks';
 import type { Payload, Slot } from '../exercisePayload';
 import { orderZonesForReading } from './zoneGeometry';
 import { rotatedSize } from './canvasViewport';
@@ -222,6 +222,8 @@ export type PresentationSlide =
       image: ImageRef;
       rotation: Rotation;
       zones: Zone[];
+      /** "Colocar un audio propio": this page's own audio markers, played from the overview slide only (never zoomed-into on a per-zone slide) — see `PresentationIsland.tsx`'s own `WorksheetStageLayer`. `undefined`/absent = none, every worksheet saved before this field existed. */
+      audio?: AudioMarker[];
     }
   | {
       kind: 'worksheet-zone';
@@ -315,14 +317,16 @@ export function buildPresentationSlides(blocks: readonly Block[]): PresentationS
     }
     if (!block.image || block.zones.length === 0) continue;
     const zones = orderZonesForReading(block.zones);
-    slides.push({
+    const overviewSlide: Extract<PresentationSlide, { kind: 'worksheet-overview' }> = {
       kind: 'worksheet-overview',
       blockId: block.id,
       name: block.name,
       image: block.image,
       rotation: block.rotation,
       zones,
-    });
+    };
+    if (block.audio && block.audio.length > 0) overviewSlide.audio = block.audio;
+    slides.push(overviewSlide);
     zones.forEach((zone, i) => {
       slides.push({
         kind: 'worksheet-zone',
