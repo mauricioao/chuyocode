@@ -18,11 +18,17 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { QuizBlock } from '@/lib/activities/blocks';
+import type { QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import type { Lang } from '@/lib/i18n';
 import type { ExerciseResponse, Payload } from '@/lib/exercisePayload';
-import { availableGameModes, deriveGameItems, SELF_CHECKING_GAME_MODES, type GameMode } from '@/lib/activities/gameModes';
+import {
+  availableGameModes,
+  deriveGameItems,
+  initialGameMode,
+  SELF_CHECKING_GAME_MODES,
+  type GameMode,
+} from '@/lib/activities/gameModes';
 import QuizBlockPractice from './QuizBlockPractice';
 import { GAME_MODE_ICONS } from './QuizGameModeSwitcher';
 
@@ -52,6 +58,8 @@ export interface QuizLivePreviewProps {
   lang: string;
   /** Already debounced by the caller (`QuizBlockEditor`) — this component re-derives nothing to smooth out typing itself. */
   payload: Payload;
+  /** The block's own authoring preset (`blocks.ts`'s `QuizTemplate`) — this preview must open in the TEMPLATE's own game (`match`/`reorder`), not always "Básico". `undefined` keeps the previous "Básico" default. */
+  template?: QuizTemplate;
 }
 
 /** The question set's own shape — same slot ids, in the same order. Changes only when a question is added, removed, or reordered, never on a plain text/option edit. */
@@ -59,9 +67,16 @@ function structuralKey(payload: Payload): string {
   return payload.slots.map((slot) => slot.id).join('|');
 }
 
-export default function QuizLivePreview({ blockId, lang, payload }: QuizLivePreviewProps) {
+export default function QuizLivePreview({ blockId, lang, payload, template }: QuizLivePreviewProps) {
   const t = copyFor(lang);
-  const [mode, setMode] = useState<GameMode>('quiz');
+  const gameItems = deriveGameItems(payload);
+  // Opens in the TEMPLATE's own game when eligible (owner review of the
+  // match stage, build item "QuizLivePreview opens in the template's own
+  // game"): a "Une las parejas"/"Reordenar" block previously always opened
+  // in Básico here, unlike the real practice page which already honored
+  // `initialGameMode` — this preview is "try it as a learner would", so it
+  // must start where a learner actually would.
+  const [mode, setMode] = useState<GameMode>(() => initialGameMode(template, gameItems, payload));
   const [response, setResponse] = useState<ExerciseResponse>({});
   const [result, setResult] = useState<GradeResult | undefined>(undefined);
 
@@ -72,9 +87,14 @@ export default function QuizLivePreview({ blockId, lang, payload }: QuizLivePrev
     prevKeyRef.current = key;
     setResponse({});
     setResult(undefined);
-  }, [key]);
+    setMode(initialGameMode(template, gameItems, payload));
+    // `gameItems`/`payload` are re-derived every render from the same
+    // debounced `payload` this effect already depends on via `key` — only
+    // `key`'s own CHANGE (a question added/removed/reordered) should ever
+    // re-pick the template's starting mode, never a plain text edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, template]);
 
-  const gameItems = deriveGameItems(payload);
   const modes = availableGameModes(gameItems, payload);
 
   const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload };

@@ -63,6 +63,39 @@ describe('QuizLivePreview — checking and retrying', () => {
   });
 });
 
+describe('QuizLivePreview — opens in the template\'s own game (owner review of the match stage)', () => {
+  const MATCH_PAYLOAD: Payload = {
+    pools: {},
+    slots: [
+      { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+      { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+    ],
+  };
+
+  const REORDER_PAYLOAD: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+  };
+
+  it('opens a "match" block\'s preview in Parejas, not Básico', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('opens a "reorder" block\'s preview in Reordenar, not Básico', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={REORDER_PAYLOAD} template="reorder" />);
+    expect(screen.getByTestId('quiz-reorder')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('still opens Básico with no template', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} />);
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
+  });
+});
+
 describe('QuizLivePreview — resets on structural change', () => {
   it('clears the response and score once the question set changes shape', () => {
     const { rerender } = render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
