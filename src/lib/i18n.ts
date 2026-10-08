@@ -784,10 +784,20 @@ export const UI_LABELS = {
         cardReviewPileTitle: 'Para repasar',
         cardReplayReview: 'Repasar de nuevo',
         cardsDone: '¡Listo! Repasaste todas las tarjetas.',
-        // Parejas (matching).
-        matchPairs: 'Parejas',
+        // Parejas (matching) — big drag-and-drop board (game-feel pass):
+        // drag an answer tile onto a prompt's empty slot, "Comprobar" grades
+        // the attempt, "Reiniciar" starts a fresh shuffled round.
         matchReset: 'Reiniciar',
-        matchCompletedPrefix: '¡Completado en',
+        matchCheck: 'Comprobar',
+        matchRetry: 'Reintentar',
+        // "4 de 5 correctas" — composed around the learner's score.
+        matchResultOf: 'de',
+        matchResultCorrect: 'correctas',
+        matchRemovePrefix: 'Quitar ficha',
+        matchEmptySlot: 'Casilla vacía',
+        matchTrayLabel: 'Fichas disponibles',
+        matchSoundMute: 'Silenciar sonido',
+        matchSoundUnmute: 'Activar sonido',
         // Cartas (Wordwall "Speaking cards"): a shuffled deck dealt one card
         // at a time, each with a question to answer out loud.
         modeSpeak: 'Cartas',
@@ -2097,9 +2107,16 @@ export const UI_LABELS = {
         cardReviewPileTitle: 'To review',
         cardReplayReview: 'Review again',
         cardsDone: 'Done! You reviewed every card.',
-        matchPairs: 'Pairs',
         matchReset: 'Reset',
-        matchCompletedPrefix: 'Completed in',
+        matchCheck: 'Check',
+        matchRetry: 'Try again',
+        matchResultOf: 'of',
+        matchResultCorrect: 'correct',
+        matchRemovePrefix: 'Remove tile',
+        matchEmptySlot: 'Empty slot',
+        matchTrayLabel: 'Available tiles',
+        matchSoundMute: 'Mute sound',
+        matchSoundUnmute: 'Unmute sound',
         modeSpeak: 'Speaking cards',
         speakDeal: 'Deal',
         speakNext: 'Next card',
