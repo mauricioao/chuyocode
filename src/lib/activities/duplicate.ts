@@ -16,11 +16,13 @@
  * 2. caller already made >= 20 duplicates today   -> daily_limit (429)
  *    (count: source_activity_id is not null and author_id = caller and
  *    created_at > now() - interval '1 day')
- * 3. copying every worksheet image into the        -> upload_limit (429)
- *    caller's own uploads folder would exceed
- *    the per-user 100-object cap (checked BEFORE
- *    any copy happens — never a partial duplicate)
- * 4. a storage copy fails for any referenced image -> copy_failed (500)
+ * 3. copying every worksheet image (or audio        -> upload_limit (429)
+ *    marker) into the caller's own uploads folder
+ *    would exceed either's own per-user cap
+ *    (checked BEFORE any copy happens — never a
+ *    partial duplicate)
+ * 4. a storage copy fails for any referenced image  -> copy_failed (500)
+ *    or audio marker
  * 5. the new activity/revision insert fails         -> create_failed (500)
  * 6. success                                        -> ok: true, id
  * ```
@@ -57,6 +59,11 @@ import {
   copyToUploadsBucket,
   countUserUploads,
   MAX_UPLOADS_PER_USER,
+  parseAudioPath,
+  uploadAudioPath,
+  copyAudioToUploadsBucket,
+  countUserAudioUploads,
+  MAX_AUDIO_UPLOADS_PER_USER,
 } from './storage';
 
 const ACTIVITIES_TABLE = 'activities';
@@ -114,31 +121,57 @@ function uniqueWorksheetImagePaths(blocks: Block[]): string[] {
   return paths;
 }
 
+/** Every unique worksheet audio marker path in `blocks`, in first-seen order — the audio counterpart of {@link uniqueWorksheetImagePaths}. */
+function uniqueWorksheetAudioPaths(blocks: Block[]): string[] {
+  const seen = new Set<string>();
+  const paths: string[] = [];
+  for (const block of blocks) {
+    if (block.type !== 'worksheet' || !block.audio) continue;
+    for (const marker of block.audio) {
+      if (seen.has(marker.path)) continue;
+      seen.add(marker.path);
+      paths.push(marker.path);
+    }
+  }
+  return paths;
+}
+
 /**
  * Rebuild `blocks` with a fresh id on every block (and, for a worksheet,
  * every zone), rewriting each worksheet's image path through `pathMapping` —
  * see file header for why both are regenerated.
  */
-function rebuildBlocksForDuplicate(blocks: Block[], pathMapping: ReadonlyMap<string, string>): Block[] {
+function rebuildBlocksForDuplicate(
+  blocks: Block[],
+  pathMapping: ReadonlyMap<string, string>,
+  audioPathMapping: ReadonlyMap<string, string>,
+): Block[] {
   return blocks.map((block): Block => {
     const id = crypto.randomUUID();
     if (block.type !== 'worksheet') {
       return { ...block, id };
     }
     const worksheet = block as WorksheetBlock;
+    const zones = worksheet.zones.map((zone) => ({ ...zone, id: crypto.randomUUID() }));
+    // New ids for every re-homed audio marker too — same "fresh document"
+    // reasoning as every block/zone id above (file header).
+    const audio = worksheet.audio?.map((marker) => ({
+      ...marker,
+      id: crypto.randomUUID(),
+      path: audioPathMapping.get(marker.path) ?? marker.path,
+    }));
     // Same "always set in practice" invariant as `uniqueWorksheetImagePaths`
     // above — a LIVE worksheet always has an image, so this only guards the
     // type, never actually skips the rewrite for a real duplicated block.
     if (!worksheet.image) {
-      return { ...worksheet, id, zones: worksheet.zones.map((zone) => ({ ...zone, id: crypto.randomUUID() })) };
+      const rebuilt: WorksheetBlock = { ...worksheet, id, zones };
+      if (audio) rebuilt.audio = audio;
+      return rebuilt;
     }
     const newPath = pathMapping.get(worksheet.image.path) ?? worksheet.image.path;
-    return {
-      ...worksheet,
-      id,
-      image: { ...worksheet.image, path: newPath },
-      zones: worksheet.zones.map((zone) => ({ ...zone, id: crypto.randomUUID() })),
-    };
+    const rebuilt: WorksheetBlock = { ...worksheet, id, image: { ...worksheet.image, path: newPath }, zones };
+    if (audio) rebuilt.audio = audio;
+    return rebuilt;
   });
 }
 
@@ -188,11 +221,18 @@ export async function duplicateActivity(originalId: string, callerId: string): P
   }
 
   const imagePaths = uniqueWorksheetImagePaths(original.blocks);
+  const audioPaths = uniqueWorksheetAudioPaths(original.blocks);
 
   // FAILS CLOSED: an unreadable count is treated as "at the cap", same
-  // reasoning as `imagen.ts`'s own upload-cap check.
+  // reasoning as `imagen.ts`'s own upload-cap check. Images and audio
+  // markers have their OWN independent per-user caps (different buckets),
+  // so each is checked against its own count.
   const currentUploads = await countUserUploads(callerId);
   if (currentUploads === null || currentUploads + imagePaths.length > MAX_UPLOADS_PER_USER) {
+    return { ok: false, error: 'upload_limit' };
+  }
+  const currentAudioUploads = await countUserAudioUploads(callerId);
+  if (currentAudioUploads === null || currentAudioUploads + audioPaths.length > MAX_AUDIO_UPLOADS_PER_USER) {
     return { ok: false, error: 'upload_limit' };
   }
 
@@ -210,7 +250,19 @@ export async function duplicateActivity(originalId: string, callerId: string): P
     pathMapping.set(path, toPath);
   }
 
-  const newBlocks = rebuildBlocksForDuplicate(original.blocks, pathMapping);
+  const audioPathMapping = new Map<string, string>();
+  for (const path of audioPaths) {
+    const parsed = parseAudioPath(path);
+    if (!parsed) return { ok: false, error: 'create_failed' };
+
+    const newObjectId = crypto.randomUUID();
+    const toPath = uploadAudioPath(callerId, newObjectId, parsed.ext);
+    const copied = await copyAudioToUploadsBucket(path, toPath);
+    if (!copied) return { ok: false, error: 'copy_failed' };
+    audioPathMapping.set(path, toPath);
+  }
+
+  const newBlocks = rebuildBlocksForDuplicate(original.blocks, pathMapping, audioPathMapping);
   const title = buildDuplicateTitle(original.title);
 
   const id = await createActivity(callerId, {

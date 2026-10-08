@@ -139,7 +139,13 @@ if (hostMode) {
       embedded
       slot="overlay"
     >
-      <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+      {/* `max-w-6xl` (visual-polish pass, owner report — the gallery's 3
+          wide-window columns used to inherit this section's OLD `max-w-4xl`
+          cap, leaving each card too narrow for its own one-line description
+          not to wrap into several): wide enough for three Wordwall-sized
+          cards with real breathing room, same cap the start screen's own
+          "no page-level scroll" posture already tolerates. */}
+      <section class="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <ActivityStartIsland client:load lang={lang} />
       </section>
     </DeskWindow>

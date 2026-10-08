@@ -24,6 +24,10 @@
  * 8. a worksheet image.path is neither the      -> 422 { error: 'invalid_image_path' }
  *    caller's own upload path NOR an
  *    `activity-images/<thisId>/…` path
+ * 8b. a worksheet audio marker's path is        -> 422 { error: 'invalid_audio_path' }
+ *    neither the caller's own audio upload
+ *    path NOR an `activity-audio/<thisId>/…`
+ *    path (same rule as step 8, audio bucket)
  * 9. latest revision status === 'draft'        -> UPDATE it in place
  *    else                                      -> INSERT a fresh draft revision
  * 10. update activities.title/level/updated_at
@@ -46,7 +50,15 @@ import type { APIRoute } from 'astro';
 import { jsonResponse, notFoundResponse, requireUser } from '@lib/apiResponse';
 import { isLevel, type Level } from '@lib/exerciseTaxonomy';
 import { parseBlocks, type Block } from '@lib/activities/blocks';
-import { isOwnUploadPath, isUuid, parseImagePath, IMAGES_BUCKET } from '@lib/activities/paths';
+import {
+  isOwnUploadPath,
+  isUuid,
+  parseImagePath,
+  IMAGES_BUCKET,
+  isOwnAudioUploadPath,
+  parseAudioPath,
+  AUDIO_BUCKET,
+} from '@lib/activities/paths';
 import { createServiceClient } from '@lib/supabase';
 
 const ACTIVITIES_TABLE = 'activities';
@@ -77,6 +89,20 @@ function everyImageAllowed(blocks: Block[], userId: string, activityId: string):
     // to check.
     if (block.type !== 'worksheet' || !block.image) return true;
     return isAllowedImagePath(block.image.path, userId, activityId);
+  });
+}
+
+/** Is `path` a worksheet audio marker this activity's save may legally reference? Mirrors {@link isAllowedImagePath}. */
+function isAllowedAudioPath(path: string, userId: string, activityId: string): boolean {
+  if (isOwnAudioUploadPath(path, userId)) return true;
+  const parsed = parseAudioPath(path);
+  return parsed !== null && parsed.bucket === AUDIO_BUCKET && parsed.ownerId === activityId.toLowerCase();
+}
+
+function everyAudioAllowed(blocks: Block[], userId: string, activityId: string): boolean {
+  return blocks.every((block) => {
+    if (block.type !== 'worksheet' || !block.audio) return true;
+    return block.audio.every((marker) => isAllowedAudioPath(marker.path, userId, activityId));
   });
 }
 
@@ -157,6 +183,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   if (!everyImageAllowed(blocks, user.id, id)) {
     return jsonResponse({ error: 'invalid_image_path' }, 422);
+  }
+
+  if (!everyAudioAllowed(blocks, user.id, id)) {
+    return jsonResponse({ error: 'invalid_audio_path' }, 422);
   }
 
   const { data: revisionData, error: revisionFetchError } = await client

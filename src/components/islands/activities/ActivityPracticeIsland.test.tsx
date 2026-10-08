@@ -66,6 +66,38 @@ describe('ActivityPracticeIsland — rendering blocks (one at a time)', () => {
   });
 });
 
+describe('ActivityPracticeIsland — game stage sizing (visual-polish pass)', () => {
+  // The four big drag-and-drop games size their own tiles/slots/boxes off
+  // the STAGE's own container width AND height (`mechanics/scale.ts`'s
+  // `min(cqw, cqh)`-based clamps, visual-polish-3 pass), not the viewport —
+  // so each stage root needs `container-type: size` (`STAGE_CONTAINER_SIZE`,
+  // the `[container-type:size]` arbitrary utility) for `cqw`/`cqh` to resolve
+  // to anything other than their own floor value. Both the normal view's
+  // stage and "modo enfoque"'s own stage need it independently — they mount
+  // a fresh `QuizBlockPractice` each (this file's own header). Both stages
+  // qualify for full size containment because they are `flex-1` flex items
+  // whose own used height never depends on their content (`scale.ts`'s own
+  // `STAGE_CONTAINER_SIZE` doc) — unlike `QuizLivePreview`'s own column,
+  // which keeps the width-only `@container` instead.
+  it('marks the normal view\'s quiz stage as a full (both-axis) size container', () => {
+    renderIsland([QUIZ]);
+    const stage = screen.getByTestId('quiz-practice-q1').parentElement;
+    expect(stage?.className).toContain('[container-type:size]');
+  });
+
+  it('marks "modo enfoque"\'s own quiz stage as a full size container too', () => {
+    const toggle = document.createElement('button');
+    toggle.id = 'activity-focus-mode-toggle';
+    document.body.appendChild(toggle);
+    renderIsland([QUIZ]);
+    fireEvent.click(toggle);
+    const stage = screen.getByTestId('practice-focus-mode').querySelector('[data-testid="quiz-practice-q1"]')
+      ?.parentElement;
+    expect(stage?.className).toContain('[container-type:size]');
+    toggle.remove();
+  });
+});
+
 describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => {
   it('hides the tab bar entirely with a single block — no empty bar, not even to host zoom controls', () => {
     renderIsland([WORKSHEET]);
@@ -78,7 +110,7 @@ describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => 
     renderIsland([WORKSHEET, QUIZ]);
     expect(screen.getByRole('tablist')).toBeTruthy();
     expect(screen.getByTestId('practice-tab-w1').textContent).toContain('Hoja 1');
-    expect(screen.getByTestId('practice-tab-q1').textContent).toContain('Preguntas');
+    expect(screen.getByTestId('practice-tab-q1').textContent).toContain('Básico');
   });
 
   it('uses the block\'s own name over the positional default', () => {
@@ -438,7 +470,7 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     },
   };
 
-  it('shows no Comprobar hint while the quiz tab is in Preguntas mode', () => {
+  it('shows no Comprobar hint while the quiz tab is in Básico mode', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
   });
@@ -447,18 +479,18 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
     expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
-      'Comprobar corrige el modo "Preguntas".',
+      'Comprobar corrige el modo "Básico".',
     );
   });
 
-  it('hides the hint again once switched back to Preguntas', () => {
+  it('hides the hint again once switched back to Básico', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
     fireEvent.click(screen.getByTestId('quiz-game-mode-quiz'));
     expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
   });
 
-  it('preserves Preguntas-mode answers across a switch to Tarjetas and back', () => {
+  it('preserves Básico-mode answers across a switch to Tarjetas and back', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'sits' } });
@@ -471,13 +503,21 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     expect(inputAgain.value).toBe('sits');
   });
 
-  it('also shows the Comprobar hint in Parejas mode, and preserves the underlying quiz block', () => {
+  // ONE "COMPROBAR" (build item 2): switching the ONLY block into Parejas
+  // leaves nothing else for the combined footer to grade, so it hides —
+  // the old "Comprobar corrige el modo Básico" hint would have been
+  // pointing at a Básico form that is not even rendered anymore. The
+  // underlying Básico answers are still preserved underneath, same as
+  // every other mode switch (see the preceding test).
+  it('hides the combined footer once switched into Parejas, instead of showing the Básico hint', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('quiz-game-mode-match'));
     expect(screen.getByTestId('quiz-matching')).toBeTruthy();
-    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
-      'Comprobar corrige el modo "Preguntas".',
-    );
+    expect(screen.queryByTestId('practice-footer')).toBeNull();
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('quiz-game-mode-quiz'));
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
   });
 
   it('remembers the chosen mode across a tab switch away and back', () => {
@@ -491,6 +531,59 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
 
     fireEvent.click(screen.getByTestId('practice-tab-q1'));
     expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
+  });
+
+  it('a block with the "match" template starts straight in Parejas mode, with no click needed', () => {
+    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.getByTestId('quiz-game-mode-match').getAttribute('aria-checked')).toBe('true');
+  });
+
+  // ONE "COMPROBAR" (build item 2): a match-only activity's own board
+  // already has its own Comprobar/Reintentar (`matching-check`) — the old
+  // combined footer used to ALSO show, right below it, with a hint saying
+  // it "corrige el modo Básico" even though nothing in Básico mode was ever
+  // filled in. The footer now hides entirely for this shape; the board's
+  // own Comprobar is the only one.
+  it('hides the combined footer entirely for a match-only activity — the board is the only Comprobar', () => {
+    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    expect(screen.getByTestId('matching-check')).toBeTruthy();
+    expect(screen.queryByTestId('practice-footer')).toBeNull();
+    expect(screen.queryByTestId('practice-check-button')).toBeNull();
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+  });
+
+  it('keeps the combined footer (with its Básico hint) when a worksheet also needs checking', () => {
+    renderIsland([WORKSHEET, { ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
+    expect(screen.getByTestId('practice-check-button')).toBeTruthy();
+    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
+      'Comprobar corrige el modo "Básico".',
+    );
+  });
+
+  it('keeps the combined footer when switched to Tarjetas instead (not a self-checking mode)', () => {
+    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
+    expect(screen.getByTestId('practice-check-button')).toBeTruthy();
+  });
+
+  it('a "match"-templated block still falls back to Básico when not eligible for match (too few unique answers)', () => {
+    const tooFew: QuizBlock = {
+      id: 'q2',
+      type: 'quiz',
+      template: 'match',
+      payload: {
+        pools: {},
+        slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+      },
+    };
+    renderIsland([tooFew]);
+    expect(screen.queryByTestId('quiz-matching')).toBeNull();
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
   });
 });
 
@@ -666,5 +759,17 @@ describe('ActivityPracticeIsland — "Modo enfoque" (full-screen exercise mode, 
 
     // Still page 1 — the key reached the input (cursor movement), not the pager.
     expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+  });
+});
+
+describe('ActivityPracticeIsland — audio markers ("colocar un audio propio")', () => {
+  it('renders a play button for a worksheet audio marker, resolved via the real audio preview endpoint', () => {
+    const withAudio: WorksheetBlock = {
+      ...WORKSHEET,
+      audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/act-1/m1.webm' }],
+    };
+    renderIsland([withAudio]);
+    const button = screen.getByTestId('player-audio-m1');
+    expect(button).toBeTruthy();
   });
 });

@@ -92,6 +92,91 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
     }
   }, [createActivity, lang, navigate, t.createError]);
 
+  // "Une las parejas" (start-gallery redesign, build item 3/4): same shape
+  // as Questions above, tagged with the `'match'` template (`blocks.ts`'s
+  // `QuizTemplate`) so the editor/practice both know this block started as
+  // a matching activity from its very first save.
+  const handleSelectMatch = useCallback(async () => {
+    setBusyCard('match');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'match', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
+  // "Reordenar" (Wordwall templates build): same shape as Match above,
+  // tagged with the `'reorder'` template so the editor/practice both know
+  // this block started as a sentence-reordering activity from its first save.
+  const handleSelectReorder = useCallback(async () => {
+    setBusyCard('reorder');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'reorder', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
+  // "Completar la frase" (cloze): same shape as Reorder above, tagged with
+  // the `'cloze'` template so the editor/practice both know this block
+  // started as a drag-the-words-into-the-blanks activity from its first save.
+  const handleSelectCloze = useCallback(async () => {
+    setBusyCard('cloze');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'cloze', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
+  // "Ordenar por grupos" (groupsort): same shape as Cloze above, tagged with
+  // the `'groupsort'` template so the editor/practice both know this block
+  // started as a drag-each-item-into-its-group activity from its first save.
+  const handleSelectGroupSort = useCallback(async () => {
+    setBusyCard('groupsort');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'groupsort', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
   return (
     <div data-testid="activity-start-island" className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold text-foreground">{t.heading}</h2>
@@ -99,6 +184,10 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
         lang={lang}
         onSelectWorksheet={handleSelectWorksheet}
         onSelectQuestions={handleSelectQuestions}
+        onSelectMatch={handleSelectMatch}
+        onSelectReorder={handleSelectReorder}
+        onSelectCloze={handleSelectCloze}
+        onSelectGroupSort={handleSelectGroupSort}
         busyCard={busyCard}
       />
     </div>

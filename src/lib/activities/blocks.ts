@@ -23,7 +23,7 @@
  * region on an otherwise-intact image, which must never happen quietly.
  */
 import { parsePayload, type Payload, type PoolItem } from '../exercisePayload';
-import { parseImagePath } from './paths';
+import { parseImagePath, parseAudioPath } from './paths';
 
 /** A worksheet's uploaded image and its natural pixel dimensions. */
 export interface ImageRef {
@@ -67,6 +67,24 @@ export interface Zone {
 /** A worksheet image's rotation, clockwise from its uploaded orientation. */
 export type Rotation = 0 | 90 | 180 | 270;
 
+/**
+ * A non-graded audio affordance placed on a worksheet image — a fixed-size
+ * play button at a fractional position, with no answer to check (unlike
+ * {@link Zone}). "Colocar un audio propio" (owner request): the author
+ * either uploads a file or records one in the editor; `path` is only ever
+ * set once that upload/recording has actually succeeded — there is no
+ * "placed but empty" marker shape stored on disk, so every marker in
+ * {@link WorksheetBlock.audio} always has real audio behind it.
+ */
+export interface AudioMarker {
+  id: string;
+  /** Fractional coordinates in `[0, 1]`, relative to the image's top-left — the marker's own center. */
+  x: number;
+  y: number;
+  /** Full bucket-prefixed storage path ({@link parseAudioPath}) — the author's private pre-moderation upload, or the public post-approval copy. */
+  path: string;
+}
+
 /** An uploaded worksheet image with answer zones drawn on top. */
 export interface WorksheetBlock {
   id: string;
@@ -94,7 +112,22 @@ export interface WorksheetBlock {
    */
   image?: ImageRef;
   zones: Zone[];
+  /** `undefined`/absent = no audio markers — every worksheet saved before this field existed, and the common case. Capped at {@link MAX_AUDIO_MARKERS_PER_WORKSHEET}. */
+  audio?: AudioMarker[];
 }
+
+/**
+ * An authoring preset over a `QuizBlock`'s payload (Wordwall-style "Cambiar
+ * plantilla"): a template is both a starting shape for the question editor
+ * AND the practice's own DEFAULT game mode (`gameModes.ts`'s
+ * `initialGameMode`) — the player can still switch to any other mode the
+ * SAME payload is eligible for, a template never restricts `availableGameModes`.
+ * `undefined` = "Básico", the plain quiz template this field predates. Every
+ * named template here has a shipped practice experience: `'match'` ("Une
+ * las parejas"), `'reorder'` ("Reordenar"), `'cloze'` ("Completar la
+ * frase") and `'groupsort'` ("Ordenar por grupos").
+ */
+export type QuizTemplate = 'match' | 'reorder' | 'cloze' | 'groupsort';
 
 /** The existing traditional exercise payload, as one activity block. */
 export interface QuizBlock {
@@ -103,6 +136,8 @@ export interface QuizBlock {
   /** Author-editable label (creator polish round 2). `undefined` = use the positional default ("Hoja N") in the UI. */
   name?: string;
   payload: Payload;
+  /** See {@link QuizTemplate}. `undefined` = "Básico" (the default before this field existed). */
+  template?: QuizTemplate;
 }
 
 export type Block = WorksheetBlock | QuizBlock;
@@ -112,6 +147,9 @@ export const MAX_BLOCKS = 20;
 
 /** A single worksheet block holds at most this many zones. */
 export const MAX_ZONES_PER_WORKSHEET = 60;
+
+/** A single worksheet block holds at most this many audio markers (owner-proposed limit — a named constant so it is easy to change). */
+export const MAX_AUDIO_MARKERS_PER_WORKSHEET = 10;
 
 /** A block's author-editable name may not exceed this many characters. */
 export const MAX_BLOCK_NAME_LENGTH = 60;
@@ -145,6 +183,7 @@ export type BlocksParseMode = 'draft' | 'submit';
 
 const ZONE_KINDS: ReadonlySet<string> = new Set(['text', 'choice']);
 const ROTATIONS: ReadonlySet<number> = new Set([0, 90, 180, 270]);
+const QUIZ_TEMPLATES: ReadonlySet<string> = new Set(['match', 'reorder', 'cloze', 'groupsort']);
 
 /** Narrow `unknown` to a plain object without trusting its keys. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -289,6 +328,26 @@ function parseZoneExplanation(value: unknown): string | undefined | typeof INVAL
 }
 
 /**
+ * Parse one audio marker, or `null` if it is unusable.
+ *
+ * Only `x`/`y` in `[0, 1]` (a marker is a fixed-size button, not a sized
+ * rectangle like {@link Zone} — there is no `w`/`h`/"stays on the image"
+ * bound to check beyond the point itself) and a well-formed `path`
+ * ({@link parseAudioPath}). No draft/submit distinction, unlike
+ * {@link parseZone}: a marker is only ever added to a block once its
+ * upload/recording has already succeeded (see {@link AudioMarker}'s own
+ * header), so there is no partial/"no audio yet" shape to tolerate in
+ * EITHER mode.
+ */
+function parseAudioMarker(value: unknown): AudioMarker | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string' || value.id.length === 0) return null;
+  if (!isUnitNumber(value.x) || !isUnitNumber(value.y)) return null;
+  if (typeof value.path !== 'string' || !parseAudioPath(value.path)) return null;
+  return { id: value.id, x: value.x, y: value.y, path: value.path };
+}
+
+/**
  * Parse a block's optional `name`, or the sentinel `INVALID_NAME` if present
  * but unusable (a non-string, or one that stays over the limit after
  * trimming) — the caller fails the whole block on that sentinel, same
@@ -360,8 +419,29 @@ function parseWorksheetBlock(
     zones.push(zone);
   }
 
+  // Audio markers (same safety/integrity posture in EITHER mode — see
+  // `parseAudioMarker`'s own header for why there is no draft/submit split
+  // here): absent entirely is the common case (every worksheet saved before
+  // this field existed), capped at `MAX_AUDIO_MARKERS_PER_WORKSHEET`, and
+  // never present without an image (a marker's `x`/`y` are fractions of the
+  // image's own pixel space, same reasoning as the zones guard above).
+  let audio: AudioMarker[] | undefined;
+  if (value.audio !== undefined) {
+    if (!Array.isArray(value.audio)) return null;
+    if (value.audio.length > MAX_AUDIO_MARKERS_PER_WORKSHEET) return null;
+    if (!image && value.audio.length > 0) return null;
+    const markers: AudioMarker[] = [];
+    for (const raw of value.audio) {
+      const marker = parseAudioMarker(raw);
+      if (!marker) return null;
+      markers.push(marker);
+    }
+    audio = markers;
+  }
+
   const block: WorksheetBlock = { id, type: 'worksheet', name, rotation, zones };
   if (image) block.image = image;
+  if (audio) block.audio = audio;
   return block;
 }
 
@@ -374,6 +454,14 @@ function parseWorksheetBlock(
  * `'draft'` quiz block may have zero questions, or a question with no answer
  * yet, exactly like a `'draft'` worksheet zone — see
  * {@link BlocksParseMode}'s own doc.
+ *
+ * `template` gets its OWN, asymmetric posture (template plumbing, build item
+ * 2): missing entirely is always fine (`undefined` = "Básico"), but an
+ * unrecognized value is only an error in `'submit'` mode (fails the whole
+ * block, same all-or-nothing rule every other field here follows) — in
+ * `'draft'` it is silently ignored instead (template stays `undefined`), so
+ * a client running code newer or older than this server's own
+ * {@link QuizTemplate} vocabulary can still autosave.
  */
 function parseQuizBlock(
   id: string,
@@ -383,7 +471,19 @@ function parseQuizBlock(
 ): QuizBlock | null {
   const payload = parsePayload(value.payload, mode);
   if (!payload) return null;
-  return { id, type: 'quiz', name, payload };
+
+  let template: QuizTemplate | undefined;
+  if (value.template !== undefined) {
+    if (typeof value.template === 'string' && QUIZ_TEMPLATES.has(value.template)) {
+      template = value.template as QuizTemplate;
+    } else if (mode === 'submit') {
+      return null;
+    }
+  }
+
+  const block: QuizBlock = { id, type: 'quiz', name, payload };
+  if (template) block.template = template;
+  return block;
 }
 
 /** Parse one block, or `null` if its own shape is unusable. */

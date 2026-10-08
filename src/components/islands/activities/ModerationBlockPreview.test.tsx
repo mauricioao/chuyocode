@@ -7,6 +7,7 @@ import type { Block } from '@/lib/activities/blocks';
 afterEach(() => cleanup());
 
 const resolveImageUrl = (path: string) => `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
+const resolveAudioUrl = (path: string) => `/api/actividades/audio?path=${encodeURIComponent(path)}`;
 
 const WORKSHEET: Block = {
   id: 'w1',
@@ -30,7 +31,7 @@ const QUIZ: Block = {
 
 describe('ModerationBlockPreview — worksheet', () => {
   it('renders the image via resolveImageUrl', () => {
-    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
     const img = screen.getByTestId('moderation-block-image') as HTMLImageElement;
     expect(img.src).toContain(
       encodeURIComponent(WORKSHEET.type === 'worksheet' ? (WORKSHEET.image?.path ?? '') : ''),
@@ -38,14 +39,48 @@ describe('ModerationBlockPreview — worksheet', () => {
   });
 
   it('lists every zone without answers when showAnswers is false', () => {
-    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
     expect(screen.getByTestId('moderation-zone-z1').textContent).not.toContain('gato');
   });
 
   it('shows the answers and options when showAnswers is true', () => {
-    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} showAnswers />);
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
     expect(screen.getByTestId('moderation-zone-z1').textContent).toContain('gato / cat');
     expect(screen.getByTestId('moderation-zone-z2').textContent).toContain('a / b / c');
+  });
+});
+
+describe('ModerationBlockPreview — audio markers ("colocar un audio propio")', () => {
+  const WORKSHEET_WITH_AUDIO: Block = {
+    ...WORKSHEET,
+    audio: [
+      { id: 'a1', x: 0.2, y: 0.3, path: 'activity-audio-uploads/author/a1.webm' },
+      { id: 'a2', x: 0.6, y: 0.7, path: 'activity-audio-uploads/author/a2.webm' },
+    ],
+  };
+
+  it('renders no audio section at all when the worksheet has no markers', () => {
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.queryByTestId(/^moderation-audio-/)).toBeNull();
+  });
+
+  it('lists every audio marker with an <audio controls> resolved via resolveAudioUrl, regardless of showAnswers', () => {
+    render(
+      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_AUDIO} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />,
+    );
+    const player1 = screen.getByTestId('moderation-audio-player-a1') as HTMLAudioElement;
+    expect(player1.getAttribute('src')).toBe(resolveAudioUrl('activity-audio-uploads/author/a1.webm'));
+    expect(player1.hasAttribute('controls')).toBe(true);
+    const player2 = screen.getByTestId('moderation-audio-player-a2') as HTMLAudioElement;
+    expect(player2.getAttribute('src')).toBe(resolveAudioUrl('activity-audio-uploads/author/a2.webm'));
+  });
+
+  it('numbers each marker 1-based, in authored order', () => {
+    render(
+      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_AUDIO} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />,
+    );
+    expect(screen.getByTestId('moderation-audio-a1').textContent).toContain('1');
+    expect(screen.getByTestId('moderation-audio-a2').textContent).toContain('2');
   });
 });
 
@@ -73,33 +108,33 @@ describe('ModerationBlockPreview — explanation (D5, "¿Por qué?")', () => {
 
   it('hides a zone explanation when showAnswers is false', () => {
     render(
-      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers={false} />,
+      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />,
     );
     expect(screen.getByTestId('moderation-zone-z1').textContent).not.toContain('Because it is the animal.');
   });
 
   it('shows a zone explanation alongside the answers when showAnswers is true', () => {
     render(
-      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers />,
+      <ModerationBlockPreview lang="es" block={WORKSHEET_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />,
     );
     expect(screen.getByTestId('moderation-zone-z1').textContent).toContain('Because it is the animal.');
   });
 
   it('shows nothing extra for a zone with no explanation', () => {
-    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} showAnswers />);
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
     expect(screen.getByTestId('moderation-zone-z2').textContent).not.toContain('undefined');
   });
 
   it('hides a quiz slot explanation when showAnswers is false', () => {
     render(
-      <ModerationBlockPreview lang="es" block={QUIZ_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers={false} />,
+      <ModerationBlockPreview lang="es" block={QUIZ_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />,
     );
     expect(screen.getByTestId('moderation-slot-s1').textContent).not.toContain('A "perro" is a dog.');
   });
 
   it('shows a quiz slot explanation alongside the answer when showAnswers is true', () => {
     render(
-      <ModerationBlockPreview lang="es" block={QUIZ_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} showAnswers />,
+      <ModerationBlockPreview lang="es" block={QUIZ_WITH_EXPLANATION} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />,
     );
     expect(screen.getByTestId('moderation-slot-s1').textContent).toContain('A "perro" is a dog.');
   });
@@ -107,17 +142,99 @@ describe('ModerationBlockPreview — explanation (D5, "¿Por qué?")', () => {
 
 describe('ModerationBlockPreview — quiz', () => {
   it('lists every slot label', () => {
-    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
     expect(screen.getByTestId('moderation-slot-s1').textContent).toContain('Elegir el animal');
   });
 
   it('resolves and shows the correct answer when showAnswers is true', () => {
-    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} showAnswers />);
+    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
     expect(screen.getByTestId('moderation-slot-s1').textContent).toContain('perro');
   });
 
   it('hides the answer when showAnswers is false', () => {
-    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
     expect(screen.getByTestId('moderation-slot-s1').textContent).not.toContain('perro');
+  });
+});
+
+describe('ModerationBlockPreview — "Une las parejas" (build item 5, match)', () => {
+  const MATCH: Block = {
+    id: 'q2',
+    type: 'quiz',
+    template: 'match',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      ],
+    },
+  };
+
+  it('lists every pair by its prompt, without the answer, when showAnswers is false', () => {
+    render(<ModerationBlockPreview lang="es" block={MATCH} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-pair-s1').textContent).toContain('dog');
+    expect(screen.getByTestId('moderation-pair-s1').textContent).not.toContain('perro');
+    expect(screen.getByTestId('moderation-pair-s2').textContent).toContain('cat');
+  });
+
+  it('shows "prompt → answer" for every pair when showAnswers is true', () => {
+    render(<ModerationBlockPreview lang="es" block={MATCH} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-pair-s1').textContent).toContain('dog');
+    expect(screen.getByTestId('moderation-pair-s1').textContent).toContain('perro');
+    expect(screen.getByTestId('moderation-pair-s2').textContent).toContain('gato');
+  });
+});
+
+describe('ModerationBlockPreview — "Reordenar" (sentence list)', () => {
+  const REORDER: Block = {
+    id: 'q3',
+    type: 'quiz',
+    template: 'reorder',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] },
+        { id: 's2', label: 'Dogs bark', input: 'text', answer: ['Dogs bark'] },
+      ],
+    },
+  };
+
+  it('lists every sentence plainly, the same regardless of showAnswers (nothing hidden)', () => {
+    render(<ModerationBlockPreview lang="es" block={REORDER} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-sentence-s1').textContent).toContain('Cats sleep');
+    expect(screen.getByTestId('moderation-sentence-s2').textContent).toContain('Dogs bark');
+
+    cleanup();
+    render(<ModerationBlockPreview lang="es" block={REORDER} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-sentence-s1').textContent).toContain('Cats sleep');
+  });
+});
+
+describe('ModerationBlockPreview — "Ordenar por grupos" (group list)', () => {
+  const GROUPSORT: Block = {
+    id: 'q4',
+    type: 'quiz',
+    template: 'groupsort',
+    payload: {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+    },
+  };
+
+  it('lists every group by name with its items, the same regardless of showAnswers (nothing hidden)', () => {
+    render(<ModerationBlockPreview lang="es" block={GROUPSORT} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('Animals');
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('dog');
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('cat');
+    expect(screen.getByTestId('moderation-group-g2').textContent).toContain('Food');
+    expect(screen.getByTestId('moderation-group-g2').textContent).toContain('bread');
+
+    cleanup();
+    render(<ModerationBlockPreview lang="es" block={GROUPSORT} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-group-g1').textContent).toContain('dog');
   });
 });

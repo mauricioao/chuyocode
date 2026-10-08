@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { useState } from 'react';
+
+const { uploadAudioBlobMock } = vi.hoisted(() => ({ uploadAudioBlobMock: vi.fn() }));
+vi.mock('@/lib/activities/audioUpload', () => ({ uploadAudioBlob: uploadAudioBlobMock }));
+
 import WorksheetZoneEditor from './WorksheetZoneEditor';
-import type { Zone } from '@/lib/activities/blocks';
+import type { Zone, AudioMarker } from '@/lib/activities/blocks';
 import { anchoredZoom, type Camera } from '@/lib/activities/canvasViewport';
+
+function resolveAudioUrl(path: string) {
+  return `/api/actividades/audio?path=${encodeURIComponent(path)}`;
+}
 
 const IMAGE = { path: 'activity-uploads/u1/img.webp', width: 800, height: 400 };
 const SSR_ZONE: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
@@ -1583,6 +1591,18 @@ describe('WorksheetZoneEditor — mobile properties bottom sheet (mobile layout 
     expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
   });
 
+  // Bug fix: the peek bar used to be `bottom-0`, exactly overlapping
+  // `EditorSideToolbar`'s own mobile bottom bar (also `fixed inset-x-0
+  // bottom-0 z-40`) — selecting a zone showed nothing usable. It now parks
+  // above that bar instead of flush with the viewport bottom.
+  it('parks the peek bar above the mobile toolbar instead of overlapping it', () => {
+    stubMobileViewport();
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const classes = screen.getByTestId('zone-properties-sheet-peek').className.split(/\s+/);
+    expect(classes).not.toContain('bottom-0');
+    expect(classes.some((c) => c.startsWith('bottom-[calc(2.5rem'))).toBe(true);
+  });
+
   it('tapping the peek bar expands the full properties form', () => {
     stubMobileViewport();
     render(<Harness initialZones={[zone]} initialSelected="z1" />);
@@ -1680,5 +1700,217 @@ describe('WorksheetZoneEditor — no layout flash on the server render (mobile l
     vi.stubGlobal('matchMedia', undefined);
     const html = renderToStaticMarkup(<Harness initialZones={[SSR_ZONE]} initialSelected="z1" />);
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);
+  });
+});
+
+describe('WorksheetZoneEditor — audio markers ("colocar un audio propio")', () => {
+  /** Stateful wrapper so onAudioMarkersChange actually drives re-renders, mirroring `renderTrackedZone` above but for markers. */
+  function renderTrackedAudio(initial: AudioMarker[] = []) {
+    const calls: Array<{ opts: { commit?: boolean }; markers: AudioMarker[] }> = [];
+    function Wrapper() {
+      const [zones, setZones] = useState<Zone[]>([]);
+      const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+      const [audioMarkers, setAudioMarkers] = useState<AudioMarker[]>(initial);
+      return (
+        <WorksheetZoneEditor
+          lang="es"
+          image={IMAGE}
+          imageUrl="/img.webp"
+          zones={zones}
+          selectedZoneId={selectedZoneId}
+          onZonesChange={setZones}
+          onSelectZone={setSelectedZoneId}
+          audioMarkers={audioMarkers}
+          onAudioMarkersChange={(next, opts) => {
+            calls.push({ opts: opts ?? {}, markers: next });
+            setAudioMarkers(next);
+          }}
+          resolveAudioUrl={resolveAudioUrl}
+        />
+      );
+    }
+    render(<Wrapper />);
+    mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
+    return calls;
+  }
+
+  beforeEach(() => {
+    uploadAudioBlobMock.mockReset();
+  });
+
+  it('renders no Audio tool at all when audio support is not wired (every existing render/test)', () => {
+    render(<Harness />);
+    expect(screen.queryByTestId('tool-audio')).toBeNull();
+  });
+
+  it('renders the Audio tool once audioMarkers/onAudioMarkersChange/resolveAudioUrl are all given', () => {
+    renderTrackedAudio();
+    expect(screen.getByTestId('tool-audio')).toBeTruthy();
+  });
+
+  it('clicking the canvas with the Audio tool active places a pending marker (ghost), opening the upload/record choice', () => {
+    renderTrackedAudio();
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    firePointer(screen.getByTestId('zone-canvas'), 'pointerdown', 20, 10);
+
+    expect(screen.getByTestId('audio-placement-ghost')).toBeTruthy();
+    expect(screen.getByTestId('audio-upload-trigger')).toBeTruthy();
+    expect(screen.getByTestId('audio-record-trigger')).toBeTruthy();
+  });
+
+  it('the Audio (A) keyboard shortcut switches tools when audio support is wired', () => {
+    renderTrackedAudio();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'a' });
+    expect(screen.getByTestId('tool-audio').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('never switches to the Audio tool via keyboard when audio support is not wired', () => {
+    render(<Harness />);
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'a' });
+    // No crash, and the Zona tool (default) stays active.
+    expect(screen.getByTestId('tool-zone').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('uploading a file while placing calls onAudioMarkersChange with a brand-new marker at the clicked point', async () => {
+    uploadAudioBlobMock.mockResolvedValue({ ok: true, path: 'activity-audio-uploads/u/new.webm' });
+    const calls = renderTrackedAudio();
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    firePointer(screen.getByTestId('zone-canvas'), 'pointerdown', 20, 10);
+
+    const file = new File(['x'], 'a.webm', { type: 'audio/webm' });
+    fireEvent.change(screen.getByTestId('audio-file-input'), { target: { files: [file] } });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].markers).toHaveLength(1);
+    const marker = calls[0].markers[0]!;
+    expect(marker.path).toBe('activity-audio-uploads/u/new.webm');
+    expect(marker.x).toBeCloseTo(20 / IMAGE.width);
+    expect(marker.y).toBeCloseTo(10 / IMAGE.height);
+    // The placement ghost is gone, replaced by the real marker, now selected.
+    expect(screen.queryByTestId('audio-placement-ghost')).toBeNull();
+    expect(screen.getByTestId(`audio-marker-${marker.id}`)).toBeTruthy();
+  });
+
+  it('cancelling a placement never calls onAudioMarkersChange', () => {
+    const calls = renderTrackedAudio();
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    firePointer(screen.getByTestId('zone-canvas'), 'pointerdown', 20, 10);
+    fireEvent.click(screen.getByTestId('audio-cancel'));
+
+    expect(screen.queryByTestId('audio-placement-ghost')).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('refuses to place a new marker once MAX_AUDIO_MARKERS_PER_WORKSHEET is already reached', () => {
+    const atCap = Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, x: 0.1, y: 0.1, path: `activity-audio/a/m${i}.webm` }));
+    renderTrackedAudio(atCap);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    firePointer(screen.getByTestId('zone-canvas'), 'pointerdown', 20, 10);
+    expect(screen.queryByTestId('audio-placement-ghost')).toBeNull();
+    expect(screen.getByTestId('worksheet-live-region').textContent).toContain('máximo');
+  });
+
+  it('clicking an existing marker selects it, opening the listen-back view', () => {
+    const marker: AudioMarker = { id: 'm1', x: 0.2, y: 0.3, path: 'activity-audio/a/m1.webm' };
+    renderTrackedAudio([marker]);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    fireEvent.pointerDown(screen.getByTestId('audio-marker-m1'));
+
+    const player = screen.getByTestId('audio-marker-player') as HTMLAudioElement;
+    expect(player.getAttribute('src')).toBe(resolveAudioUrl(marker.path));
+  });
+
+  it('deleting the selected marker calls onAudioMarkersChange with it removed', () => {
+    const marker: AudioMarker = { id: 'm1', x: 0.2, y: 0.3, path: 'activity-audio/a/m1.webm' };
+    const calls = renderTrackedAudio([marker]);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    fireEvent.pointerDown(screen.getByTestId('audio-marker-m1'));
+    fireEvent.click(screen.getByTestId('audio-delete'));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].markers).toEqual([]);
+    expect(screen.queryByTestId('audio-marker-m1')).toBeNull();
+  });
+
+  it('batches many pointermove frames of a marker drag into a single onAudioMarkersChange call per animation frame, then commits on pointerup', () => {
+    const marker: AudioMarker = { id: 'm1', x: 0.1, y: 0.1, path: 'activity-audio/a/m1.webm' };
+    const raf = stubQueuedRaf();
+    const calls = renderTrackedAudio([marker]);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    const el = screen.getByTestId('audio-marker-m1');
+
+    firePointer(el, 'pointerdown', 20, 10);
+    firePointer(el, 'pointermove', 25, 10);
+    firePointer(el, 'pointermove', 30, 10);
+    firePointer(el, 'pointermove', 40, 10); // three moves, same simulated frame
+
+    expect(calls).toHaveLength(0);
+    raf.flush();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].opts).toEqual({ commit: false });
+    const moved = calls[0].markers.find((m) => m.id === 'm1')!;
+    expect(moved.x).toBeCloseTo(0.1 + (40 - 20) / IMAGE.width);
+
+    firePointer(el, 'pointerup', 40, 10);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[1].opts).toEqual({ commit: true });
+  });
+
+  it('a cancelled marker drag (pointercancel) never commits', () => {
+    const marker: AudioMarker = { id: 'm1', x: 0.1, y: 0.1, path: 'activity-audio/a/m1.webm' };
+    const raf = stubQueuedRaf();
+    const calls = renderTrackedAudio([marker]);
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    const el = screen.getByTestId('audio-marker-m1');
+
+    firePointer(el, 'pointerdown', 20, 10);
+    firePointer(el, 'pointermove', 40, 10);
+    raf.flush();
+    expect(calls).toHaveLength(1); // the live (commit: false) frame
+
+    firePointer(el, 'pointercancel', 40, 10);
+    expect(calls).toHaveLength(1); // no further (committed) call
+  });
+
+  it('selecting a zone clears the audio marker selection, and vice versa (mutually exclusive panels)', () => {
+    function MixedHarness() {
+      const [zones, setZones] = useState<Zone[]>([{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] }]);
+      const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+      const [audioMarkers, setAudioMarkers] = useState<AudioMarker[]>([
+        { id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' },
+      ]);
+      return (
+        <WorksheetZoneEditor
+          lang="es"
+          image={IMAGE}
+          imageUrl="/img.webp"
+          zones={zones}
+          selectedZoneId={selectedZoneId}
+          onZonesChange={setZones}
+          onSelectZone={setSelectedZoneId}
+          audioMarkers={audioMarkers}
+          onAudioMarkersChange={setAudioMarkers}
+          resolveAudioUrl={resolveAudioUrl}
+        />
+      );
+    }
+    render(<MixedHarness />);
+    mockRect(screen.getByTestId('zone-canvas'), { width: 200, height: 100 });
+
+    fireEvent.click(screen.getByTestId('tool-audio'));
+    fireEvent.pointerDown(screen.getByTestId('audio-marker-m1'));
+    expect(screen.getByTestId('audio-marker-properties-panel')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('tool-zone'));
+    fireEvent.pointerDown(screen.getByTestId('zone-z1'));
+    expect(screen.queryByTestId('audio-marker-properties-panel')).toBeNull();
+    expect(screen.getByTestId('zone-properties-panel')).toBeTruthy();
   });
 });

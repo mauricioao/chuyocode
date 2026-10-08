@@ -41,6 +41,14 @@ describe('QuizLivePreview — renders the real practice component', () => {
     render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
     expect(screen.getByTestId('quiz-practice-b1-preview')).toBeTruthy();
   });
+
+  // Visual-polish pass: the big drag-and-drop games size their own tiles off
+  // their stage's own container width (`mechanics/scale.ts`) — this preview
+  // column is one such stage, so it must be a size container itself.
+  it('is a size container, for the shared game-stage sizing tokens', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
+    expect(screen.getByTestId('quiz-preview-b1').className).toContain('@container');
+  });
 });
 
 describe('QuizLivePreview — checking and retrying', () => {
@@ -60,6 +68,53 @@ describe('QuizLivePreview — checking and retrying', () => {
     fireEvent.click(screen.getByTestId('quiz-preview-retry-b1'));
     expect(screen.queryByTestId('quiz-preview-score-b1')).toBeNull();
     expect((screen.getByTestId('quiz-slot-s1').querySelector('input, textarea') as HTMLInputElement).value).toBe('');
+  });
+});
+
+describe('QuizLivePreview — opens in the template\'s own game (owner review of the match stage)', () => {
+  const MATCH_PAYLOAD: Payload = {
+    pools: {},
+    slots: [
+      { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+      { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+    ],
+  };
+
+  const REORDER_PAYLOAD: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+  };
+
+  it('opens a "match" block\'s preview in Parejas, not Básico', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('opens a "reorder" block\'s preview in Reordenar, not Básico', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={REORDER_PAYLOAD} template="reorder" />);
+    expect(screen.getByTestId('quiz-reorder')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+
+  it('still opens Básico with no template', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} />);
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
+  });
+
+  it('opens a "groupsort" block\'s preview in Ordenar por grupos, not Básico, and its own games badge counts only "Básico"/"Ordenar por grupos"', () => {
+    const GROUPSORT_PAYLOAD: Payload = {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+    };
+    render(<QuizLivePreview blockId="b1" lang="es" payload={GROUPSORT_PAYLOAD} template="groupsort" />);
+    expect(screen.getByTestId('quiz-groupsort')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-g1')).toBeNull();
+    expect(screen.getByTestId('quiz-preview-games-badge-b1').textContent).toContain('2 juegos');
   });
 });
 

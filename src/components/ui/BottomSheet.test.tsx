@@ -111,6 +111,32 @@ describe('BottomSheet — collapsed peek', () => {
     expect(screen.getByTestId('bottom-sheet')).toBeTruthy();
     expect(screen.queryByTestId('bottom-sheet-peek')).toBeNull();
   });
+
+  it('defaults the peek bar to `bottom-0`', () => {
+    render(<Harness peek={<span>Zona de texto</span>} />);
+    expect(screen.getByTestId('bottom-sheet-peek').className.split(/\s+/)).toContain('bottom-0');
+  });
+
+  // Mobile layout pass, bug fix: a caller stacking this peek bar above its
+  // own fixed bottom bar (the editor's mobile toolbar) overrides the
+  // default `bottom-0` instead of overlapping it — see `peekBottomClassName`'s
+  // own header.
+  it('applies a custom `peekBottomClassName` instead of `bottom-0`, when given', () => {
+    render(
+      <BottomSheet
+        open={false}
+        onOpenChange={() => {}}
+        title="Zona 1"
+        peek={<span>Zona de texto</span>}
+        peekBottomClassName="bottom-[2.5rem]"
+      >
+        <p>Contenido</p>
+      </BottomSheet>,
+    );
+    const classes = screen.getByTestId('bottom-sheet-peek').className.split(/\s+/);
+    expect(classes).toContain('bottom-[2.5rem]');
+    expect(classes).not.toContain('bottom-0');
+  });
 });
 
 describe('BottomSheet — swipe down to close', () => {

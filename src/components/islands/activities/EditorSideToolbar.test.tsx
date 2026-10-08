@@ -3,7 +3,6 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import EditorSideToolbar from './EditorSideToolbar';
-import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
 import { clampToolbarPosition, dockTargetPosition } from '@/lib/activities/toolbarPosition';
 
 const STORAGE_KEY = 'chuyocode:editor-side-toolbar';
@@ -58,17 +57,6 @@ function firePointer(
   });
 }
 
-function worksheetBlock(id: string, name?: string): WorksheetBlock {
-  return {
-    id,
-    type: 'worksheet',
-    rotation: 0,
-    name,
-    image: { path: `activity-uploads/u1/${id}.webp`, width: 800, height: 600 },
-    zones: [],
-  };
-}
-
 const SAVE_LABELS = {
   saving: 'Guardando cambios',
   saved: 'Cambios guardados',
@@ -81,9 +69,6 @@ const SAVE_LABELS = {
 function renderToolbar(overrides: Partial<Parameters<typeof EditorSideToolbar>[0]> = {}) {
   const props = {
     lang: 'es' as const,
-    blocks: [] as Block[],
-    onGoToBlock: vi.fn(),
-    onAddBlock: vi.fn(),
     preview: false,
     onTogglePreview: vi.fn(),
     canUndo: false,
@@ -104,14 +89,36 @@ describe('EditorSideToolbar — basic controls', () => {
   it('renders the rail with every icon button', () => {
     renderToolbar();
     expect(screen.getByTestId('editor-side-toolbar')).toBeTruthy();
-    expect(screen.getByTestId('block-index-trigger')).toBeTruthy();
-    expect(screen.getByTestId('toolbar-add-block')).toBeTruthy();
     expect(screen.getByTestId('preview-toggle')).toBeTruthy();
     expect(screen.getByTestId('undo-button')).toBeTruthy();
     expect(screen.getByTestId('redo-button')).toBeTruthy();
     expect(screen.getByTestId('shortcuts-trigger')).toBeTruthy();
     expect(screen.getByTestId('save-button')).toBeTruthy();
     expect(screen.getByTestId('save-status')).toBeTruthy();
+  });
+
+  // One-sheet redesign: the sheet-switcher popover and "Agregar bloque" are
+  // GONE — replaced by the worksheet-tools slot below.
+  it('no longer renders the sheet-switcher popover or an add-block button', () => {
+    renderToolbar();
+    expect(screen.queryByTestId('block-index-trigger')).toBeNull();
+    expect(screen.queryByTestId('toolbar-add-block')).toBeNull();
+  });
+
+  // One-sheet redesign: the active worksheet block's own tool/rotate/
+  // "Cambiar imagen" controls (owned by `BlockList.tsx`/`WorksheetZoneEditor.tsx`)
+  // portal into this slot — empty (and `empty:hidden`) with nothing to show.
+  it('renders an empty worksheet-tools slot, with nothing portaled into it yet', () => {
+    renderToolbar();
+    const slot = screen.getByTestId('worksheet-tools-slot');
+    expect(slot).toBeTruthy();
+    expect(slot.children.length).toBe(0);
+  });
+
+  it('calls onWorksheetToolsSlotReady with the slot element on mount', () => {
+    const onWorksheetToolsSlotReady = vi.fn();
+    renderToolbar({ onWorksheetToolsSlotReady });
+    expect(onWorksheetToolsSlotReady).toHaveBeenCalledWith(screen.getByTestId('worksheet-tools-slot'));
   });
 
   // "Colapsar todos"/"Expandir todos" are gone (owner decision 2026-10-07,
@@ -143,32 +150,6 @@ describe('EditorSideToolbar — basic controls', () => {
     cleanup();
     renderToolbar({ preview: true });
     expect(screen.getByTestId('preview-toggle').getAttribute('aria-label')).toBe('Volver a editar');
-  });
-});
-
-describe('EditorSideToolbar — block index popover', () => {
-  it('opens the popover listing every block by its display name', () => {
-    renderToolbar({ blocks: [worksheetBlock('b1'), worksheetBlock('b2', 'Repaso')] });
-    fireEvent.click(screen.getByTestId('block-index-trigger'));
-    const popover = screen.getByTestId('block-index-popover');
-    expect(popover.textContent).toContain('Hoja 1');
-    expect(popover.textContent).toContain('Repaso');
-  });
-
-  it('clicking an entry calls onGoToBlock and closes the popover', () => {
-    const props = renderToolbar({ blocks: [worksheetBlock('b1')] });
-    fireEvent.click(screen.getByTestId('block-index-trigger'));
-    fireEvent.click(screen.getByTestId('block-index-item-b1'));
-    expect(props.onGoToBlock).toHaveBeenCalledWith('b1');
-    expect(screen.queryByTestId('block-index-popover')).toBeNull();
-  });
-
-  it('closes on Escape', () => {
-    renderToolbar({ blocks: [worksheetBlock('b1')] });
-    fireEvent.click(screen.getByTestId('block-index-trigger'));
-    expect(screen.getByTestId('block-index-popover')).toBeTruthy();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByTestId('block-index-popover')).toBeNull();
   });
 });
 
@@ -673,20 +654,23 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
   });
 
-  it('offers every action the desktop rail offers', () => {
+  it('offers every action the desktop rail offers, except keyboard shortcuts help', () => {
     stubMobileViewport();
     renderToolbar({ canUndo: true, canRedo: true });
-    for (const testId of [
-      'block-index-trigger',
-      'toolbar-add-block',
-      'preview-toggle',
-      'undo-button',
-      'redo-button',
-      'shortcuts-trigger',
-      'save-button',
-    ]) {
+    for (const testId of ['worksheet-tools-slot', 'preview-toggle', 'undo-button', 'redo-button', 'save-button']) {
       expect(screen.getByTestId(testId)).toBeTruthy();
     }
+  });
+
+  // Bug fix (owner report: the bar got dense once every tool lived here —
+  // it could overflow even a 360px phone): `ShortcutsDialog` lists KEYBOARD
+  // shortcuts, meaningless with no physical keyboard on a touchscreen, so
+  // it is the one action this compact row drops entirely — it still shows
+  // on the desktop rail (see the sibling describe block below).
+  it('drops the keyboard-shortcuts trigger — meaningless with no physical keyboard', () => {
+    stubMobileViewport();
+    renderToolbar();
+    expect(screen.queryByTestId('shortcuts-trigger')).toBeNull();
   });
 
   it('wires the same callbacks as the desktop rail', () => {
@@ -697,11 +681,22 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the block index popover UPWARD, not sideways', () => {
+  // Bug fix (owner report: on a 360px phone this bar could overflow far
+  // enough that "Guardar" itself scrolled off-screen with no visual hint a
+  // scroll was needed). Only the worksheet tool cluster — the group most
+  // likely to grow (Zona/Mano/Audio/rotate/"Cambiar imagen") — gets its own
+  // bounded, independently-scrollable region; preview/undo/redo/save stay
+  // outside it, so the frequent actions are never what scrolls out of reach.
+  it('gives the worksheet tool cluster its own scroll region, separate from the always-visible save/undo/redo/preview row', () => {
     stubMobileViewport();
-    renderToolbar({ blocks: [worksheetBlock('b1')] });
-    fireEvent.click(screen.getByTestId('block-index-trigger'));
-    expect(screen.getByTestId('block-index-popover').className).toContain('bottom-full');
+    renderToolbar();
+    const bar = screen.getByTestId('editor-side-toolbar-mobile');
+    expect(bar.className).not.toContain('overflow-x-auto');
+    const toolsSlot = screen.getByTestId('worksheet-tools-slot');
+    const scrollRegion = toolsSlot.parentElement!;
+    expect(scrollRegion.className).toContain('overflow-x-auto');
+    expect(scrollRegion.contains(screen.getByTestId('save-button'))).toBe(false);
+    expect(scrollRegion.contains(screen.getByTestId('preview-toggle'))).toBe(false);
   });
 
   it('respects the safe-area inset at the bottom of the screen', () => {
@@ -716,9 +711,6 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
   function ssrProps(): Parameters<typeof EditorSideToolbar>[0] {
     return {
       lang: 'es',
-      blocks: [],
-      onGoToBlock: vi.fn(),
-      onAddBlock: vi.fn(),
       preview: false,
       onTogglePreview: vi.fn(),
       canUndo: false,
@@ -765,9 +757,6 @@ describe('EditorSideToolbar — no flash of the wrong docked position before the
   function ssrProps(): Parameters<typeof EditorSideToolbar>[0] {
     return {
       lang: 'es',
-      blocks: [],
-      onGoToBlock: vi.fn(),
-      onAddBlock: vi.fn(),
       preview: false,
       onTogglePreview: vi.fn(),
       canUndo: false,

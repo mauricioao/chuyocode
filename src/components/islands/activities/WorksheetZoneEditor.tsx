@@ -85,7 +85,16 @@
  * this component's analogue of the editor's "right panel". Arrow keys nudge
  * the selected zone; Delete/Backspace removes it.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
@@ -93,13 +102,16 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
+import { SpeakerHighIcon } from '@phosphor-icons/react/dist/ssr/SpeakerHigh';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
   MAX_ZONE_SPEAK_LENGTH,
   MAX_ZONE_EXPLANATION_LENGTH,
+  MAX_AUDIO_MARKERS_PER_WORKSHEET,
   type ImageRef,
   type Rotation,
   type Zone,
+  type AudioMarker,
 } from '@/lib/activities/blocks';
 import {
   rectFromDrag,
@@ -140,6 +152,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fieldClasses } from '@/lib/ui/field';
+import AudioMarkerButton from './AudioMarkerButton';
+import AudioMarkerPanel from './AudioMarkerPanel';
 
 export interface ZonesChangeOptions {
   /**
@@ -171,19 +185,38 @@ export interface WorksheetZoneEditorProps {
   incompleteZoneId?: string | null;
   incompleteMessage?: string | null;
   /**
-   * The thin active-sheet bar's own middle slot (owner decision 2026-10-07,
-   * "Barra fina debajo", build item 3: "no second toolbar row") — when
-   * given (and hydrated), this component's own zoom/tool row portals INTO
-   * it instead of rendering inline. `null`/omitted (every existing test in
-   * this file, and any other standalone render) keeps today's inline
-   * toolbar unchanged — a graceful fallback, same posture as
-   * `ActivityEditorIsland.tsx`'s own portal targets.
+   * The editor's floating SIDE toolbar's own worksheet-tools slot (one-sheet
+   * redesign, owner spec: "zona de las hojas... solo para el zoom" — the
+   * Zona/Mano tool toggle moves out of this canvas's own zoom pill and into
+   * that rail, alongside `BlockList.tsx`'s own rotate/"Cambiar imagen"
+   * controls). When given (and hydrated), the tool toggle portals INTO it;
+   * `null`/omitted (every existing test in this file, and any other
+   * standalone render) renders it inline instead — a graceful fallback,
+   * same posture as `ActivityEditorIsland.tsx`'s own portal targets.
    */
-  toolbarPortalTarget?: HTMLElement | null;
+  sideToolsPortalTarget?: HTMLElement | null;
+  /** Mirrors the live tool selection out to a caller rendering the toggle elsewhere (`sideToolsPortalTarget` above) — e.g. `BlockList.tsx`'s own `activeTool` state, used to show the pressed button there. */
+  onToolChange?: (tool: Tool) => void;
+  /**
+   * "Colocar un audio propio" — this worksheet's own audio markers.
+   * `undefined`/omitted (every existing test in this file, and any
+   * standalone render with no audio support) renders the canvas exactly as
+   * before this feature: no Audio tool, no markers, no properties-panel
+   * audio content.
+   */
+  audioMarkers?: AudioMarker[];
+  onAudioMarkersChange?: (markers: AudioMarker[], opts?: ZonesChangeOptions) => void;
+  /** Resolves a stored audio marker `path` to a browser-loadable URL (listen-back in the properties panel). Required together with `audioMarkers`/`onAudioMarkersChange`. */
+  resolveAudioUrl?: (path: string) => string;
 }
 
-/** The two canvas tools (owner-approved design) — see the file header. */
-type Tool = 'zone' | 'hand';
+/** The three canvas tools (owner-approved design, "colocar un audio propio" build) — see the file header. */
+export type Tool = 'zone' | 'hand' | 'audio';
+
+/** Imperative handle (one-sheet redesign): lets a caller rendering the tool toggle elsewhere (`sideToolsPortalTarget`) still drive this canvas's own internal tool state. */
+export interface WorksheetZoneEditorHandle {
+  setTool: (tool: Tool) => void;
+}
 
 const HANDLES: Handle[] = ['nw', 'ne', 'sw', 'se'];
 const HANDLE_CURSOR: Record<Handle, string> = {
@@ -195,27 +228,54 @@ const HANDLE_CURSOR: Record<Handle, string> = {
 
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
+/**
+ * Mobile layout pass, bug fix (owner report: on a phone, selecting a zone
+ * showed nothing usable — this canvas's own collapsed peek bar and
+ * `EditorSideToolbar`'s mobile bottom bar are both `fixed inset-x-0 bottom-0
+ * z-40`, so the later one in DOM order completely covered the other).
+ * `EditorSideToolbar.tsx`'s own mobile bar is `py-1.5` (0.375rem) around a
+ * `size-7` (1.75rem) icon-sm button — 0.375+1.75+0.375 = 2.5rem of visible
+ * content height before its own safe-area-only bottom padding, which the
+ * SAME `env(safe-area-inset-bottom)` term below accounts for identically (it
+ * REPLACES, not adds to, that bar's own bottom padding — see that
+ * component's own `pb-[calc(0.375rem+env(safe-area-inset-bottom))]`).
+ * Passed as this canvas's own peek bar's `peekBottomClassName` (both
+ * BottomSheet instances below) so it parks directly above that bar instead
+ * of underneath it.
+ */
+const MOBILE_TOOLBAR_PEEK_OFFSET = 'bottom-[calc(2.5rem+env(safe-area-inset-bottom))]';
+
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
   | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect }
   | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera }
+  /** "Colocar un audio propio": dragging an already-placed audio marker to reposition it — position only, no resize/handles (a marker has no `w`/`h`). */
+  | { kind: 'move-audio'; markerId: string; start: { x: number; y: number }; originalX: number; originalY: number }
   /** Mobile layout pass: a two-finger touch pinch/pan — see `touchGesture.ts`'s own header; all the actual math lives there, this is just the marker `handlePointerMove`/`handlePointerUp` branch on. */
   | { kind: 'touch-pinch' };
 
-export default function WorksheetZoneEditor({
-  lang,
-  image,
-  imageUrl,
-  zones,
-  selectedZoneId,
-  onZonesChange,
-  onSelectZone,
-  rotation = 0,
-  incompleteZoneId,
-  incompleteMessage = null,
-  toolbarPortalTarget = null,
-}: WorksheetZoneEditorProps) {
+const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneEditorProps>(function WorksheetZoneEditor(
+  {
+    lang,
+    image,
+    imageUrl,
+    zones,
+    selectedZoneId,
+    onZonesChange,
+    onSelectZone,
+    rotation = 0,
+    incompleteZoneId,
+    incompleteMessage = null,
+    sideToolsPortalTarget = null,
+    onToolChange,
+    audioMarkers = [],
+    onAudioMarkersChange,
+    resolveAudioUrl,
+  }: WorksheetZoneEditorProps,
+  ref,
+) {
+  const audioEnabled = onAudioMarkersChange !== undefined && resolveAudioUrl !== undefined;
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -232,6 +292,28 @@ export default function WorksheetZoneEditor({
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // "Colocar un audio propio": the marker currently shown in the properties
+  // panel's "listen/replace/delete" view, or `null` when nothing is
+  // selected. Local-only (unlike `selectedZoneId`, a prop): nothing outside
+  // this canvas needs to know which marker is open.
+  const [selectedAudioMarkerId, setSelectedAudioMarkerId] = useState<string | null>(null);
+  // A brand-new marker's own canvas point, before any audio is attached —
+  // see `blocks.ts`'s `AudioMarker` header for why nothing is added to
+  // `audioMarkers` until an upload/recording actually succeeds. `null` =
+  // not currently placing one.
+  const [pendingAudioPlacement, setPendingAudioPlacement] = useState<{ x: number; y: number } | null>(null);
+
+  // One-sheet redesign: a caller rendering the Zona/Mano toggle elsewhere
+  // (`sideToolsPortalTarget`) drives this canvas's tool via the imperative
+  // handle, and reads the CURRENT tool back via `onToolChange` (fired on
+  // every change, including the very first render, so a fresh mirror never
+  // starts stale) — `setTool` itself is a `useState` setter, already
+  // referentially stable, so the handle identity never needs to change.
+  useImperativeHandle(ref, () => ({ setTool }), []);
+  useEffect(() => {
+    onToolChange?.(tool);
+  }, [tool, onToolChange]);
 
   // Coherent loading states, item 6: a soft fade-in once the canvas image
   // actually decodes (the muted canvas background behind it already reads
@@ -268,6 +350,11 @@ export default function WorksheetZoneEditor({
   useEffect(() => {
     setMobilePanelExpanded(false);
   }, [selectedZoneId]);
+  // Same reset, for an audio marker selection or a brand-new placement
+  // (`selectedAudioMarkerId`/`pendingAudioPlacement` further down).
+  useEffect(() => {
+    setMobilePanelExpanded(false);
+  }, [selectedAudioMarkerId, pendingAudioPlacement]);
 
   // Keyboard zone creation's focus handoff (see `handleCreateZoneAtCenter`
   // above): once `selectedZoneId` actually matches the zone that requested
@@ -321,6 +408,48 @@ export default function WorksheetZoneEditor({
     zoneId: null,
     rect: null,
   });
+
+  // "Colocar un audio propio" — same kept-in-sync-every-render shape as
+  // `zonesRef`/`onZonesChangeRef` above, and the same rAF-batched pending
+  // frame shape as `moveFrameRef`, for a marker drag (position only).
+  const audioMarkersRef = useRef(audioMarkers);
+  audioMarkersRef.current = audioMarkers;
+  const onAudioMarkersChangeRef = useRef(onAudioMarkersChange);
+  onAudioMarkersChangeRef.current = onAudioMarkersChange;
+  const markerMoveFrameRef = useRef<{ id: number | null; markerId: string | null; x: number | null; y: number | null }>(
+    { id: null, markerId: null, x: null, y: null },
+  );
+
+  /**
+   * Applies whatever marker move frame is still pending RIGHT NOW,
+   * synchronously — same role as `flushPendingMoveFrame` above, for a
+   * marker drag instead of a zone one. Returns the flushed markers array,
+   * or `undefined` when nothing was pending.
+   */
+  const flushPendingMarkerMoveFrame = useCallback((): AudioMarker[] | undefined => {
+    const pending = markerMoveFrameRef.current;
+    if (pending.id != null) {
+      cancelAnimationFrame(pending.id);
+      pending.id = null;
+    }
+    const { markerId, x, y } = pending;
+    if (!markerId || x == null || y == null) return undefined;
+    pending.markerId = null;
+    pending.x = null;
+    pending.y = null;
+    const next = audioMarkersRef.current.map((m) => (m.id === markerId ? { ...m, x, y } : m));
+    onAudioMarkersChangeRef.current?.(next, { commit: false });
+    return next;
+  }, []);
+
+  // A zone/audio selection is mutually exclusive, same single-selection
+  // slot in the properties panel (see the file header's note on
+  // `AudioMarkerPanel`) — clearing this is a local-only reset (unlike the
+  // zone side, which is the `selectedZoneId` PROP, reset via `onSelectZone`).
+  const clearAudioSelection = useCallback(() => {
+    setSelectedAudioMarkerId(null);
+    setPendingAudioPlacement(null);
+  }, []);
 
   // Applies whatever zone move/resize frame is still pending RIGHT NOW,
   // synchronously — used by the frame's own `requestAnimationFrame`
@@ -528,10 +657,11 @@ export default function WorksheetZoneEditor({
     const rect = centeredZoneRect(visible);
     const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
     pendingFocusZoneIdRef.current = zone.id;
+    clearAudioSelection();
     onZonesChange([...zones, zone]);
     onSelectZone(zone.id);
     setLiveAnnouncement(t.zoneCreatedAnnouncement);
-  }, [zones, onZonesChange, onSelectZone, viewportSize, displaySize, t.zoneCreatedAnnouncement]);
+  }, [zones, onZonesChange, onSelectZone, viewportSize, displaySize, t.zoneCreatedAnnouncement, clearAudioSelection]);
 
   const handleViewportKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -550,6 +680,9 @@ export default function WorksheetZoneEditor({
       } else if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         setTool('hand');
+      } else if ((e.key === 'a' || e.key === 'A') && audioEnabled && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setTool('audio');
       } else if (
         (e.key === 'Enter' || e.key === 'n' || e.key === 'N') &&
         effectiveTool === 'zone' &&
@@ -565,7 +698,7 @@ export default function WorksheetZoneEditor({
         setSpaceHeld(true);
       }
     },
-    [handleZoomIn, handleZoomOut, handleZoomFit, effectiveTool, handleCreateZoneAtCenter],
+    [handleZoomIn, handleZoomOut, handleZoomFit, effectiveTool, handleCreateZoneAtCenter, audioEnabled],
   );
 
   // Space's "temporary hand" and any drag/pan in flight MUST release even
@@ -669,6 +802,16 @@ export default function WorksheetZoneEditor({
       cancelAnimationFrame(panFrameRef.current.id);
       panFrameRef.current.id = null;
     }
+    // A marker drag interrupted by something OTHER than its own pointerup
+    // (OS/browser cancel, a second touch finger, the window losing focus)
+    // must never commit — same "ends without committing anything" contract
+    // this whole function documents below. A NORMAL marker drag never
+    // reaches here: `handlePointerUp` commits it directly and returns
+    // before calling this (see its own branch).
+    if (markerMoveFrameRef.current.id != null) {
+      cancelAnimationFrame(markerMoveFrameRef.current.id);
+    }
+    markerMoveFrameRef.current = { id: null, markerId: null, x: null, y: null };
     if (drag?.kind === 'pan') {
       // Commit the FINAL camera synchronously, even if a batched frame was
       // still pending — see the file header's Performance note.
@@ -740,13 +883,42 @@ export default function WorksheetZoneEditor({
         startPan(e); // Mano tool (or a temporary Space-hand): left-drag pans
         return;
       }
+      if (effectiveTool === 'audio') {
+        // "Colocar un audio propio": a plain click places (or re-places) a
+        // PENDING marker point — nothing is added to `audioMarkers` yet,
+        // see `pendingAudioPlacement`'s own header. No drag/rubber-band:
+        // unlike drawing a zone, there is no size to drag out.
+        if (audioMarkers.length >= MAX_AUDIO_MARKERS_PER_WORKSHEET) {
+          setLiveAnnouncement(t.audioMaxMarkersReached);
+          return;
+        }
+        if (displaySize.width <= 0 || displaySize.height <= 0) return;
+        const point = pointFromEvent(e);
+        const x = Math.min(1, Math.max(0, point.x / displaySize.width));
+        const y = Math.min(1, Math.max(0, point.y / displaySize.height));
+        onSelectZone(null);
+        setSelectedAudioMarkerId(null);
+        setPendingAudioPlacement({ x, y });
+        return;
+      }
+      clearAudioSelection();
       onSelectZone(null);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'draw', start };
       setDraftRect(null);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
+    [
+      effectiveTool,
+      onSelectZone,
+      pointFromEvent,
+      startPan,
+      handleTouchGesturePointerDown,
+      clearAudioSelection,
+      displaySize,
+      audioMarkers,
+      t.audioMaxMarkersReached,
+    ],
   );
 
   const handleZonePointerDown = useCallback(
@@ -763,12 +935,13 @@ export default function WorksheetZoneEditor({
         return;
       }
       e.stopPropagation();
+      clearAudioSelection();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'move', zoneId: zone.id, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown, clearAudioSelection],
   );
 
   const handleHandlePointerDown = useCallback(
@@ -783,12 +956,33 @@ export default function WorksheetZoneEditor({
         return;
       }
       e.stopPropagation();
+      clearAudioSelection();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'resize', zoneId: zone.id, handle, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown, clearAudioSelection],
+  );
+
+  /**
+   * "Colocar un audio propio": pointerdown on an ALREADY-PLACED marker —
+   * selects it (opening its properties-panel listen/replace/delete view)
+   * and starts a potential reposition drag, same select-and-maybe-drag
+   * shape as `handleZonePointerDown` above. Markers have no resize handles
+   * (no `w`/`h`), so this is the marker's only pointer entry point.
+   */
+  const handleMarkerPointerDown = useCallback(
+    (marker: AudioMarker) => (e: React.PointerEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      onSelectZone(null);
+      setPendingAudioPlacement(null);
+      setSelectedAudioMarkerId(marker.id);
+      const start = pointFromEvent(e);
+      dragRef.current = { kind: 'move-audio', markerId: marker.id, start, originalX: marker.x, originalY: marker.y };
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    },
+    [onSelectZone, pointFromEvent],
   );
 
   const handlePointerMove = useCallback(
@@ -848,6 +1042,24 @@ export default function WorksheetZoneEditor({
         return;
       }
 
+      if (drag.kind === 'move-audio') {
+        if (displaySize.width <= 0 || displaySize.height <= 0) return;
+        const point = pointFromEvent(e);
+        const dx = (point.x - drag.start.x) / displaySize.width;
+        const dy = (point.y - drag.start.y) / displaySize.height;
+        const x = Math.min(1, Math.max(0, drag.originalX + dx));
+        const y = Math.min(1, Math.max(0, drag.originalY + dy));
+        markerMoveFrameRef.current.markerId = drag.markerId;
+        markerMoveFrameRef.current.x = x;
+        markerMoveFrameRef.current.y = y;
+        if (markerMoveFrameRef.current.id == null) {
+          markerMoveFrameRef.current.id = requestAnimationFrame(() => {
+            flushPendingMarkerMoveFrame();
+          });
+        }
+        return;
+      }
+
       const point = pointFromEvent(e);
 
       if (drag.kind === 'draw') {
@@ -882,12 +1094,23 @@ export default function WorksheetZoneEditor({
         }
       }
     },
-    [pointFromEvent, flushPendingMoveFrame, displaySize, viewportSize, viewportPointFromEvent],
+    [pointFromEvent, flushPendingMoveFrame, flushPendingMarkerMoveFrame, displaySize, viewportSize, viewportPointFromEvent],
   );
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
+
+      // "Colocar un audio propio": a marker drag's own commit — runs BEFORE
+      // `endDrag()` (below) ever sees this gesture, since `endDrag` itself
+      // only ever CANCELS a marker move (see its own comment) — a normal
+      // pointerup must commit it instead, exactly once, as one undo step.
+      if (drag?.kind === 'move-audio') {
+        dragRef.current = null;
+        const flushed = flushPendingMarkerMoveFrame();
+        onAudioMarkersChange?.(flushed ?? audioMarkers, { commit: true });
+        return;
+      }
 
       // Mobile layout pass: a touch finger lifting — feed it to
       // `touchGesture.ts` first. While still `'touch-pinch'` (this WAS the
@@ -947,7 +1170,18 @@ export default function WorksheetZoneEditor({
       onZonesChange([...zones, zone]);
       onSelectZone(zone.id);
     },
-    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize, viewportSize],
+    [
+      pointFromEvent,
+      zones,
+      onZonesChange,
+      onSelectZone,
+      endDrag,
+      displaySize,
+      viewportSize,
+      flushPendingMarkerMoveFrame,
+      onAudioMarkersChange,
+      audioMarkers,
+    ],
   );
 
   const handlePointerCancel = useCallback(
@@ -1333,25 +1567,20 @@ export default function WorksheetZoneEditor({
     </div>
   ) : null;
 
-  // The zoom/tool row (owner decision 2026-10-07, "Barra fina debajo",
-  // build item 3: "no second toolbar row") — when the active-sheet bar
-  // hands this component a middle slot, this portals straight into it
-  // instead of rendering its own row here. `null` (every existing test in
-  // this file, and any other standalone caller) keeps the original inline
-  // card unchanged — a graceful fallback, same posture as
-  // `ActivityEditorIsland.tsx`'s own portal targets.
-  const zoomToolbar = (
+  // The zoom pill (one-sheet redesign, owner spec: "la zona de las hojas
+  // sería solo para el zoom... compacta y minimaliza esta zona que sea
+  // finita, pero realmente fina y estilizada" — a slim ~32px floating glass
+  // pill, ALWAYS rendered inline, absolutely positioned over the canvas
+  // itself (top-left of the viewport, see the render below) rather than in
+  // any bar: zoom only now — the Zona/Mano tool toggle moved to
+  // `toolCluster` below, and rotate/"Cambiar imagen" live in
+  // `BlockList.tsx`'s own portal into the side toolbar. "Ajustar" is now an
+  // icon-only button (aria-label + tooltip) instead of icon+visible text, to
+  // stay compact.
+  const zoomPill = (
     <div
-      className={
-        toolbarPortalTarget
-          ? // Portaled into the active-sheet bar's own middle slot (build item
-            // 3): that bar is a single horizontally-SCROLLING line on phones
-            // (never wraps — see `BlockList.tsx`'s own header), so this stays
-            // one line too, matching it, rather than wrapping internally.
-            'flex flex-nowrap items-center gap-1'
-          : 'mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1'
-      }
       data-testid="zoom-toolbar"
+      className="glass-floating pointer-events-auto absolute left-3 top-3 z-20 flex h-8 flex-nowrap items-center gap-1 rounded-(--radius-pill) px-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)"
     >
       <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
         <MinusIcon aria-hidden="true" />
@@ -1384,19 +1613,36 @@ export default function WorksheetZoneEditor({
         <PlusIcon aria-hidden="true" />
       </Button>
       <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-      <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
+      {/* "Ajustar" (owner spec): icon-only now, with its label as a tooltip
+          (`title`) + `aria-label` instead of visible text. */}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        aria-label={t.zoomFit}
+        title={t.zoomFit}
+        data-testid="zoom-fit"
+        onClick={handleZoomFit}
+      >
         <FrameCornersIcon aria-hidden="true" />
-        {t.zoomFit}
       </Button>
-      <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-      {/* Tool toggle (owner-approved design): icon-only, active tool in
-          brand yellow (`variant="default"`) — replaces the old
-          25/50/100/125 preset row and the "+ Zona" button entirely. The
-          Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
-          same weight) as the side toolbar's "Agregar bloque" button, to
-          match this tool's own crosshair cursor — see
-          `EditorSideToolbar.tsx`'s `toolbar-add-block`. Its own tooltip
-          stays "Zona (V)"; only the icon is shared. */}
+    </div>
+  );
+
+  // The Zona/Mano tool toggle (one-sheet redesign): moved OUT of the zoom
+  // pill above and into the floating SIDE toolbar, alongside
+  // `BlockList.tsx`'s own rotate/"Cambiar imagen" controls — portaled into
+  // `sideToolsPortalTarget` when given (and hydrated); `null`/omitted
+  // (every existing test in this file, and any other standalone render)
+  // renders it inline instead, absolutely positioned under the zoom pill —
+  // a graceful fallback, same posture as `ActivityEditorIsland.tsx`'s own
+  // portal targets. Same markup/testids either way, so callers querying
+  // `tool-zone`/`tool-hand` never need to know which.
+  const toolCluster = (
+    <div data-testid="tool-cluster" className="flex flex-nowrap items-center gap-1 lg:flex-col">
+      {/* The Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
+          same weight) its own tooltip ("Zona (V)") already named before
+          this pass. */}
       <Button
         type="button"
         size="icon-sm"
@@ -1421,8 +1667,67 @@ export default function WorksheetZoneEditor({
       >
         <HandIcon aria-hidden="true" />
       </Button>
+      {/* "Colocar un audio propio": a third tool, rendered only when the
+          caller actually wired audio support — see `audioEnabled`'s own
+          header. Every existing test/standalone render (no `audioMarkers`/
+          `onAudioMarkersChange`/`resolveAudioUrl` given) never sees this
+          button at all, same graceful-fallback posture as every other
+          optional prop here. */}
+      {audioEnabled && (
+        <Button
+          type="button"
+          size="icon-sm"
+          variant={tool === 'audio' ? 'default' : 'ghost'}
+          aria-label={t.toolAudio}
+          aria-pressed={tool === 'audio'}
+          title={t.toolAudioTooltip}
+          data-testid="tool-audio"
+          onClick={() => setTool('audio')}
+        >
+          <SpeakerHighIcon aria-hidden="true" />
+        </Button>
+      )}
     </div>
   );
+
+  const selectedAudioMarker = audioMarkers.find((m) => m.id === selectedAudioMarkerId) ?? null;
+
+  // The audio marker properties content — either a brand-new placement's
+  // upload/record choice, or an already-placed marker's listen/replace/
+  // delete view. `null` with nothing selected AND nothing pending, same
+  // "no empty-state card" posture as `zonePropertiesContent`.
+  const audioPanelContent =
+    audioEnabled && (selectedAudioMarker || pendingAudioPlacement) ? (
+      <AudioMarkerPanel
+        key={selectedAudioMarker?.id ?? 'placement'}
+        lang={lang}
+        marker={selectedAudioMarker}
+        resolveAudioUrl={resolveAudioUrl!}
+        onAudioReady={(path) => {
+          if (selectedAudioMarker) {
+            onAudioMarkersChange!(
+              audioMarkers.map((m) => (m.id === selectedAudioMarker.id ? { ...m, path } : m)),
+            );
+            return;
+          }
+          if (!pendingAudioPlacement) return;
+          if (audioMarkers.length >= MAX_AUDIO_MARKERS_PER_WORKSHEET) return;
+          const marker: AudioMarker = { id: crypto.randomUUID(), ...pendingAudioPlacement, path };
+          onAudioMarkersChange!([...audioMarkers, marker]);
+          setPendingAudioPlacement(null);
+          setSelectedAudioMarkerId(marker.id);
+        }}
+        onDelete={
+          selectedAudioMarker
+            ? () => {
+                onAudioMarkersChange!(audioMarkers.filter((m) => m.id !== selectedAudioMarker.id));
+                setSelectedAudioMarkerId(null);
+              }
+            : undefined
+        }
+        onCancelPlacement={!selectedAudioMarker ? () => setPendingAudioPlacement(null) : undefined}
+      />
+    ) : null;
 
   // Desktop-only floating overlay (owner decision 2026-10-07, build item 3:
   // the always-rendered column "zoomed" the canvas on select/deselect —
@@ -1436,6 +1741,13 @@ export default function WorksheetZoneEditor({
       className="pointer-events-auto absolute right-2 top-2 z-10 max-h-[calc(100%-1rem)] w-72 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-elevation-2"
     >
       {zonePropertiesContent}
+    </div>
+  ) : audioPanelContent ? (
+    <div
+      data-testid="audio-marker-properties-panel"
+      className="pointer-events-auto absolute right-2 top-2 z-10 max-h-[calc(100%-1rem)] w-72 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-elevation-2"
+    >
+      {audioPanelContent}
     </div>
   ) : null;
 
@@ -1451,7 +1763,11 @@ export default function WorksheetZoneEditor({
       <div aria-live="polite" role="status" className="sr-only" data-testid="worksheet-live-region">
         {liveAnnouncement}
       </div>
-      {toolbarPortalTarget && hydrated ? createPortal(zoomToolbar, toolbarPortalTarget) : zoomToolbar}
+      {/* The Zona/Mano toggle has no inline home of its own any more once a
+          real side-toolbar slot exists — portaled there instead (see
+          `toolCluster`'s own header). Rendered here, OUTSIDE the viewport,
+          only as the standalone/pre-hydration fallback. */}
+      {sideToolsPortalTarget && hydrated ? createPortal(toolCluster, sideToolsPortalTarget) : null}
 
       <div
         ref={viewportRef}
@@ -1475,6 +1791,19 @@ export default function WorksheetZoneEditor({
         // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
         className="canvas-dots relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
+          {zoomPill}
+          {/* Standalone/pre-hydration fallback for the tool toggle — see
+              `toolCluster`'s own header. Positioned just under the zoom
+              pill so both stay reachable without a real side-toolbar slot
+              (every existing test in this file, and any other standalone
+              render). */}
+          {!(sideToolsPortalTarget && hydrated) && (
+            <div className="pointer-events-none absolute left-3 top-14 z-20">
+              <div className="pointer-events-auto glass-floating flex h-8 items-center rounded-(--radius-pill) px-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)">
+                {toolCluster}
+              </div>
+            </div>
+          )}
           <div
             ref={containerRef}
             data-testid="zone-canvas"
@@ -1568,7 +1897,11 @@ export default function WorksheetZoneEditor({
                   // empty canvas instead of the Zona tool's "move" cursor,
                   // since dragging it now pans (see `handleZonePointerDown`).
                   className={`absolute rounded border-2 ${
-                    effectiveTool === 'hand' ? canvasCursorClass : 'cursor-move'
+                    effectiveTool === 'audio'
+                      ? 'pointer-events-none'
+                      : effectiveTool === 'hand'
+                        ? canvasCursorClass
+                        : 'cursor-move'
                   } ${
                     selected ? 'border-accent-ink bg-primary/20' : 'border-accent-ink/70 bg-accent/10'
                   } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
@@ -1608,6 +1941,38 @@ export default function WorksheetZoneEditor({
                   width: `${draftRect.w * 100}%`,
                   height: `${draftRect.h * 100}%`,
                 }}
+              />
+            )}
+            {/* "Colocar un audio propio": every already-placed marker —
+                interactive (selectable/draggable) ONLY while the Audio
+                tool is active; a plain inert visual dot otherwise, same
+                "one tool's layer is interactive at a time" split zones get
+                under the Mano tool (CSS `pointer-events`, no extra
+                pointerdown branching needed — see `handleMarkerPointerDown`'s
+                own header). */}
+            {audioEnabled &&
+              audioMarkers.map((marker) => (
+                <AudioMarkerButton
+                  key={marker.id}
+                  x={marker.x}
+                  y={marker.y}
+                  playing={false}
+                  selected={marker.id === selectedAudioMarkerId}
+                  inert={effectiveTool !== 'audio'}
+                  label={t.audioMarkerLabel}
+                  data-testid={`audio-marker-${marker.id}`}
+                  onPointerDown={handleMarkerPointerDown(marker)}
+                />
+              ))}
+            {/* A brand-new placement's own ghost point — dashed, matching
+                `zone-draft`'s own "still being decided" treatment — until an
+                upload/recording actually lands it as a real marker. */}
+            {audioEnabled && pendingAudioPlacement && (
+              <div
+                data-testid="audio-placement-ghost"
+                aria-hidden="true"
+                className="pointer-events-none absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-accent-ink bg-primary/10"
+                style={{ left: `${pendingAudioPlacement.x * 100}%`, top: `${pendingAudioPlacement.y * 100}%` }}
               />
             )}
           </div>
@@ -1662,15 +2027,31 @@ export default function WorksheetZoneEditor({
           `zonePropertiesContent` is the exact same JSX the desktop overlay
           above uses, computed once. */}
       {(() => {
-        const mobileSheet = (
+        // "Colocar un audio propio": the SAME BottomSheet slot, mutually
+        // exclusive with the zone one above — a zone selection always wins
+        // when somehow both are set (should not happen, `clearAudioSelection`/
+        // `onSelectZone(null)` keep the two apart at every selection site).
+        const mobileSheet = selectedZone ? (
           <BottomSheet
             open={mobilePanelExpanded && selectedZone !== null}
             onOpenChange={setMobilePanelExpanded}
             title={selectedZoneKindLabel ?? t.zoneKindLabel}
             testId="zone-properties-sheet"
             peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
+            peekBottomClassName={MOBILE_TOOLBAR_PEEK_OFFSET}
           >
             {zonePropertiesContent}
+          </BottomSheet>
+        ) : (
+          <BottomSheet
+            open={mobilePanelExpanded && audioPanelContent !== null}
+            onOpenChange={setMobilePanelExpanded}
+            title={t.audioPlaceholderTitle}
+            testId="audio-marker-properties-sheet"
+            peek={audioPanelContent !== null ? <span>{t.toolAudio}</span> : undefined}
+            peekBottomClassName={MOBILE_TOOLBAR_PEEK_OFFSET}
+          >
+            {audioPanelContent}
           </BottomSheet>
         );
 
@@ -1692,4 +2073,6 @@ export default function WorksheetZoneEditor({
       })()}
     </div>
   );
-}
+});
+
+export default WorksheetZoneEditor;

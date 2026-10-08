@@ -39,13 +39,15 @@ import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import SpeakButton from '@/lib/speech/SpeakButton';
-import type { ImageRef, Rotation, Zone } from '@/lib/activities/blocks';
+import type { ImageRef, Rotation, Zone, AudioMarker } from '@/lib/activities/blocks';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 import {
   zoneAnswerFontSize,
   zoneInputFontSizePx,
   shouldShowZonePlaceholder,
 } from '@/lib/activities/zoneAnswerDisplay';
+import { useAudioMarkerPlayback } from '@/lib/activities/useAudioMarkerPlayback';
+import AudioMarkerButton from './AudioMarkerButton';
 import { cn } from '@/lib/utils';
 
 /** PR D, "Activities practice" — turns the creator preview into a gradable, controlled player. See file header. */
@@ -82,6 +84,10 @@ export interface WorksheetPlayerProps {
   onZoneTap?: (zoneId: string) => void;
   /** The zone currently open in the caller's bottom sheet, for the tap target's highlight ring. Ignored without `onZoneTap`. */
   activeZoneId?: string | null;
+  /** "Colocar un audio propio" — this worksheet's own audio markers, rendered as round play buttons (one plays at a time). `undefined`/omitted renders none, same as every caller before this feature. */
+  audio?: AudioMarker[];
+  /** Resolves a stored audio marker `path` to a browser-loadable URL. Required together with `audio`. */
+  resolveAudioUrl?: (path: string) => string;
 }
 
 export default function WorksheetPlayer({
@@ -93,9 +99,16 @@ export default function WorksheetPlayer({
   practice,
   onZoneTap,
   activeZoneId,
+  audio,
+  resolveAudioUrl,
 }: WorksheetPlayerProps) {
   const t = UI_LABELS[lang].activities.player;
   const containerRef = useRef<HTMLDivElement>(null);
+  // "Colocar un audio propio": one shared `<audio>` element for this
+  // worksheet's own markers — only one plays at a time. `resolveAudioUrl`
+  // is only ever missing together with `audio` itself (see the props doc),
+  // so the no-op fallback below is never actually reached with a real path.
+  const { playingId, toggle } = useAudioMarkerPlayback(resolveAudioUrl ?? (() => ''));
   // Only needed for a 90/270 rotation, where the pre-rotation image box must
   // be TRANSPOSED relative to the (now-swapped) container — a relation plain
   // CSS percentages cannot express in a fluid/responsive layout, so this is
@@ -401,6 +414,24 @@ export default function WorksheetPlayer({
             </div>
           );
         })}
+        {/* "Colocar un audio propio": every audio marker, a round play
+            button positioned like a zone but with no `w`/`h` of its own —
+            only one plays at a time (`useAudioMarkerPlayback`). Rendered
+            the same in every mode (creator preview, desktop and mobile
+            practice): a learner can always listen, whether or not they are
+            also answering a zone. */}
+        {resolveAudioUrl &&
+          audio?.map((marker) => (
+            <AudioMarkerButton
+              key={marker.id}
+              x={marker.x}
+              y={marker.y}
+              playing={playingId === marker.id}
+              label={playingId === marker.id ? t.audioPause : t.audioPlay}
+              data-testid={`player-audio-${marker.id}`}
+              onToggle={() => toggle(marker.id, marker.path)}
+            />
+          ))}
       </div>
     </div>
   );

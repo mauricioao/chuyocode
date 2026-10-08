@@ -8,9 +8,15 @@ import {
   isSingleWord,
   anagramEligible,
   hangmanEligible,
+  reorderEligible,
   trueFalseEligibleCount,
   deriveTrueFalseItems,
+  initialGameMode,
+  deriveGroupSortGroups,
+  groupSortPoolName,
+  modesForBlock,
   type GameItem,
+  type GameMode,
   type TrueFalseItem,
 } from './gameModes';
 import type { Payload } from '@/lib/exercisePayload';
@@ -137,23 +143,25 @@ describe('hasUniqueAnswers', () => {
 // never eligible for anagram/hangman (`isSingleWord` requires one letters-only
 // word), which keeps these assertions about cards/match/speak/wheel/openbox
 // from also having to account for the two single-word-only modes. Those two
-// get their own dedicated tests below.
+// get their own dedicated tests below. Being multi-word also makes every one
+// of them `reorder`-eligible (>= 2 words) — so `reorder` shows up in each
+// non-empty expectation below, right alongside the others.
 describe('availableGameModes', () => {
   it('offers only quiz for zero items', () => {
     expect(availableGameModes([])).toEqual(['quiz']);
   });
 
-  it('offers quiz + cards + speak from one item, but not match/wheel/openbox', () => {
+  it('offers quiz + cards + reorder + speak from one item, but not match/wheel/openbox', () => {
     const items: GameItem[] = [{ id: '1', prompt: 'a', answer: 'a red cat' }];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'reorder', 'speak']);
   });
 
-  it('offers quiz + cards + speak + wheel + openbox for two items (still short of match)', () => {
+  it('offers quiz + cards + reorder + speak + wheel + openbox for two items (still short of match)', () => {
     const items: GameItem[] = [
       { id: '1', prompt: 'a', answer: 'a red cat' },
       { id: '2', prompt: 'b', answer: 'a brown dog' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'reorder', 'speak', 'wheel', 'openbox']);
   });
 
   it('offers match too from three items with unique answers', () => {
@@ -162,7 +170,7 @@ describe('availableGameModes', () => {
       { id: '2', prompt: 'b', answer: 'a brown dog' },
       { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'match', 'speak', 'wheel', 'openbox']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'match', 'reorder', 'speak', 'wheel', 'openbox']);
   });
 
   it('withholds match from three items when two answers collide', () => {
@@ -171,7 +179,77 @@ describe('availableGameModes', () => {
       { id: '2', prompt: 'b', answer: 'a red cat' },
       { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'reorder', 'speak', 'wheel', 'openbox']);
+  });
+
+  it('withholds reorder when every answer is a single word', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'dog' },
+    ];
+    expect(availableGameModes(items)).not.toContain('reorder');
+  });
+});
+
+describe('initialGameMode (template plumbing, build item 2)', () => {
+  const eligibleForMatch: GameItem[] = [
+    { id: '1', prompt: 'a', answer: 'a red cat' },
+    { id: '2', prompt: 'b', answer: 'a brown dog' },
+    { id: '3', prompt: 'c', answer: 'a blue bird' },
+  ];
+  const tooFewForMatch: GameItem[] = [
+    { id: '1', prompt: 'a', answer: 'a red cat' },
+    { id: '2', prompt: 'b', answer: 'a brown dog' },
+  ];
+
+  it('starts in quiz with no template ("Básico")', () => {
+    expect(initialGameMode(undefined, eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in match for the match template, when eligible', () => {
+    expect(initialGameMode('match', eligibleForMatch)).toBe('match');
+  });
+
+  it('falls back to quiz for the match template when not (yet) eligible', () => {
+    expect(initialGameMode('match', tooFewForMatch)).toBe('quiz');
+  });
+
+  it('falls back to quiz for the groupsort template without a payload (no groups to check)', () => {
+    expect(initialGameMode('groupsort', eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in groupsort for the groupsort template, when the payload has 2+ eligible groups', () => {
+    const payload = payloadWith(
+      [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+    );
+    expect(initialGameMode('groupsort', eligibleForMatch, payload)).toBe('groupsort');
+  });
+
+  it('falls back to quiz for the cloze template without a payload (no drop-gap slots to check)', () => {
+    expect(initialGameMode('cloze', eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in cloze for the cloze template, when the payload has a drop-gap slot', () => {
+    const payload = payloadWith([
+      { id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] },
+    ], { p1: [{ id: 'goes', text: 'goes' }] });
+    expect(initialGameMode('cloze', eligibleForMatch, payload)).toBe('cloze');
+  });
+
+  it('starts in reorder for the reorder template, when eligible', () => {
+    // `eligibleForMatch`'s own answers are all multi-word, so they are
+    // `reorder`-eligible too (>= 2 words) — reused here rather than a
+    // separate fixture.
+    expect(initialGameMode('reorder', eligibleForMatch)).toBe('reorder');
+  });
+
+  it('falls back to quiz for the reorder template when not (yet) eligible', () => {
+    const singleWordItems: GameItem[] = [{ id: '1', prompt: 'a', answer: 'cat' }];
+    expect(initialGameMode('reorder', singleWordItems)).toBe('quiz');
   });
 
   it('offers anagram/hangman only once an eligible single-word answer exists', () => {
@@ -212,6 +290,108 @@ describe('availableGameModes', () => {
     const items = deriveGameItems(payload);
     expect(availableGameModes(items, payload)).toContain('truefalse');
   });
+
+  it('withholds cloze without a payload, even with drop-eligible-looking items', () => {
+    const items: GameItem[] = [{ id: '1', prompt: 'a', answer: 'cat' }];
+    expect(availableGameModes(items)).not.toContain('cloze');
+  });
+
+  it('withholds cloze when the payload has no drop-gap slot', () => {
+    const payload = payloadWith([{ id: 's1', label: 'What color?', input: 'text', answer: ['blue'] }]);
+    expect(availableGameModes([], payload)).not.toContain('cloze');
+  });
+
+  it('offers cloze once the payload has >= 1 drop-gap slot', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] }],
+      { p1: [{ id: 'goes', text: 'goes' }] },
+    );
+    expect(availableGameModes([], payload)).toContain('cloze');
+  });
+
+  it('withholds groupsort without a payload', () => {
+    expect(availableGameModes([])).not.toContain('groupsort');
+  });
+
+  it('withholds groupsort with fewer than 2 groups', () => {
+    const payload = payloadWith(
+      [{ id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] }],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }] },
+    );
+    expect(availableGameModes([], payload)).not.toContain('groupsort');
+  });
+
+  it('withholds groupsort when any group has fewer than 2 items', () => {
+    const payload = payloadWith(
+      [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+    );
+    expect(availableGameModes([], payload)).not.toContain('groupsort');
+  });
+
+  it('offers groupsort once every group has >= 2 items and there are >= 2 groups', () => {
+    const payload = payloadWith(
+      [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread', 'rice'] },
+      ],
+      { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
+    );
+    expect(availableGameModes([], payload)).toContain('groupsort');
+  });
+});
+
+describe('deriveGroupSortGroups / groupSortPoolName', () => {
+  it('derives one group per "group"-mechanic slot, in authored order, ignoring any other slot', () => {
+    const payload = payloadWith([
+      { id: 'q1', label: 'Básico question', input: 'text', answer: ['x'] },
+      { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+      { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+    ]);
+    expect(deriveGroupSortGroups(payload)).toEqual([
+      { id: 'g1', label: 'Animals', itemIds: ['dog', 'cat'] },
+      { id: 'g2', label: 'Food', itemIds: ['bread'] },
+    ]);
+  });
+
+  it('resolves the shared pool name from the first group slot', () => {
+    const payload = payloadWith([
+      { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog'] },
+    ]);
+    expect(groupSortPoolName(payload)).toBe('p1');
+  });
+
+  it('is undefined for a payload with no group slot yet', () => {
+    expect(groupSortPoolName(payloadWith([]))).toBeUndefined();
+  });
+});
+
+describe('modesForBlock', () => {
+  const allModes: GameMode[] = [
+    'quiz',
+    'cards',
+    'match',
+    'speak',
+    'wheel',
+    'anagram',
+    'hangman',
+    'openbox',
+    'groupsort',
+  ];
+
+  it('restricts a groupsort-templated block to quiz and groupsort only — every other mode built from `deriveGameItems` would misleadingly collapse a group to just its first item', () => {
+    expect(modesForBlock(allModes, 'groupsort')).toEqual(['quiz', 'groupsort']);
+  });
+
+  it('leaves every other template (and Básico, undefined) unrestricted', () => {
+    expect(modesForBlock(allModes, 'match')).toEqual(allModes);
+    expect(modesForBlock(allModes, 'reorder')).toEqual(allModes);
+    expect(modesForBlock(allModes, 'cloze')).toEqual(allModes);
+    expect(modesForBlock(allModes, undefined)).toEqual(allModes);
+  });
 });
 
 describe('isSingleWord', () => {
@@ -251,6 +431,26 @@ describe('anagramEligible / hangmanEligible', () => {
 
   it('keeps only single-word answers within the (longer) hangman length range', () => {
     expect(hangmanEligible(items).map((i) => i.id)).toEqual(['1', '3']);
+  });
+});
+
+describe('reorderEligible', () => {
+  it('keeps only answers of 2 or more words', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'a long phrase' },
+      { id: '3', prompt: 'c', answer: 'two words' },
+    ];
+    expect(reorderEligible(items).map((i) => i.id)).toEqual(['2', '3']);
+  });
+
+  it('ignores extra whitespace when counting words', () => {
+    const items: GameItem[] = [{ id: '1', prompt: 'a', answer: '  two   words  ' }];
+    expect(reorderEligible(items)).toHaveLength(1);
+  });
+
+  it('keeps zero for an empty list', () => {
+    expect(reorderEligible([])).toEqual([]);
   });
 });
 

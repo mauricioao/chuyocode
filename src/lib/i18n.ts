@@ -449,13 +449,28 @@ export const UI_LABELS = {
         pageDescription: 'Elegir el tipo de contenido para una nueva actividad.',
         heading: 'Elige el punto de partida',
         worksheet: {
-          title: 'Hoja de trabajo',
+          title: 'Worksheet',
           description: 'Sube una hoja o PDF y marca dónde van las respuestas.',
         },
         questions: {
-          title: 'Preguntas',
-          description:
-            'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
+          title: 'Básico',
+          description: 'Escribe preguntas y juégalas de muchas formas.',
+        },
+        match: {
+          title: 'Une las parejas',
+          description: 'Arrastra cada respuesta junto a su pareja.',
+        },
+        reorder: {
+          title: 'Reordenar',
+          description: 'Arrastra las palabras para ordenar la oración.',
+        },
+        cloze: {
+          title: 'Completar la frase',
+          description: 'Arrastra las palabras a los espacios en blanco de la frase.',
+        },
+        groupsort: {
+          title: 'Ordenar por grupos',
+          description: 'Arrastra cada elemento a su grupo correcto.',
         },
         createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
@@ -489,8 +504,16 @@ export const UI_LABELS = {
         deleteConfirmBody: 'Esta acción no se puede deshacer.',
         deleteConfirmCancel: 'Cancelar',
         deleteConfirmAccept: 'Eliminar',
-        worksheetLabel: 'Hoja de trabajo',
-        quizLabel: 'Preguntas',
+        // "Cambiar imagen" (one-sheet redesign): replaces the per-block
+        // delete — with a single block, starting over IS replacing its
+        // image. The confirm step only shows when the worksheet already has
+        // zones (a new image would silently invalidate them).
+        changeImage: 'Cambiar imagen',
+        changeImageConfirmTitle: '¿Cambiar la imagen de esta hoja?',
+        changeImageConfirmBody: 'Las zonas dibujadas sobre la imagen actual se perderán.',
+        changeImageConfirmAccept: 'Cambiar',
+        worksheetLabel: 'Worksheet',
+        quizLabel: 'Básico',
         // Creator polish round 2.
         blockNameLabel: 'Nombre del bloque',
         blockNamePlaceholder: 'Nombre del bloque',
@@ -573,6 +596,13 @@ export const UI_LABELS = {
         // a full-screen overlay presenting the editor's own CURRENT (unsaved
         // included) blocks — `PresentationIsland` reused, not a new route.
         viewAsPresentation: 'Ver como presentación',
+        // Mobile title-bar "⋯" menu (owner report: on a 390px phone the
+        // title bar wrapped into three rows and the title truncated to
+        // "Hoj…") — holds the level select, the review-status badge, "Ver
+        // como presentación" and "Enviar a revisión", collapsed behind one
+        // trigger so the title keeps the row's remaining width. Desktop
+        // never shows this trigger — those same controls stay inline there.
+        mobileMenuLabel: 'Más opciones',
         // Submit-for-review dialog.
         submitForReview: 'Enviar a revisión',
         submitDialogTitle: 'Enviar esta actividad a revisión',
@@ -659,6 +689,13 @@ export const UI_LABELS = {
         taskCancel: 'Cancelar',
         taskRetry: 'Reintentar',
         taskChooseAnother: 'Elegir otro archivo',
+        // Several images/PDF pages -> one sheet (one-sheet redesign): the
+        // task panel's own flat label while combining (no "N de M" to
+        // count — see `WorksheetUploader.tsx`'s own `stageLabel`), and the
+        // calm notice shown when more than `MAX_STITCH_SOURCES` (5) were
+        // picked.
+        taskCombiningPages: 'Combinando páginas…',
+        stitchTooManyPages: 'Puedes combinar hasta 5 páginas o imágenes en una sola hoja; se usarán las primeras 5.',
         errors: {
           unsupported_media_type: 'Ese tipo de archivo no está admitido.',
           empty_body: 'El archivo está vacío.',
@@ -668,6 +705,7 @@ export const UI_LABELS = {
           upload_limit_reached: 'Se alcanzó el límite de archivos subidos.',
           upload_failed: 'No se pudo subir el archivo. Inténtalo de nuevo.',
           pdf_failed: 'No se pudo procesar el PDF.',
+          stitch_too_large: 'La hoja combinada es demasiado grande para subirla. Intenta con menos páginas o imágenes más pequeñas.',
         },
         addZoneHint: 'Dibuja un recuadro sobre la imagen para agregar una respuesta.',
         zoneKindText: 'Texto',
@@ -714,6 +752,31 @@ export const UI_LABELS = {
         // tool active and the canvas focused — announced via an aria-live
         // region, see `WorksheetZoneEditor.tsx`'s own header.
         zoneCreatedAnnouncement: 'Zona creada',
+        // "Colocar un audio propio": a third canvas tool, speaker icon —
+        // click to place a marker, then choose "Subir archivo" or "Grabar".
+        toolAudio: 'Audio',
+        toolAudioTooltip: 'Audio (A)',
+        audioMarkerLabel: 'Marcador de audio',
+        audioPlaceholderTitle: 'Agregar audio',
+        audioUploadButton: 'Subir archivo',
+        audioRecordButton: 'Grabar',
+        audioCancel: 'Cancelar',
+        audioReplaceButton: 'Reemplazar audio',
+        audioDeleteButton: 'Eliminar audio',
+        audioDragHint: 'Arrastra el marcador para moverlo.',
+        audioListenLabel: 'Escuchar audio',
+        audioMaxMarkersReached: 'Esta hoja ya tiene el máximo de marcadores de audio.',
+        audioUploadError: 'No se pudo subir el audio. Inténtalo de nuevo.',
+        audioUploading: 'Subiendo…',
+        // Recorder states (`useAudioRecorder.ts`).
+        audioRequestingPermission: 'Pidiendo acceso al micrófono…',
+        audioRecording: 'Grabando…',
+        audioStopButton: 'Detener',
+        audioUseRecording: 'Usar',
+        audioRecordAgain: 'Grabar de nuevo',
+        audioPermissionDenied: 'No se pudo acceder al micrófono. Revisa los permisos del navegador.',
+        audioUnsupported: 'Este navegador no puede grabar audio.',
+        audioRecordError: 'Ocurrió un error al grabar. Inténtalo de nuevo.',
       },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
@@ -742,18 +805,22 @@ export const UI_LABELS = {
         // explicación, mostrado solo para una zona incorrecta que tiene una.
         explanationButtonLabel: 'Ver explicación',
         explanationHeading: '¿Por qué?',
+        // Audio markers in practice: a round play button, one at a time.
+        audioPlay: 'Reproducir audio',
+        audioPause: 'Pausar audio',
       },
       // Quiz block game modes (D1, "Una actividad, muchos juegos"): the
       // switcher between "Preguntas"/"Tarjetas"/"Parejas" plus the copy for
       // the two alternate games themselves.
       gameModes: {
-        modeQuiz: 'Preguntas',
+        modeQuiz: 'Básico',
         modeCards: 'Tarjetas',
         modeMatch: 'Parejas',
+        modeReorder: 'Reordenar',
         // Footer hint (practice player redesign's Comprobar/Reintentar row):
         // shown only while a quiz tab sits in Tarjetas/Parejas, since
         // Comprobar keeps grading the Preguntas-mode answers only.
-        gradesQuizModeHint: 'Comprobar corrige el modo "Preguntas".',
+        gradesQuizModeHint: 'Comprobar corrige el modo "Básico".',
         // Tarjetas (flashcards).
         cardFlipHint: 'Tocar o pulsar Espacio para dar vuelta',
         cardPrev: 'Anterior',
@@ -764,10 +831,39 @@ export const UI_LABELS = {
         cardReviewPileTitle: 'Para repasar',
         cardReplayReview: 'Repasar de nuevo',
         cardsDone: '¡Listo! Repasaste todas las tarjetas.',
-        // Parejas (matching).
-        matchPairs: 'Parejas',
+        // Parejas (matching) — big drag-and-drop board (game-feel pass):
+        // drag an answer tile onto a prompt's empty slot, "Comprobar" grades
+        // the attempt, "Reiniciar" starts a fresh shuffled round.
         matchReset: 'Reiniciar',
-        matchCompletedPrefix: '¡Completado en',
+        matchCheck: 'Comprobar',
+        matchRetry: 'Reintentar',
+        // "4 de 5 correctas" — composed around the learner's score.
+        matchResultOf: 'de',
+        matchResultCorrect: 'correctas',
+        matchRemovePrefix: 'Quitar ficha',
+        matchEmptySlot: 'Casilla vacía',
+        matchTrayLabel: 'Fichas disponibles',
+        matchSoundMute: 'Silenciar sonido',
+        matchSoundUnmute: 'Activar sonido',
+        // Reordenar (Wordwall "Reordenar palabras"): one sentence at a time,
+        // its words scrambled into a tray; drag or tap each word into the
+        // line below, in order, to rebuild it. "Comprobar" grades the current
+        // sentence, advancing on a correct attempt.
+        reorderCheck: 'Comprobar',
+        reorderRetry: 'Reintentar',
+        // "3 de 4 correctas" — composed around the learner's score.
+        reorderResultOf: 'de',
+        reorderResultCorrect: 'correctas',
+        reorderSoundMute: 'Silenciar sonido',
+        reorderSoundUnmute: 'Activar sonido',
+        reorderPrev: 'Oración anterior',
+        reorderNext: 'Oración siguiente',
+        // "1 de 4" — the sentence stepper's own position readout.
+        reorderSentenceOf: 'de',
+        reorderTrayLabel: 'Palabras disponibles',
+        reorderLineLabel: 'Oración',
+        reorderLineEmpty: 'Toca o arrastra una palabra para empezar',
+        reorderRemovePrefix: 'Quitar palabra',
         // Cartas (Wordwall "Speaking cards"): a shuffled deck dealt one card
         // at a time, each with a question to answer out loud.
         modeSpeak: 'Cartas',
@@ -827,6 +923,37 @@ export const UI_LABELS = {
         openboxBoxAriaPrefix: 'Caja',
         openboxOpenedSuffix: 'abierta',
         openboxClosedSuffix: 'cerrada',
+        // Completar la frase (Wordwall "Complete the sentence"): one sentence
+        // at a time, its blanks shown inline, a shared word bank below.
+        modeCloze: 'Completar la frase',
+        clozeCheck: 'Comprobar',
+        clozeRetry: 'Reintentar',
+        // "3 de 4 correctas" — composed around the learner's score.
+        clozeResultOf: 'de',
+        clozeResultCorrect: 'correctas',
+        clozeSoundMute: 'Silenciar sonido',
+        clozeSoundUnmute: 'Activar sonido',
+        clozePrev: 'Oración anterior',
+        clozeNext: 'Oración siguiente',
+        // "1 de 4" — the sentence stepper's own position readout.
+        clozeSentenceOf: 'de',
+        clozeTrayLabel: 'Palabras disponibles',
+        clozeBlankEmpty: 'Casilla vacía',
+        clozeRemovePrefix: 'Quitar palabra',
+        // Ordenar por grupos (Wordwall "Group sort"): every item shuffled
+        // into a tray, the groups shown as large boxes to drag each item
+        // into. "Comprobar" grades the whole board at once.
+        modeGroupSort: 'Ordenar por grupos',
+        groupSortCheck: 'Comprobar',
+        groupSortRetry: 'Reintentar',
+        // "9 de 9 bien ubicados" — composed around the learner's score.
+        groupSortResultOf: 'de',
+        groupSortResultCorrect: 'bien ubicados',
+        groupSortSoundMute: 'Silenciar sonido',
+        groupSortSoundUnmute: 'Activar sonido',
+        groupSortTrayLabel: 'Elementos disponibles',
+        groupSortEmptyGroup: 'Grupo vacío',
+        groupSortRemovePrefix: 'Quitar elemento',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1012,8 +1139,8 @@ export const UI_LABELS = {
         levelLabel: 'Nivel',
         typeLabel: 'Tipo',
         typeAll: 'Todos',
-        typeWorksheet: 'Hoja de trabajo',
-        typeQuiz: 'Preguntas',
+        typeWorksheet: 'Worksheet',
+        typeQuiz: 'Básico',
         sortLabel: 'Ordenar por',
         sortRecientes: 'Más recientes',
         sortGustadas: 'Más gustadas',
@@ -1065,6 +1192,7 @@ export const UI_LABELS = {
         noAnswersYet: 'Todavía sin respuestas',
         zoneLabel: 'Zona',
         quizAnswerLabel: 'Respuesta correcta',
+        clozeDistractorsLabel: 'Distractores',
         explanationLabel: 'Explicación',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
@@ -1099,6 +1227,10 @@ export const UI_LABELS = {
         removeError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
         confirmCancel: 'Cancelar',
         confirmAccept: 'Confirmar',
+        // Audio markers: listed so the reviewer can listen before approving
+        // (same signed-URL treatment as the pre-moderation image above).
+        audioMarkersLabel: 'Audios',
+        audioMarkerIndexLabel: 'Audio',
       },
       // Print page (`/[lang]/ingles/actividades/[id]/imprimir`, D6). A
       // separate, minimal-layout page — no site header/footer/nav, light
@@ -1112,8 +1244,21 @@ export const UI_LABELS = {
         choicesLabel: 'Opciones',
         answersHeading: 'Clave de respuestas',
         explanationLabel: 'Por qué',
-        worksheetLabel: 'Hoja',
-        quizLabel: 'Preguntas',
+        worksheetLabel: 'Worksheet',
+        quizLabel: 'Básico',
+        // "Une las parejas" in print (build item 5): the block heading above
+        // its pair list — reads oddly as "Básico" (the Google-Forms-style
+        // quiz label) when the block is actually a pair list.
+        matchLabel: 'Une las parejas',
+        // "Reordenar" in print (Wordwall templates build): same reasoning as
+        // `matchLabel` above — "Básico" would misname a sentence list.
+        reorderLabel: 'Reordenar',
+        // "Completar la frase" in print: same reasoning as `matchLabel`.
+        clozeLabel: 'Completar la frase',
+        clozeBankLabel: 'Banco de palabras',
+        // "Ordenar por grupos" in print: same reasoning as `matchLabel`.
+        groupSortLabel: 'Ordenar por grupos',
+        groupSortItemsLabel: 'Elementos',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -1161,6 +1306,26 @@ export const UI_LABELS = {
         liveSummary: 'Resumen',
         liveRevealed: 'Respuesta revelada',
         liveWorksheetOverview: 'Vista general de la hoja',
+        // "Une las parejas" in presentation mode (build item 5): one slide
+        // lists every pair's prompt; "Mostrar respuesta" reveals every
+        // answer at once — the simplest shape a teacher can run with a
+        // class projected on a screen, no drag gesture needed.
+        matchTitle: 'Une las parejas',
+        // "Reordenar" in presentation mode (Wordwall templates build): one
+        // slide per sentence, its words shown scrambled; "Mostrar respuesta"
+        // reveals the sentence in its correct order.
+        reorderTitle: 'Reordenar',
+        // "Completar la frase" in presentation mode: one slide per sentence,
+        // its blanks shown as lines; "Mostrar respuesta" fills them in.
+        clozeTitle: 'Completar la frase',
+        // "Ordenar por grupos" in presentation mode: one combined slide,
+        // every group listed by name; "Mostrar respuesta" fills each with
+        // its own items.
+        groupSortTitle: 'Ordenar por grupos',
+        // Audio markers on the worksheet overview slide (owner request:
+        // "en modo presentación también los reproduce").
+        audioPlay: 'Reproducir audio',
+        audioPause: 'Pausar audio',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1844,9 +2009,24 @@ export const UI_LABELS = {
           description: 'Upload a worksheet or a PDF and mark where the answers go.',
         },
         questions: {
-          title: 'Questions',
-          description:
-            'Write questions; learners answer them and can also play them as flashcards, a wheel, hangman…',
+          title: 'Basic',
+          description: 'Write questions and play them many ways.',
+        },
+        match: {
+          title: 'Match the pairs',
+          description: 'Drag each answer next to its partner.',
+        },
+        reorder: {
+          title: 'Reorder',
+          description: 'Drag the words to put the sentence in order.',
+        },
+        cloze: {
+          title: 'Complete the sentence',
+          description: 'Drag the words into the sentence\'s blanks.',
+        },
+        groupsort: {
+          title: 'Group sort',
+          description: 'Drag each item into its correct group.',
         },
         createError: 'Could not create the activity. Try again.',
       },
@@ -1876,8 +2056,12 @@ export const UI_LABELS = {
         deleteConfirmBody: 'This cannot be undone.',
         deleteConfirmCancel: 'Cancel',
         deleteConfirmAccept: 'Delete',
+        changeImage: 'Change image',
+        changeImageConfirmTitle: 'Change this sheet’s image?',
+        changeImageConfirmBody: 'The zones drawn on the current image will be lost.',
+        changeImageConfirmAccept: 'Change',
         worksheetLabel: 'Worksheet',
-        quizLabel: 'Questions',
+        quizLabel: 'Basic',
         // Creator polish round 2.
         blockNameLabel: 'Block name',
         blockNamePlaceholder: 'Block name',
@@ -1934,6 +2118,8 @@ export const UI_LABELS = {
         basedOnPrefix: 'Based on "',
         basedOnSuffix: '" from the community',
         viewAsPresentation: 'View as presentation',
+        // Mobile title-bar "⋯" menu — see the Spanish locale's own header.
+        mobileMenuLabel: 'More options',
         submitForReview: 'Submit for review',
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',
@@ -1989,6 +2175,8 @@ export const UI_LABELS = {
         taskCancel: 'Cancel',
         taskRetry: 'Retry',
         taskChooseAnother: 'Choose another file',
+        taskCombiningPages: 'Combining pages…',
+        stitchTooManyPages: 'You can combine up to 5 pages or images into one sheet; the first 5 will be used.',
         errors: {
           unsupported_media_type: 'That file type is not supported.',
           empty_body: 'The file is empty.',
@@ -1998,6 +2186,7 @@ export const UI_LABELS = {
           upload_limit_reached: 'The upload limit was reached.',
           upload_failed: 'Could not upload the file. Try again.',
           pdf_failed: 'Could not process the PDF.',
+          stitch_too_large: 'The combined sheet is too large to upload. Try fewer pages or smaller images.',
         },
         addZoneHint: 'Draw a box over the image to add an answer.',
         zoneKindText: 'Text',
@@ -2035,6 +2224,28 @@ export const UI_LABELS = {
         toolHand: 'Hand',
         toolHandTooltip: 'Hand (H)',
         zoneCreatedAnnouncement: 'Zone created',
+        toolAudio: 'Audio',
+        toolAudioTooltip: 'Audio (A)',
+        audioMarkerLabel: 'Audio marker',
+        audioPlaceholderTitle: 'Add audio',
+        audioUploadButton: 'Upload file',
+        audioRecordButton: 'Record',
+        audioCancel: 'Cancel',
+        audioReplaceButton: 'Replace audio',
+        audioDeleteButton: 'Delete audio',
+        audioDragHint: 'Drag the marker to move it.',
+        audioListenLabel: 'Listen to audio',
+        audioMaxMarkersReached: 'This sheet already has the maximum number of audio markers.',
+        audioUploadError: 'Could not upload the audio. Try again.',
+        audioUploading: 'Uploading…',
+        audioRequestingPermission: 'Asking for microphone access…',
+        audioRecording: 'Recording…',
+        audioStopButton: 'Stop',
+        audioUseRecording: 'Use',
+        audioRecordAgain: 'Record again',
+        audioPermissionDenied: 'Could not access the microphone. Check your browser permissions.',
+        audioUnsupported: 'This browser cannot record audio.',
+        audioRecordError: 'Something went wrong while recording. Try again.',
       },
       player: {
         notGraded: 'Preview: this view does not grade answers.',
@@ -2051,12 +2262,15 @@ export const UI_LABELS = {
         zoneOf: 'Zone',
         explanationButtonLabel: 'See explanation',
         explanationHeading: 'Why?',
+        audioPlay: 'Play audio',
+        audioPause: 'Pause audio',
       },
       gameModes: {
-        modeQuiz: 'Questions',
+        modeQuiz: 'Basic',
         modeCards: 'Cards',
         modeMatch: 'Match',
-        gradesQuizModeHint: 'Check grades the "Questions" mode.',
+        modeReorder: 'Reorder',
+        gradesQuizModeHint: 'Check grades the "Basic" mode.',
         cardFlipHint: 'Tap or press Space to flip',
         cardPrev: 'Previous',
         cardNext: 'Next',
@@ -2066,9 +2280,29 @@ export const UI_LABELS = {
         cardReviewPileTitle: 'To review',
         cardReplayReview: 'Review again',
         cardsDone: 'Done! You reviewed every card.',
-        matchPairs: 'Pairs',
         matchReset: 'Reset',
-        matchCompletedPrefix: 'Completed in',
+        matchCheck: 'Check',
+        matchRetry: 'Try again',
+        matchResultOf: 'of',
+        matchResultCorrect: 'correct',
+        matchRemovePrefix: 'Remove tile',
+        matchEmptySlot: 'Empty slot',
+        matchTrayLabel: 'Available tiles',
+        matchSoundMute: 'Mute sound',
+        matchSoundUnmute: 'Unmute sound',
+        reorderCheck: 'Check',
+        reorderRetry: 'Try again',
+        reorderResultOf: 'of',
+        reorderResultCorrect: 'correct',
+        reorderSoundMute: 'Mute sound',
+        reorderSoundUnmute: 'Unmute sound',
+        reorderPrev: 'Previous sentence',
+        reorderNext: 'Next sentence',
+        reorderSentenceOf: 'of',
+        reorderTrayLabel: 'Available words',
+        reorderLineLabel: 'Sentence',
+        reorderLineEmpty: 'Tap or drag a word to start',
+        reorderRemovePrefix: 'Remove word',
         modeSpeak: 'Speaking cards',
         speakDeal: 'Deal',
         speakNext: 'Next card',
@@ -2116,6 +2350,33 @@ export const UI_LABELS = {
         openboxBoxAriaPrefix: 'Box',
         openboxOpenedSuffix: 'opened',
         openboxClosedSuffix: 'closed',
+        modeCloze: 'Complete the sentence',
+        clozeCheck: 'Check',
+        clozeRetry: 'Retry',
+        clozeResultOf: 'of',
+        clozeResultCorrect: 'correct',
+        clozeSoundMute: 'Mute sound',
+        clozeSoundUnmute: 'Unmute sound',
+        clozePrev: 'Previous sentence',
+        clozeNext: 'Next sentence',
+        clozeSentenceOf: 'of',
+        clozeTrayLabel: 'Available words',
+        clozeBlankEmpty: 'Empty slot',
+        clozeRemovePrefix: 'Remove word',
+        // Group sort (Wordwall "Group sort"): every item shuffled into a
+        // tray, the groups shown as large boxes to drag each item into.
+        // "Check" grades the whole board at once.
+        modeGroupSort: 'Group sort',
+        groupSortCheck: 'Check',
+        groupSortRetry: 'Retry',
+        // "9 of 9 correctly sorted" — composed around the learner's score.
+        groupSortResultOf: 'of',
+        groupSortResultCorrect: 'correctly sorted',
+        groupSortSoundMute: 'Mute sound',
+        groupSortSoundUnmute: 'Unmute sound',
+        groupSortTrayLabel: 'Available items',
+        groupSortEmptyGroup: 'Empty group',
+        groupSortRemovePrefix: 'Remove item',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -2238,7 +2499,7 @@ export const UI_LABELS = {
         typeLabel: 'Type',
         typeAll: 'All',
         typeWorksheet: 'Worksheet',
-        typeQuiz: 'Questions',
+        typeQuiz: 'Basic',
         sortLabel: 'Sort by',
         sortRecientes: 'Most recent',
         sortGustadas: 'Most liked',
@@ -2276,6 +2537,7 @@ export const UI_LABELS = {
         noAnswersYet: 'No answers yet',
         zoneLabel: 'Zone',
         quizAnswerLabel: 'Correct answer',
+        clozeDistractorsLabel: 'Distractors',
         explanationLabel: 'Explanation',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
@@ -2310,6 +2572,8 @@ export const UI_LABELS = {
         removeError: 'Could not remove the activity. Try again.',
         confirmCancel: 'Cancel',
         confirmAccept: 'Confirm',
+        audioMarkersLabel: 'Audio',
+        audioMarkerIndexLabel: 'Audio',
       },
       print: {
         pageDescription: 'Print-friendly version of this English activity.',
@@ -2319,8 +2583,14 @@ export const UI_LABELS = {
         choicesLabel: 'Options',
         answersHeading: 'Answer key',
         explanationLabel: 'Why',
-        worksheetLabel: 'Sheet',
-        quizLabel: 'Questions',
+        worksheetLabel: 'Worksheet',
+        quizLabel: 'Basic',
+        matchLabel: 'Match the pairs',
+        reorderLabel: 'Reorder',
+        clozeLabel: 'Complete the sentence',
+        clozeBankLabel: 'Word bank',
+        groupSortLabel: 'Group sort',
+        groupSortItemsLabel: 'Items',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
@@ -2351,6 +2621,12 @@ export const UI_LABELS = {
         liveSummary: 'Summary',
         liveRevealed: 'Answer revealed',
         liveWorksheetOverview: 'Worksheet overview',
+        matchTitle: 'Match the pairs',
+        reorderTitle: 'Reorder',
+        clozeTitle: 'Complete the sentence',
+        groupSortTitle: 'Group sort',
+        audioPlay: 'Play audio',
+        audioPause: 'Pause audio',
       },
     },
     notFound: {

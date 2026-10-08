@@ -85,12 +85,34 @@ import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionT
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
 import { createExampleDraft, EXAMPLE_QUESTION_PROMPTS } from '@/lib/quizExampleQuestions';
 import type { Payload } from '@/lib/exercisePayload';
+import type { QuizTemplate } from '@/lib/activities/blocks';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFirstRunTips } from '@/hooks/useFirstRunTips';
 import { cn } from '@/lib/utils';
 import QuestionCard from './QuestionCard';
 import QuizLivePreview from './QuizLivePreview';
 import QuizFirstRunTip from './QuizFirstRunTip';
+import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
+import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
+import ClozeEditor, { type ClozeSentenceInput } from './ClozeEditor';
+import GroupSortEditor from './GroupSortEditor';
+import {
+  applyClozeSentenceText,
+  applyDistractorsText,
+  deriveClozeSentences,
+  deriveDistractorsText,
+  removeClozeSentence,
+} from '@/lib/activities/clozeSentences';
+import {
+  addGroupSortGroup,
+  addGroupSortItems,
+  deriveGroupSortRows,
+  removeGroupSortGroup,
+  removeGroupSortItem,
+} from '@/lib/activities/groupSort';
+
+/** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
+const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
 
 /** Bumped only if the tour's steps/anchors change shape enough that a learner who dismissed the old one should see the new one. */
 const FIRST_RUN_TIPS_KEY = 'chuyo:quiz-editor-tips-v1';
@@ -163,6 +185,8 @@ export interface QuizBlockEditorProps {
   blockId: string;
   lang: string;
   payload: Payload;
+  /** The block's authoring preset (`blocks.ts`'s own `QuizTemplate`) — `'match'` swaps the whole question list for {@link MatchPairsEditor}; `undefined` ("Básico") keeps this file's own Google-Forms-style list. */
+  template?: QuizTemplate;
   selectedSlotId: string | null;
   onSelectSlot: (slotId: string | null) => void;
   onPayloadChange: (payload: Payload) => void;
@@ -224,6 +248,7 @@ export default function QuizBlockEditor({
   blockId,
   lang,
   payload,
+  template,
   selectedSlotId,
   onSelectSlot,
   onPayloadChange,
@@ -231,6 +256,12 @@ export default function QuizBlockEditor({
   incompleteMessage = null,
 }: QuizBlockEditorProps) {
   const t = copyFor(lang);
+  const isMatch = template === 'match';
+  const isReorder = template === 'reorder';
+  const isCloze = template === 'cloze';
+  const isGroupSort = template === 'groupsort';
+  const clozePoolName = `${blockId}-cloze-pool`;
+  const groupSortPoolName = `${blockId}-groupsort-pool`;
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
@@ -346,6 +377,138 @@ export default function QuizBlockEditor({
   }, [selectedSlotId]);
 
   const hasQuestions = questions.length > 0;
+
+  // MATCH AUTHORING, SIMPLE (build item 1): a `match` block is a list of
+  // PAIRS, not questions — `MatchPairsEditor` renders the same `row`+`Slot`
+  // storage as a minimal "Pregunta | Respuesta" table instead of the full
+  // Básico question-card list, which offers controls (type/options) that
+  // make no sense for a pair. The underlying commits are UNCHANGED:
+  // `addQuestion`/`removeQuestion` already add/remove exactly one
+  // row+slot, and `setRowLabel`/`setSlotAnswer` already replace a slot's
+  // label/answer — only the rendering differs.
+  const matchPairs: MatchPair[] = isMatch
+    ? questions.flatMap((question): MatchPair[] => {
+        const slotId = rowSlotId(draft, question.id);
+        const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
+        if (!slot || !slotId) return [];
+        return [{ rowId: question.id, slotId, question: slot.label, answer: slot.answer[0] ?? '' }];
+      })
+    : [];
+
+  const matchColumn = (
+    <MatchPairsEditor
+      blockId={blockId}
+      lang={lang}
+      pairs={matchPairs}
+      focusSlotId={selectedSlotId}
+      onQuestionChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
+      onAnswerChange={(slotId, answer) => commit(setSlotAnswer(draft, slotId, answer.trim() === '' ? [] : [answer]))}
+      onAdd={addQuestion}
+      onRemove={removeQuestion}
+    />
+  );
+
+  // REORDER AUTHORING, SIMPLE (same posture as `matchPairs` above): a
+  // `reorder` block is a list of SENTENCES, not question/answer pairs — one
+  // `row`+`Slot` per sentence, the full sentence stored as BOTH the slot's
+  // `label` and its single `answer` (see `ReorderEditor.tsx`'s own header).
+  const reorderSentences: ReorderSentence[] = isReorder
+    ? questions.flatMap((question): ReorderSentence[] => {
+        const slotId = rowSlotId(draft, question.id);
+        const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
+        if (!slot || !slotId) return [];
+        return [{ rowId: question.id, slotId, sentence: slot.answer[0] ?? slot.label }];
+      })
+    : [];
+
+  const reorderColumn = (
+    <ReorderEditor
+      blockId={blockId}
+      lang={lang}
+      sentences={reorderSentences}
+      focusSlotId={selectedSlotId}
+      onSentenceChange={(slotId, sentence) => {
+        const trimmed = sentence.trim();
+        const withLabel = setRowLabel(draft, slotId, sentence);
+        commit(setSlotAnswer(withLabel, slotId, trimmed === '' ? [] : [sentence]));
+      }}
+      onAdd={addQuestion}
+      onRemove={removeQuestion}
+    />
+  );
+
+  // CLOZE AUTHORING ("Completar la frase", same posture as `matchPairs`/
+  // `reorderSentences` above): a `cloze` block is a list of SENTENCES too,
+  // but a sentence may own SEVERAL slots (one per bracketed blank — the
+  // single-value `drop` mechanic cannot represent more than one gap per
+  // slot, see `clozeSentences.ts`'s own header) — so its rows/slots/pool are
+  // managed by that module's own pure commits rather than the generic
+  // `setRowLabel`/`setSlotAnswer` pair every other template reuses.
+  const clozeRows: ClozeSentenceInput[] = isCloze
+    ? deriveClozeSentences(draft).map((row) => ({ seq: row.seq, text: row.text, blankCount: row.blankCount }))
+    : [];
+  const clozeFocusSeq =
+    isCloze && selectedSlotId?.startsWith(CLOZE_FOCUS_PREFIX)
+      ? Number(selectedSlotId.slice(CLOZE_FOCUS_PREFIX.length))
+      : null;
+
+  function addClozeRow() {
+    const nextSeq = clozeRows.length > 0 ? Math.max(...clozeRows.map((r) => r.seq)) + 1 : 0;
+    commit(applyClozeSentenceText(draft, nextSeq, '', clozePoolName, nextId));
+    onSelectSlot(`${CLOZE_FOCUS_PREFIX}${nextSeq}`);
+  }
+
+  function removeClozeRow(seq: number) {
+    commit(removeClozeSentence(draft, seq, clozePoolName));
+    if (selectedSlotId === `${CLOZE_FOCUS_PREFIX}${seq}`) onSelectSlot(null);
+  }
+
+  const clozeColumn = (
+    <ClozeEditor
+      blockId={blockId}
+      lang={lang}
+      sentences={clozeRows}
+      distractorsText={isCloze ? deriveDistractorsText(draft, clozePoolName) : ''}
+      focusSeq={clozeFocusSeq}
+      onSentenceChange={(seq, text) => commit(applyClozeSentenceText(draft, seq, text, clozePoolName, nextId))}
+      onAdd={addClozeRow}
+      onRemove={removeClozeRow}
+      onDistractorsChange={(text) => commit(applyDistractorsText(draft, clozePoolName, text, nextId))}
+    />
+  );
+
+  // GROUPSORT AUTHORING ("Ordenar por grupos", same posture as `matchPairs`/
+  // `reorderSentences`/`clozeRows` above): a `groupsort` block is a list of
+  // GROUPS, each its own `row`+`group`-mechanic `Slot` (`groupSort.ts`'s own
+  // pure commits) — `slot.label` is the group's name, `slot.answer` every
+  // pool item id it claims from the one pool every group in this block
+  // shares.
+  const groupSortRows = isGroupSort ? deriveGroupSortRows(draft, groupSortPoolName) : [];
+
+  function addGroupSortRow() {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    commit(addGroupSortGroup(draft, rowId, slotId, groupSortPoolName));
+    onSelectSlot(slotId);
+  }
+
+  function removeGroupSortRow(rowId: string) {
+    commit(removeGroupSortGroup(draft, rowId, groupSortPoolName));
+  }
+
+  const groupSortColumn = (
+    <GroupSortEditor
+      blockId={blockId}
+      lang={lang}
+      groups={groupSortRows}
+      focusSlotId={selectedSlotId}
+      onLabelChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
+      onAddItems={(slotId, text) => commit(addGroupSortItems(draft, slotId, groupSortPoolName, text, nextId))}
+      onRemoveItem={(slotId, itemId) => commit(removeGroupSortItem(draft, slotId, groupSortPoolName, itemId))}
+      onAdd={addGroupSortRow}
+      onRemove={removeGroupSortRow}
+    />
+  );
 
   const questionsColumn = (
     <div className="flex flex-col gap-3">
@@ -540,7 +703,7 @@ export default function QuizBlockEditor({
   // there is something to try (`QuizLivePreview` itself assumes >=1 slot
   // for its "Comprobar" score denominator).
   const previewColumn = hasQuestions ? (
-    <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} />
+    <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} template={template} />
   ) : null;
 
   // HEIGHT CHAIN: in the editor's desktop focus layout the expanded block has
@@ -555,7 +718,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {questionsColumn}
+        {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
       </div>
     );
   }
@@ -608,11 +771,20 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {questionsColumn}
+          {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}
-          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'questions' && 'max-lg:hidden')}
+          // `lg:pr-16`: reserves room for `EditorSideToolbar`'s own docked
+          // rail (visual-polish pass, owner report — the rail's default
+          // docked slot, right-center of the window, sat right on top of
+          // this column's own "Comprobar" button around 1230px). The ROOT's
+          // own identical gutter was deliberately removed for the worksheet
+          // CANVAS (`ActivityEditorIsland.tsx`'s own header, "CANVAS
+          // EVERYWHERE" — overlapping empty canvas there is the point, not a
+          // bug); this column is not canvas, it hosts real interactive
+          // controls, so it keeps its own gutter instead.
+          className={cn(QUIZ_COLUMN_CLASS, 'lg:pr-16', mobileTab === 'questions' && 'max-lg:hidden')}
         >
           {previewColumn}
         </div>

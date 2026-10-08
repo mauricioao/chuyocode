@@ -53,7 +53,9 @@ import { Emoji } from '@/components/ui/Emoji';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Level } from '@/lib/exerciseTaxonomy';
 import type { Block, Zone } from '@/lib/activities/blocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
+import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
+import { useAudioMarkerPlayback } from '@/lib/activities/useAudioMarkerPlayback';
+import AudioMarkerButton from './AudioMarkerButton';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import { getSlotItems, type Payload, type Slot } from '@/lib/exercisePayload';
@@ -405,6 +407,12 @@ export default function PresentationIsland({
           {currentSlide?.kind === 'question' && (
             <QuestionSlide question={currentSlide} revealed={state.revealed} t={t} />
           )}
+          {currentSlide?.kind === 'match' && <MatchSlide slide={currentSlide} revealed={state.revealed} t={t} />}
+          {currentSlide?.kind === 'reorder' && <ReorderSlide slide={currentSlide} revealed={state.revealed} t={t} />}
+          {currentSlide?.kind === 'cloze' && <ClozeSlide slide={currentSlide} revealed={state.revealed} t={t} />}
+          {currentSlide?.kind === 'groupsort' && (
+            <GroupSortSlide slide={currentSlide} revealed={state.revealed} t={t} />
+          )}
           {isSummarySlide(state) && (
             <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
           )}
@@ -642,6 +650,217 @@ function QuestionSlide({
 }
 
 /**
+ * "Une las parejas" in presentation mode (build item 5, "Match in
+ * presentation") — ONE slide for the whole pair list, not one per pair
+ * (unlike Básico's `QuestionSlide`, one per question): every prompt listed
+ * at once in a calm, large-type column; "Mostrar respuesta" reveals every
+ * answer at once, right beside its own prompt. The simplest shape that
+ * still runs well on a projector (owner build item 5) — no drag gesture in
+ * front of a class, and it reuses the exact `GameItem`s the practice board
+ * itself derives, so a pair can never read differently here.
+ */
+function MatchSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'match' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-match-${slide.blockId}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 overflow-y-auto py-6"
+    >
+      <p
+        style={{ fontSize: 64 }}
+        className="text-center font-display font-bold leading-tight text-foreground"
+      >
+        {t.matchTitle}
+      </p>
+      <ul className="flex w-full flex-col gap-4">
+        {slide.pairs.map((pair) => (
+          <li
+            key={pair.id}
+            data-testid={`presentation-match-pair-${pair.id}`}
+            className="flex items-center justify-between gap-8 rounded-2xl bg-surface-soft px-8 py-6"
+          >
+            <span style={{ fontSize: 44 }} className="font-semibold text-foreground">
+              {pair.prompt}
+            </span>
+            {revealed && (
+              <span
+                data-testid={`presentation-match-answer-${pair.id}`}
+                style={{ fontSize: 44 }}
+                className="font-bold text-accent-ink"
+              >
+                {pair.answer}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * "Reordenar" in presentation mode — ONE SLIDE PER SENTENCE (unlike
+ * `MatchSlide`'s single combined slide, see `presentationSlides.ts`'s own
+ * doc): the sentence's own words, already pre-shuffled and fixed by
+ * `buildPresentationSlides`, shown as large static tiles; "Mostrar
+ * respuesta" swaps them for the sentence in its correct order. Large type,
+ * generous spacing (owner feedback on the match stage, "scale the match and
+ * reorder slides' content up to use the stage") — same scale `MatchSlide`
+ * now uses above.
+ */
+function ReorderSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'reorder' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-reorder-${slide.slotId}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-10 overflow-y-auto py-6"
+    >
+      <p
+        style={{ fontSize: 64 }}
+        className="text-center font-display font-bold leading-tight text-foreground"
+      >
+        {t.reorderTitle}
+      </p>
+      {revealed ? (
+        <p
+          data-testid="presentation-reorder-answer"
+          style={{ fontSize: 56 }}
+          className="max-w-5xl text-center font-bold leading-snug text-accent-ink"
+        >
+          {slide.sentence}
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          {slide.words.map((word, i) => (
+            <span
+              key={`${slide.slotId}-${i}`}
+              style={{ fontSize: 44 }}
+              className="rounded-2xl bg-surface-soft px-8 py-5 font-semibold text-foreground"
+            >
+              {word}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Completar la frase" in presentation mode — ONE SLIDE PER SENTENCE, same
+ * posture as `ReorderSlide` above: the sentence's own text runs at large
+ * type, each blank unrevealed shown as an empty underline, revealed shown
+ * filled with its own correct word.
+ */
+function ClozeSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'cloze' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-cloze-${slide.blockId}-${slide.seq}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-10 overflow-y-auto py-6"
+    >
+      <p style={{ fontSize: 64 }} className="text-center font-display font-bold leading-tight text-foreground">
+        {t.clozeTitle}
+      </p>
+      <p style={{ fontSize: 44 }} className="max-w-5xl text-center font-semibold leading-relaxed text-foreground">
+        {slide.segments.map((seg, i) =>
+          seg.kind === 'text' ? (
+            <span key={i}>{seg.text}</span>
+          ) : (
+            <span
+              key={seg.slotId ?? i}
+              data-testid={`presentation-cloze-blank-${seg.slotId}`}
+              className={cn(
+                'mx-2 inline-block min-w-32 border-b-4 border-foreground/40 px-2 text-center align-bottom',
+                revealed && 'border-accent-ink text-accent-ink',
+              )}
+            >
+              {revealed ? seg.text : ' '}
+            </span>
+          ),
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * "Ordenar por grupos" in presentation mode — ONE combined slide for the
+ * whole board, same posture as `MatchSlide` above: every group's own name
+ * listed as a large labelled column; "Mostrar respuesta" fills each column
+ * with its items at once, right under its own name — no drag gesture needed
+ * in front of a class.
+ */
+function GroupSortSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'groupsort' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-groupsort-${slide.blockId}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 overflow-y-auto py-6"
+    >
+      <p style={{ fontSize: 64 }} className="text-center font-display font-bold leading-tight text-foreground">
+        {t.groupSortTitle}
+      </p>
+      <div className="flex w-full flex-col gap-6 sm:flex-row sm:flex-wrap sm:justify-center">
+        {slide.groups.map((group) => (
+          <div
+            key={group.id}
+            data-testid={`presentation-groupsort-group-${group.id}`}
+            className="flex min-w-56 flex-1 flex-col gap-3 rounded-2xl bg-surface-soft px-8 py-6"
+          >
+            <span style={{ fontSize: 44 }} className="text-center font-semibold text-foreground">
+              {group.label}
+            </span>
+            {revealed && (
+              <ul className="flex flex-col items-center gap-2">
+                {group.items.map((item, i) => (
+                  <li
+                    key={`${group.id}-${i}`}
+                    data-testid={`presentation-groupsort-item-${group.id}-${i}`}
+                    style={{ fontSize: 32 }}
+                    className="font-bold text-accent-ink"
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The worksheet zoom tour's own stage layer (sprint week 3) — renders the
  * page image at its own native/rotated pixel size, transformed by whichever
  * camera the current slide calls for (`cameraForPage` for the overview,
@@ -667,6 +886,11 @@ function WorksheetStageLayer({
       ? cameraForPage(page, WORKSHEET_STAGE)
       : cameraForZone(slide.zone, page, WORKSHEET_STAGE);
   const imageUrl = imagePreviewUrl(slide.image.path);
+  // "Colocar un audio propio": played only from the overview slide (never
+  // on a zoomed-into per-zone slide — see `PresentationSlide`'s own
+  // `audio` doc). The hook itself is harmless to mount unconditionally (a
+  // zone slide's `audio` is simply `undefined`, so nothing renders).
+  const { playingId, toggle } = useAudioMarkerPlayback(audioPreviewUrl);
 
   return (
     <div
@@ -701,11 +925,26 @@ function WorksheetStageLayer({
           transform: `translate(-50%, -50%) rotate(${slide.rotation}deg)`,
         }}
       />
-      {slide.kind === 'worksheet-overview'
-        ? slide.zones.map((zone, i) => (
+      {slide.kind === 'worksheet-overview' ? (
+        <>
+          {slide.zones.map((zone, i) => (
             <WorksheetOverviewZoneBadge key={zone.id} zone={zone} number={i + 1} t={t} />
-          ))
-        : <WorksheetZoneHighlight zone={slide.zone} revealed={revealed} t={t} />}
+          ))}
+          {slide.audio?.map((marker) => (
+            <AudioMarkerButton
+              key={marker.id}
+              x={marker.x}
+              y={marker.y}
+              playing={playingId === marker.id}
+              label={playingId === marker.id ? t.audioPause : t.audioPlay}
+              data-testid={`presentation-overview-audio-${marker.id}`}
+              onToggle={() => toggle(marker.id, marker.path)}
+            />
+          ))}
+        </>
+      ) : (
+        <WorksheetZoneHighlight zone={slide.zone} revealed={revealed} t={t} />
+      )}
     </div>
   );
 }

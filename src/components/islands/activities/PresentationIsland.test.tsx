@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { Block } from '@/lib/activities/blocks';
@@ -288,6 +288,44 @@ describe('PresentationIsland — the worksheet zoom tour (worksheet-only deck)',
   });
 });
 
+describe('PresentationIsland — audio markers ("colocar un audio propio")', () => {
+  beforeEach(() => {
+    vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  });
+
+  it('renders a play button on the overview slide for each audio marker', () => {
+    const withAudio: Block = {
+      ...WORKSHEET_BLOCK,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    render(<PresentationIsland {...BASE_PROPS} blocks={[withAudio]} />);
+    expect(screen.getByTestId('presentation-overview-audio-a1')).toBeTruthy();
+  });
+
+  it('never shows an audio marker once past the overview (zoomed into a zone)', () => {
+    const withAudio: Block = {
+      ...WORKSHEET_BLOCK,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    render(<PresentationIsland {...BASE_PROPS} blocks={[withAudio]} />);
+    next();
+    expect(screen.queryByTestId('presentation-overview-audio-a1')).toBeNull();
+  });
+
+  it('clicking the marker plays it', async () => {
+    const withAudio: Block = {
+      ...WORKSHEET_BLOCK,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    render(<PresentationIsland {...BASE_PROPS} blocks={[withAudio]} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('presentation-overview-audio-a1'));
+    });
+    expect(screen.getByTestId('presentation-overview-audio-a1').getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
 describe('PresentationIsland — interleaved worksheet + quiz order', () => {
   it('visits every slide in exactly the authored block order', () => {
     render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK, ...QUIZ_BLOCKS]} />);
@@ -497,6 +535,63 @@ describe('PresentationIsland — control bar idle-hide', () => {
     });
     act(() => vi.advanceTimersByTime(5000));
     expect(bar.className).toContain('opacity-100');
+  });
+});
+
+const REORDER_BLOCKS: Block[] = [
+  {
+    id: 'q3',
+    type: 'quiz',
+    template: 'reorder',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+    },
+  },
+];
+
+const GROUPSORT_BLOCKS: Block[] = [
+  {
+    id: 'q4',
+    type: 'quiz',
+    template: 'groupsort',
+    payload: {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+    },
+  },
+];
+
+describe('PresentationIsland — "Reordenar" (one slide per sentence)', () => {
+  it('shows the scrambled words unrevealed, then the correct sentence once revealed', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={REORDER_BLOCKS} />);
+    const slide = screen.getByTestId('presentation-reorder-s1');
+    expect(slide.textContent).not.toContain('Cats sleep');
+    expect(slide.textContent).toContain('Cats');
+    expect(slide.textContent).toContain('sleep');
+    expect(screen.queryByTestId('presentation-reorder-answer')).toBeNull();
+
+    next(); // reveals, same "next reveals then advances" rule every other slide follows
+    expect(screen.getByTestId('presentation-reorder-answer').textContent).toBe('Cats sleep');
+  });
+});
+
+describe('PresentationIsland — "Ordenar por grupos" (one combined slide for the whole board)', () => {
+  it('shows every group by name, unrevealed, then every group filled with its own items once revealed', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={GROUPSORT_BLOCKS} />);
+    const slide = screen.getByTestId('presentation-groupsort-q4');
+    expect(slide.textContent).toContain('Animals');
+    expect(slide.textContent).toContain('Food');
+    expect(slide.textContent).not.toContain('dog');
+    expect(screen.queryByTestId('presentation-groupsort-item-g1-0')).toBeNull();
+
+    next(); // reveals, same "next reveals then advances" rule every other slide follows
+    expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('dog');
+    expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('cat');
+    expect(screen.getByTestId('presentation-groupsort-group-g2').textContent).toContain('bread');
   });
 });
 

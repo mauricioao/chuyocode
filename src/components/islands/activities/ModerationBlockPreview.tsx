@@ -12,6 +12,8 @@
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import { zoneAnswerSummary, zoneOptionsSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
+import { deriveClozeGameSentences } from '@/lib/activities/clozeSentences';
+import { deriveGroupSortGroups } from '@/lib/activities/gameModes';
 import { FadeImage } from '@/components/ui/fade-image';
 
 export interface ModerationBlockPreviewProps {
@@ -19,10 +21,18 @@ export interface ModerationBlockPreviewProps {
   block: Block;
   /** Resolved, browser-loadable URL for a worksheet block's `image.path`. */
   resolveImageUrl: (path: string) => string;
+  /** Resolved, browser-loadable URL for an audio marker's `path` — same signed-URL treatment as `resolveImageUrl`, so a moderator can listen before approving. */
+  resolveAudioUrl: (path: string) => string;
   showAnswers: boolean;
 }
 
-export default function ModerationBlockPreview({ lang, block, resolveImageUrl, showAnswers }: ModerationBlockPreviewProps) {
+export default function ModerationBlockPreview({
+  lang,
+  block,
+  resolveImageUrl,
+  resolveAudioUrl,
+  showAnswers,
+}: ModerationBlockPreviewProps) {
   const t = UI_LABELS[lang].activities.moderation;
 
   if (block.type === 'worksheet') {
@@ -66,6 +76,137 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
                   )}
                 </div>
               ) : null}
+            </li>
+          ))}
+        </ul>
+        {block.audio && block.audio.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-foreground">{t.audioMarkersLabel}</span>
+            <ul className="flex flex-col gap-2">
+            {block.audio.map((marker, index) => (
+              <li
+                key={marker.id}
+                data-testid={`moderation-audio-${marker.id}`}
+                className="rounded-md border border-border p-2 text-sm"
+              >
+                <span className="font-medium text-foreground">
+                  {t.audioMarkerIndexLabel} {index + 1}
+                </span>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a short voice note has no track to caption */}
+                <audio
+                  data-testid={`moderation-audio-player-${marker.id}`}
+                  controls
+                  src={resolveAudioUrl(marker.path)}
+                  className="mt-1 w-full"
+                />
+              </li>
+            ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // "Une las parejas" (build item 5, "Match in moderation"): a match block
+  // is a list of PAIRS, so each row reads as one — "prompt → answer" — the
+  // same `showAnswers` toggle still decides whether the answer half shows
+  // at all, exactly as it does for every other block kind on this page.
+  if (block.template === 'match') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {block.payload.slots.map((slot) => (
+            <li key={slot.id} data-testid={`moderation-pair-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
+              <span className="font-medium text-foreground">{slot.label}</span>
+              {showAnswers && (
+                <span className="text-muted-foreground"> → {quizSlotAnswerSummary(block.payload, slot)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // "Reordenar" (Wordwall templates build, "Reorder in moderation"): a
+  // reorder block is a plain list of SENTENCES — unlike `match`/Básico there
+  // is nothing to reveal behind `showAnswers` (the stored sentence already
+  // IS the content, not a hidden answer), so this always shows it plainly.
+  if (block.template === 'reorder') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {block.payload.slots.map((slot) => (
+            <li key={slot.id} data-testid={`moderation-sentence-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
+              <span className="text-foreground">{quizSlotAnswerSummary(block.payload, slot) || slot.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // "Completar la frase": each sentence printed plainly, its own blank
+  // words highlighted inline (the sentence's own authored content, same
+  // "nothing to reveal behind `showAnswers`" reasoning `reorder` uses
+  // above), plus the block's own distractors listed once underneath.
+  if (block.template === 'cloze') {
+    const poolName = block.payload.slots.find((s) => s.input === 'drop')?.pool;
+    const pool = poolName ? (block.payload.pools[poolName] ?? []) : [];
+    const claimedIds = new Set(block.payload.slots.flatMap((s) => s.answer));
+    const distractors = pool.filter((item) => !claimedIds.has(item.id));
+
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {deriveClozeGameSentences(block.payload).map((sentence) => (
+            <li
+              key={sentence.seq}
+              data-testid={`moderation-cloze-${sentence.seq}`}
+              className="rounded-md border border-border p-2 text-sm"
+            >
+              <span className="text-foreground">
+                {sentence.segments.map((seg, i) =>
+                  seg.kind === 'text' ? (
+                    <span key={i}>{seg.text}</span>
+                  ) : (
+                    <strong key={seg.slotId ?? i} className="text-accent-ink">
+                      {seg.text}
+                    </strong>
+                  ),
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {distractors.length > 0 && (
+          <p data-testid={`moderation-cloze-distractors-${block.id}`} className="text-sm text-muted-foreground">
+            {t.clozeDistractorsLabel}: {distractors.map((item) => item.text ?? item.id).join(', ')}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // "Ordenar por grupos": each group printed plainly — its own name and its
+  // items (the authored content itself, not a hidden answer) — same "nothing
+  // to reveal behind `showAnswers`" reasoning `reorder`/`cloze` use above.
+  if (block.template === 'groupsort') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {deriveGroupSortGroups(block.payload).map((group) => (
+            <li
+              key={group.id}
+              data-testid={`moderation-group-${group.id}`}
+              className="rounded-md border border-border p-2 text-sm"
+            >
+              <span className="font-medium text-foreground">{group.label}</span>
+              <span className="text-muted-foreground">
+                {' '}
+                → {quizSlotAnswerSummary(block.payload, block.payload.slots.find((s) => s.id === group.id)!)}
+              </span>
             </li>
           ))}
         </ul>

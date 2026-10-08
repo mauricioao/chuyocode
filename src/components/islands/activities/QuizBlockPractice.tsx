@@ -32,6 +32,7 @@
  */
 import { useMemo } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { QuizBlock } from '@/lib/activities/blocks';
@@ -42,8 +43,10 @@ import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exerci
 import {
   deriveGameItems,
   availableGameModes,
+  modesForBlock,
   anagramEligible,
   hangmanEligible,
+  reorderEligible,
   deriveTrueFalseItems,
   seedFromString,
   type GameMode,
@@ -54,12 +57,15 @@ import SlotExplanation from '@/components/islands/mechanics/SlotExplanation';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
+import QuizReorder from './QuizReorder';
 import QuizSpeakingCards from './QuizSpeakingCards';
 import QuizWheel from './QuizWheel';
 import QuizAnagram from './QuizAnagram';
 import QuizHangman from './QuizHangman';
 import QuizTrueFalse from './QuizTrueFalse';
 import QuizOpenBox from './QuizOpenBox';
+import QuizCloze from './QuizCloze';
+import QuizGroupSort from './QuizGroupSort';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -81,12 +87,15 @@ const SUPPORTED_MODES: readonly GameMode[] = [
   'quiz',
   'cards',
   'match',
+  'reorder',
   'speak',
   'wheel',
   'anagram',
   'hangman',
   'truefalse',
   'openbox',
+  'cloze',
+  'groupsort',
 ];
 
 export default function QuizBlockPractice({
@@ -105,8 +114,9 @@ export default function QuizBlockPractice({
 
   const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
   const modes = useMemo(
-    () => availableGameModes(gameItems, payload).filter((m) => SUPPORTED_MODES.includes(m)),
-    [gameItems, payload],
+    () =>
+      modesForBlock(availableGameModes(gameItems, payload), block.template).filter((m) => SUPPORTED_MODES.includes(m)),
+    [gameItems, payload, block.template],
   );
   // A mode this block no longer offers (edited down since it was chosen)
   // falls back to `quiz` rather than rendering nothing.
@@ -115,20 +125,40 @@ export default function QuizBlockPractice({
   if (
     effectiveMode === 'cards' ||
     effectiveMode === 'match' ||
+    effectiveMode === 'reorder' ||
     effectiveMode === 'speak' ||
     effectiveMode === 'wheel' ||
     effectiveMode === 'anagram' ||
     effectiveMode === 'hangman' ||
     effectiveMode === 'truefalse' ||
-    effectiveMode === 'openbox'
+    effectiveMode === 'openbox' ||
+    effectiveMode === 'cloze' ||
+    effectiveMode === 'groupsort'
   ) {
+    // The four big drag-and-drop games (visual-polish pass) stretch to fill
+    // their stage — `flex-1 min-h-0` — so a short board/sentence can center
+    // itself in the real available height instead of sizing to its own
+    // content and leaving the rest of the stage empty; every other game
+    // mode here (Tarjetas/Ruleta/Anagrama/…) keeps its original shrink-to-
+    // fit sizing, unaffected by this pass.
+    const isBigStageGame =
+      effectiveMode === 'match' ||
+      effectiveMode === 'reorder' ||
+      effectiveMode === 'cloze' ||
+      effectiveMode === 'groupsort';
     return (
-      <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
+      <div
+        data-testid={`quiz-practice-${block.id}`}
+        className={cn('flex flex-col gap-3', isBigStageGame && 'min-h-0 flex-1')}
+      >
         {modes.length > 1 && (
           <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
         )}
         {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'match' && <QuizMatching lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'reorder' && (
+          <QuizReorder lang={lang} items={reorderEligible(gameItems)} seed={block.id} />
+        )}
         {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'anagram' && (
@@ -139,6 +169,8 @@ export default function QuizBlockPractice({
           <QuizTrueFalse lang={lang} items={deriveTrueFalseItems(payload, seedFromString(block.id))} />
         )}
         {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
+        {effectiveMode === 'cloze' && <QuizCloze lang={lang} payload={payload} seed={block.id} />}
+        {effectiveMode === 'groupsort' && <QuizGroupSort lang={lang} payload={payload} seed={block.id} />}
       </div>
     );
   }

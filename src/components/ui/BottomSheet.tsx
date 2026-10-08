@@ -59,6 +59,19 @@ export interface BottomSheetProps {
   peek?: React.ReactNode;
   testId?: string;
   className?: string;
+  /**
+   * Mobile layout pass, bug fix (owner report: the editor's mobile bottom
+   * toolbar and this collapsed peek bar are both `fixed inset-x-0 bottom-0`
+   * at the same `z-40` — stacked in DOM order, the later one completely
+   * covers the other, so selecting a zone showed nothing usable). A caller
+   * that ALSO renders a fixed bottom bar of its own (the editor's
+   * `EditorSideToolbar` mobile bar) passes this to park the peek bar right
+   * above that bar instead of flush with the viewport bottom — a plain
+   * Tailwind `bottom-*` utility (or arbitrary value), replacing the default
+   * `bottom-0`. Omitted (every other caller — the practice page's per-zone
+   * sheet, the community filters sheet) keeps today's `bottom-0` unchanged.
+   */
+  peekBottomClassName?: string;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -83,6 +96,7 @@ export default function BottomSheet({
   peek,
   testId = 'bottom-sheet',
   className,
+  peekBottomClassName = 'bottom-0',
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<DragSample | null>(null);
@@ -143,7 +157,10 @@ export default function BottomSheet({
           aria-label={title}
           aria-expanded={false}
           onClick={() => onOpenChange(true)}
-          className="fixed inset-x-0 bottom-0 z-40 flex w-full items-center justify-center gap-2 border-t border-border bg-card/95 px-4 py-3 text-sm text-foreground shadow-lg backdrop-blur-sm pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+          className={cn(
+            'fixed inset-x-0 z-40 flex w-full items-center justify-center gap-2 border-t border-border bg-card/95 px-4 py-3 text-sm text-foreground shadow-lg backdrop-blur-sm pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
+            peekBottomClassName,
+          )}
         >
           <span aria-hidden="true" className="h-1 w-10 rounded-full bg-muted-foreground/40" />
           {peek}

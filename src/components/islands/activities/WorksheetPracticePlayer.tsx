@@ -134,6 +134,8 @@ export interface WorksheetPracticePlayerProps {
    * view.
    */
   toolbarSlot?: HTMLElement | null;
+  /** "Colocar un audio propio" — resolves a stored audio marker `path` to a browser-loadable URL. Omitted renders no round play buttons, even if `block.audio` has some. */
+  resolveAudioUrl?: (path: string) => string;
 }
 
 /** No drawing tool exists here (practice, not the editor) — "hand" is the only thing a left-drag can ever mean once active. */
@@ -145,12 +147,14 @@ function DesktopWorksheetCamera({
   imageUrl,
   practice,
   toolbarSlot,
+  resolveAudioUrl,
 }: {
   lang: Lang;
   block: SubmittedWorksheetBlock;
   imageUrl: string;
   practice: WorksheetPracticeState;
   toolbarSlot?: HTMLElement | null;
+  resolveAudioUrl?: (path: string) => string;
 }) {
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -414,6 +418,8 @@ function DesktopWorksheetCamera({
             rotation={block.rotation}
             imageUrl={imageUrl}
             practice={practice}
+            audio={block.audio}
+            resolveAudioUrl={resolveAudioUrl}
           />
         </div>
       </div>
@@ -472,16 +478,36 @@ function DesktopWorksheetCamera({
   );
 }
 
-export default function WorksheetPracticePlayer({ lang, block, imageUrl, practice, toolbarSlot }: WorksheetPracticePlayerProps) {
+export default function WorksheetPracticePlayer({
+  lang,
+  block,
+  imageUrl,
+  practice,
+  toolbarSlot,
+  resolveAudioUrl,
+}: WorksheetPracticePlayerProps) {
   const isDesktop = useIsDesktop();
   const hydrated = useHydrated();
 
   const desktopView = (
-    <DesktopWorksheetCamera lang={lang} block={block} imageUrl={imageUrl} practice={practice} toolbarSlot={toolbarSlot} />
+    <DesktopWorksheetCamera
+      lang={lang}
+      block={block}
+      imageUrl={imageUrl}
+      practice={practice}
+      toolbarSlot={toolbarSlot}
+      resolveAudioUrl={resolveAudioUrl}
+    />
   );
 
   const mobileView = (
-    <WorksheetPracticePlayerMobile lang={lang} block={block} imageUrl={imageUrl} practice={practice} />
+    <WorksheetPracticePlayerMobile
+      lang={lang}
+      block={block}
+      imageUrl={imageUrl}
+      practice={practice}
+      resolveAudioUrl={resolveAudioUrl}
+    />
   );
 
   // No-flash split (mobile layout pass, priority fix, unchanged by this

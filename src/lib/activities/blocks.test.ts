@@ -6,14 +6,21 @@ import {
   MAX_ZONES_PER_WORKSHEET,
   MAX_ZONE_SPEAK_LENGTH,
   MAX_ZONE_EXPLANATION_LENGTH,
+  MAX_AUDIO_MARKERS_PER_WORKSHEET,
   type Block,
   type WorksheetBlock,
 } from './blocks';
-import { uploadPath } from './paths';
+import { uploadPath, uploadAudioPath } from './paths';
 
 const USER = 'a1b2c3d4-0000-4000-8000-000000000001';
 const OBJECT = 'f1e2d3c4-0000-4000-8000-0000000000ff';
 const IMAGE_PATH = uploadPath(USER, OBJECT);
+const AUDIO_OBJECT = 'a9b8c7d6-0000-4000-8000-0000000000aa';
+const AUDIO_PATH = uploadAudioPath(USER, AUDIO_OBJECT, 'webm');
+
+function audioMarker(overrides: Record<string, unknown> = {}) {
+  return { id: 'a1', x: 0.2, y: 0.3, path: AUDIO_PATH, ...overrides };
+}
 
 function textZone(overrides: Record<string, unknown> = {}) {
   return {
@@ -131,6 +138,47 @@ describe('parseBlocks — quiz block', () => {
 
   it('rejects a quiz block missing payload entirely', () => {
     expect(parseBlocks([{ id: 'b1', type: 'quiz' }])).toBeNull();
+  });
+});
+
+describe('parseBlocks — quiz block: template (build item 2, template plumbing)', () => {
+  it('accepts a missing template (undefined = "Básico")', () => {
+    const result = parseBlocks([quizBlock()]);
+    expect((result as Block[])[0]).not.toHaveProperty('template');
+  });
+
+  it('accepts the "match" template, in both submit and draft mode', () => {
+    expect(parseBlocks([quizBlock({ template: 'match' })])).toEqual([
+      { id: 'b1', type: 'quiz', payload: expect.any(Object), template: 'match' },
+    ]);
+    expect(parseBlocks([quizBlock({ template: 'match' })], 'draft')).toEqual([
+      { id: 'b1', type: 'quiz', payload: expect.any(Object), template: 'match' },
+    ]);
+  });
+
+  it('accepts every reserved template name', () => {
+    for (const template of ['match', 'reorder', 'cloze', 'groupsort']) {
+      const result = parseBlocks([quizBlock({ template })]);
+      expect((result as Block[])[0]).toMatchObject({ template });
+    }
+  });
+
+  it('rejects an unknown template in submit mode (fails the whole block)', () => {
+    expect(parseBlocks([quizBlock({ template: 'bingo' })])).toBeNull();
+    expect(parseBlocks([quizBlock({ template: 'bingo' })], 'submit')).toBeNull();
+  });
+
+  it('ignores (not rejects) an unknown template in draft mode', () => {
+    const result = parseBlocks([quizBlock({ template: 'bingo' })], 'draft');
+    expect(result).not.toBeNull();
+    expect((result as Block[])[0]).not.toHaveProperty('template');
+  });
+
+  it('rejects a non-string template in submit mode, ignores it in draft mode', () => {
+    expect(parseBlocks([quizBlock({ template: 42 })])).toBeNull();
+    const draft = parseBlocks([quizBlock({ template: 42 })], 'draft');
+    expect(draft).not.toBeNull();
+    expect((draft as Block[])[0]).not.toHaveProperty('template');
   });
 });
 
@@ -574,6 +622,81 @@ describe("parseBlocks — 'draft' mode (creator polish round 3, owner feedback #
 
   it("defaults to 'submit' (strict) when mode is omitted — existing behavior unchanged", () => {
     expect(parseBlocks([worksheetBlock({ zones: [textZone({ answers: [] })] })])).toBeNull();
+  });
+});
+
+describe('audio markers', () => {
+  it('parses a worksheet with no `audio` field as before (backward compatible)', () => {
+    const [block] = parseBlocks([worksheetBlock()])! as WorksheetBlock[];
+    expect(block.audio).toBeUndefined();
+  });
+
+  it('accepts a well-formed audio marker, in both submit and draft mode', () => {
+    for (const mode of ['submit', 'draft'] as const) {
+      const [block] = parseBlocks([worksheetBlock({ audio: [audioMarker()] })], mode)! as WorksheetBlock[];
+      expect(block.audio).toEqual([{ id: 'a1', x: 0.2, y: 0.3, path: AUDIO_PATH }]);
+    }
+  });
+
+  it('accepts an empty `audio` array', () => {
+    const [block] = parseBlocks([worksheetBlock({ audio: [] })])! as WorksheetBlock[];
+    expect(block.audio).toEqual([]);
+  });
+
+  it('rejects a non-array `audio` field', () => {
+    expect(parseBlocks([worksheetBlock({ audio: 'nope' })])).toBeNull();
+  });
+
+  it.each([
+    ['missing id', { id: undefined }],
+    ['empty id', { id: '' }],
+    ['x below 0', { x: -0.01 }],
+    ['x above 1', { x: 1.01 }],
+    ['y below 0', { y: -0.01 }],
+    ['y above 1', { y: 1.01 }],
+    ['non-numeric x', { x: 'nope' }],
+    ['missing path', { path: undefined }],
+    ['a plain URL instead of a stored path', { path: 'https://evil.example/a.webm' }],
+    ['an image path, not an audio path', { path: IMAGE_PATH }],
+    ['a traversal attempt', { path: '../../activity-audio-uploads/x/y.webm' }],
+  ])('rejects an audio marker with %s', (_label, overrides) => {
+    expect(parseBlocks([worksheetBlock({ audio: [audioMarker(overrides)] })])).toBeNull();
+  });
+
+  it('rejects more than MAX_AUDIO_MARKERS_PER_WORKSHEET markers', () => {
+    const audio = Array.from({ length: MAX_AUDIO_MARKERS_PER_WORKSHEET + 1 }, (_, i) =>
+      audioMarker({ id: `a${i}` }),
+    );
+    expect(parseBlocks([worksheetBlock({ audio })])).toBeNull();
+  });
+
+  it('accepts exactly MAX_AUDIO_MARKERS_PER_WORKSHEET markers', () => {
+    const audio = Array.from({ length: MAX_AUDIO_MARKERS_PER_WORKSHEET }, (_, i) =>
+      audioMarker({ id: `a${i}` }),
+    );
+    const result = parseBlocks([worksheetBlock({ audio })]);
+    expect(result).not.toBeNull();
+  });
+
+  it('rejects audio markers on an imageless draft block (nothing for x/y to be relative to)', () => {
+    expect(
+      parseBlocks([worksheetBlock({ image: undefined, zones: [], audio: [audioMarker()] })], 'draft'),
+    ).toBeNull();
+  });
+
+  it('allows an imageless draft block with an explicitly empty audio array', () => {
+    const [block] = parseBlocks(
+      [worksheetBlock({ image: undefined, zones: [], audio: [] })],
+      'draft',
+    )! as WorksheetBlock[];
+    expect(block.audio).toEqual([]);
+  });
+
+  it('never leaks an unknown key on a parsed marker (field-by-field rebuild, never spread)', () => {
+    const [block] = parseBlocks([
+      worksheetBlock({ audio: [audioMarker({ forged: 'nope' })] }),
+    ])! as WorksheetBlock[];
+    expect(block.audio![0]).toEqual({ id: 'a1', x: 0.2, y: 0.3, path: AUDIO_PATH });
   });
 });
 

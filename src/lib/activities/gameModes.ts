@@ -11,6 +11,8 @@
  */
 import { normalizeAnswer } from '@/lib/exerciseGrading';
 import { splitLabelAtBlank, type Payload, type Slot } from '@/lib/exercisePayload';
+import { isDropGap } from '@/lib/quizQuestionType';
+import type { QuizTemplate } from './blocks';
 
 /**
  * One playable game item, derived from a quiz slot — one question, one
@@ -35,15 +37,49 @@ export interface GameItem {
  * (Ruleta), `anagram` (Anagrama), `hangman` (Ahorcado), `truefalse`
  * (Verdadero o falso) and `openbox` (Abre la caja) are the Wordwall-style
  * "switch template" games added in batch 1, alongside the original
- * `cards`/`match`.
+ * `cards`/`match`. `groupsort` ("Ordenar por grupos") is the big drag-each-
+ * item-into-its-group board.
  */
-export type GameMode = 'quiz' | 'cards' | 'match' | 'speak' | 'wheel' | 'anagram' | 'hangman' | 'truefalse' | 'openbox';
+export type GameMode =
+  | 'quiz'
+  | 'cards'
+  | 'match'
+  | 'reorder'
+  | 'speak'
+  | 'wheel'
+  | 'anagram'
+  | 'hangman'
+  | 'truefalse'
+  | 'openbox'
+  | 'cloze'
+  | 'groupsort';
+
+/**
+ * Game modes that carry their OWN "Comprobar"/check affordance, built right
+ * into the game screen itself (`match`'s big board, its own
+ * `matching-check` button; `reorder`'s own per-sentence check). The
+ * page-level combined Comprobar (`ActivityPracticeIsland`'s footer, and
+ * `QuizLivePreview`'s own editor preview) must never show a SECOND one next
+ * to it — build item 2, "One Comprobar".
+ */
+export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set([
+  'match',
+  'reorder',
+  'cloze',
+  'groupsort',
+]);
 
 /** `cards` is worth flipping through from a single item. */
 const MIN_CARDS_ITEMS = 1;
 
 /** `match` needs at least this many pairs — fewer makes the last pair a guaranteed, un-losable match. */
 const MIN_MATCH_ITEMS = 3;
+
+/** `reorder` needs at least one sentence worth reordering. */
+const MIN_REORDER_ITEMS = 1;
+
+/** A sentence must have at least this many words to be worth reordering — a single word has nothing to reorder. */
+const MIN_REORDER_WORDS = 2;
 
 /** `speak` (Cartas) is worth dealing from a single item, same as `cards`. */
 const MIN_SPEAK_ITEMS = 1;
@@ -60,6 +96,15 @@ const MIN_TRUEFALSE_ITEMS = 2;
 
 /** `openbox` (Abre la caja) needs at least two boxes — one box is not a grid. */
 const MIN_OPENBOX_ITEMS = 2;
+
+/** `cloze` needs at least one drag-and-drop gap to fill in. */
+const MIN_CLOZE_ITEMS = 1;
+
+/** `groupsort` needs at least this many groups — one group has nothing to sort against. */
+const MIN_GROUPSORT_GROUPS = 2;
+
+/** Each group needs at least this many items — a 1-item group is a guaranteed, un-missable match. */
+const MIN_GROUPSORT_ITEMS_PER_GROUP = 2;
 
 /** `anagram` tiles stay readable and quick to solve within this letter-count range. */
 const ANAGRAM_MIN_LEN = 3;
@@ -137,6 +182,17 @@ export function hangmanEligible(items: readonly GameItem[]): GameItem[] {
   return items.filter((item) => isSingleWord(item.answer, HANGMAN_MIN_LEN, HANGMAN_MAX_LEN));
 }
 
+/** Whitespace-separated word count in `text` — the simplest honest measure, blank-tolerant (`"".split(/\s+/)` would otherwise count as one). */
+function wordCount(text: string): number {
+  const trimmed = text.trim();
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+}
+
+/** Items whose answer is a full SENTENCE (>= {@link MIN_REORDER_WORDS} words) — playable as `reorder` (drag the words back into order). */
+export function reorderEligible(items: readonly GameItem[]): GameItem[] {
+  return items.filter((item) => wordCount(item.answer) >= MIN_REORDER_WORDS);
+}
+
 /** One `truefalse` statement: a slot's prompt with its gap filled by either its correct answer or a wrong pool option. */
 export interface TrueFalseItem {
   id: string;
@@ -176,6 +232,65 @@ export function trueFalseEligibleCount(payload: Payload): number {
 }
 
 /**
+ * How many of a payload's slots are drag-and-drop gaps (`cloze`'s own
+ * eligibility test — every blank of a `template: 'cloze'` block is one such
+ * slot, see `clozeSentences.ts`'s own header, but a plain Básico block with
+ * a `drop`-type gap question is just as eligible, same as `reorder`'s own
+ * "any long-enough answer qualifies" rule).
+ */
+export function clozeEligibleCount(payload: Payload): number {
+  return payload.slots.filter((slot) => isDropGap(slot.input)).length;
+}
+
+/**
+ * `groupsort` ("Ordenar por grupos") models each GROUP as one slot: `label`
+ * is the group's name, `input: 'group'` is its own mechanic discriminator
+ * (unknown to the shared mechanic registry, so Básico degrades it to
+ * `UnavailableRenderer` rather than breaking — see `QuizBlockPractice.tsx`'s
+ * own header), and `answer` holds every item id that belongs in that group,
+ * all drawn from ONE pool shared by the whole block (every group's items
+ * together). This reuses `exercisePayload.ts`'s existing `Slot`/`Pool` shape
+ * as-is — no new field anywhere — because `parseSlot` already accepts any
+ * non-empty `input` string and already allows `answer` to carry more than
+ * one id.
+ */
+function isGroupSortSlot(slot: Slot): boolean {
+  return slot.input === 'group';
+}
+
+/** One group, as the editor/game/presentation/print all derive it from a quiz block's own slots. */
+export interface GroupSortGroup {
+  id: string;
+  label: string;
+  /** Every pool item id that belongs in this group, in authored order. */
+  itemIds: string[];
+}
+
+/** Every authored group, in authored slot order. */
+export function deriveGroupSortGroups(payload: Payload): GroupSortGroup[] {
+  return payload.slots
+    .filter(isGroupSortSlot)
+    .map((slot) => ({ id: slot.id, label: slot.label, itemIds: slot.answer }));
+}
+
+/** The one pool name every group slot shares, or `undefined` for a block with no group yet. */
+export function groupSortPoolName(payload: Payload): string | undefined {
+  return payload.slots.find(isGroupSortSlot)?.pool;
+}
+
+/**
+ * Is this block's content actually playable as `groupsort`? At least {@link
+ * MIN_GROUPSORT_GROUPS} groups, EVERY ONE of them with at least {@link
+ * MIN_GROUPSORT_ITEMS_PER_GROUP} items — a lone group, or a 1-item group,
+ * would make sorting trivial or meaningless.
+ */
+export function groupSortEligible(payload: Payload): boolean {
+  const groups = deriveGroupSortGroups(payload);
+  if (groups.length < MIN_GROUPSORT_GROUPS) return false;
+  return groups.every((group) => group.itemIds.length >= MIN_GROUPSORT_ITEMS_PER_GROUP);
+}
+
+/**
  * Derive every playable {@link TrueFalseItem}, one per eligible slot, in
  * authored order. Each statement is seeded 50/50 between its correct answer
  * (a true statement) and a random wrong pool option (a false one) — the SAME
@@ -208,13 +323,70 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
   const modes: GameMode[] = ['quiz'];
   if (items.length >= MIN_CARDS_ITEMS) modes.push('cards');
   if (items.length >= MIN_MATCH_ITEMS && hasUniqueAnswers(items)) modes.push('match');
+  if (reorderEligible(items).length >= MIN_REORDER_ITEMS) modes.push('reorder');
   if (items.length >= MIN_SPEAK_ITEMS) modes.push('speak');
   if (items.length >= MIN_WHEEL_ITEMS) modes.push('wheel');
   if (anagramEligible(items).length >= MIN_ANAGRAM_ITEMS) modes.push('anagram');
   if (hangmanEligible(items).length >= MIN_HANGMAN_ITEMS) modes.push('hangman');
   if (payload && trueFalseEligibleCount(payload) >= MIN_TRUEFALSE_ITEMS) modes.push('truefalse');
   if (items.length >= MIN_OPENBOX_ITEMS) modes.push('openbox');
+  if (payload && clozeEligibleCount(payload) >= MIN_CLOZE_ITEMS) modes.push('cloze');
+  if (payload && groupSortEligible(payload)) modes.push('groupsort');
   return modes;
+}
+
+/**
+ * `groupsort`'s own additional restriction on top of {@link
+ * availableGameModes} — unlike every OTHER template (`blocks.ts`'s own
+ * `QuizTemplate` doc: "a template never restricts `availableGameModes`"),
+ * because every other game mode here is built from `deriveGameItems`, which
+ * collapses a slot down to ONE answer — for a `groupsort` block's own
+ * GROUP slots that means just the group's FIRST item, silently dropping
+ * every other item it holds. That is not a legitimate alternate way to
+ * play a group-sort activity, it is a misleading, incomplete one (e.g.
+ * "Anagrama" would scramble only the group's first item's letters,
+ * completely unrelated to sorting) — so a `groupsort`-templated block is
+ * restricted to `quiz` (Básico, itself degrading per group — see
+ * `QuizBlockPractice.tsx`'s own header) and `groupsort` only. Every OTHER
+ * template's modes are returned unchanged.
+ */
+export function modesForBlock(modes: readonly GameMode[], template: QuizTemplate | undefined): GameMode[] {
+  if (template !== 'groupsort') return [...modes];
+  return modes.filter((mode) => mode === 'quiz' || mode === 'groupsort');
+}
+
+/**
+ * Which {@link GameMode} a template WANTS to start in — `'match'` for the
+ * `'match'` template ("Une las parejas"), `'reorder'` for the `'reorder'`
+ * template ("Reordenar"), `'cloze'` for `'cloze'` ("Completar la frase"),
+ * `'groupsort'` for `'groupsort'` ("Ordenar por grupos"); `undefined`
+ * ("Básico") wants `'quiz'`.
+ */
+const TEMPLATE_DEFAULT_MODE: Record<QuizTemplate, GameMode> = {
+  match: 'match',
+  reorder: 'reorder',
+  cloze: 'cloze',
+  groupsort: 'groupsort',
+};
+
+/**
+ * A quiz block's own STARTING game mode (template plumbing, build item 2):
+ * the template's wanted mode (see {@link TEMPLATE_DEFAULT_MODE}) when the
+ * caller is actually eligible for it right now, `'quiz'` otherwise — a
+ * template never forces a mode the current content cannot play (e.g. fewer
+ * than `MIN_MATCH_ITEMS` unique answers), it only PREFERS one. The player
+ * can still switch away via `QuizGameModeSwitcher` once practising; this
+ * only decides where a fresh render starts.
+ */
+export function initialGameMode(
+  template: QuizTemplate | undefined,
+  items: readonly GameItem[],
+  payload?: Payload,
+): GameMode {
+  if (!template) return 'quiz';
+  const wanted = TEMPLATE_DEFAULT_MODE[template];
+  if (wanted === 'quiz') return 'quiz';
+  return availableGameModes(items, payload).includes(wanted) ? wanted : 'quiz';
 }
 
 /**

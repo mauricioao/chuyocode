@@ -42,10 +42,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
+import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
+import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
 import {
   initHistory,
   pushHistory,
@@ -71,6 +72,8 @@ import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
 import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
+import { useHydrated } from '@/hooks/useHydrated';
 
 /**
  * The window title bar's own `<span>` ids ("desktop" redesign PART 6b) —
@@ -87,7 +90,6 @@ import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/
  * change either way, same id, same `textContent` write.
  */
 const DESK_WINDOW_TITLE_ID = 'desk-window-title';
-const DESK_WINDOW_STATUS_ID = 'desk-window-status';
 /**
  * The window title bar's own EDITABLE title group ("desktop" redesign PART
  * 6b polish — owner report: a duplicated title, once in the title bar, once
@@ -139,6 +141,7 @@ interface ActivityDoc {
 }
 
 const resolveImageUrl = imagePreviewUrl;
+const resolveAudioUrl = audioPreviewUrl;
 
 function isMac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');
@@ -250,14 +253,15 @@ export default function ActivityEditorIsland({
     }
   }, [activityId, activeBlockId]);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-  const [addingBlock, setAddingBlock] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   // Empty activity (creator polish round 4, owner feedback #3): the add-flow
-  // (picker, then the worksheet uploader) is ALWAYS open while there are
-  // zero blocks — no separate "+" click needed first, matching
-  // `BlockList.tsx`'s own "Elige con qué seguir" empty-state heading right
-  // above it in the same scroll column.
-  const showAddFlow = addingBlock || blocks.length === 0;
+  // (picker, then the worksheet uploader) is open while there are zero
+  // blocks — no separate "+" click needed first, matching `BlockList.tsx`'s
+  // own "Elige con qué seguir" empty-state heading right above it in the
+  // same scroll column. ONE BLOCK PER ACTIVITY (one-sheet redesign, owner
+  // spec 2026-10-08): this is also now the ONLY way this flow ever opens —
+  // there is no more "+ Agregar bloque" trigger once a block exists.
+  const showAddFlow = blocks.length === 0;
 
   // Baseline captured at the start of an in-progress (non-committing)
   // transaction, e.g. a zone drag — see `updateDoc`.
@@ -297,7 +301,6 @@ export default function ActivityEditorIsland({
   // `BlockIndexPopover`, formerly the "block index") — jumps straight to a
   // chosen block by making it the sole active one. No scroll needed any
   // more: the body always shows exactly the active block, full-bleed.
-  const goToBlock = useCallback((blockId: string) => setActiveBlockId(blockId), [setActiveBlockId]);
 
   // A rejected submit's exact incomplete spot is stale the moment the
   // author touches ANY block content again — clear it on the next blocks
@@ -609,25 +612,17 @@ export default function ActivityEditorIsland({
     };
   }, [flushForMinimize, confirmCloseForWindow]);
 
-  // The window title bar's own live title/status (PART 6b) — see
-  // `DESK_WINDOW_TITLE_ID`/`DESK_WINDOW_STATUS_ID`'s own doc above for why
-  // this is a direct `textContent` write rather than a portal.
+  // The window title bar's own live title (PART 6b) — see
+  // `DESK_WINDOW_TITLE_ID`'s own doc above for why this is a direct
+  // `textContent` write rather than a portal. The title bar's own muted
+  // autosave status span is GONE (owner report: redundant with the side
+  // toolbar's own save-status icon, which is now the ONE save indicator —
+  // see `SaveStatusIndicator.tsx`); `[id].astro` no longer passes `status`/
+  // `statusId` to `DeskWindow`, so there is nothing left here to sync.
   useEffect(() => {
     const el = document.getElementById(DESK_WINDOW_TITLE_ID);
     if (el) el.textContent = title.trim() || t.titleFallback;
   }, [title, t.titleFallback]);
-
-  useEffect(() => {
-    const el = document.getElementById(DESK_WINDOW_STATUS_ID);
-    if (!el) return;
-    if (saveState === 'saving') el.textContent = t.titlebarSaving;
-    else if (saveState === 'error') el.textContent = t.errorStatus;
-    // 'idle'/'pending'/'saved' all read as the SAME ambient "saved a moment
-    // ago" copy here (approved mockup) — the SIDE TOOLBAR's own indicator
-    // (`saveLabels` below) is where the finer-grained "unsaved" state still
-    // shows, unchanged.
-    else el.textContent = t.titlebarSaved;
-  }, [saveState, t.titlebarSaving, t.errorStatus, t.titlebarSaved]);
 
   // The window title bar's own `actions` slot (PART 6b) — resolved once on
   // mount; `DeskWindow.astro` always renders this node (empty) before this
@@ -639,6 +634,24 @@ export default function ActivityEditorIsland({
   }, []);
   /** "Ver como presentación" icon button's own tooltip id (icon-only pass, 2026-10-07) — same `ICON_TOOLTIP_*` pattern `ReportActivityButton`/`DuplicateActivityButton` already use. */
   const viewAsPresentationTooltipId = useId();
+  /**
+   * Mobile title bar "⋯" menu (owner report: on a 390px phone the title bar
+   * wrapped into three rows and the title truncated to "Hoj…") — see
+   * `t.mobileMenuLabel`'s own doc. `useIsDesktop`/`useHydrated` pair exactly
+   * like `WorksheetZoneEditor`'s own desktop-overlay/mobile-sheet split and
+   * `EditorSideToolbar`'s own desktop-rail/mobile-bar split (see either
+   * hook's own header): this is a real STRUCTURAL branch — the level
+   * select/status badge/"Ver como presentación"/"Enviar a revisión" each
+   * render in a DIFFERENT portal slot (or a different position within one)
+   * depending on which side of the breakpoint wins, not just a CSS show/hide
+   * of the same markup. `lg:` (1024px) is deliberately the SAME breakpoint
+   * the rest of the editor's mobile layout already uses — not `sm:`/`desk:`
+   * (used elsewhere, for unrelated windows) — so the whole editor flips from
+   * mobile to desktop at one single width.
+   */
+  const isDesktop = useIsDesktop();
+  const hydrated = useHydrated();
+  const mobileMenuTooltipId = useId();
 
   // The window title bar's own EDITABLE title group slot (PART 6b polish) —
   // same resolve-once-on-mount posture as the actions slot above; `null`
@@ -648,6 +661,12 @@ export default function ActivityEditorIsland({
   useEffect(() => {
     setTitleGroupPortalTarget(document.getElementById(DESK_WINDOW_TITLE_GROUP_ID));
   }, []);
+
+  // One-sheet redesign: the floating side toolbar's own worksheet-tools
+  // slot (`EditorSideToolbar.tsx`'s `onWorksheetToolsSlotReady`) — threaded
+  // down to `BlockList.tsx` as `sideToolsPortalTarget`, same ref-callback
+  // pattern as the portal targets above.
+  const [worksheetToolsSlot, setWorksheetToolsSlot] = useState<HTMLDivElement | null>(null);
 
   const openSubmitDialog = useCallback(() => {
     setSubmitDialog({ open: true, submitting: false, error: null });
@@ -666,8 +685,8 @@ export default function ActivityEditorIsland({
   // restoration on close is THIS component's job (the button that opened
   // it is the one thing the island itself cannot know about) — a plain
   // `document.querySelector` on the button's own `data-testid`, same
-  // direct-DOM-focus style `goToBlock`/`handleConfirmSubmit` already use
-  // above, rather than a `Button`-forwarded ref (that shared component is a
+  // direct-DOM-focus style `handleConfirmSubmit` already uses above, rather
+  // than a `Button`-forwarded ref (that shared component is a
   // bare function component, not `forwardRef`-wrapped).
   const [showPresentationPreview, setShowPresentationPreview] = useState(false);
   const openPresentationPreview = useCallback(() => setShowPresentationPreview(true), []);
@@ -748,8 +767,9 @@ export default function ActivityEditorIsland({
 
   // Unlike Worksheet (which needs an upload step first, via `showUploader`),
   // Questions has nothing to upload — the new block is appended immediately,
-  // empty, and becomes the sole active one, same rule `handleUploadComplete`
-  // follows for its own last-uploaded block.
+  // empty, and becomes the sole active one. ONE BLOCK PER ACTIVITY (one-sheet
+  // redesign): `showAddFlow` only ever opens while `blocks.length === 0`, so
+  // this always creates the activity's ONE AND ONLY block.
   const handleQuestionsChosen = useCallback(() => {
     const newBlock: Block = {
       id: crypto.randomUUID(),
@@ -757,27 +777,77 @@ export default function ActivityEditorIsland({
       payload: { pools: {}, slots: [] },
     };
     changeBlocks([...blocks, newBlock]);
-    setAddingBlock(false);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
+  // "Une las parejas" (start-gallery redesign, build item 4): same shape as
+  // Questions above — appended immediately, empty, no upload step — just
+  // tagged with the `'match'` template (`blocks.ts`'s `QuizTemplate`) so the
+  // practice side opens straight into Parejas once there is enough content.
+  const handleMatchChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'match',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
+  // "Reordenar" (Wordwall templates build): same shape as Match above, just
+  // tagged with the `'reorder'` template.
+  const handleReorderChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'reorder',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
+  // "Completar la frase" (cloze): same shape as Reorder above, just tagged
+  // with the `'cloze'` template.
+  const handleClozeChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'cloze',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
+  // "Ordenar por grupos" (groupsort): same shape as Cloze above, just tagged
+  // with the `'groupsort'` template.
+  const handleGroupSortChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'groupsort',
+    };
+    changeBlocks([...blocks, newBlock]);
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
-      const newBlocks: WorksheetBlock[] = images.map((image) => ({
-        id: crypto.randomUUID(),
-        type: 'worksheet',
-        rotation: 0,
-        image,
-        zones: [],
-      }));
-      changeBlocks([...blocks, ...newBlocks]);
-      setAddingBlock(false);
+      // `WorksheetUploader` always hands back exactly ONE image now —
+      // several dropped files/PDF pages are stitched into one sheet
+      // client-side before upload (`sheetStitcher.ts`), which is also what
+      // keeps this the activity's ONE AND ONLY block (see
+      // `handleQuestionsChosen`'s own header). Any defensive extra is
+      // simply ignored rather than spawning a second block.
+      const [image] = images;
+      if (!image) return;
+      const newBlock: WorksheetBlock = { id: crypto.randomUUID(), type: 'worksheet', rotation: 0, image, zones: [] };
+      changeBlocks([...blocks, newBlock]);
       setShowUploader(false);
-      // Only the LAST uploaded block becomes the sole active one, even when
-      // several images were uploaded at once (a multi-page PDF) — one
-      // active block at a time, same rule everywhere else.
-      const last = newBlocks.at(-1);
-      if (last) setActiveBlockId(last.id);
+      setActiveBlockId(newBlock.id);
     },
     [blocks, changeBlocks, setActiveBlockId],
   );
@@ -829,6 +899,185 @@ export default function ActivityEditorIsland({
   // block in sequence, so it keeps this unchanged.
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
+  // The level select + review-status badge, exactly as they render on
+  // desktop today (byte-identical markup/testids) — inline in the title
+  // bar's own editable title group, right after the title input. See
+  // `isDesktop`/`hydrated`'s own header above for why this (and the two
+  // variables below) is a real structural branch, not a CSS media query.
+  const desktopLevelAndStatus = (
+    <>
+      <label className="flex shrink-0 items-center gap-1 text-sm">
+        <span className="sr-only">{t.levelLabel}</span>
+        <Select
+          data-testid="activity-level-select"
+          aria-label={t.levelLabel}
+          fieldSize="sm"
+          value={level ?? ''}
+          onChange={(e) => changeLevel(e.target.value)}
+        >
+          <option value="">{t.levelNone}</option>
+          {LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>
+              {levelLabels[lvl]}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <div
+        className="flex shrink-0 flex-wrap items-center gap-2"
+        data-testid="activity-status-badge"
+        data-status={status}
+      >
+        <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+          {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+            ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+            : t.statusDraft}
+        </span>
+        {status === 'rejected' && initialReviewNote && (
+          <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+            {t.reviewNoteLabel}: {initialReviewNote}
+          </span>
+        )}
+      </div>
+    </>
+  );
+
+  // "Ver como presentación" + "Enviar a revisión", exactly as they render on
+  // desktop today — ghost icon button + tooltip, yellow primary button —
+  // portaled into the title bar's own far-right `actions` slot.
+  const desktopActions = (
+    <>
+      <button
+        type="button"
+        data-testid="view-as-presentation-button"
+        aria-label={t.viewAsPresentation}
+        aria-describedby={viewAsPresentationTooltipId}
+        className={ICON_TOOLTIP_TRIGGER_CLASS}
+        onClick={openPresentationPreview}
+      >
+        <PresentationIcon aria-hidden="true" size={16} />
+        <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {t.viewAsPresentation}
+        </span>
+      </button>
+      <Button
+        type="button"
+        size="sm"
+        data-testid="submit-for-review-button"
+        className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+        onClick={openSubmitDialog}
+      >
+        {t.submitForReview}
+      </Button>
+    </>
+  );
+
+  /**
+   * Mobile title bar "⋯" menu (bug fix — owner report: on a 390px phone the
+   * title bar wrapped into three rows and the title truncated to "Hoj…").
+   * ONE compact row on a phone: traffic lights, the title (gets the
+   * remaining width, still editable), and this single trigger — holding the
+   * level select, the review-status badge, "Ver como presentación" AND
+   * "Enviar a revisión". A pure checkbox + `<label>` CSS-only disclosure, NO
+   * JS required for the show/hide itself — same pattern (and the same
+   * no-JS-first posture) as the PRACTICE window's own "Más" overflow menu
+   * (`global.css`'s `[data-desk-window-more]`, `[id].astro`'s own header),
+   * just at `lg:` instead of `desk:` (see `isDesktop`'s own doc above for
+   * why) and under a different attribute name (`data-desk-window-editor-more`)
+   * so the two unrelated features never collide.
+   *
+   * JUDGMENT CALL: the bug report explicitly leaves "Enviar a revisión" as
+   * either a kept compact button OR folded into this menu. It is folded in
+   * here — keeping ANY second control beside the title (even a short
+   * "Enviar" label) still competes with it for the row's width, which is
+   * exactly the regression being fixed; "Enviar a revisión" is also a
+   * once-in-a-while action (done at specific milestones, not every editing
+   * session), so one tap into a clearly-labeled menu costs little. Both
+   * actions keep their exact desktop testids/behaviour here (`onClick`
+   * handlers unchanged) — only WHERE they render differs.
+   */
+  const mobileMenu = (
+    <div className="relative" data-desk-window-editor-more>
+      <input
+        type="checkbox"
+        id="desk-window-editor-more-toggle"
+        className="peer sr-only"
+        aria-label={t.mobileMenuLabel}
+        aria-controls="desk-window-editor-more-content"
+      />
+      <label
+        htmlFor="desk-window-editor-more-toggle"
+        data-testid="activity-mobile-menu-trigger"
+        className={`${ICON_TOOLTIP_TRIGGER_CLASS} cursor-pointer peer-focus-visible:outline-none peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50`}
+      >
+        <DotsThreeIcon aria-hidden="true" size={18} weight="bold" />
+        <span role="tooltip" id={mobileMenuTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {t.mobileMenuLabel}
+        </span>
+      </label>
+      <div
+        id="desk-window-editor-more-content"
+        data-testid="activity-mobile-menu-content"
+        // `z-30`: the worksheet canvas's own floating zoom pill/properties
+        // overlay sit at `z-20` (`WorksheetZoneEditor.tsx`) — verified by
+        // screenshot to otherwise paint OVER this menu, since both are
+        // `position: absolute`. One rung above clears every canvas-level
+        // overlay, while staying below the body-portaled side toolbar
+        // (`z-[60]`) and any modal (`z-40`/`z-50`), neither of which is ever
+        // open at the same time as this menu.
+        className="hidden absolute right-0 top-full z-30 mt-2 w-56 max-w-[calc(100vw-2rem)] flex-col items-stretch gap-2 rounded-lg border border-border bg-background p-2 shadow-elevation-2 peer-checked:flex"
+      >
+        <label className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{t.levelLabel}</span>
+          <Select
+            data-testid="activity-level-select"
+            aria-label={t.levelLabel}
+            fieldSize="sm"
+            value={level ?? ''}
+            onChange={(e) => changeLevel(e.target.value)}
+          >
+            <option value="">{t.levelNone}</option>
+            {LEVELS.map((lvl) => (
+              <option key={lvl} value={lvl}>
+                {levelLabels[lvl]}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+              : t.statusDraft}
+          </span>
+          {status === 'rejected' && initialReviewNote && (
+            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+              {t.reviewNoteLabel}: {initialReviewNote}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          data-testid="view-as-presentation-button"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-muted"
+          onClick={openPresentationPreview}
+        >
+          <PresentationIcon aria-hidden="true" size={16} />
+          {t.viewAsPresentation}
+        </button>
+        <Button
+          type="button"
+          size="sm"
+          data-testid="submit-for-review-button"
+          className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+          onClick={openSubmitDialog}
+        >
+          {t.submitForReview}
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
     // (border, rounded, `bg-card`) with real vertical margins from the site
@@ -848,22 +1097,24 @@ export default function ActivityEditorIsland({
     // end — no separate `BackButton` row above it any more, and no
     // pixel-perfect header-height math to keep in sync here). `astro-island`
     // (this component's own wrapper tag) renders as `display: contents`, so the
-    // flex chain passes straight through it. `lg:pr-16` reserves room for
-    // `EditorSideToolbar`'s `fixed right-3` icon rail (docked position) so
-    // it never overlaps the canvas/properties column — unchanged by the
-    // toolbar's own floating pass: that reserved space stays put regardless
-    // of whether the toolbar is currently docked or floating elsewhere, so
-    // undocking it never shifts this layout. Below `lg:` this is
-    // intentionally untouched — today's stacked, scrollable layout keeps
-    // working; a dedicated mobile layout comes later.
+    // flex chain passes straight through it. `EditorSideToolbar`'s own
+    // `fixed`/docked icon rail used to need an `lg:pr-16` gutter reserved
+    // here so it never overlapped the canvas — CANVAS EVERYWHERE (owner
+    // report: a white/grey strip ran down that reserved column): removed.
+    // The dotted canvas now fills the window's full body edge to edge, and
+    // the docked rail simply FLOATS OVER it (it is already `fixed`/
+    // `z-[60]`, portaled to `document.body` — overlapping content beneath
+    // it is the point, not a layout bug). Below `lg:` this is intentionally
+    // untouched — today's stacked, scrollable layout keeps working; a
+    // dedicated mobile layout comes later.
     <div
       data-testid="activity-editor-island"
       // Mobile layout pass: `pb-*` reserves room for `EditorSideToolbar`'s
       // own fixed bottom action bar there (safe-area aware, same pattern as
       // the practice page's sticky Comprobar bar) — cleared entirely at
-      // `lg:`, where that component goes back to its original floating
-      // rail and `lg:pr-16` (unchanged) reserves ITS docked slot instead.
-      className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16"
+      // `lg:`, where that component goes back to its own floating rail,
+      // which no longer reserves a side gutter (see above).
+      className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0"
     >
       {/* THE card (PART 6b polish, "double framing" fix — owner report:
           "se ve el marco de la ventana y encima el marco de la tarjeta"):
@@ -935,6 +1186,8 @@ export default function ActivityEditorIsland({
                   zones={block.zones}
                   rotation={block.rotation}
                   imageUrl={resolveImageUrl(block.image.path)}
+                  audio={block.audio}
+                  resolveAudioUrl={resolveAudioUrl}
                 />
               ))}
           </div>
@@ -947,30 +1200,52 @@ export default function ActivityEditorIsland({
           // edges; scrolls on its own if the picker/uploader ever overflows.
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
             {/* Zero-block activity: `BlockList` itself renders the "Elige
-                con qué seguir" heading right above this same picker. */}
-            <BlockList
-              lang={lang}
-              blocks={blocks}
-              activeBlockId={activeBlockId}
-              selectedZoneId={selectedZoneId}
-              resolveImageUrl={resolveImageUrl}
-              onSetActiveBlock={setActiveBlockId}
-              onSelectZone={setSelectedZoneId}
-              onBlocksChange={changeBlocks}
-              incompleteBlockId={incompleteTarget?.blockId ?? null}
-              incompleteZoneId={incompleteTarget?.zoneId ?? null}
-              incompleteMessage={incompleteMessage}
-            />
+                con qué seguir" heading right above this same picker — but
+                only while the picker is actually still showing. Once the
+                worksheet card has been chosen and the uploader's own drop
+                zone is up (`showUploader`), that heading no longer applies
+                to anything on screen, so `BlockList` (and its heading) is
+                skipped entirely here. */}
+            {!showUploader && (
+              <BlockList
+                lang={lang}
+                blocks={blocks}
+                activeBlockId={activeBlockId}
+                selectedZoneId={selectedZoneId}
+                resolveImageUrl={resolveImageUrl}
+                resolveAudioUrl={resolveAudioUrl}
+                onSetActiveBlock={setActiveBlockId}
+                onSelectZone={setSelectedZoneId}
+                onBlocksChange={changeBlocks}
+                incompleteBlockId={incompleteTarget?.blockId ?? null}
+                incompleteZoneId={incompleteTarget?.zoneId ?? null}
+                incompleteMessage={incompleteMessage}
+                sideToolsPortalTarget={worksheetToolsSlot}
+              />
+            )}
 
             {!showUploader && (
               <BlockTypePicker
                 lang={lang}
                 onSelectWorksheet={handleWorksheetChosen}
                 onSelectQuestions={handleQuestionsChosen}
+                onSelectMatch={handleMatchChosen}
+                onSelectReorder={handleReorderChosen}
+                onSelectCloze={handleClozeChosen}
+                onSelectGroupSort={handleGroupSortChosen}
               />
             )}
 
-            {showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
+            {/* CANVAS EVERYWHERE (owner spec): the dotted canvas pattern
+                also fills this first-ever upload's own drop/loading area,
+                same as a worksheet block's empty state in `BlockList.tsx`,
+                so it reads as "the place to drop" before any block exists
+                yet. */}
+            {showUploader && (
+              <div className="canvas-dots relative flex min-h-80 flex-1 flex-col overflow-hidden rounded-lg bg-muted">
+                <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />
+              </div>
+            )}
           </div>
         ) : (
           // The active block's own editor, edge to edge — no margins, no
@@ -981,12 +1256,14 @@ export default function ActivityEditorIsland({
             activeBlockId={activeBlockId}
             selectedZoneId={selectedZoneId}
             resolveImageUrl={resolveImageUrl}
+            resolveAudioUrl={resolveAudioUrl}
             onSetActiveBlock={setActiveBlockId}
             onSelectZone={setSelectedZoneId}
             onBlocksChange={changeBlocks}
             incompleteBlockId={incompleteTarget?.blockId ?? null}
             incompleteZoneId={incompleteTarget?.zoneId ?? null}
             incompleteMessage={incompleteMessage}
+            sideToolsPortalTarget={worksheetToolsSlot}
           />
         )}
 
@@ -1005,9 +1282,6 @@ export default function ActivityEditorIsland({
       {blocks.length > 0 && (
         <EditorSideToolbar
           lang={lang}
-          blocks={blocks}
-          onGoToBlock={goToBlock}
-          onAddBlock={() => setAddingBlock(true)}
           preview={preview}
           onTogglePreview={() => setPreview((p) => !p)}
           canUndo={canUndo(history)}
@@ -1018,6 +1292,7 @@ export default function ActivityEditorIsland({
           saveDisabled={saveState === 'saving'}
           saveState={saveState}
           saveLabels={saveLabels}
+          onWorksheetToolsSlotReady={setWorksheetToolsSlot}
         />
       )}
 
@@ -1059,42 +1334,32 @@ export default function ActivityEditorIsland({
       {/* "Desktop" redesign PART 6b: the window's own title bar `actions`
           slot (ghost "Ver como presentación" + yellow primary "Enviar a
           revisión") — see `DESK_WINDOW_ACTIONS_ID`'s own doc above for why
-          this is a portal rather than plain JSX in the header row. */}
+          this is a portal rather than plain JSX in the header row. Mobile
+          bug fix: below `lg:` those same two actions move into the title
+          group's own "⋯" menu instead (see `mobileMenu`'s own header) — this
+          slot renders nothing there. `hydrated ? … : …` is the same
+          "no layout flash" SSR split `WorksheetZoneEditor`/`EditorSideToolbar`
+          already use (see `isDesktop`'s own doc above). */}
       {actionsPortalTarget &&
         createPortal(
-          <>
-            <button
-              type="button"
-              data-testid="view-as-presentation-button"
-              aria-label={t.viewAsPresentation}
-              aria-describedby={viewAsPresentationTooltipId}
-              className={ICON_TOOLTIP_TRIGGER_CLASS}
-              onClick={openPresentationPreview}
-            >
-              <PresentationIcon aria-hidden="true" size={16} />
-              <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
-                {t.viewAsPresentation}
-              </span>
-            </button>
-            <Button
-              type="button"
-              size="sm"
-              data-testid="submit-for-review-button"
-              className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
-              onClick={openSubmitDialog}
-            >
-              {t.submitForReview}
-            </Button>
-          </>,
+          hydrated ? (
+            isDesktop ? (
+              desktopActions
+            ) : null
+          ) : (
+            <div className="hidden lg:contents">{desktopActions}</div>
+          ),
           actionsPortalTarget,
         )}
 
       {/* "Desktop" redesign PART 6b polish: the window's own title bar
           EDITABLE title group — the SAME controlled title `<input>` (value/
           onChange/validation/autosave unchanged, just relocated out of the
-          card's own old header row), the level `<select>`, and the
-          review-status badge right after it. See `DESK_WINDOW_TITLE_GROUP_ID`'s
-          own doc above for why this is a portal. */}
+          card's own old header row). See `DESK_WINDOW_TITLE_GROUP_ID`'s own
+          doc above for why this is a portal. Mobile bug fix: the level
+          select/status badge (desktop) collapse into the "⋯" menu (mobile)
+          right after the title input — see `desktopLevelAndStatus`/
+          `mobileMenu`'s own headers above. */}
       {titleGroupPortalTarget &&
         createPortal(
           <>
@@ -1114,39 +1379,20 @@ export default function ActivityEditorIsland({
                 className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground outline-none placeholder:font-semibold placeholder:text-muted-foreground hover:border-border focus-visible:border-border focus-visible:bg-(--color-field) focus-visible:outline-none focus-visible:ring-0"
               />
             </label>
-            <label className="flex shrink-0 items-center gap-1 text-sm">
-              <span className="sr-only">{t.levelLabel}</span>
-              <Select
-                data-testid="activity-level-select"
-                aria-label={t.levelLabel}
-                fieldSize="sm"
-                value={level ?? ''}
-                onChange={(e) => changeLevel(e.target.value)}
-              >
-                <option value="">{t.levelNone}</option>
-                {LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {levelLabels[lvl]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <div
-              className="flex shrink-0 flex-wrap items-center gap-2"
-              data-testid="activity-status-badge"
-              data-status={status}
-            >
-              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-                  : t.statusDraft}
-              </span>
-              {status === 'rejected' && initialReviewNote && (
-                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-                  {t.reviewNoteLabel}: {initialReviewNote}
-                </span>
-              )}
-            </div>
+            {hydrated ? (
+              isDesktop ? (
+                desktopLevelAndStatus
+              ) : (
+                mobileMenu
+              )
+            ) : (
+              <>
+                <div className="hidden lg:contents">{desktopLevelAndStatus}</div>
+                <div className="contents lg:hidden" inert>
+                  {mobileMenu}
+                </div>
+              </>
+            )}
           </>,
           titleGroupPortalTarget,
         )}

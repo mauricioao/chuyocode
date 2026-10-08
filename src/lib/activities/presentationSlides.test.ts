@@ -218,6 +218,25 @@ describe('buildPresentationSlides', () => {
     expect(zoneSlide2.zoneCount).toBe(2);
   });
 
+  it("carries the worksheet's own audio markers on the overview slide only", () => {
+    const withAudio: Block = {
+      ...WORKSHEET_TWO_ZONES,
+      audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }],
+    };
+    const slides = buildPresentationSlides([withAudio]);
+    const overview = slides[0] as Extract<(typeof slides)[number], { kind: 'worksheet-overview' }>;
+    expect(overview.audio).toEqual([{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio/abc/a1.webm' }]);
+
+    const zoneSlide = slides[1] as Extract<(typeof slides)[number], { kind: 'worksheet-zone' }>;
+    expect('audio' in zoneSlide).toBe(false);
+  });
+
+  it('leaves the overview slide with no `audio` field at all when the worksheet has no markers (backward compatible)', () => {
+    const slides = buildPresentationSlides([WORKSHEET_TWO_ZONES]);
+    const overview = slides[0] as Extract<(typeof slides)[number], { kind: 'worksheet-overview' }>;
+    expect(overview.audio).toBeUndefined();
+  });
+
   it('skips an unpresentable worksheet (no image/zones) entirely, contributing no slides', () => {
     expect(buildPresentationSlides([WORKSHEET_NO_IMAGE])).toEqual([]);
     expect(buildPresentationSlides([WORKSHEET_NO_ZONES])).toEqual([]);
@@ -238,6 +257,124 @@ describe('buildPresentationSlides', () => {
     ]);
     expect(slides.map((s) => s.blockId)).toEqual(['w1', 'w1', 'q1', 'w2', 'w2', 'w2', 'q2']);
   });
+
+  it('builds ONE "match" slide for a template: match block, carrying every pair (build item 5)', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      name: 'Animales',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+          { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+          { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+        ],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(slides).toEqual([
+      {
+        kind: 'match',
+        blockId: 'q1',
+        name: 'Animales',
+        pairs: [
+          { id: 's1', prompt: 'dog', answer: 'perro' },
+          { id: 's2', prompt: 'cat', answer: 'gato' },
+          { id: 's3', prompt: 'bird', answer: 'pájaro' },
+        ],
+      },
+    ]);
+  });
+
+  it('skips an incomplete match block (every pair still unanswered), contributing no slide', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: [] }] },
+    };
+    expect(buildPresentationSlides([block])).toEqual([]);
+  });
+
+  it('builds ONE "reorder" slide PER sentence, with its words pre-shuffled and never in the original order', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'reorder',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'What are you doing', input: 'text', answer: ['What are you doing'] },
+          { id: 's2', label: 'She goes to school', input: 'text', answer: ['She goes to school'] },
+        ],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(slides).toHaveLength(2);
+    for (const slide of slides) {
+      if (slide.kind !== 'reorder') throw new Error('expected a reorder slide');
+      expect(slide.blockId).toBe('q1');
+      const originalWords = slide.sentence.split(' ');
+      expect(slide.words.slice().sort()).toEqual(originalWords.slice().sort());
+      expect(slide.words).not.toEqual(originalWords);
+    }
+  });
+
+  it('skips a reorder sentence with fewer than 2 words, contributing no slide for it', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'reorder',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'cat', input: 'text', answer: ['cat'] }] },
+    };
+    expect(buildPresentationSlides([block])).toEqual([]);
+  });
+
+  it('builds ONE "groupsort" slide for a template: groupsort block, carrying every group with its resolved items', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'groupsort',
+      name: 'Categorías',
+      payload: {
+        pools: {
+          p1: [
+            { id: 'dog', text: 'dog' },
+            { id: 'cat', text: 'cat' },
+            { id: 'bread', text: 'bread' },
+          ],
+        },
+        slots: [
+          { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+          { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+        ],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(slides).toEqual([
+      {
+        kind: 'groupsort',
+        blockId: 'q1',
+        name: 'Categorías',
+        groups: [
+          { id: 'g1', label: 'Animals', items: ['dog', 'cat'] },
+          { id: 'g2', label: 'Food', items: ['bread'] },
+        ],
+      },
+    ]);
+  });
+
+  it('skips an empty groupsort group (no items yet), and contributes no slide once every group is empty', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'groupsort',
+      payload: { pools: {}, slots: [{ id: 'g1', label: 'Animals', input: 'group', answer: [] }] },
+    };
+    expect(buildPresentationSlides([block])).toEqual([]);
+  });
 });
 
 describe('revealableSlides', () => {
@@ -248,6 +385,20 @@ describe('revealableSlides', () => {
 
   it('is empty for an empty deck', () => {
     expect(revealableSlides([])).toEqual([]);
+  });
+
+  it('a "match" slide is revealable, same as "question"', () => {
+    expect(revealableSlides([{ kind: 'match', blockId: 'q1', pairs: [] }])).toEqual([true]);
+  });
+
+  it('a "groupsort" slide is revealable, same as "question"', () => {
+    expect(revealableSlides([{ kind: 'groupsort', blockId: 'q1', groups: [] }])).toEqual([true]);
+  });
+
+  it('a "reorder" slide is revealable, same as "question"', () => {
+    expect(
+      revealableSlides([{ kind: 'reorder', blockId: 'q1', slotId: 's1', sentence: 'a b', words: ['b', 'a'] }]),
+    ).toEqual([true]);
   });
 });
 

@@ -61,6 +61,16 @@ export const MAX_PDF_THUMBNAIL_PAGES = 40;
 /** The rendered thumbnail's target width, in CSS pixels — height follows the page's own aspect ratio. */
 export const PDF_THUMBNAIL_WIDTH = 120;
 
+/**
+ * Client-side mirror of `/api/actividades/imagen.ts`'s own `MAX_UPLOAD_BYTES`
+ * (2 MB) — `sheetStitcher.ts`'s own size-limit retry loop needs to know the
+ * server's cap BEFORE uploading, so a stitched sheet that would be rejected
+ * shrinks (or gives up with a clear message) instead of failing the upload
+ * itself. Keep these two constants in sync by hand; there is no shared
+ * module between server and client code for this one number.
+ */
+export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
 const SUPPORTED_IMAGE_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
   'image/png',
@@ -143,8 +153,13 @@ export function validatePageSelection(
   return [...pages];
 }
 
-/** `<canvas>.toBlob` wrapped as a Promise, encoding as WebP at {@link WEBP_QUALITY}. */
-function canvasToWebpBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+/**
+ * `<canvas>.toBlob` wrapped as a Promise, encoding as WebP at `quality`
+ * (defaults to {@link WEBP_QUALITY}). Exported for `sheetStitcher.ts`'s own
+ * thin canvas-drawing wrapper — its one caller outside this file — which
+ * needs a LOWER quality for its own size-limit retry loop.
+ */
+export function canvasToWebpBlob(canvas: HTMLCanvasElement, quality: number = WEBP_QUALITY): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -152,12 +167,13 @@ function canvasToWebpBlob(canvas: HTMLCanvasElement): Promise<Blob> {
         else reject(new Error('imagePipeline: WebP encoding produced no blob'));
       },
       'image/webp',
-      WEBP_QUALITY,
+      quality,
     );
   });
 }
 
-function create2dContext(width: number, height: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+/** Exported for `sheetStitcher.ts`'s own thin canvas-drawing wrapper — see {@link canvasToWebpBlob}'s own header. */
+export function create2dContext(width: number, height: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;

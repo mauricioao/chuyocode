@@ -111,6 +111,27 @@ describe('POST /api/actividades — blocks validation', () => {
       }),
     );
   });
+
+  // Template plumbing (build item 2): the start screen's "Une las parejas"
+  // card seeds a quiz starter block with `template: 'match'` — this endpoint
+  // must persist it through `parseBlocks('draft')` like every other field.
+  it('persists a "match" template on the starter quiz block', async () => {
+    const res = await POST(
+      ctx({
+        body: {
+          lang: 'es',
+          blocks: [{ id: 'b1', type: 'quiz', template: 'match', payload: { pools: {}, slots: [] } }],
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(createActivityMock).toHaveBeenCalledWith(
+      USER.id,
+      expect.objectContaining({
+        blocks: [expect.objectContaining({ type: 'quiz', template: 'match' })],
+      }),
+    );
+  });
 });
 
 describe('POST /api/actividades — image ownership', () => {

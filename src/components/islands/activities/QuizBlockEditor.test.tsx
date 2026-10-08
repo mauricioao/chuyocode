@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
@@ -38,6 +38,74 @@ function Harness({ initialPayload }: { initialPayload: Payload }) {
       blockId="b1"
       lang="es"
       payload={payload}
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
+/** Same harness, authoring a `template: 'match'` block ("Une las parejas", build item 1). */
+function MatchHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="match"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
+/** Same harness, authoring a `template: 'reorder'` block ("Reordenar"). */
+function ReorderHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="reorder"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
+/** Same harness, authoring a `template: 'cloze'` block ("Completar la frase"). */
+function ClozeHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="cloze"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
+/** Same harness, authoring a `template: 'groupsort'` block ("Ordenar por grupos"). */
+function GroupSortHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="groupsort"
       selectedSlotId={selectedSlotId}
       onSelectSlot={setSelectedSlotId}
       onPayloadChange={setPayload}
@@ -248,6 +316,14 @@ describe('QuizBlockEditor — fits the focus block and scrolls inside it', () =>
     }
   });
 
+  it('reserves room on the preview column for the floating side toolbar\'s docked slot, so it never covers the preview\'s own Comprobar button', () => {
+    render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
+    expect(classesOf('quiz-col-preview-b1')).toEqual(expect.arrayContaining(['lg:pr-16']));
+    // The questions column sits beside it, away from the docked rail's own
+    // right-edge slot — it keeps its original, smaller gutter.
+    expect(classesOf('quiz-col-questions-b1')).not.toEqual(expect.arrayContaining(['lg:pr-16']));
+  });
+
   it('lets the empty state scroll inside the block too', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
     expect(classesOf('quiz-editor-b1')).toEqual(
@@ -385,5 +461,404 @@ describe('QuizBlockEditor — hydration (useFirstRunTips reads localStorage, ite
     ));
     expect(recoverableErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
+  });
+});
+
+describe('QuizBlockEditor — "Une las parejas" (build item 1, match authoring)', () => {
+  it('renders the minimal Pregunta/Respuesta pair editor instead of the Básico question-card list', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('match-pairs-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least 3 pairs" hint until there are 3 complete pairs', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    expect(screen.getByTestId('match-pairs-hint-b1').textContent).toContain('Agrega al menos 3 parejas');
+  });
+
+  it('hides the hint once there are 3 complete pairs', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+        { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+        { kind: 'row', id: 'row-s3', slotId: 's3' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    expect(screen.queryByTestId('match-pairs-hint-b1')).toBeNull();
+  });
+
+  it('"+ Agregar pareja" adds a new row+slot (same storage addQuestion already writes)', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('match-add-pair-b1'));
+    expect(screen.getAllByTestId(/^match-pair-question-/)).toHaveLength(1);
+  });
+
+  it('Enter in the answer field adds another pair and focuses its question field', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('match-add-pair-b1'));
+    const [questionInput] = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    const [answerInput] = screen.getAllByTestId(/^match-pair-answer-/) as HTMLInputElement[];
+    fireEvent.change(questionInput, { target: { value: 'dog' } });
+    fireEvent.change(answerInput, { target: { value: 'perro' } });
+    fireEvent.keyDown(answerInput, { key: 'Enter' });
+
+    const questionInputs = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    expect(questionInputs).toHaveLength(2);
+    expect(document.activeElement).toBe(questionInputs[1]);
+  });
+
+  it('removing a pair ("×") deletes exactly its own row+slot', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    fireEvent.click(screen.getByTestId('match-pair-remove-s1'));
+    expect(screen.queryByTestId('match-pair-s1')).toBeNull();
+    expect(screen.getByTestId('match-pair-s2')).toBeTruthy();
+  });
+
+  it('typing a question/answer commits back through onPayloadChange', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: '', input: 'text', answer: [] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    fireEvent.change(screen.getByTestId('match-pair-question-s1'), { target: { value: 'dog' } });
+    fireEvent.change(screen.getByTestId('match-pair-answer-s1'), { target: { value: 'perro' } });
+    expect((screen.getByTestId('match-pair-question-s1') as HTMLInputElement).value).toBe('dog');
+    expect((screen.getByTestId('match-pair-answer-s1') as HTMLInputElement).value).toBe('perro');
+  });
+});
+
+describe('QuizBlockEditor — "Reordenar" (sentence authoring)', () => {
+  it('renders the minimal sentence-list editor instead of the Básico question-card list', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('reorder-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least one sentence" hint until a sentence has >= 2 words', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('reorder-hint-b1').textContent).toContain('Agrega al menos una oración');
+  });
+
+  it('hides the hint once a sentence has >= 2 words', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    expect(screen.queryByTestId('reorder-hint-b1')).toBeNull();
+  });
+
+  it('"+ Agregar oración" adds a new row+slot', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('reorder-add-b1'));
+    expect(screen.getAllByTestId(/^reorder-sentence-/)).toHaveLength(1);
+  });
+
+  it('Enter in a sentence field adds another one and focuses it', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('reorder-add-b1'));
+    const [sentenceInput] = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentenceInput, { target: { value: 'Cats sleep' } });
+    fireEvent.keyDown(sentenceInput, { key: 'Enter' });
+
+    const sentenceInputs = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs).toHaveLength(2);
+    expect(document.activeElement).toBe(sentenceInputs[1]);
+  });
+
+  it('removing a sentence ("×") deletes exactly its own row+slot', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] },
+        { id: 's2', label: 'Dogs bark', input: 'text', answer: ['Dogs bark'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    fireEvent.click(screen.getByTestId('reorder-remove-s1'));
+    expect(screen.queryByTestId('reorder-row-s1')).toBeNull();
+    expect(screen.getByTestId('reorder-row-s2')).toBeTruthy();
+  });
+
+  it('typing a sentence commits BOTH the slot label and its answer back through onPayloadChange', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: '', input: 'text', answer: [] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    fireEvent.change(screen.getByTestId('reorder-sentence-s1'), { target: { value: 'Cats sleep' } });
+    expect((screen.getByTestId('reorder-sentence-s1') as HTMLInputElement).value).toBe('Cats sleep');
+  });
+});
+
+describe('QuizBlockEditor — "Completar la frase" (cloze authoring)', () => {
+  it('renders the bracket-sentence editor instead of the Básico question-card list', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('cloze-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least one sentence" hint until a sentence has >= 1 blank', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('cloze-hint-b1').textContent).toContain('Agrega al menos una frase');
+  });
+
+  it('"+ Agregar frase" adds a new, bracket-less sentence row', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    expect(screen.getAllByTestId(/^cloze-sentence-/)).toHaveLength(1);
+  });
+
+  it('typing a bracketed sentence commits one drop slot per blank and hides the hint', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    const [sentenceInput] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentenceInput, { target: { value: 'I [was] travelling when I [received] a phone call.' } });
+
+    expect(screen.queryByTestId('cloze-hint-b1')).toBeNull();
+    expect((sentenceInput as HTMLInputElement).value).toBe(
+      'I [was] travelling when I [received] a phone call.',
+    );
+  });
+
+  it('Enter in a sentence field adds another one and focuses it', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    const [sentenceInput] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentenceInput, { target: { value: 'She [goes] to school.' } });
+    fireEvent.keyDown(sentenceInput, { key: 'Enter' });
+
+    const sentenceInputs = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs).toHaveLength(2);
+    expect(document.activeElement).toBe(sentenceInputs[1]);
+  });
+
+  it('removing a sentence ("×") deletes exactly its own rows/slots/pool items', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    fireEvent.change(screen.getAllByTestId(/^cloze-sentence-/)[0]!, {
+      target: { value: 'She [goes] to school.' },
+    });
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    fireEvent.change(screen.getAllByTestId(/^cloze-sentence-/)[1]!, {
+      target: { value: 'They [have] arrived.' },
+    });
+
+    fireEvent.click(screen.getByTestId('cloze-remove-0'));
+    const remaining = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.value).toBe('They [have] arrived.');
+  });
+
+  it('round-trips a reloaded multi-blank sentence back into the bracket textbox', () => {
+    const payload: Payload = {
+      pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'was' }, { id: 'w2', text: 'received' }] },
+      slots: [
+        { id: 'slot-a', label: 'I ___ travelling when I received a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] },
+        { id: 'slot-b', label: 'I was travelling when I ___ a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w2'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' },
+        { kind: 'row', id: 'row-cz-s0-b1-2', slotId: 'slot-b' },
+      ],
+    };
+    render(<ClozeHarness initialPayload={payload} />);
+    expect((screen.getByTestId('cloze-sentence-0') as HTMLInputElement).value).toBe(
+      'I [was] travelling when I [received] a phone call.',
+    );
+  });
+
+  it('the "Palabras extra (distractores)" field commits/reads back unclaimed pool items', () => {
+    const payload: Payload = {
+      pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'goes' }] },
+      slots: [{ id: 'slot-a', label: 'She ___ to school.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' }],
+    };
+    render(<ClozeHarness initialPayload={payload} />);
+    fireEvent.change(screen.getByTestId('cloze-distractors-b1'), { target: { value: 'is, went' } });
+    expect((screen.getByTestId('cloze-distractors-b1') as HTMLInputElement).value).toBe('is, went');
+  });
+});
+
+describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () => {
+  it('renders the group editor instead of the Básico question-card list', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('groupsort-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least 2 groups" hint until reached', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('groupsort-min-groups-hint-b1').textContent).toContain('Agrega al menos 2 grupos');
+  });
+
+  it('"+ Agregar grupo" adds a new, empty group row', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(1);
+  });
+
+  it('typing a group name commits it back through onPayloadChange', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const [nameInput] = screen.getAllByTestId(/^groupsort-name-/) as HTMLInputElement[];
+    fireEvent.change(nameInput, { target: { value: 'Animals' } });
+    expect((nameInput as HTMLInputElement).value).toBe('Animals');
+  });
+
+  it('Enter in the item field adds a chip and clears the field, without adding a new group', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+
+    fireEvent.change(itemInput, { target: { value: 'dog' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    const chips = within(screen.getByTestId(`groupsort-items-${slotId}`)).getAllByTestId(/^groupsort-item-/);
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.textContent).toContain('dog');
+    expect(itemInput.value).toBe('');
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(1);
+  });
+
+  it('a comma-separated paste adds several items in one go', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+
+    fireEvent.change(itemInput, { target: { value: 'dog, cat, horse' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    const chips = within(screen.getByTestId(`groupsort-items-${slotId}`)).getAllByTestId(/^groupsort-item-/);
+    expect(chips.map((c) => c.textContent?.trim())).toEqual([
+      expect.stringContaining('dog'),
+      expect.stringContaining('cat'),
+      expect.stringContaining('horse'),
+    ]);
+  });
+
+  it('shows the "add at least 2 items" hint per group until reached, hiding once satisfied', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    expect(screen.getByTestId(`groupsort-min-items-hint-${slotId}`)).toBeTruthy();
+
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+    fireEvent.change(itemInput, { target: { value: 'dog, cat' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    expect(screen.queryByTestId(`groupsort-min-items-hint-${slotId}`)).toBeNull();
+  });
+
+  it('removing an item chip ("×") removes exactly that item', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
+    fireEvent.change(itemInput, { target: { value: 'dog, cat' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    const itemsContainer = screen.getByTestId(`groupsort-items-${slotId}`);
+    const [dogChip] = within(itemsContainer).getAllByTestId(/^groupsort-item-/);
+    const removeButton = dogChip!.querySelector('button')!;
+    fireEvent.click(removeButton);
+
+    const remaining = within(itemsContainer).getAllByTestId(/^groupsort-item-/);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.textContent).toContain('cat');
+  });
+
+  it('removing a group ("Quitar este grupo") deletes its row, slot, and items', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(2);
+
+    const [firstSlot] = screen.getAllByTestId(/^groupsort-name-/).map((n) => n.getAttribute('data-testid')!.replace('groupsort-name-', ''));
+    fireEvent.click(screen.getByTestId(`groupsort-remove-group-${firstSlot}`));
+
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(1);
+  });
+
+  it('stops offering "+ Agregar grupo" once 4 groups exist, showing the max-groups hint instead', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(4);
+    expect(screen.queryByTestId('groupsort-add-b1')).toBeNull();
+    expect(screen.getByTestId('groupsort-max-groups-hint-b1')).toBeTruthy();
+  });
+
+  it('round-trips a reloaded groupsort payload back into named groups with their items', () => {
+    const payload: Payload = {
+      pools: {
+        'b1-groupsort-pool': [
+          { id: 'i1', text: 'dog' },
+          { id: 'i2', text: 'cat' },
+          { id: 'i3', text: 'bread' },
+          { id: 'i4', text: 'rice' },
+        ],
+      },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'b1-groupsort-pool', answer: ['i1', 'i2'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'b1-groupsort-pool', answer: ['i3', 'i4'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-g1', slotId: 'g1' },
+        { kind: 'row', id: 'row-g2', slotId: 'g2' },
+      ],
+    };
+    render(<GroupSortHarness initialPayload={payload} />);
+
+    expect((screen.getByTestId('groupsort-name-g1') as HTMLInputElement).value).toBe('Animals');
+    expect((screen.getByTestId('groupsort-name-g2') as HTMLInputElement).value).toBe('Food');
+    expect(screen.getByTestId('groupsort-item-i1').textContent).toContain('dog');
+    expect(screen.getByTestId('groupsort-item-i4').textContent).toContain('rice');
+    expect(screen.queryByTestId('groupsort-min-groups-hint-b1')).toBeNull();
   });
 });

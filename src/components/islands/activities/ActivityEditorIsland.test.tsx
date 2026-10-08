@@ -25,6 +25,27 @@ vi.mock('@/lib/activities/imagePipeline', async () => {
   };
 });
 
+// Several PDF pages stitch into ONE sheet now (one-sheet redesign) — real
+// `<canvas>`/`createImageBitmap` work is "manual check only" (see
+// `sheetStitcher.ts`'s own header), mocked here the same way
+// `WorksheetUploader.test.tsx` does.
+const stitcherMocks = vi.hoisted(() => ({
+  stitchSourcesWithinSizeLimit: vi.fn(),
+}));
+vi.mock('@/lib/activities/sheetStitcher', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/activities/sheetStitcher')>(
+    '@/lib/activities/sheetStitcher',
+  );
+  return {
+    ...actual,
+    stitchSourcesWithinSizeLimit: stitcherMocks.stitchSourcesWithinSizeLimit,
+  };
+});
+if (typeof (globalThis as { createImageBitmap?: unknown }).createImageBitmap !== 'function') {
+  (globalThis as unknown as { createImageBitmap: (source: Blob) => Promise<ImageBitmap> }).createImageBitmap = () =>
+    Promise.resolve({ width: 100, height: 100, close: () => {} } as unknown as ImageBitmap);
+}
+
 const realLocation = window.location;
 
 beforeEach(() => {
@@ -68,8 +89,13 @@ beforeEach(() => {
   // four stand-in nodes by hand.
   document.body.insertAdjacentHTML(
     'beforeend',
-    '<span id="desk-window-title"></span><span id="desk-window-status"></span><div id="desk-window-title-group"></div><div id="desk-window-actions"></div>',
+    '<span id="desk-window-title"></span><div id="desk-window-title-group"></div><div id="desk-window-actions"></div>',
   );
+
+  vi.spyOn(globalThis, 'createImageBitmap').mockResolvedValue(
+    { width: 100, height: 100, close: () => {} } as unknown as ImageBitmap,
+  );
+  stitcherMocks.stitchSourcesWithinSizeLimit.mockResolvedValue(new Blob(['stitched']));
 });
 
 afterEach(() => {
@@ -87,7 +113,6 @@ afterEach(() => {
   // the next (same reasoning as the hash reset above).
   sessionStorage.clear();
   document.getElementById('desk-window-title')?.remove();
-  document.getElementById('desk-window-status')?.remove();
   document.getElementById('desk-window-title-group')?.remove();
   document.getElementById('desk-window-actions')?.remove();
 });
@@ -210,6 +235,11 @@ describe('ActivityEditorIsland — one active block on entry (owner decision 202
     const emptyWorksheet: WorksheetBlock = { ...WORKSHEET_BLOCK, image: undefined, zones: [] };
     renderEditor({ initialBlocks: [emptyWorksheet] });
     expect(screen.getByTestId('worksheet-uploader')).toBeTruthy();
+  });
+
+  it('wires the Audio tool ("colocar un audio propio") on a worksheet block', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(screen.getByTestId('tool-audio')).toBeTruthy();
   });
 
   it('still shows the empty-blocks state (no block to activate) for a brand-new, zero-block activity', () => {
@@ -358,6 +388,59 @@ describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b
   });
 });
 
+/** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport — same pattern `EditorSideToolbar.test.tsx`/`WorksheetZoneEditor.test.tsx` already use. */
+function stubMobileViewport() {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
+}
+
+describe('ActivityEditorIsland — mobile title bar "⋯" menu (bug fix, owner report: title truncated to "Hoj…" on a 390px phone)', () => {
+  it('on desktop, shows no "⋯" trigger — the level select/status badge/actions stay inline exactly as before', () => {
+    renderEditor();
+    expect(screen.queryByTestId('activity-mobile-menu-trigger')).toBeNull();
+    expect(screen.getByTestId('activity-level-select')).toBeTruthy();
+  });
+
+  it('on a phone, collapses the level select/status badge/"Ver como presentación"/"Enviar a revisión" behind one "⋯" trigger', () => {
+    stubMobileViewport();
+    renderEditor();
+    expect(screen.getByTestId('activity-mobile-menu-trigger')).toBeTruthy();
+    const menu = screen.getByTestId('activity-mobile-menu-content');
+    expect(menu.contains(screen.getByTestId('activity-level-select'))).toBe(true);
+    expect(menu.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+    expect(menu.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
+    expect(menu.contains(screen.getByTestId('submit-for-review-button'))).toBe(true);
+  });
+
+  it('on a phone, the title-bar actions slot renders nothing of its own — those two actions moved into the "⋯" menu', () => {
+    stubMobileViewport();
+    renderEditor();
+    const actionsSlot = document.getElementById('desk-window-actions');
+    expect(actionsSlot?.children.length).toBe(0);
+  });
+
+  it('on a phone, the level select inside the menu still edits the same document', () => {
+    stubMobileViewport();
+    renderEditor({ initialLevel: 'A1' });
+    fireEvent.change(screen.getByTestId('activity-level-select'), { target: { value: 'B1' } });
+    expect((screen.getByTestId('activity-level-select') as HTMLSelectElement).value).toBe('B1');
+  });
+
+  it('on a phone, "Enviar a revisión" inside the menu still opens the submit dialog', () => {
+    stubMobileViewport();
+    renderEditor();
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+});
+
 describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
   it('mirrors the title into the window title bar, falling back to "Nueva actividad" when empty', () => {
     renderEditor({ initialTitle: 'Mi actividad' });
@@ -370,29 +453,6 @@ describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
   it('localizes the empty-title fallback to English', () => {
     renderEditor({ lang: 'en', initialTitle: '' });
     expect(document.getElementById('desk-window-title')?.textContent).toBe('New activity');
-  });
-
-  it('shows the muted "saved a moment ago" status by default, "Guardando…" while saving, and the error text on failure', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-    vi.stubGlobal('fetch', fetchMock);
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento');
-
-    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('save-button'));
-    });
-    expect(document.getElementById('desk-window-status')?.textContent).toBe('No se pudo guardar');
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('save-retry'));
-    });
-    await waitFor(() =>
-      expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento'),
-    );
   });
 
   it('renders "Ver como presentación" and "Enviar a revisión" into the window title bar actions slot, not the header row', () => {
@@ -624,14 +684,13 @@ describe('ActivityEditorIsland — dirty tracking and save', () => {
     });
 
     await waitFor(() =>
-      expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento'),
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/actividades/act-1/guardar',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ title: 'Mi actividad', level: 'A2', blocks: [] }),
-      }),
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/actividades/act-1/guardar',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ title: 'Mi actividad', level: 'A2', blocks: [] }),
+        }),
+      ),
     );
   });
 
@@ -728,15 +787,6 @@ describe('ActivityEditorIsland — Escape deselects the current zone', () => {
   });
 });
 
-describe('ActivityEditorIsland — sticky toolbar wiring', () => {
-  it('the sheet-switcher popover activates the chosen block', () => {
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    fireEvent.click(screen.getByTestId('block-index-trigger'));
-    fireEvent.click(screen.getByTestId('block-index-item-b1'));
-    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
-  });
-});
-
 describe('ActivityEditorIsland — one active block at a time (owner decision 2026-10-07, "Barra fina debajo")', () => {
   it('switching the active block never shows two editors at once', () => {
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
@@ -753,25 +803,14 @@ describe('ActivityEditorIsland — one active block at a time (owner decision 20
     expect(screen.getByTestId('block-b2')).toBeTruthy();
   });
 
-  it('the sheet-switcher popover activates a block the same way', () => {
-    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
-
-    fireEvent.click(screen.getByTestId('block-index-trigger'));
-    fireEvent.click(screen.getByTestId('block-index-item-b2'));
-
-    expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
-    expect(screen.getByTestId('block-b2')).toBeTruthy();
-  });
-
-  it('uploading a multi-page PDF (several new blocks at once) activates only the LAST new block', async () => {
-    // A PDF with several selected pages is the one real path that hands
-    // `handleUploadComplete` MULTIPLE new blocks in a single call — see
-    // `WorksheetUploader.tsx`'s `handlePdfPagesConfirm` (a plain image
-    // upload only ever produces one).
+  it('uploading a multi-page PDF stitches it into ONE new block (one-sheet redesign)', async () => {
+    // A PDF with several selected pages used to hand `handleUploadComplete`
+    // one new block PER page — see `WorksheetUploader.tsx`'s own header on
+    // why that is now stitched into a single combined sheet instead (an
+    // activity has only one block at all now).
     pipelineMocks.routeFileType.mockReturnValue('pdf');
     // The thumbnail grid is a separate concern (`WorksheetUploader.test.tsx`
-    // owns it) — this test only cares about the multi-block fan-out, so it
+    // owns it) — this test only cares about the single-block result, so it
     // takes the text-field fallback path by having thumbnail rendering fail.
     pipelineMocks.renderPdfThumbnails.mockRejectedValue(new Error('pdf_failed'));
     pipelineMocks.validatePageSelection.mockReturnValue([1, 2]);
@@ -782,10 +821,7 @@ describe('ActivityEditorIsland — one active block at a time (owner decision 20
     });
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ path: 'p1.webp', width: 400, height: 300 }) })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ path: 'p2.webp', width: 400, height: 300 }) }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ path: 'combined.webp', width: 400, height: 300 }) }),
     );
 
     renderEditor();
@@ -802,8 +838,9 @@ describe('ActivityEditorIsland — one active block at a time (owner decision 20
     });
 
     await waitFor(() => expect(screen.getByTestId('block-list')).toBeTruthy());
-    // Two new blocks were added, but only ONE is active — the LAST page.
-    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 2');
+    // ONE block, fully active — no bar at all (one-sheet redesign: a single
+    // block never gets the legacy minimal switcher).
+    expect(screen.queryByTestId('active-sheet-bar')).toBeNull();
     expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
   });
 });

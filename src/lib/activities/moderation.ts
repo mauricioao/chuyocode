@@ -14,7 +14,16 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
 import { parseBlocks, type Block } from './blocks';
-import { approvedImagePath, parseImagePath, UPLOADS_BUCKET, copyToImagesBucket } from './storage';
+import {
+  approvedImagePath,
+  parseImagePath,
+  UPLOADS_BUCKET,
+  copyToImagesBucket,
+  approvedAudioPath,
+  parseAudioPath,
+  AUDIO_UPLOADS_BUCKET,
+  copyToAudioBucket,
+} from './storage';
 
 const ACTIVITIES_TABLE = 'activities';
 const ACTIVITY_REVISIONS_TABLE = 'activity_revisions';
@@ -383,6 +392,19 @@ function rewriteImagePaths(blocks: Block[], mapping: ReadonlyMap<string, string>
   });
 }
 
+/** Every worksheet audio marker path in `blocks`, in order — the audio counterpart of {@link worksheetImagePaths}. */
+function worksheetAudioPaths(blocks: Block[]): string[] {
+  return blocks.flatMap((block) => (block.type === 'worksheet' && block.audio ? block.audio.map((m) => m.path) : []));
+}
+
+/** Rewrite every worksheet audio marker's path via `mapping` — the audio counterpart of {@link rewriteImagePaths}. */
+function rewriteAudioPaths(blocks: Block[], mapping: ReadonlyMap<string, string>): Block[] {
+  return blocks.map((block) => {
+    if (block.type !== 'worksheet' || !block.audio) return block;
+    return { ...block, audio: block.audio.map((m) => ({ ...m, path: mapping.get(m.path) ?? m.path })) };
+  });
+}
+
 /**
  * `POST /api/admin/actividades/[revisionId]/aprobar`'s whole write path:
  *
@@ -395,11 +417,13 @@ function rewriteImagePaths(blocks: Block[], mapping: ReadonlyMap<string, string>
  *    'draft'-mode save)
  * 4. any worksheet image under activity-uploads/…    -> foreign_upload
  *    NOT owned by the revision's own author
- *    (`activity_revisions.created_by`)
+ *    (`activity_revisions.created_by`) — same check,
+ *    same error, for any audio marker under
+ *    activity-audio-uploads/…
  * 5. a storage copy fails for any referenced image   -> copy_failed
- *    (COPY BEFORE the RPC — see storage.ts's header:
- *    a partial copy here is a harmless orphan, no
- *    activity references it yet)
+ *    or audio marker (COPY BEFORE the RPC — see
+ *    storage.ts's header: a partial copy here is a
+ *    harmless orphan, no activity references it yet)
  * 6. the approve_activity_revision RPC fails         -> approve_failed
  * 7. success                                         -> ok: true
  * ```
@@ -449,12 +473,34 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
       }
     }
 
+    // Audio markers: same ownership rule as the images above, over the
+    // audio buckets instead. Every ownership check (images AND audio) runs
+    // BEFORE either kind's copy loop below — a foreign audio path must
+    // never be reached only after an earlier image has already been copied
+    // for nothing.
+    const audioPaths = worksheetAudioPaths(blocks);
+    const audioPathMapping = new Map<string, string>();
+    for (const path of audioPaths) {
+      const parsed = parseAudioPath(path);
+      if (!parsed) return { ok: false, error: 'invalid_blocks' };
+      if (parsed.bucket !== AUDIO_UPLOADS_BUCKET) continue; // already public, left as-is
+      if (parsed.ownerId !== authorId.toLowerCase()) return { ok: false, error: 'foreign_upload' };
+      if (!audioPathMapping.has(path)) {
+        audioPathMapping.set(path, approvedAudioPath(activityId, parsed.objectId, parsed.ext));
+      }
+    }
+
     for (const [fromPath, toPath] of pathMapping) {
       const copied = await copyToImagesBucket(fromPath, toPath);
       if (!copied) return { ok: false, error: 'copy_failed' };
     }
 
-    const rewrittenBlocks = rewriteImagePaths(blocks, pathMapping);
+    for (const [fromPath, toPath] of audioPathMapping) {
+      const copied = await copyToAudioBucket(fromPath, toPath);
+      if (!copied) return { ok: false, error: 'copy_failed' };
+    }
+
+    const rewrittenBlocks = rewriteAudioPaths(rewriteImagePaths(blocks, pathMapping), audioPathMapping);
     const blockTypes = Array.from(new Set(rewrittenBlocks.map((b) => b.type)));
 
     const { error: rpcError } = await client.rpc('approve_activity_revision', {

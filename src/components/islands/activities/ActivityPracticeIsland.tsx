@@ -68,16 +68,17 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import type { Block, ImageRef, QuizBlock, WorksheetBlock } from '@/lib/activities/blocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
+import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
 import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
 import type { ExerciseResponse } from '@/lib/exercisePayload';
-import type { GameMode } from '@/lib/activities/gameModes';
+import { deriveGameItems, initialGameMode, SELF_CHECKING_GAME_MODES, type GameMode } from '@/lib/activities/gameModes';
 import { Button } from '@/components/ui/button';
 import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
+import { STAGE_CONTAINER_SIZE } from '@/components/islands/mechanics/scale';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -121,10 +122,12 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const [quizResponses, setQuizResponses] = useState<Record<string, ExerciseResponse>>({});
   const [quizResults, setQuizResults] = useState<Record<string, GradeResult> | undefined>(undefined);
   // D1 "Una actividad, muchos juegos": each quiz block's own active game mode
-  // (Preguntas/Tarjetas/Parejas), remembered per block id while this island
+  // (Básico/Tarjetas/Parejas), remembered per block id while this island
   // stays mounted — never persisted, and never reset by Reintentar (a mode
-  // choice is not an answer). Missing entry = `'quiz'`, same default
-  // `QuizBlockPractice`'s own `mode` prop already falls back to.
+  // choice is not an answer). A missing entry falls back to the block's own
+  // TEMPLATE default (`quizModeFor` below, template plumbing build item 2)
+  // rather than a hardcoded `'quiz'`, so a "Une las parejas" activity opens
+  // straight into Parejas when eligible.
   const [quizModes, setQuizModes] = useState<Record<string, GameMode>>({});
   const [activeTab, setActiveTab] = useState<string>(() => blocks[0]?.id ?? '');
   const [zoomSlot, setZoomSlot] = useState<HTMLDivElement | null>(null);
@@ -178,6 +181,13 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
     setQuizModes((prev) => ({ ...prev, [blockId]: mode }));
   }, []);
 
+  /** This block's current (or, before any switch, its template's own default) game mode. */
+  const quizModeFor = useCallback(
+    (block: QuizBlock): GameMode =>
+      quizModes[block.id] ?? initialGameMode(block.template, deriveGameItems(block.payload), block.payload),
+    [quizModes],
+  );
+
   const handleCheck = useCallback(() => {
     stopAllSpeech();
     const summary = gradeZones(allZones, values);
@@ -212,6 +222,23 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const totalCount = allZones.length + quizGradableTotal;
   const hasGradableContent = totalCount > 0;
 
+  // ONE "COMPROBAR" (build item 2): a self-checking game (today: `match`)
+  // already has its own board-level Comprobar/Reintentar — showing the
+  // page-level combined pair too, right next to it, is confusing and (for a
+  // match-only activity) grades nothing real anyway, since the Básico
+  // inputs it would check are never even rendered while that mode is
+  // active. When EVERY quiz block in the activity sits in a self-checking
+  // mode AND there is no worksheet content to grade, the combined footer
+  // has nothing useful left to do, so it hides entirely and each block's
+  // own board is the only Comprobar on screen. Any other mix (a worksheet
+  // present, or at least one quiz block still in Básico/another
+  // page-graded mode) keeps the footer exactly as before.
+  const allQuizBlocksSelfChecking = useMemo(
+    () => quizBlocks.length > 0 && quizBlocks.every((block) => SELF_CHECKING_GAME_MODES.has(quizModeFor(block))),
+    [quizBlocks, quizModeFor],
+  );
+  const showCombinedFooter = hasGradableContent && !(allZones.length === 0 && allQuizBlocksSelfChecking);
+
   // Each block's OWN result, once graded — undefined before Comprobar (no
   // tab badge yet) or for a block with nothing gradable in it at all.
   const tabResult = useCallback(
@@ -232,11 +259,12 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const activeBlock = blocks.find((b) => b.id === activeTab) ?? blocks[0];
   const showTabs = blocks.length > 1;
   // D1: while the active tab's quiz block sits in Tarjetas/Parejas, Comprobar
-  // still only grades that block's Preguntas-mode answers — the footer says
-  // so rather than leaving the learner to guess why an ungraded game did
-  // nothing when they pressed it.
-  const activeQuizModeHint =
-    activeBlock?.type === 'quiz' && (quizModes[activeBlock.id] ?? 'quiz') !== 'quiz';
+  // still only grades that block's Básico-mode answers — the footer says so
+  // rather than leaving the learner to guess why an ungraded game did
+  // nothing when they pressed it. Also true from the very first render of a
+  // "Une las parejas" activity, which starts in Parejas (its own template
+  // default), not Básico.
+  const activeQuizModeHint = activeBlock?.type === 'quiz' && quizModeFor(activeBlock as QuizBlock) !== 'quiz';
 
   const activateByIndex = useCallback(
     (index: number) => {
@@ -474,9 +502,23 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock & { image: ImageRef }).image.path)}
               practice={{ values, onChange: handleChange, results, disabled: graded }}
               toolbarSlot={zoomSlot}
+              resolveAudioUrl={audioPreviewUrl}
             />
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            // `flex flex-col` (visual-polish-2 pass, owner bug: a big-stage
+            // game's own "Comprobar" was unreachable without scrolling the
+            // WHOLE page in the normal, non-"modo enfoque" view): without
+            // it, this div never becomes a flex container of its own, so
+            // `QuizBlockPractice`'s `min-h-0 flex-1` on a big-stage game
+            // below has no flex parent to size against and silently does
+            // nothing — the game then renders at its full natural height
+            // instead of shrinking to fit, and overflow lands on THIS div's
+            // `overflow-y-auto` instead of the game's own internal one,
+            // scrolling its chrome (tabs, Reiniciar) out of view along with
+            // it. "Modo enfoque"'s own stage wrapper already carries `flex
+            // flex-col` for exactly this reason — this view is the one that
+            // was missing it.
+            <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-3', STAGE_CONTAINER_SIZE)}>
               <QuizBlockPractice
                 lang={lang}
                 block={activeBlock as QuizBlock}
@@ -484,7 +526,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 onChange={(slotId, value) => handleQuizChange(activeBlock.id, slotId, value)}
                 outcomes={quizResults?.[activeBlock.id]?.slots}
                 disabled={graded}
-                mode={quizModes[activeBlock.id] ?? 'quiz'}
+                mode={quizModeFor(activeBlock as QuizBlock)}
                 onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
               />
             </div>
@@ -492,7 +534,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
         </div>
       )}
 
-      {hasGradableContent && (
+      {showCombinedFooter && (
         <div
           data-testid="practice-footer"
           className={cn('flex flex-none flex-wrap items-center gap-3 border-t border-border py-3', ROW_PADDING_X)}
@@ -587,7 +629,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               <XIcon aria-hidden="true" size={18} />
             </button>
 
-            <div className="flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10">
+            <div className={cn('flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10', STAGE_CONTAINER_SIZE)}>
               {activeBlock.type === 'worksheet' ? (
                 <WorksheetPracticePlayer
                   lang={lang}
@@ -595,6 +637,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                   imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock & { image: ImageRef }).image.path)}
                   practice={{ values, onChange: handleChange, results, disabled: graded }}
                   toolbarSlot={null}
+                  resolveAudioUrl={audioPreviewUrl}
                 />
               ) : (
                 <QuizBlockPractice
@@ -604,7 +647,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                   onChange={(slotId, value) => handleQuizChange(activeBlock.id, slotId, value)}
                   outcomes={quizResults?.[activeBlock.id]?.slots}
                   disabled={graded}
-                  mode={quizModes[activeBlock.id] ?? 'quiz'}
+                  mode={quizModeFor(activeBlock as QuizBlock)}
                   onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
                 />
               )}
@@ -643,7 +686,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 </div>
               )}
 
-              {hasGradableContent && isLastPage && (
+              {showCombinedFooter && isLastPage && (
                 <div className="ml-auto flex flex-wrap items-center gap-3">
                   {graded && (
                     <p data-testid="practice-focus-mode-score" className="text-sm font-medium text-foreground">

@@ -355,3 +355,20 @@ describe('WorksheetPracticePlayer — no layout flash on the server render (mobi
     expect(html).not.toContain('practice-zoom-in');
   });
 });
+
+describe('WorksheetPracticePlayer — audio markers threading', () => {
+  it('passes block.audio and resolveAudioUrl through to the underlying WorksheetPlayer', () => {
+    mockViewportRect();
+    const block = { ...BLOCK, audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' }] };
+    renderPlayer({ block, resolveAudioUrl: (path) => `/audio?path=${path}` });
+    const button = screen.getByTestId('player-audio-m1');
+    expect(button).toBeTruthy();
+  });
+
+  it('renders no audio button when resolveAudioUrl is not given, even with audio markers present', () => {
+    mockViewportRect();
+    const block = { ...BLOCK, audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' }] };
+    renderPlayer({ block, resolveAudioUrl: undefined });
+    expect(screen.queryByTestId('player-audio-m1')).toBeNull();
+  });
+});
