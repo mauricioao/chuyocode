@@ -102,13 +102,16 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
+import { SpeakerHighIcon } from '@phosphor-icons/react/dist/ssr/SpeakerHigh';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
   MAX_ZONE_SPEAK_LENGTH,
   MAX_ZONE_EXPLANATION_LENGTH,
+  MAX_AUDIO_MARKERS_PER_WORKSHEET,
   type ImageRef,
   type Rotation,
   type Zone,
+  type AudioMarker,
 } from '@/lib/activities/blocks';
 import {
   rectFromDrag,
@@ -149,6 +152,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fieldClasses } from '@/lib/ui/field';
+import AudioMarkerButton from './AudioMarkerButton';
+import AudioMarkerPanel from './AudioMarkerPanel';
 
 export interface ZonesChangeOptions {
   /**
@@ -192,10 +197,21 @@ export interface WorksheetZoneEditorProps {
   sideToolsPortalTarget?: HTMLElement | null;
   /** Mirrors the live tool selection out to a caller rendering the toggle elsewhere (`sideToolsPortalTarget` above) — e.g. `BlockList.tsx`'s own `activeTool` state, used to show the pressed button there. */
   onToolChange?: (tool: Tool) => void;
+  /**
+   * "Colocar un audio propio" — this worksheet's own audio markers.
+   * `undefined`/omitted (every existing test in this file, and any
+   * standalone render with no audio support) renders the canvas exactly as
+   * before this feature: no Audio tool, no markers, no properties-panel
+   * audio content.
+   */
+  audioMarkers?: AudioMarker[];
+  onAudioMarkersChange?: (markers: AudioMarker[], opts?: ZonesChangeOptions) => void;
+  /** Resolves a stored audio marker `path` to a browser-loadable URL (listen-back in the properties panel). Required together with `audioMarkers`/`onAudioMarkersChange`. */
+  resolveAudioUrl?: (path: string) => string;
 }
 
-/** The two canvas tools (owner-approved design) — see the file header. */
-export type Tool = 'zone' | 'hand';
+/** The three canvas tools (owner-approved design, "colocar un audio propio" build) — see the file header. */
+export type Tool = 'zone' | 'hand' | 'audio';
 
 /** Imperative handle (one-sheet redesign): lets a caller rendering the tool toggle elsewhere (`sideToolsPortalTarget`) still drive this canvas's own internal tool state. */
 export interface WorksheetZoneEditorHandle {
@@ -217,6 +233,8 @@ type DragMode =
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
   | { kind: 'resize'; zoneId: string; handle: Handle; start: { x: number; y: number }; original: Rect }
   | { kind: 'pan'; startClientX: number; startClientY: number; startCamera: Camera }
+  /** "Colocar un audio propio": dragging an already-placed audio marker to reposition it — position only, no resize/handles (a marker has no `w`/`h`). */
+  | { kind: 'move-audio'; markerId: string; start: { x: number; y: number }; originalX: number; originalY: number }
   /** Mobile layout pass: a two-finger touch pinch/pan — see `touchGesture.ts`'s own header; all the actual math lives there, this is just the marker `handlePointerMove`/`handlePointerUp` branch on. */
   | { kind: 'touch-pinch' };
 
@@ -234,9 +252,13 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
     incompleteMessage = null,
     sideToolsPortalTarget = null,
     onToolChange,
+    audioMarkers = [],
+    onAudioMarkersChange,
+    resolveAudioUrl,
   }: WorksheetZoneEditorProps,
   ref,
 ) {
+  const audioEnabled = onAudioMarkersChange !== undefined && resolveAudioUrl !== undefined;
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -253,6 +275,17 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // "Colocar un audio propio": the marker currently shown in the properties
+  // panel's "listen/replace/delete" view, or `null` when nothing is
+  // selected. Local-only (unlike `selectedZoneId`, a prop): nothing outside
+  // this canvas needs to know which marker is open.
+  const [selectedAudioMarkerId, setSelectedAudioMarkerId] = useState<string | null>(null);
+  // A brand-new marker's own canvas point, before any audio is attached —
+  // see `blocks.ts`'s `AudioMarker` header for why nothing is added to
+  // `audioMarkers` until an upload/recording actually succeeds. `null` =
+  // not currently placing one.
+  const [pendingAudioPlacement, setPendingAudioPlacement] = useState<{ x: number; y: number } | null>(null);
 
   // One-sheet redesign: a caller rendering the Zona/Mano toggle elsewhere
   // (`sideToolsPortalTarget`) drives this canvas's tool via the imperative
@@ -300,6 +333,11 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
   useEffect(() => {
     setMobilePanelExpanded(false);
   }, [selectedZoneId]);
+  // Same reset, for an audio marker selection or a brand-new placement
+  // (`selectedAudioMarkerId`/`pendingAudioPlacement` further down).
+  useEffect(() => {
+    setMobilePanelExpanded(false);
+  }, [selectedAudioMarkerId, pendingAudioPlacement]);
 
   // Keyboard zone creation's focus handoff (see `handleCreateZoneAtCenter`
   // above): once `selectedZoneId` actually matches the zone that requested
@@ -353,6 +391,48 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
     zoneId: null,
     rect: null,
   });
+
+  // "Colocar un audio propio" — same kept-in-sync-every-render shape as
+  // `zonesRef`/`onZonesChangeRef` above, and the same rAF-batched pending
+  // frame shape as `moveFrameRef`, for a marker drag (position only).
+  const audioMarkersRef = useRef(audioMarkers);
+  audioMarkersRef.current = audioMarkers;
+  const onAudioMarkersChangeRef = useRef(onAudioMarkersChange);
+  onAudioMarkersChangeRef.current = onAudioMarkersChange;
+  const markerMoveFrameRef = useRef<{ id: number | null; markerId: string | null; x: number | null; y: number | null }>(
+    { id: null, markerId: null, x: null, y: null },
+  );
+
+  /**
+   * Applies whatever marker move frame is still pending RIGHT NOW,
+   * synchronously — same role as `flushPendingMoveFrame` above, for a
+   * marker drag instead of a zone one. Returns the flushed markers array,
+   * or `undefined` when nothing was pending.
+   */
+  const flushPendingMarkerMoveFrame = useCallback((): AudioMarker[] | undefined => {
+    const pending = markerMoveFrameRef.current;
+    if (pending.id != null) {
+      cancelAnimationFrame(pending.id);
+      pending.id = null;
+    }
+    const { markerId, x, y } = pending;
+    if (!markerId || x == null || y == null) return undefined;
+    pending.markerId = null;
+    pending.x = null;
+    pending.y = null;
+    const next = audioMarkersRef.current.map((m) => (m.id === markerId ? { ...m, x, y } : m));
+    onAudioMarkersChangeRef.current?.(next, { commit: false });
+    return next;
+  }, []);
+
+  // A zone/audio selection is mutually exclusive, same single-selection
+  // slot in the properties panel (see the file header's note on
+  // `AudioMarkerPanel`) — clearing this is a local-only reset (unlike the
+  // zone side, which is the `selectedZoneId` PROP, reset via `onSelectZone`).
+  const clearAudioSelection = useCallback(() => {
+    setSelectedAudioMarkerId(null);
+    setPendingAudioPlacement(null);
+  }, []);
 
   // Applies whatever zone move/resize frame is still pending RIGHT NOW,
   // synchronously — used by the frame's own `requestAnimationFrame`
@@ -560,10 +640,11 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
     const rect = centeredZoneRect(visible);
     const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
     pendingFocusZoneIdRef.current = zone.id;
+    clearAudioSelection();
     onZonesChange([...zones, zone]);
     onSelectZone(zone.id);
     setLiveAnnouncement(t.zoneCreatedAnnouncement);
-  }, [zones, onZonesChange, onSelectZone, viewportSize, displaySize, t.zoneCreatedAnnouncement]);
+  }, [zones, onZonesChange, onSelectZone, viewportSize, displaySize, t.zoneCreatedAnnouncement, clearAudioSelection]);
 
   const handleViewportKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -582,6 +663,9 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
       } else if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         setTool('hand');
+      } else if ((e.key === 'a' || e.key === 'A') && audioEnabled && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setTool('audio');
       } else if (
         (e.key === 'Enter' || e.key === 'n' || e.key === 'N') &&
         effectiveTool === 'zone' &&
@@ -597,7 +681,7 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         setSpaceHeld(true);
       }
     },
-    [handleZoomIn, handleZoomOut, handleZoomFit, effectiveTool, handleCreateZoneAtCenter],
+    [handleZoomIn, handleZoomOut, handleZoomFit, effectiveTool, handleCreateZoneAtCenter, audioEnabled],
   );
 
   // Space's "temporary hand" and any drag/pan in flight MUST release even
@@ -701,6 +785,16 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
       cancelAnimationFrame(panFrameRef.current.id);
       panFrameRef.current.id = null;
     }
+    // A marker drag interrupted by something OTHER than its own pointerup
+    // (OS/browser cancel, a second touch finger, the window losing focus)
+    // must never commit — same "ends without committing anything" contract
+    // this whole function documents below. A NORMAL marker drag never
+    // reaches here: `handlePointerUp` commits it directly and returns
+    // before calling this (see its own branch).
+    if (markerMoveFrameRef.current.id != null) {
+      cancelAnimationFrame(markerMoveFrameRef.current.id);
+    }
+    markerMoveFrameRef.current = { id: null, markerId: null, x: null, y: null };
     if (drag?.kind === 'pan') {
       // Commit the FINAL camera synchronously, even if a batched frame was
       // still pending — see the file header's Performance note.
@@ -772,13 +866,42 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         startPan(e); // Mano tool (or a temporary Space-hand): left-drag pans
         return;
       }
+      if (effectiveTool === 'audio') {
+        // "Colocar un audio propio": a plain click places (or re-places) a
+        // PENDING marker point — nothing is added to `audioMarkers` yet,
+        // see `pendingAudioPlacement`'s own header. No drag/rubber-band:
+        // unlike drawing a zone, there is no size to drag out.
+        if (audioMarkers.length >= MAX_AUDIO_MARKERS_PER_WORKSHEET) {
+          setLiveAnnouncement(t.audioMaxMarkersReached);
+          return;
+        }
+        if (displaySize.width <= 0 || displaySize.height <= 0) return;
+        const point = pointFromEvent(e);
+        const x = Math.min(1, Math.max(0, point.x / displaySize.width));
+        const y = Math.min(1, Math.max(0, point.y / displaySize.height));
+        onSelectZone(null);
+        setSelectedAudioMarkerId(null);
+        setPendingAudioPlacement({ x, y });
+        return;
+      }
+      clearAudioSelection();
       onSelectZone(null);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'draw', start };
       setDraftRect(null);
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
+    [
+      effectiveTool,
+      onSelectZone,
+      pointFromEvent,
+      startPan,
+      handleTouchGesturePointerDown,
+      clearAudioSelection,
+      displaySize,
+      audioMarkers,
+      t.audioMaxMarkersReached,
+    ],
   );
 
   const handleZonePointerDown = useCallback(
@@ -795,12 +918,13 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         return;
       }
       e.stopPropagation();
+      clearAudioSelection();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'move', zoneId: zone.id, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown, clearAudioSelection],
   );
 
   const handleHandlePointerDown = useCallback(
@@ -815,12 +939,33 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         return;
       }
       e.stopPropagation();
+      clearAudioSelection();
       onSelectZone(zone.id);
       const start = pointFromEvent(e);
       dragRef.current = { kind: 'resize', zoneId: zone.id, handle, start, original: zone };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown],
+    [effectiveTool, onSelectZone, pointFromEvent, startPan, handleTouchGesturePointerDown, clearAudioSelection],
+  );
+
+  /**
+   * "Colocar un audio propio": pointerdown on an ALREADY-PLACED marker —
+   * selects it (opening its properties-panel listen/replace/delete view)
+   * and starts a potential reposition drag, same select-and-maybe-drag
+   * shape as `handleZonePointerDown` above. Markers have no resize handles
+   * (no `w`/`h`), so this is the marker's only pointer entry point.
+   */
+  const handleMarkerPointerDown = useCallback(
+    (marker: AudioMarker) => (e: React.PointerEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      onSelectZone(null);
+      setPendingAudioPlacement(null);
+      setSelectedAudioMarkerId(marker.id);
+      const start = pointFromEvent(e);
+      dragRef.current = { kind: 'move-audio', markerId: marker.id, start, originalX: marker.x, originalY: marker.y };
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    },
+    [onSelectZone, pointFromEvent],
   );
 
   const handlePointerMove = useCallback(
@@ -880,6 +1025,24 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         return;
       }
 
+      if (drag.kind === 'move-audio') {
+        if (displaySize.width <= 0 || displaySize.height <= 0) return;
+        const point = pointFromEvent(e);
+        const dx = (point.x - drag.start.x) / displaySize.width;
+        const dy = (point.y - drag.start.y) / displaySize.height;
+        const x = Math.min(1, Math.max(0, drag.originalX + dx));
+        const y = Math.min(1, Math.max(0, drag.originalY + dy));
+        markerMoveFrameRef.current.markerId = drag.markerId;
+        markerMoveFrameRef.current.x = x;
+        markerMoveFrameRef.current.y = y;
+        if (markerMoveFrameRef.current.id == null) {
+          markerMoveFrameRef.current.id = requestAnimationFrame(() => {
+            flushPendingMarkerMoveFrame();
+          });
+        }
+        return;
+      }
+
       const point = pointFromEvent(e);
 
       if (drag.kind === 'draw') {
@@ -914,12 +1077,23 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         }
       }
     },
-    [pointFromEvent, flushPendingMoveFrame, displaySize, viewportSize, viewportPointFromEvent],
+    [pointFromEvent, flushPendingMoveFrame, flushPendingMarkerMoveFrame, displaySize, viewportSize, viewportPointFromEvent],
   );
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
+
+      // "Colocar un audio propio": a marker drag's own commit — runs BEFORE
+      // `endDrag()` (below) ever sees this gesture, since `endDrag` itself
+      // only ever CANCELS a marker move (see its own comment) — a normal
+      // pointerup must commit it instead, exactly once, as one undo step.
+      if (drag?.kind === 'move-audio') {
+        dragRef.current = null;
+        const flushed = flushPendingMarkerMoveFrame();
+        onAudioMarkersChange?.(flushed ?? audioMarkers, { commit: true });
+        return;
+      }
 
       // Mobile layout pass: a touch finger lifting — feed it to
       // `touchGesture.ts` first. While still `'touch-pinch'` (this WAS the
@@ -979,7 +1153,18 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
       onZonesChange([...zones, zone]);
       onSelectZone(zone.id);
     },
-    [pointFromEvent, zones, onZonesChange, onSelectZone, endDrag, displaySize, viewportSize],
+    [
+      pointFromEvent,
+      zones,
+      onZonesChange,
+      onSelectZone,
+      endDrag,
+      displaySize,
+      viewportSize,
+      flushPendingMarkerMoveFrame,
+      onAudioMarkersChange,
+      audioMarkers,
+    ],
   );
 
   const handlePointerCancel = useCallback(
@@ -1465,8 +1650,67 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
       >
         <HandIcon aria-hidden="true" />
       </Button>
+      {/* "Colocar un audio propio": a third tool, rendered only when the
+          caller actually wired audio support — see `audioEnabled`'s own
+          header. Every existing test/standalone render (no `audioMarkers`/
+          `onAudioMarkersChange`/`resolveAudioUrl` given) never sees this
+          button at all, same graceful-fallback posture as every other
+          optional prop here. */}
+      {audioEnabled && (
+        <Button
+          type="button"
+          size="icon-sm"
+          variant={tool === 'audio' ? 'default' : 'ghost'}
+          aria-label={t.toolAudio}
+          aria-pressed={tool === 'audio'}
+          title={t.toolAudioTooltip}
+          data-testid="tool-audio"
+          onClick={() => setTool('audio')}
+        >
+          <SpeakerHighIcon aria-hidden="true" />
+        </Button>
+      )}
     </div>
   );
+
+  const selectedAudioMarker = audioMarkers.find((m) => m.id === selectedAudioMarkerId) ?? null;
+
+  // The audio marker properties content — either a brand-new placement's
+  // upload/record choice, or an already-placed marker's listen/replace/
+  // delete view. `null` with nothing selected AND nothing pending, same
+  // "no empty-state card" posture as `zonePropertiesContent`.
+  const audioPanelContent =
+    audioEnabled && (selectedAudioMarker || pendingAudioPlacement) ? (
+      <AudioMarkerPanel
+        key={selectedAudioMarker?.id ?? 'placement'}
+        lang={lang}
+        marker={selectedAudioMarker}
+        resolveAudioUrl={resolveAudioUrl!}
+        onAudioReady={(path) => {
+          if (selectedAudioMarker) {
+            onAudioMarkersChange!(
+              audioMarkers.map((m) => (m.id === selectedAudioMarker.id ? { ...m, path } : m)),
+            );
+            return;
+          }
+          if (!pendingAudioPlacement) return;
+          if (audioMarkers.length >= MAX_AUDIO_MARKERS_PER_WORKSHEET) return;
+          const marker: AudioMarker = { id: crypto.randomUUID(), ...pendingAudioPlacement, path };
+          onAudioMarkersChange!([...audioMarkers, marker]);
+          setPendingAudioPlacement(null);
+          setSelectedAudioMarkerId(marker.id);
+        }}
+        onDelete={
+          selectedAudioMarker
+            ? () => {
+                onAudioMarkersChange!(audioMarkers.filter((m) => m.id !== selectedAudioMarker.id));
+                setSelectedAudioMarkerId(null);
+              }
+            : undefined
+        }
+        onCancelPlacement={!selectedAudioMarker ? () => setPendingAudioPlacement(null) : undefined}
+      />
+    ) : null;
 
   // Desktop-only floating overlay (owner decision 2026-10-07, build item 3:
   // the always-rendered column "zoomed" the canvas on select/deselect —
@@ -1480,6 +1724,13 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
       className="pointer-events-auto absolute right-2 top-2 z-10 max-h-[calc(100%-1rem)] w-72 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-elevation-2"
     >
       {zonePropertiesContent}
+    </div>
+  ) : audioPanelContent ? (
+    <div
+      data-testid="audio-marker-properties-panel"
+      className="pointer-events-auto absolute right-2 top-2 z-10 max-h-[calc(100%-1rem)] w-72 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-elevation-2"
+    >
+      {audioPanelContent}
     </div>
   ) : null;
 
@@ -1629,7 +1880,11 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
                   // empty canvas instead of the Zona tool's "move" cursor,
                   // since dragging it now pans (see `handleZonePointerDown`).
                   className={`absolute rounded border-2 ${
-                    effectiveTool === 'hand' ? canvasCursorClass : 'cursor-move'
+                    effectiveTool === 'audio'
+                      ? 'pointer-events-none'
+                      : effectiveTool === 'hand'
+                        ? canvasCursorClass
+                        : 'cursor-move'
                   } ${
                     selected ? 'border-accent-ink bg-primary/20' : 'border-accent-ink/70 bg-accent/10'
                   } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
@@ -1669,6 +1924,38 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
                   width: `${draftRect.w * 100}%`,
                   height: `${draftRect.h * 100}%`,
                 }}
+              />
+            )}
+            {/* "Colocar un audio propio": every already-placed marker —
+                interactive (selectable/draggable) ONLY while the Audio
+                tool is active; a plain inert visual dot otherwise, same
+                "one tool's layer is interactive at a time" split zones get
+                under the Mano tool (CSS `pointer-events`, no extra
+                pointerdown branching needed — see `handleMarkerPointerDown`'s
+                own header). */}
+            {audioEnabled &&
+              audioMarkers.map((marker) => (
+                <AudioMarkerButton
+                  key={marker.id}
+                  x={marker.x}
+                  y={marker.y}
+                  playing={false}
+                  selected={marker.id === selectedAudioMarkerId}
+                  inert={effectiveTool !== 'audio'}
+                  label={t.audioMarkerLabel}
+                  data-testid={`audio-marker-${marker.id}`}
+                  onPointerDown={handleMarkerPointerDown(marker)}
+                />
+              ))}
+            {/* A brand-new placement's own ghost point — dashed, matching
+                `zone-draft`'s own "still being decided" treatment — until an
+                upload/recording actually lands it as a real marker. */}
+            {audioEnabled && pendingAudioPlacement && (
+              <div
+                data-testid="audio-placement-ghost"
+                aria-hidden="true"
+                className="pointer-events-none absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-accent-ink bg-primary/10"
+                style={{ left: `${pendingAudioPlacement.x * 100}%`, top: `${pendingAudioPlacement.y * 100}%` }}
               />
             )}
           </div>
@@ -1723,7 +2010,11 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
           `zonePropertiesContent` is the exact same JSX the desktop overlay
           above uses, computed once. */}
       {(() => {
-        const mobileSheet = (
+        // "Colocar un audio propio": the SAME BottomSheet slot, mutually
+        // exclusive with the zone one above — a zone selection always wins
+        // when somehow both are set (should not happen, `clearAudioSelection`/
+        // `onSelectZone(null)` keep the two apart at every selection site).
+        const mobileSheet = selectedZone ? (
           <BottomSheet
             open={mobilePanelExpanded && selectedZone !== null}
             onOpenChange={setMobilePanelExpanded}
@@ -1732,6 +2023,16 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
             peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
           >
             {zonePropertiesContent}
+          </BottomSheet>
+        ) : (
+          <BottomSheet
+            open={mobilePanelExpanded && audioPanelContent !== null}
+            onOpenChange={setMobilePanelExpanded}
+            title={t.audioPlaceholderTitle}
+            testId="audio-marker-properties-sheet"
+            peek={audioPanelContent !== null ? <span>{t.toolAudio}</span> : undefined}
+          >
+            {audioPanelContent}
           </BottomSheet>
         );
 

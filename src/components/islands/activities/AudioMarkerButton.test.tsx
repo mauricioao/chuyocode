@@ -40,6 +40,11 @@ describe('AudioMarkerButton', () => {
     expect(button.className).toContain('pointer-events-none');
   });
 
+  it('adds a selection ring when selected, independent of playing', () => {
+    render(<AudioMarkerButton x={0} y={0} playing={false} selected label="l" data-testid="marker" />);
+    expect(screen.getByTestId('marker').className).toContain('ring-accent-ink');
+  });
+
   it('forwards onPointerDown (the editor canvas drag handle)', () => {
     const onPointerDown = vi.fn();
     render(<AudioMarkerButton x={0} y={0} playing={false} label="l" onPointerDown={onPointerDown} data-testid="marker" />);

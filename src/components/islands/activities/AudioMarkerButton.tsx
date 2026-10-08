@@ -27,6 +27,8 @@ export interface AudioMarkerButtonProps {
   className?: string;
   /** Disables the button's own pointer handling (editor canvas, outside the Audio tool) — rendered as a plain inert visual marker. Defaults to `false`. */
   inert?: boolean;
+  /** Editor-only selection ring — independent of `playing` (which is always `false` on the canvas: the editor's own listen-back lives in the properties panel, not this button). Defaults to `false`. */
+  selected?: boolean;
 }
 
 export default function AudioMarkerButton({
@@ -39,6 +41,7 @@ export default function AudioMarkerButton({
   'data-testid': testId,
   className,
   inert = false,
+  selected = false,
 }: AudioMarkerButtonProps) {
   return (
     <button
@@ -56,6 +59,7 @@ export default function AudioMarkerButton({
       className={cn(
         'absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-primary-foreground bg-primary text-primary-foreground shadow-elevation-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
         inert ? 'pointer-events-none' : 'pointer-events-auto cursor-pointer',
+        selected && 'ring-4 ring-accent-ink',
         className,
       )}
       style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
