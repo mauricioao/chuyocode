@@ -745,6 +745,31 @@ export const UI_LABELS = {
         // tool active and the canvas focused — announced via an aria-live
         // region, see `WorksheetZoneEditor.tsx`'s own header.
         zoneCreatedAnnouncement: 'Zona creada',
+        // "Colocar un audio propio": a third canvas tool, speaker icon —
+        // click to place a marker, then choose "Subir archivo" or "Grabar".
+        toolAudio: 'Audio',
+        toolAudioTooltip: 'Audio (A)',
+        audioMarkerLabel: 'Marcador de audio',
+        audioPlaceholderTitle: 'Agregar audio',
+        audioUploadButton: 'Subir archivo',
+        audioRecordButton: 'Grabar',
+        audioCancel: 'Cancelar',
+        audioReplaceButton: 'Reemplazar audio',
+        audioDeleteButton: 'Eliminar audio',
+        audioDragHint: 'Arrastra el marcador para moverlo.',
+        audioListenLabel: 'Escuchar audio',
+        audioMaxMarkersReached: 'Esta hoja ya tiene el máximo de marcadores de audio.',
+        audioUploadError: 'No se pudo subir el audio. Inténtalo de nuevo.',
+        audioUploading: 'Subiendo…',
+        // Recorder states (`useAudioRecorder.ts`).
+        audioRequestingPermission: 'Pidiendo acceso al micrófono…',
+        audioRecording: 'Grabando…',
+        audioStopButton: 'Detener',
+        audioUseRecording: 'Usar',
+        audioRecordAgain: 'Grabar de nuevo',
+        audioPermissionDenied: 'No se pudo acceder al micrófono. Revisa los permisos del navegador.',
+        audioUnsupported: 'Este navegador no puede grabar audio.',
+        audioRecordError: 'Ocurrió un error al grabar. Inténtalo de nuevo.',
       },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
@@ -773,6 +798,9 @@ export const UI_LABELS = {
         // explicación, mostrado solo para una zona incorrecta que tiene una.
         explanationButtonLabel: 'Ver explicación',
         explanationHeading: '¿Por qué?',
+        // Audio markers in practice: a round play button, one at a time.
+        audioPlay: 'Reproducir audio',
+        audioPause: 'Pausar audio',
       },
       // Quiz block game modes (D1, "Una actividad, muchos juegos"): the
       // switcher between "Preguntas"/"Tarjetas"/"Parejas" plus the copy for
@@ -1192,6 +1220,10 @@ export const UI_LABELS = {
         removeError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
         confirmCancel: 'Cancelar',
         confirmAccept: 'Confirmar',
+        // Audio markers: listed so the reviewer can listen before approving
+        // (same signed-URL treatment as the pre-moderation image above).
+        audioMarkersLabel: 'Audios',
+        audioMarkerIndexLabel: 'Audio',
       },
       // Print page (`/[lang]/ingles/actividades/[id]/imprimir`, D6). A
       // separate, minimal-layout page — no site header/footer/nav, light
@@ -1283,6 +1315,10 @@ export const UI_LABELS = {
         // every group listed by name; "Mostrar respuesta" fills each with
         // its own items.
         groupSortTitle: 'Ordenar por grupos',
+        // Audio markers on the worksheet overview slide (owner request:
+        // "en modo presentación también los reproduce").
+        audioPlay: 'Reproducir audio',
+        audioPause: 'Pausar audio',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -2179,6 +2215,28 @@ export const UI_LABELS = {
         toolHand: 'Hand',
         toolHandTooltip: 'Hand (H)',
         zoneCreatedAnnouncement: 'Zone created',
+        toolAudio: 'Audio',
+        toolAudioTooltip: 'Audio (A)',
+        audioMarkerLabel: 'Audio marker',
+        audioPlaceholderTitle: 'Add audio',
+        audioUploadButton: 'Upload file',
+        audioRecordButton: 'Record',
+        audioCancel: 'Cancel',
+        audioReplaceButton: 'Replace audio',
+        audioDeleteButton: 'Delete audio',
+        audioDragHint: 'Drag the marker to move it.',
+        audioListenLabel: 'Listen to audio',
+        audioMaxMarkersReached: 'This sheet already has the maximum number of audio markers.',
+        audioUploadError: 'Could not upload the audio. Try again.',
+        audioUploading: 'Uploading…',
+        audioRequestingPermission: 'Asking for microphone access…',
+        audioRecording: 'Recording…',
+        audioStopButton: 'Stop',
+        audioUseRecording: 'Use',
+        audioRecordAgain: 'Record again',
+        audioPermissionDenied: 'Could not access the microphone. Check your browser permissions.',
+        audioUnsupported: 'This browser cannot record audio.',
+        audioRecordError: 'Something went wrong while recording. Try again.',
       },
       player: {
         notGraded: 'Preview: this view does not grade answers.',
@@ -2195,6 +2253,8 @@ export const UI_LABELS = {
         zoneOf: 'Zone',
         explanationButtonLabel: 'See explanation',
         explanationHeading: 'Why?',
+        audioPlay: 'Play audio',
+        audioPause: 'Pause audio',
       },
       gameModes: {
         modeQuiz: 'Basic',
@@ -2503,6 +2563,8 @@ export const UI_LABELS = {
         removeError: 'Could not remove the activity. Try again.',
         confirmCancel: 'Cancel',
         confirmAccept: 'Confirm',
+        audioMarkersLabel: 'Audio',
+        audioMarkerIndexLabel: 'Audio',
       },
       print: {
         pageDescription: 'Print-friendly version of this English activity.',
@@ -2554,6 +2616,8 @@ export const UI_LABELS = {
         reorderTitle: 'Reorder',
         clozeTitle: 'Complete the sentence',
         groupSortTitle: 'Group sort',
+        audioPlay: 'Play audio',
+        audioPause: 'Pause audio',
       },
     },
     notFound: {
