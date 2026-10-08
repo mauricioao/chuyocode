@@ -218,8 +218,12 @@ if (!hostMode) {
         `bg-muted` itself spans the window's FULL body width, with
         `ROW_PADDING_X` as the only inset either side, so the block cards'
         canvas gets the full width instead of being capped at 6xl with the
-        window's own white body colour showing through on either side. */}
-    <section class={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-clip`}>
+        window's own white body colour showing through on either side.
+
+        `data-editor-body`: while a template editor is mounted inside
+        (`TemplateEditorKit.tsx`'s `data-template-canvas`), `global.css`
+        drops this inset and paints the dotted canvas here, edge to edge. */}
+    <section class={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-muted ${ROW_PADDING_X} py-4 lg:min-h-0 lg:overflow-clip`} data-editor-body>
       <ActivityEditorIsland
         client:load
         lang={lang}

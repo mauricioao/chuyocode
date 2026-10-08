@@ -866,3 +866,120 @@ describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () =>
     expect(screen.queryByTestId('groupsort-min-groups-hint-b1')).toBeNull();
   });
 });
+
+describe('QuizBlockEditor — template editors share the desk-native sheet + stage layout', () => {
+  const THREE_PAIRS: Payload = {
+    pools: {},
+    slots: [
+      { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+      { id: 's2', label: 'water', input: 'text', answer: ['agua'] },
+      { id: 's3', label: 'bird', input: 'text', answer: ['ave'] },
+    ],
+    blocks: [
+      { kind: 'row', id: 'row-s1', slotId: 's1' },
+      { kind: 'row', id: 'row-s2', slotId: 's2' },
+      { kind: 'row', id: 'row-s3', slotId: 's3' },
+    ],
+  };
+
+  it('renders the authoring sheet beside the preview stage, with no phone tab bar', () => {
+    render(<MatchHarness initialPayload={THREE_PAIRS} />);
+    expect(screen.getByTestId('quiz-editor-b1').hasAttribute('data-template-canvas')).toBe(true);
+    expect(within(screen.getByTestId('template-sheet-b1')).getByTestId('match-pairs-editor-b1')).toBeTruthy();
+    expect(within(screen.getByTestId('template-stage-b1')).getByTestId('quiz-preview-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-mobile-tabs-b1')).toBeNull();
+  });
+
+  it('shows an empty stage (no game yet) for a brand-new template block', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('template-stage-empty-b1').textContent).toContain('Aquí verás el juego');
+    expect(screen.queryByTestId('quiz-preview-b1')).toBeNull();
+  });
+
+  it('match: says "Listo para jugar" once 3 complete pairs exist', () => {
+    render(<MatchHarness initialPayload={THREE_PAIRS} />);
+    expect(screen.getByTestId('match-pairs-ready-b1').textContent).toBe('Listo para jugar · 3 parejas');
+  });
+
+  it('match: is not "Listo" while two pairs share an answer (the board could not tell them apart)', () => {
+    const payload: Payload = {
+      ...THREE_PAIRS,
+      slots: THREE_PAIRS.slots.map((s) => (s.id === 's3' ? { ...s, answer: ['Perro'] } : s)),
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    expect(screen.queryByTestId('match-pairs-ready-b1')).toBeNull();
+    expect(screen.getByTestId('match-pairs-hint-b1').textContent).toBe('Cada pareja necesita una respuesta distinta');
+  });
+
+  it('match: Enter in a question field moves to its own answer field', () => {
+    render(<MatchHarness initialPayload={THREE_PAIRS} />);
+    fireEvent.keyDown(screen.getByTestId('match-pair-question-s2'), { key: 'Enter' });
+    expect(document.activeElement).toBe(screen.getByTestId('match-pair-answer-s2'));
+    expect(screen.getAllByTestId(/^match-pair-question-/)).toHaveLength(3);
+  });
+
+  it('match: labels every field with its own row number', () => {
+    render(<MatchHarness initialPayload={THREE_PAIRS} />);
+    expect(screen.getByLabelText('Pregunta 2')).toBe(screen.getByTestId('match-pair-question-s2'));
+    expect(screen.getByLabelText('Respuesta 3')).toBe(screen.getByTestId('match-pair-answer-s3'));
+  });
+
+  it('reorder: previews each sentence as its own words, shuffled', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'She is reading a book', input: 'text', answer: ['She is reading a book'] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    const words = Array.from(screen.getByTestId('reorder-preview-s1').children).map((chip) => chip.textContent);
+    expect([...words].sort()).toEqual(['She', 'a', 'book', 'is', 'reading'].sort());
+    expect(words.join(' ')).not.toBe('She is reading a book');
+    expect(screen.getByTestId('reorder-ready-b1').textContent).toBe('Listo para jugar · 1 oración');
+  });
+
+  it('cloze: the mini-preview shows each bracketed word as its own chip', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    fireEvent.change(screen.getAllByTestId(/^cloze-sentence-/)[0]!, { target: { value: 'I [was] tired.' } });
+    const preview = screen.getByTestId('cloze-preview-0');
+    expect(preview.textContent).toBe('I was tired.');
+    expect(preview.querySelectorAll('span.inline-flex')).toHaveLength(1);
+  });
+
+  it('cloze: extra words are chips — Enter adds them (comma lists too), "×" removes one', () => {
+    const payload: Payload = {
+      pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'goes' }] },
+      slots: [{ id: 'slot-a', label: 'She ___ to school.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' }],
+    };
+    render(<ClozeHarness initialPayload={payload} />);
+    const input = screen.getByTestId('cloze-distractors-b1') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'is, went' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const chips = () => Array.from(screen.getByTestId('cloze-distractor-chips-b1').children).map((c) => c.textContent);
+    expect(chips()).toEqual(['is', 'went']);
+    expect(input.value).toBe('');
+
+    fireEvent.click(screen.getByTestId('cloze-distractor-remove-0'));
+    expect(chips()).toEqual(['went']);
+  });
+
+  it('groupsort: says "Listo para jugar" once 2 groups have 2 items each', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const slotIds = screen
+      .getAllByTestId(/^groupsort-name-/)
+      .map((n) => n.getAttribute('data-testid')!.replace('groupsort-name-', ''));
+    expect(slotIds).toHaveLength(2);
+    expect(screen.queryByTestId('groupsort-ready-b1')).toBeNull();
+
+    for (const slotId of slotIds) {
+      const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`);
+      fireEvent.change(itemInput, { target: { value: 'one, two' } });
+      fireEvent.keyDown(itemInput, { key: 'Enter' });
+    }
+    expect(screen.getByTestId('groupsort-ready-b1').textContent).toBe('Listo para jugar · 2 grupos');
+  });
+});

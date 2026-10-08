@@ -110,6 +110,7 @@ import {
   removeGroupSortGroup,
   removeGroupSortItem,
 } from '@/lib/activities/groupSort';
+import { TemplateEditorLayout } from './TemplateEditorKit';
 
 /** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
 const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
@@ -127,6 +128,7 @@ export const COPY = {
     dragHandle: 'Reordenar pregunta',
     tabQuestions: 'Preguntas',
     tabPreview: 'Vista previa',
+    previewEmpty: 'Aquí verás el juego en cuanto escribas el contenido.',
     tip1: 'Escribe la pregunta',
     tip2: 'Toca el círculo de la correcta',
     tip3: 'Agrega otra pregunta',
@@ -154,6 +156,7 @@ export const COPY = {
     dragHandle: 'Reorder question',
     tabQuestions: 'Questions',
     tabPreview: 'Preview',
+    previewEmpty: 'The game shows up here as soon as you write the content.',
     tip1: 'Write the question',
     tip2: "Tap the correct answer's circle",
     tip3: 'Add another question',
@@ -706,6 +709,33 @@ export default function QuizBlockEditor({
     <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} template={template} />
   ) : null;
 
+  // TEMPLATE EDITORS (owner report: "no va a juego con los sombreados y
+  // estilos de nuestro escritorio"): the four templates share one desk-native
+  // work area — the authoring sheet beside the live preview's stage card,
+  // stacked on phones (no tabs: both are short enough to scroll through) —
+  // see `TemplateEditorKit.tsx`'s own header. Básico keeps the layout below.
+  const templateColumn = isMatch
+    ? matchColumn
+    : isReorder
+      ? reorderColumn
+      : isCloze
+        ? clozeColumn
+        : isGroupSort
+          ? groupSortColumn
+          : null;
+  if (templateColumn) {
+    return (
+      <TemplateEditorLayout
+        blockId={blockId}
+        sheet={templateColumn}
+        preview={previewColumn}
+        stageLabel={t.tabPreview}
+        stageEmptyText={t.previewEmpty}
+        onKeyDownCapture={handleContainerKeyDown}
+      />
+    );
+  }
+
   // HEIGHT CHAIN: in the editor's desktop focus layout the expanded block has
   // a fixed height and clips its overflow (BlockList). The root and the
   // two-column grid must take that height (`flex-1 min-h-0`), and each column
@@ -718,7 +748,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
+        {questionsColumn}
       </div>
     );
   }
@@ -771,7 +801,7 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
+          {questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}

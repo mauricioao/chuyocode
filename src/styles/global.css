@@ -804,9 +804,258 @@ h3 {
  * surface itself. The dot color is plain white at ~9% alpha, legible but
  * quiet against the dark `bg-muted` surface underneath; `background-size`
  * sets the 16px grid pitch. */
-.canvas-dots {
+.canvas-dots,
+[data-editor-body]:has([data-template-canvas]) {
   background-image: radial-gradient(var(--color-canvas-dot) 1px, transparent 1px);
   background-size: 16px 16px;
+}
+
+/* --- Template editor (match / reorder / cloze / groupsort authoring) ------
+ * `TemplateEditorKit.tsx`'s surfaces, iOS/macOS-style so the editor reads as
+ * part of the desk rather than a generic form:
+ *
+ * - WORK AREA: the editor window's body (`[id].astro`'s `data-editor-body`)
+ *   drops its inset and becomes the dotted canvas itself (selector list
+ *   above), edge to edge, whenever a template editor is mounted in it.
+ * - SHEET: the authoring panel is the desk's own glass (`.ingles-glass`
+ *   above, reused as-is) at a smaller radius, lifted by `--shadow-
+ *   elevation-2` instead of the widgets' wider float.
+ * - STAGE: the live preview's plain white card, one elevation step higher.
+ * - GROUP: an iOS "grouped list" — one white container, hairline rows
+ *   inset 16px, borderless fields that tint their row when focused.
+ *
+ * Plain classes (not utilities) for the parts that need sibling selectors,
+ * pseudo-elements, `@supports`/media gates or keyframes. */
+[data-editor-body]:has([data-template-canvas]) {
+  padding: 0;
+}
+
+.ingles-glass.template-sheet {
+  border-radius: 22px;
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 0.95),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.55),
+    var(--shadow-elevation-2);
+}
+
+.template-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(28 28 30 / 0.18) transparent;
+}
+
+.template-stage {
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: var(--shadow-elevation-3);
+}
+
+.template-group {
+  background: var(--card);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+/* `.template-ghost`: the dashed "add a group" card — a group's shape, no fill. */
+.template-group,
+.template-ghost {
+  border-radius: 14px;
+}
+
+.template-icon {
+  border-radius: 9px;
+}
+
+@supports (corner-shape: squircle) {
+  .ingles-glass.template-sheet,
+  .template-stage {
+    border-radius: 31px;
+    corner-shape: squircle;
+  }
+
+  .template-group,
+  .template-ghost {
+    border-radius: 20px;
+    corner-shape: squircle;
+  }
+
+  .template-icon {
+    border-radius: 12px;
+    corner-shape: squircle;
+  }
+}
+
+/* One row of a grouped list: the hairline above every row but the first,
+ * inset 16px like iOS, and the soft sky tint while a field inside it has
+ * focus. */
+.template-row {
+  position: relative;
+  transition: background-color 120ms var(--ease-control);
+}
+
+.template-row + .template-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: rgb(28 28 30 / 0.08);
+  pointer-events: none;
+}
+
+.template-row:focus-within {
+  background-color: color-mix(in srgb, var(--color-pop-sky) 6%, transparent);
+}
+
+/* A borderless field: no box at rest, a white well with a fine pop-sky ring
+ * once focused. `pop-sky-deep`, not `pop-sky`, for the ring itself — the
+ * lighter step is 2.4:1 on white, under the 3:1 a focus indicator needs. */
+.template-field {
+  min-width: 0;
+  height: 40px;
+  margin: 6px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 17px;
+  line-height: 22px;
+  outline: none;
+  transition:
+    background-color 120ms var(--ease-control),
+    box-shadow 120ms var(--ease-control);
+}
+
+.template-field::placeholder {
+  color: var(--input);
+}
+
+.template-field:focus {
+  background: var(--card);
+  box-shadow: 0 0 0 2px var(--color-pop-sky-deep);
+}
+
+/* Chips: white, rounded, hairline — the "+ word" input beside them is the
+ * same shape drawn as a dashed outline until it is focused. */
+.template-chip {
+  box-shadow:
+    0 0 0 1px rgb(28 28 30 / 0.1),
+    0 1px 2px rgb(28 28 30 / 0.05);
+}
+
+.template-chip-input {
+  border: 1px dashed rgb(28 28 30 / 0.22);
+  background: transparent;
+  color: var(--foreground);
+  outline: none;
+  field-sizing: content;
+  transition:
+    background-color 120ms var(--ease-control),
+    box-shadow 120ms var(--ease-control);
+}
+
+.template-chip-input::placeholder {
+  color: var(--input);
+}
+
+.template-chip-input:focus {
+  border-color: transparent;
+  background: var(--card);
+  box-shadow: 0 0 0 2px var(--color-pop-sky-deep);
+}
+
+/* Row actions (the round "×") stay hidden until the row is hovered or holds
+ * focus — only where a real hover exists. Touch screens always show them. */
+@media (hover: hover) and (pointer: fine) {
+  .template-row-action {
+    opacity: 0;
+    transition: opacity 120ms var(--ease-control);
+  }
+
+  :is(.template-row, .template-card):is(:hover, :focus-within) .template-row-action {
+    opacity: 1;
+  }
+}
+
+/* Collapsible wrapper (`TemplateCollapse`): a one-row grid whose track can
+ * animate to `0fr`, which is what lets a removed row/card fold its own
+ * height away without measuring it. */
+.template-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.template-collapse > * {
+  min-height: 0;
+}
+
+.template-collapse[data-leaving] {
+  pointer-events: none;
+}
+
+.template-collapse[data-leaving] > * {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .template-enter {
+    animation: template-row-in 160ms var(--ease-control) both;
+  }
+
+  .template-chip-enter {
+    animation: template-chip-in 140ms var(--ease-control) both;
+  }
+
+  .template-collapse[data-leaving] {
+    animation: template-row-out 160ms var(--ease-control) forwards;
+  }
+}
+
+@keyframes template-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes template-chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes template-row-out {
+  to {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+}
+
+/* The floating Comprobar (`scale.ts`'s `FLOATING_CHECK_BAR_CLASS`) sits 16px
+ * inside the stage card's own bottom-right corner rather than on its edge:
+ * the card stops 16px above the window's bottom and 70px before its right
+ * edge (`TemplateEditorLayout`'s `lg:pr-[70px]` — the side toolbar's docked
+ * rail, 12px + 42px, plus a 16px gap). */
+@media (width >= 64rem) {
+  [data-template-canvas] .floating-check-bar {
+    right: calc(70px + 1rem);
+    bottom: 2rem;
+  }
+}
+
+/* Phones stack the sheet above the stage, so a window-fixed Comprobar would
+ * float over the sheet while the author types, half under the side
+ * toolbar's bottom bar (~40px). It sticks to the bottom of the stage's own
+ * game instead, just above that bar — reachable whenever the game is on
+ * screen, never on top of the sheet. `order` moves it after the board: every
+ * game renders it as a direct child of its own flex-column root, some
+ * before the board in source order. */
+@media (width < 64rem) {
+  [data-template-canvas] .floating-check-bar {
+    position: sticky;
+    bottom: calc(3.25rem + env(safe-area-inset-bottom));
+    order: 99;
+  }
 }
 
 /* --- Smart header/footer visibility (chrome-visibility feature) ---------- *

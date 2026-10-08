@@ -953,11 +953,19 @@ export default function ActivityEditorIsland({
    * component) — phones keep the SAME testid/markup inside their own "⋯"
    * menu instead (`mobileMenu` below), unchanged.
    */
+  // A template editor's authoring sheet (`TemplateEditorKit.tsx`) fills the
+  // work area's whole left side, edge to edge with no window inset, so the
+  // pill moves INTO the sheet's own bottom-left corner — aligned with its
+  // content edge (16px margin + 20px padding) and level with the stage's
+  // floating Comprobar on the right — instead of straddling the sheet's edge.
+  const activeBlock = blocks.find((b) => b.id === activeBlockId) ?? blocks[0];
+  const onTemplateCanvas = !preview && !showAddFlow && activeBlock?.type === 'quiz' && Boolean(activeBlock.template);
+
   const statusPill = (
     <div
       data-testid="activity-status-badge"
       data-status={status}
-      className="pointer-events-none absolute bottom-3 left-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground shadow-elevation-1 backdrop-blur-sm"
+      className={`pointer-events-none absolute z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground shadow-elevation-1 backdrop-blur-sm ${onTemplateCanvas ? 'bottom-8 left-9' : 'bottom-3 left-3'}`}
     >
       <span
         aria-hidden="true"

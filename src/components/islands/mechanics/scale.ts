@@ -181,9 +181,16 @@ export const STAGE_TWO_COL_GRID = 'grid-cols-1 @lg:grid-cols-2';
  * Every caller that renders this inside a SCROLLABLE stage must also give
  * that scroll container `STAGE_BOTTOM_RESERVE_CLASS` (below), so the
  * floating bar can never cover the last visible row/tile.
+ *
+ * `floating-check-bar` styles nothing by itself: it is the hook
+ * `global.css` uses inside the template editor (`TemplateEditorKit.tsx`) —
+ * on desktop it moves the bar 16px inside the stage card's own
+ * bottom-right corner; on phones, where the authoring sheet sits above the
+ * stage, it sticks to the bottom of the game instead of floating over the
+ * sheet.
  */
 export const FLOATING_CHECK_BAR_CLASS =
-  'fixed bottom-4 right-4 z-40 flex flex-wrap items-center justify-end gap-2';
+  'floating-check-bar fixed bottom-4 right-4 z-40 flex flex-wrap items-center justify-end gap-2';
 
 /** Added to {@link FLOATING_CHECK_BAR_CLASS} only inside the activity editor — see that token's own header. */
 export const FLOATING_CHECK_BAR_EDITOR_OFFSET = 'lg:right-20';
