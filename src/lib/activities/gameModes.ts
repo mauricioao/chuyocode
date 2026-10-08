@@ -336,6 +336,23 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
 }
 
 /**
+ * ONE TEMPLATE, ONE GAME (owner spec 2026-10-08: "vamos a enfocarnos en que
+ * cada opción de construcción cumpla un solo propósito y sea pulcro, no
+ * combinemos"). While `false`, a TEMPLATED block (`match`/`reorder`/`cloze`/
+ * `groupsort`) never offers the generic alternate games (cards/speak/wheel/
+ * anagram/…) nor even plain "Básico" — it plays ONLY its own game,
+ * everywhere (editor live preview, practice, full-screen focus mode,
+ * presentation). "Básico" (`template === undefined`) is completely
+ * untouched either way — every one of its games stays exactly as before.
+ *
+ * A single, clearly named switch rather than deleting the mode-switching
+ * code (owner: "por el momento coméntalas"): flip this back to `true` to
+ * restore the previous "any eligible mode" behaviour for every template —
+ * `modesForBlock` below is the one and only place that reads it.
+ */
+export const TEMPLATE_GAME_SWITCHING_ENABLED = false;
+
+/**
  * `groupsort`'s own additional restriction on top of {@link
  * availableGameModes} — unlike every OTHER template (`blocks.ts`'s own
  * `QuizTemplate` doc: "a template never restricts `availableGameModes`"),
@@ -348,11 +365,29 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
  * completely unrelated to sorting) — so a `groupsort`-templated block is
  * restricted to `quiz` (Básico, itself degrading per group — see
  * `QuizBlockPractice.tsx`'s own header) and `groupsort` only. Every OTHER
- * template's modes are returned unchanged.
+ * template's modes are returned unchanged. Only reached while
+ * {@link TEMPLATE_GAME_SWITCHING_ENABLED} is back on — see below.
  */
-export function modesForBlock(modes: readonly GameMode[], template: QuizTemplate | undefined): GameMode[] {
+function modesForBlockWithSwitching(modes: readonly GameMode[], template: QuizTemplate | undefined): GameMode[] {
   if (template !== 'groupsort') return [...modes];
   return modes.filter((mode) => mode === 'quiz' || mode === 'groupsort');
+}
+
+/**
+ * Which modes a block actually OFFERS (and so, via `modes.length > 1`,
+ * whether `QuizGameModeSwitcher` shows at all — `QuizBlockPractice.tsx`'s
+ * own header) — gated by {@link TEMPLATE_GAME_SWITCHING_ENABLED}. `undefined`
+ * (Básico) is always `[...modes]` unchanged, both ways.
+ */
+export function modesForBlock(modes: readonly GameMode[], template: QuizTemplate | undefined): GameMode[] {
+  if (!template || TEMPLATE_GAME_SWITCHING_ENABLED) return modesForBlockWithSwitching(modes, template);
+  // ONE TEMPLATE, ONE GAME: collapse straight to the template's own wanted
+  // mode (see {@link TEMPLATE_DEFAULT_MODE} below) — falling back to `quiz`
+  // alone (never a longer list) only when that game is not yet eligible for
+  // the current content, matching `initialGameMode`'s own fallback rather
+  // than rendering nothing.
+  const wanted = TEMPLATE_DEFAULT_MODE[template];
+  return modes.includes(wanted) ? [wanted] : ['quiz'];
 }
 
 /**

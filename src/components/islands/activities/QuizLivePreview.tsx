@@ -28,6 +28,7 @@ import {
   initialGameMode,
   modesForBlock,
   SELF_CHECKING_GAME_MODES,
+  TEMPLATE_GAME_SWITCHING_ENABLED,
   type GameMode,
 } from '@/lib/activities/gameModes';
 import { STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
@@ -99,18 +100,27 @@ export default function QuizLivePreview({ blockId, lang, payload, template }: Qu
   }, [key, template]);
 
   const modes = modesForBlock(availableGameModes(gameItems, payload), template);
+  // ONE TEMPLATE, ONE GAME (owner spec, build item 1): "Estas preguntas se
+  // usan en N juegos" is a BÁSICO-only affordance — a templated block only
+  // ever plays its own single game (see `gameModes.ts`'s own
+  // `TEMPLATE_GAME_SWITCHING_ENABLED`), so a count of games would be
+  // meaningless, misleading clutter right above it. Restored automatically
+  // if that switch is ever turned back on.
+  const showGamesBadge = TEMPLATE_GAME_SWITCHING_ENABLED || !template;
 
   const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
 
   return (
     <div data-testid={`quiz-preview-${blockId}`} className={cn('flex flex-col gap-3', STAGE_CONTAINER)}>
-      <div data-testid={`quiz-preview-games-badge-${blockId}`} className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        <span>{t.usedInGames(modes.length)}</span>
-        {modes.map((m) => {
-          const Icon = GAME_MODE_ICONS[m];
-          return Icon ? <Icon key={m} aria-hidden="true" /> : null;
-        })}
-      </div>
+      {showGamesBadge && (
+        <div data-testid={`quiz-preview-games-badge-${blockId}`} className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+          <span>{t.usedInGames(modes.length)}</span>
+          {modes.map((m) => {
+            const Icon = GAME_MODE_ICONS[m];
+            return Icon ? <Icon key={m} aria-hidden="true" /> : null;
+          })}
+        </div>
+      )}
 
       <QuizBlockPractice
         lang={lang as Lang}
