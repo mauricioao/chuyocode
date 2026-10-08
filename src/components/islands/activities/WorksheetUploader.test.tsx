@@ -24,6 +24,23 @@ vi.mock('@/lib/activities/imagePipeline', async () => {
   };
 });
 
+// Several images/PDF pages stitch into ONE sheet (one-sheet redesign) —
+// real `<canvas>`/`createImageBitmap` work is "manual check only" (see
+// `sheetStitcher.ts`'s own header), so this mocks the actual pixel-pushing
+// and keeps `capStitchSources` real (pure, safe to run for real).
+const stitcherMocks = vi.hoisted(() => ({
+  stitchSourcesWithinSizeLimit: vi.fn(),
+}));
+vi.mock('@/lib/activities/sheetStitcher', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/activities/sheetStitcher')>(
+    '@/lib/activities/sheetStitcher',
+  );
+  return {
+    ...actual,
+    stitchSourcesWithinSizeLimit: stitcherMocks.stitchSourcesWithinSizeLimit,
+  };
+});
+
 import WorksheetUploader from './WorksheetUploader';
 
 // jsdom does not implement `URL.createObjectURL`/`revokeObjectURL` — defined
@@ -37,10 +54,25 @@ if (typeof URL.revokeObjectURL !== 'function') {
   (URL as unknown as { revokeObjectURL: (url: string) => void }).revokeObjectURL = () => {};
 }
 
+// jsdom has no real `createImageBitmap` either — stubbed globally with a
+// fake bitmap (closeable, with a plain width/height) so the stitch path's
+// own decode step never throws; the actual DRAWING is mocked above via
+// `stitchSourcesWithinSizeLimit` instead of really touching a `<canvas>`.
+if (typeof (globalThis as { createImageBitmap?: unknown }).createImageBitmap !== 'function') {
+  (globalThis as unknown as { createImageBitmap: (source: Blob) => Promise<ImageBitmap> }).createImageBitmap = () =>
+    Promise.resolve({ width: 100, height: 100, close: () => {} } as unknown as ImageBitmap);
+}
+
 beforeEach(() => {
   let counter = 0;
   vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:mock-${counter++}`);
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  vi.spyOn(globalThis, 'createImageBitmap').mockResolvedValue(
+    { width: 100, height: 100, close: () => {} } as unknown as ImageBitmap,
+  );
+  // A sensible default so tests that don't care about stitching specifics
+  // still get a usable blob — tests that DO care override this per-test.
+  stitcherMocks.stitchSourcesWithinSizeLimit.mockResolvedValue(new Blob(['stitched']));
 });
 
 afterEach(() => {
@@ -314,7 +346,7 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
     expect(confirm.textContent).toContain('2');
   });
 
-  it('converts and uploads the selected pages, in order, through converting/uploading stages, never showing the drop zone again until done', async () => {
+  it('stitches the selected pages into ONE sheet, in order, through converting/uploading stages, never showing the drop zone again until done', async () => {
     pipelineMocks.routeFileType.mockReturnValue('pdf');
     pipelineMocks.renderPdfThumbnails.mockResolvedValue(thumbnailsResult(3));
     pipelineMocks.validatePageSelection.mockImplementation((pages: unknown) =>
@@ -322,7 +354,8 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
     );
     const converter = converterMock(3);
     pipelineMocks.openPdfForConversion.mockResolvedValue(converter);
-    vi.stubGlobal('fetch', fetchOkSequence(['p1.webp', 'p3.webp']));
+    // ONE upload now (the stitched sheet), not one per page.
+    vi.stubGlobal('fetch', fetchOkSequence(['combined.webp']));
     const onComplete = vi.fn();
 
     render(<WorksheetUploader lang="es" onComplete={onComplete} />);
@@ -337,10 +370,7 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
     });
 
     await waitFor(() =>
-      expect(onComplete).toHaveBeenCalledWith([
-        { path: 'p1.webp', width: 100, height: 100 },
-        { path: 'p3.webp', width: 100, height: 100 },
-      ]),
+      expect(onComplete).toHaveBeenCalledWith([{ path: 'combined.webp', width: 100, height: 100 }]),
     );
     expect(converter.convertPage).toHaveBeenNthCalledWith(1, 1, expect.any(AbortSignal));
     expect(converter.convertPage).toHaveBeenNthCalledWith(2, 3, expect.any(AbortSignal));
@@ -394,7 +424,12 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
     expect(converter.dispose).toHaveBeenCalledOnce();
   });
 
-  it('a failure on page 3 stops at the task error state, and Reintentar resumes AT page 3 without re-uploading pages 1-2', async () => {
+  it('a failure on page 3 stops at the task error state, and Reintentar re-runs the WHOLE combine step', async () => {
+    // One-sheet redesign tradeoff (documented, not a regression test for
+    // the old per-page behaviour): several pages now combine inside ONE
+    // task item, so a failure partway through re-converts every page on
+    // retry — there is no longer a per-PAGE resume point, only a per-ITEM
+    // one, and the whole combine is one item.
     pipelineMocks.routeFileType.mockReturnValue('pdf');
     pipelineMocks.renderPdfThumbnails.mockResolvedValue(thumbnailsResult(3));
     pipelineMocks.validatePageSelection.mockImplementation((pages: unknown) =>
@@ -409,7 +444,7 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
       return new Blob([`page-${pageNumber}`]);
     });
     pipelineMocks.openPdfForConversion.mockResolvedValue(converter);
-    vi.stubGlobal('fetch', fetchOkSequence(['p1.webp', 'p2.webp', 'p3.webp']));
+    vi.stubGlobal('fetch', fetchOkSequence(['combined.webp']));
     const onComplete = vi.fn();
 
     render(<WorksheetUploader lang="es" onComplete={onComplete} />);
@@ -433,14 +468,11 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
     });
 
     await waitFor(() =>
-      expect(onComplete).toHaveBeenCalledWith([
-        { path: 'p1.webp', width: 100, height: 100 },
-        { path: 'p2.webp', width: 100, height: 100 },
-        { path: 'p3.webp', width: 100, height: 100 },
-      ]),
+      expect(onComplete).toHaveBeenCalledWith([{ path: 'combined.webp', width: 100, height: 100 }]),
     );
-    expect(attempt).toBe(2); // page 3 converted twice (fail, then retry); pages 1-2 only once each
-    expect(converter.convertPage).toHaveBeenCalledTimes(4); // p1, p2, p3 (failed), p3 (retried)
+    expect(attempt).toBe(2); // page 3 tried once per full combine attempt (fail, then succeed)
+    // Pages 1-2 are re-converted on the retry too — see the test's own header.
+    expect(converter.convertPage).toHaveBeenCalledTimes(6); // (p1,p2,p3-failed) + (p1,p2,p3-retried)
   });
 
   it('falls back to the plain page-number field when thumbnail rendering fails', async () => {
@@ -491,13 +523,13 @@ describe('WorksheetUploader — PDF page thumbnails', () => {
 });
 
 describe('WorksheetUploader — PDF page number fallback', () => {
-  it('converts and uploads each chosen page, in order, on confirm', async () => {
+  it('stitches each chosen page into ONE sheet, in order, on confirm', async () => {
     pipelineMocks.routeFileType.mockReturnValue('pdf');
     pipelineMocks.renderPdfThumbnails.mockRejectedValue(new Error('pdf_failed'));
     pipelineMocks.validatePageSelection.mockReturnValue([1, 3]);
     const converter = converterMock(3);
     pipelineMocks.openPdfForConversion.mockResolvedValue(converter);
-    vi.stubGlobal('fetch', fetchOkSequence(['p1.webp', 'p3.webp']));
+    vi.stubGlobal('fetch', fetchOkSequence(['combined.webp']));
     const onComplete = vi.fn();
 
     render(<WorksheetUploader lang="es" onComplete={onComplete} />);
@@ -510,11 +542,10 @@ describe('WorksheetUploader — PDF page number fallback', () => {
     });
 
     await waitFor(() =>
-      expect(onComplete).toHaveBeenCalledWith([
-        { path: 'p1.webp', width: 100, height: 100 },
-        { path: 'p3.webp', width: 100, height: 100 },
-      ]),
+      expect(onComplete).toHaveBeenCalledWith([{ path: 'combined.webp', width: 100, height: 100 }]),
     );
+    expect(converter.convertPage).toHaveBeenNthCalledWith(1, 1, expect.any(AbortSignal));
+    expect(converter.convertPage).toHaveBeenNthCalledWith(2, 3, expect.any(AbortSignal));
   });
 
   it('shows an error for an invalid page selection without opening the PDF for conversion', async () => {
@@ -553,5 +584,105 @@ describe('WorksheetUploader — drag and drop', () => {
     });
 
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
+  });
+});
+
+// One-sheet redesign: several images dropped/picked at once stitch into ONE
+// sheet client-side (`sheetStitcher.ts`), instead of becoming one block
+// each — necessary now that an activity has only one block at all.
+describe('WorksheetUploader — several images at once stitch into one sheet', () => {
+  it('stitches several dropped image files into ONE uploaded sheet', async () => {
+    pipelineMocks.routeFileType.mockImplementation((file: { type: string }) =>
+      file.type.startsWith('image/') ? 'image' : null,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ path: 'combined.webp', width: 1600, height: 900 }) }),
+    );
+    const onComplete = vi.fn();
+
+    render(<WorksheetUploader lang="es" onComplete={onComplete} />);
+    const dropzone = screen.getByTestId('worksheet-uploader');
+    await act(async () => {
+      fireEvent.drop(dropzone, { dataTransfer: { files: [imageFile('a.png'), imageFile('b.png')] } });
+    });
+
+    await waitFor(() =>
+      expect(onComplete).toHaveBeenCalledWith([{ path: 'combined.webp', width: 1600, height: 900 }]),
+    );
+    expect(stitcherMocks.stitchSourcesWithinSizeLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps at 5 sources, silently dropping the rest', async () => {
+    pipelineMocks.routeFileType.mockImplementation((file: { type: string }) =>
+      file.type.startsWith('image/') ? 'image' : null,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ path: 'combined.webp', width: 100, height: 100 }) }),
+    );
+
+    render(<WorksheetUploader lang="es" onComplete={vi.fn()} />);
+    const dropzone = screen.getByTestId('worksheet-uploader');
+    const files = Array.from({ length: 7 }, (_, i) => imageFile(`img-${i}.png`));
+    await act(async () => {
+      fireEvent.drop(dropzone, { dataTransfer: { files } });
+    });
+
+    await waitFor(() => expect(stitcherMocks.stitchSourcesWithinSizeLimit).toHaveBeenCalledTimes(1));
+    const sources = stitcherMocks.stitchSourcesWithinSizeLimit.mock.calls[0][0] as unknown[];
+    expect(sources).toHaveLength(5);
+  });
+
+  it('a single dropped image skips stitching entirely', async () => {
+    pipelineMocks.routeFileType.mockReturnValue('image');
+    pipelineMocks.convertImageToWebp.mockResolvedValue(new Blob(['webp']));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ path: 'x.webp', width: 300, height: 300 }) }),
+    );
+    const onComplete = vi.fn();
+
+    render(<WorksheetUploader lang="es" onComplete={onComplete} />);
+    const dropzone = screen.getByTestId('worksheet-uploader');
+    await act(async () => {
+      fireEvent.drop(dropzone, { dataTransfer: { files: [imageFile()] } });
+    });
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+    expect(stitcherMocks.stitchSourcesWithinSizeLimit).not.toHaveBeenCalled();
+  });
+
+  it('reports unsupported when the dropped files mix images and a PDF', async () => {
+    pipelineMocks.routeFileType.mockImplementation((file: { type: string }) =>
+      file.type === 'application/pdf' ? 'pdf' : file.type.startsWith('image/') ? 'image' : null,
+    );
+
+    render(<WorksheetUploader lang="es" onComplete={vi.fn()} />);
+    const dropzone = screen.getByTestId('worksheet-uploader');
+    await act(async () => {
+      fireEvent.drop(dropzone, { dataTransfer: { files: [imageFile(), pdfFile()] } });
+    });
+
+    expect(await screen.findByTestId('uploader-error')).toBeTruthy();
+  });
+
+  it('shows a clear message instead of failing silently when the stitched sheet cannot be shrunk to fit', async () => {
+    pipelineMocks.routeFileType.mockImplementation((file: { type: string }) =>
+      file.type.startsWith('image/') ? 'image' : null,
+    );
+    stitcherMocks.stitchSourcesWithinSizeLimit.mockResolvedValue(null); // gave up — see `sheetStitcher.ts`
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<WorksheetUploader lang="es" onComplete={vi.fn()} />);
+    const dropzone = screen.getByTestId('worksheet-uploader');
+    await act(async () => {
+      fireEvent.drop(dropzone, { dataTransfer: { files: [imageFile('a.png'), imageFile('b.png')] } });
+    });
+
+    expect(await screen.findByTestId('task-progress-error')).toHaveProperty(
+      'textContent',
+      'La hoja combinada es demasiado grande para subirla. Intenta con menos páginas o imágenes más pequeñas.',
+    );
   });
 });

@@ -249,14 +249,15 @@ export default function ActivityEditorIsland({
     }
   }, [activityId, activeBlockId]);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-  const [addingBlock, setAddingBlock] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   // Empty activity (creator polish round 4, owner feedback #3): the add-flow
-  // (picker, then the worksheet uploader) is ALWAYS open while there are
-  // zero blocks — no separate "+" click needed first, matching
-  // `BlockList.tsx`'s own "Elige con qué seguir" empty-state heading right
-  // above it in the same scroll column.
-  const showAddFlow = addingBlock || blocks.length === 0;
+  // (picker, then the worksheet uploader) is open while there are zero
+  // blocks — no separate "+" click needed first, matching `BlockList.tsx`'s
+  // own "Elige con qué seguir" empty-state heading right above it in the
+  // same scroll column. ONE BLOCK PER ACTIVITY (one-sheet redesign, owner
+  // spec 2026-10-08): this is also now the ONLY way this flow ever opens —
+  // there is no more "+ Agregar bloque" trigger once a block exists.
+  const showAddFlow = blocks.length === 0;
 
   // Baseline captured at the start of an in-progress (non-committing)
   // transaction, e.g. a zone drag — see `updateDoc`.
@@ -296,7 +297,6 @@ export default function ActivityEditorIsland({
   // `BlockIndexPopover`, formerly the "block index") — jumps straight to a
   // chosen block by making it the sole active one. No scroll needed any
   // more: the body always shows exactly the active block, full-bleed.
-  const goToBlock = useCallback((blockId: string) => setActiveBlockId(blockId), [setActiveBlockId]);
 
   // A rejected submit's exact incomplete spot is stale the moment the
   // author touches ANY block content again — clear it on the next blocks
@@ -640,6 +640,12 @@ export default function ActivityEditorIsland({
     setTitleGroupPortalTarget(document.getElementById(DESK_WINDOW_TITLE_GROUP_ID));
   }, []);
 
+  // One-sheet redesign: the floating side toolbar's own worksheet-tools
+  // slot (`EditorSideToolbar.tsx`'s `onWorksheetToolsSlotReady`) — threaded
+  // down to `BlockList.tsx` as `sideToolsPortalTarget`, same ref-callback
+  // pattern as the portal targets above.
+  const [worksheetToolsSlot, setWorksheetToolsSlot] = useState<HTMLDivElement | null>(null);
+
   const openSubmitDialog = useCallback(() => {
     setSubmitDialog({ open: true, submitting: false, error: null });
   }, []);
@@ -657,8 +663,8 @@ export default function ActivityEditorIsland({
   // restoration on close is THIS component's job (the button that opened
   // it is the one thing the island itself cannot know about) — a plain
   // `document.querySelector` on the button's own `data-testid`, same
-  // direct-DOM-focus style `goToBlock`/`handleConfirmSubmit` already use
-  // above, rather than a `Button`-forwarded ref (that shared component is a
+  // direct-DOM-focus style `handleConfirmSubmit` already uses above, rather
+  // than a `Button`-forwarded ref (that shared component is a
   // bare function component, not `forwardRef`-wrapped).
   const [showPresentationPreview, setShowPresentationPreview] = useState(false);
   const openPresentationPreview = useCallback(() => setShowPresentationPreview(true), []);
@@ -739,8 +745,9 @@ export default function ActivityEditorIsland({
 
   // Unlike Worksheet (which needs an upload step first, via `showUploader`),
   // Questions has nothing to upload — the new block is appended immediately,
-  // empty, and becomes the sole active one, same rule `handleUploadComplete`
-  // follows for its own last-uploaded block.
+  // empty, and becomes the sole active one. ONE BLOCK PER ACTIVITY (one-sheet
+  // redesign): `showAddFlow` only ever opens while `blocks.length === 0`, so
+  // this always creates the activity's ONE AND ONLY block.
   const handleQuestionsChosen = useCallback(() => {
     const newBlock: Block = {
       id: crypto.randomUUID(),
@@ -748,27 +755,23 @@ export default function ActivityEditorIsland({
       payload: { pools: {}, slots: [] },
     };
     changeBlocks([...blocks, newBlock]);
-    setAddingBlock(false);
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
-      const newBlocks: WorksheetBlock[] = images.map((image) => ({
-        id: crypto.randomUUID(),
-        type: 'worksheet',
-        rotation: 0,
-        image,
-        zones: [],
-      }));
-      changeBlocks([...blocks, ...newBlocks]);
-      setAddingBlock(false);
+      // `WorksheetUploader` always hands back exactly ONE image now —
+      // several dropped files/PDF pages are stitched into one sheet
+      // client-side before upload (`sheetStitcher.ts`), which is also what
+      // keeps this the activity's ONE AND ONLY block (see
+      // `handleQuestionsChosen`'s own header). Any defensive extra is
+      // simply ignored rather than spawning a second block.
+      const [image] = images;
+      if (!image) return;
+      const newBlock: WorksheetBlock = { id: crypto.randomUUID(), type: 'worksheet', rotation: 0, image, zones: [] };
+      changeBlocks([...blocks, newBlock]);
       setShowUploader(false);
-      // Only the LAST uploaded block becomes the sole active one, even when
-      // several images were uploaded at once (a multi-page PDF) — one
-      // active block at a time, same rule everywhere else.
-      const last = newBlocks.at(-1);
-      if (last) setActiveBlockId(last.id);
+      setActiveBlockId(newBlock.id);
     },
     [blocks, changeBlocks, setActiveBlockId],
   );
@@ -839,22 +842,24 @@ export default function ActivityEditorIsland({
     // end — no separate `BackButton` row above it any more, and no
     // pixel-perfect header-height math to keep in sync here). `astro-island`
     // (this component's own wrapper tag) renders as `display: contents`, so the
-    // flex chain passes straight through it. `lg:pr-16` reserves room for
-    // `EditorSideToolbar`'s `fixed right-3` icon rail (docked position) so
-    // it never overlaps the canvas/properties column — unchanged by the
-    // toolbar's own floating pass: that reserved space stays put regardless
-    // of whether the toolbar is currently docked or floating elsewhere, so
-    // undocking it never shifts this layout. Below `lg:` this is
-    // intentionally untouched — today's stacked, scrollable layout keeps
-    // working; a dedicated mobile layout comes later.
+    // flex chain passes straight through it. `EditorSideToolbar`'s own
+    // `fixed`/docked icon rail used to need an `lg:pr-16` gutter reserved
+    // here so it never overlapped the canvas — CANVAS EVERYWHERE (owner
+    // report: a white/grey strip ran down that reserved column): removed.
+    // The dotted canvas now fills the window's full body edge to edge, and
+    // the docked rail simply FLOATS OVER it (it is already `fixed`/
+    // `z-[60]`, portaled to `document.body` — overlapping content beneath
+    // it is the point, not a layout bug). Below `lg:` this is intentionally
+    // untouched — today's stacked, scrollable layout keeps working; a
+    // dedicated mobile layout comes later.
     <div
       data-testid="activity-editor-island"
       // Mobile layout pass: `pb-*` reserves room for `EditorSideToolbar`'s
       // own fixed bottom action bar there (safe-area aware, same pattern as
       // the practice page's sticky Comprobar bar) — cleared entirely at
-      // `lg:`, where that component goes back to its original floating
-      // rail and `lg:pr-16` (unchanged) reserves ITS docked slot instead.
-      className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0 lg:pr-16"
+      // `lg:`, where that component goes back to its own floating rail,
+      // which no longer reserves a side gutter (see above).
+      className="flex flex-col gap-4 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:flex-1 lg:gap-2 lg:pb-0"
     >
       {/* THE card (PART 6b polish, "double framing" fix — owner report:
           "se ve el marco de la ventana y encima el marco de la tarjeta"):
@@ -951,6 +956,7 @@ export default function ActivityEditorIsland({
               incompleteBlockId={incompleteTarget?.blockId ?? null}
               incompleteZoneId={incompleteTarget?.zoneId ?? null}
               incompleteMessage={incompleteMessage}
+              sideToolsPortalTarget={worksheetToolsSlot}
             />
 
             {!showUploader && (
@@ -961,7 +967,16 @@ export default function ActivityEditorIsland({
               />
             )}
 
-            {showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
+            {/* CANVAS EVERYWHERE (owner spec): the dotted canvas pattern
+                also fills this first-ever upload's own drop/loading area,
+                same as a worksheet block's empty state in `BlockList.tsx`,
+                so it reads as "the place to drop" before any block exists
+                yet. */}
+            {showUploader && (
+              <div className="canvas-dots relative flex min-h-80 flex-1 flex-col overflow-hidden rounded-lg bg-muted">
+                <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />
+              </div>
+            )}
           </div>
         ) : (
           // The active block's own editor, edge to edge — no margins, no
@@ -978,6 +993,7 @@ export default function ActivityEditorIsland({
             incompleteBlockId={incompleteTarget?.blockId ?? null}
             incompleteZoneId={incompleteTarget?.zoneId ?? null}
             incompleteMessage={incompleteMessage}
+            sideToolsPortalTarget={worksheetToolsSlot}
           />
         )}
 
@@ -996,9 +1012,6 @@ export default function ActivityEditorIsland({
       {blocks.length > 0 && (
         <EditorSideToolbar
           lang={lang}
-          blocks={blocks}
-          onGoToBlock={goToBlock}
-          onAddBlock={() => setAddingBlock(true)}
           preview={preview}
           onTogglePreview={() => setPreview((p) => !p)}
           canUndo={canUndo(history)}
@@ -1009,6 +1022,7 @@ export default function ActivityEditorIsland({
           saveDisabled={saveState === 'saving'}
           saveState={saveState}
           saveLabels={saveLabels}
+          onWorksheetToolsSlotReady={setWorksheetToolsSlot}
         />
       )}
 

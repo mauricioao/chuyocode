@@ -24,7 +24,14 @@
  * re-uploaded, and their results stay in `results`.
  */
 
-export type UploadTaskKind = 'pdf' | 'image';
+/**
+ * `'stitch'` (one-sheet redesign): several images/PDF pages combined
+ * client-side into one sheet BEFORE this task ever starts — always a
+ * single-item run (`items.length === 1`), same shape as a plain `'image'`
+ * run, just a different stage label (`WorksheetUploader.tsx`'s own
+ * `stageLabel`).
+ */
+export type UploadTaskKind = 'pdf' | 'image' | 'stitch';
 export type UploadTaskStage = 'preparing' | 'converting' | 'uploading';
 export type UploadTaskStatus = 'idle' | 'running' | 'done' | 'error' | 'cancelled';
 

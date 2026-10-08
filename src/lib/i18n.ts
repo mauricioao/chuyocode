@@ -489,6 +489,14 @@ export const UI_LABELS = {
         deleteConfirmBody: 'Esta acción no se puede deshacer.',
         deleteConfirmCancel: 'Cancelar',
         deleteConfirmAccept: 'Eliminar',
+        // "Cambiar imagen" (one-sheet redesign): replaces the per-block
+        // delete — with a single block, starting over IS replacing its
+        // image. The confirm step only shows when the worksheet already has
+        // zones (a new image would silently invalidate them).
+        changeImage: 'Cambiar imagen',
+        changeImageConfirmTitle: '¿Cambiar la imagen de esta hoja?',
+        changeImageConfirmBody: 'Las zonas dibujadas sobre la imagen actual se perderán.',
+        changeImageConfirmAccept: 'Cambiar',
         worksheetLabel: 'Hoja de trabajo',
         quizLabel: 'Preguntas',
         // Creator polish round 2.
@@ -659,6 +667,13 @@ export const UI_LABELS = {
         taskCancel: 'Cancelar',
         taskRetry: 'Reintentar',
         taskChooseAnother: 'Elegir otro archivo',
+        // Several images/PDF pages -> one sheet (one-sheet redesign): the
+        // task panel's own flat label while combining (no "N de M" to
+        // count — see `WorksheetUploader.tsx`'s own `stageLabel`), and the
+        // calm notice shown when more than `MAX_STITCH_SOURCES` (5) were
+        // picked.
+        taskCombiningPages: 'Combinando páginas…',
+        stitchTooManyPages: 'Puedes combinar hasta 5 páginas o imágenes en una sola hoja; se usarán las primeras 5.',
         errors: {
           unsupported_media_type: 'Ese tipo de archivo no está admitido.',
           empty_body: 'El archivo está vacío.',
@@ -668,6 +683,7 @@ export const UI_LABELS = {
           upload_limit_reached: 'Se alcanzó el límite de archivos subidos.',
           upload_failed: 'No se pudo subir el archivo. Inténtalo de nuevo.',
           pdf_failed: 'No se pudo procesar el PDF.',
+          stitch_too_large: 'La hoja combinada es demasiado grande para subirla. Intenta con menos páginas o imágenes más pequeñas.',
         },
         addZoneHint: 'Dibuja un recuadro sobre la imagen para agregar una respuesta.',
         zoneKindText: 'Texto',
@@ -1876,6 +1892,10 @@ export const UI_LABELS = {
         deleteConfirmBody: 'This cannot be undone.',
         deleteConfirmCancel: 'Cancel',
         deleteConfirmAccept: 'Delete',
+        changeImage: 'Change image',
+        changeImageConfirmTitle: 'Change this sheet’s image?',
+        changeImageConfirmBody: 'The zones drawn on the current image will be lost.',
+        changeImageConfirmAccept: 'Change',
         worksheetLabel: 'Worksheet',
         quizLabel: 'Questions',
         // Creator polish round 2.
@@ -1989,6 +2009,8 @@ export const UI_LABELS = {
         taskCancel: 'Cancel',
         taskRetry: 'Retry',
         taskChooseAnother: 'Choose another file',
+        taskCombiningPages: 'Combining pages…',
+        stitchTooManyPages: 'You can combine up to 5 pages or images into one sheet; the first 5 will be used.',
         errors: {
           unsupported_media_type: 'That file type is not supported.',
           empty_body: 'The file is empty.',
@@ -1998,6 +2020,7 @@ export const UI_LABELS = {
           upload_limit_reached: 'The upload limit was reached.',
           upload_failed: 'Could not upload the file. Try again.',
           pdf_failed: 'Could not process the PDF.',
+          stitch_too_large: 'The combined sheet is too large to upload. Try fewer pages or smaller images.',
         },
         addZoneHint: 'Draw a box over the image to add an answer.',
         zoneKindText: 'Text',

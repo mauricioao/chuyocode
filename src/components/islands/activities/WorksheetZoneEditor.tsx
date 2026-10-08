@@ -85,7 +85,16 @@
  * this component's analogue of the editor's "right panel". Arrow keys nudge
  * the selected zone; Delete/Backspace removes it.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
@@ -171,19 +180,27 @@ export interface WorksheetZoneEditorProps {
   incompleteZoneId?: string | null;
   incompleteMessage?: string | null;
   /**
-   * The thin active-sheet bar's own middle slot (owner decision 2026-10-07,
-   * "Barra fina debajo", build item 3: "no second toolbar row") — when
-   * given (and hydrated), this component's own zoom/tool row portals INTO
-   * it instead of rendering inline. `null`/omitted (every existing test in
-   * this file, and any other standalone render) keeps today's inline
-   * toolbar unchanged — a graceful fallback, same posture as
-   * `ActivityEditorIsland.tsx`'s own portal targets.
+   * The editor's floating SIDE toolbar's own worksheet-tools slot (one-sheet
+   * redesign, owner spec: "zona de las hojas... solo para el zoom" — the
+   * Zona/Mano tool toggle moves out of this canvas's own zoom pill and into
+   * that rail, alongside `BlockList.tsx`'s own rotate/"Cambiar imagen"
+   * controls). When given (and hydrated), the tool toggle portals INTO it;
+   * `null`/omitted (every existing test in this file, and any other
+   * standalone render) renders it inline instead — a graceful fallback,
+   * same posture as `ActivityEditorIsland.tsx`'s own portal targets.
    */
-  toolbarPortalTarget?: HTMLElement | null;
+  sideToolsPortalTarget?: HTMLElement | null;
+  /** Mirrors the live tool selection out to a caller rendering the toggle elsewhere (`sideToolsPortalTarget` above) — e.g. `BlockList.tsx`'s own `activeTool` state, used to show the pressed button there. */
+  onToolChange?: (tool: Tool) => void;
 }
 
 /** The two canvas tools (owner-approved design) — see the file header. */
-type Tool = 'zone' | 'hand';
+export type Tool = 'zone' | 'hand';
+
+/** Imperative handle (one-sheet redesign): lets a caller rendering the tool toggle elsewhere (`sideToolsPortalTarget`) still drive this canvas's own internal tool state. */
+export interface WorksheetZoneEditorHandle {
+  setTool: (tool: Tool) => void;
+}
 
 const HANDLES: Handle[] = ['nw', 'ne', 'sw', 'se'];
 const HANDLE_CURSOR: Record<Handle, string> = {
@@ -203,19 +220,23 @@ type DragMode =
   /** Mobile layout pass: a two-finger touch pinch/pan — see `touchGesture.ts`'s own header; all the actual math lives there, this is just the marker `handlePointerMove`/`handlePointerUp` branch on. */
   | { kind: 'touch-pinch' };
 
-export default function WorksheetZoneEditor({
-  lang,
-  image,
-  imageUrl,
-  zones,
-  selectedZoneId,
-  onZonesChange,
-  onSelectZone,
-  rotation = 0,
-  incompleteZoneId,
-  incompleteMessage = null,
-  toolbarPortalTarget = null,
-}: WorksheetZoneEditorProps) {
+const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneEditorProps>(function WorksheetZoneEditor(
+  {
+    lang,
+    image,
+    imageUrl,
+    zones,
+    selectedZoneId,
+    onZonesChange,
+    onSelectZone,
+    rotation = 0,
+    incompleteZoneId,
+    incompleteMessage = null,
+    sideToolsPortalTarget = null,
+    onToolChange,
+  }: WorksheetZoneEditorProps,
+  ref,
+) {
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -232,6 +253,17 @@ export default function WorksheetZoneEditor({
   const [isPanning, setIsPanning] = useState(false);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [tool, setTool] = useState<Tool>('zone');
+
+  // One-sheet redesign: a caller rendering the Zona/Mano toggle elsewhere
+  // (`sideToolsPortalTarget`) drives this canvas's tool via the imperative
+  // handle, and reads the CURRENT tool back via `onToolChange` (fired on
+  // every change, including the very first render, so a fresh mirror never
+  // starts stale) — `setTool` itself is a `useState` setter, already
+  // referentially stable, so the handle identity never needs to change.
+  useImperativeHandle(ref, () => ({ setTool }), []);
+  useEffect(() => {
+    onToolChange?.(tool);
+  }, [tool, onToolChange]);
 
   // Coherent loading states, item 6: a soft fade-in once the canvas image
   // actually decodes (the muted canvas background behind it already reads
@@ -1333,25 +1365,20 @@ export default function WorksheetZoneEditor({
     </div>
   ) : null;
 
-  // The zoom/tool row (owner decision 2026-10-07, "Barra fina debajo",
-  // build item 3: "no second toolbar row") — when the active-sheet bar
-  // hands this component a middle slot, this portals straight into it
-  // instead of rendering its own row here. `null` (every existing test in
-  // this file, and any other standalone caller) keeps the original inline
-  // card unchanged — a graceful fallback, same posture as
-  // `ActivityEditorIsland.tsx`'s own portal targets.
-  const zoomToolbar = (
+  // The zoom pill (one-sheet redesign, owner spec: "la zona de las hojas
+  // sería solo para el zoom... compacta y minimaliza esta zona que sea
+  // finita, pero realmente fina y estilizada" — a slim ~32px floating glass
+  // pill, ALWAYS rendered inline, absolutely positioned over the canvas
+  // itself (top-left of the viewport, see the render below) rather than in
+  // any bar: zoom only now — the Zona/Mano tool toggle moved to
+  // `toolCluster` below, and rotate/"Cambiar imagen" live in
+  // `BlockList.tsx`'s own portal into the side toolbar. "Ajustar" is now an
+  // icon-only button (aria-label + tooltip) instead of icon+visible text, to
+  // stay compact.
+  const zoomPill = (
     <div
-      className={
-        toolbarPortalTarget
-          ? // Portaled into the active-sheet bar's own middle slot (build item
-            // 3): that bar is a single horizontally-SCROLLING line on phones
-            // (never wraps — see `BlockList.tsx`'s own header), so this stays
-            // one line too, matching it, rather than wrapping internally.
-            'flex flex-nowrap items-center gap-1'
-          : 'mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1'
-      }
       data-testid="zoom-toolbar"
+      className="glass-floating pointer-events-auto absolute left-3 top-3 z-20 flex h-8 flex-nowrap items-center gap-1 rounded-(--radius-pill) px-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)"
     >
       <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
         <MinusIcon aria-hidden="true" />
@@ -1384,19 +1411,36 @@ export default function WorksheetZoneEditor({
         <PlusIcon aria-hidden="true" />
       </Button>
       <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-      <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
+      {/* "Ajustar" (owner spec): icon-only now, with its label as a tooltip
+          (`title`) + `aria-label` instead of visible text. */}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        aria-label={t.zoomFit}
+        title={t.zoomFit}
+        data-testid="zoom-fit"
+        onClick={handleZoomFit}
+      >
         <FrameCornersIcon aria-hidden="true" />
-        {t.zoomFit}
       </Button>
-      <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-      {/* Tool toggle (owner-approved design): icon-only, active tool in
-          brand yellow (`variant="default"`) — replaces the old
-          25/50/100/125 preset row and the "+ Zona" button entirely. The
-          Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
-          same weight) as the side toolbar's "Agregar bloque" button, to
-          match this tool's own crosshair cursor — see
-          `EditorSideToolbar.tsx`'s `toolbar-add-block`. Its own tooltip
-          stays "Zona (V)"; only the icon is shared. */}
+    </div>
+  );
+
+  // The Zona/Mano tool toggle (one-sheet redesign): moved OUT of the zoom
+  // pill above and into the floating SIDE toolbar, alongside
+  // `BlockList.tsx`'s own rotate/"Cambiar imagen" controls — portaled into
+  // `sideToolsPortalTarget` when given (and hydrated); `null`/omitted
+  // (every existing test in this file, and any other standalone render)
+  // renders it inline instead, absolutely positioned under the zoom pill —
+  // a graceful fallback, same posture as `ActivityEditorIsland.tsx`'s own
+  // portal targets. Same markup/testids either way, so callers querying
+  // `tool-zone`/`tool-hand` never need to know which.
+  const toolCluster = (
+    <div data-testid="tool-cluster" className="flex flex-nowrap items-center gap-1">
+      {/* The Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
+          same weight) its own tooltip ("Zona (V)") already named before
+          this pass. */}
       <Button
         type="button"
         size="icon-sm"
@@ -1451,7 +1495,11 @@ export default function WorksheetZoneEditor({
       <div aria-live="polite" role="status" className="sr-only" data-testid="worksheet-live-region">
         {liveAnnouncement}
       </div>
-      {toolbarPortalTarget && hydrated ? createPortal(zoomToolbar, toolbarPortalTarget) : zoomToolbar}
+      {/* The Zona/Mano toggle has no inline home of its own any more once a
+          real side-toolbar slot exists — portaled there instead (see
+          `toolCluster`'s own header). Rendered here, OUTSIDE the viewport,
+          only as the standalone/pre-hydration fallback. */}
+      {sideToolsPortalTarget && hydrated ? createPortal(toolCluster, sideToolsPortalTarget) : null}
 
       <div
         ref={viewportRef}
@@ -1475,6 +1523,19 @@ export default function WorksheetZoneEditor({
         // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
         className="canvas-dots relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
+          {zoomPill}
+          {/* Standalone/pre-hydration fallback for the tool toggle — see
+              `toolCluster`'s own header. Positioned just under the zoom
+              pill so both stay reachable without a real side-toolbar slot
+              (every existing test in this file, and any other standalone
+              render). */}
+          {!(sideToolsPortalTarget && hydrated) && (
+            <div className="pointer-events-none absolute left-3 top-14 z-20">
+              <div className="pointer-events-auto glass-floating flex h-8 items-center rounded-(--radius-pill) px-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)">
+                {toolCluster}
+              </div>
+            </div>
+          )}
           <div
             ref={containerRef}
             data-testid="zone-canvas"
@@ -1692,4 +1753,6 @@ export default function WorksheetZoneEditor({
       })()}
     </div>
   );
-}
+});
+
+export default WorksheetZoneEditor;

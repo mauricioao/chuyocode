@@ -2,12 +2,21 @@
  * EditorSideToolbar — the editor's icon rail (creator polish round 2, owner
  * request #7; FLOATING in the "floating side toolbar" pass). Everything
  * that used to sit scattered across the top bar (preview toggle, save
- * button, save status) plus the sheet-switcher popover and undo/redo now
- * live here, keeping the top bar down to just title + level (owner request
- * #1). "Colapsar todos"/"Expandir todos" are gone (owner decision
- * 2026-10-07, "Barra fina debajo"): they only ever served the accordion
- * layout the active-sheet bar replaced — there is no longer a list of
- * collapsed siblings to expand or collapse.
+ * button, save status) plus undo/redo live here, keeping the top bar down to
+ * just title + level (owner request #1). "Colapsar todos"/"Expandir todos"
+ * are gone (owner decision 2026-10-07, "Barra fina debajo"): they only ever
+ * served the accordion layout the active-sheet bar replaced — there is no
+ * longer a list of collapsed siblings to expand or collapse.
+ *
+ * ONE BLOCK PER ACTIVITY (one-sheet redesign, owner spec 2026-10-08): the
+ * sheet-switcher popover and "Agregar bloque" are GONE — a new activity
+ * never has a second block to switch to or add, and a legacy multi-block one
+ * (backward compatibility only) gets a minimal ‹ n/N › switcher INSIDE
+ * `BlockList.tsx` instead, never here. `worksheetToolsSlotRef` below is
+ * their replacement: the active WORKSHEET block's own Zona/Mano tool toggle,
+ * rotate, and "Cambiar imagen" controls (all owned by `WorksheetZoneEditor.tsx`/
+ * `BlockList.tsx`) portal straight into it — this component has no idea what
+ * they are, only where they go.
  *
  * Every button is icon-only with an accessible `aria-label` (also its
  * `title`, so a mouse user gets a native tooltip for free) — no icon here
@@ -72,8 +81,6 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ListBulletsIcon } from '@phosphor-icons/react/dist/ssr/ListBullets';
-import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
 import { EyeSlashIcon } from '@phosphor-icons/react/dist/ssr/EyeSlash';
 import { ArrowUUpLeftIcon } from '@phosphor-icons/react/dist/ssr/ArrowUUpLeft';
@@ -84,7 +91,6 @@ import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVerti
 import { PushPinIcon } from '@phosphor-icons/react/dist/ssr/PushPin';
 import { PushPinSlashIcon } from '@phosphor-icons/react/dist/ssr/PushPinSlash';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block } from '@/lib/activities/blocks';
 import type { AutosaveStatus } from '@/lib/activities/autosave';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useHydrated } from '@/hooks/useHydrated';
@@ -98,7 +104,6 @@ import {
   type Point,
   type ToolbarSize,
 } from '@/lib/activities/toolbarPosition';
-import { blockDisplayName } from './BlockList';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -180,9 +185,6 @@ function measureSize(el: HTMLElement | null): ToolbarSize {
 
 export interface EditorSideToolbarProps {
   lang: Lang;
-  blocks: Block[];
-  onGoToBlock: (blockId: string) => void;
-  onAddBlock: () => void;
   preview: boolean;
   onTogglePreview: () => void;
   canUndo: boolean;
@@ -193,6 +195,14 @@ export interface EditorSideToolbarProps {
   saveDisabled: boolean;
   saveState: AutosaveStatus | 'idle';
   saveLabels: SaveStatusLabels;
+  /**
+   * One-sheet redesign: the DOM node the active WORKSHEET block's own tool/
+   * rotate/"Cambiar imagen" controls portal into (`BlockList.tsx`/
+   * `WorksheetZoneEditor.tsx` own this content; this component only exposes
+   * where it goes). Fired with `null` on unmount, same ref-callback shape
+   * `ActivityEditorIsland.tsx`'s own portal targets already use.
+   */
+  onWorksheetToolsSlotReady?: (el: HTMLDivElement | null) => void;
 }
 
 /** A single icon button in the rail — factored out so every entry gets the same shape/spacing. */
@@ -231,91 +241,6 @@ function ToolbarIconButton({
     >
       {children}
     </Button>
-  );
-}
-
-/**
- * The sheet-switcher popover (formerly "block index" — kept the same name
- * and test ids; owner decision 2026-10-07, "Barra fina debajo": it already
- * behaved exactly like a sheet switcher — lists every block's display
- * name, click to make it the active one). No scrolling involved any more:
- * `ActivityEditorIsland.tsx`'s `goToBlock` just activates the chosen block.
- */
-function BlockIndexPopover({
-  lang,
-  blocks,
-  onGoToBlock,
-  /** Mobile layout pass: the bottom action bar opens this UPWARD (above the trigger) instead of sideways — a `right-full` popover from a bottom-edge bar would run off the left/bottom of a narrow screen. */
-  openUpward = false,
-}: {
-  lang: Lang;
-  blocks: Block[];
-  onGoToBlock: (blockId: string) => void;
-  openUpward?: boolean;
-}) {
-  const t = UI_LABELS[lang].activities.editor;
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const close = useCallback(() => setOpen(false), []);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') close();
-    }
-    function onPointerDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
-    }
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onPointerDown);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onPointerDown);
-    };
-  }, [open, close]);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <ToolbarIconButton label={t.blockIndex} testId="block-index-trigger" onClick={() => setOpen((v) => !v)}>
-        <ListBulletsIcon aria-hidden="true" />
-      </ToolbarIconButton>
-      {open && (
-        <div
-          data-testid="block-index-popover"
-          role="menu"
-          className={
-            openUpward
-              ? 'absolute bottom-full left-0 mb-2 w-56 rounded-md border border-border bg-popover p-2 shadow-lg'
-              : 'absolute right-full top-0 mr-2 w-56 rounded-md border border-border bg-popover p-2 shadow-lg'
-          }
-        >
-          <p className="mb-1 px-2 text-xs font-medium text-muted-foreground">{t.blockIndexTitle}</p>
-          {blocks.length === 0 ? (
-            <p className="px-2 py-1 text-sm text-muted-foreground">{t.blocksEmpty}</p>
-          ) : (
-            <ul className="flex flex-col">
-              {blocks.map((block, index) => (
-                <li key={block.id}>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-testid={`block-index-item-${block.id}`}
-                    onClick={() => {
-                      onGoToBlock(block.id);
-                      close();
-                    }}
-                    className="w-full truncate rounded px-2 py-1.5 text-left text-sm text-foreground hover:bg-muted"
-                  >
-                    {blockDisplayName(block, index, t.blockDefaultNamePrefix)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -362,9 +287,6 @@ function ShortcutsDialog({ lang }: { lang: Lang }) {
 
 export default function EditorSideToolbar({
   lang,
-  blocks,
-  onGoToBlock,
-  onAddBlock,
   preview,
   onTogglePreview,
   canUndo,
@@ -375,6 +297,7 @@ export default function EditorSideToolbar({
   saveDisabled,
   saveState,
   saveLabels,
+  onWorksheetToolsSlotReady,
 }: EditorSideToolbarProps) {
   const t = UI_LABELS[lang].activities.editor;
 
@@ -694,10 +617,12 @@ export default function EditorSideToolbar({
       role="toolbar"
       className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1 overflow-x-auto border-t border-border bg-card/95 px-2 py-1.5 shadow-lg backdrop-blur-sm pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
     >
-      <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} openUpward />
-      <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
-        <PlusIcon aria-hidden="true" />
-      </ToolbarIconButton>
+      {/* One-sheet redesign: the active worksheet block's own Zona/Mano/
+          rotate/"Cambiar imagen" controls portal in here — empty (and
+          therefore invisible, `empty:hidden`) for a quiz block or while
+          nothing is selected yet. Replaces the old sheet-switcher popover
+          and "Agregar bloque" — see this file's own header. */}
+      <div ref={onWorksheetToolsSlotReady} data-testid="worksheet-tools-slot" className="empty:hidden flex items-center gap-1" />
 
       <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
 
@@ -821,10 +746,13 @@ export default function EditorSideToolbar({
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 
-      <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} />
-      <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
-        <PlusIcon aria-hidden="true" />
-      </ToolbarIconButton>
+      {/* One-sheet redesign — see this file's own header and the mobile
+          bar's matching slot above. */}
+      <div
+        ref={onWorksheetToolsSlotReady}
+        data-testid="worksheet-tools-slot"
+        className="empty:hidden flex flex-col items-center gap-1"
+      />
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 

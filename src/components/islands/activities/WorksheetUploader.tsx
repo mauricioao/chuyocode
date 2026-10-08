@@ -44,14 +44,27 @@
  * page converts/uploads — not revoked until the reasons above, so they're
  * still good at that point.
  *
+ * SEVERAL IMAGES, OR SEVERAL PDF PAGES, -> ONE SHEET (one-sheet redesign,
+ * owner spec 2026-10-08): dropping/picking more than one image file, or
+ * confirming more than one PDF page, no longer produces one block PER page
+ * — `sheetStitcher.ts` stitches them client-side, top to bottom in the
+ * chosen order, into ONE combined image, capped at `MAX_STITCH_SOURCES` (5)
+ * with a calm toast when more were picked, retrying at a smaller width/
+ * quality if the stitched result would not fit the server's own upload
+ * limit. A single image/page skips stitching entirely (nothing to combine)
+ * and keeps its original, simpler path. Either way `onComplete` now always
+ * hands back exactly ONE image.
+ *
  * MANUAL/PLAYWRIGHT CHECK for the real canvas/`<img>`/`pdfjs-dist` decoding
  * (jsdom cannot meaningfully run it) — same posture as
  * `imagePipeline.ts`'s own header. Automated tests here mock the pipeline
- * (including `renderPdfThumbnails`/`openPdfForConversion`) and `fetch`, and
- * cover this component's OWN decisions: routing, thumbnail selection,
- * progress, error mapping, and the shape of what it hands back.
+ * (including `renderPdfThumbnails`/`openPdfForConversion`) and the stitcher's
+ * own `stitchSourcesWithinSizeLimit`, and `fetch`, and cover this
+ * component's OWN decisions: routing, thumbnail selection, progress, error
+ * mapping, and the shape of what it hands back.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { UploadSimpleIcon } from '@phosphor-icons/react/dist/ssr/UploadSimple';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
@@ -60,11 +73,13 @@ import {
   convertImageToWebp,
   renderPdfThumbnails,
   openPdfForConversion,
+  MAX_UPLOAD_BYTES,
   type PdfPageConverter,
   MAX_PDF_PAGES,
   MAX_PDF_THUMBNAIL_PAGES,
   PDF_THUMBNAIL_WIDTH,
 } from '@/lib/activities/imagePipeline';
+import { capStitchSources, stitchSourcesWithinSizeLimit, type StitchDrawSource } from '@/lib/activities/sheetStitcher';
 import { createUploadTask, type UploadTask, type UploadTaskKind, type UploadTaskState } from '@/lib/activities/uploadTask';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,10 +136,14 @@ async function uploadWebp(blob: Blob, signal?: AbortSignal): Promise<UploadedIma
   return { path: data.path, width: data.width, height: data.height };
 }
 
-/** Builds the task panel's stage label, e.g. "Convirtiendo página 2 de 5" / "Optimizando imagen 1 de 1". */
+/** Builds the task panel's stage label, e.g. "Convirtiendo página 2 de 5" / "Optimizando imagen 1 de 1" / "Combinando páginas…". */
 function stageLabel(t: (typeof UI_LABELS)[Lang]['activities']['worksheet'], state: UploadTaskState): string {
   if (state.stage === 'preparing') return t.taskPreparingPdf;
   if (!state.stage) return '';
+  // Stitching several images/PDF pages into one sheet (one-sheet redesign):
+  // always a single pseudo-item, so the usual "N de M" phrasing has
+  // nothing meaningful to count — one flat label for the whole combine step.
+  if (state.kind === 'stitch') return t.taskCombiningPages;
   const pageNumber = state.pageNumber ?? 0;
   if (state.kind === 'pdf') {
     const prefix = state.stage === 'converting' ? t.taskConvertingPage : t.taskUploadingPage;
@@ -226,6 +245,35 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
     [beginTask],
   );
 
+  /**
+   * Several images dropped/picked at once (one-sheet redesign): stitched
+   * into ONE sheet instead of becoming one block each. A single file skips
+   * this entirely — `handleFiles` below routes it to `handleImageFile`
+   * instead, which needs no stitching.
+   */
+  const handleImageFiles = useCallback(
+    (files: File[]) => {
+      const { sources: capped, truncated } = capStitchSources(files);
+      if (truncated) toast(t.stitchTooManyPages);
+      beginTask('stitch', [1], new Map(), async (_pageNumber, signal) => {
+        const bitmaps = await Promise.all(capped.map((file) => createImageBitmap(file)));
+        try {
+          if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+          const sources: StitchDrawSource[] = bitmaps.map((bitmap) => ({
+            image: bitmap,
+            size: { width: bitmap.width, height: bitmap.height },
+          }));
+          const stitched = await stitchSourcesWithinSizeLimit(sources, MAX_UPLOAD_BYTES);
+          if (!stitched) throw new Error('stitch_too_large');
+          return stitched;
+        } finally {
+          bitmaps.forEach((bitmap) => bitmap.close());
+        }
+      });
+    },
+    [beginTask, t.stitchTooManyPages],
+  );
+
   /** Shared by the thumbnail grid's confirm and the text-field fallback's confirm — only how `pages` (and `thumbnails`, when available) were gathered differs. */
   const handlePdfPagesConfirm = useCallback(
     async (file: File, pages: number[], thumbnails: Map<number, string>) => {
@@ -244,9 +292,38 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
       }
       converterRef.current = converter;
 
-      beginTask('pdf', validated, thumbnails, (pageNumber, signal) => converter.convertPage(pageNumber, signal));
+      // A single confirmed page needs no stitching — same simple path as
+      // before this pass. Several pages (one-sheet redesign) are combined
+      // into ONE sheet instead of becoming one block each.
+      if (validated.length <= 1) {
+        beginTask('pdf', validated, thumbnails, (pageNumber, signal) => converter.convertPage(pageNumber, signal));
+        return;
+      }
+
+      const { sources: cappedPages, truncated } = capStitchSources(validated);
+      if (truncated) toast(t.stitchTooManyPages);
+      beginTask('stitch', [1], new Map(), async (_pageNumber, signal) => {
+        const pageBlobs: Blob[] = [];
+        for (const pageNumber of cappedPages) {
+          if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+          pageBlobs.push(await converter.convertPage(pageNumber, signal));
+        }
+        const bitmaps = await Promise.all(pageBlobs.map((blob) => createImageBitmap(blob)));
+        try {
+          if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+          const sources: StitchDrawSource[] = bitmaps.map((bitmap) => ({
+            image: bitmap,
+            size: { width: bitmap.width, height: bitmap.height },
+          }));
+          const stitched = await stitchSourcesWithinSizeLimit(sources, MAX_UPLOAD_BYTES);
+          if (!stitched) throw new Error('stitch_too_large');
+          return stitched;
+        } finally {
+          bitmaps.forEach((bitmap) => bitmap.close());
+        }
+      });
     },
-    [errorMessage, beginTask],
+    [errorMessage, beginTask, t.stitchTooManyPages],
   );
 
   const cancelTask = useCallback(() => {
@@ -329,23 +406,47 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
     [handleImageFile, errorMessage, revokeThumbnailUrls],
   );
 
+  /**
+   * Routes a drop/pick that may carry MULTIPLE files (one-sheet redesign) —
+   * several plain images stitch into one sheet (`handleImageFiles`); a
+   * single file (image or PDF) keeps today's simpler `handleFile` path.
+   * Several PDFs at once, or a mix of images and PDFs, has no defined combine
+   * behaviour (the owner's two named cases are "several images" OR "several
+   * PDF pages", never mixed file types) — reported as unsupported rather
+   * than guessing which file to use.
+   */
+  const handleFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+      if (files.length === 1) {
+        handleFile(files[0]);
+        return;
+      }
+      const allImages = files.every((file) => routeFileType(file) === 'image');
+      if (!allImages) {
+        setStatus({ kind: 'error', message: errorMessage('unsupported_media_type') });
+        return;
+      }
+      handleImageFiles(files);
+    },
+    [handleFile, handleImageFiles, errorMessage],
+  );
+
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       setDragActive(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) handleFile(file);
+      handleFiles(Array.from(e.dataTransfer.files ?? []));
     },
-    [handleFile],
+    [handleFiles],
   );
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
+      handleFiles(Array.from(e.target.files ?? []));
       e.target.value = '';
     },
-    [handleFile],
+    [handleFiles],
   );
 
   if (status.kind === 'loading-thumbnails') {
@@ -501,12 +602,17 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
   }
 
   return (
-    // The empty-state drop zone — reused both here (the "+ Agregar bloque"
-    // flow) and as a brand-new worksheet block's own canvas-area empty state
-    // (`BlockList.tsx`, creator polish round 4, owner feedback #2): a large,
-    // centered call to action with the upload illustration, one primary
-    // button, and a muted formats/size hint — the whole area is the drop
-    // zone, with a visible dashed brand-yellow border while dragging over.
+    // BIG DROP ZONE (owner spec: "esa área también agrándala, un usuario
+    // normalmente cree que arrastrando al plomo ya debería cargar"): the
+    // WHOLE available space is the drop target now, not a small bordered
+    // card — reused both here (the first-ever upload flow) and as a
+    // brand-new/replaced worksheet block's own canvas-area empty state
+    // (`BlockList.tsx`/`ActivityEditorIsland.tsx`, which wrap this in the
+    // same dotted `.canvas-dots` surface the filled canvas uses — CANVAS
+    // EVERYWHERE, owner spec). No border/background of its own at rest (the
+    // ambient canvas already reads as "this is where you work"); dragging
+    // over highlights the ENTIRE area with a dashed border + a soft tint,
+    // never just a small inner card.
     <div
       data-testid="worksheet-uploader"
       onDragOver={(e) => {
@@ -515,20 +621,25 @@ export default function WorksheetUploader({ lang, onComplete }: WorksheetUploade
       }}
       onDragLeave={() => setDragActive(false)}
       onDrop={handleDrop}
-      className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-theme duration-theme ${
-        dragActive ? 'border-accent-ink bg-primary/5' : 'border-border'
+      className={`flex min-h-80 flex-1 flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed p-10 text-center transition-theme duration-theme ${
+        dragActive ? 'border-accent-ink bg-primary/10' : 'border-transparent'
       }`}
     >
-      <UploadSimpleIcon weight="duotone" size={48} className="text-accent-ink" aria-hidden="true" />
-      <p className="text-sm font-medium text-foreground">
+      <UploadSimpleIcon weight="duotone" size={64} className="text-accent-ink" aria-hidden="true" />
+      <p className="text-base font-medium text-foreground">
         {dragActive ? t.uploadDragActive : t.uploadTitle}
       </p>
-      <p className="text-xs text-muted-foreground">{t.uploadHint}</p>
+      <p className="text-sm text-muted-foreground">{t.uploadHint}</p>
       <input
         ref={inputRef}
         type="file"
         data-testid="worksheet-file-input"
         accept="image/jpeg,image/png,image/webp,application/pdf"
+        // Several images at once (one-sheet redesign) stitch into one
+        // sheet — see `handleFiles`'s own header. A PDF is still picked one
+        // file at a time; its own MULTIPLE pages are chosen afterward, in
+        // the thumbnail grid/text field below.
+        multiple
         className="sr-only"
         onChange={handleInputChange}
         aria-label={t.uploadButton}
