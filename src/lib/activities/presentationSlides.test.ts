@@ -238,6 +238,46 @@ describe('buildPresentationSlides', () => {
     ]);
     expect(slides.map((s) => s.blockId)).toEqual(['w1', 'w1', 'q1', 'w2', 'w2', 'w2', 'q2']);
   });
+
+  it('builds ONE "match" slide for a template: match block, carrying every pair (build item 5)', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      name: 'Animales',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+          { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+          { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+        ],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(slides).toEqual([
+      {
+        kind: 'match',
+        blockId: 'q1',
+        name: 'Animales',
+        pairs: [
+          { id: 's1', prompt: 'dog', answer: 'perro' },
+          { id: 's2', prompt: 'cat', answer: 'gato' },
+          { id: 's3', prompt: 'bird', answer: 'pájaro' },
+        ],
+      },
+    ]);
+  });
+
+  it('skips an incomplete match block (every pair still unanswered), contributing no slide', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: [] }] },
+    };
+    expect(buildPresentationSlides([block])).toEqual([]);
+  });
 });
 
 describe('revealableSlides', () => {
@@ -248,6 +288,10 @@ describe('revealableSlides', () => {
 
   it('is empty for an empty deck', () => {
     expect(revealableSlides([])).toEqual([]);
+  });
+
+  it('a "match" slide is revealable, same as "question"', () => {
+    expect(revealableSlides([{ kind: 'match', blockId: 'q1', pairs: [] }])).toEqual([true]);
   });
 });
 

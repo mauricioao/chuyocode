@@ -30,6 +30,7 @@ import { orderZonesForReading } from './zoneGeometry';
 import { rotatedSize } from './canvasViewport';
 import { zoneExceedsMaxZoom, type Size } from './presentationCamera';
 import { STAGE_SAFE_WIDTH, STAGE_SAFE_HEIGHT } from './fitStage';
+import { deriveGameItems, type GameItem } from './gameModes';
 
 /** One question slide's own data: the slot to show, the payload that resolves its pool (if any), and the block it came from. */
 export interface PresentationQuestion {
@@ -138,6 +139,15 @@ export function promptFontSize(label: string): number {
  *
  *  - `'question'` — unchanged from v1: one quiz slot, reveal shows the
  *    correct option/answer.
+ *  - `'match'` (build item 5, "Match in presentation"): a `template:
+ *    'match'` quiz block contributes ONE slide for its whole pair list
+ *    instead of one slide per pair — the simplest shape that still works on
+ *    a projector (owner build item 5): every prompt listed at once, reveal
+ *    shows every answer at once, no drag gesture needed in front of a
+ *    class. `pairs` reuses `gameModes.ts`'s own {@link GameItem} (same
+ *    `{ id, prompt, answer }` the practice board already derives), so answer
+ *    resolution (plain text or a pool item's display text) can never drift
+ *    between the two.
  *  - `'worksheet-overview'` — the whole page, zones numbered, NEVER
  *    revealable (a plain glance, not a question).
  *  - `'worksheet-zone'` — one answer zone, in reading order; unrevealed it
@@ -146,6 +156,7 @@ export function promptFontSize(label: string): number {
  */
 export type PresentationSlide =
   | { kind: 'question'; blockId: string; payload: Payload; slot: Slot }
+  | { kind: 'match'; blockId: string; name?: string; pairs: GameItem[] }
   | {
       kind: 'worksheet-overview';
       blockId: string;
@@ -178,6 +189,18 @@ export function buildPresentationSlides(blocks: readonly Block[]): PresentationS
   const slides: PresentationSlide[] = [];
   for (const block of blocks) {
     if (block.type === 'quiz') {
+      if (block.template === 'match') {
+        // One combined slide for the whole pair list — see this module's
+        // own `PresentationSlide` doc on `'match'`. An incomplete match
+        // (fewer than `gameModes.ts`'s own `MIN_MATCH_ITEMS`, or every pair
+        // still unanswered) derives zero items and contributes nothing,
+        // same as an empty Básico quiz.
+        const pairs = deriveGameItems(block.payload);
+        if (pairs.length > 0) {
+          slides.push({ kind: 'match', blockId: block.id, name: block.name, pairs });
+        }
+        continue;
+      }
       for (const slot of block.payload.slots) {
         slides.push({ kind: 'question', blockId: block.id, payload: block.payload, slot });
       }

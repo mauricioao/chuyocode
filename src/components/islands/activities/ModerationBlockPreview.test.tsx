@@ -121,3 +121,32 @@ describe('ModerationBlockPreview — quiz', () => {
     expect(screen.getByTestId('moderation-slot-s1').textContent).not.toContain('perro');
   });
 });
+
+describe('ModerationBlockPreview — "Une las parejas" (build item 5, match)', () => {
+  const MATCH: Block = {
+    id: 'q2',
+    type: 'quiz',
+    template: 'match',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      ],
+    },
+  };
+
+  it('lists every pair by its prompt, without the answer, when showAnswers is false', () => {
+    render(<ModerationBlockPreview lang="es" block={MATCH} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-pair-s1').textContent).toContain('dog');
+    expect(screen.getByTestId('moderation-pair-s1').textContent).not.toContain('perro');
+    expect(screen.getByTestId('moderation-pair-s2').textContent).toContain('cat');
+  });
+
+  it('shows "prompt → answer" for every pair when showAnswers is true', () => {
+    render(<ModerationBlockPreview lang="es" block={MATCH} resolveImageUrl={resolveImageUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-pair-s1').textContent).toContain('dog');
+    expect(screen.getByTestId('moderation-pair-s1').textContent).toContain('perro');
+    expect(screen.getByTestId('moderation-pair-s2').textContent).toContain('gato');
+  });
+});

@@ -96,10 +96,16 @@ const levelLabels = UI_LABELS[lang].english.levels;
 const showAnswers = Astro.url.searchParams.get('respuestas') === '1';
 const answersHref = `${Astro.url.pathname}?respuestas=1`;
 
-/** This block's own label — the author's own `block.name`, or a positional/type default. Same rule `ActivityPracticeIsland`'s own `tabLabel` uses for the practice tabs. */
+/**
+ * This block's own label — the author's own `block.name`, or a positional/
+ * type default. Same rule `ActivityPracticeIsland`'s own `tabLabel` uses for
+ * the practice tabs, plus `template === 'match'` (build item 5): "Básico"
+ * would misname a pair list that has no Básico questions in it at all.
+ */
 function blockLabel(block: Block, worksheetPosition: number): string {
   if (block.name) return block.name;
-  return block.type === 'worksheet' ? `${t.worksheetLabel} ${worksheetPosition + 1}` : t.quizLabel;
+  if (block.type === 'worksheet') return `${t.worksheetLabel} ${worksheetPosition + 1}`;
+  return block.template === 'match' ? t.matchLabel : t.quizLabel;
 }
 
 interface LabeledBlock {
@@ -227,6 +233,26 @@ function questionText(slot: Slot): string {
             );
           }
 
+          // "Une las parejas" (build item 5, "Match in print"): a numbered
+          // fill-in-the-blank list makes no sense for a pair list — this
+          // prints a clean two-column worksheet instead, prompt on the
+          // left and a blank line (to write the answer) on the right.
+          if (block.template === 'match') {
+            return (
+              <section data-testid={`print-block-${block.id}`} class="print-quiz">
+                <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+                <div data-testid={`print-match-${block.id}`} class="flex flex-col gap-2 text-black">
+                  {block.payload.slots.map((slot) => (
+                    <div data-testid={`print-match-pair-${slot.id}`} class="flex items-baseline gap-4">
+                      <span class="flex-1">{slot.label}</span>
+                      <span class="flex-1 border-b border-black/40">&nbsp;</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          }
+
           return (
             <section data-testid={`print-block-${block.id}`} class="print-quiz">
               <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
@@ -273,6 +299,17 @@ function questionText(slot: Slot): string {
                       </li>
                     ))}
                   </ol>
+                ) : block.template === 'match' ? (
+                  // Same clean two-column shape as the main content above,
+                  // this time filled in: prompt | answer.
+                  <div data-testid={`print-answers-match-${block.id}`} class="flex flex-col gap-1 text-sm text-black">
+                    {block.payload.slots.map((slot) => (
+                      <div data-testid={`print-answer-match-${slot.id}`} class="flex items-baseline gap-4">
+                        <span class="flex-1">{slot.label}</span>
+                        <span class="flex-1 font-medium">{quizSlotAnswerSummary(block.payload, slot)}</span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <ol class="flex flex-col gap-1 text-sm text-black">
                     {block.payload.slots.map((slot, i) => (

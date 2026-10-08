@@ -62,6 +62,27 @@ const WORKSHEET_ACTIVITY = {
   ],
 };
 
+const MATCH_ACTIVITY = {
+  id: 'match-1',
+  title: 'Une las parejas: animales',
+  level: 'A1',
+  blocks: [
+    {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+          { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+          { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+        ],
+      },
+    },
+  ],
+};
+
 describe('GET /[lang]/ingles/actividades/[id]/imprimir — routing', () => {
   it('404s for an unsupported lang segment', async () => {
     const res = await render('https://chuyocode.test/fr/ingles/actividades/abc/imprimir', {
@@ -207,5 +228,40 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — answer key (?respuest
     });
     const html = await res.text();
     expect(html).not.toContain('data-testid="print-include-answers"');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Une las parejas" (build item 5)', () => {
+  it('prints a clean two-column pair list, no numbered fill-in-the-blank', async () => {
+    activityResult.value = MATCH_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/match-1/imprimir', {
+      params: { lang: 'es', id: 'match-1' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-match-q1"');
+    expect(html).toContain('data-testid="print-match-pair-s1"');
+    expect(html).toContain('data-testid="print-match-pair-s2"');
+    expect(html).toContain('data-testid="print-match-pair-s3"');
+    expect(html).toContain('>dog<');
+    expect(html).toContain('>cat<');
+    // No blank marker/underscore question text for a pair — that shape is
+    // Básico-only.
+    expect(html).not.toContain('________');
+    // The right-hand column is a blank line, not the answer, outside the
+    // answer key.
+    expect(html).not.toContain('perro');
+  });
+
+  it('shows prompt and answer side by side in the answer key', async () => {
+    activityResult.value = MATCH_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/match-1/imprimir?respuestas=1', {
+      params: { lang: 'es', id: 'match-1' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-answers-match-q1"');
+    expect(html).toContain('data-testid="print-answer-match-s1"');
+    expect(html).toContain('perro');
+    expect(html).toContain('gato');
+    expect(html).toContain('pájaro');
   });
 });

@@ -73,6 +73,27 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
     );
   }
 
+  // "Une las parejas" (build item 5, "Match in moderation"): a match block
+  // is a list of PAIRS, so each row reads as one — "prompt → answer" — the
+  // same `showAnswers` toggle still decides whether the answer half shows
+  // at all, exactly as it does for every other block kind on this page.
+  if (block.template === 'match') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {block.payload.slots.map((slot) => (
+            <li key={slot.id} data-testid={`moderation-pair-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
+              <span className="font-medium text-foreground">{slot.label}</span>
+              {showAnswers && (
+                <span className="text-muted-foreground"> → {quizSlotAnswerSummary(block.payload, slot)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
       <ul className="flex flex-col gap-2">

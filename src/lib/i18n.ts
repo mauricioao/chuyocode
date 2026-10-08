@@ -1144,6 +1144,10 @@ export const UI_LABELS = {
         explanationLabel: 'Por qué',
         worksheetLabel: 'Worksheet',
         quizLabel: 'Básico',
+        // "Une las parejas" in print (build item 5): the block heading above
+        // its pair list — reads oddly as "Básico" (the Google-Forms-style
+        // quiz label) when the block is actually a pair list.
+        matchLabel: 'Une las parejas',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -1191,6 +1195,11 @@ export const UI_LABELS = {
         liveSummary: 'Resumen',
         liveRevealed: 'Respuesta revelada',
         liveWorksheetOverview: 'Vista general de la hoja',
+        // "Une las parejas" in presentation mode (build item 5): one slide
+        // lists every pair's prompt; "Mostrar respuesta" reveals every
+        // answer at once — the simplest shape a teacher can run with a
+        // class projected on a screen, no drag gesture needed.
+        matchTitle: 'Une las parejas',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -2369,6 +2378,7 @@ export const UI_LABELS = {
         explanationLabel: 'Why',
         worksheetLabel: 'Worksheet',
         quizLabel: 'Basic',
+        matchLabel: 'Match the pairs',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
@@ -2399,6 +2409,7 @@ export const UI_LABELS = {
         liveSummary: 'Summary',
         liveRevealed: 'Answer revealed',
         liveWorksheetOverview: 'Worksheet overview',
+        matchTitle: 'Match the pairs',
       },
     },
     notFound: {

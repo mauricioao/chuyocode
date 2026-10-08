@@ -405,6 +405,7 @@ export default function PresentationIsland({
           {currentSlide?.kind === 'question' && (
             <QuestionSlide question={currentSlide} revealed={state.revealed} t={t} />
           )}
+          {currentSlide?.kind === 'match' && <MatchSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {isSummarySlide(state) && (
             <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
           )}
@@ -637,6 +638,62 @@ function QuestionSlide({
           {slot.explanation}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * "Une las parejas" in presentation mode (build item 5, "Match in
+ * presentation") — ONE slide for the whole pair list, not one per pair
+ * (unlike Básico's `QuestionSlide`, one per question): every prompt listed
+ * at once in a calm, large-type column; "Mostrar respuesta" reveals every
+ * answer at once, right beside its own prompt. The simplest shape that
+ * still runs well on a projector (owner build item 5) — no drag gesture in
+ * front of a class, and it reuses the exact `GameItem`s the practice board
+ * itself derives, so a pair can never read differently here.
+ */
+function MatchSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'match' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-match-${slide.blockId}`}
+      className="flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-6 overflow-y-auto py-6"
+    >
+      <p
+        style={{ fontSize: 44 }}
+        className="text-center font-display font-bold leading-tight text-foreground"
+      >
+        {t.matchTitle}
+      </p>
+      <ul className="flex w-full flex-col gap-3">
+        {slide.pairs.map((pair) => (
+          <li
+            key={pair.id}
+            data-testid={`presentation-match-pair-${pair.id}`}
+            className="flex items-center justify-between gap-6 rounded-xl bg-surface-soft px-6 py-4"
+          >
+            <span style={{ fontSize: 32 }} className="font-semibold text-foreground">
+              {pair.prompt}
+            </span>
+            {revealed && (
+              <span
+                data-testid={`presentation-match-answer-${pair.id}`}
+                style={{ fontSize: 32 }}
+                className="font-bold text-accent-ink"
+              >
+                {pair.answer}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
