@@ -761,3 +761,15 @@ describe('ActivityPracticeIsland — "Modo enfoque" (full-screen exercise mode, 
     expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
   });
 });
+
+describe('ActivityPracticeIsland — audio markers ("colocar un audio propio")', () => {
+  it('renders a play button for a worksheet audio marker, resolved via the real audio preview endpoint', () => {
+    const withAudio: WorksheetBlock = {
+      ...WORKSHEET,
+      audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/act-1/m1.webm' }],
+    };
+    renderIsland([withAudio]);
+    const button = screen.getByTestId('player-audio-m1');
+    expect(button).toBeTruthy();
+  });
+});

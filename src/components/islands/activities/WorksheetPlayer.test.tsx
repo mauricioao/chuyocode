@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import WorksheetPlayer from './WorksheetPlayer';
 import type { Zone } from '@/lib/activities/blocks';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const IMAGE = { path: 'activity-images/act-1/img-1.webp', width: 800, height: 400 };
 
@@ -597,5 +601,77 @@ describe('WorksheetPlayer — explanation affordance (D5)', () => {
       />,
     );
     expect(screen.queryByTestId('player-zone-explanation-z1')).toBeNull();
+  });
+});
+
+describe('WorksheetPlayer — audio markers ("colocar un audio propio")', () => {
+  const MARKER = { id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' };
+  const OTHER_MARKER = { id: 'm2', x: 0.2, y: 0.2, path: 'activity-audio/a/m2.webm' };
+
+  function resolveAudioUrl(path: string) {
+    return `/api/actividades/audio?path=${encodeURIComponent(path)}`;
+  }
+
+  beforeEach(() => {
+    vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  });
+
+  it('renders nothing when `audio` is omitted (every existing caller)', () => {
+    render(<WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" />);
+    expect(screen.queryByTestId(/^player-audio-/)).toBeNull();
+  });
+
+  it('renders a round button per marker, positioned by its fractional point', () => {
+    render(
+      <WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" audio={[MARKER]} resolveAudioUrl={resolveAudioUrl} />,
+    );
+    const button = screen.getByTestId('player-audio-m1');
+    expect(button.style.left).toBe('50%');
+    expect(button.style.top).toBe('50%');
+  });
+
+  it('clicking a marker plays it, resolved through resolveAudioUrl', async () => {
+    render(
+      <WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" audio={[MARKER]} resolveAudioUrl={resolveAudioUrl} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('player-audio-m1'));
+    });
+    expect(screen.getByTestId('player-audio-m1').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('only one marker plays at a time — starting a second one stops the first', async () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[]}
+        imageUrl="/img.webp"
+        audio={[MARKER, OTHER_MARKER]}
+        resolveAudioUrl={resolveAudioUrl}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('player-audio-m1'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('player-audio-m2'));
+    });
+    expect(screen.getByTestId('player-audio-m1').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('player-audio-m2').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('clicking the SAME marker again pauses it', async () => {
+    render(
+      <WorksheetPlayer lang="es" image={IMAGE} zones={[]} imageUrl="/img.webp" audio={[MARKER]} resolveAudioUrl={resolveAudioUrl} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('player-audio-m1'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('player-audio-m1'));
+    });
+    expect(screen.getByTestId('player-audio-m1').getAttribute('aria-pressed')).toBe('false');
   });
 });

@@ -986,6 +986,8 @@ export default function ActivityEditorIsland({
                   zones={block.zones}
                   rotation={block.rotation}
                   imageUrl={resolveImageUrl(block.image.path)}
+                  audio={block.audio}
+                  resolveAudioUrl={resolveAudioUrl}
                 />
               ))}
           </div>

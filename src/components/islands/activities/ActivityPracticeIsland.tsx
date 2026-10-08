@@ -68,7 +68,7 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { stopAllSpeech } from '@/lib/speech/useSpeech';
 import type { Block, ImageRef, QuizBlock, WorksheetBlock } from '@/lib/activities/blocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
+import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
 import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
@@ -502,6 +502,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock & { image: ImageRef }).image.path)}
               practice={{ values, onChange: handleChange, results, disabled: graded }}
               toolbarSlot={zoomSlot}
+              resolveAudioUrl={audioPreviewUrl}
             />
           ) : (
             // `flex flex-col` (visual-polish-2 pass, owner bug: a big-stage
@@ -636,6 +637,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                   imageUrl={imagePreviewUrl((activeBlock as WorksheetBlock & { image: ImageRef }).image.path)}
                   practice={{ values, onChange: handleChange, results, disabled: graded }}
                   toolbarSlot={null}
+                  resolveAudioUrl={audioPreviewUrl}
                 />
               ) : (
                 <QuizBlockPractice

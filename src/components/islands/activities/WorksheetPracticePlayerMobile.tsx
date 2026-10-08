@@ -75,6 +75,8 @@ export interface WorksheetPracticePlayerMobileProps {
   block: SubmittedWorksheetBlock;
   imageUrl: string;
   practice: WorksheetPracticeState;
+  /** "Colocar un audio propio" — resolves a stored audio marker `path` to a browser-loadable URL. Omitted renders no round play buttons, even if `block.audio` has some. */
+  resolveAudioUrl?: (path: string) => string;
 }
 
 type Gesture =
@@ -86,6 +88,7 @@ export default function WorksheetPracticePlayerMobile({
   block,
   imageUrl,
   practice,
+  resolveAudioUrl,
 }: WorksheetPracticePlayerMobileProps) {
   const t = UI_LABELS[lang].activities.player;
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -273,6 +276,8 @@ export default function WorksheetPracticePlayerMobile({
             practice={practice}
             onZoneTap={setActiveZoneId}
             activeZoneId={activeZoneId}
+            audio={block.audio}
+            resolveAudioUrl={resolveAudioUrl}
           />
         </div>
       </div>

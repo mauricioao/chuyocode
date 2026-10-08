@@ -365,3 +365,19 @@ describe('WorksheetPracticePlayerMobile — free panning (Bug 2, loose camera bo
     expect(contentTransform()).toBe('translate(30px, 0px) scale(1)');
   });
 });
+
+describe('WorksheetPracticePlayerMobile — audio markers threading', () => {
+  it('passes block.audio and resolveAudioUrl through to the underlying WorksheetPlayer', () => {
+    const block = { ...BLOCK, audio: [{ id: 'm1', x: 0.5, y: 0.5, path: 'activity-audio/a/m1.webm' }] };
+    render(
+      <WorksheetPracticePlayerMobile
+        lang="es"
+        block={block}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+        resolveAudioUrl={(path) => `/audio?path=${path}`}
+      />,
+    );
+    expect(screen.getByTestId('player-audio-m1')).toBeTruthy();
+  });
+});
