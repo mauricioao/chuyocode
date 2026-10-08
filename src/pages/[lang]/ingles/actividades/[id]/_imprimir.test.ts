@@ -83,6 +83,26 @@ const MATCH_ACTIVITY = {
   ],
 };
 
+const REORDER_ACTIVITY = {
+  id: 'reorder-1',
+  title: 'Reordenar: presente simple',
+  level: 'A1',
+  blocks: [
+    {
+      id: 'q1',
+      type: 'quiz',
+      template: 'reorder',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'What are you doing', input: 'text', answer: ['What are you doing'] },
+          { id: 's2', label: 'She goes to school by bus', input: 'text', answer: ['She goes to school by bus'] },
+        ],
+      },
+    },
+  ],
+};
+
 describe('GET /[lang]/ingles/actividades/[id]/imprimir — routing', () => {
   it('404s for an unsupported lang segment', async () => {
     const res = await render('https://chuyocode.test/fr/ingles/actividades/abc/imprimir', {
@@ -263,5 +283,32 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Une las parejas" (bu
     expect(html).toContain('perro');
     expect(html).toContain('gato');
     expect(html).toContain('pájaro');
+  });
+});
+
+describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Reordenar"', () => {
+  it('prints each sentence scrambled, with a blank writing line, no numbered fill-in-the-blank', async () => {
+    activityResult.value = REORDER_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/reorder-1/imprimir', {
+      params: { lang: 'es', id: 'reorder-1' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-reorder-s1"');
+    expect(html).toContain('data-testid="print-reorder-s2"');
+    // No blank marker — that shape is Básico-only.
+    expect(html).not.toContain('________');
+    // The sentence is scrambled, not printed verbatim, outside the answer key.
+    expect(html).not.toContain('>1. What are you doing<');
+  });
+
+  it('shows the full sentence, in order, in the answer key', async () => {
+    activityResult.value = REORDER_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/reorder-1/imprimir?respuestas=1', {
+      params: { lang: 'es', id: 'reorder-1' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-answer-reorder-s1"');
+    expect(html).toContain('What are you doing');
+    expect(html).toContain('She goes to school by bus');
   });
 });

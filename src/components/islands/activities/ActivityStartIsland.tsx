@@ -114,6 +114,27 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
     }
   }, [createActivity, lang, navigate, t.createError]);
 
+  // "Reordenar" (Wordwall templates build): same shape as Match above,
+  // tagged with the `'reorder'` template so the editor/practice both know
+  // this block started as a sentence-reordering activity from its first save.
+  const handleSelectReorder = useCallback(async () => {
+    setBusyCard('reorder');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'reorder', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
   return (
     <div data-testid="activity-start-island" className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold text-foreground">{t.heading}</h2>
@@ -122,6 +143,7 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
         onSelectWorksheet={handleSelectWorksheet}
         onSelectQuestions={handleSelectQuestions}
         onSelectMatch={handleSelectMatch}
+        onSelectReorder={handleSelectReorder}
         busyCard={busyCard}
       />
     </div>

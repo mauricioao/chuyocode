@@ -44,6 +44,7 @@ import {
   availableGameModes,
   anagramEligible,
   hangmanEligible,
+  reorderEligible,
   deriveTrueFalseItems,
   seedFromString,
   type GameMode,
@@ -54,6 +55,7 @@ import SlotExplanation from '@/components/islands/mechanics/SlotExplanation';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
+import QuizReorder from './QuizReorder';
 import QuizSpeakingCards from './QuizSpeakingCards';
 import QuizWheel from './QuizWheel';
 import QuizAnagram from './QuizAnagram';
@@ -81,6 +83,7 @@ const SUPPORTED_MODES: readonly GameMode[] = [
   'quiz',
   'cards',
   'match',
+  'reorder',
   'speak',
   'wheel',
   'anagram',
@@ -115,6 +118,7 @@ export default function QuizBlockPractice({
   if (
     effectiveMode === 'cards' ||
     effectiveMode === 'match' ||
+    effectiveMode === 'reorder' ||
     effectiveMode === 'speak' ||
     effectiveMode === 'wheel' ||
     effectiveMode === 'anagram' ||
@@ -129,6 +133,9 @@ export default function QuizBlockPractice({
         )}
         {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'match' && <QuizMatching lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'reorder' && (
+          <QuizReorder lang={lang} items={reorderEligible(gameItems)} seed={block.id} />
+        )}
         {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'anagram' && (

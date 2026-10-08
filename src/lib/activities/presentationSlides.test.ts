@@ -278,6 +278,40 @@ describe('buildPresentationSlides', () => {
     };
     expect(buildPresentationSlides([block])).toEqual([]);
   });
+
+  it('builds ONE "reorder" slide PER sentence, with its words pre-shuffled and never in the original order', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'reorder',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'What are you doing', input: 'text', answer: ['What are you doing'] },
+          { id: 's2', label: 'She goes to school', input: 'text', answer: ['She goes to school'] },
+        ],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(slides).toHaveLength(2);
+    for (const slide of slides) {
+      if (slide.kind !== 'reorder') throw new Error('expected a reorder slide');
+      expect(slide.blockId).toBe('q1');
+      const originalWords = slide.sentence.split(' ');
+      expect(slide.words.slice().sort()).toEqual(originalWords.slice().sort());
+      expect(slide.words).not.toEqual(originalWords);
+    }
+  });
+
+  it('skips a reorder sentence with fewer than 2 words, contributing no slide for it', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'reorder',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'cat', input: 'text', answer: ['cat'] }] },
+    };
+    expect(buildPresentationSlides([block])).toEqual([]);
+  });
 });
 
 describe('revealableSlides', () => {
@@ -292,6 +326,12 @@ describe('revealableSlides', () => {
 
   it('a "match" slide is revealable, same as "question"', () => {
     expect(revealableSlides([{ kind: 'match', blockId: 'q1', pairs: [] }])).toEqual([true]);
+  });
+
+  it('a "reorder" slide is revealable, same as "question"', () => {
+    expect(
+      revealableSlides([{ kind: 'reorder', blockId: 'q1', slotId: 's1', sentence: 'a b', words: ['b', 'a'] }]),
+    ).toEqual([true]);
   });
 });
 

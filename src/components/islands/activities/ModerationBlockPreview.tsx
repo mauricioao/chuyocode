@@ -94,6 +94,24 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
     );
   }
 
+  // "Reordenar" (Wordwall templates build, "Reorder in moderation"): a
+  // reorder block is a plain list of SENTENCES — unlike `match`/Básico there
+  // is nothing to reveal behind `showAnswers` (the stored sentence already
+  // IS the content, not a hidden answer), so this always shows it plainly.
+  if (block.template === 'reorder') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {block.payload.slots.map((slot) => (
+            <li key={slot.id} data-testid={`moderation-sentence-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
+              <span className="text-foreground">{quizSlotAnswerSummary(block.payload, slot) || slot.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
       <ul className="flex flex-col gap-2">

@@ -30,7 +30,18 @@ import { orderZonesForReading } from './zoneGeometry';
 import { rotatedSize } from './canvasViewport';
 import { zoneExceedsMaxZoom, type Size } from './presentationCamera';
 import { STAGE_SAFE_WIDTH, STAGE_SAFE_HEIGHT } from './fitStage';
-import { deriveGameItems, type GameItem } from './gameModes';
+import { deriveGameItems, seedFromString, shuffleWithSeed, type GameItem } from './gameModes';
+
+/** A deterministic word shuffle that is never the sentence's own original order — same anti-identity rule `QuizReorder.tsx`'s own tile shuffle follows, applied here to plain words (no interactive tile ids needed for a static slide). */
+function shuffledWords(words: readonly string[], seed: number): string[] {
+  if (words.length < 2) return [...words];
+  let order = shuffleWithSeed(words, seed);
+  if (order.every((word, i) => word === words[i])) {
+    order = [...order];
+    [order[0], order[1]] = [order[1]!, order[0]!];
+  }
+  return order;
+}
 
 /** One question slide's own data: the slot to show, the payload that resolves its pool (if any), and the block it came from. */
 export interface PresentationQuestion {
@@ -158,6 +169,20 @@ export type PresentationSlide =
   | { kind: 'question'; blockId: string; payload: Payload; slot: Slot }
   | { kind: 'match'; blockId: string; name?: string; pairs: GameItem[] }
   | {
+      /**
+       * "Reordenar" in presentation mode: ONE SLIDE PER SENTENCE (unlike
+       * `'match'`'s single combined slide) — a sentence's own shuffled words
+       * are computed HERE, deterministically (`words`), so the deck never
+       * reshuffles between renders; `sentence` is the correct order, shown
+       * only once revealed.
+       */
+      kind: 'reorder';
+      blockId: string;
+      slotId: string;
+      sentence: string;
+      words: string[];
+    }
+  | {
       kind: 'worksheet-overview';
       blockId: string;
       name?: string;
@@ -198,6 +223,26 @@ export function buildPresentationSlides(blocks: readonly Block[]): PresentationS
         const pairs = deriveGameItems(block.payload);
         if (pairs.length > 0) {
           slides.push({ kind: 'match', blockId: block.id, name: block.name, pairs });
+        }
+        continue;
+      }
+      if (block.template === 'reorder') {
+        // ONE SLIDE PER SENTENCE (unlike `'match'`'s single combined slide,
+        // see this module's own `PresentationSlide` doc on `'reorder'`): a
+        // sentence shorter than 2 words has nothing to reorder, same
+        // `gameModes.ts` rule `reorderEligible` enforces for the practice
+        // board, and is simply skipped here.
+        for (const slot of block.payload.slots) {
+          const sentence = slot.answer[0] ?? slot.label;
+          const words = sentence.trim().split(/\s+/).filter(Boolean);
+          if (words.length < 2) continue;
+          slides.push({
+            kind: 'reorder',
+            blockId: block.id,
+            slotId: slot.id,
+            sentence,
+            words: shuffledWords(words, seedFromString(`${block.id}:${slot.id}:present`)),
+          });
         }
         continue;
       }

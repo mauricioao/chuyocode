@@ -461,6 +461,10 @@ export const UI_LABELS = {
           title: 'Une las parejas',
           description: 'Arrastra cada respuesta junto a su pareja.',
         },
+        reorder: {
+          title: 'Reordenar',
+          description: 'Arrastra y suelta palabras para reordenar cada oración correctamente.',
+        },
         createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
@@ -770,6 +774,7 @@ export const UI_LABELS = {
         modeQuiz: 'Básico',
         modeCards: 'Tarjetas',
         modeMatch: 'Parejas',
+        modeReorder: 'Reordenar',
         // Footer hint (practice player redesign's Comprobar/Reintentar row):
         // shown only while a quiz tab sits in Tarjetas/Parejas, since
         // Comprobar keeps grading the Preguntas-mode answers only.
@@ -798,6 +803,25 @@ export const UI_LABELS = {
         matchTrayLabel: 'Fichas disponibles',
         matchSoundMute: 'Silenciar sonido',
         matchSoundUnmute: 'Activar sonido',
+        // Reordenar (Wordwall "Reordenar palabras"): one sentence at a time,
+        // its words scrambled into a tray; drag or tap each word into the
+        // line below, in order, to rebuild it. "Comprobar" grades the current
+        // sentence, advancing on a correct attempt.
+        reorderCheck: 'Comprobar',
+        reorderRetry: 'Reintentar',
+        // "3 de 4 correctas" — composed around the learner's score.
+        reorderResultOf: 'de',
+        reorderResultCorrect: 'correctas',
+        reorderSoundMute: 'Silenciar sonido',
+        reorderSoundUnmute: 'Activar sonido',
+        reorderPrev: 'Oración anterior',
+        reorderNext: 'Oración siguiente',
+        // "1 de 4" — the sentence stepper's own position readout.
+        reorderSentenceOf: 'de',
+        reorderTrayLabel: 'Palabras disponibles',
+        reorderLineLabel: 'Oración',
+        reorderLineEmpty: 'Toca o arrastra una palabra para empezar',
+        reorderRemovePrefix: 'Quitar palabra',
         // Cartas (Wordwall "Speaking cards"): a shuffled deck dealt one card
         // at a time, each with a question to answer out loud.
         modeSpeak: 'Cartas',
@@ -1148,6 +1172,9 @@ export const UI_LABELS = {
         // its pair list — reads oddly as "Básico" (the Google-Forms-style
         // quiz label) when the block is actually a pair list.
         matchLabel: 'Une las parejas',
+        // "Reordenar" in print (Wordwall templates build): same reasoning as
+        // `matchLabel` above — "Básico" would misname a sentence list.
+        reorderLabel: 'Reordenar',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -1200,6 +1227,10 @@ export const UI_LABELS = {
         // answer at once — the simplest shape a teacher can run with a
         // class projected on a screen, no drag gesture needed.
         matchTitle: 'Une las parejas',
+        // "Reordenar" in presentation mode (Wordwall templates build): one
+        // slide per sentence, its words shown scrambled; "Mostrar respuesta"
+        // reveals the sentence in its correct order.
+        reorderTitle: 'Reordenar',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1891,6 +1922,10 @@ export const UI_LABELS = {
           title: 'Match the pairs',
           description: 'Drag each answer next to its partner.',
         },
+        reorder: {
+          title: 'Reorder',
+          description: 'Drag and drop words to put each sentence back in order.',
+        },
         createError: 'Could not create the activity. Try again.',
       },
       editor: {
@@ -2106,6 +2141,7 @@ export const UI_LABELS = {
         modeQuiz: 'Basic',
         modeCards: 'Cards',
         modeMatch: 'Match',
+        modeReorder: 'Reorder',
         gradesQuizModeHint: 'Check grades the "Basic" mode.',
         cardFlipHint: 'Tap or press Space to flip',
         cardPrev: 'Previous',
@@ -2126,6 +2162,19 @@ export const UI_LABELS = {
         matchTrayLabel: 'Available tiles',
         matchSoundMute: 'Mute sound',
         matchSoundUnmute: 'Unmute sound',
+        reorderCheck: 'Check',
+        reorderRetry: 'Try again',
+        reorderResultOf: 'of',
+        reorderResultCorrect: 'correct',
+        reorderSoundMute: 'Mute sound',
+        reorderSoundUnmute: 'Unmute sound',
+        reorderPrev: 'Previous sentence',
+        reorderNext: 'Next sentence',
+        reorderSentenceOf: 'of',
+        reorderTrayLabel: 'Available words',
+        reorderLineLabel: 'Sentence',
+        reorderLineEmpty: 'Tap or drag a word to start',
+        reorderRemovePrefix: 'Remove word',
         modeSpeak: 'Speaking cards',
         speakDeal: 'Deal',
         speakNext: 'Next card',
@@ -2379,6 +2428,7 @@ export const UI_LABELS = {
         worksheetLabel: 'Worksheet',
         quizLabel: 'Basic',
         matchLabel: 'Match the pairs',
+        reorderLabel: 'Reorder',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
@@ -2410,6 +2460,7 @@ export const UI_LABELS = {
         liveRevealed: 'Answer revealed',
         liveWorksheetOverview: 'Worksheet overview',
         matchTitle: 'Match the pairs',
+        reorderTitle: 'Reorder',
       },
     },
     notFound: {

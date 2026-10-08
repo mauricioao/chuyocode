@@ -93,6 +93,7 @@ import QuestionCard from './QuestionCard';
 import QuizLivePreview from './QuizLivePreview';
 import QuizFirstRunTip from './QuizFirstRunTip';
 import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
+import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
 
 /** Bumped only if the tour's steps/anchors change shape enough that a learner who dismissed the old one should see the new one. */
 const FIRST_RUN_TIPS_KEY = 'chuyo:quiz-editor-tips-v1';
@@ -237,6 +238,7 @@ export default function QuizBlockEditor({
 }: QuizBlockEditorProps) {
   const t = copyFor(lang);
   const isMatch = template === 'match';
+  const isReorder = template === 'reorder';
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
@@ -378,6 +380,35 @@ export default function QuizBlockEditor({
       focusSlotId={selectedSlotId}
       onQuestionChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
       onAnswerChange={(slotId, answer) => commit(setSlotAnswer(draft, slotId, answer.trim() === '' ? [] : [answer]))}
+      onAdd={addQuestion}
+      onRemove={removeQuestion}
+    />
+  );
+
+  // REORDER AUTHORING, SIMPLE (same posture as `matchPairs` above): a
+  // `reorder` block is a list of SENTENCES, not question/answer pairs — one
+  // `row`+`Slot` per sentence, the full sentence stored as BOTH the slot's
+  // `label` and its single `answer` (see `ReorderEditor.tsx`'s own header).
+  const reorderSentences: ReorderSentence[] = isReorder
+    ? questions.flatMap((question): ReorderSentence[] => {
+        const slotId = rowSlotId(draft, question.id);
+        const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
+        if (!slot || !slotId) return [];
+        return [{ rowId: question.id, slotId, sentence: slot.answer[0] ?? slot.label }];
+      })
+    : [];
+
+  const reorderColumn = (
+    <ReorderEditor
+      blockId={blockId}
+      lang={lang}
+      sentences={reorderSentences}
+      focusSlotId={selectedSlotId}
+      onSentenceChange={(slotId, sentence) => {
+        const trimmed = sentence.trim();
+        const withLabel = setRowLabel(draft, slotId, sentence);
+        commit(setSlotAnswer(withLabel, slotId, trimmed === '' ? [] : [sentence]));
+      }}
       onAdd={addQuestion}
       onRemove={removeQuestion}
     />
@@ -576,7 +607,7 @@ export default function QuizBlockEditor({
   // there is something to try (`QuizLivePreview` itself assumes >=1 slot
   // for its "Comprobar" score denominator).
   const previewColumn = hasQuestions ? (
-    <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} />
+    <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} template={template} />
   ) : null;
 
   // HEIGHT CHAIN: in the editor's desktop focus layout the expanded block has
@@ -591,7 +622,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {isMatch ? matchColumn : questionsColumn}
+        {isMatch ? matchColumn : isReorder ? reorderColumn : questionsColumn}
       </div>
     );
   }
@@ -644,7 +675,7 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {isMatch ? matchColumn : questionsColumn}
+          {isMatch ? matchColumn : isReorder ? reorderColumn : questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}

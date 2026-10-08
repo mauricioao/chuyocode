@@ -51,6 +51,7 @@ import { rotatedSize } from '@lib/activities/canvasViewport';
 import { orderZonesForReading } from '@lib/activities/zoneGeometry';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@lib/activities/moderationPreview';
 import { splitLabelAtBlank, getSlotItems, type Slot } from '@lib/exercisePayload';
+import { seedFromString, shuffleWithSeed } from '@lib/activities/gameModes';
 import type { Block } from '@lib/activities/blocks';
 import '@styles/global.css';
 
@@ -105,7 +106,21 @@ const answersHref = `${Astro.url.pathname}?respuestas=1`;
 function blockLabel(block: Block, worksheetPosition: number): string {
   if (block.name) return block.name;
   if (block.type === 'worksheet') return `${t.worksheetLabel} ${worksheetPosition + 1}`;
-  return block.template === 'match' ? t.matchLabel : t.quizLabel;
+  if (block.template === 'match') return t.matchLabel;
+  if (block.template === 'reorder') return t.reorderLabel;
+  return t.quizLabel;
+}
+
+/** A deterministic word shuffle that is never the sentence's own order — same anti-identity rule the reorder game/presentation slide both follow. */
+function shuffledWords(sentence: string, seed: number): string[] {
+  const words = sentence.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return words;
+  let order = shuffleWithSeed(words, seed);
+  if (order.every((word, i) => word === words[i])) {
+    order = [...order];
+    [order[0], order[1]] = [order[1]!, order[0]!];
+  }
+  return order;
 }
 
 interface LabeledBlock {
@@ -253,6 +268,30 @@ function questionText(slot: Slot): string {
             );
           }
 
+          // "Reordenar" in print (Wordwall templates build): a numbered
+          // fill-in-the-blank list makes no sense for a sentence list
+          // either — each sentence prints as its own SCRAMBLED words plus a
+          // blank writing line, same two-part shape `match` uses above.
+          if (block.template === 'reorder') {
+            return (
+              <section data-testid={`print-block-${block.id}`} class="print-quiz">
+                <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+                <ol class="flex flex-col gap-3 text-black">
+                  {block.payload.slots.map((slot, i) => {
+                    const sentence = slot.answer[0] ?? slot.label;
+                    const words = shuffledWords(sentence, seedFromString(`${block.id}:${slot.id}:print`));
+                    return (
+                      <li data-testid={`print-reorder-${slot.id}`}>
+                        <p>{i + 1}. {words.join('  /  ')}</p>
+                        <p class="mt-1 border-b border-black/40">&nbsp;</p>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            );
+          }
+
           return (
             <section data-testid={`print-block-${block.id}`} class="print-quiz">
               <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
@@ -310,6 +349,14 @@ function questionText(slot: Slot): string {
                       </div>
                     ))}
                   </div>
+                ) : block.template === 'reorder' ? (
+                  <ol class="flex flex-col gap-1 text-sm text-black">
+                    {block.payload.slots.map((slot, i) => (
+                      <li data-testid={`print-answer-reorder-${slot.id}`}>
+                        {i + 1}. {quizSlotAnswerSummary(block.payload, slot)}
+                      </li>
+                    ))}
+                  </ol>
                 ) : (
                   <ol class="flex flex-col gap-1 text-sm text-black">
                     {block.payload.slots.map((slot, i) => (

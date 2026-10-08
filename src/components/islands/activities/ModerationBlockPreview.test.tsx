@@ -150,3 +150,28 @@ describe('ModerationBlockPreview — "Une las parejas" (build item 5, match)', (
     expect(screen.getByTestId('moderation-pair-s2').textContent).toContain('gato');
   });
 });
+
+describe('ModerationBlockPreview — "Reordenar" (sentence list)', () => {
+  const REORDER: Block = {
+    id: 'q3',
+    type: 'quiz',
+    template: 'reorder',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] },
+        { id: 's2', label: 'Dogs bark', input: 'text', answer: ['Dogs bark'] },
+      ],
+    },
+  };
+
+  it('lists every sentence plainly, the same regardless of showAnswers (nothing hidden)', () => {
+    render(<ModerationBlockPreview lang="es" block={REORDER} resolveImageUrl={resolveImageUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-sentence-s1').textContent).toContain('Cats sleep');
+    expect(screen.getByTestId('moderation-sentence-s2').textContent).toContain('Dogs bark');
+
+    cleanup();
+    render(<ModerationBlockPreview lang="es" block={REORDER} resolveImageUrl={resolveImageUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-sentence-s1').textContent).toContain('Cats sleep');
+  });
+});

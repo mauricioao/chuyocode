@@ -169,4 +169,44 @@ describe('ActivityStartIsland', () => {
 
     resolveFetch({ ok: true, json: async () => ({ id: 'x' }) });
   });
+
+  // "Reordenar" (Wordwall templates build).
+  it('creates an activity with one empty, "reorder"-templated quiz block, and navigates to its editor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'new-activity-4' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const navigate = vi.fn();
+
+    render(<ActivityStartIsland lang="es" navigate={navigate} />);
+    fireEvent.click(screen.getByTestId('picker-reorder'));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-4'));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    const body = JSON.parse(init.body);
+    expect(body.blocks).toEqual([
+      expect.objectContaining({ type: 'quiz', template: 'reorder', payload: { pools: {}, slots: [] } }),
+    ]);
+  });
+
+  it('marks the reorder card busy while its request is in flight', async () => {
+    let resolveFetch!: (value: unknown) => void;
+    const fetchMock = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ActivityStartIsland lang="es" navigate={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('picker-reorder'));
+
+    await waitFor(() => expect(screen.getByTestId('picker-reorder').getAttribute('aria-busy')).toBe('true'));
+    expect((screen.getByTestId('picker-worksheet') as HTMLButtonElement).disabled).toBe(true);
+
+    resolveFetch({ ok: true, json: async () => ({ id: 'x' }) });
+  });
 });

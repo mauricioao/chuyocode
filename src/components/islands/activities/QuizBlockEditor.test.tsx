@@ -62,6 +62,23 @@ function MatchHarness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
+/** Same harness, authoring a `template: 'reorder'` block ("Reordenar"). */
+function ReorderHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="reorder"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
 describe('QuizBlockEditor — empty state (item 4, example-first)', () => {
   it('shows the empty-questions message, a 3-question example preview, and no question list or checklist', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
@@ -496,5 +513,76 @@ describe('QuizBlockEditor — "Une las parejas" (build item 1, match authoring)'
     fireEvent.change(screen.getByTestId('match-pair-answer-s1'), { target: { value: 'perro' } });
     expect((screen.getByTestId('match-pair-question-s1') as HTMLInputElement).value).toBe('dog');
     expect((screen.getByTestId('match-pair-answer-s1') as HTMLInputElement).value).toBe('perro');
+  });
+});
+
+describe('QuizBlockEditor — "Reordenar" (sentence authoring)', () => {
+  it('renders the minimal sentence-list editor instead of the Básico question-card list', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('reorder-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least one sentence" hint until a sentence has >= 2 words', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('reorder-hint-b1').textContent).toContain('Agrega al menos una oración');
+  });
+
+  it('hides the hint once a sentence has >= 2 words', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    expect(screen.queryByTestId('reorder-hint-b1')).toBeNull();
+  });
+
+  it('"+ Agregar oración" adds a new row+slot', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('reorder-add-b1'));
+    expect(screen.getAllByTestId(/^reorder-sentence-/)).toHaveLength(1);
+  });
+
+  it('Enter in a sentence field adds another one and focuses it', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('reorder-add-b1'));
+    const [sentenceInput] = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentenceInput, { target: { value: 'Cats sleep' } });
+    fireEvent.keyDown(sentenceInput, { key: 'Enter' });
+
+    const sentenceInputs = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs).toHaveLength(2);
+    expect(document.activeElement).toBe(sentenceInputs[1]);
+  });
+
+  it('removing a sentence ("×") deletes exactly its own row+slot', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] },
+        { id: 's2', label: 'Dogs bark', input: 'text', answer: ['Dogs bark'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    fireEvent.click(screen.getByTestId('reorder-remove-s1'));
+    expect(screen.queryByTestId('reorder-row-s1')).toBeNull();
+    expect(screen.getByTestId('reorder-row-s2')).toBeTruthy();
+  });
+
+  it('typing a sentence commits BOTH the slot label and its answer back through onPayloadChange', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: '', input: 'text', answer: [] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<ReorderHarness initialPayload={payload} />);
+    fireEvent.change(screen.getByTestId('reorder-sentence-s1'), { target: { value: 'Cats sleep' } });
+    expect((screen.getByTestId('reorder-sentence-s1') as HTMLInputElement).value).toBe('Cats sleep');
   });
 });

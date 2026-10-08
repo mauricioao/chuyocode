@@ -773,6 +773,19 @@ export default function ActivityEditorIsland({
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
+  // "Reordenar" (Wordwall templates build): same shape as Match above, just
+  // tagged with the `'reorder'` template.
+  const handleReorderChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'reorder',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
       // `WorksheetUploader` always hands back exactly ONE image now —
@@ -987,6 +1000,7 @@ export default function ActivityEditorIsland({
                 onSelectWorksheet={handleWorksheetChosen}
                 onSelectQuestions={handleQuestionsChosen}
                 onSelectMatch={handleMatchChosen}
+                onSelectReorder={handleReorderChosen}
               />
             )}
 

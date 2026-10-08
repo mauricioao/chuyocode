@@ -500,6 +500,32 @@ describe('PresentationIsland — control bar idle-hide', () => {
   });
 });
 
+const REORDER_BLOCKS: Block[] = [
+  {
+    id: 'q3',
+    type: 'quiz',
+    template: 'reorder',
+    payload: {
+      pools: {},
+      slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+    },
+  },
+];
+
+describe('PresentationIsland — "Reordenar" (one slide per sentence)', () => {
+  it('shows the scrambled words unrevealed, then the correct sentence once revealed', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={REORDER_BLOCKS} />);
+    const slide = screen.getByTestId('presentation-reorder-s1');
+    expect(slide.textContent).not.toContain('Cats sleep');
+    expect(slide.textContent).toContain('Cats');
+    expect(slide.textContent).toContain('sleep');
+    expect(screen.queryByTestId('presentation-reorder-answer')).toBeNull();
+
+    next(); // reveals, same "next reveals then advances" rule every other slide follows
+    expect(screen.getByTestId('presentation-reorder-answer').textContent).toBe('Cats sleep');
+  });
+});
+
 describe('PresentationIsland — SSR/hydration', () => {
   it('hydrates cleanly against its own server-rendered markup (no React #418) for a quiz-only deck', async () => {
     const { recoverableErrors } = await renderThenHydrate(() => <PresentationIsland {...BASE_PROPS} />);

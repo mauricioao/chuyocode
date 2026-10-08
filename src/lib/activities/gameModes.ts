@@ -38,25 +38,41 @@ export interface GameItem {
  * "switch template" games added in batch 1, alongside the original
  * `cards`/`match`.
  */
-export type GameMode = 'quiz' | 'cards' | 'match' | 'speak' | 'wheel' | 'anagram' | 'hangman' | 'truefalse' | 'openbox';
+export type GameMode =
+  | 'quiz'
+  | 'cards'
+  | 'match'
+  | 'reorder'
+  | 'speak'
+  | 'wheel'
+  | 'anagram'
+  | 'hangman'
+  | 'truefalse'
+  | 'openbox';
 
 /**
  * Game modes that carry their OWN "Comprobar"/check affordance, built right
- * into the game screen itself (today: `match`'s big board, its own
- * `matching-check` button). The page-level combined Comprobar
- * (`ActivityPracticeIsland`'s footer, and `QuizLivePreview`'s own editor
- * preview) must never show a SECOND one next to it — build item 2, "One
- * Comprobar". Growing this set is the ONLY step a future self-checking
- * template (`reorder`, `cloze`, `groupsort` — see `QuizTemplate`) needs to
- * plug into that rule.
+ * into the game screen itself (`match`'s big board, its own
+ * `matching-check` button; `reorder`'s own per-sentence check). The
+ * page-level combined Comprobar (`ActivityPracticeIsland`'s footer, and
+ * `QuizLivePreview`'s own editor preview) must never show a SECOND one next
+ * to it — build item 2, "One Comprobar". Growing this set is the ONLY step a
+ * future self-checking template (`cloze`, `groupsort` — see `QuizTemplate`)
+ * needs to plug into that rule.
  */
-export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set(['match']);
+export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set(['match', 'reorder']);
 
 /** `cards` is worth flipping through from a single item. */
 const MIN_CARDS_ITEMS = 1;
 
 /** `match` needs at least this many pairs — fewer makes the last pair a guaranteed, un-losable match. */
 const MIN_MATCH_ITEMS = 3;
+
+/** `reorder` needs at least one sentence worth reordering. */
+const MIN_REORDER_ITEMS = 1;
+
+/** A sentence must have at least this many words to be worth reordering — a single word has nothing to reorder. */
+const MIN_REORDER_WORDS = 2;
 
 /** `speak` (Cartas) is worth dealing from a single item, same as `cards`. */
 const MIN_SPEAK_ITEMS = 1;
@@ -150,6 +166,17 @@ export function hangmanEligible(items: readonly GameItem[]): GameItem[] {
   return items.filter((item) => isSingleWord(item.answer, HANGMAN_MIN_LEN, HANGMAN_MAX_LEN));
 }
 
+/** Whitespace-separated word count in `text` — the simplest honest measure, blank-tolerant (`"".split(/\s+/)` would otherwise count as one). */
+function wordCount(text: string): number {
+  const trimmed = text.trim();
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+}
+
+/** Items whose answer is a full SENTENCE (>= {@link MIN_REORDER_WORDS} words) — playable as `reorder` (drag the words back into order). */
+export function reorderEligible(items: readonly GameItem[]): GameItem[] {
+  return items.filter((item) => wordCount(item.answer) >= MIN_REORDER_WORDS);
+}
+
 /** One `truefalse` statement: a slot's prompt with its gap filled by either its correct answer or a wrong pool option. */
 export interface TrueFalseItem {
   id: string;
@@ -221,6 +248,7 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
   const modes: GameMode[] = ['quiz'];
   if (items.length >= MIN_CARDS_ITEMS) modes.push('cards');
   if (items.length >= MIN_MATCH_ITEMS && hasUniqueAnswers(items)) modes.push('match');
+  if (reorderEligible(items).length >= MIN_REORDER_ITEMS) modes.push('reorder');
   if (items.length >= MIN_SPEAK_ITEMS) modes.push('speak');
   if (items.length >= MIN_WHEEL_ITEMS) modes.push('wheel');
   if (anagramEligible(items).length >= MIN_ANAGRAM_ITEMS) modes.push('anagram');
@@ -232,12 +260,13 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
 
 /**
  * Which {@link GameMode} a template WANTS to start in — `'match'` for the
- * `'match'` template ("Une las parejas"); the other template names have no
- * shipped game yet, so they (and `undefined`, "Básico") want `'quiz'`.
+ * `'match'` template ("Une las parejas"), `'reorder'` for the `'reorder'`
+ * template ("Reordenar"); the other template names have no shipped game
+ * yet, so they (and `undefined`, "Básico") want `'quiz'`.
  */
 const TEMPLATE_DEFAULT_MODE: Record<QuizTemplate, GameMode> = {
   match: 'match',
-  reorder: 'quiz',
+  reorder: 'reorder',
   cloze: 'quiz',
   groupsort: 'quiz',
 };

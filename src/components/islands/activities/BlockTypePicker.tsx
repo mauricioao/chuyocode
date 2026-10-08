@@ -39,18 +39,20 @@
 import { FileTextIcon } from '@phosphor-icons/react/dist/ssr/FileText';
 import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRight';
+import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
 import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export type BlockTypeCard = 'worksheet' | 'questions' | 'match';
+export type BlockTypeCard = 'worksheet' | 'questions' | 'match' | 'reorder';
 
 export interface BlockTypePickerProps {
   lang: Lang;
   onSelectWorksheet: () => void;
   onSelectQuestions: () => void;
   onSelectMatch: () => void;
+  onSelectReorder: () => void;
   /** The card currently creating the activity, if any — see the file header. `null`/omitted: the picker is fully idle. */
   busyCard?: BlockTypeCard | null;
 }
@@ -146,11 +148,32 @@ function MatchCardPreview() {
   );
 }
 
+/**
+ * "Reordenar" card's tiny result preview: three scrambled word bars that
+ * slide into reading order on hover (`group-hover:`) — hinting at "drag the
+ * words back into order" without a real drag gesture, same restraint
+ * {@link MatchCardPreview}'s own connecting-line animation uses.
+ */
+function ReorderCardPreview() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="card-preview-reorder"
+      className="mt-2 flex h-11 w-full items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5"
+    >
+      <span className="h-1.5 w-5 rounded-full bg-primary/40 transition-transform duration-500 motion-safe:group-hover:translate-x-0 motion-safe:translate-x-3" />
+      <span className="h-1.5 w-8 rounded-full bg-foreground/15 transition-transform duration-500 motion-safe:group-hover:translate-x-0 motion-safe:-translate-x-1" />
+      <span className="h-1.5 w-4 rounded-full bg-foreground/15 transition-transform duration-500 motion-safe:group-hover:translate-x-0 motion-safe:-translate-x-2" />
+    </div>
+  );
+}
+
 export default function BlockTypePicker({
   lang,
   onSelectWorksheet,
   onSelectQuestions,
   onSelectMatch,
+  onSelectReorder,
   busyCard = null,
 }: BlockTypePickerProps) {
   const t = UI_LABELS[lang].activities.start;
@@ -161,7 +184,7 @@ export default function BlockTypePicker({
       role="group"
       aria-label={t.heading}
       data-testid="block-type-picker"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
     >
       <button
         type="button"
@@ -222,6 +245,27 @@ export default function BlockTypePicker({
             <CardTitle className="text-lg">{t.match.title}</CardTitle>
             <CardDescription>{t.match.description}</CardDescription>
             <MatchCardPreview />
+          </CardHeader>
+        </Card>
+      </button>
+
+      <button
+        type="button"
+        data-testid="picker-reorder"
+        onClick={onSelectReorder}
+        disabled={disabled}
+        aria-busy={busyCard === 'reorder'}
+        className={cn(
+          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+          disabled && busyCard !== 'reorder' && 'opacity-50',
+        )}
+      >
+        <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
+          <CardHeader>
+            <CardIcon busy={busyCard === 'reorder'} Icon={ArrowsDownUpIcon} />
+            <CardTitle className="text-lg">{t.reorder.title}</CardTitle>
+            <CardDescription>{t.reorder.description}</CardDescription>
+            <ReorderCardPreview />
           </CardHeader>
         </Card>
       </button>

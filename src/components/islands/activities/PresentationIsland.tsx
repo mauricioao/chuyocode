@@ -406,6 +406,7 @@ export default function PresentationIsland({
             <QuestionSlide question={currentSlide} revealed={state.revealed} t={t} />
           )}
           {currentSlide?.kind === 'match' && <MatchSlide slide={currentSlide} revealed={state.revealed} t={t} />}
+          {currentSlide?.kind === 'reorder' && <ReorderSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {isSummarySlide(state) && (
             <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
           )}
@@ -664,28 +665,28 @@ function MatchSlide({
   return (
     <div
       data-testid={`presentation-match-${slide.blockId}`}
-      className="flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-6 overflow-y-auto py-6"
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 overflow-y-auto py-6"
     >
       <p
-        style={{ fontSize: 44 }}
+        style={{ fontSize: 64 }}
         className="text-center font-display font-bold leading-tight text-foreground"
       >
         {t.matchTitle}
       </p>
-      <ul className="flex w-full flex-col gap-3">
+      <ul className="flex w-full flex-col gap-4">
         {slide.pairs.map((pair) => (
           <li
             key={pair.id}
             data-testid={`presentation-match-pair-${pair.id}`}
-            className="flex items-center justify-between gap-6 rounded-xl bg-surface-soft px-6 py-4"
+            className="flex items-center justify-between gap-8 rounded-2xl bg-surface-soft px-8 py-6"
           >
-            <span style={{ fontSize: 32 }} className="font-semibold text-foreground">
+            <span style={{ fontSize: 44 }} className="font-semibold text-foreground">
               {pair.prompt}
             </span>
             {revealed && (
               <span
                 data-testid={`presentation-match-answer-${pair.id}`}
-                style={{ fontSize: 32 }}
+                style={{ fontSize: 44 }}
                 className="font-bold text-accent-ink"
               >
                 {pair.answer}
@@ -694,6 +695,61 @@ function MatchSlide({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * "Reordenar" in presentation mode — ONE SLIDE PER SENTENCE (unlike
+ * `MatchSlide`'s single combined slide, see `presentationSlides.ts`'s own
+ * doc): the sentence's own words, already pre-shuffled and fixed by
+ * `buildPresentationSlides`, shown as large static tiles; "Mostrar
+ * respuesta" swaps them for the sentence in its correct order. Large type,
+ * generous spacing (owner feedback on the match stage, "scale the match and
+ * reorder slides' content up to use the stage") — same scale `MatchSlide`
+ * now uses above.
+ */
+function ReorderSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'reorder' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-reorder-${slide.slotId}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-10 overflow-y-auto py-6"
+    >
+      <p
+        style={{ fontSize: 64 }}
+        className="text-center font-display font-bold leading-tight text-foreground"
+      >
+        {t.reorderTitle}
+      </p>
+      {revealed ? (
+        <p
+          data-testid="presentation-reorder-answer"
+          style={{ fontSize: 56 }}
+          className="max-w-5xl text-center font-bold leading-snug text-accent-ink"
+        >
+          {slide.sentence}
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          {slide.words.map((word, i) => (
+            <span
+              key={`${slide.slotId}-${i}`}
+              style={{ fontSize: 44 }}
+              className="rounded-2xl bg-surface-soft px-8 py-5 font-semibold text-foreground"
+            >
+              {word}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

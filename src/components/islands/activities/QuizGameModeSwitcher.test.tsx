@@ -86,6 +86,12 @@ describe('QuizGameModeSwitcher', () => {
     expect(screen.getByText('Abre la caja')).toBeTruthy();
   });
 
+  it('renders "Reordenar" for the reorder mode', () => {
+    render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'reorder']} active="quiz" onChange={vi.fn()} />);
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getByText('Reordenar')).toBeTruthy();
+  });
+
   it('renders no control for a mode with no icon/label wired in yet', () => {
     const futureMode = 'future-mode' as GameMode;
     render(<QuizGameModeSwitcher lang="es" modes={['quiz', futureMode]} active="quiz" onChange={vi.fn()} />);

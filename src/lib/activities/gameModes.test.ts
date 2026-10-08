@@ -8,6 +8,7 @@ import {
   isSingleWord,
   anagramEligible,
   hangmanEligible,
+  reorderEligible,
   trueFalseEligibleCount,
   deriveTrueFalseItems,
   initialGameMode,
@@ -138,23 +139,25 @@ describe('hasUniqueAnswers', () => {
 // never eligible for anagram/hangman (`isSingleWord` requires one letters-only
 // word), which keeps these assertions about cards/match/speak/wheel/openbox
 // from also having to account for the two single-word-only modes. Those two
-// get their own dedicated tests below.
+// get their own dedicated tests below. Being multi-word also makes every one
+// of them `reorder`-eligible (>= 2 words) — so `reorder` shows up in each
+// non-empty expectation below, right alongside the others.
 describe('availableGameModes', () => {
   it('offers only quiz for zero items', () => {
     expect(availableGameModes([])).toEqual(['quiz']);
   });
 
-  it('offers quiz + cards + speak from one item, but not match/wheel/openbox', () => {
+  it('offers quiz + cards + reorder + speak from one item, but not match/wheel/openbox', () => {
     const items: GameItem[] = [{ id: '1', prompt: 'a', answer: 'a red cat' }];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'reorder', 'speak']);
   });
 
-  it('offers quiz + cards + speak + wheel + openbox for two items (still short of match)', () => {
+  it('offers quiz + cards + reorder + speak + wheel + openbox for two items (still short of match)', () => {
     const items: GameItem[] = [
       { id: '1', prompt: 'a', answer: 'a red cat' },
       { id: '2', prompt: 'b', answer: 'a brown dog' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'reorder', 'speak', 'wheel', 'openbox']);
   });
 
   it('offers match too from three items with unique answers', () => {
@@ -163,7 +166,7 @@ describe('availableGameModes', () => {
       { id: '2', prompt: 'b', answer: 'a brown dog' },
       { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'match', 'speak', 'wheel', 'openbox']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'match', 'reorder', 'speak', 'wheel', 'openbox']);
   });
 
   it('withholds match from three items when two answers collide', () => {
@@ -172,7 +175,15 @@ describe('availableGameModes', () => {
       { id: '2', prompt: 'b', answer: 'a red cat' },
       { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
-    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
+    expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'reorder', 'speak', 'wheel', 'openbox']);
+  });
+
+  it('withholds reorder when every answer is a single word', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'dog' },
+    ];
+    expect(availableGameModes(items)).not.toContain('reorder');
   });
 });
 
@@ -200,9 +211,20 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
   });
 
   it('falls back to quiz for a reserved template with no shipped game yet', () => {
-    expect(initialGameMode('reorder', eligibleForMatch)).toBe('quiz');
     expect(initialGameMode('cloze', eligibleForMatch)).toBe('quiz');
     expect(initialGameMode('groupsort', eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in reorder for the reorder template, when eligible', () => {
+    // `eligibleForMatch`'s own answers are all multi-word, so they are
+    // `reorder`-eligible too (>= 2 words) — reused here rather than a
+    // separate fixture.
+    expect(initialGameMode('reorder', eligibleForMatch)).toBe('reorder');
+  });
+
+  it('falls back to quiz for the reorder template when not (yet) eligible', () => {
+    const singleWordItems: GameItem[] = [{ id: '1', prompt: 'a', answer: 'cat' }];
+    expect(initialGameMode('reorder', singleWordItems)).toBe('quiz');
   });
 
   it('offers anagram/hangman only once an eligible single-word answer exists', () => {
@@ -282,6 +304,26 @@ describe('anagramEligible / hangmanEligible', () => {
 
   it('keeps only single-word answers within the (longer) hangman length range', () => {
     expect(hangmanEligible(items).map((i) => i.id)).toEqual(['1', '3']);
+  });
+});
+
+describe('reorderEligible', () => {
+  it('keeps only answers of 2 or more words', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'a long phrase' },
+      { id: '3', prompt: 'c', answer: 'two words' },
+    ];
+    expect(reorderEligible(items).map((i) => i.id)).toEqual(['2', '3']);
+  });
+
+  it('ignores extra whitespace when counting words', () => {
+    const items: GameItem[] = [{ id: '1', prompt: 'a', answer: '  two   words  ' }];
+    expect(reorderEligible(items)).toHaveLength(1);
+  });
+
+  it('keeps zero for an empty list', () => {
+    expect(reorderEligible([])).toEqual([]);
   });
 });
 
