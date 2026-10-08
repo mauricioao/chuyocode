@@ -62,6 +62,7 @@ import QuizAnagram from './QuizAnagram';
 import QuizHangman from './QuizHangman';
 import QuizTrueFalse from './QuizTrueFalse';
 import QuizOpenBox from './QuizOpenBox';
+import QuizCloze from './QuizCloze';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -90,6 +91,7 @@ const SUPPORTED_MODES: readonly GameMode[] = [
   'hangman',
   'truefalse',
   'openbox',
+  'cloze',
 ];
 
 export default function QuizBlockPractice({
@@ -124,7 +126,8 @@ export default function QuizBlockPractice({
     effectiveMode === 'anagram' ||
     effectiveMode === 'hangman' ||
     effectiveMode === 'truefalse' ||
-    effectiveMode === 'openbox'
+    effectiveMode === 'openbox' ||
+    effectiveMode === 'cloze'
   ) {
     return (
       <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
@@ -146,6 +149,7 @@ export default function QuizBlockPractice({
           <QuizTrueFalse lang={lang} items={deriveTrueFalseItems(payload, seedFromString(block.id))} />
         )}
         {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
+        {effectiveMode === 'cloze' && <QuizCloze lang={lang} payload={payload} seed={block.id} />}
       </div>
     );
   }

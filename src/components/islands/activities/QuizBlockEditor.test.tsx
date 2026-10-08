@@ -79,6 +79,23 @@ function ReorderHarness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
+/** Same harness, authoring a `template: 'cloze'` block ("Completar la frase"). */
+function ClozeHarness({ initialPayload }: { initialPayload: Payload }) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="cloze"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={setPayload}
+    />
+  );
+}
+
 describe('QuizBlockEditor — empty state (item 4, example-first)', () => {
   it('shows the empty-questions message, a 3-question example preview, and no question list or checklist', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
@@ -584,5 +601,95 @@ describe('QuizBlockEditor — "Reordenar" (sentence authoring)', () => {
     render(<ReorderHarness initialPayload={payload} />);
     fireEvent.change(screen.getByTestId('reorder-sentence-s1'), { target: { value: 'Cats sleep' } });
     expect((screen.getByTestId('reorder-sentence-s1') as HTMLInputElement).value).toBe('Cats sleep');
+  });
+});
+
+describe('QuizBlockEditor — "Completar la frase" (cloze authoring)', () => {
+  it('renders the bracket-sentence editor instead of the Básico question-card list', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('cloze-editor-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+  });
+
+  it('shows the "add at least one sentence" hint until a sentence has >= 1 blank', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('cloze-hint-b1').textContent).toContain('Agrega al menos una frase');
+  });
+
+  it('"+ Agregar frase" adds a new, bracket-less sentence row', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    expect(screen.getAllByTestId(/^cloze-sentence-/)).toHaveLength(1);
+  });
+
+  it('typing a bracketed sentence commits one drop slot per blank and hides the hint', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    const [sentenceInput] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentenceInput, { target: { value: 'I [was] travelling when I [received] a phone call.' } });
+
+    expect(screen.queryByTestId('cloze-hint-b1')).toBeNull();
+    expect((sentenceInput as HTMLInputElement).value).toBe(
+      'I [was] travelling when I [received] a phone call.',
+    );
+  });
+
+  it('Enter in a sentence field adds another one and focuses it', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    const [sentenceInput] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentenceInput, { target: { value: 'She [goes] to school.' } });
+    fireEvent.keyDown(sentenceInput, { key: 'Enter' });
+
+    const sentenceInputs = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs).toHaveLength(2);
+    expect(document.activeElement).toBe(sentenceInputs[1]);
+  });
+
+  it('removing a sentence ("×") deletes exactly its own rows/slots/pool items', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    fireEvent.change(screen.getAllByTestId(/^cloze-sentence-/)[0]!, {
+      target: { value: 'She [goes] to school.' },
+    });
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    fireEvent.change(screen.getAllByTestId(/^cloze-sentence-/)[1]!, {
+      target: { value: 'They [have] arrived.' },
+    });
+
+    fireEvent.click(screen.getByTestId('cloze-remove-0'));
+    const remaining = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.value).toBe('They [have] arrived.');
+  });
+
+  it('round-trips a reloaded multi-blank sentence back into the bracket textbox', () => {
+    const payload: Payload = {
+      pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'was' }, { id: 'w2', text: 'received' }] },
+      slots: [
+        { id: 'slot-a', label: 'I ___ travelling when I received a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] },
+        { id: 'slot-b', label: 'I was travelling when I ___ a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w2'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' },
+        { kind: 'row', id: 'row-cz-s0-b1-2', slotId: 'slot-b' },
+      ],
+    };
+    render(<ClozeHarness initialPayload={payload} />);
+    expect((screen.getByTestId('cloze-sentence-0') as HTMLInputElement).value).toBe(
+      'I [was] travelling when I [received] a phone call.',
+    );
+  });
+
+  it('the "Palabras extra (distractores)" field commits/reads back unclaimed pool items', () => {
+    const payload: Payload = {
+      pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'goes' }] },
+      slots: [{ id: 'slot-a', label: 'She ___ to school.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' }],
+    };
+    render(<ClozeHarness initialPayload={payload} />);
+    fireEvent.change(screen.getByTestId('cloze-distractors-b1'), { target: { value: 'is, went' } });
+    expect((screen.getByTestId('cloze-distractors-b1') as HTMLInputElement).value).toBe('is, went');
   });
 });

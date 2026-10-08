@@ -9,18 +9,27 @@ function noopHandlers() {
     onSelectQuestions: vi.fn(),
     onSelectMatch: vi.fn(),
     onSelectReorder: vi.fn(),
+    onSelectCloze: vi.fn(),
   };
 }
 
-const ALL_CARDS = ['picker-worksheet', 'picker-questions', 'picker-match', 'picker-reorder'];
+const ALL_CARDS = ['picker-worksheet', 'picker-questions', 'picker-match', 'picker-reorder', 'picker-cloze'];
 
 describe('BlockTypePicker', () => {
-  it('renders the worksheet, questions, match and reorder cards, in Spanish', () => {
+  it('renders the worksheet, questions, match, reorder and cloze cards, in Spanish', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
     expect(screen.getByTestId('picker-questions').textContent).toContain('Básico');
     expect(screen.getByTestId('picker-match').textContent).toContain('Une las parejas');
     expect(screen.getByTestId('picker-reorder').textContent).toContain('Reordenar');
+    expect(screen.getByTestId('picker-cloze').textContent).toContain('Completar la frase');
+  });
+
+  it('clicking the cloze card calls onSelectCloze', () => {
+    const handlers = noopHandlers();
+    render(<BlockTypePicker lang="es" {...handlers} />);
+    fireEvent.click(screen.getByTestId('picker-cloze'));
+    expect(handlers.onSelectCloze).toHaveBeenCalledOnce();
   });
 
   it('renders in English', () => {
@@ -42,11 +51,11 @@ describe('BlockTypePicker', () => {
     );
   });
 
-  it('lays the cards out as one responsive grid (4 columns wide, 2 narrower, 1 on a phone)', () => {
+  it('lays the cards out as one responsive grid (5 columns wide, 2 narrower, 1 on a phone)', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('block-type-picker').className).toContain('grid-cols-1');
     expect(screen.getByTestId('block-type-picker').className).toContain('sm:grid-cols-2');
-    expect(screen.getByTestId('block-type-picker').className).toContain('lg:grid-cols-4');
+    expect(screen.getByTestId('block-type-picker').className).toContain('lg:grid-cols-5');
   });
 
   it('calls onSelectWorksheet when the worksheet card is chosen', () => {

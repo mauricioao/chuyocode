@@ -31,6 +31,7 @@ import { rotatedSize } from './canvasViewport';
 import { zoneExceedsMaxZoom, type Size } from './presentationCamera';
 import { STAGE_SAFE_WIDTH, STAGE_SAFE_HEIGHT } from './fitStage';
 import { deriveGameItems, seedFromString, shuffleWithSeed, type GameItem } from './gameModes';
+import { deriveClozeGameSentences, type ClozeGameSegment } from './clozeSentences';
 
 /** A deterministic word shuffle that is never the sentence's own original order — same anti-identity rule `QuizReorder.tsx`'s own tile shuffle follows, applied here to plain words (no interactive tile ids needed for a static slide). */
 function shuffledWords(words: readonly string[], seed: number): string[] {
@@ -183,6 +184,19 @@ export type PresentationSlide =
       words: string[];
     }
   | {
+      /**
+       * "Completar la frase" in presentation mode: ONE SLIDE PER SENTENCE,
+       * same posture as `'reorder'` above — `segments` is the sentence's own
+       * text/blank structure, already resolved by `clozeSentences.ts`'s own
+       * `deriveClozeGameSentences`, unrevealed a blank shows an empty line,
+       * revealed it shows its own correct word.
+       */
+      kind: 'cloze';
+      blockId: string;
+      seq: number;
+      segments: ClozeGameSegment[];
+    }
+  | {
       kind: 'worksheet-overview';
       blockId: string;
       name?: string;
@@ -243,6 +257,15 @@ export function buildPresentationSlides(blocks: readonly Block[]): PresentationS
             sentence,
             words: shuffledWords(words, seedFromString(`${block.id}:${slot.id}:present`)),
           });
+        }
+        continue;
+      }
+      if (block.template === 'cloze') {
+        // ONE SLIDE PER SENTENCE, same posture as `'reorder'` above — a
+        // sentence with no real blank yet (still bracket-less) derives no
+        // entry at all (`deriveClozeGameSentences` already skips it).
+        for (const sentence of deriveClozeGameSentences(block.payload)) {
+          slides.push({ kind: 'cloze', blockId: block.id, seq: sentence.seq, segments: sentence.segments });
         }
         continue;
       }

@@ -12,6 +12,7 @@
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block } from '@/lib/activities/blocks';
 import { zoneAnswerSummary, zoneOptionsSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
+import { deriveClozeGameSentences } from '@/lib/activities/clozeSentences';
 import { FadeImage } from '@/components/ui/fade-image';
 
 export interface ModerationBlockPreviewProps {
@@ -108,6 +109,48 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
             </li>
           ))}
         </ul>
+      </div>
+    );
+  }
+
+  // "Completar la frase": each sentence printed plainly, its own blank
+  // words highlighted inline (the sentence's own authored content, same
+  // "nothing to reveal behind `showAnswers`" reasoning `reorder` uses
+  // above), plus the block's own distractors listed once underneath.
+  if (block.template === 'cloze') {
+    const poolName = block.payload.slots.find((s) => s.input === 'drop')?.pool;
+    const pool = poolName ? (block.payload.pools[poolName] ?? []) : [];
+    const claimedIds = new Set(block.payload.slots.flatMap((s) => s.answer));
+    const distractors = pool.filter((item) => !claimedIds.has(item.id));
+
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
+          {deriveClozeGameSentences(block.payload).map((sentence) => (
+            <li
+              key={sentence.seq}
+              data-testid={`moderation-cloze-${sentence.seq}`}
+              className="rounded-md border border-border p-2 text-sm"
+            >
+              <span className="text-foreground">
+                {sentence.segments.map((seg, i) =>
+                  seg.kind === 'text' ? (
+                    <span key={i}>{seg.text}</span>
+                  ) : (
+                    <strong key={seg.slotId ?? i} className="text-accent-ink">
+                      {seg.text}
+                    </strong>
+                  ),
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {distractors.length > 0 && (
+          <p data-testid={`moderation-cloze-distractors-${block.id}`} className="text-sm text-muted-foreground">
+            {t.clozeDistractorsLabel}: {distractors.map((item) => item.text ?? item.id).join(', ')}
+          </p>
+        )}
       </div>
     );
   }

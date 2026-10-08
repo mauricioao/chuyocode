@@ -786,6 +786,19 @@ export default function ActivityEditorIsland({
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
+  // "Completar la frase" (cloze): same shape as Reorder above, just tagged
+  // with the `'cloze'` template.
+  const handleClozeChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'cloze',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
       // `WorksheetUploader` always hands back exactly ONE image now —
@@ -1001,6 +1014,7 @@ export default function ActivityEditorIsland({
                 onSelectQuestions={handleQuestionsChosen}
                 onSelectMatch={handleMatchChosen}
                 onSelectReorder={handleReorderChosen}
+                onSelectCloze={handleClozeChosen}
               />
             )}
 

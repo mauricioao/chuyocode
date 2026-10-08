@@ -11,6 +11,7 @@
  */
 import { normalizeAnswer } from '@/lib/exerciseGrading';
 import { splitLabelAtBlank, type Payload, type Slot } from '@/lib/exercisePayload';
+import { isDropGap } from '@/lib/quizQuestionType';
 import type { QuizTemplate } from './blocks';
 
 /**
@@ -48,7 +49,8 @@ export type GameMode =
   | 'anagram'
   | 'hangman'
   | 'truefalse'
-  | 'openbox';
+  | 'openbox'
+  | 'cloze';
 
 /**
  * Game modes that carry their OWN "Comprobar"/check affordance, built right
@@ -60,7 +62,7 @@ export type GameMode =
  * future self-checking template (`cloze`, `groupsort` — see `QuizTemplate`)
  * needs to plug into that rule.
  */
-export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set(['match', 'reorder']);
+export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set(['match', 'reorder', 'cloze']);
 
 /** `cards` is worth flipping through from a single item. */
 const MIN_CARDS_ITEMS = 1;
@@ -89,6 +91,9 @@ const MIN_TRUEFALSE_ITEMS = 2;
 
 /** `openbox` (Abre la caja) needs at least two boxes — one box is not a grid. */
 const MIN_OPENBOX_ITEMS = 2;
+
+/** `cloze` needs at least one drag-and-drop gap to fill in. */
+const MIN_CLOZE_ITEMS = 1;
 
 /** `anagram` tiles stay readable and quick to solve within this letter-count range. */
 const ANAGRAM_MIN_LEN = 3;
@@ -216,6 +221,17 @@ export function trueFalseEligibleCount(payload: Payload): number {
 }
 
 /**
+ * How many of a payload's slots are drag-and-drop gaps (`cloze`'s own
+ * eligibility test — every blank of a `template: 'cloze'` block is one such
+ * slot, see `clozeSentences.ts`'s own header, but a plain Básico block with
+ * a `drop`-type gap question is just as eligible, same as `reorder`'s own
+ * "any long-enough answer qualifies" rule).
+ */
+export function clozeEligibleCount(payload: Payload): number {
+  return payload.slots.filter((slot) => isDropGap(slot.input)).length;
+}
+
+/**
  * Derive every playable {@link TrueFalseItem}, one per eligible slot, in
  * authored order. Each statement is seeded 50/50 between its correct answer
  * (a true statement) and a random wrong pool option (a false one) — the SAME
@@ -255,6 +271,7 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
   if (hangmanEligible(items).length >= MIN_HANGMAN_ITEMS) modes.push('hangman');
   if (payload && trueFalseEligibleCount(payload) >= MIN_TRUEFALSE_ITEMS) modes.push('truefalse');
   if (items.length >= MIN_OPENBOX_ITEMS) modes.push('openbox');
+  if (payload && clozeEligibleCount(payload) >= MIN_CLOZE_ITEMS) modes.push('cloze');
   return modes;
 }
 
@@ -267,7 +284,7 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
 const TEMPLATE_DEFAULT_MODE: Record<QuizTemplate, GameMode> = {
   match: 'match',
   reorder: 'reorder',
-  cloze: 'quiz',
+  cloze: 'cloze',
   groupsort: 'quiz',
 };
 

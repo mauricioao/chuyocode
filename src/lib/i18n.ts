@@ -465,6 +465,10 @@ export const UI_LABELS = {
           title: 'Reordenar',
           description: 'Arrastra y suelta palabras para reordenar cada oración correctamente.',
         },
+        cloze: {
+          title: 'Completar la frase',
+          description: 'Arrastra las palabras a los espacios en blanco de la frase.',
+        },
         createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
@@ -881,6 +885,23 @@ export const UI_LABELS = {
         openboxBoxAriaPrefix: 'Caja',
         openboxOpenedSuffix: 'abierta',
         openboxClosedSuffix: 'cerrada',
+        // Completar la frase (Wordwall "Complete the sentence"): one sentence
+        // at a time, its blanks shown inline, a shared word bank below.
+        modeCloze: 'Completar la frase',
+        clozeCheck: 'Comprobar',
+        clozeRetry: 'Reintentar',
+        // "3 de 4 correctas" — composed around the learner's score.
+        clozeResultOf: 'de',
+        clozeResultCorrect: 'correctas',
+        clozeSoundMute: 'Silenciar sonido',
+        clozeSoundUnmute: 'Activar sonido',
+        clozePrev: 'Oración anterior',
+        clozeNext: 'Oración siguiente',
+        // "1 de 4" — the sentence stepper's own position readout.
+        clozeSentenceOf: 'de',
+        clozeTrayLabel: 'Palabras disponibles',
+        clozeBlankEmpty: 'Casilla vacía',
+        clozeRemovePrefix: 'Quitar palabra',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1119,6 +1140,7 @@ export const UI_LABELS = {
         noAnswersYet: 'Todavía sin respuestas',
         zoneLabel: 'Zona',
         quizAnswerLabel: 'Respuesta correcta',
+        clozeDistractorsLabel: 'Distractores',
         explanationLabel: 'Explicación',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
@@ -1175,6 +1197,9 @@ export const UI_LABELS = {
         // "Reordenar" in print (Wordwall templates build): same reasoning as
         // `matchLabel` above — "Básico" would misname a sentence list.
         reorderLabel: 'Reordenar',
+        // "Completar la frase" in print: same reasoning as `matchLabel`.
+        clozeLabel: 'Completar la frase',
+        clozeBankLabel: 'Banco de palabras',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -1231,6 +1256,9 @@ export const UI_LABELS = {
         // slide per sentence, its words shown scrambled; "Mostrar respuesta"
         // reveals the sentence in its correct order.
         reorderTitle: 'Reordenar',
+        // "Completar la frase" in presentation mode: one slide per sentence,
+        // its blanks shown as lines; "Mostrar respuesta" fills them in.
+        clozeTitle: 'Completar la frase',
       },
     },
     // 404 copy. It used to live in a local map inside `404.astro`, which put a
@@ -1926,6 +1954,10 @@ export const UI_LABELS = {
           title: 'Reorder',
           description: 'Drag and drop words to put each sentence back in order.',
         },
+        cloze: {
+          title: 'Complete the sentence',
+          description: 'Drag the words into the sentence\'s blanks.',
+        },
         createError: 'Could not create the activity. Try again.',
       },
       editor: {
@@ -2222,6 +2254,19 @@ export const UI_LABELS = {
         openboxBoxAriaPrefix: 'Box',
         openboxOpenedSuffix: 'opened',
         openboxClosedSuffix: 'closed',
+        modeCloze: 'Complete the sentence',
+        clozeCheck: 'Check',
+        clozeRetry: 'Retry',
+        clozeResultOf: 'of',
+        clozeResultCorrect: 'correct',
+        clozeSoundMute: 'Mute sound',
+        clozeSoundUnmute: 'Unmute sound',
+        clozePrev: 'Previous sentence',
+        clozeNext: 'Next sentence',
+        clozeSentenceOf: 'of',
+        clozeTrayLabel: 'Available words',
+        clozeBlankEmpty: 'Empty slot',
+        clozeRemovePrefix: 'Remove word',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -2382,6 +2427,7 @@ export const UI_LABELS = {
         noAnswersYet: 'No answers yet',
         zoneLabel: 'Zone',
         quizAnswerLabel: 'Correct answer',
+        clozeDistractorsLabel: 'Distractors',
         explanationLabel: 'Explanation',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
@@ -2429,6 +2475,8 @@ export const UI_LABELS = {
         quizLabel: 'Basic',
         matchLabel: 'Match the pairs',
         reorderLabel: 'Reorder',
+        clozeLabel: 'Complete the sentence',
+        clozeBankLabel: 'Word bank',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
@@ -2461,6 +2509,7 @@ export const UI_LABELS = {
         liveWorksheetOverview: 'Worksheet overview',
         matchTitle: 'Match the pairs',
         reorderTitle: 'Reorder',
+        clozeTitle: 'Complete the sentence',
       },
     },
     notFound: {

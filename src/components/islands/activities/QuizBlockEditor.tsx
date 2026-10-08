@@ -94,6 +94,17 @@ import QuizLivePreview from './QuizLivePreview';
 import QuizFirstRunTip from './QuizFirstRunTip';
 import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
+import ClozeEditor, { type ClozeSentenceInput } from './ClozeEditor';
+import {
+  applyClozeSentenceText,
+  applyDistractorsText,
+  deriveClozeSentences,
+  deriveDistractorsText,
+  removeClozeSentence,
+} from '@/lib/activities/clozeSentences';
+
+/** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
+const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
 
 /** Bumped only if the tour's steps/anchors change shape enough that a learner who dismissed the old one should see the new one. */
 const FIRST_RUN_TIPS_KEY = 'chuyo:quiz-editor-tips-v1';
@@ -239,6 +250,8 @@ export default function QuizBlockEditor({
   const t = copyFor(lang);
   const isMatch = template === 'match';
   const isReorder = template === 'reorder';
+  const isCloze = template === 'cloze';
+  const clozePoolName = `${blockId}-cloze-pool`;
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
@@ -411,6 +424,46 @@ export default function QuizBlockEditor({
       }}
       onAdd={addQuestion}
       onRemove={removeQuestion}
+    />
+  );
+
+  // CLOZE AUTHORING ("Completar la frase", same posture as `matchPairs`/
+  // `reorderSentences` above): a `cloze` block is a list of SENTENCES too,
+  // but a sentence may own SEVERAL slots (one per bracketed blank — the
+  // single-value `drop` mechanic cannot represent more than one gap per
+  // slot, see `clozeSentences.ts`'s own header) — so its rows/slots/pool are
+  // managed by that module's own pure commits rather than the generic
+  // `setRowLabel`/`setSlotAnswer` pair every other template reuses.
+  const clozeRows: ClozeSentenceInput[] = isCloze
+    ? deriveClozeSentences(draft).map((row) => ({ seq: row.seq, text: row.text, blankCount: row.blankCount }))
+    : [];
+  const clozeFocusSeq =
+    isCloze && selectedSlotId?.startsWith(CLOZE_FOCUS_PREFIX)
+      ? Number(selectedSlotId.slice(CLOZE_FOCUS_PREFIX.length))
+      : null;
+
+  function addClozeRow() {
+    const nextSeq = clozeRows.length > 0 ? Math.max(...clozeRows.map((r) => r.seq)) + 1 : 0;
+    commit(applyClozeSentenceText(draft, nextSeq, '', clozePoolName, nextId));
+    onSelectSlot(`${CLOZE_FOCUS_PREFIX}${nextSeq}`);
+  }
+
+  function removeClozeRow(seq: number) {
+    commit(removeClozeSentence(draft, seq, clozePoolName));
+    if (selectedSlotId === `${CLOZE_FOCUS_PREFIX}${seq}`) onSelectSlot(null);
+  }
+
+  const clozeColumn = (
+    <ClozeEditor
+      blockId={blockId}
+      lang={lang}
+      sentences={clozeRows}
+      distractorsText={isCloze ? deriveDistractorsText(draft, clozePoolName) : ''}
+      focusSeq={clozeFocusSeq}
+      onSentenceChange={(seq, text) => commit(applyClozeSentenceText(draft, seq, text, clozePoolName, nextId))}
+      onAdd={addClozeRow}
+      onRemove={removeClozeRow}
+      onDistractorsChange={(text) => commit(applyDistractorsText(draft, clozePoolName, text, nextId))}
     />
   );
 
@@ -622,7 +675,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {isMatch ? matchColumn : isReorder ? reorderColumn : questionsColumn}
+        {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : questionsColumn}
       </div>
     );
   }
@@ -675,7 +728,7 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {isMatch ? matchColumn : isReorder ? reorderColumn : questionsColumn}
+          {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}

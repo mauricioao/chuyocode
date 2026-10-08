@@ -135,6 +135,27 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
     }
   }, [createActivity, lang, navigate, t.createError]);
 
+  // "Completar la frase" (cloze): same shape as Reorder above, tagged with
+  // the `'cloze'` template so the editor/practice both know this block
+  // started as a drag-the-words-into-the-blanks activity from its first save.
+  const handleSelectCloze = useCallback(async () => {
+    setBusyCard('cloze');
+    try {
+      const id = await createActivity([
+        { id: crypto.randomUUID(), type: 'quiz', template: 'cloze', payload: { pools: {}, slots: [] } },
+      ]);
+      if (!id) {
+        toast.error(t.createError);
+        setBusyCard(null);
+        return;
+      }
+      navigate(`/${lang}/crear/${id}`);
+    } catch {
+      toast.error(t.createError);
+      setBusyCard(null);
+    }
+  }, [createActivity, lang, navigate, t.createError]);
+
   return (
     <div data-testid="activity-start-island" className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold text-foreground">{t.heading}</h2>
@@ -144,6 +165,7 @@ export default function ActivityStartIsland({ lang, navigate = defaultNavigate }
         onSelectQuestions={handleSelectQuestions}
         onSelectMatch={handleSelectMatch}
         onSelectReorder={handleSelectReorder}
+        onSelectCloze={handleSelectCloze}
         busyCard={busyCard}
       />
     </div>

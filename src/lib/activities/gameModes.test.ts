@@ -211,8 +211,18 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
   });
 
   it('falls back to quiz for a reserved template with no shipped game yet', () => {
-    expect(initialGameMode('cloze', eligibleForMatch)).toBe('quiz');
     expect(initialGameMode('groupsort', eligibleForMatch)).toBe('quiz');
+  });
+
+  it('falls back to quiz for the cloze template without a payload (no drop-gap slots to check)', () => {
+    expect(initialGameMode('cloze', eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in cloze for the cloze template, when the payload has a drop-gap slot', () => {
+    const payload = payloadWith([
+      { id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] },
+    ], { p1: [{ id: 'goes', text: 'goes' }] });
+    expect(initialGameMode('cloze', eligibleForMatch, payload)).toBe('cloze');
   });
 
   it('starts in reorder for the reorder template, when eligible', () => {
@@ -264,6 +274,24 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
     );
     const items = deriveGameItems(payload);
     expect(availableGameModes(items, payload)).toContain('truefalse');
+  });
+
+  it('withholds cloze without a payload, even with drop-eligible-looking items', () => {
+    const items: GameItem[] = [{ id: '1', prompt: 'a', answer: 'cat' }];
+    expect(availableGameModes(items)).not.toContain('cloze');
+  });
+
+  it('withholds cloze when the payload has no drop-gap slot', () => {
+    const payload = payloadWith([{ id: 's1', label: 'What color?', input: 'text', answer: ['blue'] }]);
+    expect(availableGameModes([], payload)).not.toContain('cloze');
+  });
+
+  it('offers cloze once the payload has >= 1 drop-gap slot', () => {
+    const payload = payloadWith(
+      [{ id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] }],
+      { p1: [{ id: 'goes', text: 'goes' }] },
+    );
+    expect(availableGameModes([], payload)).toContain('cloze');
   });
 });
 

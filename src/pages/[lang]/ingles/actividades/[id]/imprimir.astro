@@ -52,6 +52,7 @@ import { orderZonesForReading } from '@lib/activities/zoneGeometry';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@lib/activities/moderationPreview';
 import { splitLabelAtBlank, getSlotItems, type Slot } from '@lib/exercisePayload';
 import { seedFromString, shuffleWithSeed } from '@lib/activities/gameModes';
+import { deriveClozeGameSentences } from '@lib/activities/clozeSentences';
 import type { Block } from '@lib/activities/blocks';
 import '@styles/global.css';
 
@@ -108,6 +109,7 @@ function blockLabel(block: Block, worksheetPosition: number): string {
   if (block.type === 'worksheet') return `${t.worksheetLabel} ${worksheetPosition + 1}`;
   if (block.template === 'match') return t.matchLabel;
   if (block.template === 'reorder') return t.reorderLabel;
+  if (block.template === 'cloze') return t.clozeLabel;
   return t.quizLabel;
 }
 
@@ -292,6 +294,41 @@ function questionText(slot: Slot): string {
             );
           }
 
+          // "Completar la frase" in print: a numbered sentence list, each
+          // blank printed as "________", plus one shared word bank below
+          // (every blank word across the block's sentences, plus the
+          // author's own distractors, shuffled) — same two-part shape
+          // `match`/`reorder` use above, at sentence granularity.
+          if (block.template === 'cloze') {
+            const sentences = deriveClozeGameSentences(block.payload);
+            const poolName = block.payload.slots.find((s) => s.input === 'drop')?.pool;
+            const bank = poolName ? (block.payload.pools[poolName] ?? []) : [];
+            const bankWords = shuffleWithSeed(
+              bank.map((item) => item.text ?? item.id),
+              seedFromString(`${block.id}:cloze-bank:print`),
+            );
+            return (
+              <section data-testid={`print-block-${block.id}`} class="print-quiz">
+                <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+                <ol class="flex flex-col gap-2 text-black">
+                  {sentences.map((sentence) => (
+                    <li data-testid={`print-cloze-${sentence.seq}`}>
+                      {sentence.seq + 1}.{' '}
+                      {sentence.segments
+                        .map((seg) => (seg.kind === 'text' ? seg.text : '________'))
+                        .join('')}
+                    </li>
+                  ))}
+                </ol>
+                {bankWords.length > 0 && (
+                  <p data-testid={`print-cloze-bank-${block.id}`} class="mt-2 text-sm italic">
+                    {t.clozeBankLabel}: {bankWords.join('   ·   ')}
+                  </p>
+                )}
+              </section>
+            );
+          }
+
           return (
             <section data-testid={`print-block-${block.id}`} class="print-quiz">
               <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
@@ -354,6 +391,14 @@ function questionText(slot: Slot): string {
                     {block.payload.slots.map((slot, i) => (
                       <li data-testid={`print-answer-reorder-${slot.id}`}>
                         {i + 1}. {quizSlotAnswerSummary(block.payload, slot)}
+                      </li>
+                    ))}
+                  </ol>
+                ) : block.template === 'cloze' ? (
+                  <ol class="flex flex-col gap-1 text-sm text-black">
+                    {deriveClozeGameSentences(block.payload).map((sentence) => (
+                      <li data-testid={`print-answer-cloze-${sentence.seq}`}>
+                        {sentence.seq + 1}. {sentence.segments.map((seg) => seg.text).join('')}
                       </li>
                     ))}
                   </ol>

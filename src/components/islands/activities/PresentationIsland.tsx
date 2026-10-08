@@ -407,6 +407,7 @@ export default function PresentationIsland({
           )}
           {currentSlide?.kind === 'match' && <MatchSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {currentSlide?.kind === 'reorder' && <ReorderSlide slide={currentSlide} revealed={state.revealed} t={t} />}
+          {currentSlide?.kind === 'cloze' && <ClozeSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {isSummarySlide(state) && (
             <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
           )}
@@ -750,6 +751,51 @@ function ReorderSlide({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * "Completar la frase" in presentation mode — ONE SLIDE PER SENTENCE, same
+ * posture as `ReorderSlide` above: the sentence's own text runs at large
+ * type, each blank unrevealed shown as an empty underline, revealed shown
+ * filled with its own correct word.
+ */
+function ClozeSlide({
+  slide,
+  revealed,
+  t,
+}: {
+  slide: Extract<PresentationSlide, { kind: 'cloze' }>;
+  revealed: boolean;
+  t: PresentCopy;
+}) {
+  return (
+    <div
+      data-testid={`presentation-cloze-${slide.blockId}-${slide.seq}`}
+      className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-10 overflow-y-auto py-6"
+    >
+      <p style={{ fontSize: 64 }} className="text-center font-display font-bold leading-tight text-foreground">
+        {t.clozeTitle}
+      </p>
+      <p style={{ fontSize: 44 }} className="max-w-5xl text-center font-semibold leading-relaxed text-foreground">
+        {slide.segments.map((seg, i) =>
+          seg.kind === 'text' ? (
+            <span key={i}>{seg.text}</span>
+          ) : (
+            <span
+              key={seg.slotId ?? i}
+              data-testid={`presentation-cloze-blank-${seg.slotId}`}
+              className={cn(
+                'mx-2 inline-block min-w-32 border-b-4 border-foreground/40 px-2 text-center align-bottom',
+                revealed && 'border-accent-ink text-accent-ink',
+              )}
+            >
+              {revealed ? seg.text : ' '}
+            </span>
+          ),
+        )}
+      </p>
     </div>
   );
 }
