@@ -42,6 +42,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
+import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
@@ -71,6 +72,8 @@ import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
 import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
+import { useHydrated } from '@/hooks/useHydrated';
 
 /**
  * The window title bar's own `<span>` ids ("desktop" redesign PART 6b) —
@@ -631,6 +634,24 @@ export default function ActivityEditorIsland({
   }, []);
   /** "Ver como presentación" icon button's own tooltip id (icon-only pass, 2026-10-07) — same `ICON_TOOLTIP_*` pattern `ReportActivityButton`/`DuplicateActivityButton` already use. */
   const viewAsPresentationTooltipId = useId();
+  /**
+   * Mobile title bar "⋯" menu (owner report: on a 390px phone the title bar
+   * wrapped into three rows and the title truncated to "Hoj…") — see
+   * `t.mobileMenuLabel`'s own doc. `useIsDesktop`/`useHydrated` pair exactly
+   * like `WorksheetZoneEditor`'s own desktop-overlay/mobile-sheet split and
+   * `EditorSideToolbar`'s own desktop-rail/mobile-bar split (see either
+   * hook's own header): this is a real STRUCTURAL branch — the level
+   * select/status badge/"Ver como presentación"/"Enviar a revisión" each
+   * render in a DIFFERENT portal slot (or a different position within one)
+   * depending on which side of the breakpoint wins, not just a CSS show/hide
+   * of the same markup. `lg:` (1024px) is deliberately the SAME breakpoint
+   * the rest of the editor's mobile layout already uses — not `sm:`/`desk:`
+   * (used elsewhere, for unrelated windows) — so the whole editor flips from
+   * mobile to desktop at one single width.
+   */
+  const isDesktop = useIsDesktop();
+  const hydrated = useHydrated();
+  const mobileMenuTooltipId = useId();
 
   // The window title bar's own EDITABLE title group slot (PART 6b polish) —
   // same resolve-once-on-mount posture as the actions slot above; `null`
@@ -877,6 +898,185 @@ export default function ActivityEditorIsland({
   // to top" button to do there. Preview mode still lists every worksheet
   // block in sequence, so it keeps this unchanged.
   const previewScrollRef = useRef<HTMLDivElement>(null);
+
+  // The level select + review-status badge, exactly as they render on
+  // desktop today (byte-identical markup/testids) — inline in the title
+  // bar's own editable title group, right after the title input. See
+  // `isDesktop`/`hydrated`'s own header above for why this (and the two
+  // variables below) is a real structural branch, not a CSS media query.
+  const desktopLevelAndStatus = (
+    <>
+      <label className="flex shrink-0 items-center gap-1 text-sm">
+        <span className="sr-only">{t.levelLabel}</span>
+        <Select
+          data-testid="activity-level-select"
+          aria-label={t.levelLabel}
+          fieldSize="sm"
+          value={level ?? ''}
+          onChange={(e) => changeLevel(e.target.value)}
+        >
+          <option value="">{t.levelNone}</option>
+          {LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>
+              {levelLabels[lvl]}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <div
+        className="flex shrink-0 flex-wrap items-center gap-2"
+        data-testid="activity-status-badge"
+        data-status={status}
+      >
+        <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+          {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+            ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+            : t.statusDraft}
+        </span>
+        {status === 'rejected' && initialReviewNote && (
+          <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+            {t.reviewNoteLabel}: {initialReviewNote}
+          </span>
+        )}
+      </div>
+    </>
+  );
+
+  // "Ver como presentación" + "Enviar a revisión", exactly as they render on
+  // desktop today — ghost icon button + tooltip, yellow primary button —
+  // portaled into the title bar's own far-right `actions` slot.
+  const desktopActions = (
+    <>
+      <button
+        type="button"
+        data-testid="view-as-presentation-button"
+        aria-label={t.viewAsPresentation}
+        aria-describedby={viewAsPresentationTooltipId}
+        className={ICON_TOOLTIP_TRIGGER_CLASS}
+        onClick={openPresentationPreview}
+      >
+        <PresentationIcon aria-hidden="true" size={16} />
+        <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {t.viewAsPresentation}
+        </span>
+      </button>
+      <Button
+        type="button"
+        size="sm"
+        data-testid="submit-for-review-button"
+        className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+        onClick={openSubmitDialog}
+      >
+        {t.submitForReview}
+      </Button>
+    </>
+  );
+
+  /**
+   * Mobile title bar "⋯" menu (bug fix — owner report: on a 390px phone the
+   * title bar wrapped into three rows and the title truncated to "Hoj…").
+   * ONE compact row on a phone: traffic lights, the title (gets the
+   * remaining width, still editable), and this single trigger — holding the
+   * level select, the review-status badge, "Ver como presentación" AND
+   * "Enviar a revisión". A pure checkbox + `<label>` CSS-only disclosure, NO
+   * JS required for the show/hide itself — same pattern (and the same
+   * no-JS-first posture) as the PRACTICE window's own "Más" overflow menu
+   * (`global.css`'s `[data-desk-window-more]`, `[id].astro`'s own header),
+   * just at `lg:` instead of `desk:` (see `isDesktop`'s own doc above for
+   * why) and under a different attribute name (`data-desk-window-editor-more`)
+   * so the two unrelated features never collide.
+   *
+   * JUDGMENT CALL: the bug report explicitly leaves "Enviar a revisión" as
+   * either a kept compact button OR folded into this menu. It is folded in
+   * here — keeping ANY second control beside the title (even a short
+   * "Enviar" label) still competes with it for the row's width, which is
+   * exactly the regression being fixed; "Enviar a revisión" is also a
+   * once-in-a-while action (done at specific milestones, not every editing
+   * session), so one tap into a clearly-labeled menu costs little. Both
+   * actions keep their exact desktop testids/behaviour here (`onClick`
+   * handlers unchanged) — only WHERE they render differs.
+   */
+  const mobileMenu = (
+    <div className="relative" data-desk-window-editor-more>
+      <input
+        type="checkbox"
+        id="desk-window-editor-more-toggle"
+        className="peer sr-only"
+        aria-label={t.mobileMenuLabel}
+        aria-controls="desk-window-editor-more-content"
+      />
+      <label
+        htmlFor="desk-window-editor-more-toggle"
+        data-testid="activity-mobile-menu-trigger"
+        className={`${ICON_TOOLTIP_TRIGGER_CLASS} cursor-pointer peer-focus-visible:outline-none peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50`}
+      >
+        <DotsThreeIcon aria-hidden="true" size={18} weight="bold" />
+        <span role="tooltip" id={mobileMenuTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+          {t.mobileMenuLabel}
+        </span>
+      </label>
+      <div
+        id="desk-window-editor-more-content"
+        data-testid="activity-mobile-menu-content"
+        // `z-30`: the worksheet canvas's own floating zoom pill/properties
+        // overlay sit at `z-20` (`WorksheetZoneEditor.tsx`) — verified by
+        // screenshot to otherwise paint OVER this menu, since both are
+        // `position: absolute`. One rung above clears every canvas-level
+        // overlay, while staying below the body-portaled side toolbar
+        // (`z-[60]`) and any modal (`z-40`/`z-50`), neither of which is ever
+        // open at the same time as this menu.
+        className="hidden absolute right-0 top-full z-30 mt-2 w-56 max-w-[calc(100vw-2rem)] flex-col items-stretch gap-2 rounded-lg border border-border bg-background p-2 shadow-elevation-2 peer-checked:flex"
+      >
+        <label className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{t.levelLabel}</span>
+          <Select
+            data-testid="activity-level-select"
+            aria-label={t.levelLabel}
+            fieldSize="sm"
+            value={level ?? ''}
+            onChange={(e) => changeLevel(e.target.value)}
+          >
+            <option value="">{t.levelNone}</option>
+            {LEVELS.map((lvl) => (
+              <option key={lvl} value={lvl}>
+                {levelLabels[lvl]}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
+          <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+              : t.statusDraft}
+          </span>
+          {status === 'rejected' && initialReviewNote && (
+            <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
+              {t.reviewNoteLabel}: {initialReviewNote}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          data-testid="view-as-presentation-button"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-muted"
+          onClick={openPresentationPreview}
+        >
+          <PresentationIcon aria-hidden="true" size={16} />
+          {t.viewAsPresentation}
+        </button>
+        <Button
+          type="button"
+          size="sm"
+          data-testid="submit-for-review-button"
+          className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+          onClick={openSubmitDialog}
+        >
+          {t.submitForReview}
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
@@ -1134,42 +1334,32 @@ export default function ActivityEditorIsland({
       {/* "Desktop" redesign PART 6b: the window's own title bar `actions`
           slot (ghost "Ver como presentación" + yellow primary "Enviar a
           revisión") — see `DESK_WINDOW_ACTIONS_ID`'s own doc above for why
-          this is a portal rather than plain JSX in the header row. */}
+          this is a portal rather than plain JSX in the header row. Mobile
+          bug fix: below `lg:` those same two actions move into the title
+          group's own "⋯" menu instead (see `mobileMenu`'s own header) — this
+          slot renders nothing there. `hydrated ? … : …` is the same
+          "no layout flash" SSR split `WorksheetZoneEditor`/`EditorSideToolbar`
+          already use (see `isDesktop`'s own doc above). */}
       {actionsPortalTarget &&
         createPortal(
-          <>
-            <button
-              type="button"
-              data-testid="view-as-presentation-button"
-              aria-label={t.viewAsPresentation}
-              aria-describedby={viewAsPresentationTooltipId}
-              className={ICON_TOOLTIP_TRIGGER_CLASS}
-              onClick={openPresentationPreview}
-            >
-              <PresentationIcon aria-hidden="true" size={16} />
-              <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
-                {t.viewAsPresentation}
-              </span>
-            </button>
-            <Button
-              type="button"
-              size="sm"
-              data-testid="submit-for-review-button"
-              className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
-              onClick={openSubmitDialog}
-            >
-              {t.submitForReview}
-            </Button>
-          </>,
+          hydrated ? (
+            isDesktop ? (
+              desktopActions
+            ) : null
+          ) : (
+            <div className="hidden lg:contents">{desktopActions}</div>
+          ),
           actionsPortalTarget,
         )}
 
       {/* "Desktop" redesign PART 6b polish: the window's own title bar
           EDITABLE title group — the SAME controlled title `<input>` (value/
           onChange/validation/autosave unchanged, just relocated out of the
-          card's own old header row), the level `<select>`, and the
-          review-status badge right after it. See `DESK_WINDOW_TITLE_GROUP_ID`'s
-          own doc above for why this is a portal. */}
+          card's own old header row). See `DESK_WINDOW_TITLE_GROUP_ID`'s own
+          doc above for why this is a portal. Mobile bug fix: the level
+          select/status badge (desktop) collapse into the "⋯" menu (mobile)
+          right after the title input — see `desktopLevelAndStatus`/
+          `mobileMenu`'s own headers above. */}
       {titleGroupPortalTarget &&
         createPortal(
           <>
@@ -1189,39 +1379,20 @@ export default function ActivityEditorIsland({
                 className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground outline-none placeholder:font-semibold placeholder:text-muted-foreground hover:border-border focus-visible:border-border focus-visible:bg-(--color-field) focus-visible:outline-none focus-visible:ring-0"
               />
             </label>
-            <label className="flex shrink-0 items-center gap-1 text-sm">
-              <span className="sr-only">{t.levelLabel}</span>
-              <Select
-                data-testid="activity-level-select"
-                aria-label={t.levelLabel}
-                fieldSize="sm"
-                value={level ?? ''}
-                onChange={(e) => changeLevel(e.target.value)}
-              >
-                <option value="">{t.levelNone}</option>
-                {LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {levelLabels[lvl]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <div
-              className="flex shrink-0 flex-wrap items-center gap-2"
-              data-testid="activity-status-badge"
-              data-status={status}
-            >
-              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-                  ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-                  : t.statusDraft}
-              </span>
-              {status === 'rejected' && initialReviewNote && (
-                <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-                  {t.reviewNoteLabel}: {initialReviewNote}
-                </span>
-              )}
-            </div>
+            {hydrated ? (
+              isDesktop ? (
+                desktopLevelAndStatus
+              ) : (
+                mobileMenu
+              )
+            ) : (
+              <>
+                <div className="hidden lg:contents">{desktopLevelAndStatus}</div>
+                <div className="contents lg:hidden" inert>
+                  {mobileMenu}
+                </div>
+              </>
+            )}
           </>,
           titleGroupPortalTarget,
         )}

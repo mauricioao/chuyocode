@@ -388,6 +388,59 @@ describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b
   });
 });
 
+/** Stubs `useIsDesktop`'s own `matchMedia` query to report a narrow (mobile) viewport — same pattern `EditorSideToolbar.test.tsx`/`WorksheetZoneEditor.test.tsx` already use. */
+function stubMobileViewport() {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
+}
+
+describe('ActivityEditorIsland — mobile title bar "⋯" menu (bug fix, owner report: title truncated to "Hoj…" on a 390px phone)', () => {
+  it('on desktop, shows no "⋯" trigger — the level select/status badge/actions stay inline exactly as before', () => {
+    renderEditor();
+    expect(screen.queryByTestId('activity-mobile-menu-trigger')).toBeNull();
+    expect(screen.getByTestId('activity-level-select')).toBeTruthy();
+  });
+
+  it('on a phone, collapses the level select/status badge/"Ver como presentación"/"Enviar a revisión" behind one "⋯" trigger', () => {
+    stubMobileViewport();
+    renderEditor();
+    expect(screen.getByTestId('activity-mobile-menu-trigger')).toBeTruthy();
+    const menu = screen.getByTestId('activity-mobile-menu-content');
+    expect(menu.contains(screen.getByTestId('activity-level-select'))).toBe(true);
+    expect(menu.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+    expect(menu.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
+    expect(menu.contains(screen.getByTestId('submit-for-review-button'))).toBe(true);
+  });
+
+  it('on a phone, the title-bar actions slot renders nothing of its own — those two actions moved into the "⋯" menu', () => {
+    stubMobileViewport();
+    renderEditor();
+    const actionsSlot = document.getElementById('desk-window-actions');
+    expect(actionsSlot?.children.length).toBe(0);
+  });
+
+  it('on a phone, the level select inside the menu still edits the same document', () => {
+    stubMobileViewport();
+    renderEditor({ initialLevel: 'A1' });
+    fireEvent.change(screen.getByTestId('activity-level-select'), { target: { value: 'B1' } });
+    expect((screen.getByTestId('activity-level-select') as HTMLSelectElement).value).toBe('B1');
+  });
+
+  it('on a phone, "Enviar a revisión" inside the menu still opens the submit dialog', () => {
+    stubMobileViewport();
+    renderEditor();
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+});
+
 describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
   it('mirrors the title into the window title bar, falling back to "Nueva actividad" when empty', () => {
     renderEditor({ initialTitle: 'Mi actividad' });

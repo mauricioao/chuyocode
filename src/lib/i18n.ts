@@ -596,6 +596,13 @@ export const UI_LABELS = {
         // a full-screen overlay presenting the editor's own CURRENT (unsaved
         // included) blocks — `PresentationIsland` reused, not a new route.
         viewAsPresentation: 'Ver como presentación',
+        // Mobile title-bar "⋯" menu (owner report: on a 390px phone the
+        // title bar wrapped into three rows and the title truncated to
+        // "Hoj…") — holds the level select, the review-status badge, "Ver
+        // como presentación" and "Enviar a revisión", collapsed behind one
+        // trigger so the title keeps the row's remaining width. Desktop
+        // never shows this trigger — those same controls stay inline there.
+        mobileMenuLabel: 'Más opciones',
         // Submit-for-review dialog.
         submitForReview: 'Enviar a revisión',
         submitDialogTitle: 'Enviar esta actividad a revisión',
@@ -2111,6 +2118,8 @@ export const UI_LABELS = {
         basedOnPrefix: 'Based on "',
         basedOnSuffix: '" from the community',
         viewAsPresentation: 'View as presentation',
+        // Mobile title-bar "⋯" menu — see the Spanish locale's own header.
+        mobileMenuLabel: 'More options',
         submitForReview: 'Submit for review',
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',
