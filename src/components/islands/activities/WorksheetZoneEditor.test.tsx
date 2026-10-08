@@ -1591,6 +1591,18 @@ describe('WorksheetZoneEditor — mobile properties bottom sheet (mobile layout 
     expect(screen.queryByTestId('zone-properties-sheet')).toBeNull();
   });
 
+  // Bug fix: the peek bar used to be `bottom-0`, exactly overlapping
+  // `EditorSideToolbar`'s own mobile bottom bar (also `fixed inset-x-0
+  // bottom-0 z-40`) — selecting a zone showed nothing usable. It now parks
+  // above that bar instead of flush with the viewport bottom.
+  it('parks the peek bar above the mobile toolbar instead of overlapping it', () => {
+    stubMobileViewport();
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    const classes = screen.getByTestId('zone-properties-sheet-peek').className.split(/\s+/);
+    expect(classes).not.toContain('bottom-0');
+    expect(classes.some((c) => c.startsWith('bottom-[calc(2.5rem'))).toBe(true);
+  });
+
   it('tapping the peek bar expands the full properties form', () => {
     stubMobileViewport();
     render(<Harness initialZones={[zone]} initialSelected="z1" />);

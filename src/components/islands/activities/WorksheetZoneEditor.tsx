@@ -228,6 +228,23 @@ const HANDLE_CURSOR: Record<Handle, string> = {
 
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
+/**
+ * Mobile layout pass, bug fix (owner report: on a phone, selecting a zone
+ * showed nothing usable — this canvas's own collapsed peek bar and
+ * `EditorSideToolbar`'s mobile bottom bar are both `fixed inset-x-0 bottom-0
+ * z-40`, so the later one in DOM order completely covered the other).
+ * `EditorSideToolbar.tsx`'s own mobile bar is `py-1.5` (0.375rem) around a
+ * `size-7` (1.75rem) icon-sm button — 0.375+1.75+0.375 = 2.5rem of visible
+ * content height before its own safe-area-only bottom padding, which the
+ * SAME `env(safe-area-inset-bottom)` term below accounts for identically (it
+ * REPLACES, not adds to, that bar's own bottom padding — see that
+ * component's own `pb-[calc(0.375rem+env(safe-area-inset-bottom))]`).
+ * Passed as this canvas's own peek bar's `peekBottomClassName` (both
+ * BottomSheet instances below) so it parks directly above that bar instead
+ * of underneath it.
+ */
+const MOBILE_TOOLBAR_PEEK_OFFSET = 'bottom-[calc(2.5rem+env(safe-area-inset-bottom))]';
+
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
@@ -2021,6 +2038,7 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
             title={selectedZoneKindLabel ?? t.zoneKindLabel}
             testId="zone-properties-sheet"
             peek={selectedZoneKindLabel !== null ? <span>{selectedZoneKindLabel}</span> : undefined}
+            peekBottomClassName={MOBILE_TOOLBAR_PEEK_OFFSET}
           >
             {zonePropertiesContent}
           </BottomSheet>
@@ -2031,6 +2049,7 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
             title={t.audioPlaceholderTitle}
             testId="audio-marker-properties-sheet"
             peek={audioPanelContent !== null ? <span>{t.toolAudio}</span> : undefined}
+            peekBottomClassName={MOBILE_TOOLBAR_PEEK_OFFSET}
           >
             {audioPanelContent}
           </BottomSheet>
