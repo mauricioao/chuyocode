@@ -763,3 +763,60 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);
   });
 });
+
+// Owner report: "las herramientas se están cargando medio raro al entrar a
+// construir ... primero aparecen a un lado y luego pasan al otro" — the
+// rail's docked position is only known once the dock-sync `useLayoutEffect`
+// measures it, but the SERVER-rendered markup (painted before hydration,
+// visible at `lg:` widths per the describe block above) had no such gating
+// and rendered fully opaque at `{0,0}` every time, then jumped once React
+// took over. Fixed by staying invisible until that first measurement lands.
+describe('EditorSideToolbar — no flash of the wrong docked position before the first measurement', () => {
+  function ssrProps(): Parameters<typeof EditorSideToolbar>[0] {
+    return {
+      lang: 'es',
+      blocks: [],
+      onCollapseAll: vi.fn(),
+      onExpandAll: vi.fn(),
+      onGoToBlock: vi.fn(),
+      onAddBlock: vi.fn(),
+      preview: false,
+      onTogglePreview: vi.fn(),
+      canUndo: false,
+      canRedo: false,
+      onUndo: vi.fn(),
+      onRedo: vi.fn(),
+      onSave: vi.fn(),
+      saveDisabled: false,
+      saveState: 'idle',
+      saveLabels: SAVE_LABELS,
+    };
+  }
+
+  function classesOf(html: string, testId: string): string[] {
+    const match = html.match(new RegExp(`data-testid="${testId}"[^>]*class="([^"]*)"`));
+    return match ? match[1].split(/\s+/) : [];
+  }
+
+  it('renders the server markup fully INVISIBLE (opacity-0), not just at the wrong spot', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
+    const classes = classesOf(html, 'editor-side-toolbar');
+    expect(classes).toContain('opacity-0');
+    expect(classes).not.toContain('opacity-100');
+  });
+
+  it('becomes visible (fades in) once the first real position is measured on mount', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.className.split(/\s+/)).toContain('opacity-100');
+    expect(rail.className.split(/\s+/)).not.toContain('opacity-0');
+  });
+
+  it('transitions opacity (never none) so the reveal is a short fade, except under prefers-reduced-motion', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.className).toMatch(/\btransition-opacity\b/);
+    expect(rail.className).toMatch(/\bmotion-reduce:transition-none\b/);
+  });
+});
