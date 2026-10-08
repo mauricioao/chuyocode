@@ -95,20 +95,51 @@ export const CONTROL_SCALE = 'text-[length:1em]';
  */
 export const STAGE_CONTAINER = '@container';
 
-/** Tile/slot/blank/prompt text — ~20px on a narrow stage, up to the owner's own "readable from the back of the room" ~44px on a wide/full-screen one. */
-export const TILE_TEXT_SCALE = 'text-[clamp(1.25rem,1rem+2.5cqw,2.75rem)]';
+/**
+ * A stage root with a KNOWN, bounded HEIGHT (visual-polish-3 pass, owner bug:
+ * an 8-pair match board — and group-sort's 4x4 ceiling — overflowed even
+ * 1440x900 full screen, "Comprobar" reachable only via an inner scroll the
+ * learner had to discover). {@link STAGE_CONTAINER} alone only ever measured
+ * WIDTH (`container-type: inline-size`): every tile/box token below grew
+ * off `cqw` alone, so a tall board at a wide-but-not-tall viewport (1280x720)
+ * kept growing tiles toward their ceiling with no regard for how many ROWS
+ * had to stack underneath them.
+ *
+ * `container-type: size` containment, both axes at once — unlocks `cqh`
+ * (1% of the container's own block size) for the same tokens' `min(…cqw,
+ * …cqh)` terms below, so a tile's growth is bounded by whichever axis is
+ * tighter.
+ *
+ * ONLY FOR A ROOT WHOSE HEIGHT COMES FROM OUTSIDE ITS OWN CONTENT —
+ * `ActivityPracticeIsland`'s two stage wrappers qualify: each is a
+ * `flex-1` flex item (`flex: 1 1 0%`, so its hypothetical main size is `0`,
+ * never its content) inside a column flex chain that bottoms out at a
+ * viewport-bound ancestor ("modo enfoque"'s `fixed inset-0`, or the desk
+ * window's own fixed-height body) — so its used height is fully resolved by
+ * the flex algorithm before layout ever looks at what is inside it, exactly
+ * the condition `container-type: size` needs to avoid collapsing to a
+ * zero-height box. `QuizLivePreview`'s own column is NOT one of these: it
+ * grows to fit its content (no `flex-1`/bounded ancestor), so it keeps the
+ * plain {@link STAGE_CONTAINER} (width only) — giving it this token instead
+ * would starve its own height to zero, same failure mode this doc warns
+ * against.
+ */
+export const STAGE_CONTAINER_SIZE = '[container-type:size]';
+
+/** Tile/slot/blank/prompt text — ~20px on a narrow stage, up to the owner's own "readable from the back of the room" ~44px on a wide/full-screen one; the `cqh` term keeps a tall board (8 pairs, a 4x4 group-sort) from outgrowing a SHORT viewport the way the `cqw`-only ramp used to. */
+export const TILE_TEXT_SCALE = 'text-[clamp(1.1rem,0.9rem+min(2.5cqw,1.4cqh),2.75rem)]';
 
 /** Tile/slot/blank horizontal padding — grows alongside {@link TILE_TEXT_SCALE} so the shape stays the same recipe at every size, just bigger. */
-export const TILE_PADDING_X_SCALE = 'px-[clamp(1rem,0.6rem+1.6cqw,1.75rem)]';
+export const TILE_PADDING_X_SCALE = 'px-[clamp(0.75rem,0.5rem+min(1.6cqw,0.9cqh),1.75rem)]';
 
 /** Tile/slot/blank vertical padding — see {@link TILE_PADDING_X_SCALE}. */
-export const TILE_PADDING_Y_SCALE = 'py-[clamp(0.75rem,0.4rem+1.2cqw,1.25rem)]';
+export const TILE_PADDING_Y_SCALE = 'py-[clamp(0.375rem,0.25rem+min(1.2cqw,0.6cqh),1.25rem)]';
 
 /** Tile/slot/blank minimum height — keeps the touch target big even a moment before the text clamp visually catches up. */
-export const TILE_MIN_HEIGHT_SCALE = 'min-h-[clamp(3.5rem,3rem+2cqw,5.5rem)]';
+export const TILE_MIN_HEIGHT_SCALE = 'min-h-[clamp(2.25rem,2rem+min(2cqw,1.1cqh),5.5rem)]';
 
 /** A multi-tile container's own floor (the reorder line, a group-sort box) — bigger than one tile's own floor since it holds several. */
-export const STAGE_BOX_MIN_HEIGHT_SCALE = 'min-h-[clamp(6rem,5rem+4cqw,11rem)]';
+export const STAGE_BOX_MIN_HEIGHT_SCALE = 'min-h-[clamp(5rem,4.5rem+min(4cqw,2.2cqh),11rem)]';
 
 /**
  * A board with MANY rows (`QuizMatching`'s own "Une las parejas" — visual-

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTAINER,
+  STAGE_CONTAINER_SIZE,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
@@ -10,22 +11,26 @@ import {
 } from './scale';
 
 describe('scale — shared game-stage sizing tokens (visual-polish pass)', () => {
-  it('STAGE_CONTAINER marks a stage root as a size container', () => {
+  it('STAGE_CONTAINER marks a stage root as a width-only size container', () => {
     expect(STAGE_CONTAINER).toBe('@container');
   });
 
-  it('TILE_TEXT_SCALE is a container-query clamp, not a fixed/viewport-breakpoint size', () => {
-    expect(TILE_TEXT_SCALE).toMatch(/^text-\[clamp\(.+cqw.+\)\]$/);
+  it('STAGE_CONTAINER_SIZE marks a stage root with a known height as a full (both-axis) size container, unlocking cqh', () => {
+    expect(STAGE_CONTAINER_SIZE).toBe('[container-type:size]');
   });
 
-  it('TILE_PADDING_X_SCALE and TILE_PADDING_Y_SCALE are container-query clamps too', () => {
-    expect(TILE_PADDING_X_SCALE).toMatch(/^px-\[clamp\(.+cqw.+\)\]$/);
-    expect(TILE_PADDING_Y_SCALE).toMatch(/^py-\[clamp\(.+cqw.+\)\]$/);
+  it('TILE_TEXT_SCALE is a container-query clamp bounded by BOTH axes (cqw and cqh), not a fixed/viewport-breakpoint size', () => {
+    expect(TILE_TEXT_SCALE).toMatch(/^text-\[clamp\(.+min\(.*cqw.*,.*cqh.*\).+\)\]$/);
   });
 
-  it('TILE_MIN_HEIGHT_SCALE and STAGE_BOX_MIN_HEIGHT_SCALE are container-query clamps', () => {
-    expect(TILE_MIN_HEIGHT_SCALE).toMatch(/^min-h-\[clamp\(.+cqw.+\)\]$/);
-    expect(STAGE_BOX_MIN_HEIGHT_SCALE).toMatch(/^min-h-\[clamp\(.+cqw.+\)\]$/);
+  it('TILE_PADDING_X_SCALE and TILE_PADDING_Y_SCALE are dual-axis container-query clamps too', () => {
+    expect(TILE_PADDING_X_SCALE).toMatch(/^px-\[clamp\(.+min\(.*cqw.*,.*cqh.*\).+\)\]$/);
+    expect(TILE_PADDING_Y_SCALE).toMatch(/^py-\[clamp\(.+min\(.*cqw.*,.*cqh.*\).+\)\]$/);
+  });
+
+  it('TILE_MIN_HEIGHT_SCALE and STAGE_BOX_MIN_HEIGHT_SCALE are dual-axis container-query clamps', () => {
+    expect(TILE_MIN_HEIGHT_SCALE).toMatch(/^min-h-\[clamp\(.+min\(.*cqw.*,.*cqh.*\).+\)\]$/);
+    expect(STAGE_BOX_MIN_HEIGHT_SCALE).toMatch(/^min-h-\[clamp\(.+min\(.*cqw.*,.*cqh.*\).+\)\]$/);
   });
 
   it('STAGE_TWO_COL_GRID is a container-query grid (not a viewport breakpoint) with a one-column floor', () => {

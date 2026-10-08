@@ -68,19 +68,24 @@ describe('ActivityPracticeIsland — rendering blocks (one at a time)', () => {
 
 describe('ActivityPracticeIsland — game stage sizing (visual-polish pass)', () => {
   // The four big drag-and-drop games size their own tiles/slots/boxes off
-  // the STAGE's own container width (`mechanics/scale.ts`'s `cqw`-based
-  // clamps), not the viewport — so each stage root needs `container-type:
-  // inline-size` (the `@container` utility) for that to resolve to anything
-  // other than its own floor value. Both the normal view's stage and "modo
-  // enfoque"'s own stage need it independently — they mount a fresh
-  // `QuizBlockPractice` each (this file's own header).
-  it('marks the normal view\'s quiz stage as a size container', () => {
+  // the STAGE's own container width AND height (`mechanics/scale.ts`'s
+  // `min(cqw, cqh)`-based clamps, visual-polish-3 pass), not the viewport —
+  // so each stage root needs `container-type: size` (`STAGE_CONTAINER_SIZE`,
+  // the `[container-type:size]` arbitrary utility) for `cqw`/`cqh` to resolve
+  // to anything other than their own floor value. Both the normal view's
+  // stage and "modo enfoque"'s own stage need it independently — they mount
+  // a fresh `QuizBlockPractice` each (this file's own header). Both stages
+  // qualify for full size containment because they are `flex-1` flex items
+  // whose own used height never depends on their content (`scale.ts`'s own
+  // `STAGE_CONTAINER_SIZE` doc) — unlike `QuizLivePreview`'s own column,
+  // which keeps the width-only `@container` instead.
+  it('marks the normal view\'s quiz stage as a full (both-axis) size container', () => {
     renderIsland([QUIZ]);
     const stage = screen.getByTestId('quiz-practice-q1').parentElement;
-    expect(stage?.className).toContain('@container');
+    expect(stage?.className).toContain('[container-type:size]');
   });
 
-  it('marks "modo enfoque"\'s own quiz stage as a size container too', () => {
+  it('marks "modo enfoque"\'s own quiz stage as a full size container too', () => {
     const toggle = document.createElement('button');
     toggle.id = 'activity-focus-mode-toggle';
     document.body.appendChild(toggle);
@@ -88,7 +93,7 @@ describe('ActivityPracticeIsland — game stage sizing (visual-polish pass)', ()
     fireEvent.click(toggle);
     const stage = screen.getByTestId('practice-focus-mode').querySelector('[data-testid="quiz-practice-q1"]')
       ?.parentElement;
-    expect(stage?.className).toContain('@container');
+    expect(stage?.className).toContain('[container-type:size]');
     toggle.remove();
   });
 });

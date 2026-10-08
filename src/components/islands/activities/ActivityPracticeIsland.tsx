@@ -78,7 +78,7 @@ import { Button } from '@/components/ui/button';
 import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
-import { STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
+import { STAGE_CONTAINER_SIZE } from '@/components/islands/mechanics/scale';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -517,7 +517,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
             // it. "Modo enfoque"'s own stage wrapper already carries `flex
             // flex-col` for exactly this reason — this view is the one that
             // was missing it.
-            <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-3', STAGE_CONTAINER)}>
+            <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-3', STAGE_CONTAINER_SIZE)}>
               <QuizBlockPractice
                 lang={lang}
                 block={activeBlock as QuizBlock}
@@ -628,7 +628,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               <XIcon aria-hidden="true" size={18} />
             </button>
 
-            <div className={cn('flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10', STAGE_CONTAINER)}>
+            <div className={cn('flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10', STAGE_CONTAINER_SIZE)}>
               {activeBlock.type === 'worksheet' ? (
                 <WorksheetPracticePlayer
                   lang={lang}
