@@ -17,27 +17,23 @@
  * convention as `sitemap.xml.ts`/`robots.txt.ts`, puts the dot in that first
  * segment and reaches this handler with no middleware change needed.
  *
- * `prerender = true` + `getStaticPaths` opts these two routes OUT of this
- * otherwise fully SSR site (`astro.config.mjs`'s `output: 'server'` — see
- * that file's own header) and into build-time static generation: the
- * response never depends on `Astro.locals`/cookies/geo, so there is nothing
- * here that NEEDS a live request, and shipping it as a build-time static
- * asset means Netlify's CDN serves it with zero function invocations.
+ * Served from SSR, not prerendered: a prerendered route makes `astro build`
+ * run the middleware, whose imports load the deployment secrets at import
+ * time, and CI builds without them (`src/pagesNoPrerender.test.ts`). The
+ * response never depends on `Astro.locals`/cookies/geo, so Netlify's CDN can
+ * keep it until the next deploy (which purges it) with no function
+ * invocation per visitor; browsers keep it for an hour only, because the URL
+ * carries no content hash and a tip edit must reach returning visitors.
  *
  * Payload stays minimal: `{ id, character, html }` per tip. The character's
  * DISPLAY NAME and avatar image are resolved client-side from `CharacterSlug`
  * through `@/content/characters` (already imported by `deskHelper.ts` for
  * the SSR-picked tip) rather than repeated 100 times in this JSON.
  */
-import type { APIRoute, GetStaticPaths } from 'astro';
-import { SUPPORTED_LANGS, type Lang } from '@lib/i18n';
+import type { APIRoute } from 'astro';
+import { isValidLang } from '@lib/i18n';
 import { DESK_HELPER_TIPS } from '@/content/deskHelperTips';
 import type { CharacterSlug } from '@/content/characters';
-
-export const prerender = true;
-
-export const getStaticPaths: GetStaticPaths = () =>
-  SUPPORTED_LANGS.map((lang) => ({ params: { lang } }));
 
 export interface DeskTipPayload {
   id: string;
@@ -46,7 +42,10 @@ export interface DeskTipPayload {
 }
 
 export const GET: APIRoute = ({ params }) => {
-  const lang = params.lang as Lang;
+  const lang = params.lang;
+  if (!lang || !isValidLang(lang)) {
+    return new Response(null, { status: 404 });
+  }
   const body: DeskTipPayload[] = DESK_HELPER_TIPS.map((tip) => ({
     id: tip.id,
     character: tip.character,
@@ -57,9 +56,8 @@ export const GET: APIRoute = ({ params }) => {
     status: 200,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      // Build-time static content, keyed by lang in the URL itself — safe to
-      // cache for a long time; a content change ships under a new deploy.
-      'cache-control': 'public, max-age=31536000, immutable',
+      'cache-control': 'public, max-age=3600',
+      'netlify-cdn-cache-control': 'public, durable, max-age=31536000',
     },
   });
 };
