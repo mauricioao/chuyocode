@@ -86,6 +86,7 @@
  * the selected zone; Delete/Backspace removes it.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MinusIcon } from '@phosphor-icons/react/dist/ssr/Minus';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
@@ -169,6 +170,16 @@ export interface WorksheetZoneEditorProps {
    */
   incompleteZoneId?: string | null;
   incompleteMessage?: string | null;
+  /**
+   * The thin active-sheet bar's own middle slot (owner decision 2026-10-07,
+   * "Barra fina debajo", build item 3: "no second toolbar row") — when
+   * given (and hydrated), this component's own zoom/tool row portals INTO
+   * it instead of rendering inline. `null`/omitted (every existing test in
+   * this file, and any other standalone render) keeps today's inline
+   * toolbar unchanged — a graceful fallback, same posture as
+   * `ActivityEditorIsland.tsx`'s own portal targets.
+   */
+  toolbarPortalTarget?: HTMLElement | null;
 }
 
 /** The two canvas tools (owner-approved design) — see the file header. */
@@ -203,6 +214,7 @@ export default function WorksheetZoneEditor({
   rotation = 0,
   incompleteZoneId,
   incompleteMessage = null,
+  toolbarPortalTarget = null,
 }: WorksheetZoneEditorProps) {
   const t = UI_LABELS[lang].activities.worksheet;
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -1321,9 +1333,115 @@ export default function WorksheetZoneEditor({
     </div>
   ) : null;
 
+  // The zoom/tool row (owner decision 2026-10-07, "Barra fina debajo",
+  // build item 3: "no second toolbar row") — when the active-sheet bar
+  // hands this component a middle slot, this portals straight into it
+  // instead of rendering its own row here. `null` (every existing test in
+  // this file, and any other standalone caller) keeps the original inline
+  // card unchanged — a graceful fallback, same posture as
+  // `ActivityEditorIsland.tsx`'s own portal targets.
+  const zoomToolbar = (
+    <div
+      className={
+        toolbarPortalTarget
+          ? // Portaled into the active-sheet bar's own middle slot (build item
+            // 3): that bar is a single horizontally-SCROLLING line on phones
+            // (never wraps — see `BlockList.tsx`'s own header), so this stays
+            // one line too, matching it, rather than wrapping internally.
+            'flex flex-nowrap items-center gap-1'
+          : 'mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1'
+      }
+      data-testid="zoom-toolbar"
+    >
+      <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
+        <MinusIcon aria-hidden="true" />
+      </Button>
+      {/* Editable zoom % (owner-approved design, replacing the old
+          read-only span): Enter/blur applies, Escape reverts, accepts
+          "80" or "80%", clamped 10%-400%. Wheel over this input does NOT
+          zoom — it is outside `viewportRef`'s own subtree entirely, so
+          the wheel listener attached there never sees it. */}
+      <input
+        type="text"
+        inputMode="numeric"
+        data-testid="zoom-input"
+        aria-label={t.zoomInputLabel}
+        value={zoomDraft}
+        onChange={(e) => setZoomDraft(e.target.value)}
+        onFocus={handleZoomInputFocus}
+        onBlur={commitZoomDraft}
+        onKeyDown={handleZoomInputKeyDown}
+        // Too small/dynamic a control for the shared `Input` component's
+        // fixed control heights (fills a 28px-tall toolbar chip, not a
+        // 36-44px field row) — `fieldClasses()` directly, so it still
+        // gets the system's own border/surface/focus-ring tokens, with
+        // just its own compact size layered on top.
+        className={fieldClasses({
+          className: 'h-7 w-12 rounded-(--radius-field) px-1 py-0 text-center text-xs tabular-nums',
+        })}
+      />
+      <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomIn} data-testid="zoom-in" onClick={handleZoomIn}>
+        <PlusIcon aria-hidden="true" />
+      </Button>
+      <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+      <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
+        <FrameCornersIcon aria-hidden="true" />
+        {t.zoomFit}
+      </Button>
+      <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+      {/* Tool toggle (owner-approved design): icon-only, active tool in
+          brand yellow (`variant="default"`) — replaces the old
+          25/50/100/125 preset row and the "+ Zona" button entirely. The
+          Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
+          same weight) as the side toolbar's "Agregar bloque" button, to
+          match this tool's own crosshair cursor — see
+          `EditorSideToolbar.tsx`'s `toolbar-add-block`. Its own tooltip
+          stays "Zona (V)"; only the icon is shared. */}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant={tool === 'zone' ? 'default' : 'ghost'}
+        aria-label={t.toolZone}
+        aria-pressed={tool === 'zone'}
+        title={t.toolZoneTooltip}
+        data-testid="tool-zone"
+        onClick={() => setTool('zone')}
+      >
+        <PlusIcon aria-hidden="true" />
+      </Button>
+      <Button
+        type="button"
+        size="icon-sm"
+        variant={tool === 'hand' ? 'default' : 'ghost'}
+        aria-label={t.toolHand}
+        aria-pressed={tool === 'hand'}
+        title={t.toolHandTooltip}
+        data-testid="tool-hand"
+        onClick={() => setTool('hand')}
+      >
+        <HandIcon aria-hidden="true" />
+      </Button>
+    </div>
+  );
+
+  // Desktop-only floating overlay (owner decision 2026-10-07, build item 3:
+  // the always-rendered column "zoomed" the canvas on select/deselect —
+  // replaced by an overlay that only ever occupies screen space while a
+  // zone is actually selected). `null` with nothing selected: never an
+  // empty-state card any more, since there is no persistent column left to
+  // show one in.
+  const desktopOverlay = selectedZone ? (
+    <div
+      data-testid="zone-properties-panel"
+      className="pointer-events-auto absolute right-2 top-2 z-10 max-h-[calc(100%-1rem)] w-72 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-elevation-2"
+    >
+      {zonePropertiesContent}
+    </div>
+  ) : null;
+
   return (
     <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       data-testid="worksheet-zone-editor"
     >
       {/* Keyboard zone creation's announcement (accessibility) — visually
@@ -1333,117 +1451,30 @@ export default function WorksheetZoneEditor({
       <div aria-live="polite" role="status" className="sr-only" data-testid="worksheet-live-region">
         {liveAnnouncement}
       </div>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div
-          className="mb-1 flex flex-none flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1"
-          data-testid="zoom-toolbar"
-        >
-          <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomOut} data-testid="zoom-out" onClick={handleZoomOut}>
-            <MinusIcon aria-hidden="true" />
-          </Button>
-          {/* Editable zoom % (owner-approved design, replacing the old
-              read-only span): Enter/blur applies, Escape reverts, accepts
-              "80" or "80%", clamped 10%-400%. Wheel over this input does NOT
-              zoom — it is outside `viewportRef`'s own subtree entirely, so
-              the wheel listener attached there never sees it. */}
-          <input
-            type="text"
-            inputMode="numeric"
-            data-testid="zoom-input"
-            aria-label={t.zoomInputLabel}
-            value={zoomDraft}
-            onChange={(e) => setZoomDraft(e.target.value)}
-            onFocus={handleZoomInputFocus}
-            onBlur={commitZoomDraft}
-            onKeyDown={handleZoomInputKeyDown}
-            // Too small/dynamic a control for the shared `Input` component's
-            // fixed control heights (fills a 28px-tall toolbar chip, not a
-            // 36-44px field row) — `fieldClasses()` directly, so it still
-            // gets the system's own border/surface/focus-ring tokens, with
-            // just its own compact size layered on top.
-            className={fieldClasses({
-              className: 'h-7 w-12 rounded-(--radius-field) px-1 py-0 text-center text-xs tabular-nums',
-            })}
-          />
-          <Button type="button" size="icon-sm" variant="ghost" aria-label={t.zoomIn} data-testid="zoom-in" onClick={handleZoomIn}>
-            <PlusIcon aria-hidden="true" />
-          </Button>
-          <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-          <Button type="button" size="sm" variant="outline" data-testid="zoom-fit" onClick={handleZoomFit}>
-            <FrameCornersIcon aria-hidden="true" />
-            {t.zoomFit}
-          </Button>
-          <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-          {/* Tool toggle (owner-approved design): icon-only, active tool in
-              brand yellow (`variant="default"`) — replaces the old
-              25/50/100/125 preset row and the "+ Zona" button entirely. The
-              Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
-              same weight) as the side toolbar's "Agregar bloque" button, to
-              match this tool's own crosshair cursor — see
-              `EditorSideToolbar.tsx`'s `toolbar-add-block`. Its own tooltip
-              stays "Zona (V)"; only the icon is shared. */}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant={tool === 'zone' ? 'default' : 'ghost'}
-            aria-label={t.toolZone}
-            aria-pressed={tool === 'zone'}
-            title={t.toolZoneTooltip}
-            data-testid="tool-zone"
-            onClick={() => setTool('zone')}
-          >
-            <PlusIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant={tool === 'hand' ? 'default' : 'ghost'}
-            aria-label={t.toolHand}
-            aria-pressed={tool === 'hand'}
-            title={t.toolHandTooltip}
-            data-testid="tool-hand"
-            onClick={() => setTool('hand')}
-          >
-            <HandIcon aria-hidden="true" />
-          </Button>
-          {/* "Fill the empty space" pass (owner feedback #2): this hint used
-              to be its own `flex-none` row UNDER the canvas — real height the
-              canvas viewport's own `flex-1` never got back, on top of the
-              zoom toolbar directly above it. Folded into the SAME row as the
-              zoom/tool controls instead (this toolbar already wraps via its
-              own `flex-wrap` — see `zoom-toolbar` above), a thin line that
-              adds no height of its own rather than a whole extra row. */}
-          <div
-            data-testid="worksheet-canvas-hint"
-            className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
-          >
-            {zones.length === 0 && <span>{t.noZonesYet}</span>}
-            <span>{t.addZoneHint}</span>
-          </div>
-        </div>
+      {toolbarPortalTarget && hydrated ? createPortal(zoomToolbar, toolbarPortalTarget) : zoomToolbar}
 
-        <div
-          ref={viewportRef}
-          data-testid="zone-viewport"
-          tabIndex={0}
-          onKeyDown={handleViewportKeyDown}
-          // Layout-driven height (creator "one-screen" pass): this viewport
-          // fills whatever height its flex ancestors give it (the active
-          // block's row in `BlockList.tsx`, ultimately the editor page's own
-          // `100dvh`-based column) instead of a fixed/clamped CSS height —
-          // `min-h-80` is only a FLOOR so it still renders usably outside
-          // that flex chain (narrow/stacked layout below `lg:`, or a test
-          // harness with no real layout). `overflow-hidden`, no native
-          // scrollbars (canvas camera pass) — panning is entirely the
-          // content layer's own CSS transform now, never native scroll.
-          // `touch-none` (mobile layout pass) lives HERE, on the viewport —
-          // not the content layer below, which can be smaller OR larger
-          // than the viewport at any given zoom — so the browser's own
-          // touch gestures (page scroll, pinch-zoom-the-page) never fire
-          // anywhere inside this bounded box, matching this component's own
-          // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
-          className="canvas-dots relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
+      <div
+        ref={viewportRef}
+        data-testid="zone-viewport"
+        tabIndex={0}
+        onKeyDown={handleViewportKeyDown}
+        // Layout-driven height (creator "one-screen" pass): this viewport
+        // fills whatever height its flex ancestors give it (the active
+        // block's row in `BlockList.tsx`, ultimately the editor page's own
+        // `100dvh`-based column) instead of a fixed/clamped CSS height —
+        // `min-h-80` is only a FLOOR so it still renders usably outside
+        // that flex chain (narrow/stacked layout below `lg:`, or a test
+        // harness with no real layout). `overflow-hidden`, no native
+        // scrollbars (canvas camera pass) — panning is entirely the
+        // content layer's own CSS transform now, never native scroll.
+        // `touch-none` (mobile layout pass) lives HERE, on the viewport —
+        // not the content layer below, which can be smaller OR larger
+        // than the viewport at any given zoom — so the browser's own
+        // touch gestures (page scroll, pinch-zoom-the-page) never fire
+        // anywhere inside this bounded box, matching this component's own
+        // two-finger pinch/pan (`touchGesture.ts`) rather than fighting it.
+        className="canvas-dots relative min-h-80 flex-1 touch-none overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
           <div
             ref={containerRef}
             data-testid="zone-canvas"
@@ -1580,6 +1611,36 @@ export default function WorksheetZoneEditor({
               />
             )}
           </div>
+
+          {/* The empty-canvas hint (owner decision 2026-10-07, build item
+              3): used to sit in the zoom toolbar row, always visible once
+              at least `addZoneHint` had something to say. Now a subtle,
+              centered hint ON THE CANVAS itself — and only until the FIRST
+              zone exists, never once there is real content to crowd. */}
+          {zones.length === 0 && (
+            <div
+              data-testid="worksheet-canvas-hint"
+              className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center"
+            >
+              <span className="rounded-md bg-card/80 px-3 py-1.5 text-xs text-muted-foreground shadow-elevation-1">
+                {t.noZonesYet} {t.addZoneHint}
+              </span>
+            </div>
+          )}
+
+          {/* Desktop-only floating properties overlay — see `desktopOverlay`'s
+              own header above. Below `lg` (mobile layout pass) the SAME
+              selection instead drives the `BottomSheet` further down,
+              unaffected by this. No-flash split (mobile layout pass,
+              priority fix): `!hydrated` (server render + the very first
+              client paint) renders this gated purely by the CSS `lg:` class
+              — see `useHydrated`'s own header — collapsing to the plain
+              `isDesktop` check once hydrated. */}
+          {hydrated ? (
+            isDesktop && desktopOverlay
+          ) : (
+            <div className="hidden lg:contents">{desktopOverlay}</div>
+          )}
         </div>
         {/* Block-level incomplete pointer (creator polish round 3, owner
             feedback #1): `incompleteZoneId === null` means the gap is
@@ -1593,30 +1654,14 @@ export default function WorksheetZoneEditor({
             {incompleteMessage}
           </p>
         )}
-      </div>
 
-      {/* Desktop ALWAYS renders this column, fixed width (~280-300px) — see
-          the file header. Hiding it when nothing is selected is exactly the
-          bug that made the canvas "zoom" on select/deselect. Below `lg`
-          (mobile layout pass) this becomes a `BottomSheet` instead: a
+      {/* The mobile properties BOTTOM SHEET (mobile layout pass) — a
           collapsed PEEK bar (the selected zone's own kind label) while
           `mobilePanelExpanded` is false, tap it to expand to the full
-          properties form, and it disappears ENTIRELY on deselect (no
-          "select a zone" empty-state card floating at the bottom of a
-          phone — that hint is what `addZoneHint` below the canvas already
-          says). `zonePropertiesContent` is the exact same JSX either way,
-          computed once. */}
+          properties form, and it disappears ENTIRELY on deselect.
+          `zonePropertiesContent` is the exact same JSX the desktop overlay
+          above uses, computed once. */}
       {(() => {
-        const desktopPanel = (
-          <div className="w-full flex-none overflow-y-auto lg:min-h-0 lg:w-72" data-testid="zone-properties-panel">
-            {zonePropertiesContent ?? (
-              <div data-testid="zone-properties-empty" className="rounded-lg border border-dashed border-border p-4">
-                <p className="text-sm text-muted-foreground">{t.panelEmpty}</p>
-                <p className="mt-2 text-xs text-muted-foreground">{t.panelEmptyHint}</p>
-              </div>
-            )}
-          </div>
-        );
         const mobileSheet = (
           <BottomSheet
             open={mobilePanelExpanded && selectedZone !== null}
@@ -1629,31 +1674,20 @@ export default function WorksheetZoneEditor({
           </BottomSheet>
         );
 
-        // No-flash split (mobile layout pass, priority fix): these are two
-        // genuinely different subtrees (a plain always-visible column vs. a
-        // Radix-backed BottomSheet) — a CSS-only `hidden lg:block` toggle
-        // would mount BOTH (duplicate zone-properties inputs/ids). `isDesktop`
-        // alone defaults to `true` before hydration, so it used to render the
-        // desktop column's structure on a phone's very first paint. `!hydrated`
-        // (server render + the very first client paint) instead renders BOTH,
-        // gated purely by CSS `lg:` classes (real media queries, correct on
-        // every viewport immediately, no JS needed) — see `useHydrated`'s own
-        // header. The mobile sheet is additionally `inert` there: a STATIC
-        // (not `isDesktop`-driven) choice matching `useIsDesktop`'s own
-        // desktop-first SSR default, so the attribute itself never disagrees
-        // between the server and the first client render either. Once
-        // `hydrated` is true (flushed synchronously by Testing Library's own
-        // `render()` — every existing test above still finds exactly one of
-        // `zone-properties-panel`/`zone-properties-sheet`), this collapses to
-        // mounting only the one `isDesktop` says matches, same as before.
-        if (hydrated) return isDesktop ? desktopPanel : mobileSheet;
+        // No-flash split (mobile layout pass, priority fix) — see
+        // `desktopOverlay`'s own rendering above for the matching half of
+        // this same split. `isDesktop` alone defaults to `true` before
+        // hydration, so it used to render the desktop treatment on a
+        // phone's very first paint; `!hydrated` instead renders this gated
+        // purely by CSS `lg:` classes, `inert` so it is never reachable by
+        // tab order or a screen reader before hydration has run. Once
+        // `hydrated` is true (flushed synchronously by Testing Library's
+        // own `render()`), this collapses to mounting only while `!isDesktop`.
+        if (hydrated) return !isDesktop && mobileSheet;
         return (
-          <>
-            <div className="hidden lg:contents">{desktopPanel}</div>
-            <div className="contents lg:hidden" inert>
-              {mobileSheet}
-            </div>
-          </>
+          <div className="contents lg:hidden" inert>
+            {mobileSheet}
+          </div>
         );
       })()}
     </div>

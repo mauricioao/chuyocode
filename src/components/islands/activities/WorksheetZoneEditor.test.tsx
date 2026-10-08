@@ -168,48 +168,54 @@ describe('WorksheetZoneEditor — rendering', () => {
     expect(el.style.top).toBe('10%');
   });
 
-  // "Fill the empty space" pass (owner feedback #2): the "Dibujar un
-  // recuadro…"/no-zones hint used to be its own extra row UNDER the canvas —
-  // real height the canvas `flex-1` viewport never got back. It now lives
-  // INSIDE the zoom toolbar's own row instead, adding no height of its own.
-  it('folds the canvas hint into the zoom toolbar row instead of its own row under the canvas', () => {
+  // Owner decision 2026-10-07 ("Barra fina debajo", build item 3): the
+  // "Dibuja un recuadro…"/no-zones hint is now a subtle hint CENTERED ON
+  // THE CANVAS itself (an overlay, not a toolbar row) — and only until the
+  // first zone exists, never once there is real content to crowd.
+  it('centers the empty-canvas hint on the canvas, only until the first zone exists', () => {
     render(<Harness />);
-    const toolbar = screen.getByTestId('zoom-toolbar');
+    const viewport = screen.getByTestId('zone-viewport');
     const hint = screen.getByTestId('worksheet-canvas-hint');
-    expect(toolbar.contains(hint)).toBe(true);
+    expect(viewport.contains(hint)).toBe(true);
+
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
+    cleanup();
+    render(<Harness initialZones={[zone]} />);
+    expect(screen.queryByTestId('worksheet-canvas-hint')).toBeNull();
   });
 });
 
-describe('WorksheetZoneEditor — properties panel is always rendered (no layout jump)', () => {
-  it('shows the panel with a quiet empty state when nothing is selected', () => {
+describe('WorksheetZoneEditor — properties overlay only appears once a zone is selected (owner decision 2026-10-07, "Barra fina debajo")', () => {
+  it('renders no overlay at all when nothing is selected — never an empty-state card', () => {
     render(<Harness />);
-    const panel = screen.getByTestId('zone-properties-panel');
-    expect(panel).toBeTruthy();
-    expect(screen.getByTestId('zone-properties-empty')).toBeTruthy();
-    expect(screen.queryByTestId('zone-properties-content')).toBeNull();
+    expect(screen.queryByTestId('zone-properties-panel')).toBeNull();
   });
 
-  it('keeps the exact same panel column width whether or not a zone is selected', () => {
-    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
-    render(<Harness initialZones={[zone]} initialSelected={null} />);
-    const emptyClass = screen.getByTestId('zone-properties-panel').className;
-
-    cleanup();
-    render(<Harness initialZones={[zone]} initialSelected="z1" />);
-    const selectedClass = screen.getByTestId('zone-properties-panel').className;
-
-    expect(selectedClass).toBe(emptyClass);
-  });
-
-  it('switches the panel content in place on select, without ever hiding the column', () => {
+  it('selecting a zone opens the overlay with its properties form', () => {
     const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
     render(<Harness initialZones={[zone]} />);
-    expect(screen.getByTestId('zone-properties-empty')).toBeTruthy();
+    expect(screen.queryByTestId('zone-properties-panel')).toBeNull();
 
     fireEvent.pointerDown(screen.getByTestId('zone-z1'));
     expect(screen.getByTestId('zone-properties-panel')).toBeTruthy();
     expect(screen.getByTestId('zone-properties-content')).toBeTruthy();
-    expect(screen.queryByTestId('zone-properties-empty')).toBeNull();
+  });
+
+  it('deselecting closes the overlay entirely', () => {
+    const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[zone]} initialSelected="z1" />);
+    expect(screen.getByTestId('zone-properties-panel')).toBeTruthy();
+
+    // This component has no Escape handling of its own (that lives in
+    // `ActivityEditorIsland.tsx`) — deselect the same way a plain click on
+    // empty canvas does, through `onSelectZone(null)` — a real `PointerEvent`
+    // (jsdom has none; `firePointer`, declared below, hand-builds one) is
+    // needed here: `handleCanvasPointerDown` checks `e.target ===
+    // e.currentTarget`, which a plain `fireEvent.pointerDown` satisfies too,
+    // but only a dispatched native event carries the `button` field that
+    // check reads past.
+    firePointer(screen.getByTestId('zone-canvas'), 'pointerdown', 0, 0);
+    expect(screen.queryByTestId('zone-properties-panel')).toBeNull();
   });
 });
 
@@ -241,7 +247,7 @@ describe('WorksheetZoneEditor — add / select / delete', () => {
     render(<Harness initialZones={[zone]} initialSelected="z1" />);
     fireEvent.click(screen.getByTestId('delete-zone'));
     expect(screen.queryByTestId('zone-z1')).toBeNull();
-    expect(screen.getByTestId('zone-properties-empty')).toBeTruthy();
+    expect(screen.queryByTestId('zone-properties-panel')).toBeNull();
   });
 
   it('deletes the selected zone via the Delete key', () => {
@@ -589,7 +595,7 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
     firePointer(canvas, 'pointerup', 21, 10); // 1px move: well under MIN_ZONE_SIZE (2%)
 
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
-    expect(screen.getByTestId('zone-properties-empty')).toBeTruthy();
+    expect(screen.queryByTestId('zone-properties-panel')).toBeNull();
   });
 
   it('discards the in-progress draft on pointercancel without committing a zone', () => {
@@ -1260,10 +1266,12 @@ describe('WorksheetZoneEditor — keyboard zone creation (accessibility)', () =>
     expect(screen.queryAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/)).toHaveLength(0);
   });
 
-  it('is added to the shortcuts help hint text below the canvas', () => {
-    render(<Harness />);
-    expect(screen.getByText(/N para/)).toBeTruthy();
-  });
+  // Owner decision 2026-10-07 ("Barra fina debajo"): the full shortcuts
+  // list (this one included) used to also live in the desktop properties
+  // panel's own quiet empty state — gone now that the panel is a selection-
+  // only overlay. It stays discoverable the same way every OTHER editor
+  // shortcut already is: `EditorSideToolbar.tsx`'s "Atajos de teclado"
+  // dialog (`t.shortcutNewZone`, bound to "Enter / N").
 });
 
 describe('WorksheetZoneEditor — rotation (creator polish round 2)', () => {
