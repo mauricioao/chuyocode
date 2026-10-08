@@ -22,7 +22,7 @@ import type { QuizBlock } from '@/lib/activities/blocks';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import type { Lang } from '@/lib/i18n';
 import type { ExerciseResponse, Payload } from '@/lib/exercisePayload';
-import { availableGameModes, deriveGameItems, type GameMode } from '@/lib/activities/gameModes';
+import { availableGameModes, deriveGameItems, SELF_CHECKING_GAME_MODES, type GameMode } from '@/lib/activities/gameModes';
 import QuizBlockPractice from './QuizBlockPractice';
 import { GAME_MODE_ICONS } from './QuizGameModeSwitcher';
 
@@ -100,35 +100,41 @@ export default function QuizLivePreview({ blockId, lang, payload }: QuizLivePrev
         onModeChange={setMode}
       />
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
-        <Button
-          type="button"
-          size="sm"
-          data-testid={`quiz-preview-check-${blockId}`}
-          onClick={() => setResult(check(payload, response))}
-        >
-          {t.check}
-        </Button>
-        {result && (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid={`quiz-preview-retry-${blockId}`}
-              onClick={() => {
-                setResponse({});
-                setResult(undefined);
-              }}
-            >
-              {t.retry}
-            </Button>
-            <span data-testid={`quiz-preview-score-${blockId}`} className="text-sm text-muted-foreground">
-              {t.score}: {Object.values(result.slots).filter((o) => o === 'correct').length} / {payload.slots.length}
-            </span>
-          </>
-        )}
-      </div>
+      {/* ONE "COMPROBAR" (build item 2): a self-checking game (today:
+          `match`) already shows its own board-level Comprobar — this
+          editor-only preview must not add a second one right under it,
+          same rule `ActivityPracticeIsland`'s own footer follows. */}
+      {!SELF_CHECKING_GAME_MODES.has(mode) && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+          <Button
+            type="button"
+            size="sm"
+            data-testid={`quiz-preview-check-${blockId}`}
+            onClick={() => setResult(check(payload, response))}
+          >
+            {t.check}
+          </Button>
+          {result && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid={`quiz-preview-retry-${blockId}`}
+                onClick={() => {
+                  setResponse({});
+                  setResult(undefined);
+                }}
+              >
+                {t.retry}
+              </Button>
+              <span data-testid={`quiz-preview-score-${blockId}`} className="text-sm text-muted-foreground">
+                {t.score}: {Object.values(result.slots).filter((o) => o === 'correct').length} / {payload.slots.length}
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

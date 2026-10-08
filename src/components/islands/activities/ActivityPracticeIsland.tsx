@@ -73,7 +73,7 @@ import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
 import type { ExerciseResponse } from '@/lib/exercisePayload';
-import { deriveGameItems, initialGameMode, type GameMode } from '@/lib/activities/gameModes';
+import { deriveGameItems, initialGameMode, SELF_CHECKING_GAME_MODES, type GameMode } from '@/lib/activities/gameModes';
 import { Button } from '@/components/ui/button';
 import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
@@ -220,6 +220,23 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const correctCount = worksheetCorrectCount + quizCorrectCount;
   const totalCount = allZones.length + quizGradableTotal;
   const hasGradableContent = totalCount > 0;
+
+  // ONE "COMPROBAR" (build item 2): a self-checking game (today: `match`)
+  // already has its own board-level Comprobar/Reintentar — showing the
+  // page-level combined pair too, right next to it, is confusing and (for a
+  // match-only activity) grades nothing real anyway, since the Básico
+  // inputs it would check are never even rendered while that mode is
+  // active. When EVERY quiz block in the activity sits in a self-checking
+  // mode AND there is no worksheet content to grade, the combined footer
+  // has nothing useful left to do, so it hides entirely and each block's
+  // own board is the only Comprobar on screen. Any other mix (a worksheet
+  // present, or at least one quiz block still in Básico/another
+  // page-graded mode) keeps the footer exactly as before.
+  const allQuizBlocksSelfChecking = useMemo(
+    () => quizBlocks.length > 0 && quizBlocks.every((block) => SELF_CHECKING_GAME_MODES.has(quizModeFor(block))),
+    [quizBlocks, quizModeFor],
+  );
+  const showCombinedFooter = hasGradableContent && !(allZones.length === 0 && allQuizBlocksSelfChecking);
 
   // Each block's OWN result, once graded — undefined before Comprobar (no
   // tab badge yet) or for a block with nothing gradable in it at all.
@@ -502,7 +519,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
         </div>
       )}
 
-      {hasGradableContent && (
+      {showCombinedFooter && (
         <div
           data-testid="practice-footer"
           className={cn('flex flex-none flex-wrap items-center gap-3 border-t border-border py-3', ROW_PADDING_X)}
@@ -653,7 +670,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 </div>
               )}
 
-              {hasGradableContent && isLastPage && (
+              {showCombinedFooter && isLastPage && (
                 <div className="ml-auto flex flex-wrap items-center gap-3">
                   {graded && (
                     <p data-testid="practice-focus-mode-score" className="text-sm font-medium text-foreground">

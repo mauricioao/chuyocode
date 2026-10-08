@@ -40,6 +40,18 @@ export interface GameItem {
  */
 export type GameMode = 'quiz' | 'cards' | 'match' | 'speak' | 'wheel' | 'anagram' | 'hangman' | 'truefalse' | 'openbox';
 
+/**
+ * Game modes that carry their OWN "Comprobar"/check affordance, built right
+ * into the game screen itself (today: `match`'s big board, its own
+ * `matching-check` button). The page-level combined Comprobar
+ * (`ActivityPracticeIsland`'s footer, and `QuizLivePreview`'s own editor
+ * preview) must never show a SECOND one next to it — build item 2, "One
+ * Comprobar". Growing this set is the ONLY step a future self-checking
+ * template (`reorder`, `cloze`, `groupsort` — see `QuizTemplate`) needs to
+ * plug into that rule.
+ */
+export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set(['match']);
+
 /** `cards` is worth flipping through from a single item. */
 const MIN_CARDS_ITEMS = 1;
 

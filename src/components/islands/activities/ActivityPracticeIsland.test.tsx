@@ -471,13 +471,21 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     expect(inputAgain.value).toBe('sits');
   });
 
-  it('also shows the Comprobar hint in Parejas mode, and preserves the underlying quiz block', () => {
+  // ONE "COMPROBAR" (build item 2): switching the ONLY block into Parejas
+  // leaves nothing else for the combined footer to grade, so it hides —
+  // the old "Comprobar corrige el modo Básico" hint would have been
+  // pointing at a Básico form that is not even rendered anymore. The
+  // underlying Básico answers are still preserved underneath, same as
+  // every other mode switch (see the preceding test).
+  it('hides the combined footer once switched into Parejas, instead of showing the Básico hint', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('quiz-game-mode-match'));
     expect(screen.getByTestId('quiz-matching')).toBeTruthy();
-    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
-      'Comprobar corrige el modo "Básico".',
-    );
+    expect(screen.queryByTestId('practice-footer')).toBeNull();
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('quiz-game-mode-quiz'));
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
   });
 
   it('remembers the chosen mode across a tab switch away and back', () => {
@@ -497,9 +505,38 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
     expect(screen.getByTestId('quiz-matching')).toBeTruthy();
     expect(screen.getByTestId('quiz-game-mode-match').getAttribute('aria-checked')).toBe('true');
+  });
+
+  // ONE "COMPROBAR" (build item 2): a match-only activity's own board
+  // already has its own Comprobar/Reintentar (`matching-check`) — the old
+  // combined footer used to ALSO show, right below it, with a hint saying
+  // it "corrige el modo Básico" even though nothing in Básico mode was ever
+  // filled in. The footer now hides entirely for this shape; the board's
+  // own Comprobar is the only one.
+  it('hides the combined footer entirely for a match-only activity — the board is the only Comprobar', () => {
+    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    expect(screen.getByTestId('matching-check')).toBeTruthy();
+    expect(screen.queryByTestId('practice-footer')).toBeNull();
+    expect(screen.queryByTestId('practice-check-button')).toBeNull();
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+  });
+
+  it('keeps the combined footer (with its Básico hint) when a worksheet also needs checking', () => {
+    renderIsland([WORKSHEET, { ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    fireEvent.click(screen.getByTestId('practice-tab-q1'));
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
+    expect(screen.getByTestId('practice-check-button')).toBeTruthy();
     expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
       'Comprobar corrige el modo "Básico".',
     );
+  });
+
+  it('keeps the combined footer when switched to Tarjetas instead (not a self-checking mode)', () => {
+    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
+    expect(screen.getByTestId('practice-footer')).toBeTruthy();
+    expect(screen.getByTestId('practice-check-button')).toBeTruthy();
   });
 
   it('a "match"-templated block still falls back to Básico when not eligible for match (too few unique answers)', () => {
