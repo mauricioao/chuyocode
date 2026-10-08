@@ -135,6 +135,7 @@ function unoffsetWrapperRect(wrapper: HTMLElement): WindowRect {
 /** A calm, title-bar-shaped loading skeleton — shown until the iframe's own `load` fires, then faded out. No shimmer animation under reduced motion. */
 function buildLoader(doc: Document, win: Window): HTMLElement {
   const loader = doc.createElement('div');
+  loader.setAttribute('data-desk-window-loader', '');
   loader.className = 'pointer-events-none absolute inset-0 flex flex-col bg-card transition-opacity duration-200';
 
   const titlebar = doc.createElement('div');
@@ -533,6 +534,13 @@ export function initDeskWindowManager(
     // reuse branch re-navigates this SAME frame (a filter/pagination link, an
     // in-window navigate) and must re-arm this exact timer too.
     (managed as unknown as { armFallbackTimeout: () => void }).armFallbackTimeout = armFallbackTimeout;
+    // Perf pass: `onMessage`'s own `ready` handler (posted by the embedded
+    // page right after its first paint, `deskWindow.ts#afterFirstPaint`)
+    // needs this exact loader/timer pair too — hiding the loader and
+    // cancelling the never-resolving-load fallback early, without waiting
+    // for the iframe's own `load` event.
+    (managed as unknown as { showLoaded: () => void }).showLoaded = showLoaded;
+    (managed as unknown as { clearFallbackTimeout: () => void }).clearFallbackTimeout = clearFallbackTimeout;
     return managed;
   }
 
@@ -912,6 +920,20 @@ export function initDeskWindowManager(
         // this, so this `pagehide`-signaled start is the only hook to
         // re-arm the never-resolving-load timeout for it too.
         (managed as unknown as { armFallbackTimeout: () => void }).armFallbackTimeout();
+        return;
+      case 'ready':
+        // Perf pass (owner report: the loader used to wait for the iframe's
+        // own `load` — i.e. every resource the window pulls in — even once
+        // its chrome had already painted): hide the loader now, whichever
+        // of `ready`/`load` wins the race for this navigation. Only a
+        // genuine `DeskWindow.astro` document ever posts this, so receiving
+        // it already proves the chrome exists — clear the never-resolving-
+        // load fallback too, same as `load`'s own handler does first. The
+        // `load` handler's own chrome-less fallback-bar CHECK is untouched:
+        // it still runs on `load`, against the real document, regardless of
+        // whether `ready` already hid the loader.
+        (managed as unknown as { showLoaded: () => void }).showLoaded();
+        (managed as unknown as { clearFallbackTimeout: () => void }).clearFallbackTimeout();
         return;
       default:
         return;

@@ -1347,18 +1347,13 @@ export const UI_LABELS = {
         title: 'Ejercicios de inglés',
         subtitle: 'Escoge qué quieres hacer hoy',
         description:
-          'Elige entre ejercicios propuestos por nivel o actividades creadas por la comunidad.',
-        proposedTitle: 'Ejercicios propuestos',
-        proposedDescription: 'Ejercicios curados por nivel.',
+          'Practica inglés con actividades de la comunidad para cada nivel.',
         // Reuses `activities.explore`'s established phrasing on purpose —
         // same destination, same name for it everywhere it appears.
         communityTitle: 'Actividades de la comunidad',
         communityDescription: 'Actividades creadas por otros usuarios.',
-        // Live counts on each card ("12 ejercicios", "1 actividad"). The
-        // number is prepended by the page, same convention as
-        // `section.exerciseOne`/`exerciseMany` — these stay plain nouns.
-        exerciseCountOne: 'ejercicio',
-        exerciseCountMany: 'ejercicios',
+        // Live count on the community folder ("1 actividad"). The number is
+        // prepended by the page — these stay plain nouns.
         activityCountOne: 'actividad',
         activityCountMany: 'actividades',
         // "Para ti hoy" strip: the daily activity (its own highlight label
@@ -2510,13 +2505,9 @@ export const UI_LABELS = {
         title: 'English exercises',
         subtitle: 'Choose what you want to do today',
         description:
-          'Choose between curated exercises by level or activities created by the community.',
-        proposedTitle: 'Curated exercises',
-        proposedDescription: 'Exercises curated by level.',
+          'Practise English with community activities for every level.',
         communityTitle: 'Community activities',
         communityDescription: 'Activities created by other users.',
-        exerciseCountOne: 'exercise',
-        exerciseCountMany: 'exercises',
         activityCountOne: 'activity',
         activityCountMany: 'activities',
         todayTitle: 'For you today',

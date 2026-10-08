@@ -475,6 +475,36 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
       });
     });
 
+    // Perf pass (owner report: the host's loader waited for the iframe's own
+    // `load` — every resource this window pulls in — even once its own
+    // chrome had already painted): this window posts `ready` after its first
+    // paint so the host can hide the loader immediately
+    // (`deskWindowManager.ts`'s own `ready` handler). `fakeWin()` has no
+    // `requestAnimationFrame`, so `afterFirstPaint` falls back to its
+    // synchronous `setTimeout` fake — the message is posted by the time
+    // `initDeskWindow` returns, same as every other mount-time post here.
+    it('posts "ready" to the host after its first paint', () => {
+      document.documentElement.setAttribute('data-desk-window-embedded', '');
+      const el = buildWindowEl();
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      const win = fakeEmbeddedWin(posted);
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      expect(posted).toContainEqual({
+        message: { source: 'desk-window', type: 'ready' },
+        origin: 'https://example.test',
+      });
+    });
+
+    it('never posts "ready" outside embedded mode', () => {
+      const el = buildWindowEl();
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      const win = fakeEmbeddedWin(posted);
+      initDeskWindow(el, '/es/ingles', 'abc', false, document, win);
+
+      expect(posted.some((p) => (p.message as { type?: string }).type === 'ready')).toBe(false);
+    });
+
     it('window.deskWindowCanClose resolves the SAME guard decision canCloseNow would, for the host to call directly', async () => {
       const el = buildWindowEl();
       const win = fakeWin();

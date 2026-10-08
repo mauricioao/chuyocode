@@ -33,7 +33,8 @@ export type DeskWindowMessage =
   | { type: 'drag-end' }
   | { type: 'open-window'; href: string; title: string | null }
   | { type: 'title'; text: string }
-  | { type: 'navigating' };
+  | { type: 'navigating' }
+  | { type: 'ready' };
 
 export type DeskWindowMessageEnvelope = DeskWindowMessage & { source: typeof DESK_WINDOW_MESSAGE_SOURCE };
 

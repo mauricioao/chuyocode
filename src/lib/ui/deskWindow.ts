@@ -51,6 +51,27 @@ export interface EditorWindowGuard {
   confirmClose(): Promise<'saved' | 'discarded' | 'cancelled'>;
 }
 
+/**
+ * Perf pass (owner report: the host's loader used to wait for the iframe's
+ * own `load` event, i.e. EVERY resource this window pulls in, even once its
+ * own chrome had already painted): runs `callback` two `requestAnimationFrame`
+ * callbacks from now — the first one lands on the NEXT frame the browser
+ * paints, the second confirms that paint actually happened rather than
+ * merely being scheduled, the same "two rAFs" technique used elsewhere to
+ * detect a real first paint instead of just "parsed". Falls back to two
+ * deferred `setTimeout`s when `requestAnimationFrame` is unavailable (a
+ * test double's fake `win`, or a very old/unusual environment) — same
+ * best-effort posture as every other DOM call in this module.
+ */
+function afterFirstPaint(win: Window, callback: () => void): void {
+  const raf = typeof win.requestAnimationFrame === 'function' ? win.requestAnimationFrame.bind(win) : null;
+  if (raf) {
+    raf(() => raf(callback));
+    return;
+  }
+  win.setTimeout(() => win.setTimeout(callback, 0), 0);
+}
+
 function getEditorWindowGuard(win: Window): EditorWindowGuard | null {
   const guard = (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY];
   return guard && typeof guard === 'object' ? (guard as EditorWindowGuard) : null;
@@ -452,6 +473,16 @@ export function initDeskWindow(
     const initialTitle = titleEl?.textContent?.trim();
     if (initialTitle) postDeskWindowMessage(win, { type: 'title', text: initialTitle });
     win.addEventListener('pagehide', () => postDeskWindowMessage(win, { type: 'navigating' }));
+
+    // "ready" (perf pass, owner report above): posted once this window's own
+    // chrome has actually painted, so the HOST can hide its loader right
+    // then instead of waiting for the iframe's own `load` — this function
+    // only ever runs for a genuine desk window, so receiving this message at
+    // all already proves the chrome exists (`deskWindowManager.ts`'s own
+    // `ready` handler still leaves the chrome-less fallback-bar check on the
+    // real `load` event, which needs the FULL document, not just this
+    // script, to have run).
+    afterFirstPaint(win, () => postDeskWindowMessage(win, { type: 'ready' }));
   }
 }
 

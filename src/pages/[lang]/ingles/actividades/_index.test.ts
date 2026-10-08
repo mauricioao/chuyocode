@@ -84,6 +84,12 @@ beforeEach(() => {
   pageResult.value = { activities: [], total: 0 };
   dailyCandidatesResult.value = { activities: [], total: 0 };
   getActivityCount.mockResolvedValue(null);
+  // Restore the default dispatch-by-`orden` implementation — a test below
+  // overrides it with deferred promises to prove concurrency, and must not
+  // leak that override into the next test.
+  publishedMock.mockImplementation(async (opts: { orden?: string }) =>
+    opts.orden === 'gustadas' ? dailyCandidatesResult.value : pageResult.value,
+  );
 });
 
 describe('GET /[lang]/ingles/actividades — routing', () => {
@@ -527,6 +533,49 @@ describe('GET /[lang]/ingles/actividades — actividad del día', () => {
     expect(html).not.toContain('Actividad del día');
     const gustadasCalls = publishedMock.mock.calls.filter(([opts]) => opts.orden === 'gustadas');
     expect(gustadasCalls).toHaveLength(0);
+  });
+
+  // This is the actual performance fix: the grid query and the daily-pick
+  // candidates query are independent reads (`src/lib/activities/activities.ts`'s
+  // `getPublishedActivities`, different `orden`), so they must run with
+  // `Promise.all`, not one `await` after another — this route was the
+  // slowest window to open (TTFB ~1.3-1.5s vs ~0.3s for an activity window)
+  // specifically because of that sequential pair.
+  it('starts the daily-pick candidates query before the grid query resolves, proving they run concurrently', async () => {
+    const callOrder: string[] = [];
+    let resolveMain!: (value: { activities: unknown[]; total: number }) => void;
+
+    publishedMock.mockImplementation((opts: { orden?: string }) => {
+      if (opts.orden === 'gustadas') {
+        callOrder.push('daily-start');
+        return Promise.resolve(dailyCandidatesResult.value);
+      }
+      callOrder.push('main-start');
+      // Deliberately left pending: if the route awaited this BEFORE firing
+      // the daily-pick query (the old, sequential code), `callOrder` would
+      // still be `['main-start']` at the checkpoint below — the daily-pick
+      // query would never even have been CALLED yet.
+      return new Promise((resolve) => {
+        resolveMain = resolve;
+      });
+    });
+
+    const responsePromise = render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+
+    // Flush pending micro/macrotasks without resolving the main query yet —
+    // POLLED (bounded by iteration count, not wall time) so this stays
+    // reliable under a loaded test run (the full suite, many workers) where
+    // a single fixed tick is not always enough for the render pipeline to
+    // reach the two query calls.
+    for (let i = 0; i < 200 && callOrder.length < 2; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(callOrder).toEqual(expect.arrayContaining(['main-start', 'daily-start']));
+    expect(callOrder).toHaveLength(2);
+
+    resolveMain(pageResult.value);
+    await responsePromise;
   });
 });
 

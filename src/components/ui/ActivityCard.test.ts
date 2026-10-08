@@ -69,6 +69,48 @@ describe('ActivityCard.astro — thumbnail loading (coherent loading states, ite
   });
 });
 
+describe('ActivityCard.astro — thumbnail perf attributes (intrinsic size, async decoding, eager/lazy)', () => {
+  const activityWithThumbnail = {
+    ...baseActivity,
+    thumbnailPath: 'activity-images/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.webp',
+  };
+
+  function imgTag(html: string): string {
+    return html.slice(html.indexOf('<img'), html.indexOf('>', html.indexOf('<img')) + 1);
+  }
+
+  it('sets a literal 96x96 intrinsic size on the compact (square) thumbnail', async () => {
+    const html = await render({ ...baseProps, activity: activityWithThumbnail, variant: 'compact' });
+    const tag = imgTag(html);
+    expect(tag).toContain('width="96"');
+    expect(tag).toContain('height="96"');
+    expect(tag).toContain('decoding="async"');
+  });
+
+  it('sets a 16:9 intrinsic-size hint on the default (fluid-width) thumbnail', async () => {
+    const html = await render({ ...baseProps, activity: activityWithThumbnail });
+    const tag = imgTag(html);
+    expect(tag).toContain('width="640"');
+    expect(tag).toContain('height="360"');
+    expect(tag).toContain('decoding="async"');
+  });
+
+  it('defaults to loading="lazy" when the caller does not mark it eager', async () => {
+    const html = await render({ ...baseProps, activity: activityWithThumbnail });
+    expect(imgTag(html)).toContain('loading="lazy"');
+  });
+
+  it('renders loading="eager" when the caller marks it eager (the grid\'s own first row)', async () => {
+    const html = await render({ ...baseProps, activity: activityWithThumbnail, eager: true });
+    expect(imgTag(html)).toContain('loading="eager"');
+  });
+
+  it('eager also applies to the compact variant', async () => {
+    const html = await render({ ...baseProps, activity: activityWithThumbnail, variant: 'compact', eager: true });
+    expect(imgTag(html)).toContain('loading="eager"');
+  });
+});
+
 describe('ActivityCard.astro — default variant (unchanged)', () => {
   it('renders the full-size card with a 16:9 thumbnail area', async () => {
     const html = await render(baseProps);

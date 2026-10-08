@@ -142,6 +142,17 @@ describe('ingles/index.astro (hub)', () => {
     expect(main).toContain('desk-player');
   });
 
+  it('puts the player’s drag identity on a wrapper outside its React island, so the drag script never edits React-owned markup before hydration', async () => {
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    const island = /<astro-island\b[^>]*>[\s\S]*?<\/astro-island>/g;
+    const playerIsland = [...html.matchAll(island)].map((m) => m[0]).find((markup) => markup.includes('desk-player'));
+    expect(playerIsland).toBeDefined();
+    expect(playerIsland).not.toContain('data-desk-widget');
+    expect(html).toMatch(/data-desk-widget="player"[^>]*>\s*<astro-island/);
+  });
+
   describe('greeting', () => {
     it('greets the signed-in visitor by their first name, in Spanish', async () => {
       const res = await renderPage(

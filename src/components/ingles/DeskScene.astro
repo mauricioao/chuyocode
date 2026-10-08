@@ -198,7 +198,10 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   >
     <DeskClockWidget />
     <DeskCalendarWidget />
-    <DeskPlayerWidget labels={playerLabels} client:load />
+    {/* The drag identity lives on this Astro wrapper, never on the React island's own root: `deskDrag` edits its widget's attributes and inline styles, and doing that to React-owned markup before hydration made React report a hydration mismatch. */}
+    <div data-desk-widget="player" class="w-full max-w-[320px] desk:w-[320px]">
+      <DeskPlayerWidget labels={playerLabels} client:load />
+    </div>
     <DeskWeatherWidget
       lat={weatherLat}
       lon={weatherLon}

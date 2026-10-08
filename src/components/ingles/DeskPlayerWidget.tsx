@@ -134,7 +134,6 @@ export default function DeskPlayerWidget({ labels }: DeskPlayerWidgetProps) {
   return (
     <div
       id="desk-player"
-      data-desk-widget="player"
       aria-label={labels.title}
       aria-busy={index === null}
       className="ingles-glass grid w-full max-w-[320px] grid-cols-[72px_1fr] items-center gap-x-3.5 gap-y-2 p-4 desk:w-[320px]"
