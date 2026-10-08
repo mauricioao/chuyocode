@@ -186,9 +186,18 @@ describe('QuizGroupSort', () => {
       expect(screen.getByTestId('groupsort-controls').className).toContain('flex-none');
     });
 
-    it('keeps "Comprobar" out of the scrollable board/tray area, so it can never scroll out of view', () => {
+    // FLOATING COMPROBAR (build item 5): "Comprobar" is now a `fixed`
+    // bottom-right overlay — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS`
+    // header.
+    it('floats "Comprobar" fixed at the stage\'s own bottom-right, out of the scrollable board/tray area', () => {
       render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
       expect(screen.getByTestId('groupsort-stage').contains(screen.getByTestId('groupsort-check'))).toBe(false);
+      expect(screen.getByTestId('groupsort-actions').className).toContain('fixed');
+    });
+
+    it('offsets the floating Comprobar further left when rendered inside the editor', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" editorOffset />);
+      expect(screen.getByTestId('groupsort-actions').className).toContain('lg:right-20');
     });
   });
 });

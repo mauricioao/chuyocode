@@ -31,7 +31,12 @@ import {
   TEMPLATE_GAME_SWITCHING_ENABLED,
   type GameMode,
 } from '@/lib/activities/gameModes';
-import { STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
+import {
+  FLOATING_CHECK_BAR_CLASS,
+  FLOATING_CHECK_BAR_EDITOR_OFFSET,
+  STAGE_BOTTOM_RESERVE_CLASS,
+  STAGE_CONTAINER,
+} from '@/components/islands/mechanics/scale';
 import { cn } from '@/lib/utils';
 import QuizBlockPractice from './QuizBlockPractice';
 import { GAME_MODE_ICONS } from './QuizGameModeSwitcher';
@@ -111,7 +116,10 @@ export default function QuizLivePreview({ blockId, lang, payload, template }: Qu
   const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
 
   return (
-    <div data-testid={`quiz-preview-${blockId}`} className={cn('flex flex-col gap-3', STAGE_CONTAINER)}>
+    <div
+      data-testid={`quiz-preview-${blockId}`}
+      className={cn('flex flex-col gap-3', STAGE_CONTAINER, STAGE_BOTTOM_RESERVE_CLASS)}
+    >
       {showGamesBadge && (
         <div data-testid={`quiz-preview-games-badge-${blockId}`} className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
           <span>{t.usedInGames(modes.length)}</span>
@@ -131,14 +139,21 @@ export default function QuizLivePreview({ blockId, lang, payload, template }: Qu
         disabled={false}
         mode={mode}
         onModeChange={setMode}
+        editorOffset
       />
 
       {/* ONE "COMPROBAR" (build item 2): a self-checking game (today:
-          `match`) already shows its own board-level Comprobar — this
-          editor-only preview must not add a second one right under it,
-          same rule `ActivityPracticeIsland`'s own footer follows. */}
+          `match`) already shows its own FLOATING board-level Comprobar —
+          this editor-only preview must not add a second one, same rule
+          `ActivityPracticeIsland`'s own footer follows. FLOATING COMPROBAR
+          (build item 5): same bottom-right spot, `editorOffset` always on
+          (this preview only ever renders inside the editor) — see
+          `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
       {!SELF_CHECKING_GAME_MODES.has(mode) && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+        <div
+          data-testid={`quiz-preview-actions-${blockId}`}
+          className={cn(FLOATING_CHECK_BAR_CLASS, FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+        >
           <Button
             type="button"
             size="sm"

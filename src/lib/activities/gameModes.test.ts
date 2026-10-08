@@ -389,10 +389,11 @@ describe('modesForBlock', () => {
 
   it('ONE TEMPLATE, ONE GAME: collapses a templated block to its own single game when eligible', () => {
     expect(modesForBlock(allModes, 'match')).toEqual(['match']);
-    expect(modesForBlock(allModes, 'reorder')).toEqual(['reorder']);
     expect(modesForBlock(allModes, 'groupsort')).toEqual(['groupsort']);
-    // 'cloze' is not itself in `allModes` above (it is derived separately,
-    // via `payload`-aware `clozeEligibleCount`) — exercised on its own list.
+    // 'reorder'/'cloze' are not themselves in `allModes` above ('reorder' is
+    // derived separately via `reorderEligible`, 'cloze' via `payload`-aware
+    // `clozeEligibleCount`) — exercised on their own lists.
+    expect(modesForBlock(['quiz', 'reorder'], 'reorder')).toEqual(['reorder']);
     expect(modesForBlock(['quiz', 'cloze'], 'cloze')).toEqual(['cloze']);
   });
 

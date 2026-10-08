@@ -775,16 +775,18 @@ export default function QuizBlockEditor({
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}
-          // `lg:pr-16`: reserves room for `EditorSideToolbar`'s own docked
-          // rail (visual-polish pass, owner report — the rail's default
-          // docked slot, right-center of the window, sat right on top of
-          // this column's own "Comprobar" button around 1230px). The ROOT's
-          // own identical gutter was deliberately removed for the worksheet
-          // CANVAS (`ActivityEditorIsland.tsx`'s own header, "CANVAS
-          // EVERYWHERE" — overlapping empty canvas there is the point, not a
-          // bug); this column is not canvas, it hosts real interactive
-          // controls, so it keeps its own gutter instead.
-          className={cn(QUIZ_COLUMN_CLASS, 'lg:pr-16', mobileTab === 'questions' && 'max-lg:hidden')}
+          // NO WHITE STRIP ON THE RIGHT (build item 6, owner report: "se
+          // sigue viendo esa franja blanca a la derecha"): this column used
+          // to reserve `lg:pr-16` so `EditorSideToolbar`'s own docked rail
+          // (right-center of the window) would never sit on top of this
+          // column's own "Comprobar" button — which left a visibly empty
+          // gutter down the right edge. FLOATING COMPROBAR (build item 5)
+          // already clears the docked rail on its own (`QuizLivePreview`'s
+          // own `editorOffset`, `FLOATING_CHECK_BAR_EDITOR_OFFSET`), so this
+          // column no longer needs a reserved gutter at all — it now runs
+          // edge to edge like every other column, with the toolbar floating
+          // OVER it instead.
+          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'questions' && 'max-lg:hidden')}
         >
           {previewColumn}
         </div>

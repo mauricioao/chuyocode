@@ -209,11 +209,22 @@ describe('QuizMatching', () => {
       expect(screen.getByTestId('matching-controls').className).toContain('flex-none');
     });
 
-    it('keeps "Comprobar" out of the scrollable board/tray area, so it can never scroll out of view', () => {
+    // FLOATING COMPROBAR (build item 5): "Comprobar" is now a `fixed`
+    // bottom-right overlay (never in the scrollable board/tray flow at
+    // all), same place in every game — see `scale.ts`'s own
+    // `FLOATING_CHECK_BAR_CLASS` header.
+    it('floats "Comprobar" fixed at the stage\'s own bottom-right, out of the scrollable board/tray area', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
-      expect(screen.getByTestId('matching-actions').className).toContain('flex-none');
+      expect(screen.getByTestId('matching-actions').className).toContain('fixed');
+      expect(screen.getByTestId('matching-actions').className).toContain('bottom-4');
+      expect(screen.getByTestId('matching-actions').className).toContain('right-4');
       // Never a descendant of the scrollable prompts grid — a sibling of it.
       expect(screen.getByTestId('matching-prompts').contains(screen.getByTestId('matching-check'))).toBe(false);
+    });
+
+    it('offsets the floating Comprobar further left when rendered inside the editor (clears the docked side toolbar)', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" editorOffset />);
+      expect(screen.getByTestId('matching-actions').className).toContain('lg:right-20');
     });
 
     it('stays one column for a short board (3 pairs, at/under the many-pairs threshold)', () => {

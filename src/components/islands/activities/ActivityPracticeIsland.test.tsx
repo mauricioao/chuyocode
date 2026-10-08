@@ -214,7 +214,7 @@ describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => 
   });
 });
 
-describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar)', () => {
+describe('ActivityPracticeIsland — footer (zoom/score) and the floating Comprobar/Reintentar', () => {
   it('shows no footer when there is nothing gradable at all', () => {
     const unavailableQuiz: QuizBlock = {
       id: 'q2',
@@ -231,24 +231,27 @@ describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
   });
 
-  it('is a plain static row, never a sticky/floating bar', () => {
+  // FLOATING COMPROBAR (owner spec, build item 5 — supersedes this
+  // describe block's earlier "no sticky bar" decision): the actual button
+  // now floats `fixed` at the bottom-right, same corner every game stage
+  // uses, in its own container separate from the footer row.
+  it('floats Comprobar/Reintentar fixed at the bottom-right, outside the plain footer row', () => {
     renderIsland([QUIZ]);
-    expect(screen.getByTestId('practice-footer').className).not.toContain('sticky');
     expect(screen.getByTestId('practice-footer').className).not.toContain('fixed');
+    const actions = screen.getByTestId('practice-actions');
+    expect(actions.className).toContain('fixed');
+    expect(actions.className).toContain('bottom-4');
+    expect(actions.className).toContain('right-4');
+    expect(actions.contains(screen.getByTestId('practice-check-button'))).toBe(true);
+    expect(screen.getByTestId('practice-footer').contains(screen.getByTestId('practice-check-button'))).toBe(false);
   });
 
-  it('puts the zoom controls inside the FOOTER, on the left of Comprobar/Reintentar, for a single worksheet block', () => {
+  it('keeps the zoom controls inside the plain footer row, for a single worksheet block', () => {
     renderIsland([WORKSHEET]);
     expect(screen.queryByTestId('practice-tab-row')).toBeNull();
     const footer = screen.getByTestId('practice-footer');
     const zoomSlot = screen.getByTestId('worksheet-zoom-slot');
-    const checkButton = screen.getByTestId('practice-check-button');
     expect(footer.contains(zoomSlot)).toBe(true);
-    expect(footer.contains(checkButton)).toBe(true);
-    // Document order: the zoom slot comes before Comprobar (left before right).
-    expect(
-      zoomSlot.compareDocumentPosition(checkButton) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
   });
 
   it('shows Comprobar before grading', () => {

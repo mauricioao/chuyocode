@@ -22,9 +22,14 @@
  *
  * ONE combined Comprobar/Reintentar pair for the WHOLE activity, not one per
  * block/tab — unchanged from before this redesign: worksheet zones AND quiz
- * questions grade together into a single score, shown in a plain FOOTER row
- * (never a sticky/floating bar — the whole card already fits the screen at
- * `lg:`, so nothing needs to float above scrolled-past content).
+ * questions grade together into a single score. FLOATING COMPROBAR (owner
+ * spec, build item 5 — supersedes this file's own earlier "never a sticky/
+ * floating bar" decision): the actual Comprobar/Reintentar button now floats
+ * `fixed` at the stage's own bottom-right (`FLOATING_CHECK_BAR_CLASS`,
+ * `scale.ts`), the SAME corner "modo enfoque" already uses below — the rest
+ * of the footer (zoom controls, score) stays an ordinary in-flow row, with
+ * the scrollable content above it reserving bottom space
+ * (`STAGE_BOTTOM_RESERVE_CLASS`) so the floating button can never cover it.
  *
  * ZOOM CONTROLS LIVE IN THE FOOTER'S OWN LEFT SIDE (owner feedback: they used
  * to live in the tab row, which forced an empty tab bar to stay mounted for a
@@ -78,7 +83,11 @@ import { Button } from '@/components/ui/button';
 import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
-import { STAGE_CONTAINER_SIZE } from '@/components/islands/mechanics/scale';
+import {
+  FLOATING_CHECK_BAR_CLASS,
+  STAGE_BOTTOM_RESERVE_CLASS,
+  STAGE_CONTAINER_SIZE,
+} from '@/components/islands/mechanics/scale';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -518,7 +527,13 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
             // it. "Modo enfoque"'s own stage wrapper already carries `flex
             // flex-col` for exactly this reason — this view is the one that
             // was missing it.
-            <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-3', STAGE_CONTAINER_SIZE)}>
+            <div
+              className={cn(
+                'flex min-h-0 flex-1 flex-col overflow-y-auto p-3',
+                STAGE_CONTAINER_SIZE,
+                showCombinedFooter && STAGE_BOTTOM_RESERVE_CLASS,
+              )}
+            >
               <QuizBlockPractice
                 lang={lang}
                 block={activeBlock as QuizBlock}
@@ -530,6 +545,30 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
               />
             </div>
+          )}
+        </div>
+      )}
+
+      {/* FLOATING COMPROBAR (build item 5): the actual check/retry button,
+          floated out of the footer row below into the same fixed
+          bottom-right corner every game stage now uses — see
+          `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
+      {showCombinedFooter && (
+        <div data-testid="practice-actions" className={FLOATING_CHECK_BAR_CLASS}>
+          {!graded ? (
+            <Button type="button" data-testid="practice-check-button" className="min-h-11" onClick={handleCheck}>
+              {t.check}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="practice-retry-button"
+              className="min-h-11"
+              onClick={handleRetry}
+            >
+              {t.retry}
+            </Button>
           )}
         </div>
       )}
@@ -583,23 +622,6 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 {tGameModes.gradesQuizModeHint}
               </p>
             ) : null}
-            <div className="flex items-center gap-2">
-              {!graded ? (
-                <Button type="button" data-testid="practice-check-button" className="min-h-11" onClick={handleCheck}>
-                  {t.check}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  data-testid="practice-retry-button"
-                  className="min-h-11"
-                  onClick={handleRetry}
-                >
-                  {t.retry}
-                </Button>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -629,7 +651,13 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               <XIcon aria-hidden="true" size={18} />
             </button>
 
-            <div className={cn('flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10', STAGE_CONTAINER_SIZE)}>
+            <div
+              className={cn(
+                'flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10',
+                STAGE_CONTAINER_SIZE,
+                showCombinedFooter && isLastPage && STAGE_BOTTOM_RESERVE_CLASS,
+              )}
+            >
               {activeBlock.type === 'worksheet' ? (
                 <WorksheetPracticePlayer
                   lang={lang}
@@ -654,8 +682,12 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
             </div>
 
             {/* Minimal bottom bar (owner spec): page nav only when there is
-                more than one page, the final Comprobar/Reintentar only on
-                the last page — always, for a single-page activity. */}
+                more than one page, the final score only on the last page
+                once graded — Comprobar/Reintentar itself now floats
+                separately (build item 5, below). Skipped entirely once it
+                would have nothing left to show (a single-page, ungraded
+                activity), rather than a blank bordered strip. */}
+            {(blocks.length > 1 || (showCombinedFooter && isLastPage && graded)) && (
             <div
               data-testid="practice-focus-mode-bar"
               className={cn('flex flex-none flex-wrap items-center gap-3 border-t border-border py-3', ROW_PADDING_X)}
@@ -686,31 +718,38 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 </div>
               )}
 
-              {showCombinedFooter && isLastPage && (
-                <div className="ml-auto flex flex-wrap items-center gap-3">
-                  {graded && (
-                    <p data-testid="practice-focus-mode-score" className="text-sm font-medium text-foreground">
-                      {t.score}: {correctCount} / {totalCount}
-                    </p>
-                  )}
-                  {!graded ? (
-                    <Button type="button" data-testid="practice-focus-mode-check" className="min-h-11" onClick={handleCheck}>
-                      {t.check}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      data-testid="practice-focus-mode-retry"
-                      className="min-h-11"
-                      onClick={handleRetry}
-                    >
-                      {t.retry}
-                    </Button>
-                  )}
-                </div>
+              {showCombinedFooter && isLastPage && graded && (
+                <p data-testid="practice-focus-mode-score" className="ml-auto text-sm font-medium text-foreground">
+                  {t.score}: {correctCount} / {totalCount}
+                </p>
               )}
             </div>
+            )}
+
+            {/* FLOATING COMPROBAR (build item 5): same fixed bottom-right
+                corner the normal (non-full-screen) view and every game
+                stage use — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS`
+                header. No editor offset here: the editor has no "modo
+                enfoque" of its own. */}
+            {showCombinedFooter && isLastPage && (
+              <div data-testid="practice-focus-mode-actions" className={FLOATING_CHECK_BAR_CLASS}>
+                {!graded ? (
+                  <Button type="button" data-testid="practice-focus-mode-check" className="min-h-11" onClick={handleCheck}>
+                    {t.check}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    data-testid="practice-focus-mode-retry"
+                    className="min-h-11"
+                    onClick={handleRetry}
+                  >
+                    {t.retry}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>,
           focusModeHost,
         )}

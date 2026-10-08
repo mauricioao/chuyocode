@@ -316,11 +316,15 @@ describe('QuizBlockEditor — fits the focus block and scrolls inside it', () =>
     }
   });
 
-  it('reserves room on the preview column for the floating side toolbar\'s docked slot, so it never covers the preview\'s own Comprobar button', () => {
+  // NO WHITE STRIP ON THE RIGHT (build item 6): the preview column used to
+  // reserve `lg:pr-16` so the floating side toolbar's docked slot would
+  // never cover the preview's own Comprobar button — replaced by
+  // `QuizLivePreview`'s own floating Comprobar (build item 5, `editorOffset`),
+  // which clears that same toolbar on its own. The column now runs edge to
+  // edge, same as the questions column beside it.
+  it('runs the preview column edge to edge — no reserved gutter for the docked toolbar any more', () => {
     render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
-    expect(classesOf('quiz-col-preview-b1')).toEqual(expect.arrayContaining(['lg:pr-16']));
-    // The questions column sits beside it, away from the docked rail's own
-    // right-edge slot — it keeps its original, smaller gutter.
+    expect(classesOf('quiz-col-preview-b1')).not.toEqual(expect.arrayContaining(['lg:pr-16']));
     expect(classesOf('quiz-col-questions-b1')).not.toEqual(expect.arrayContaining(['lg:pr-16']));
   });
 

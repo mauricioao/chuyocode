@@ -54,6 +54,9 @@ import {
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
 import {
+  FLOATING_CHECK_BAR_CLASS,
+  FLOATING_CHECK_BAR_EDITOR_OFFSET,
+  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
@@ -67,6 +70,8 @@ export interface QuizGroupSortProps {
   payload: Payload;
   /** Stable per-block seed (the block id) — the tray's own shuffle and "Reintentar". */
   seed: string;
+  /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
+  editorOffset?: boolean;
 }
 
 /** How long a fully-correct board stays visible before showing the final result (ms) — same value every sibling game uses for its own settle. */
@@ -263,7 +268,7 @@ function GroupBox({
   );
 }
 
-export default function QuizGroupSort({ lang, payload, seed }: QuizGroupSortProps) {
+export default function QuizGroupSort({ lang, payload, seed, editorOffset = false }: QuizGroupSortProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -473,6 +478,14 @@ export default function QuizGroupSort({ lang, payload, seed }: QuizGroupSortProp
           <p data-testid="groupsort-result" aria-live="polite" className="text-xl font-medium text-foreground sm:text-2xl">
             {total} {t.groupSortResultOf} {total} {t.groupSortResultCorrect}
           </p>
+        </div>
+
+        {/* FLOATING COMPROBAR (build item 5) — see `scale.ts`'s own
+            `FLOATING_CHECK_BAR_CLASS` header. */}
+        <div
+          data-testid="groupsort-actions"
+          className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+        >
           <Button type="button" data-testid="groupsort-retry" className="min-h-11" onClick={handleRetry}>
             {t.groupSortRetry}
           </Button>
@@ -496,6 +509,23 @@ export default function QuizGroupSort({ lang, payload, seed }: QuizGroupSortProp
         />
       </div>
 
+      {/* FLOATING COMPROBAR (build item 5) — see `scale.ts`'s own
+          `FLOATING_CHECK_BAR_CLASS` header. */}
+      <div
+        data-testid="groupsort-actions"
+        className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+      >
+        <Button
+          type="button"
+          data-testid="groupsort-check"
+          className="min-h-11"
+          onClick={handleCheck}
+          disabled={settling || !isComplete}
+        >
+          {t.groupSortCheck}
+        </Button>
+      </div>
+
       <DndContext
         id={`dnd-groupsort-${seed}`}
         sensors={sensors}
@@ -512,7 +542,10 @@ export default function QuizGroupSort({ lang, payload, seed }: QuizGroupSortProp
             documents. Only THIS outer row is centered, never the
             scrollable div below — see that file's own header on why. */}
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
-          <div data-testid="groupsort-stage" className="flex min-h-0 flex-col gap-6 overflow-y-auto">
+          <div
+            data-testid="groupsort-stage"
+            className={cn('flex min-h-0 flex-col gap-6 overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS)}
+          >
           <div data-testid="groupsort-board" className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {groups.map((group) => {
               // Every item CURRENTLY sitting in this group box: `placements`
@@ -573,21 +606,6 @@ export default function QuizGroupSort({ lang, payload, seed }: QuizGroupSortProp
               );
             })}
           </ul>
-          </div>
-
-          {/* `flex-none`, a SIBLING of the scrollable div above — same
-              "never scrolls away" guarantee `QuizMatching.tsx`'s own action
-              row documents. */}
-          <div className="flex flex-none justify-end">
-            <Button
-              type="button"
-              data-testid="groupsort-check"
-              className="min-h-11"
-              onClick={handleCheck}
-              disabled={settling || !isComplete}
-            >
-              {t.groupSortCheck}
-            </Button>
           </div>
         </div>
 
