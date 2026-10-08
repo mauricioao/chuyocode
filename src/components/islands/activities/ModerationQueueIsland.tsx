@@ -33,6 +33,11 @@ function resolveImageUrl(path: string): string {
   return `/api/actividades/imagen?path=${encodeURIComponent(path)}`;
 }
 
+/** Same signed-URL treatment as `resolveImageUrl`, over the audio preview endpoint — see `src/pages/api/actividades/audio.ts`'s own GET. */
+function resolveAudioUrl(path: string): string {
+  return `/api/actividades/audio?path=${encodeURIComponent(path)}`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '';
   try {
@@ -315,6 +320,7 @@ export default function ModerationQueueIsland({ lang, initialPending, initialRep
                     lang={lang}
                     block={block}
                     resolveImageUrl={resolveImageUrl}
+                    resolveAudioUrl={resolveAudioUrl}
                     showAnswers={showAnswers}
                   />
                 ))}

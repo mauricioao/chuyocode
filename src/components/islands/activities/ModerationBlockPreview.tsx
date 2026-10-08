@@ -21,10 +21,18 @@ export interface ModerationBlockPreviewProps {
   block: Block;
   /** Resolved, browser-loadable URL for a worksheet block's `image.path`. */
   resolveImageUrl: (path: string) => string;
+  /** Resolved, browser-loadable URL for an audio marker's `path` — same signed-URL treatment as `resolveImageUrl`, so a moderator can listen before approving. */
+  resolveAudioUrl: (path: string) => string;
   showAnswers: boolean;
 }
 
-export default function ModerationBlockPreview({ lang, block, resolveImageUrl, showAnswers }: ModerationBlockPreviewProps) {
+export default function ModerationBlockPreview({
+  lang,
+  block,
+  resolveImageUrl,
+  resolveAudioUrl,
+  showAnswers,
+}: ModerationBlockPreviewProps) {
   const t = UI_LABELS[lang].activities.moderation;
 
   if (block.type === 'worksheet') {
@@ -71,6 +79,31 @@ export default function ModerationBlockPreview({ lang, block, resolveImageUrl, s
             </li>
           ))}
         </ul>
+        {block.audio && block.audio.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-foreground">{t.audioMarkersLabel}</span>
+            <ul className="flex flex-col gap-2">
+            {block.audio.map((marker, index) => (
+              <li
+                key={marker.id}
+                data-testid={`moderation-audio-${marker.id}`}
+                className="rounded-md border border-border p-2 text-sm"
+              >
+                <span className="font-medium text-foreground">
+                  {t.audioMarkerIndexLabel} {index + 1}
+                </span>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a short voice note has no track to caption */}
+                <audio
+                  data-testid={`moderation-audio-player-${marker.id}`}
+                  controls
+                  src={resolveAudioUrl(marker.path)}
+                  className="mt-1 w-full"
+                />
+              </li>
+            ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }

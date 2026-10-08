@@ -107,6 +107,19 @@ describe('ModerationQueueIsland — pending detail', () => {
     fireEvent.click(screen.getByTestId('moderation-version-published'));
     expect(screen.getByTestId('moderation-detail').textContent).toContain('viejo');
   });
+
+  it('resolves a worksheet audio marker via the real audio preview endpoint, so the moderator can listen', () => {
+    const withAudio: ReviewQueueItem = {
+      ...FIRST_PUBLICATION,
+      blocks: [{ ...FIRST_PUBLICATION.blocks[0], audio: [{ id: 'a1', x: 0.5, y: 0.5, path: 'activity-audio-uploads/author-1/a1.webm' }] }] as ReviewQueueItem['blocks'],
+    };
+    render(<ModerationQueueIsland lang="es" initialPending={[withAudio]} initialReported={[]} />);
+    fireEvent.click(screen.getByTestId('moderation-item-rev-1'));
+    const player = screen.getByTestId('moderation-audio-player-a1') as HTMLAudioElement;
+    expect(player.getAttribute('src')).toBe(
+      '/api/actividades/audio?path=' + encodeURIComponent('activity-audio-uploads/author-1/a1.webm'),
+    );
+  });
 });
 
 describe('ModerationQueueIsland — approve', () => {
