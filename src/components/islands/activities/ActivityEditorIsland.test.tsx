@@ -78,10 +78,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete (window as unknown as { location?: unknown }).location;
   (window as unknown as { location: Location }).location = realLocation;
-  // A handful of "open the first block on entry" tests set this to exercise
+  // A handful of "one active block on entry" tests set this to exercise
   // hash-targeting — reset unconditionally so a later test never inherits a
   // leftover hash, even if one of those failed before its own cleanup line.
   window.location.hash = '';
+  // Every test below reuses the same default `activityId` ("act-1") — the
+  // active-block `sessionStorage` key must never leak from one test into
+  // the next (same reasoning as the hash reset above).
+  sessionStorage.clear();
   document.getElementById('desk-window-title')?.remove();
   document.getElementById('desk-window-status')?.remove();
   document.getElementById('desk-window-title-group')?.remove();
@@ -194,32 +198,31 @@ describe('ActivityEditorIsland — initial render', () => {
   });
 });
 
-describe('ActivityEditorIsland — open the first block on entry (creator polish round 4, owner feedback #1)', () => {
-  it('expands the first block automatically, with no click needed', () => {
+describe('ActivityEditorIsland — one active block on entry (owner decision 2026-10-07, "Barra fina debajo")', () => {
+  it('activates the first block automatically, with no click needed', () => {
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
     expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
-    expect(screen.getByTestId('block-b2').querySelector('[data-testid="worksheet-zone-editor"]')).toBeNull();
-    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBe('true');
+    expect(screen.queryByTestId('block-b2')).toBeNull();
   });
 
-  it('shows a brand-new (imageless) sole block\'s own upload drop zone immediately, auto-expanded', () => {
+  it('shows a brand-new (imageless) sole block\'s own upload drop zone immediately, active', () => {
     const emptyWorksheet: WorksheetBlock = { ...WORKSHEET_BLOCK, image: undefined, zones: [] };
     renderEditor({ initialBlocks: [emptyWorksheet] });
     expect(screen.getByTestId('worksheet-uploader')).toBeTruthy();
   });
 
-  it('still shows the empty-blocks state (no block to expand) for a brand-new, zero-block activity', () => {
+  it('still shows the empty-blocks state (no block to activate) for a brand-new, zero-block activity', () => {
     renderEditor({ initialBlocks: [] });
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();
     expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
   });
 
-  it('expands the block the URL hash targets instead of the first one', () => {
+  it('activates the block the URL hash targets instead of the first one', () => {
     window.location.hash = '#block-b2';
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
-    expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeNull();
+    expect(screen.queryByTestId('block-b1')).toBeNull();
     expect(screen.getByTestId('block-b2').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
     window.location.hash = '';
   });
@@ -232,12 +235,30 @@ describe('ActivityEditorIsland — open the first block on entry (creator polish
     window.location.hash = '';
   });
 
-  it('"collapse all" still works after the first block auto-opens', () => {
+  it('resumes the last active block remembered for this activity, from sessionStorage', () => {
+    sessionStorage.setItem('chuyocode:editor-active-block:act-1', 'b2');
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
-    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('collapse-all-button'));
-    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+    expect(screen.queryByTestId('block-b1')).toBeNull();
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
+  });
+
+  it('ignores a remembered block id that no longer exists on this activity', () => {
+    sessionStorage.setItem('chuyocode:editor-active-block:act-1', 'gone');
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
+  });
+
+  it('remembers the active block across a remount of the same activity', () => {
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    const { unmount } = renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+    fireEvent.click(screen.getByTestId('sheet-nav-next'));
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
+    unmount();
+
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+    expect(screen.queryByTestId('block-b1')).toBeNull();
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
   });
 });
 
@@ -297,9 +318,9 @@ describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "dou
 // Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the
 // "Elige con qué seguir" type picker — shown while `blocks.length === 0`,
 // before any block exists — used to render WITH the floating side toolbar
-// next to it, even though there is nothing yet for collapse-all/expand-all/
-// block-index/undo/redo to act on. The toolbar now only mounts once there is
-// an editor with blocks.
+// next to it, even though there is nothing yet for the sheet switcher/undo/
+// redo to act on. The toolbar now only mounts once there is an editor with
+// blocks.
 describe('ActivityEditorIsland — no side toolbar while the empty-blocks picker is showing', () => {
   it('does not render the floating side toolbar for a brand-new, zero-block activity', () => {
     renderEditor({ initialBlocks: [] });
@@ -708,18 +729,7 @@ describe('ActivityEditorIsland — Escape deselects the current zone', () => {
 });
 
 describe('ActivityEditorIsland — sticky toolbar wiring', () => {
-  it('expand-all/collapse-all in the toolbar affect every block', () => {
-    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
-
-    fireEvent.click(screen.getByTestId('expand-all-button'));
-    expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(2);
-
-    fireEvent.click(screen.getByTestId('collapse-all-button'));
-    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
-  });
-
-  it('the block index popover expands the chosen block', () => {
+  it('the sheet-switcher popover activates the chosen block', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
     fireEvent.click(screen.getByTestId('block-index-trigger'));
     fireEvent.click(screen.getByTestId('block-index-item-b1'));
@@ -727,59 +737,31 @@ describe('ActivityEditorIsland — sticky toolbar wiring', () => {
   });
 });
 
-describe('ActivityEditorIsland — collapse/expand per block', () => {
-  it('collapses the (auto-opened) block on header click, and a second click re-expands it', () => {
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    // The first block opens on entry (owner feedback #1) — no click needed.
-    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('block-header-b1'));
-    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
-    fireEvent.click(screen.getByTestId('block-header-b1'));
-    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
-  });
-});
-
-describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pass)', () => {
-  it('expanding a block collapses the previously-active one (accordion — only one focus block at a time)', () => {
+describe('ActivityEditorIsland — one active block at a time (owner decision 2026-10-07, "Barra fina debajo")', () => {
+  it('switching the active block never shows two editors at once', () => {
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
 
-    // The first block opens on entry (owner feedback #1) — no click needed.
+    // The first block is active on entry (owner feedback #1) — no click needed.
     expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
-    expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
 
-    // Selecting another block makes IT the active/expanded one instead.
-    fireEvent.click(screen.getByTestId('block-header-b2'));
+    // ‹ › switches to the next sheet instead.
+    fireEvent.click(screen.getByTestId('sheet-nav-next'));
     expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
-    expect(screen.getByTestId('block-b1').querySelector('[data-testid="worksheet-zone-editor"]')).toBeNull();
-    expect(screen.getByTestId('block-b2').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
-
-    // The active block's own <li> is the one marked focus-active for the
-    // desktop layout's flexible-height treatment (see `BlockList.tsx`).
-    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBeNull();
-    expect(document.getElementById('block-b2')?.getAttribute('data-focus-active')).toBe('true');
+    expect(screen.queryByTestId('block-b1')).toBeNull();
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
   });
 
-  it('the block-index popover switches the active block the same way', () => {
+  it('the sheet-switcher popover activates a block the same way', () => {
     const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
 
-    fireEvent.click(screen.getByTestId('block-header-b1'));
     fireEvent.click(screen.getByTestId('block-index-trigger'));
     fireEvent.click(screen.getByTestId('block-index-item-b2'));
 
     expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
-    expect(screen.getByTestId('block-b2').querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
-  });
-
-  it('"expand all" is NOT a focus state — no block is marked focus-active while several are expanded', () => {
-    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
-
-    fireEvent.click(screen.getByTestId('expand-all-button'));
-    expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(2);
-    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBeNull();
-    expect(document.getElementById('block-b2')?.getAttribute('data-focus-active')).toBeNull();
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
   });
 
   it('uploading a multi-page PDF (several new blocks at once) activates only the LAST new block', async () => {
@@ -820,8 +802,8 @@ describe('ActivityEditorIsland — desktop focus layout (creator "one-screen" pa
     });
 
     await waitFor(() => expect(screen.getByTestId('block-list')).toBeTruthy());
-    // Two new blocks were added, but only ONE is active/expanded.
-    expect(screen.getAllByTestId(/^block-header-/)).toHaveLength(2);
+    // Two new blocks were added, but only ONE is active — the LAST page.
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 2');
     expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
   });
 });
@@ -1234,35 +1216,33 @@ describe('ActivityEditorIsland — "Ver como presentación" overlay (worksheet z
   });
 });
 
-describe('ActivityEditorIsland — scoped ScrollToTop wiring (nav buttons pass)', () => {
-  it('appears after scrolling the block list — the list is the ACTUAL scroll container, not its outer wrapper', () => {
-    // Regression test for the actual root cause: the scoped ScrollToTop
-    // used to track the outer wrapper div, which also carries
-    // `overflow-y-auto` but never actually overflows in ordinary use —
-    // `BlockList.tsx`'s own `<ul>` does (see `ActivityEditorIsland.tsx`'s
-    // `blockListRef` header). Scrolling that `<ul>` directly is exactly
-    // what would have stayed invisible under the old wiring.
+describe('ActivityEditorIsland — scoped ScrollToTop wiring, PREVIEW ONLY (owner decision 2026-10-07, "Barra fina debajo")', () => {
+  // The active block's own body now fills the editor edge to edge with no
+  // outer list to scroll past (`WorksheetZoneEditor`'s canvas pans
+  // internally; `QuizBlockEditor`'s own columns scroll internally) — so
+  // this is mounted only while `preview` is, same as `previewScrollRef`'s
+  // own header in `ActivityEditorIsland.tsx`.
+  it('is not mounted while editing', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    const list = screen.getByTestId('block-list');
-    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('true');
-
-    Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
-    Object.defineProperty(list, 'scrollTop', { value: 500, configurable: true });
-    act(() => {
-      list.dispatchEvent(new Event('scroll'));
-    });
-
-    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('false');
+    expect(screen.queryByTestId('scroll-to-top-scoped')).toBeNull();
   });
 
-  it('scrolls the block list to the top (the first block) on click', () => {
+  it('appears after scrolling the preview list, and scrolls it back to the top on click', () => {
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    const list = screen.getByTestId('block-list') as HTMLUListElement;
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    const preview = screen.getByTestId('activity-preview');
+    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('true');
+
+    Object.defineProperty(preview, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(preview, 'scrollTop', { value: 500, configurable: true });
+    act(() => {
+      preview.dispatchEvent(new Event('scroll'));
+    });
+    expect(screen.getByTestId('scroll-to-top-scoped').getAttribute('aria-hidden')).toBe('false');
+
     const scrollTo = vi.fn();
-    list.scrollTo = scrollTo;
-
+    preview.scrollTo = scrollTo;
     fireEvent.click(screen.getByTestId('scroll-to-top-scoped'));
-
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
 });

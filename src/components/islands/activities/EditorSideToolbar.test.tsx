@@ -82,8 +82,6 @@ function renderToolbar(overrides: Partial<Parameters<typeof EditorSideToolbar>[0
   const props = {
     lang: 'es' as const,
     blocks: [] as Block[],
-    onCollapseAll: vi.fn(),
-    onExpandAll: vi.fn(),
     onGoToBlock: vi.fn(),
     onAddBlock: vi.fn(),
     preview: false,
@@ -106,8 +104,6 @@ describe('EditorSideToolbar — basic controls', () => {
   it('renders the rail with every icon button', () => {
     renderToolbar();
     expect(screen.getByTestId('editor-side-toolbar')).toBeTruthy();
-    expect(screen.getByTestId('collapse-all-button')).toBeTruthy();
-    expect(screen.getByTestId('expand-all-button')).toBeTruthy();
     expect(screen.getByTestId('block-index-trigger')).toBeTruthy();
     expect(screen.getByTestId('toolbar-add-block')).toBeTruthy();
     expect(screen.getByTestId('preview-toggle')).toBeTruthy();
@@ -118,12 +114,13 @@ describe('EditorSideToolbar — basic controls', () => {
     expect(screen.getByTestId('save-status')).toBeTruthy();
   });
 
-  it('calls onCollapseAll / onExpandAll', () => {
-    const props = renderToolbar();
-    fireEvent.click(screen.getByTestId('collapse-all-button'));
-    fireEvent.click(screen.getByTestId('expand-all-button'));
-    expect(props.onCollapseAll).toHaveBeenCalledTimes(1);
-    expect(props.onExpandAll).toHaveBeenCalledTimes(1);
+  // "Colapsar todos"/"Expandir todos" are gone (owner decision 2026-10-07,
+  // "Barra fina debajo") — they only ever served the accordion layout the
+  // active-sheet bar replaced.
+  it('no longer renders the collapse-all/expand-all buttons', () => {
+    renderToolbar();
+    expect(screen.queryByTestId('collapse-all-button')).toBeNull();
+    expect(screen.queryByTestId('expand-all-button')).toBeNull();
   });
 
   it('disables undo/redo per props', () => {
@@ -680,8 +677,6 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     stubMobileViewport();
     renderToolbar({ canUndo: true, canRedo: true });
     for (const testId of [
-      'collapse-all-button',
-      'expand-all-button',
       'block-index-trigger',
       'toolbar-add-block',
       'preview-toggle',
@@ -696,12 +691,9 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
 
   it('wires the same callbacks as the desktop rail', () => {
     stubMobileViewport();
-    const onCollapseAll = vi.fn();
     const onSave = vi.fn();
-    renderToolbar({ onCollapseAll, onSave });
-    fireEvent.click(screen.getByTestId('collapse-all-button'));
+    renderToolbar({ onSave });
     fireEvent.click(screen.getByTestId('save-button'));
-    expect(onCollapseAll).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
@@ -725,8 +717,6 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
     return {
       lang: 'es',
       blocks: [],
-      onCollapseAll: vi.fn(),
-      onExpandAll: vi.fn(),
       onGoToBlock: vi.fn(),
       onAddBlock: vi.fn(),
       preview: false,
@@ -776,8 +766,6 @@ describe('EditorSideToolbar — no flash of the wrong docked position before the
     return {
       lang: 'es',
       blocks: [],
-      onCollapseAll: vi.fn(),
-      onExpandAll: vi.fn(),
       onGoToBlock: vi.fn(),
       onAddBlock: vi.fn(),
       preview: false,

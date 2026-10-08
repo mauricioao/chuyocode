@@ -2,9 +2,12 @@
  * EditorSideToolbar — the editor's icon rail (creator polish round 2, owner
  * request #7; FLOATING in the "floating side toolbar" pass). Everything
  * that used to sit scattered across the top bar (preview toggle, save
- * button, save status) plus the new block-navigation/collapse controls and
- * undo/redo now live here, keeping the top bar down to just title + level
- * (owner request #1).
+ * button, save status) plus the sheet-switcher popover and undo/redo now
+ * live here, keeping the top bar down to just title + level (owner request
+ * #1). "Colapsar todos"/"Expandir todos" are gone (owner decision
+ * 2026-10-07, "Barra fina debajo"): they only ever served the accordion
+ * layout the active-sheet bar replaced — there is no longer a list of
+ * collapsed siblings to expand or collapse.
  *
  * Every button is icon-only with an accessible `aria-label` (also its
  * `title`, so a mouse user gets a native tooltip for free) — no icon here
@@ -69,8 +72,6 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
-import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ListBulletsIcon } from '@phosphor-icons/react/dist/ssr/ListBullets';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
@@ -180,8 +181,6 @@ function measureSize(el: HTMLElement | null): ToolbarSize {
 export interface EditorSideToolbarProps {
   lang: Lang;
   blocks: Block[];
-  onCollapseAll: () => void;
-  onExpandAll: () => void;
   onGoToBlock: (blockId: string) => void;
   onAddBlock: () => void;
   preview: boolean;
@@ -235,7 +234,13 @@ function ToolbarIconButton({
   );
 }
 
-/** The block-index popover: lists every block's display name, click to go to it. */
+/**
+ * The sheet-switcher popover (formerly "block index" — kept the same name
+ * and test ids; owner decision 2026-10-07, "Barra fina debajo": it already
+ * behaved exactly like a sheet switcher — lists every block's display
+ * name, click to make it the active one). No scrolling involved any more:
+ * `ActivityEditorIsland.tsx`'s `goToBlock` just activates the chosen block.
+ */
 function BlockIndexPopover({
   lang,
   blocks,
@@ -358,8 +363,6 @@ function ShortcutsDialog({ lang }: { lang: Lang }) {
 export default function EditorSideToolbar({
   lang,
   blocks,
-  onCollapseAll,
-  onExpandAll,
   onGoToBlock,
   onAddBlock,
   preview,
@@ -691,12 +694,6 @@ export default function EditorSideToolbar({
       role="toolbar"
       className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1 overflow-x-auto border-t border-border bg-card/95 px-2 py-1.5 shadow-lg backdrop-blur-sm pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
     >
-      <ToolbarIconButton label={t.collapseAll} testId="collapse-all-button" onClick={onCollapseAll}>
-        <ArrowsInIcon aria-hidden="true" />
-      </ToolbarIconButton>
-      <ToolbarIconButton label={t.expandAll} testId="expand-all-button" onClick={onExpandAll}>
-        <ArrowsOutIcon aria-hidden="true" />
-      </ToolbarIconButton>
       <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} openUpward />
       <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
         <PlusIcon aria-hidden="true" />
@@ -824,12 +821,6 @@ export default function EditorSideToolbar({
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 
-      <ToolbarIconButton label={t.collapseAll} testId="collapse-all-button" onClick={onCollapseAll}>
-        <ArrowsInIcon aria-hidden="true" />
-      </ToolbarIconButton>
-      <ToolbarIconButton label={t.expandAll} testId="expand-all-button" onClick={onExpandAll}>
-        <ArrowsOutIcon aria-hidden="true" />
-      </ToolbarIconButton>
       <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} />
       <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
         <PlusIcon aria-hidden="true" />
