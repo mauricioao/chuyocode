@@ -900,47 +900,80 @@ export default function ActivityEditorIsland({
   // block in sequence, so it keeps this unchanged.
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
-  // The level select + review-status badge, exactly as they render on
-  // desktop today (byte-identical markup/testids) — inline in the title
-  // bar's own editable title group, right after the title input. See
-  // `isDesktop`/`hydrated`'s own header above for why this (and the two
-  // variables below) is a real structural branch, not a CSS media query.
+  // The level select, exactly as it renders on desktop today (byte-identical
+  // markup/testid) — inline in the title bar's own editable title group,
+  // right after the title input. See `isDesktop`/`hydrated`'s own header
+  // above for why this (and the two variables below) is a real structural
+  // branch, not a CSS media query.
+  //
+  // TITLE BAR ORDER (owner spec, build item 3 — "arriba ordena primero
+  // 'Nivel | íconos | botón de enviar'"): the review-status badge used to
+  // ride along right after the level select here, inside this very group —
+  // moved OUT (see `statusPill` below) so desktop's title bar now reads
+  // exactly title | Nivel | [icon actions | Enviar a revisión] (the actions
+  // portal, `DESK_WINDOW_ACTIONS_ID`), with nothing competing for that row
+  // in between.
   const desktopLevelAndStatus = (
-    <>
-      <label className="flex shrink-0 items-center gap-1 text-sm">
-        <span className="sr-only">{t.levelLabel}</span>
-        <Select
-          data-testid="activity-level-select"
-          aria-label={t.levelLabel}
-          fieldSize="sm"
-          value={level ?? ''}
-          onChange={(e) => changeLevel(e.target.value)}
-        >
-          <option value="">{t.levelNone}</option>
-          {LEVELS.map((lvl) => (
-            <option key={lvl} value={lvl}>
-              {levelLabels[lvl]}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <div
-        className="flex shrink-0 flex-wrap items-center gap-2"
-        data-testid="activity-status-badge"
-        data-status={status}
+    <label className="flex shrink-0 items-center gap-1 text-sm">
+      <span className="sr-only">{t.levelLabel}</span>
+      <Select
+        data-testid="activity-level-select"
+        aria-label={t.levelLabel}
+        fieldSize="sm"
+        value={level ?? ''}
+        onChange={(e) => changeLevel(e.target.value)}
       >
-        <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-          {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-            ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-            : t.statusDraft}
+        <option value="">{t.levelNone}</option>
+        {LEVELS.map((lvl) => (
+          <option key={lvl} value={lvl}>
+            {levelLabels[lvl]}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+
+  /** One coloured dot per `activities.status` (build item 3's own floating pill) — same `bg-pop-*` tokens the window's own traffic lights use, so a glance at the corner reads consistently with the rest of the chrome. `draft` (and any unrecognized status) gets a neutral muted dot. */
+  const STATUS_DOT_CLASS: Record<string, string> = {
+    pending_review: 'bg-pop-yellow',
+    live: 'bg-pop-green',
+    rejected: 'bg-pop-red',
+  };
+
+  /**
+   * The review-status badge, relocated (build item 3, owner spec: "lo de
+   * 'Publicada' colócalo flotando en la parte inferior izquierda que no se
+   * usa") out of the title bar into a small floating pill, glass/subtle,
+   * anchored to the bottom-left corner of the editor's own work area
+   * (`activity-editor-card`, already `position: relative`) — an area the
+   * owner confirmed is otherwise empty. `pointer-events-none` + never
+   * stretched: it can never intercept a click meant for the canvas beneath
+   * it, nor cover real content. Desktop only (`lg:`, gated the same
+   * `hydrated`/`isDesktop` way as every other structural branch in this
+   * component) — phones keep the SAME testid/markup inside their own "⋯"
+   * menu instead (`mobileMenu` below), unchanged.
+   */
+  const statusPill = (
+    <div
+      data-testid="activity-status-badge"
+      data-status={status}
+      className="pointer-events-none absolute bottom-3 left-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground shadow-elevation-1 backdrop-blur-sm"
+    >
+      <span
+        aria-hidden="true"
+        className={`h-2 w-2 flex-none rounded-full ${STATUS_DOT_CLASS[status] ?? 'bg-muted-foreground'}`}
+      />
+      <span className="truncate">
+        {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
+          ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
+          : t.statusDraft}
+      </span>
+      {status === 'rejected' && initialReviewNote && (
+        <span data-testid="activity-review-note" className="truncate text-muted-foreground">
+          {t.reviewNoteLabel}: {initialReviewNote}
         </span>
-        {status === 'rejected' && initialReviewNote && (
-          <span data-testid="activity-review-note" className="text-xs text-muted-foreground">
-            {t.reviewNoteLabel}: {initialReviewNote}
-          </span>
-        )}
-      </div>
-    </>
+      )}
+    </div>
   );
 
   // "Ver como presentación" + "Enviar a revisión", exactly as they render on
@@ -1137,6 +1170,14 @@ export default function ActivityEditorIsland({
         data-testid="activity-editor-card"
         className="relative flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:gap-0 lg:overflow-clip"
       >
+        {/* Floating status pill (build item 3) — see `statusPill`'s own
+            header above for why this lives here, desktop-only, rather than
+            in the title bar. Hydration-gated the same way as every other
+            structural desktop/mobile branch in this component: phones never
+            mount this at all (their status stays inside `mobileMenu`'s own
+            copy, unaffected). */}
+        {hydrated && isDesktop && statusPill}
+
         {/* "Duplicar y adaptar" credit line (D7) — only ever set for a
             duplicate's own editor; an ordinary activity never renders this. */}
         {/* No horizontal padding of its own any more (PART 6b polish,

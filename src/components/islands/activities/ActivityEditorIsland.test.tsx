@@ -302,12 +302,22 @@ describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "dou
     expect(card.contains(screen.getByTestId('block-list'))).toBe(true);
   });
 
-  it('the title/level/status-badge header row is gone from the card body — relocated into the title bar', () => {
+  it('the title/level header row is gone from the card body — relocated into the title bar', () => {
     renderEditor();
     const card = screen.getByTestId('activity-editor-card');
     expect(card.contains(screen.getByTestId('activity-title-input'))).toBe(false);
     expect(card.contains(screen.getByTestId('activity-level-select'))).toBe(false);
-    expect(card.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
+  });
+
+  // TITLE BAR ORDER (build item 3): the status badge moved OUT of the title
+  // bar into a floating pill anchored to this card's own work area — the
+  // opposite containment from title/level above.
+  it('floats the status badge inside the card\'s own work area (desktop) — not in the title bar', () => {
+    renderEditor();
+    const card = screen.getByTestId('activity-editor-card');
+    expect(card.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+    const titleGroup = document.getElementById('desk-window-title-group')!;
+    expect(titleGroup.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
   });
 
   it('reserves safe-area-aware bottom room for the mobile bottom action bar, cleared at lg', () => {
@@ -366,12 +376,12 @@ describe('ActivityEditorIsland — no side toolbar while the empty-blocks picker
 });
 
 describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b polish)', () => {
-  it('portals the real controlled title input, level select and status badge into the title group slot', () => {
+  it('portals the real controlled title input and level select into the title group slot (status now floats separately, build item 3)', () => {
     renderEditor({ initialTitle: 'Mi actividad', initialLevel: 'B1' });
     const group = document.getElementById('desk-window-title-group')!;
     expect(group.contains(screen.getByTestId('activity-title-input'))).toBe(true);
     expect(group.contains(screen.getByTestId('activity-level-select'))).toBe(true);
-    expect(group.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+    expect(group.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
   });
 
   it('has "Nueva actividad" as its placeholder and an accessible label', () => {
