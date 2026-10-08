@@ -107,6 +107,7 @@ import {
   addGroupSortGroup,
   addGroupSortItems,
   deriveGroupSortRows,
+  MAX_GROUPSORT_GROUPS,
   removeGroupSortGroup,
   removeGroupSortItem,
 } from '@/lib/activities/groupSort';
@@ -358,7 +359,12 @@ export default function QuizBlockEditor({
   function handleContainerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
-    addQuestion();
+    // `cloze`/`groupsort` own their rows through their own commits — a plain
+    // `addQuestion` row would be an invisible stray slot in those blocks.
+    if (isCloze) addClozeRow();
+    else if (isGroupSort) {
+      if (groupSortRows.length < MAX_GROUPSORT_GROUPS) addGroupSortRow();
+    } else addQuestion();
   }
 
   const cardNodeRefs = useRef<Record<string, HTMLLIElement | null>>({});

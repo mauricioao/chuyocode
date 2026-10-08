@@ -946,6 +946,13 @@ describe('QuizBlockEditor — template editors share the desk-native sheet + sta
     expect(preview.querySelectorAll('span.inline-flex')).toHaveLength(1);
   });
 
+  it('cloze: Ctrl+Enter adds another SENTENCE row (never a stray plain question slot)', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    fireEvent.keyDown(screen.getAllByTestId(/^cloze-sentence-/)[0]!, { key: 'Enter', ctrlKey: true });
+    expect(screen.getAllByTestId(/^cloze-sentence-/)).toHaveLength(2);
+  });
+
   it('cloze: extra words are chips — Enter adds them (comma lists too), "×" removes one', () => {
     const payload: Payload = {
       pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'goes' }] },
@@ -963,6 +970,14 @@ describe('QuizBlockEditor — template editors share the desk-native sheet + sta
 
     fireEvent.click(screen.getByTestId('cloze-distractor-remove-0'));
     expect(chips()).toEqual(['went']);
+  });
+
+  it('groupsort: Ctrl+Enter adds another GROUP (never a stray plain question slot), up to the 4-group cap', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+    const firstName = screen.getAllByTestId(/^groupsort-name-/)[0]!;
+    for (let i = 0; i < 5; i += 1) fireEvent.keyDown(firstName, { key: 'Enter', ctrlKey: true });
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(4);
   });
 
   it('groupsort: says "Listo para jugar" once 2 groups have 2 items each', () => {
