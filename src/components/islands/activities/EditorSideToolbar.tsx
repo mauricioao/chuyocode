@@ -615,14 +615,25 @@ export default function EditorSideToolbar({
     <div
       data-testid="editor-side-toolbar-mobile"
       role="toolbar"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1 overflow-x-auto border-t border-border bg-card/95 px-2 py-1.5 shadow-lg backdrop-blur-sm pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
+      className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1 border-t border-border bg-card/95 px-2 py-1.5 shadow-lg backdrop-blur-sm pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
     >
-      {/* One-sheet redesign: the active worksheet block's own Zona/Mano/
-          rotate/"Cambiar imagen" controls portal in here — empty (and
+      {/* Mobile layout pass, bug fix (owner report: this bar got dense once
+          every tool/rotate/change-image/preview/undo/redo/save control lived
+          here — on a 360px phone it could overflow far enough to scroll
+          "Guardar" itself off-screen with no visual hint a scroll was
+          needed). Only the WORKSHEET block's own tool cluster — Zona/Mano/
+          Audio/rotate/"Cambiar imagen", portaled in below, the group most
+          likely to grow — gets its own bounded, independently-scrollable
+          region (`min-w-0 flex-1 overflow-x-auto`); preview/undo/redo/save
+          stay OUTSIDE it, `flex-none` on the always-visible outer row, so
+          the frequent/important actions are never the ones that scroll out
+          of reach. One-sheet redesign: the slot itself is empty (and
           therefore invisible, `empty:hidden`) for a quiz block or while
           nothing is selected yet. Replaces the old sheet-switcher popover
           and "Agregar bloque" — see this file's own header. */}
-      <div ref={onWorksheetToolsSlotReady} data-testid="worksheet-tools-slot" className="empty:hidden flex items-center gap-1" />
+      <div className="min-w-0 flex-1 overflow-x-auto">
+        <div ref={onWorksheetToolsSlotReady} data-testid="worksheet-tools-slot" className="empty:hidden flex items-center gap-1" />
+      </div>
 
       <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
 
@@ -641,10 +652,14 @@ export default function EditorSideToolbar({
 
       <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
 
-      <ShortcutsDialog lang={lang} />
-
-      <div className="mx-1 h-6 w-px flex-none bg-border" aria-hidden="true" />
-
+      {/* Mobile layout pass, bug fix (owner report: this bar got dense once
+          every tool/rotate/change-image/preview/undo/redo/shortcuts/save
+          control lived here — it could overflow even a 360px phone).
+          `ShortcutsDialog` lists KEYBOARD shortcuts — meaningless with no
+          physical keyboard attached — so it is the one action dropped from
+          this compact row entirely rather than squeezed in; it stays exactly
+          where it was on the desktop rail below. Every other action here
+          keeps full parity with desktop. */}
       <ToolbarIconButton
         label={t.save}
         testId="save-button"

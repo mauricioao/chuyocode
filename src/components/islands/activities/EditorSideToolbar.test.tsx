@@ -654,12 +654,23 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
   });
 
-  it('offers every action the desktop rail offers', () => {
+  it('offers every action the desktop rail offers, except keyboard shortcuts help', () => {
     stubMobileViewport();
     renderToolbar({ canUndo: true, canRedo: true });
-    for (const testId of ['worksheet-tools-slot', 'preview-toggle', 'undo-button', 'redo-button', 'shortcuts-trigger', 'save-button']) {
+    for (const testId of ['worksheet-tools-slot', 'preview-toggle', 'undo-button', 'redo-button', 'save-button']) {
       expect(screen.getByTestId(testId)).toBeTruthy();
     }
+  });
+
+  // Bug fix (owner report: the bar got dense once every tool lived here —
+  // it could overflow even a 360px phone): `ShortcutsDialog` lists KEYBOARD
+  // shortcuts, meaningless with no physical keyboard on a touchscreen, so
+  // it is the one action this compact row drops entirely — it still shows
+  // on the desktop rail (see the sibling describe block below).
+  it('drops the keyboard-shortcuts trigger — meaningless with no physical keyboard', () => {
+    stubMobileViewport();
+    renderToolbar();
+    expect(screen.queryByTestId('shortcuts-trigger')).toBeNull();
   });
 
   it('wires the same callbacks as the desktop rail', () => {
@@ -668,6 +679,24 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     renderToolbar({ onSave });
     fireEvent.click(screen.getByTestId('save-button'));
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  // Bug fix (owner report: on a 360px phone this bar could overflow far
+  // enough that "Guardar" itself scrolled off-screen with no visual hint a
+  // scroll was needed). Only the worksheet tool cluster — the group most
+  // likely to grow (Zona/Mano/Audio/rotate/"Cambiar imagen") — gets its own
+  // bounded, independently-scrollable region; preview/undo/redo/save stay
+  // outside it, so the frequent actions are never what scrolls out of reach.
+  it('gives the worksheet tool cluster its own scroll region, separate from the always-visible save/undo/redo/preview row', () => {
+    stubMobileViewport();
+    renderToolbar();
+    const bar = screen.getByTestId('editor-side-toolbar-mobile');
+    expect(bar.className).not.toContain('overflow-x-auto');
+    const toolsSlot = screen.getByTestId('worksheet-tools-slot');
+    const scrollRegion = toolsSlot.parentElement!;
+    expect(scrollRegion.className).toContain('overflow-x-auto');
+    expect(scrollRegion.contains(screen.getByTestId('save-button'))).toBe(false);
+    expect(scrollRegion.contains(screen.getByTestId('preview-toggle'))).toBe(false);
   });
 
   it('respects the safe-area inset at the bottom of the screen', () => {
