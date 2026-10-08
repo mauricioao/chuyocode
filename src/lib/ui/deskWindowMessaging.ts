@@ -28,9 +28,6 @@ export type DeskWindowMessage =
   | { type: 'close' }
   | { type: 'minimize' }
   | { type: 'maximize-toggle' }
-  | { type: 'drag-start' }
-  | { type: 'drag-move'; dx: number; dy: number }
-  | { type: 'drag-end' }
   | { type: 'open-window'; href: string; title: string | null }
   | { type: 'title'; text: string }
   | { type: 'navigating' }

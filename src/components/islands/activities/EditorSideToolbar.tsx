@@ -2,9 +2,12 @@
  * EditorSideToolbar — the editor's icon rail (creator polish round 2, owner
  * request #7; FLOATING in the "floating side toolbar" pass). Everything
  * that used to sit scattered across the top bar (preview toggle, save
- * button, save status) plus the new block-navigation/collapse controls and
- * undo/redo now live here, keeping the top bar down to just title + level
- * (owner request #1).
+ * button, save status) plus the sheet-switcher popover and undo/redo now
+ * live here, keeping the top bar down to just title + level (owner request
+ * #1). "Colapsar todos"/"Expandir todos" are gone (owner decision
+ * 2026-10-07, "Barra fina debajo"): they only ever served the accordion
+ * layout the active-sheet bar replaced — there is no longer a list of
+ * collapsed siblings to expand or collapse.
  *
  * Every button is icon-only with an accessible `aria-label` (also its
  * `title`, so a mouse user gets a native tooltip for free) — no icon here
@@ -69,8 +72,6 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
-import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ListBulletsIcon } from '@phosphor-icons/react/dist/ssr/ListBullets';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
@@ -180,8 +181,6 @@ function measureSize(el: HTMLElement | null): ToolbarSize {
 export interface EditorSideToolbarProps {
   lang: Lang;
   blocks: Block[];
-  onCollapseAll: () => void;
-  onExpandAll: () => void;
   onGoToBlock: (blockId: string) => void;
   onAddBlock: () => void;
   preview: boolean;
@@ -235,7 +234,13 @@ function ToolbarIconButton({
   );
 }
 
-/** The block-index popover: lists every block's display name, click to go to it. */
+/**
+ * The sheet-switcher popover (formerly "block index" — kept the same name
+ * and test ids; owner decision 2026-10-07, "Barra fina debajo": it already
+ * behaved exactly like a sheet switcher — lists every block's display
+ * name, click to make it the active one). No scrolling involved any more:
+ * `ActivityEditorIsland.tsx`'s `goToBlock` just activates the chosen block.
+ */
 function BlockIndexPopover({
   lang,
   blocks,
@@ -358,8 +363,6 @@ function ShortcutsDialog({ lang }: { lang: Lang }) {
 export default function EditorSideToolbar({
   lang,
   blocks,
-  onCollapseAll,
-  onExpandAll,
   onGoToBlock,
   onAddBlock,
   preview,
@@ -390,6 +393,15 @@ export default function EditorSideToolbar({
 
   const [docked, setDocked] = useState(true);
   const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
+  // Owner report ("primero aparecen a un lado y luego pasan al otro" — the
+  // tools appear on one side then jump to the other): `position` starts at
+  // `{0,0}` on BOTH the server render and the first client paint, before
+  // the dock-sync `useLayoutEffect` below has ever measured a real spot.
+  // Flipped to `true` INSIDE that same effect, once a real position has
+  // been computed — gates the rail/ghost's own opacity (see `railAndGhost`)
+  // so that wrong intermediate position is never actually visible, rather
+  // than painting it and letting it jump.
+  const [ready, setReady] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   // The rail's OWN size, measured once on mount (it never changes — a fixed
   // icon rail's own content never resizes itself) — only needed to position
@@ -442,6 +454,7 @@ export default function EditorSideToolbar({
           const clamped = clampToolbarPosition({ x: restored.x, y: restored.y }, size, measureViewportBounds());
           setPosition(clamped);
           setDocked(false);
+          setReady(true);
           return undefined; // restored undocked -> no dock-sync/observer this run.
         }
       } catch {
@@ -460,6 +473,7 @@ export default function EditorSideToolbar({
     // touch its own `style` when it moves, which this observes directly.
     function resync() {
       setPosition(dockTargetPosition(measureSize(railRef.current), measureBounds()));
+      setReady(true); // a no-op once already true — every later resync (window moved/resized) keeps it visible.
     }
     resync();
     const windowEl = document.getElementById('desk-window');
@@ -669,18 +683,17 @@ export default function EditorSideToolbar({
       })()
     : null;
 
+  // Owner report fix (see `ready`'s own header): invisible until the first
+  // real position lands, then a short fade — never a silent `visibility`
+  // flip, which would skip the fade entirely.
+  const readyOpacityClass = ready ? 'opacity-100' : 'opacity-0';
+
   const mobileBar = (
     <div
       data-testid="editor-side-toolbar-mobile"
       role="toolbar"
       className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1 overflow-x-auto border-t border-border bg-card/95 px-2 py-1.5 shadow-lg backdrop-blur-sm pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
     >
-      <ToolbarIconButton label={t.collapseAll} testId="collapse-all-button" onClick={onCollapseAll}>
-        <ArrowsInIcon aria-hidden="true" />
-      </ToolbarIconButton>
-      <ToolbarIconButton label={t.expandAll} testId="expand-all-button" onClick={onExpandAll}>
-        <ArrowsOutIcon aria-hidden="true" />
-      </ToolbarIconButton>
       <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} openUpward />
       <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
         <PlusIcon aria-hidden="true" />
@@ -748,7 +761,7 @@ export default function EditorSideToolbar({
         // `MinimizedWindowsTray.astro` uses — so this (now body-portaled,
         // see `railAndGhost`'s own header) ghost always wins the stacking
         // comparison wherever it lands, including directly over the window.
-        className="glass-floating fixed z-[60] flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={`glass-floating fixed z-[60] flex h-8 w-8 items-center justify-center rounded-(--radius-pill) border border-dashed border-border text-muted-foreground shadow-(--shadow-floating) transition-[color,opacity] duration-150 motion-reduce:transition-none hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${readyOpacityClass}`}
         style={{ left: ghostPosition.x, top: ghostPosition.y }}
       >
         <PushPinIcon aria-hidden="true" />
@@ -771,8 +784,8 @@ export default function EditorSideToolbar({
         // `#desk-window` now, not a descendant, so without it the window
         // would win ordinary stacking comparisons wherever the two overlap.
         docked
-          ? 'fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2'
-          : 'glass-floating fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)'
+          ? `fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2 transition-opacity duration-150 motion-reduce:transition-none ${readyOpacityClass}`
+          : `glass-floating fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating) transition-opacity duration-150 motion-reduce:transition-none ${readyOpacityClass}`
       }
       style={{ left: position.x, top: position.y }}
     >
@@ -808,12 +821,6 @@ export default function EditorSideToolbar({
 
       <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
 
-      <ToolbarIconButton label={t.collapseAll} testId="collapse-all-button" onClick={onCollapseAll}>
-        <ArrowsInIcon aria-hidden="true" />
-      </ToolbarIconButton>
-      <ToolbarIconButton label={t.expandAll} testId="expand-all-button" onClick={onExpandAll}>
-        <ArrowsOutIcon aria-hidden="true" />
-      </ToolbarIconButton>
       <BlockIndexPopover lang={lang} blocks={blocks} onGoToBlock={onGoToBlock} />
       <ToolbarIconButton label={t.addBlock} testId="toolbar-add-block" onClick={onAddBlock}>
         <PlusIcon aria-hidden="true" />

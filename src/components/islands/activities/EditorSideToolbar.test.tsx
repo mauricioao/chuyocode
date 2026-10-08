@@ -82,8 +82,6 @@ function renderToolbar(overrides: Partial<Parameters<typeof EditorSideToolbar>[0
   const props = {
     lang: 'es' as const,
     blocks: [] as Block[],
-    onCollapseAll: vi.fn(),
-    onExpandAll: vi.fn(),
     onGoToBlock: vi.fn(),
     onAddBlock: vi.fn(),
     preview: false,
@@ -106,8 +104,6 @@ describe('EditorSideToolbar — basic controls', () => {
   it('renders the rail with every icon button', () => {
     renderToolbar();
     expect(screen.getByTestId('editor-side-toolbar')).toBeTruthy();
-    expect(screen.getByTestId('collapse-all-button')).toBeTruthy();
-    expect(screen.getByTestId('expand-all-button')).toBeTruthy();
     expect(screen.getByTestId('block-index-trigger')).toBeTruthy();
     expect(screen.getByTestId('toolbar-add-block')).toBeTruthy();
     expect(screen.getByTestId('preview-toggle')).toBeTruthy();
@@ -118,12 +114,13 @@ describe('EditorSideToolbar — basic controls', () => {
     expect(screen.getByTestId('save-status')).toBeTruthy();
   });
 
-  it('calls onCollapseAll / onExpandAll', () => {
-    const props = renderToolbar();
-    fireEvent.click(screen.getByTestId('collapse-all-button'));
-    fireEvent.click(screen.getByTestId('expand-all-button'));
-    expect(props.onCollapseAll).toHaveBeenCalledTimes(1);
-    expect(props.onExpandAll).toHaveBeenCalledTimes(1);
+  // "Colapsar todos"/"Expandir todos" are gone (owner decision 2026-10-07,
+  // "Barra fina debajo") — they only ever served the accordion layout the
+  // active-sheet bar replaced.
+  it('no longer renders the collapse-all/expand-all buttons', () => {
+    renderToolbar();
+    expect(screen.queryByTestId('collapse-all-button')).toBeNull();
+    expect(screen.queryByTestId('expand-all-button')).toBeNull();
   });
 
   it('disables undo/redo per props', () => {
@@ -680,8 +677,6 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
     stubMobileViewport();
     renderToolbar({ canUndo: true, canRedo: true });
     for (const testId of [
-      'collapse-all-button',
-      'expand-all-button',
       'block-index-trigger',
       'toolbar-add-block',
       'preview-toggle',
@@ -696,12 +691,9 @@ describe('EditorSideToolbar — mobile bottom action bar (mobile layout pass)', 
 
   it('wires the same callbacks as the desktop rail', () => {
     stubMobileViewport();
-    const onCollapseAll = vi.fn();
     const onSave = vi.fn();
-    renderToolbar({ onCollapseAll, onSave });
-    fireEvent.click(screen.getByTestId('collapse-all-button'));
+    renderToolbar({ onSave });
     fireEvent.click(screen.getByTestId('save-button'));
-    expect(onCollapseAll).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
@@ -725,8 +717,6 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
     return {
       lang: 'es',
       blocks: [],
-      onCollapseAll: vi.fn(),
-      onExpandAll: vi.fn(),
       onGoToBlock: vi.fn(),
       onAddBlock: vi.fn(),
       preview: false,
@@ -761,5 +751,60 @@ describe('EditorSideToolbar — no layout flash on the server render (mobile lay
     const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
     expect(html).toMatch(/class="contents lg:hidden" inert(="")?[^>]*>/);
     expect(html).not.toMatch(/class="hidden lg:contents" inert/);
+  });
+});
+
+// Owner report: "las herramientas se están cargando medio raro al entrar a
+// construir ... primero aparecen a un lado y luego pasan al otro" — the
+// rail's docked position is only known once the dock-sync `useLayoutEffect`
+// measures it, but the SERVER-rendered markup (painted before hydration,
+// visible at `lg:` widths per the describe block above) had no such gating
+// and rendered fully opaque at `{0,0}` every time, then jumped once React
+// took over. Fixed by staying invisible until that first measurement lands.
+describe('EditorSideToolbar — no flash of the wrong docked position before the first measurement', () => {
+  function ssrProps(): Parameters<typeof EditorSideToolbar>[0] {
+    return {
+      lang: 'es',
+      blocks: [],
+      onGoToBlock: vi.fn(),
+      onAddBlock: vi.fn(),
+      preview: false,
+      onTogglePreview: vi.fn(),
+      canUndo: false,
+      canRedo: false,
+      onUndo: vi.fn(),
+      onRedo: vi.fn(),
+      onSave: vi.fn(),
+      saveDisabled: false,
+      saveState: 'idle',
+      saveLabels: SAVE_LABELS,
+    };
+  }
+
+  function classesOf(html: string, testId: string): string[] {
+    const match = html.match(new RegExp(`data-testid="${testId}"[^>]*class="([^"]*)"`));
+    return match ? match[1].split(/\s+/) : [];
+  }
+
+  it('renders the server markup fully INVISIBLE (opacity-0), not just at the wrong spot', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const html = renderToStaticMarkup(<EditorSideToolbar {...ssrProps()} />);
+    const classes = classesOf(html, 'editor-side-toolbar');
+    expect(classes).toContain('opacity-0');
+    expect(classes).not.toContain('opacity-100');
+  });
+
+  it('becomes visible (fades in) once the first real position is measured on mount', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.className.split(/\s+/)).toContain('opacity-100');
+    expect(rail.className.split(/\s+/)).not.toContain('opacity-0');
+  });
+
+  it('transitions opacity (never none) so the reveal is a short fade, except under prefers-reduced-motion', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.className).toMatch(/\btransition-opacity\b/);
+    expect(rail.className).toMatch(/\bmotion-reduce:transition-none\b/);
   });
 });

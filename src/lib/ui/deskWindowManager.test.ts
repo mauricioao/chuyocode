@@ -85,6 +85,7 @@ let handle: DeskWindowManagerHandle | null;
 
 beforeEach(() => {
   stubRects();
+  (Element.prototype as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture = vi.fn();
   document.body.innerHTML = '<header data-chrome-header></header>';
   document.body.className = '';
   container = document.createElement('div');
@@ -347,6 +348,73 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
   });
 
+  // Owner report: creating an activity from "Crear actividad" opened the new
+  // activity's editor as a SECOND window, leaving the "Nueva actividad"
+  // picker reverted to its own `/crear` route behind it. The picker
+  // navigating itself straight to the new editor route is an ALLOWED
+  // identity transition (`create` -> `editor:<id>`), not a click race to
+  // recover from — this exact frame becomes the editor in place.
+  it('creating an activity re-identifies the picker window as the editor, in place, instead of opening a second one', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/crear', 'Nueva actividad');
+    const frame = frameFor('create')!;
+
+    const replaceSpy = vi.fn();
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/crear/new-id', search: '', replace: replaceSpy },
+        document: { title: 'Present Simple', addEventListener: vi.fn() },
+      },
+    });
+
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    // Never reverted/duplicated...
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(frameFor('create')).toBeNull();
+    expect(container.querySelectorAll('[data-desk-window-frame]')).toHaveLength(1);
+    // ...the SAME wrapper/iframe, just re-identified as the editor.
+    const editorFrame = frameFor('editor:new-id');
+    expect(editorFrame).not.toBeNull();
+    expect(editorFrame!.wrapper).toBe(frame.wrapper);
+    expect(editorFrame!.iframe).toBe(frame.iframe);
+  });
+
+  it('a later load on the re-identified editor frame still detects wrong-identity correctly (the stale "create" id never lingers)', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/crear', 'Nueva actividad');
+    const frame = frameFor('create')!;
+
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/crear/new-id', search: '', replace: vi.fn() },
+        document: { title: 'Present Simple', addEventListener: vi.fn() },
+      },
+    });
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    // A SECOND in-frame navigation, now to an unrelated route — must be
+    // judged against the frame's NEW identity (`editor:new-id`), not the
+    // stale `create` one, or every later load on this exact frame would
+    // keep mis-firing the click-race recovery forever.
+    const replaceSpy2 = vi.fn();
+    Object.defineProperty(frame.iframe, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: { pathname: '/es/ingles/actividades/abc', search: '', replace: replaceSpy2 },
+        document: { title: 'Comunidad' },
+      },
+    });
+    frame.iframe.dispatchEvent(new Event('load'));
+
+    expect(frameFor('activity:abc')).not.toBeNull();
+    expect(replaceSpy2).toHaveBeenCalledWith('https://example.test/es/crear/new-id?ventana=1');
+  });
+
   /** Synchronously replaces an iframe's own document content via the classic
    * `document.open/write/close` API — reliable in jsdom, unlike setting
    * `.src` (which schedules a real, unimplemented navigation). */
@@ -413,17 +481,41 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(frame.wrapper.hasAttribute('inert')).toBe(true);
   });
 
-  it('drag-start/drag-move/drag-end moves the wrapper and commits the offset', () => {
+  /** Loads a genuine desk-window document into `iframe` with a title bar of
+   * the given size (own-property `getBoundingClientRect` override — jsdom's
+   * iframe document is its own realm, so a top-level `Element.prototype`
+   * stub never reaches it), so `syncTitlebarDragHandles` finds something
+   * real to measure and builds a drag handle on the HOST wrapper. */
+  function loadWindowWithTitlebar(iframe: HTMLIFrameElement, rect = { width: 300, height: 40 }): void {
+    const innerDoc = iframe.contentDocument!;
+    innerDoc.open();
+    innerDoc.write('<!doctype html><html><body><div data-desk-window></div><div data-desk-window-titlebar></div></body></html>');
+    innerDoc.close();
+    const titlebar = innerDoc.querySelector('[data-desk-window-titlebar]') as HTMLElement;
+    titlebar.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, width: rect.width, height: rect.height, top: 0, left: 0, right: rect.width, bottom: rect.height, toJSON() {} }) as DOMRect;
+    iframe.dispatchEvent(new Event('load'));
+  }
+
+  // Structural fix (owner report: "el arrastre de las ventanas no es suave
+  // ... tiembla demasiado" — real-mouse jitter from dragging inside a moving
+  // iframe): dragging is entirely HOST-side now, via a transparent handle
+  // positioned over the title bar's own measured region.
+  it('dragging a title bar handle moves the wrapper and commits the offset', () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
     const frame = frameFor('community')!;
+    loadWindowWithTitlebar(frame.iframe);
 
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-start' }, frame.iframe.contentWindow);
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-move', dx: 40, dy: 10 }, frame.iframe.contentWindow);
+    const dragHandle = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]');
+    expect(dragHandle).not.toBeNull();
+
+    dragHandle!.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100 }));
+    dragHandle!.dispatchEvent(new MouseEvent('pointermove', { clientX: 140, clientY: 110 }));
     expect(frame.wrapper.style.translate).toBe('40px 10px');
 
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-end' }, frame.iframe.contentWindow);
+    dragHandle!.dispatchEvent(new MouseEvent('pointerup', { clientX: 140, clientY: 110 }));
     // Committed into state — a later render (e.g. opening another window, which cascades off the topmost one) reflects it.
     handle.openWindow('/es/crear', 'Crear actividad');
     const second = frameFor('create')!;
@@ -431,7 +523,7 @@ describe('initDeskWindowManager — postMessage bridge', () => {
   });
 
   it('a long drag past the top-left corner stops exactly at the 8px edge margin', () => {
-    // Like a real browser: the measured rect moves with the applied `translate`.
+    // Like a real browser: the measured WRAPPER rect moves with the applied `translate`.
     Element.prototype.getBoundingClientRect = function (this: Element) {
       const [tx = 0, ty = 0] = ((this as HTMLElement).style?.translate || '0px 0px').split(' ').map((v) => Number.parseFloat(v) || 0);
       const r = { ...WRAPPER_RECT, left: WRAPPER_RECT.left + tx, top: WRAPPER_RECT.top + ty };
@@ -442,14 +534,50 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     handle.openWindow('/es/ingles/actividades', 'Comunidad');
     const frame = frameFor('community')!;
     frame.wrapper.style.translate = '';
+    loadWindowWithTitlebar(frame.iframe);
 
-    win.dispatchMessage({ source: 'desk-window', type: 'drag-start' }, frame.iframe.contentWindow);
+    const dragHandle = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]')!;
+    dragHandle.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0, clientY: 0 }));
     for (let step = 1; step <= 25; step++) {
-      win.dispatchMessage({ source: 'desk-window', type: 'drag-move', dx: -12 * step, dy: -12 * step }, frame.iframe.contentWindow);
+      dragHandle.dispatchEvent(new MouseEvent('pointermove', { clientX: -12 * step, clientY: -12 * step }));
     }
 
     // WRAPPER_RECT sits at left 64 / top 76 untranslated: 8 - 64, 8 - 76.
     expect(frame.wrapper.style.translate).toBe('-56px -68px');
+  });
+
+  it('never rebuilds the dragged window\'s own handle mid-drag, even when the drag\'s own "focus" dispatch re-renders every window', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad'); // not yet topmost once "Crear actividad" opens below
+    const community = frameFor('community')!;
+    loadWindowWithTitlebar(community.iframe);
+    handle.openWindow('/es/crear', 'Crear actividad'); // now topmost
+    loadWindowWithTitlebar(frameFor('create')!.iframe);
+
+    const dragHandle = community.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]')!;
+    // Pressing down on the BACKGROUND window's handle focuses it (a real
+    // state change — top-of-stack changes) — the resulting `render()` must
+    // not replace this exact node, or the pointer capture about to be
+    // requested on it would be silently dropped.
+    dragHandle.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100 }));
+    expect(community.wrapper.querySelector('[data-desk-window-drag-handle]')).toBe(dragHandle);
+
+    dragHandle.dispatchEvent(new MouseEvent('pointermove', { clientX: 150, clientY: 100 }));
+    expect(community.wrapper.style.translate).toBe('50px 0px');
+  });
+
+  it('double-clicking a title bar drag handle toggles maximize', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+    loadWindowWithTitlebar(frame.iframe);
+
+    const dragHandle = frame.wrapper.querySelector<HTMLElement>('[data-desk-window-drag-handle]')!;
+    dragHandle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+    expect(frame.wrapper.style.inset).toBe('0px');
   });
 });
 
@@ -624,6 +752,25 @@ describe('initDeskWindowManager — entrance/exit motion (robustness pass)', () 
     frame.wrapper.querySelector<HTMLButtonElement>('[data-desk-window-fallback-minimize]')!.click();
 
     expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
+  });
+
+  it('restoring a minimized window clears the shrink-toward-tray exit class (regression: the frame stayed shrunk in the corner after restore)', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+    const frame = frameFor('community')!;
+
+    win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+    await flushMicrotasks(); // the exit animation (`playMinimizeAnimation`) is awaited before the dispatch commits.
+    expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(true);
+
+    // Reopening the SAME id (exactly what clicking its tray chip, or the
+    // fallback bar, does) is how a window is restored — see the `open`
+    // case in `reduceDeskWindows`.
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+
+    expect(frame.wrapper.classList.contains('ingles-window--minimizing')).toBe(false);
+    expect(frame.wrapper.style.visibility).not.toBe('hidden');
   });
 
   // Owner report, verified in a real browser: "working red/yellow/green" —

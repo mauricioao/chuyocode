@@ -144,6 +144,32 @@ function isMac(): boolean {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent ?? '');
 }
 
+/** `sessionStorage` key for the one active block remembered per activity (owner decision 2026-10-07, "Barra fina debajo"). */
+function activeBlockStorageKey(activityId: string): string {
+  return `chuyocode:editor-active-block:${activityId}`;
+}
+
+/**
+ * The active block to open on mount: the URL's own `#block-<id>` hash (the
+ * sheet-switcher popover's deep link) wins first, then the last block
+ * remembered for THIS activity in `sessionStorage`, falling back to the
+ * first block. `null` for a brand-new, zero-block activity — nothing to
+ * activate yet (see `showAddFlow`).
+ */
+function readInitialActiveBlockId(activityId: string, blocks: Block[]): string | null {
+  if (blocks.length === 0) return null;
+  const hash = typeof window !== 'undefined' ? window.location.hash : '';
+  const hashBlockId = hash.startsWith('#block-') ? hash.slice('#block-'.length) : null;
+  if (hashBlockId && blocks.some((b) => b.id === hashBlockId)) return hashBlockId;
+  try {
+    const stored = sessionStorage.getItem(activeBlockStorageKey(activityId));
+    if (stored && blocks.some((b) => b.id === stored)) return stored;
+  } catch {
+    // Private window / blocked storage — fall through to the first block.
+  }
+  return blocks[0].id;
+}
+
 /**
  * `activities.status` -> the `t.status*` key that names it (PR D, "Activities
  * practice"). `removed` is deliberately absent — it never reaches the editor
@@ -200,26 +226,29 @@ export default function ActivityEditorIsland({
     reason: IncompleteBlockInfo['reason'];
   } | null>(null);
   const [preview, setPreview] = useState(false);
-  // "Open the first block on entry" (creator polish round 4, owner
-  // feedback #1): a brand-new editor used to land with EVERY block
-  // collapsed — a lost, huge-empty-card first impression. On first mount,
-  // expand the FIRST block (the desktop "focus" layout `BlockList.tsx`
-  // already derives from a one-element `expandedBlockIds`) instead, UNLESS
-  // the URL's own hash already targets a different one — `goToBlock`'s own
-  // `#block-<id>` convention (the block-index popover's deep link), read
-  // straight out of `window.location.hash` since this island is client-only
-  // (no SSR value to agree with). A brand-new, zero-block activity has
-  // nothing to expand — its empty state (the type picker/uploader) is
-  // already unconditionally open via `showAddFlow` below. "Collapse all"
-  // (`collapseAllBlocks`) keeps working exactly as before: this only seeds
-  // the INITIAL state, nothing pins it open afterward.
-  const [expandedBlockIds, setExpandedBlockIds] = useState<ReadonlySet<string>>(() => {
-    if (initialBlocks.length === 0) return new Set();
-    const hash = typeof window !== 'undefined' ? window.location.hash : '';
-    const hashBlockId = hash.startsWith('#block-') ? hash.slice('#block-'.length) : null;
-    const targeted = hashBlockId && initialBlocks.some((b) => b.id === hashBlockId) ? hashBlockId : null;
-    return new Set([targeted ?? initialBlocks[0].id]);
-  });
+  // One active block at a time (owner decision 2026-10-07, "Barra fina
+  // debajo" — replaces the earlier accordion). On first mount this reads,
+  // in order: the URL's own `#block-<id>` hash (the sheet-switcher
+  // popover's deep link), then the LAST active block remembered for THIS
+  // activity in `sessionStorage` (so resuming mid-edit lands back where the
+  // author left off), falling back to the first block. A brand-new,
+  // zero-block activity has nothing to activate — its empty state (the
+  // type picker/uploader) is already unconditionally open via `showAddFlow`
+  // below.
+  const [activeBlockId, setActiveBlockIdState] = useState<string | null>(() =>
+    readInitialActiveBlockId(activityId, initialBlocks),
+  );
+  const setActiveBlockId = useCallback((blockId: string) => setActiveBlockIdState(blockId), []);
+  // Persists the active block per activity (`sessionStorage`, best-effort —
+  // a private window or blocked storage must never crash the editor).
+  useEffect(() => {
+    if (!activeBlockId) return;
+    try {
+      sessionStorage.setItem(activeBlockStorageKey(activityId), activeBlockId);
+    } catch {
+      // Best-effort only — the in-memory state is still correct.
+    }
+  }, [activityId, activeBlockId]);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [addingBlock, setAddingBlock] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
@@ -264,37 +293,11 @@ export default function ActivityEditorIsland({
     [doc, updateDoc],
   );
 
-  // Accordion (creator "one-screen" pass): expanding a block makes it the
-  // SOLE expanded one — `BlockList`'s desktop "focus" layout derives its
-  // active block straight from this being a one-element set, so clicking a
-  // different block's header both collapses the previous one AND makes the
-  // new one active in the same step (owner request: "selecting another
-  // block makes it the active/expanded one"). Toggling the already-expanded
-  // block back off clears the set entirely — no block is active.
-  const toggleBlockExpanded = useCallback((blockId: string) => {
-    setExpandedBlockIds((prev) => (prev.has(blockId) ? new Set() : new Set([blockId])));
-  }, []);
-
-  const collapseAllBlocks = useCallback(() => setExpandedBlockIds(new Set()), []);
-  // Deliberately NOT the focus layout (see `BlockList.tsx`'s own header):
-  // expanding every block at once falls back to normal page scrolling.
-  const expandAllBlocks = useCallback(() => {
-    setExpandedBlockIds(new Set(blocks.map((b) => b.id)));
-  }, [blocks]);
-
-  // Block-index popover: make the chosen block the sole active one (same
-  // accordion rule as `toggleBlockExpanded`) and scroll it into view — it
-  // may already be off-screen above/below the current scroll position.
-  const goToBlock = useCallback((blockId: string) => {
-    setExpandedBlockIds(new Set([blockId]));
-    if (typeof document === 'undefined') return;
-    const el = document.getElementById(`block-${blockId}`);
-    // `scrollIntoView` does not exist in jsdom (and is not guaranteed on
-    // every real UA either) — feature-detect rather than assume it.
-    if (el && typeof el.scrollIntoView === 'function') {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, []);
+  // The sheet-switcher popover (`EditorSideToolbar.tsx`'s own
+  // `BlockIndexPopover`, formerly the "block index") — jumps straight to a
+  // chosen block by making it the sole active one. No scroll needed any
+  // more: the body always shows exactly the active block, full-bleed.
+  const goToBlock = useCallback((blockId: string) => setActiveBlockId(blockId), [setActiveBlockId]);
 
   // A rejected submit's exact incomplete spot is stale the moment the
   // author touches ANY block content again — clear it on the next blocks
@@ -710,25 +713,20 @@ export default function ActivityEditorIsland({
         ) {
           // Points the author straight at the exact gap instead of a
           // generic dialog error (creator polish round 3, owner feedback
-          // #1) — close the dialog, expand/select that block/zone, and let
-          // `BlockList`/`WorksheetZoneEditor` show a short inline message
-          // there.
+          // #1) — close the dialog, activate/select that block/zone, and
+          // let `BlockList`/`WorksheetZoneEditor` show a short inline
+          // message there. No scroll needed any more: the body always
+          // shows exactly the active block, full-bleed.
           const { blockId, reason } = errBody;
           const zoneId = errBody.zoneId ?? null;
           setSubmitDialog({ open: false, submitting: false, error: null });
-          setExpandedBlockIds(new Set([blockId]));
+          setActiveBlockId(blockId);
           setSelectedZoneId(zoneId);
           setIncompleteTarget({
             blockId,
             zoneId,
             reason: reason as IncompleteBlockInfo['reason'],
           });
-          if (typeof document !== 'undefined') {
-            const el = document.getElementById(`block-${blockId}`);
-            if (el && typeof el.scrollIntoView === 'function') {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }
           return;
         }
         throw new Error(errBody.error ?? 'submit_failed');
@@ -742,7 +740,7 @@ export default function ActivityEditorIsland({
       const message = t.submitErrors[code as keyof typeof t.submitErrors] ?? t.submitErrors.submit_failed;
       setSubmitDialog((s) => ({ ...s, submitting: false, error: message }));
     }
-  }, [activityId, t.submitErrors]);
+  }, [activityId, t.submitErrors, setActiveBlockId]);
 
   const handleWorksheetChosen = useCallback(() => {
     setShowUploader(true);
@@ -750,8 +748,8 @@ export default function ActivityEditorIsland({
 
   // Unlike Worksheet (which needs an upload step first, via `showUploader`),
   // Questions has nothing to upload — the new block is appended immediately,
-  // empty, and becomes the sole active one, same accordion rule
-  // `handleUploadComplete` follows for its own last-uploaded block.
+  // empty, and becomes the sole active one, same rule `handleUploadComplete`
+  // follows for its own last-uploaded block.
   const handleQuestionsChosen = useCallback(() => {
     const newBlock: Block = {
       id: crypto.randomUUID(),
@@ -760,8 +758,8 @@ export default function ActivityEditorIsland({
     };
     changeBlocks([...blocks, newBlock]);
     setAddingBlock(false);
-    setExpandedBlockIds(new Set([newBlock.id]));
-  }, [blocks, changeBlocks]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
 
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
@@ -775,14 +773,13 @@ export default function ActivityEditorIsland({
       changeBlocks([...blocks, ...newBlocks]);
       setAddingBlock(false);
       setShowUploader(false);
-      // Accordion (creator "one-screen" pass): only the LAST uploaded block
-      // becomes the sole active one, even when several images were uploaded
-      // at once — matches `toggleBlockExpanded`'s "one active block" model
-      // instead of expanding all of them together.
+      // Only the LAST uploaded block becomes the sole active one, even when
+      // several images were uploaded at once (a multi-page PDF) — one
+      // active block at a time, same rule everywhere else.
       const last = newBlocks.at(-1);
-      if (last) setExpandedBlockIds(new Set([last.id]));
+      if (last) setActiveBlockId(last.id);
     },
-    [blocks, changeBlocks],
+    [blocks, changeBlocks, setActiveBlockId],
   );
 
   const saveLabels = useMemo(
@@ -823,26 +820,14 @@ export default function ActivityEditorIsland({
     [t],
   );
 
-  // The scoped `ScrollToTop`'s target: whichever of these two is the
-  // ACTUAL scrolling element for the currently-mounted mode (`preview` and
-  // the block list are mutually exclusive, so exactly one of these two refs
-  // is ever attached to anything at a time).
-  //
-  // WRONG-REF BUG, FIXED (nav buttons pass): `previewScrollRef` below is a
-  // real, self-contained scroll container — but the non-preview branch's OWN
-  // wrapper div (further down) ALSO carries `overflow-y-auto`, and used to
-  // be the ref `ScrollToTop` tracked. It is not the element that actually
-  // scrolls there: `BlockList.tsx`'s own `<ul>` is `lg:flex-1 lg:min-h-0
-  // lg:overflow-y-auto` INSIDE it, so that inner list fills the wrapper's
-  // exact height and scrolls internally, while the wrapper itself stays
-  // sized to fit (no overflow of its own) in ordinary use. Tracking the
-  // wrapper's `scrollTop` therefore near-permanently read `0`, so the
-  // button's appear threshold was never crossed — see `ScrollToTop.tsx`'s own
-  // header for the other half of the "never appears in the editor" fix.
-  // `blockListRef` is threaded through as `BlockList`'s new `listRef` prop
-  // instead, straight onto that real `<ul>`.
+  // The scoped `ScrollToTop`'s target — PREVIEW ONLY now (owner decision
+  // 2026-10-07, "Barra fina debajo"): the editor body shows exactly the one
+  // active block, full-bleed, with no outer list to scroll past any more —
+  // `WorksheetZoneEditor`'s canvas pans internally and `QuizBlockEditor`'s
+  // own columns scroll internally, so there is nothing left for a "scroll
+  // to top" button to do there. Preview mode still lists every worksheet
+  // block in sequence, so it keeps this unchanged.
   const previewScrollRef = useRef<HTMLDivElement>(null);
-  const blockListRef = useRef<HTMLUListElement>(null);
 
   return (
     // Desktop "one-screen" layout, creator polish round 3: ONE framed card
@@ -953,23 +938,23 @@ export default function ActivityEditorIsland({
                 />
               ))}
           </div>
-        ) : (
-          // The card's body: consistent inner padding (`p-3`) so nothing
-          // touches the card edges, and THIS is the one scrolling region
-          // (`min-h-0 flex-1 overflow-y-auto`) — see `BlockList.tsx`'s own
-          // header for how its ONE active/expanded block then gets the
-          // flexible height inside it. The add-block flow (picker/uploader)
-          // scrolls into view here too, inside the same card, instead of
-          // growing the page past it.
-          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:gap-3 lg:overflow-y-auto lg:py-3">
+        ) : showAddFlow ? (
+          // The add-block flow (picker, then the worksheet uploader) —
+          // temporarily replaces the active sheet entirely rather than
+          // stacking below it (owner decision 2026-10-07, "Barra fina
+          // debajo": there is no more scrollable list for it to sit under).
+          // Consistent inner padding (`p-3`) so nothing touches the card
+          // edges; scrolls on its own if the picker/uploader ever overflows.
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+            {/* Zero-block activity: `BlockList` itself renders the "Elige
+                con qué seguir" heading right above this same picker. */}
             <BlockList
-              listRef={blockListRef}
               lang={lang}
               blocks={blocks}
-              expandedBlockIds={expandedBlockIds}
+              activeBlockId={activeBlockId}
               selectedZoneId={selectedZoneId}
               resolveImageUrl={resolveImageUrl}
-              onToggleExpand={toggleBlockExpanded}
+              onSetActiveBlock={setActiveBlockId}
               onSelectZone={setSelectedZoneId}
               onBlocksChange={changeBlocks}
               incompleteBlockId={incompleteTarget?.blockId ?? null}
@@ -977,23 +962,7 @@ export default function ActivityEditorIsland({
               incompleteMessage={incompleteMessage}
             />
 
-            {/* Desktop already has this same action in the sticky side
-                toolbar's icon (`toolbar-add-block`, always reachable
-                without scrolling); this text button stays for
-                mobile/narrow layouts. */}
-            {!showAddFlow && (
-              <Button
-                type="button"
-                variant="outline"
-                data-testid="add-block-button"
-                onClick={() => setAddingBlock(true)}
-                className="flex-none lg:hidden"
-              >
-                + {t.addBlock}
-              </Button>
-            )}
-
-            {showAddFlow && !showUploader && (
+            {!showUploader && (
               <BlockTypePicker
                 lang={lang}
                 onSelectWorksheet={handleWorksheetChosen}
@@ -1001,34 +970,42 @@ export default function ActivityEditorIsland({
               />
             )}
 
-            {showAddFlow && showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
+            {showUploader && <WorksheetUploader lang={lang} onComplete={handleUploadComplete} />}
           </div>
+        ) : (
+          // The active block's own editor, edge to edge — no margins, no
+          // card border (owner decision 2026-10-07, "Barra fina debajo").
+          <BlockList
+            lang={lang}
+            blocks={blocks}
+            activeBlockId={activeBlockId}
+            selectedZoneId={selectedZoneId}
+            resolveImageUrl={resolveImageUrl}
+            onSetActiveBlock={setActiveBlockId}
+            onSelectZone={setSelectedZoneId}
+            onBlocksChange={changeBlocks}
+            incompleteBlockId={incompleteTarget?.blockId ?? null}
+            incompleteZoneId={incompleteTarget?.zoneId ?? null}
+            incompleteMessage={incompleteMessage}
+          />
         )}
 
-        {/* Scoped "back to top" for the card's own scroll container (block
-            list or preview, whichever is mounted) — reuses the same island
-            `BaseLayout` mounts globally, targeted at the REAL scrolling
-            element for whichever mode is active (see `previewScrollRef`'s
-            own header above) instead of the window. Positioned inside THIS
-            card (the `relative` ancestor above), never the page. Clicking it
-            scrolls that container to its top — in the block-list mode, that
-            IS the first block, since `BlockList.tsx`'s `<ul>` renders blocks
-            in order with nothing else above them. */}
-        <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={preview ? previewScrollRef : blockListRef} />
+        {/* Scoped "back to top" — PREVIEW ONLY (see `previewScrollRef`'s own
+            header above); only mounted while preview is, so it never floats
+            over the add-flow or the full-bleed active block either. */}
+        {preview && <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={previewScrollRef} />}
       </div>
 
       {/* Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the
           "Elige con qué seguir" type picker (`showAddFlow` above, rendered
-          while `blocks.length === 0`) has nothing yet for collapse-all/
-          expand-all/block-index/undo/redo/preview to act on — the rail used
-          to render anyway, floating next to an editor with no content. It
-          now only mounts once the activity has at least one block. */}
+          while `blocks.length === 0`) has nothing yet for the sheet
+          switcher/undo/redo/preview to act on — the rail used to render
+          anyway, floating next to an editor with no content. It now only
+          mounts once the activity has at least one block. */}
       {blocks.length > 0 && (
         <EditorSideToolbar
           lang={lang}
           blocks={blocks}
-          onCollapseAll={collapseAllBlocks}
-          onExpandAll={expandAllBlocks}
           onGoToBlock={goToBlock}
           onAddBlock={() => setAddingBlock(true)}
           preview={preview}

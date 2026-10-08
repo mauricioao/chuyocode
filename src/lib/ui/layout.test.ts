@@ -46,13 +46,19 @@ describe('ROW_PADDING_X', () => {
     expect(page).toContain('${ROW_PADDING_X} py-4');
   });
 
-  it('the activity block header and its expanded editor body share the same inset', () => {
+  // Owner decision 2026-10-07 ("Barra fina debajo") replaced the accordion
+  // (a header per block, each sharing this inset with its own expanded
+  // body) with ONE thin active-sheet bar plus a full-bleed body: the bar
+  // still shares the window title bar's own horizontal inset (it sits
+  // directly under it), but the body is now explicitly EDGE TO EDGE — the
+  // owner's own "sin márgenes" — so it no longer carries this token at all.
+  it('the active sheet bar shares the window title bar\'s inset; the canvas body is edge-to-edge, not inset', () => {
     const src = sourceOf('components/islands/activities/BlockList.tsx');
     expect(src).toContain("import { ROW_PADDING_X } from '@/lib/ui/layout'");
-    // Header row + the worksheet expanded body + the quiz expanded body.
-    expect(src.match(/ROW_PADDING_X/g)?.length).toBeGreaterThanOrEqual(4);
-    expect(src).not.toContain('items-center gap-2 py-1"');
-    expect(src).not.toContain('px-2 pb-2 pt-1');
+    // The import plus the bar's own className (comments may mention it too).
+    expect(src.match(/ROW_PADDING_X/g)?.length).toBeGreaterThanOrEqual(2);
+    // The body wrapper never carries the literal inset value — edge to edge.
+    expect(src).not.toMatch(/data-testid=\{`block-\$\{activeBlock\.id\}`\}[^>]*px-3/);
   });
 
   it('the practice player tab row and footer share the header row\'s own inset', () => {

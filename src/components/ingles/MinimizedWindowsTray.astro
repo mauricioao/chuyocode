@@ -29,11 +29,16 @@
  * window from the hub on mobile too. At `desk:` and up it always shows,
  * window or not.
  *
- * ONE CHIP AT EVERY WIDTH (PART 6c polish, owner feedback 2026-10-07: "un
- * pequeño rectángulo", not a row of them — the old 3-chips-≥1280px/1-below
- * rule still ran under/over the hub's levels dock and the footer): see
- * `@lib/ui/minimizedWindows`'s own `MAX_VISIBLE_MINIMIZED_CHIPS` header —
- * the width-dependent cap is gone, the overflow "+N" tile/menu is not.
+ * INDEPENDENT BLOCKS, STACKED UPWARD (PART 6c, round 2 — owner feedback
+ * 2026-10-07: "cuando se minimizan quiero que sean bloques independientes"):
+ * `flex-col-reverse` below puts the FIRST DOM child at the bottom of the
+ * stack, growing upward for each older one — `@lib/ui/minimizedWindows`
+ * always renders its chips newest-first, so the newest minimized window
+ * always sits at the bottom. Only `@lib/ui/minimizedWindows`'s own
+ * `computeMaxVisibleMinimizedChips` still collapses the OLDEST ones into the
+ * "+N" tile/menu, and only once the stack would otherwise grow tall enough
+ * to cover the desk's right-hand folders column at the current viewport
+ * height — never a flat per-width cap any more.
  *
  * FOOTER OVERLAP GUARD (PART 6c polish, defect #3): `data-minimized-tray-
  * wrapper` on the OUTER div below (never the inner `<nav>`, which already
@@ -73,7 +78,7 @@ const t = UI_LABELS[isValidLang(lang) ? lang : 'es'].english.hub;
     data-more-label={t.trayMoreLabel}
     hidden
     aria-label={t.trayLabel}
-    class="pointer-events-auto flex flex-row-reverse flex-wrap justify-end gap-2.5"
+    class="pointer-events-auto flex flex-col-reverse items-end gap-2.5"
   ></nav>
 </div>
 

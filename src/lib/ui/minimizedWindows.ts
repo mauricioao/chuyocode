@@ -16,20 +16,28 @@
  *
  * PART 6c polish (owner feedback 2026-10-07: the tray's own corner box was
  * still too wide — three ~200px rectangles plus a "+N" pill ran under/over
- * the hub's levels dock and the footer at common desktop widths): ONE chip
- * (the most recently minimized window) renders directly, at EVERY viewport
- * width — see {@link MAX_VISIBLE_MINIMIZED_CHIPS}'s own comment, which
- * REPLACES the old width-dependent `visibleChipLimit`/`NARROW_DESK_WIDTH`
- * (3 chips ≥1280px, 1 below it). Anything past the cap still collapses into
- * the same "+N" overflow tile/menu — only the cap itself (and its dependence
- * on viewport width) changed.
+ * the hub's levels dock and the footer at common desktop widths) briefly
+ * capped the tray at ONE directly-rendered chip, at every viewport width.
+ *
+ * PART 6c, round 2 (owner feedback, same day: "cuando se minimizan quiero
+ * que sean bloques independientes" — minimized windows should each be their
+ * OWN independent block): that single-chip cap is gone. Every minimized
+ * window now renders as its own block, stacked UPWARD from the bottom-right
+ * corner (newest at the bottom, `MinimizedWindowsTray.astro`'s own
+ * `flex-col-reverse`), each still restoring its own window on click and
+ * closable on its own "×". Only {@link computeMaxVisibleMinimizedChips}
+ * still collapses the OLDEST ones into the same "+N" overflow tile/menu —
+ * and only when the stack would otherwise grow tall enough to cover another
+ * desk item (the right-hand folders column) at the CURRENT viewport height,
+ * never as a flat per-width cap any more.
  *
  * Split the same way `deskWindow.ts`/`backNavigation.ts` are: pure, zero-DOM
  * list operations ({@link withMinimizedWindow}, {@link withoutMinimizedWindow},
- * {@link parseMinimizedWindows}) that are fully unit-testable, plus thin
- * Storage-reading/writing wrappers (`try`/`catch`-guarded, every access —
- * private browsing, quota, disabled storage) and a DOM-rendering function for
- * `MinimizedWindowsTray.astro`'s own tray element.
+ * {@link parseMinimizedWindows}, {@link computeMaxVisibleMinimizedChips}) that
+ * are fully unit-testable, plus thin Storage-reading/writing wrappers
+ * (`try`/`catch`-guarded, every access — private browsing, quota, disabled
+ * storage) and a DOM-rendering function for `MinimizedWindowsTray.astro`'s
+ * own tray element.
  */
 
 import { FOOTER_SELECTOR } from '@lib/chromeVisibility';
@@ -39,14 +47,46 @@ export const MINIMIZED_WINDOWS_STORAGE_KEY = 'ingles-desk-minimized-windows';
 /** At most this many chips — oldest (least recently minimized/reopened) dropped first. */
 export const MAX_MINIMIZED_WINDOWS = 5;
 
+/** `DeskScene.astro`'s own right-hand folders column — the one other desk item the independent-blocks stack must never grow tall enough to cover, see {@link computeMaxVisibleMinimizedChips}. */
+export const DESK_FOLDERS_SELECTOR = '[data-desk-folders]';
+
+/** A chip's own fixed height (`createChip`'s `h-11` class) in pixels. */
+export const MINIMIZED_CHIP_HEIGHT_PX = 44;
+/** The gap between stacked chips (`MinimizedWindowsTray.astro`'s own `gap-2.5`) in pixels. */
+export const MINIMIZED_CHIP_GAP_PX = 10;
+
 /**
- * At most this many chips render DIRECTLY in the tray, at every viewport
- * width (PART 6c polish, owner spec 2026-10-07: "un pequeño rectángulo" —
- * ONE small rectangle, not a row of them). Anything past this collapses into
- * one "+N" tile that opens a small menu listing the rest — see
- * {@link renderMinimizedWindowsTray}.
+ * Pure: how many of `totalCount` minimized windows can render as their own
+ * independent block — stacked upward from the tray's own bottom anchor
+ * (`trayBottomY`, a viewport Y coordinate) — before the stack itself would
+ * reach `ceilingY` (the bottom edge, also viewport Y, of the desk item it
+ * must never cover — `DESK_FOLDERS_SELECTOR`'s own rect). `ceilingY === null`
+ * (nothing to protect against — e.g. the folders column is off this page, or
+ * scrolled out of view) never collapses anything: every window gets its own
+ * block, up to `totalCount` itself.
+ *
+ * Always keeps the NEWEST entries visible, collapsing the OLDEST ones (the
+ * tail of the list — callers always pass it newest-first, same order
+ * {@link withMinimizedWindow} already keeps it in) into the "+N" tile — same
+ * "oldest goes first" rule that tile's own eviction already follows. When
+ * collapsing is actually needed, one slot is reserved for the "+N" tile
+ * itself (it is a block in the stack too).
  */
-export const MAX_VISIBLE_MINIMIZED_CHIPS = 1;
+export function computeMaxVisibleMinimizedChips(
+  totalCount: number,
+  trayBottomY: number,
+  ceilingY: number | null,
+): number {
+  if (totalCount <= 0) return 0;
+  if (ceilingY === null) return totalCount;
+
+  const available = trayBottomY - ceilingY;
+  const step = MINIMIZED_CHIP_HEIGHT_PX + MINIMIZED_CHIP_GAP_PX;
+  const fits = Math.max(0, Math.floor((available + MINIMIZED_CHIP_GAP_PX) / step));
+
+  if (fits >= totalCount) return totalCount; // everything fits — no overflow tile needed at all
+  return Math.max(0, fits - 1); // reserve one slot for the "+N" tile itself
+}
 
 export interface MinimizedWindowEntry {
   /** The activity id — also the dedupe key (re-minimizing the same activity moves it to the front instead of duplicating it). */
@@ -392,10 +432,11 @@ function wireOverflowEscapeClose(doc: Document): void {
  * {@link MAX_MINIMIZED_WINDOWS} long, so a full rebuild is cheap, and it
  * keeps this function simple enough to trust at a glance.
  *
- * At most {@link MAX_VISIBLE_MINIMIZED_CHIPS} render directly; the rest
- * collapse into one "+N" tile (`createOverflowTile`) — see that function's
- * own header for why (owner report `dock-three-chips.png`: the dock used to
- * widen under the open helper bubble to fit every chip).
+ * Every entry renders as its OWN independent block, by default (`maxVisible`
+ * defaults to `entries.length` — no collapsing at all unless a caller
+ * explicitly measured less room, see {@link computeMaxVisibleMinimizedChips}).
+ * Only the OLDEST ones past `maxVisible` collapse into one "+N" tile
+ * (`createOverflowTile`).
  */
 export function renderMinimizedWindowsTrayFrom(
   container: HTMLElement,
@@ -405,6 +446,7 @@ export function renderMinimizedWindowsTrayFrom(
   rerender: () => void,
   doc: Document = document,
   moreLabelTemplate = '+{n}',
+  maxVisible: number = entries.length,
 ): void {
   wireOverflowEscapeClose(doc);
 
@@ -418,14 +460,20 @@ export function renderMinimizedWindowsTrayFrom(
   const isEmpty = entries.length === 0;
   container.hidden = isEmpty;
 
-  const visible = entries.slice(0, MAX_VISIBLE_MINIMIZED_CHIPS);
-  const overflow = entries.slice(MAX_VISIBLE_MINIMIZED_CHIPS);
+  const visible = entries.slice(0, Math.max(0, maxVisible));
+  const overflow = entries.slice(visible.length);
 
+  // `entries` is always newest-first — appending in that same order here
+  // puts the newest chip FIRST in DOM order, which `MinimizedWindowsTray.astro`'s
+  // own `flex-col-reverse` then places at the BOTTOM of the stack, growing
+  // upward for each older one (owner spec: "el más reciente abajo").
   for (const entry of visible) {
     container.appendChild(createChip(entry, removeLabel, onRemove, doc, rerender));
   }
 
   if (overflow.length > 0) {
+    // Appended LAST so it becomes the TOP-most block in the stack — the
+    // oldest windows collapse furthest away from the newest, reachable one.
     container.appendChild(createOverflowTile(overflow, moreLabelTemplate, doc));
   }
 }
@@ -438,6 +486,7 @@ export function renderMinimizedWindowsTray(
   storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
   doc: Document = document,
   moreLabelTemplate = '+{n}',
+  maxVisible: number = entries.length,
 ): void {
   renderMinimizedWindowsTrayFrom(
     container,
@@ -447,7 +496,28 @@ export function renderMinimizedWindowsTray(
     () => renderMinimizedWindowsTray(container, readMinimizedWindows(storage), removeLabel, storage, doc, moreLabelTemplate),
     doc,
     moreLabelTemplate,
+    maxVisible,
   );
+}
+
+/**
+ * DOM: measure how many independent blocks currently fit — see
+ * {@link computeMaxVisibleMinimizedChips}'s own header. `trayWrapper` is
+ * `MinimizedWindowsTray.astro`'s own outer fixed element (the stack's
+ * bottom anchor); the folders column (`DESK_FOLDERS_SELECTOR`) may not
+ * exist on every page (a guest-only route, say) or may be scrolled out of
+ * view — either way that is simply "nothing to protect against" (`null`
+ * ceiling), never a thrown error.
+ */
+export function measureMaxVisibleMinimizedChips(
+  totalCount: number,
+  trayWrapper: HTMLElement,
+  doc: Document = document,
+): number {
+  const trayBottomY = trayWrapper.getBoundingClientRect().bottom;
+  const folders = doc.querySelector(DESK_FOLDERS_SELECTOR);
+  const ceilingY = folders ? folders.getBoundingClientRect().bottom : null;
+  return computeMaxVisibleMinimizedChips(totalCount, trayBottomY, ceilingY);
 }
 
 /**
@@ -471,23 +541,33 @@ export function initMinimizedWindowsTray(doc: Document = document, win: Window =
 
   const removeLabel = container.getAttribute('data-remove-label') ?? '';
   const moreLabelTemplate = container.getAttribute('data-more-label') ?? '+{n}';
-  const render = () =>
-    renderMinimizedWindowsTray(
-      container,
-      readMinimizedWindows(win.sessionStorage),
-      removeLabel,
-      win.sessionStorage,
-      doc,
-      moreLabelTemplate,
-    );
-  render();
-
   // PART 6c polish (owner spec 2026-10-07, "que no tape el footer"): the
   // tray's own OUTER fixed wrapper (`MinimizedWindowsTray.astro`'s own
   // `[data-minimized-tray-wrapper]`), not this `<nav>` — see
-  // {@link initFooterOverlapGuard}'s own header.
+  // {@link initFooterOverlapGuard}'s own header. Also this stack's own
+  // bottom anchor for {@link measureMaxVisibleMinimizedChips}.
   const wrapper = container.closest<HTMLElement>(`[${MINIMIZED_TRAY_WRAPPER_ATTR}]`);
-  if (wrapper) initFooterOverlapGuard(wrapper, doc);
+  const render = () => {
+    const entries = readMinimizedWindows(win.sessionStorage);
+    const maxVisible = wrapper ? measureMaxVisibleMinimizedChips(entries.length, wrapper, doc) : entries.length;
+    renderMinimizedWindowsTray(container, entries, removeLabel, win.sessionStorage, doc, moreLabelTemplate, maxVisible);
+  };
+  render();
+
+  if (wrapper) {
+    initFooterOverlapGuard(wrapper, doc);
+    // Round 2 (owner feedback, same day — "bloques independientes" stacked
+    // upward): how many fit without covering the folders column depends on
+    // the CURRENT viewport height, so a resize (rotating a tablet, resizing
+    // a desktop browser window) needs the same re-measure a fresh render
+    // already gets. Idempotent per `win`, same posture as every other
+    // double-wiring guard in this module.
+    const marker = win as unknown as Record<string, unknown>;
+    if (!marker.__inglesMinimizedResizeReady && typeof win.addEventListener === 'function') {
+      marker.__inglesMinimizedResizeReady = true;
+      win.addEventListener('resize', render);
+    }
+  }
 }
 
 /**

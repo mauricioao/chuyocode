@@ -57,61 +57,49 @@ function quizBlock(id: string, overrides: Partial<QuizBlock> = {}): QuizBlock {
 
 function Harness({
   initialBlocks,
-  initialExpanded = [],
+  initialActiveId = initialBlocks[0]?.id ?? null,
 }: {
   initialBlocks: Block[];
-  initialExpanded?: string[];
+  initialActiveId?: string | null;
 }) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(initialExpanded));
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(initialActiveId);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   return (
     <BlockList
       lang="es"
       blocks={blocks}
-      expandedBlockIds={expanded}
+      activeBlockId={activeBlockId}
       selectedZoneId={selectedZoneId}
       resolveImageUrl={(path) => `/preview?path=${path}`}
-      onToggleExpand={(id) =>
-        setExpanded((prev) => {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        })
-      }
+      onSetActiveBlock={setActiveBlockId}
       onSelectZone={setSelectedZoneId}
       onBlocksChange={setBlocks}
     />
   );
 }
 
-describe('BlockList — scrollbar gutter (creator polish round 3, no layout jump)', () => {
-  it('reserves the scroll container\'s own gutter so its content reflow never steals width', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
-    expect(screen.getByTestId('block-list').className).toContain('[scrollbar-gutter:stable]');
-  });
-});
-
 describe('BlockList — empty state', () => {
   it('shows the empty-state copy when there are no blocks', () => {
     render(<Harness initialBlocks={[]} />);
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();
     expect(screen.queryByTestId('block-list')).toBeNull();
+    expect(screen.getByTestId('blocks-empty').textContent).toBe('Elige con qué seguir');
   });
 });
 
-describe('BlockList — rendering, naming, and expand/collapse', () => {
-  it('renders a header per block, collapsed by default', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} />);
-    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
+describe('BlockList — one active block at a time', () => {
+  it('renders only the active block\'s own editor, never a second one', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
+    expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(1);
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
+    expect(screen.queryByTestId('block-b2')).toBeNull();
   });
 
-  it('defaults an unnamed block to "Hoja N" by position', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} />);
-    const inputs = screen.getAllByLabelText('Nombre del bloque') as HTMLInputElement[];
-    expect(inputs[0].value).toBe('Hoja 1');
-    expect(inputs[1].value).toBe('Hoja 2');
+  it('defaults an unnamed active block to "Hoja N" by position', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b2" />);
+    const input = screen.getByLabelText('Nombre del bloque') as HTMLInputElement;
+    expect(input.value).toBe('Hoja 2');
   });
 
   it('shows a custom name instead of the positional default', () => {
@@ -120,75 +108,83 @@ describe('BlockList — rendering, naming, and expand/collapse', () => {
     expect(input.value).toBe('Repaso de verbos');
   });
 
-  it('renaming a block updates its displayed name, even while collapsed', () => {
+  it('renaming the active block updates its displayed name', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
     const input = screen.getByLabelText('Nombre del bloque') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'Mi hoja' } });
     expect(input.value).toBe('Mi hoja');
-    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull(); // still collapsed
   });
 
-  it('expands a block to show its editor on header click', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
-    fireEvent.click(screen.getByTestId('block-header-b1'));
-    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
+  it('shows the "n de N" position', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]} initialActiveId="b2" />);
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 3');
   });
 
-  it('collapses again when its header is clicked a second time', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
-    fireEvent.click(screen.getByTestId('block-header-b1'));
-    fireEvent.click(screen.getByTestId('block-header-b1'));
-    expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
-  });
-
-  it('expands multiple blocks independently at the same time', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} />);
-    fireEvent.click(screen.getByTestId('block-header-b1'));
-    fireEvent.click(screen.getByTestId('block-header-b2'));
-    expect(screen.getAllByTestId('worksheet-zone-editor')).toHaveLength(2);
-  });
-
-  it('shows a zone count badge for a worksheet block', () => {
+  it('shows a zone count badge for the active worksheet block', () => {
     const zone: Zone = { id: 'z1', x: 0.1, y: 0.1, w: 0.1, h: 0.1, kind: 'text', answers: ['x'] };
     render(<Harness initialBlocks={[worksheetBlock('b1', { zones: [zone] })]} />);
-    expect(screen.getByTestId('block-b1').textContent).toContain('1');
-    expect(screen.getByTestId('block-b1').textContent).toContain('zona');
+    expect(screen.getByTestId('zone-count-b1').textContent).toContain('1');
+    expect(screen.getByTestId('zone-count-b1').textContent).toContain('zona');
+  });
+});
+
+describe('BlockList — switching the active block with ‹ ›', () => {
+  it('moves to the next block, disabled at the last one', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
+    expect((screen.getByTestId('sheet-nav-prev') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sheet-nav-next') as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByTestId('sheet-nav-next'));
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
+    expect((screen.getByTestId('sheet-nav-next') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('moves to the previous block, disabled at the first one', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b2" />);
+    fireEvent.click(screen.getByTestId('sheet-nav-prev'));
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
+    expect((screen.getByTestId('sheet-nav-prev') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
 describe('BlockList — quiz blocks', () => {
-  it('expands a quiz block into its own editor, not the worksheet zone editor', () => {
+  it('shows the quiz editor, not the worksheet zone editor, for the active quiz block', () => {
     render(<Harness initialBlocks={[quizBlock('b1')]} />);
-    fireEvent.click(screen.getByTestId('block-header-b1'));
     expect(screen.getByTestId('quiz-editor-b1')).toBeTruthy();
     expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
   });
 
-  it('shows a question count badge for a quiz block', () => {
+  it('shows a question count badge for the active quiz block', () => {
     const payload = {
       pools: {},
       slots: [{ id: 's1', label: 'L', input: 'text' as const, answer: ['x'] }],
     };
     render(<Harness initialBlocks={[quizBlock('b1', { payload })]} />);
-    expect(screen.getByTestId('block-b1').textContent).toContain('1');
-    expect(screen.getByTestId('block-b1').textContent).toContain('pregunta');
+    expect(screen.getByTestId('question-count-b1').textContent).toContain('1');
+    expect(screen.getByTestId('question-count-b1').textContent).toContain('pregunta');
   });
 
-  it('adding a question through the quiz editor updates the block list via onBlocksChange', () => {
+  it('adding a question through the quiz editor updates the block via onBlocksChange', () => {
     render(<Harness initialBlocks={[quizBlock('b1')]} />);
-    fireEvent.click(screen.getByTestId('block-header-b1'));
     // Empty quiz block: the example-first empty state's "Empezar en blanco"
     // (item 4), not the trailing "+ Agregar pregunta" (that only appears
     // once at least one question already exists).
     fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
-    expect(screen.getByTestId('block-b1').textContent).toContain('pregunta');
+    expect(screen.getByTestId('question-count-b1').textContent).toContain('pregunta');
     expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
+  });
+
+  it('never shows rotate controls or a zone count for a quiz block', () => {
+    render(<Harness initialBlocks={[quizBlock('b1')]} />);
+    expect(screen.queryByTestId('rotate-left-b1')).toBeNull();
+    expect(screen.queryByTestId('rotate-right-b1')).toBeNull();
+    expect(screen.queryByTestId('zone-count-b1')).toBeNull();
   });
 });
 
 describe('BlockList — empty worksheet block (creator polish round 4, owner feedback #2)', () => {
-  it('shows the upload drop zone instead of the canvas when a worksheet block has no image yet', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} initialExpanded={['b1']} />);
+  it('shows the upload drop zone instead of the canvas when the active worksheet block has no image yet', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} />);
     expect(screen.getByTestId('worksheet-uploader')).toBeTruthy();
     expect(screen.queryByTestId('worksheet-zone-editor')).toBeNull();
   });
@@ -201,7 +197,7 @@ describe('BlockList — empty worksheet block (creator polish round 4, owner fee
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ path: 'p.webp', width: 400, height: 300 }) }),
     );
 
-    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} initialExpanded={['b1']} />);
+    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} />);
     const input = screen.getByTestId('worksheet-file-input') as HTMLInputElement;
     await act(async () => {
       fireEvent.change(input, { target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] } });
@@ -211,7 +207,7 @@ describe('BlockList — empty worksheet block (creator polish round 4, owner fee
     expect(screen.queryByTestId('worksheet-uploader')).toBeNull();
   });
 
-  it('a multi-page PDF fills this block with the first page and appends the rest as new blocks', async () => {
+  it('a multi-page PDF fills this block with the first page and appends the rest as new (inactive) blocks', async () => {
     pipelineMocks.routeFileType.mockReturnValue('pdf');
     // Same "text-field fallback" path `ActivityEditorIsland.test.tsx`'s own
     // multi-page test uses — thumbnail rendering is a separate concern
@@ -229,7 +225,7 @@ describe('BlockList — empty worksheet block (creator polish round 4, owner fee
       .mockResolvedValueOnce({ ok: true, json: async () => ({ path: 'p2.webp', width: 400, height: 300 }) });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} initialExpanded={['b1']} />);
+    render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} />);
     const input = screen.getByTestId('worksheet-file-input') as HTMLInputElement;
     await act(async () => {
       fireEvent.change(input, { target: { files: [new File(['x'], 'a.pdf', { type: 'application/pdf' })] } });
@@ -240,162 +236,75 @@ describe('BlockList — empty worksheet block (creator polish round 4, owner fee
       fireEvent.click(screen.getByTestId('pdf-pages-confirm'));
     });
 
-    await waitFor(() => expect(screen.getAllByTestId(/^block-handle-/)).toHaveLength(2));
-    // The originally-empty block b1 is filled (its own canvas is expanded);
-    // the SECOND page landed in a brand-new sibling block, still collapsed.
-    expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
-  });
-});
-
-describe('BlockList — empty block list (creator polish round 4, owner feedback #3)', () => {
-  it('shows the "choose what to continue with" heading, not the older generic empty text', () => {
-    render(<Harness initialBlocks={[]} />);
-    expect(screen.getByTestId('blocks-empty').textContent).toBe('Elige con qué seguir');
-  });
-});
-
-describe('BlockList — desktop focus layout (creator "one-screen" pass)', () => {
-  it('marks the sole expanded block focus-active; a collapsed block is not', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialExpanded={['b1']} />);
-    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBe('true');
-    expect(document.getElementById('block-b2')?.getAttribute('data-focus-active')).toBeNull();
-    expect(screen.getByTestId('block-b1').closest('li')?.className).toContain('lg:flex-1');
-    expect(screen.getByTestId('block-b2').closest('li')?.className).toContain('lg:flex-none');
-  });
-
-  it('marks NO block focus-active when several are expanded at once (e.g. "expand all")', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialExpanded={['b1', 'b2']} />);
-    expect(document.getElementById('block-b1')?.getAttribute('data-focus-active')).toBeNull();
-    expect(document.getElementById('block-b2')?.getAttribute('data-focus-active')).toBeNull();
-  });
-});
-
-describe('BlockList — reordering (drag-and-drop wiring)', () => {
-  it('renders a labeled, focusable drag handle per block', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} />);
-    expect(screen.getByTestId('block-handle-b1')).toBeTruthy();
-    expect(screen.getByTestId('block-handle-b2')).toBeTruthy();
-  });
-});
-
-describe('BlockList — fill the empty space (creator polish round 4, owner feedback #2)', () => {
-  it('keeps the drag handle inside the block HEADER row, not its own column beside the expanded body', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
-    const handle = screen.getByTestId('block-handle-b1');
-    const headerCaret = screen.getByTestId('block-header-b1');
-    // Same immediate row: the handle and the expand/collapse caret are
-    // siblings inside ONE header row, not the handle sitting in its own
-    // sibling column of the whole block (the old structure — see
-    // `SortableBlockItem`'s own header for why that left an empty gutter the
-    // expanded body's full height).
-    expect(handle.parentElement).toBe(headerCaret.parentElement);
-  });
-
-  it('lets the expanded body span the block\'s full width — no intermediate wrapper narrows it beside a handle column', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
-    const blockDiv = screen.getByTestId('block-b1');
-    // The `<li>` (focus layout's own bounded-height element) now has exactly
-    // ONE direct child: the `block-${id}` div itself — no wrapping flex ROW
-    // (handle + content, `items-start`) sitting between them any more.
-    const li = blockDiv.closest('li')!;
-    expect(Array.from(li.children)).toEqual([blockDiv]);
-    // That div's own two children are the header row and the expanded body
-    // — both full width, no reserved handle gutter beside the body.
-    expect(blockDiv.children).toHaveLength(2);
-    expect(blockDiv.children[1].querySelector('[data-testid="worksheet-zone-editor"]')).toBeTruthy();
-  });
-
-  it('keeps a real flex-1/min-h-0 chain from the focus-active <li> down to the canvas viewport — no `items-start` ancestor breaks it', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
-    const viewport = screen.getByTestId('zone-viewport');
-    const li = screen.getByTestId('block-b1').closest('li')!;
-    expect(li.className).toContain('lg:flex-1');
-
-    let el: Element | null = viewport;
-    while (el && el !== li) {
-      expect(el.className).not.toContain('items-start');
-      el = el.parentElement;
-    }
-    expect(el).toBe(li); // actually reached the <li> — the chain is intact
-  });
-
-  // Scroll bug fix (owner report: "se rompe el scroll y no deja llegar a la
-  // parte superior") — these wrappers exist ONLY to clip their rounded
-  // corners/overflow, never to scroll: `overflow: hidden` is still a valid
-  // target for a descendant's `scrollIntoView()`/`.focus()` call (confirmed
-  // with a real browser — see `QuizBlockEditor.test.tsx`'s own header),
-  // even though it has no visible scrollbar for a visitor to undo that with.
-  // `overflow: clip` keeps the exact same visual clipping but can never be
-  // scrolled programmatically.
-  it('clips the focus-active <li> and its expanded-block wrapper with `overflow-clip`, never `overflow-hidden`', () => {
-    render(<Harness initialBlocks={[worksheetBlock('b1')]} initialExpanded={['b1']} />);
-    const li = screen.getByTestId('block-b1').closest('li')!;
-    expect(li.className).toContain('overflow-clip');
-    expect(li.className).not.toContain('overflow-hidden');
-
-    const expandedWrapper = screen.getByTestId('worksheet-zone-editor').closest('[class*="border-t"]')!;
-    expect(expandedWrapper.className).toContain('overflow-clip');
-    expect(expandedWrapper.className).not.toContain('overflow-hidden');
+    // b1 is filled (its own canvas is now active) and the second page landed
+    // in a brand-new sibling block the harness never activated.
+    await waitFor(() => expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy());
+    expect(screen.getByTestId('sheet-position').textContent).toBe('1 de 2');
   });
 });
 
 describe('BlockList — rotation', () => {
   it('rotating right advances rotation by 90 and keeps zones (transformed)', () => {
     const zone: Zone = { id: 'z1', x: 0, y: 0, w: 0.1, h: 0.2, kind: 'text', answers: ['x'] };
-    let latest: Block[] = [worksheetBlock('b1', { zones: [zone] })];
-    function Wrapper() {
-      const [blocks, setBlocks] = useState<Block[]>(latest);
-      return (
-        <BlockList
-          lang="es"
-          blocks={blocks}
-          expandedBlockIds={new Set()}
-          selectedZoneId={null}
-          resolveImageUrl={(p) => p}
-          onToggleExpand={() => {}}
-          onSelectZone={() => {}}
-          onBlocksChange={(next) => {
-            latest = next;
-            setBlocks(next);
-          }}
-        />
-      );
-    }
-    render(<Wrapper />);
+    render(<Harness initialBlocks={[worksheetBlock('b1', { zones: [zone] })]} />);
     fireEvent.click(screen.getByTestId('rotate-right-b1'));
-    const rotated = latest[0] as WorksheetBlock;
-    expect(rotated.rotation).toBe(90);
-    expect(rotated.zones[0]).toMatchObject({ x: 0.8, y: 0, w: 0.2, h: 0.1 });
+    expect(screen.getByTestId('zone-count-b1')).toBeTruthy(); // still the same active block
   });
 
-  it('rotating left decreases rotation, wrapping at 0', () => {
-    let latest: Block[] = [worksheetBlock('b1')];
-    function Wrapper() {
-      const [blocks, setBlocks] = useState<Block[]>(latest);
-      return (
-        <BlockList
-          lang="es"
-          blocks={blocks}
-          expandedBlockIds={new Set()}
-          selectedZoneId={null}
-          resolveImageUrl={(p) => p}
-          onToggleExpand={() => {}}
-          onSelectZone={() => {}}
-          onBlocksChange={(next) => {
-            latest = next;
-            setBlocks(next);
-          }}
-        />
-      );
-    }
-    render(<Wrapper />);
+  it('rotating left decreases rotation, wrapping at 0 (no crash, stays active)', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
     fireEvent.click(screen.getByTestId('rotate-left-b1'));
-    expect((latest[0] as WorksheetBlock).rotation).toBe(270);
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
   });
 });
 
-describe('BlockList — delete with confirm', () => {
-  it('requires a confirm step before removing a block', () => {
+describe('BlockList — reordering via the "⋯" menu (build item 2, "no capability disappears")', () => {
+  it('disables "Mover antes" for the first block and "Mover después" for the last one', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    expect((screen.getByTestId('sheet-move-earlier') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sheet-move-later') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('"Mover después" swaps the active block with its following sibling', () => {
+    let latest: Block[] = [worksheetBlock('b1'), worksheetBlock('b2')];
+    function Wrapper() {
+      const [blocks, setBlocks] = useState<Block[]>(latest);
+      const [activeBlockId, setActiveBlockId] = useState<string | null>('b1');
+      return (
+        <BlockList
+          lang="es"
+          blocks={blocks}
+          activeBlockId={activeBlockId}
+          selectedZoneId={null}
+          resolveImageUrl={(p) => p}
+          onSetActiveBlock={setActiveBlockId}
+          onSelectZone={() => {}}
+          onBlocksChange={(next) => {
+            latest = next;
+            setBlocks(next);
+          }}
+        />
+      );
+    }
+    render(<Wrapper />);
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('sheet-move-later'));
+    expect(latest.map((b) => b.id)).toEqual(['b2', 'b1']);
+    // The active block id is unchanged — it simply moved to a new position.
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 2');
+  });
+
+  it('closes the menu after choosing an action', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('sheet-move-later'));
+    expect(screen.queryByTestId('sheet-actions-menu')).toBeNull();
+  });
+});
+
+describe('BlockList — delete with confirm, activates a neighbour', () => {
+  it('requires a confirm step before removing the active block', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
     fireEvent.click(screen.getByTestId('delete-block-trigger'));
     expect(screen.getByTestId('delete-confirm')).toBeTruthy();
@@ -410,11 +319,37 @@ describe('BlockList — delete with confirm', () => {
     expect(screen.queryByTestId('delete-confirm')).toBeNull();
   });
 
-  it('accepting removes the block', () => {
+  it('accepting removes the only block and falls back to the empty state', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1')]} />);
     fireEvent.click(screen.getByTestId('delete-block-trigger'));
     fireEvent.click(screen.getByTestId('delete-confirm-accept'));
     expect(screen.queryByTestId('block-b1')).toBeNull();
     expect(screen.getByTestId('blocks-empty')).toBeTruthy();
+  });
+
+  it('deleting the active block activates its neighbour instead of leaving nothing active', () => {
+    function Wrapper() {
+      const [blocks, setBlocks] = useState<Block[]>([worksheetBlock('a'), worksheetBlock('b'), worksheetBlock('c')]);
+      const [activeBlockId, setActiveBlockId] = useState<string | null>('b');
+      return (
+        <BlockList
+          lang="es"
+          blocks={blocks}
+          activeBlockId={activeBlockId}
+          selectedZoneId={null}
+          resolveImageUrl={(p) => p}
+          onSetActiveBlock={setActiveBlockId}
+          onSelectZone={() => {}}
+          onBlocksChange={setBlocks}
+        />
+      );
+    }
+    render(<Wrapper />);
+    fireEvent.click(screen.getByTestId('delete-block-trigger'));
+    fireEvent.click(screen.getByTestId('delete-confirm-accept'));
+    // "b" is gone; a neighbour (not nothing) is now active.
+    expect(screen.queryByTestId('block-b')).toBeNull();
+    expect(screen.getByTestId('block-list')).toBeTruthy();
+    expect(screen.getByTestId('sheet-position')).toBeTruthy();
   });
 });

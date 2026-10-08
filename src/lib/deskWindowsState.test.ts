@@ -174,6 +174,39 @@ describe('reduceDeskWindows', () => {
     expect(state.windows[0].title).toBe('Comunidad');
   });
 
+  // Owner report: "crear actividad" opened the new activity's editor as a
+  // SECOND window, leaving the picker reverted to its own route behind it.
+  // The picker navigating itself straight to the new editor route is this
+  // SAME window BECOMING the editor, in place — `navigate` can optionally
+  // re-identify the window (a new id/kind), preserving every other field
+  // (position, z-order, minimized/maximized) untouched.
+  it('navigate can re-identify the window itself (create -> editor), keeping geometry/z untouched', () => {
+    let state = open(initialDeskWindowsState, 'create', 'create', '/crear', 'Nueva actividad');
+    state = reduceDeskWindows(state, { type: 'move', id: 'create', offset: { x: 12, y: 34 } });
+    state = reduceDeskWindows(state, {
+      type: 'navigate',
+      id: 'create',
+      href: '/crear/new-id',
+      title: 'Present Simple',
+      nextId: 'editor:new-id',
+      kind: 'editor',
+    });
+    expect(state.windows).toHaveLength(1);
+    const entry = state.windows[0];
+    expect(entry.id).toBe('editor:new-id');
+    expect(entry.kind).toBe('editor');
+    expect(entry.href).toBe('/crear/new-id');
+    expect(entry.title).toBe('Present Simple');
+    expect(entry.offset).toEqual({ x: 12, y: 34 });
+  });
+
+  it('navigate without nextId/kind never changes identity (every other caller keeps today\'s behavior)', () => {
+    let state = open(initialDeskWindowsState, 'community', 'community', '/community', 'Comunidad');
+    state = reduceDeskWindows(state, { type: 'navigate', id: 'community', href: '/community?page=2' });
+    expect(state.windows[0].id).toBe('community');
+    expect(state.windows[0].kind).toBe('community');
+  });
+
   it('events targeting an unknown id are no-ops', () => {
     const state = open(initialDeskWindowsState, 'community', 'community');
     expect(reduceDeskWindows(state, { type: 'focus', id: 'nope' })).toBe(state);

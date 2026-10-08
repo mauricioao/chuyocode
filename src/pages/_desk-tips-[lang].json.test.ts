@@ -1,25 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { GET, getStaticPaths } from './desk-tips-[lang].json';
+import { GET } from './desk-tips-[lang].json';
 import { DESK_HELPER_TIPS } from '@/content/deskHelperTips';
-import { SUPPORTED_LANGS } from '@lib/i18n';
 
 function ctx(lang: string) {
   return { params: { lang } } as unknown as Parameters<typeof GET>[0];
 }
 
-describe('getStaticPaths', () => {
-  it('builds one static path per supported language', () => {
-    const paths = getStaticPaths({} as never);
-    expect(paths).toEqual(SUPPORTED_LANGS.map((lang) => ({ params: { lang } })));
-  });
-});
-
 describe('GET /desk-tips-[lang].json', () => {
-  it('answers 200 with a JSON content type and a long-lived immutable cache header', async () => {
+  it('answers 200 with a JSON content type', async () => {
     const res = await GET(ctx('es'));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
-    expect(res.headers.get('cache-control')).toContain('immutable');
+  });
+
+  it('lets the CDN keep it until the next deploy but browsers only briefly, so a tip edit reaches returning visitors', async () => {
+    const res = await GET(ctx('es'));
+    expect(res.headers.get('netlify-cdn-cache-control')).toContain('durable');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=3600');
+  });
+
+  it('answers 404 for an unsupported language', async () => {
+    const res = await GET(ctx('fr'));
+    expect(res.status).toBe(404);
   });
 
   it('ships every tip, each with only id/character/html — no duplicated character name', async () => {

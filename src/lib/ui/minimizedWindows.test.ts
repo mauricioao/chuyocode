@@ -18,7 +18,8 @@ import {
   initFooterOverlapGuard,
   FOOTER_GUARD_ROOT_MARGIN,
   MAX_MINIMIZED_WINDOWS,
-  MAX_VISIBLE_MINIMIZED_CHIPS,
+  computeMaxVisibleMinimizedChips,
+  measureMaxVisibleMinimizedChips,
   MINIMIZED_WINDOWS_STORAGE_KEY,
   MINIMIZED_TRAY_WRAPPER_ATTR,
   TRAY_FOOTER_OVERLAP_ATTR,
@@ -221,29 +222,41 @@ describe('renderMinimizedWindowsTray (DOM)', () => {
   });
 });
 
-// PART 6c polish (owner feedback 2026-10-07, defect #2): the tray used to
-// show up to 3 chips ≥1280px wide (1 below it) — a row that ran under/over
-// the hub's levels dock and its footer. It now shows at most
-// `MAX_VISIBLE_MINIMIZED_CHIPS` (1) chip, at EVERY viewport width; the rest
-// still collapse into one "+N" tile that opens a small menu listing them.
-describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () => {
-  it('shows every chip, no overflow tile, when at or under the visible cap', () => {
-    const container = document.createElement('nav');
-    renderMinimizedWindowsTray(container, [entry('a')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
-    expect(container.querySelectorAll('a[data-desk-window-open]')).toHaveLength(1);
-    expect(container.querySelector('[data-minimized-tray-more]')).toBeNull();
-  });
-
-  it('shows only the first MAX_VISIBLE_MINIMIZED_CHIPS chip plus a "+N" tile once there are more, regardless of viewport width', () => {
+// PART 6c, round 2 (owner feedback 2026-10-07, same day: "cuando se
+// minimizan quiero que sean bloques independientes"): every minimized
+// window now renders as its own block by default — no flat per-width cap.
+// Only an explicit `maxVisible` (computed from real geometry by
+// `measureMaxVisibleMinimizedChips`/`computeMaxVisibleMinimizedChips` — see
+// their own describe blocks below) still collapses the OLDEST ones into the
+// "+N" tile that opens a small menu listing them.
+describe('renderMinimizedWindowsTray — independent blocks + geometry-based "+N" overflow', () => {
+  it('shows EVERY entry as its own independent block by default, no overflow tile', () => {
     const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
     const container = document.createElement('nav');
     renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
 
-    const visibleChips = container.querySelectorAll('a[data-minimized-chip]');
-    expect(visibleChips).toHaveLength(MAX_VISIBLE_MINIMIZED_CHIPS);
-    expect([...visibleChips].map((c) => c.getAttribute('data-desk-window-open'))).toEqual(['id-0']);
+    expect(container.querySelectorAll('a[data-minimized-chip]')).toHaveLength(MAX_MINIMIZED_WINDOWS);
+    expect(container.querySelector('[data-minimized-tray-more]')).toBeNull();
+  });
 
-    const overflowCount = entries.length - MAX_VISIBLE_MINIMIZED_CHIPS;
+  it('renders chips newest-first in DOM order (flex-col-reverse then puts the newest at the bottom of the stack)', () => {
+    const entries = [entry('newest'), entry('older'), entry('oldest')];
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+
+    const ids = [...container.querySelectorAll('a[data-minimized-chip]')].map((c) => c.getAttribute('data-minimized-chip'));
+    expect(ids).toEqual(['newest', 'older', 'oldest']);
+  });
+
+  it('collapses only the OLDEST entries into a "+N" tile when an explicit maxVisible is passed', () => {
+    const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
+    const container = document.createElement('nav');
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE, 2);
+
+    const visibleChips = container.querySelectorAll('a[data-minimized-chip]');
+    expect([...visibleChips].map((c) => c.getAttribute('data-desk-window-open'))).toEqual(['id-0', 'id-1']);
+
+    const overflowCount = entries.length - 2;
     const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
     expect(moreButton).not.toBeNull();
     expect(moreButton.getAttribute('aria-expanded')).toBe('false');
@@ -251,22 +264,10 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     expect(moreButton.textContent).toBe(`+${overflowCount}`);
   });
 
-  it('a wide viewport still gets only ONE visible chip (the old ≥1280px/3-chip rule is gone)', () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
-    try {
-      const container = document.createElement('nav');
-      renderMinimizedWindowsTray(container, [entry('a'), entry('b'), entry('c')], 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
-      expect(container.querySelectorAll('a[data-minimized-chip]')).toHaveLength(1);
-      expect((container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement).textContent).toBe('+2');
-    } finally {
-      Object.defineProperty(window, 'innerWidth', { configurable: true, value: window.innerWidth });
-    }
-  });
-
   it('the "+N" tile is a button that opens a hidden menu listing every remaining entry as a link', () => {
     const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
     const container = document.createElement('nav');
-    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE, 1);
 
     const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
     // The menu escapes the dock's own `overflow-x-auto` scroller onto
@@ -290,7 +291,7 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     const entries = Array.from({ length: MAX_MINIMIZED_WINDOWS }, (_, i) => entry(`id-${i}`));
     const container = document.createElement('nav');
     document.body.appendChild(container);
-    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE);
+    renderMinimizedWindowsTray(container, entries, 'Quitar', undefined, document, MORE_LABEL_TEMPLATE, 1);
 
     const moreButton = container.querySelector('[data-minimized-tray-more]') as HTMLButtonElement;
     const menu = document.querySelector('[data-minimized-tray-menu]') as HTMLElement;
@@ -304,6 +305,55 @@ describe('renderMinimizedWindowsTray — visible cap + "+N" overflow menu', () =
     expect(moreButton.getAttribute('aria-expanded')).toBe('false');
     container.remove();
     menu.remove();
+  });
+});
+
+describe('computeMaxVisibleMinimizedChips', () => {
+  it('never collapses anything when there is no ceiling to protect (folders off-page or scrolled away)', () => {
+    expect(computeMaxVisibleMinimizedChips(5, 900, null)).toBe(5);
+  });
+
+  it('shows every window when the stack comfortably fits in the available space', () => {
+    // 5 chips * (44 + 10) - 10 = 260px needed; 900 - 500 = 400px available.
+    expect(computeMaxVisibleMinimizedChips(5, 900, 500)).toBe(5);
+  });
+
+  it('collapses the oldest ones, reserving one slot for the "+N" tile itself, once space is tight', () => {
+    // Only ~120px available: room for two 44px blocks + one gap (98px) but
+    // not three (152px) — one of those two slots is the "+N" tile itself,
+    // so only ONE real window stays visible.
+    expect(computeMaxVisibleMinimizedChips(5, 900, 780)).toBe(1);
+  });
+
+  it('collapses everything (even the newest) into the "+N" tile when there is no room at all', () => {
+    expect(computeMaxVisibleMinimizedChips(5, 900, 899)).toBe(0);
+  });
+
+  it('is a no-op for an empty list', () => {
+    expect(computeMaxVisibleMinimizedChips(0, 900, 500)).toBe(0);
+  });
+});
+
+describe('measureMaxVisibleMinimizedChips', () => {
+  it('uses the folders column bottom edge as the ceiling when present', () => {
+    const doc = document.implementation.createHTMLDocument('');
+    const wrapper = doc.createElement('div');
+    wrapper.getBoundingClientRect = () => ({ bottom: 900 }) as DOMRect;
+    const folders = doc.createElement('nav');
+    folders.setAttribute('data-desk-folders', '');
+    folders.getBoundingClientRect = () => ({ bottom: 780 }) as DOMRect;
+    doc.body.append(wrapper, folders);
+
+    expect(measureMaxVisibleMinimizedChips(5, wrapper, doc)).toBe(1);
+  });
+
+  it('never collapses anything when the folders column is not on the page', () => {
+    const doc = document.implementation.createHTMLDocument('');
+    const wrapper = doc.createElement('div');
+    wrapper.getBoundingClientRect = () => ({ bottom: 900 }) as DOMRect;
+    doc.body.append(wrapper);
+
+    expect(measureMaxVisibleMinimizedChips(5, wrapper, doc)).toBe(5);
   });
 });
 

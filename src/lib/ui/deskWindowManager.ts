@@ -37,7 +37,12 @@ import {
 } from '../deskWindowsState';
 import { clampWindowDragOffset, type WindowRect } from '../deskWindowDragMath';
 import { isDeskWindowMessageEnvelope } from './deskWindowMessaging';
-import { renderMinimizedWindowsTrayFrom, type MinimizedWindowEntry } from './minimizedWindows';
+import { measureTitlebarDragRegions } from '../deskWindowTitlebarRegions';
+import {
+  renderMinimizedWindowsTrayFrom,
+  measureMaxVisibleMinimizedChips,
+  type MinimizedWindowEntry,
+} from './minimizedWindows';
 import { readPersistedDeskWindows, writePersistedDeskWindows } from './deskWindowsPersistence';
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
@@ -87,9 +92,12 @@ interface ManagedWindow {
   wrapper: HTMLElement;
   iframe: HTMLIFrameElement;
   loader: HTMLElement;
-  /** Set on `drag-start`, cleared on `drag-end` — the offset to add the posted screen deltas to. */
-  dragStartOffset: DeskWindowOffset | null;
+  /** Re-wired fresh on every `load` — see {@link wireTitlebarObserver}'s own header. */
+  titlebarObserver: MutationObserver | null;
 }
+
+/** One transparent `position: absolute` drag handle per {@link syncTitlebarDragHandles} region, carrying the window's own id (same "id as the attribute value" posture `MINIMIZED_TRAY_ATTR.chip` already uses). */
+const DRAG_HANDLE_ATTR = 'data-desk-window-drag-handle';
 
 export interface DeskWindowManagerHandle {
   /** Opens (or focuses/restores) a window for `href` — a no-op when `href` does not resolve to one of the four window routes. */
@@ -260,6 +268,13 @@ export function initDeskWindowManager(
   let state: DeskWindowsState = restored && restored.windows.length > 0 ? restored : initialDeskWindowsState;
   const frames = new Map<string, ManagedWindow>();
   let pendingOpen: PendingOpen = null;
+  // Set for the duration of an active title-bar drag (see
+  // `wireTitlebarDragHandle`) — `syncTitlebarDragHandles` skips rebuilding
+  // THIS window's own handles while it is set, so a `render()` triggered by
+  // the drag's own "focus" dispatch (or any unrelated dispatch firing mid-
+  // drag) never destroys the handle element the pointer is currently
+  // captured on, which would otherwise end the drag outright.
+  let draggingWindowId: string | null = null;
   // Focus management (robustness pass, owner spec: "opening a window moves
   // keyboard focus into it; closing returns focus to the next window or to
   // the desk item that opened it"). Keyed by window id, populated ONLY by a
@@ -276,6 +291,24 @@ export function initDeskWindowManager(
       managed.wrapper.setAttribute('inert', '');
     } else {
       managed.wrapper.removeAttribute('inert');
+      // Regression fix: `playMinimizeAnimation` leaves `.ingles-window--minimizing`
+      // on the wrapper — its `forwards` fill keeps the shrunk-into-the-tray
+      // transform applied even after `visibility`/`inert` are restored above,
+      // so a "restored" window stayed stuck at 185×111px in the corner. Clear
+      // it here (the one place every restore path — a tray chip, the
+      // fallback bar, or re-opening the same id — ends up calling), and swap
+      // in a short reverse ("un-shrink") entrance, skipped under reduced
+      // motion same as every other desk-window animation.
+      if (managed.wrapper.classList.contains('ingles-window--minimizing')) {
+        managed.wrapper.classList.remove('ingles-window--minimizing');
+        if (!prefersReducedMotion(win)) {
+          const wrapper = managed.wrapper;
+          wrapper.classList.add('ingles-window--restoring');
+          wrapper.addEventListener('animationend', () => wrapper.classList.remove('ingles-window--restoring'), {
+            once: true,
+          });
+        }
+      }
     }
 
     if (entry.maximized) {
@@ -310,10 +343,174 @@ export function initDeskWindowManager(
     }
   }
 
+  /**
+   * Structural fix for the real-mouse shake (owner report: "el arrastre de
+   * las ventanas no es suave como el de los widgets, tiembla demasiado"):
+   * one transparent `pointer-events: auto` handle per region
+   * `measureTitlebarDragRegions` reports — the title bar's own rect minus
+   * every interactive control inside it (same-origin direct
+   * `iframe.contentDocument` access, the same validated pattern this
+   * feature already uses elsewhere in this file) — appended as children of
+   * `managed.wrapper`, AFTER the iframe in DOM order so they paint on top of
+   * it and intercept the pointer before it ever reaches the embedded
+   * document. Rebuilt from scratch every call (clear-and-rebuild, same
+   * posture as the minimized tray) rather than diffed — the region count is
+   * always small.
+   */
+  function syncTitlebarDragHandles(managed: ManagedWindow, id: string): void {
+    // Never rebuilt mid-drag — see `draggingWindowId`'s own header.
+    if (draggingWindowId === id) return;
+    managed.wrapper.querySelectorAll(`[${DRAG_HANDLE_ATTR}]`).forEach((el) => el.remove());
+
+    const entry = state.windows.find((w) => w.id === id);
+    if (!entry || entry.minimized || entry.maximized || !isDesktop(win)) return;
+
+    for (const region of measureTitlebarDragRegions(managed.iframe.contentDocument)) {
+      if (region.width <= 0 || region.height <= 0) continue;
+      const handle = doc.createElement('div');
+      handle.setAttribute(DRAG_HANDLE_ATTR, id);
+      handle.style.position = 'absolute';
+      handle.style.left = `${region.x}px`;
+      handle.style.top = `${region.y}px`;
+      handle.style.width = `${region.width}px`;
+      handle.style.height = `${region.height}px`;
+      handle.style.cursor = 'grab';
+      wireTitlebarDragHandle(handle, managed, id);
+      managed.wrapper.appendChild(handle);
+    }
+  }
+
+  /**
+   * Pointer wiring for ONE drag handle — same math/persistence
+   * (`clampWindowDragOffset`, `dispatch({ type: 'move', … })`) the fallback
+   * bar's own host-side drag right above already uses, PLUS rAF batching
+   * (owner spec: "rAF-batched translate", the other half of the smoothness
+   * fix alongside moving off the iframe entirely) so a flood of pointermove
+   * events only ever applies the LATEST one per frame. Falls back to
+   * applying synchronously when `win.requestAnimationFrame` is unavailable
+   * (a minimal test double, a very old/unusual embedder) rather than
+   * silently never drawing at all.
+   */
+  function wireTitlebarDragHandle(handle: HTMLElement, managed: ManagedWindow, id: string): void {
+    let drag: { x: number; y: number; offset: DeskWindowOffset } | null = null;
+    let rafId: number | null = null;
+    let pending: DeskWindowOffset | null = null;
+
+    function flush(): void {
+      rafId = null;
+      if (!pending) return;
+      const rect = unoffsetWrapperRect(managed.wrapper);
+      const clamped = clampWindowDragOffset(pending, rect, { width: win.innerWidth, height: win.innerHeight });
+      managed.wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
+      pending = null;
+    }
+
+    function scheduleFlush(): void {
+      if (typeof win.requestAnimationFrame !== 'function') {
+        flush();
+        return;
+      }
+      if (rafId === null) rafId = win.requestAnimationFrame(flush);
+    }
+
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || !isDesktop(win)) return;
+      const current = state.windows.find((w) => w.id === id);
+      if (!current || current.maximized) return;
+      event.preventDefault();
+      // Already set by `wrapper`'s own EARLIER capture-phase listener (see
+      // its header — it has to run before this one, and before the "focus"
+      // dispatch right below), redundantly repeated here as a harmless
+      // defensive no-op in case that ever changes.
+      draggingWindowId = id;
+      dispatch({ type: 'focus', id });
+      handle.setPointerCapture(event.pointerId);
+      drag = { x: event.clientX, y: event.clientY, offset: current.offset };
+    });
+
+    handle.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      pending = { x: drag.offset.x + (event.clientX - drag.x), y: drag.offset.y + (event.clientY - drag.y) };
+      scheduleFlush();
+    });
+
+    handle.addEventListener('pointerup', () => {
+      if (!drag) return;
+      drag = null;
+      if (rafId !== null && typeof win.cancelAnimationFrame === 'function') win.cancelAnimationFrame(rafId);
+      flush(); // apply whatever the last pointermove queued, so a drag ending mid-frame is never lost
+      const translate = managed.wrapper.style.translate || '0px 0px';
+      const [x, y] = translate.split(' ').map((v) => Number.parseFloat(v) || 0);
+      draggingWindowId = null; // the "move" dispatch right below may now safely rebuild this window's own handles
+      dispatch({ type: 'move', id, offset: { x, y } });
+    });
+
+    // macOS convention, same as the fallback bar's own maximize button —
+    // double-clicking a title bar (here: any of its draggable regions)
+    // toggles maximize.
+    handle.addEventListener('dblclick', () => dispatch({ type: 'maximizeToggle', id }));
+  }
+
+  /**
+   * Re-measures the title bar's own draggable regions whenever the EMBEDDED
+   * document mutates its own title bar WITHOUT any host dispatch in between
+   * (owner spec: "re-reporting on resize/mutation") — the editor's live
+   * autosave status text changing length, a title edit, the review-status
+   * badge appearing/disappearing. `MutationObserver`-based (re-wired fresh
+   * on every `load`, since a new navigation means a brand new
+   * `contentDocument` to observe); a plain window resize is already covered
+   * by `render()`'s own per-dispatch resync and the manager's own `resize`
+   * listener below.
+   */
+  function wireTitlebarObserver(managed: ManagedWindow, id: string): void {
+    managed.titlebarObserver?.disconnect();
+    managed.titlebarObserver = null;
+    if (typeof MutationObserver !== 'function') return;
+    const innerDoc = managed.iframe.contentDocument;
+    if (!innerDoc?.documentElement) return;
+
+    let scheduled = false;
+    const resync = () => {
+      if (scheduled) return;
+      scheduled = true;
+      const run = () => {
+        scheduled = false;
+        syncTitlebarDragHandles(managed, id);
+      };
+      if (typeof win.requestAnimationFrame === 'function') win.requestAnimationFrame(run);
+      else run();
+    };
+    const observer = new MutationObserver(resync);
+    observer.observe(innerDoc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+    managed.titlebarObserver = observer;
+  }
+
   function createManagedWindow(entry: DeskWindowEntry): ManagedWindow {
     const wrapper = doc.createElement('div');
     wrapper.className = WRAPPER_CLASS;
     wrapper.dataset.deskWindowFrame = entry.id;
+
+    // Registered FIRST, capture phase, on `wrapper` itself — same node and
+    // phase as the "bring to front on any pointerdown" listener below, so
+    // DOM ordering guarantees this one runs BEFORE it (same-node/same-phase
+    // listeners fire in registration order). That ordering is the whole
+    // point: the OTHER listener's own "focus" dispatch can trigger a
+    // `render()` (focusing a currently-BACKGROUND window IS a real state
+    // change) before a drag handle's OWN `pointerdown` listener ever gets a
+    // chance to run (capture propagates ancestor-first, and `wrapper` is an
+    // ancestor of every handle) — `draggingWindowId` has to already be set
+    // by the time that happens, or `syncTitlebarDragHandles` would rebuild
+    // (and so destroy) the very handle the pointer is about to be captured
+    // on.
+    wrapper.addEventListener(
+      'pointerdown',
+      (event) => {
+        if ((event.target as Element | null)?.closest(`[${DRAG_HANDLE_ATTR}]`)) {
+          draggingWindowId = entry.id;
+        }
+      },
+      true,
+    );
 
     const iframe = doc.createElement('iframe');
     iframe.className = 'absolute inset-0 h-full w-full border-0';
@@ -322,6 +519,15 @@ export function initDeskWindowManager(
     const url = new URL(entry.href, win.location.href);
     url.searchParams.set('ventana', '1');
     iframe.src = url.toString();
+
+    // Declared here (assigned once, right before it is returned below) so
+    // the `load` handler right below — wired BEFORE that assignment, but
+    // only ever CALLED long after `createManagedWindow` itself has
+    // returned — can still close over the real, fully-built object by
+    // reference, same "declare early, assign once, closures run later"
+    // posture `let managed` below needs because `syncTitlebarDragHandles`/
+    // `wireTitlebarObserver` both need the object literal itself.
+    let managed: ManagedWindow;
 
     const loader = buildLoader(doc, win);
     const showLoaded = () => {
@@ -442,25 +648,65 @@ export function initDeskWindowManager(
         const loc = iframe.contentWindow?.location;
         const match = loc ? classifyWindowRoute(loc.pathname) : null;
         if (match && match.id !== entry.id) {
-          const title = iframe.contentWindow?.document.title || '';
-          openWindow(`${loc!.pathname}${loc!.search}`, title);
-          const current = state.windows.find((w) => w.id === entry.id);
-          const ownUrl = new URL(current?.href ?? entry.href, win.location.href);
-          ownUrl.searchParams.set('ventana', '1');
-          showLoading();
-          armFallbackTimeout();
-          try {
-            // `location.replace` (never reassigning `iframe.src`): the
-            // in-frame navigation already happened without ever changing the
-            // `src` ATTRIBUTE string this element still holds, so setting it
-            // back to that same string would be a same-URL no-op in most
-            // browsers — this re-navigates the frame's own `Location`
-            // directly instead, which always takes effect.
-            iframe.contentWindow?.location.replace(ownUrl.toString());
-          } catch {
-            iframe.src = ownUrl.toString();
+          // ALLOWED identity transition (owner report: creating an activity
+          // from "Crear actividad" opened the new editor as a SECOND
+          // window, leaving the picker reverted to its own `/crear` route
+          // behind it): the create picker navigating itself, in-window,
+          // straight to the brand-new activity's editor route is not a
+          // click race to recover from — it is THIS frame becoming the
+          // editor, in place (same wrapper, same iframe, same position/
+          // z-order). Re-identify it instead of opening a second window.
+          if (entry.kind === 'create' && match.kind === 'editor') {
+            const title = iframe.contentWindow?.document.title || '';
+            const oldId = entry.id;
+            const href = `${loc!.pathname}${loc!.search}`;
+            // Re-key the live frame/opener/DOM bookkeeping to match BEFORE
+            // dispatching below — `dispatch` calls `render()` synchronously,
+            // which looks up this frame by the renamed entry's `id` in
+            // `frames` and removes anything ELSE still keyed by the OLD id
+            // as "no longer in state" — reversing this order would have
+            // `render()` find no frame under the new id (creating a second,
+            // genuinely duplicate one) and then clean up this exact frame as
+            // orphaned under the old one.
+            frames.delete(oldId);
+            frames.set(match.id, managed);
+            managed.wrapper.dataset.deskWindowFrame = match.id;
+            const opener = openerElements.get(oldId);
+            if (opener) {
+              openerElements.delete(oldId);
+              openerElements.set(match.id, opener);
+            }
+            entry = { ...entry, id: match.id, kind: match.kind, href, title };
+            // Everything else in this closure (the fallback bar,
+            // `armFallbackTimeout`, the focus check right below) reads
+            // `entry` fresh every time, so reassigning it above keeps every
+            // one of them correct for this load AND any later one on this
+            // same frame.
+            dispatch({ type: 'navigate', id: oldId, href, title, nextId: match.id, kind: match.kind });
+            // Falls through to the rest of this handler below (showLoaded,
+            // active state, fallback-bar detection, drag-handle sync) — this
+            // IS a genuine successful load, never an early return.
+          } else {
+            const title = iframe.contentWindow?.document.title || '';
+            openWindow(`${loc!.pathname}${loc!.search}`, title);
+            const current = state.windows.find((w) => w.id === entry.id);
+            const ownUrl = new URL(current?.href ?? entry.href, win.location.href);
+            ownUrl.searchParams.set('ventana', '1');
+            showLoading();
+            armFallbackTimeout();
+            try {
+              // `location.replace` (never reassigning `iframe.src`): the
+              // in-frame navigation already happened without ever changing the
+              // `src` ATTRIBUTE string this element still holds, so setting it
+              // back to that same string would be a same-URL no-op in most
+              // browsers — this re-navigates the frame's own `Location`
+              // directly instead, which always takes effect.
+              iframe.contentWindow?.location.replace(ownUrl.toString());
+            } catch {
+              iframe.src = ownUrl.toString();
+            }
+            return;
           }
-          return;
         }
       } catch {
         // Cross-origin — should never happen (see this file's own header).
@@ -505,9 +751,10 @@ export function initDeskWindowManager(
       // NOT a genuine desk window (a login page after a session-expiry
       // redirect, a 404/500 error page, …) — hidden again the moment a
       // later navigation lands back on a real one.
+      let isDeskWindow = false;
       try {
         const innerDoc = iframe.contentDocument;
-        const isDeskWindow = !!innerDoc?.querySelector(DESK_WINDOW_MARKER_SELECTOR);
+        isDeskWindow = !!innerDoc?.querySelector(DESK_WINDOW_MARKER_SELECTOR);
         fallbackBar.hidden = isDeskWindow;
         if (!isDeskWindow) {
           fallbackTitle.textContent = innerDoc?.title?.trim() || entry.title || '';
@@ -515,6 +762,20 @@ export function initDeskWindowManager(
       } catch {
         // Cross-origin — should never happen (see this file's own header);
         // optimistically assume a genuine window rather than flash the bar.
+      }
+
+      // Structural drag fix (owner report: real-mouse shake) — a genuine
+      // desk window just (re)loaded a fresh `contentDocument`: measure its
+      // title bar's own draggable regions now, and keep re-measuring it on
+      // its own later mutations (a title edit, the autosave status text
+      // changing length) with no further host dispatch needed.
+      if (isDeskWindow) {
+        syncTitlebarDragHandles(managed, entry.id);
+        wireTitlebarObserver(managed, entry.id);
+      } else {
+        managed.titlebarObserver?.disconnect();
+        managed.titlebarObserver = null;
+        managed.wrapper.querySelectorAll(`[${DRAG_HANDLE_ATTR}]`).forEach((el) => el.remove());
       }
     });
 
@@ -525,7 +786,7 @@ export function initDeskWindowManager(
     wrapper.appendChild(fallbackBar);
     container.appendChild(wrapper);
 
-    const managed: ManagedWindow = { wrapper, iframe, loader, dragStartOffset: null };
+    managed = { wrapper, iframe, loader, titlebarObserver: null };
     // Expose a hook so `onMessage`'s `navigating` handler (posted by the
     // embedded page right as an in-window navigation starts) can re-arm this
     // exact loader without a second lookup.
@@ -582,6 +843,7 @@ export function initDeskWindowManager(
     const ids = new Set(state.windows.map((w) => w.id));
     for (const [id, managed] of frames) {
       if (!ids.has(id)) {
+        managed.titlebarObserver?.disconnect();
         managed.wrapper.remove();
         frames.delete(id);
       }
@@ -615,6 +877,11 @@ export function initDeskWindowManager(
       // this SAME `render()` function but never sets `pendingOpen`
       // (`applyOpenAnimation`'s own header), so it is always a no-op there.
       if (isNew) applyOpenAnimation(managed);
+      // Every dispatch (move/focus/minimize/restore/maximizeToggle/navigate)
+      // can change whether/where a drag handle belongs — re-measured here
+      // too, not just on `load`, since e.g. maximizing must hide handles
+      // without the iframe itself reloading.
+      syncTitlebarDragHandles(managed, entry.id);
     }
 
     applyActiveState();
@@ -639,6 +906,13 @@ export function initDeskWindowManager(
         thumbnail: null,
         t: w.z,
       }));
+      // Independent blocks, stacked upward (owner spec 2026-10-07, round 2):
+      // collapse the oldest into "+N" only once the stack would otherwise
+      // grow tall enough to cover the folders column — see
+      // `@lib/ui/minimizedWindows#computeMaxVisibleMinimizedChips`.
+      const maxVisible = trayWrapper
+        ? measureMaxVisibleMinimizedChips(entries.length, trayWrapper, doc)
+        : entries.length;
       renderMinimizedWindowsTrayFrom(
         trayContainer,
         entries,
@@ -646,6 +920,8 @@ export function initDeskWindowManager(
         (id) => void requestClose(id),
         () => render(),
         doc,
+        '+{n}',
+        maxVisible,
       );
     }
 
@@ -674,7 +950,18 @@ export function initDeskWindowManager(
   }
 
   function dispatch(event: Parameters<typeof reduceDeskWindows>[1]): void {
-    state = reduceDeskWindows(state, event);
+    const next = reduceDeskWindows(state, event);
+    // Genuine no-ops (`reduceDeskWindows`'s own documented intent — e.g.
+    // "focus" on an already-topmost window, or "restore"/"navigate" for an
+    // id that no longer exists — all return the SAME `state` reference
+    // unchanged) must skip `render()` entirely, not just avoid a state
+    // change: a drag handle's own `pointerdown` dispatches exactly this
+    // "focus" event FIRST, before starting the drag — re-rendering would
+    // otherwise destroy and recreate that very handle (and every other
+    // window's) out from under the pointer capture that same handler is
+    // about to request, breaking the drag before it starts.
+    if (next === state) return;
+    state = next;
     render();
   }
 
@@ -886,27 +1173,6 @@ export function initDeskWindowManager(
       case 'maximize-toggle':
         dispatch({ type: 'maximizeToggle', id });
         return;
-      case 'drag-start': {
-        const entry = state.windows.find((w) => w.id === id);
-        managed.dragStartOffset = entry?.offset ?? { x: 0, y: 0 };
-        return;
-      }
-      case 'drag-move': {
-        if (!managed.dragStartOffset || !isDesktop(win)) return;
-        const next = { x: managed.dragStartOffset.x + message.dx, y: managed.dragStartOffset.y + message.dy };
-        const rect = unoffsetWrapperRect(managed.wrapper);
-        const clamped = clampWindowDragOffset(next, rect, { width: win.innerWidth, height: win.innerHeight });
-        managed.wrapper.style.translate = `${clamped.x}px ${clamped.y}px`;
-        return;
-      }
-      case 'drag-end': {
-        if (!managed.dragStartOffset) return;
-        const translate = managed.wrapper.style.translate || '0px 0px';
-        const [x, y] = translate.split(' ').map((v) => Number.parseFloat(v) || 0);
-        managed.dragStartOffset = null;
-        dispatch({ type: 'move', id, offset: { x, y } });
-        return;
-      }
       case 'open-window':
         openWindow(message.href, message.title ?? '');
         return;
@@ -940,6 +1206,21 @@ export function initDeskWindowManager(
     }
   }
   win.addEventListener('message', (event) => void onMessage(event));
+  // Independent-blocks stacking (owner spec 2026-10-07, round 2): how many
+  // minimized windows fit without covering the folders column depends on
+  // the CURRENT viewport height — a resize needs the same re-measure a
+  // fresh `render()` already does on every dispatch.
+  win.addEventListener('resize', () => render());
+  // Safety net for `draggingWindowId`: the handle's own `pointerup` already
+  // clears it on a completed drag, but a pointerdown that never actually
+  // started one (e.g. the window turned out to be maximized) leaves it set
+  // with no handle-level `pointerup` logic to clear it again — a stray
+  // `pointercancel` (an OS gesture interrupting the drag) is the same
+  // story. Clearing it here unconditionally, on ANY pointerup/pointercancel
+  // anywhere, costs nothing on the normal path (the handle already cleared
+  // it by the time this runs) and guarantees it never gets stuck forever.
+  doc.addEventListener('pointerup', () => (draggingWindowId = null));
+  doc.addEventListener('pointercancel', () => (draggingWindowId = null));
 
   // Restore-after-reload: materialize every restored window's own frame
   // BEFORE `initialWindow` (this request's own route) is opened, so that
@@ -957,7 +1238,10 @@ export function initDeskWindowManager(
     openWindow,
     destroy(): void {
       doc.removeEventListener('click', onClickCapture, true);
-      for (const managed of frames.values()) managed.wrapper.remove();
+      for (const managed of frames.values()) {
+        managed.titlebarObserver?.disconnect();
+        managed.wrapper.remove();
+      }
       frames.clear();
     },
   };
