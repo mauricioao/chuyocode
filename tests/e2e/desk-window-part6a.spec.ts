@@ -126,7 +126,21 @@ test.describe('the window paints above the footer and every other chrome element
         );
       };
 
-      const checkButton = page.locator('[data-testid="practice-check-button"]');
+      // Whichever "Comprobar" this activity shows: Básico/worksheets use the
+      // practice footer's, while each template game checks with its own
+      // (one Comprobar per activity), and the first published activity may
+      // be either.
+      const checkButton = page
+        .locator(
+          [
+            '[data-testid="practice-check-button"]',
+            '[data-testid="matching-check"]',
+            '[data-testid="reorder-check"]',
+            '[data-testid="cloze-check"]',
+            '[data-testid="groupsort-check"]',
+          ].join(', '),
+        )
+        .first();
       await expect(checkButton).toBeVisible();
       expect(await resolvesInsideDialog(checkButton)).toBe(true);
 
