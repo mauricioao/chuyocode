@@ -32,6 +32,7 @@
  */
 import { useMemo } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { QuizBlock } from '@/lib/activities/blocks';
@@ -134,8 +135,22 @@ export default function QuizBlockPractice({
     effectiveMode === 'cloze' ||
     effectiveMode === 'groupsort'
   ) {
+    // The four big drag-and-drop games (visual-polish pass) stretch to fill
+    // their stage — `flex-1 min-h-0` — so a short board/sentence can center
+    // itself in the real available height instead of sizing to its own
+    // content and leaving the rest of the stage empty; every other game
+    // mode here (Tarjetas/Ruleta/Anagrama/…) keeps its original shrink-to-
+    // fit sizing, unaffected by this pass.
+    const isBigStageGame =
+      effectiveMode === 'match' ||
+      effectiveMode === 'reorder' ||
+      effectiveMode === 'cloze' ||
+      effectiveMode === 'groupsort';
     return (
-      <div data-testid={`quiz-practice-${block.id}`} className="flex flex-col gap-3">
+      <div
+        data-testid={`quiz-practice-${block.id}`}
+        className={cn('flex flex-col gap-3', isBigStageGame && 'min-h-0 flex-1')}
+      >
         {modes.length > 1 && (
           <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
         )}

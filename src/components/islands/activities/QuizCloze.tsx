@@ -64,6 +64,12 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import {
+  TILE_MIN_HEIGHT_SCALE,
+  TILE_PADDING_X_SCALE,
+  TILE_PADDING_Y_SCALE,
+  TILE_TEXT_SCALE,
+} from '@/components/islands/mechanics/scale';
 
 export interface QuizClozeProps {
   lang: Lang;
@@ -111,9 +117,14 @@ const CLOZE_COPY: Record<'es' | 'en', ClozeCopy> = {
   },
 };
 
-/** Shared visual base for one word tile — same "big stage" scale `QuizReorder`'s own `TILE_BASE` uses. */
-const TILE_BASE =
-  'inline-flex min-h-14 items-center justify-center rounded-md border border-input bg-card px-4 py-3 text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 text-lg sm:text-xl lg:text-2xl';
+/** Shared visual base for one word tile — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
+const TILE_BASE = cn(
+  'inline-flex items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+  TILE_MIN_HEIGHT_SCALE,
+  TILE_PADDING_X_SCALE,
+  TILE_PADDING_Y_SCALE,
+  TILE_TEXT_SCALE,
+);
 
 interface ClozeTileButtonProps {
   id: string;
@@ -188,7 +199,11 @@ function ClozeBlankBox({
       disabled={disabled}
       aria-label={tile ? removeLabel : emptyLabel}
       className={cn(
-        'mx-1 inline-flex min-h-11 min-w-24 items-center justify-center rounded-md border px-3 py-1 align-middle text-lg font-medium sm:text-xl lg:text-2xl',
+        'mx-1 inline-flex min-w-24 items-center justify-center rounded-md border align-middle font-medium',
+        TILE_MIN_HEIGHT_SCALE,
+        TILE_PADDING_X_SCALE,
+        TILE_PADDING_Y_SCALE,
+        TILE_TEXT_SCALE,
         tile ? 'border-input bg-card text-foreground' : 'border-dashed border-input bg-surface-soft text-muted-foreground',
         isOver && !disabled && 'border-ring bg-accent/20',
         !tile && canPlacePicked && !disabled && 'border-ring bg-accent/10',
@@ -475,7 +490,12 @@ export default function QuizCloze({ lang, payload, seed }: QuizClozeProps) {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-6">
+        {/* `justify-center`: one sentence at a time is naturally short —
+            center it in the stage's own available height instead of
+            pinning to the top and leaving the rest empty (visual-polish
+            pass), same reasoning `QuizMatching`'s own content wrapper
+            documents. */}
+        <div className="flex min-h-0 flex-1 flex-col justify-center gap-6">
           <p
             // `cloze-game-sentence-*`, not `cloze-sentence-*`: `ClozeEditor.tsx`'s
             // own authoring row already owns that prefix (its bracket-text
@@ -485,7 +505,7 @@ export default function QuizCloze({ lang, payload, seed }: QuizClozeProps) {
             data-testid={`cloze-game-sentence-${sentence.seq}`}
             className={cn(
               'rounded-lg border-2 border-dashed border-input bg-surface-soft p-4 leading-loose font-medium text-foreground',
-              'text-lg sm:text-xl lg:text-2xl',
+              TILE_TEXT_SCALE,
               isSolved && 'border-success-strong bg-success-strong/10',
             )}
           >

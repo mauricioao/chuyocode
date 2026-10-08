@@ -63,6 +63,13 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import {
+  STAGE_BOX_MIN_HEIGHT_SCALE,
+  TILE_MIN_HEIGHT_SCALE,
+  TILE_PADDING_X_SCALE,
+  TILE_PADDING_Y_SCALE,
+  TILE_TEXT_SCALE,
+} from '@/components/islands/mechanics/scale';
 
 export interface QuizReorderProps {
   lang: Lang;
@@ -131,9 +138,14 @@ const REORDER_COPY: Record<'es' | 'en', ReorderCopy> = {
   },
 };
 
-/** Shared visual base for every word tile — same "big stage" scale `QuizMatching`'s own `TILE_BASE` uses. */
-const TILE_BASE =
-  'inline-flex min-h-14 items-center justify-center rounded-md border border-input bg-card px-4 py-3 text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 text-lg sm:text-xl lg:text-2xl';
+/** Shared visual base for every word tile — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
+const TILE_BASE = cn(
+  'inline-flex items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+  TILE_MIN_HEIGHT_SCALE,
+  TILE_PADDING_X_SCALE,
+  TILE_PADDING_Y_SCALE,
+  TILE_TEXT_SCALE,
+);
 
 interface WordTileButtonProps {
   id: string;
@@ -427,13 +439,19 @@ export default function QuizReorder({ lang, items, seed }: QuizReorderProps) {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-6">
+        {/* `justify-center`: one sentence at a time is naturally short —
+            center it in the stage's own available height instead of
+            pinning to the top and leaving the rest empty (visual-polish
+            pass), same reasoning `QuizMatching`'s own content wrapper
+            documents. */}
+        <div className="flex min-h-0 flex-1 flex-col justify-center gap-6">
           <ol
             ref={setLineRef}
             data-testid={`reorder-line-${index}`}
             aria-label={t.reorderLineLabel}
             className={cn(
-              'flex min-h-20 list-none flex-wrap items-center gap-2 rounded-lg border-2 border-dashed border-input bg-surface-soft p-3 sm:gap-3',
+              'flex list-none flex-wrap items-center gap-2 rounded-lg border-2 border-dashed border-input bg-surface-soft p-3 sm:gap-3',
+              STAGE_BOX_MIN_HEIGHT_SCALE,
               isOver && !locked && 'border-ring bg-accent/20',
               isSolved && 'border-success-strong bg-success-strong/10',
             )}

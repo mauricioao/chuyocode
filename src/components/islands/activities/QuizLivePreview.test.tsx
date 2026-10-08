@@ -41,6 +41,14 @@ describe('QuizLivePreview — renders the real practice component', () => {
     render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
     expect(screen.getByTestId('quiz-practice-b1-preview')).toBeTruthy();
   });
+
+  // Visual-polish pass: the big drag-and-drop games size their own tiles off
+  // their stage's own container width (`mechanics/scale.ts`) — this preview
+  // column is one such stage, so it must be a size container itself.
+  it('is a size container, for the shared game-stage sizing tokens', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
+    expect(screen.getByTestId('quiz-preview-b1').className).toContain('@container');
+  });
 });
 
 describe('QuizLivePreview — checking and retrying', () => {

@@ -30,6 +30,8 @@ import {
   SELF_CHECKING_GAME_MODES,
   type GameMode,
 } from '@/lib/activities/gameModes';
+import { STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
+import { cn } from '@/lib/utils';
 import QuizBlockPractice from './QuizBlockPractice';
 import { GAME_MODE_ICONS } from './QuizGameModeSwitcher';
 
@@ -101,7 +103,7 @@ export default function QuizLivePreview({ blockId, lang, payload, template }: Qu
   const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
 
   return (
-    <div data-testid={`quiz-preview-${blockId}`} className="flex flex-col gap-3">
+    <div data-testid={`quiz-preview-${blockId}`} className={cn('flex flex-col gap-3', STAGE_CONTAINER)}>
       <div data-testid={`quiz-preview-games-badge-${blockId}`} className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
         <span>{t.usedInGames(modes.length)}</span>
         {modes.map((m) => {

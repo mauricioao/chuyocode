@@ -57,7 +57,13 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { PROMPT_SCALE } from '@/components/islands/mechanics/scale';
+import {
+  PROMPT_SCALE,
+  TILE_MIN_HEIGHT_SCALE,
+  TILE_PADDING_X_SCALE,
+  TILE_PADDING_Y_SCALE,
+  TILE_TEXT_SCALE,
+} from '@/components/islands/mechanics/scale';
 
 export interface QuizMatchingProps {
   lang: Lang;
@@ -125,9 +131,14 @@ function shuffledTray(items: readonly GameItem[], seed: string, round: number): 
   );
 }
 
-/** Shared visual base for every tile, tray or placed — large, "big stage" scale (owner spec). */
-const TILE_BASE =
-  'inline-flex min-h-14 w-full items-center justify-center rounded-md border border-input bg-card px-4 py-3 text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 text-lg sm:text-xl lg:text-2xl';
+/** Shared visual base for every tile, tray or placed — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
+const TILE_BASE = cn(
+  'inline-flex w-full items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+  TILE_MIN_HEIGHT_SCALE,
+  TILE_PADDING_X_SCALE,
+  TILE_PADDING_Y_SCALE,
+  TILE_TEXT_SCALE,
+);
 
 interface MatchTileProps {
   id: string;
@@ -216,7 +227,8 @@ function MatchSlot({
       data-over={isOver ? 'true' : undefined}
       data-filled={tile ? 'true' : undefined}
       className={cn(
-        'inline-flex min-h-14 min-w-32 flex-1 rounded-md border-2 transition-colors sm:min-w-48',
+        'inline-flex min-w-32 flex-1 rounded-md border-2 transition-colors sm:min-w-48',
+        TILE_MIN_HEIGHT_SCALE,
         tile ? 'items-stretch border-solid border-transparent' : 'items-center justify-center border-dashed border-input',
         isOver && !locked && 'border-ring bg-accent/30',
         !tile && canPlacePicked && 'border-ring bg-accent/20',
@@ -491,7 +503,13 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <div className="flex min-h-0 flex-1 flex-col gap-6">
+          {/* `justify-center`: a short board (a handful of pairs) centers in
+              the stage's own available height instead of pinning to the top
+              and leaving the rest of a tall/full-screen stage empty (visual-
+              polish pass) — a long one simply overflows/scrolls as before,
+              `justify-center` has nothing left to distribute once content
+              already fills or exceeds the space. */}
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-6">
             <div className="flex flex-col gap-3">
               {items.map((item) => {
                 const tileId = placements[item.id];

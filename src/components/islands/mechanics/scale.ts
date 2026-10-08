@@ -63,3 +63,49 @@ export const PROMPT_MEASURE = 'mx-auto max-w-[32em]';
  * which also resolves `text-*` as a colour utility.
  */
 export const CONTROL_SCALE = 'text-[length:1em]';
+
+/**
+ * Shared "big stage" sizing for the four drag-and-drop games (`QuizMatching`,
+ * `QuizReorder`, `QuizCloze`, `QuizGroupSort`) — visual-polish pass, owner ask:
+ * "igual de grandes que Wordwall, que se lean desde el fondo del salón" (as
+ * big as Wordwall, readable from the back of the classroom), AND consistent:
+ * one tile shape/padding/radius/type-scale everywhere instead of the four
+ * games separately hand-tuning their own (they used to each define their own
+ * near-identical `TILE_BASE` string — a duplicated size ramp is exactly the
+ * bug {@link PROMPT_SCALE}'s own header already warns about).
+ *
+ * CONTAINER-QUERY, NOT VIEWPORT: a tile must be exactly as big embedded in
+ * the small practice window, in the editor's live preview column, and in
+ * "modo enfoque" full screen — three very different VIEWPORT widths that
+ * hand this stage three very different amounts of actual room. `cqw` (1% of
+ * the nearest ancestor with `container-type: inline-size`) tracks the room
+ * the stage ACTUALLY has, not the window outside it; `{@link STAGE_CONTAINER}`
+ * is that ancestor, applied once per stage root (`ActivityPracticeIsland`'s
+ * two stage wrappers, `QuizLivePreview`'s own column).
+ *
+ * `clamp()` over a stepped breakpoint ramp (unlike {@link PROMPT_SCALE})
+ * because a drag tile's own touch target should track the stage CONTINUOUSLY
+ * growing/shrinking, not jump at a few fixed container widths — there is no
+ * "whole number of columns" constraint here the way there is for the start
+ * gallery's own cards.
+ *
+ * Falls back to each clamp's own floor with no `STAGE_CONTAINER` ancestor
+ * (`cqw` resolves to `0` with no containment context) — still fully usable,
+ * just not grown, same as before this pass.
+ */
+export const STAGE_CONTAINER = '@container';
+
+/** Tile/slot/blank/prompt text — ~20px on a narrow stage, up to the owner's own "readable from the back of the room" ~44px on a wide/full-screen one. */
+export const TILE_TEXT_SCALE = 'text-[clamp(1.25rem,1rem+2.5cqw,2.75rem)]';
+
+/** Tile/slot/blank horizontal padding — grows alongside {@link TILE_TEXT_SCALE} so the shape stays the same recipe at every size, just bigger. */
+export const TILE_PADDING_X_SCALE = 'px-[clamp(1rem,0.6rem+1.6cqw,1.75rem)]';
+
+/** Tile/slot/blank vertical padding — see {@link TILE_PADDING_X_SCALE}. */
+export const TILE_PADDING_Y_SCALE = 'py-[clamp(0.75rem,0.4rem+1.2cqw,1.25rem)]';
+
+/** Tile/slot/blank minimum height — keeps the touch target big even a moment before the text clamp visually catches up. */
+export const TILE_MIN_HEIGHT_SCALE = 'min-h-[clamp(3.5rem,3rem+2cqw,5.5rem)]';
+
+/** A multi-tile container's own floor (the reorder line, a group-sort box) — bigger than one tile's own floor since it holds several. */
+export const STAGE_BOX_MIN_HEIGHT_SCALE = 'min-h-[clamp(6rem,5rem+4cqw,11rem)]';

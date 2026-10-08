@@ -66,6 +66,33 @@ describe('ActivityPracticeIsland — rendering blocks (one at a time)', () => {
   });
 });
 
+describe('ActivityPracticeIsland — game stage sizing (visual-polish pass)', () => {
+  // The four big drag-and-drop games size their own tiles/slots/boxes off
+  // the STAGE's own container width (`mechanics/scale.ts`'s `cqw`-based
+  // clamps), not the viewport — so each stage root needs `container-type:
+  // inline-size` (the `@container` utility) for that to resolve to anything
+  // other than its own floor value. Both the normal view's stage and "modo
+  // enfoque"'s own stage need it independently — they mount a fresh
+  // `QuizBlockPractice` each (this file's own header).
+  it('marks the normal view\'s quiz stage as a size container', () => {
+    renderIsland([QUIZ]);
+    const stage = screen.getByTestId('quiz-practice-q1').parentElement;
+    expect(stage?.className).toContain('@container');
+  });
+
+  it('marks "modo enfoque"\'s own quiz stage as a size container too', () => {
+    const toggle = document.createElement('button');
+    toggle.id = 'activity-focus-mode-toggle';
+    document.body.appendChild(toggle);
+    renderIsland([QUIZ]);
+    fireEvent.click(toggle);
+    const stage = screen.getByTestId('practice-focus-mode').querySelector('[data-testid="quiz-practice-q1"]')
+      ?.parentElement;
+    expect(stage?.className).toContain('@container');
+    toggle.remove();
+  });
+});
+
 describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => {
   it('hides the tab bar entirely with a single block — no empty bar, not even to host zoom controls', () => {
     renderIsland([WORKSHEET]);

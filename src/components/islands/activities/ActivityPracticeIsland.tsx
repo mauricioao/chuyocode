@@ -78,6 +78,7 @@ import { Button } from '@/components/ui/button';
 import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
+import { STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -503,7 +504,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               toolbarSlot={zoomSlot}
             />
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className={cn('min-h-0 flex-1 overflow-y-auto p-3', STAGE_CONTAINER)}>
               <QuizBlockPractice
                 lang={lang}
                 block={activeBlock as QuizBlock}
@@ -614,7 +615,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               <XIcon aria-hidden="true" size={18} />
             </button>
 
-            <div className="flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10">
+            <div className={cn('flex min-h-0 flex-1 flex-col items-stretch justify-center overflow-y-auto p-4 lg:p-10', STAGE_CONTAINER)}>
               {activeBlock.type === 'worksheet' ? (
                 <WorksheetPracticePlayer
                   lang={lang}
