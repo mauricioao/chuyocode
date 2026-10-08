@@ -177,4 +177,18 @@ describe('QuizReorder', () => {
       expect(screen.getByTestId('game-sound-toggle').getAttribute('aria-pressed')).toBe('true');
     });
   });
+
+  describe('layout (visual-polish-2 pass: controls must never overlap the board, "Comprobar" must never scroll away)', () => {
+    it('keeps the chrome row (‹ › pager + sound toggle) from ever shrinking', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('reorder-controls').className).toContain('flex-none');
+    });
+
+    it('keeps "Comprobar" out of the scrollable line/tray area, so it can never scroll out of view', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      const checkButton = screen.getByTestId('reorder-check');
+      expect(checkButton.closest('div[class*="flex-none"][class*="justify-end"]')).toBeTruthy();
+      expect(screen.getByTestId('reorder-stage').contains(checkButton)).toBe(false);
+    });
+  });
 });

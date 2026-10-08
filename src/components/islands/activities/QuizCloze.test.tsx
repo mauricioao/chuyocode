@@ -216,4 +216,16 @@ describe('QuizCloze', () => {
       expect(screen.getByTestId('game-sound-toggle').getAttribute('aria-pressed')).toBe('true');
     });
   });
+
+  describe('layout (visual-polish-2 pass: controls must never overlap the board, "Comprobar" must never scroll away)', () => {
+    it('keeps the chrome row (‹ › pager + sound toggle) from ever shrinking', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      expect(screen.getByTestId('cloze-controls').className).toContain('flex-none');
+    });
+
+    it('keeps "Comprobar" out of the scrollable sentence/tray area, so it can never scroll out of view', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      expect(screen.getByTestId('cloze-stage').contains(screen.getByTestId('cloze-check'))).toBe(false);
+    });
+  });
 });

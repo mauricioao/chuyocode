@@ -504,7 +504,20 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
               toolbarSlot={zoomSlot}
             />
           ) : (
-            <div className={cn('min-h-0 flex-1 overflow-y-auto p-3', STAGE_CONTAINER)}>
+            // `flex flex-col` (visual-polish-2 pass, owner bug: a big-stage
+            // game's own "Comprobar" was unreachable without scrolling the
+            // WHOLE page in the normal, non-"modo enfoque" view): without
+            // it, this div never becomes a flex container of its own, so
+            // `QuizBlockPractice`'s `min-h-0 flex-1` on a big-stage game
+            // below has no flex parent to size against and silently does
+            // nothing — the game then renders at its full natural height
+            // instead of shrinking to fit, and overflow lands on THIS div's
+            // `overflow-y-auto` instead of the game's own internal one,
+            // scrolling its chrome (tabs, Reiniciar) out of view along with
+            // it. "Modo enfoque"'s own stage wrapper already carries `flex
+            // flex-col` for exactly this reason — this view is the one that
+            // was missing it.
+            <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-3', STAGE_CONTAINER)}>
               <QuizBlockPractice
                 lang={lang}
                 block={activeBlock as QuizBlock}

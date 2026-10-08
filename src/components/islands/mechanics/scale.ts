@@ -109,3 +109,20 @@ export const TILE_MIN_HEIGHT_SCALE = 'min-h-[clamp(3.5rem,3rem+2cqw,5.5rem)]';
 
 /** A multi-tile container's own floor (the reorder line, a group-sort box) — bigger than one tile's own floor since it holds several. */
 export const STAGE_BOX_MIN_HEIGHT_SCALE = 'min-h-[clamp(6rem,5rem+4cqw,11rem)]';
+
+/**
+ * A board with MANY rows (`QuizMatching`'s own "Une las parejas" — visual-
+ * polish-2 pass, owner bug: a 5-pair board already overflowed 1440x900 full
+ * screen, "Comprobar" cut off below the fold, and 8 pairs is the authored
+ * ceiling). One column stays the rule for a short board or a narrow stage (a
+ * phone, the small practice window); a wide stage gets a second column once
+ * the board actually needs it, roughly halving how many rows tall it grows.
+ *
+ * `@lg` (a container-query breakpoint, not a viewport one) so this tracks
+ * the STAGE's own width — the same `STAGE_CONTAINER` ancestor {@link
+ * TILE_TEXT_SCALE} already reads `cqw` from — not the window outside it;
+ * same reasoning that module's own header gives for `cqw` over a viewport
+ * breakpoint. `grid-cols-1` is the floor so this still renders correctly
+ * (one column) with no `STAGE_CONTAINER` ancestor.
+ */
+export const STAGE_TWO_COL_GRID = 'grid-cols-1 @lg:grid-cols-2';

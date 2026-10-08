@@ -202,4 +202,35 @@ describe('QuizMatching', () => {
       expect(slotButton.textContent).toBe('');
     });
   });
+
+  describe('layout (visual-polish-2 pass: a 5+ pair board must fit the stage, never overlap its own controls)', () => {
+    it('keeps the chrome row (sound toggle + Reiniciar) from ever shrinking, so it cannot be squeezed over the board', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('matching-controls').className).toContain('flex-none');
+    });
+
+    it('keeps "Comprobar" out of the scrollable board/tray area, so it can never scroll out of view', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('matching-actions').className).toContain('flex-none');
+      // Never a descendant of the scrollable prompts grid — a sibling of it.
+      expect(screen.getByTestId('matching-prompts').contains(screen.getByTestId('matching-check'))).toBe(false);
+    });
+
+    it('stays one column for a short board (3 pairs, at/under the many-pairs threshold)', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const grid = screen.getByTestId('matching-prompts').className;
+      expect(grid).toContain('grid-cols-1');
+      expect(grid).not.toContain('@lg:grid-cols-2');
+    });
+
+    it('switches to a two-column grid on a wide stage once there are many pairs (5+)', () => {
+      const manyItems: GameItem[] = [
+        ...items,
+        { id: 's4', prompt: 'Prompt 4', answer: 'four' },
+        { id: 's5', prompt: 'Prompt 5', answer: 'five' },
+      ];
+      render(<QuizMatching lang="es" items={manyItems} seed="block-1" />);
+      expect(screen.getByTestId('matching-prompts').className).toContain('@lg:grid-cols-2');
+    });
+  });
 });

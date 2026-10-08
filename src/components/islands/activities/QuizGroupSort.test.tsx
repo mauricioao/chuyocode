@@ -179,4 +179,16 @@ describe('QuizGroupSort', () => {
       expect(screen.getByTestId('game-sound-toggle').getAttribute('aria-pressed')).toBe('true');
     });
   });
+
+  describe('layout (visual-polish-2 pass: controls must never overlap the board, "Comprobar" must never scroll away)', () => {
+    it('keeps the chrome row (sound toggle) from ever shrinking', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-controls').className).toContain('flex-none');
+    });
+
+    it('keeps "Comprobar" out of the scrollable board/tray area, so it can never scroll out of view', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-stage').contains(screen.getByTestId('groupsort-check'))).toBe(false);
+    });
+  });
 });

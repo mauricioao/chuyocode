@@ -59,11 +59,15 @@ import {
 } from '@/components/islands/mechanics/gameFeel';
 import {
   PROMPT_SCALE,
+  STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
   TILE_PADDING_Y_SCALE,
   TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
+
+/** Past this many pairs, the prompt list switches to {@link STAGE_TWO_COL_GRID} on a wide stage — see that token's own header. */
+const MANY_PAIRS_THRESHOLD = 4;
 
 export interface QuizMatchingProps {
   lang: Lang;
@@ -465,10 +469,16 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
   if (total === 0) return null;
 
   const activeItem = activeId ? byId.get(activeId) : undefined;
+  /** Past {@link MANY_PAIRS_THRESHOLD}, every row/gap tightens a notch (on top of the two-column grid) — the closer this board gets to the authored 8-pair ceiling, the less room a smaller stage (1280x720) has to spare. */
+  const manyPairs = items.length > MANY_PAIRS_THRESHOLD;
 
   return (
     <div data-testid="quiz-matching" className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex items-center justify-end gap-1">
+      {/* `flex-none`: a tidy chrome row that NEVER shrinks (visual-polish-2
+          pass, owner bug: with no floor, this row got squeezed by the
+          board's own overflow and "Reiniciar" painted over the first
+          prompt's slot instead of sitting in its own row above it). */}
+      <div data-testid="matching-controls" className="flex flex-none items-center justify-end gap-1">
         <GameSoundToggle
           muted={sound.muted}
           onToggle={sound.toggleMuted}
@@ -506,11 +516,24 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
           {/* `justify-center`: a short board (a handful of pairs) centers in
               the stage's own available height instead of pinning to the top
               and leaving the rest of a tall/full-screen stage empty (visual-
-              polish pass) — a long one simply overflows/scrolls as before,
-              `justify-center` has nothing left to distribute once content
-              already fills or exceeds the space. */}
-          <div className="flex min-h-0 flex-1 flex-col justify-center gap-6">
-            <div className="flex flex-col gap-3">
+              polish pass). Only THIS outer row is centered, never the
+              scrollable div below — centering an overflowing `overflow-y-
+              auto` box clips its own start edge out of scroll reach in
+              Chromium (no "safe" alignment on `justify-center`), which would
+              silently strand the top prompt rows off-screen. */}
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
+            {/* `min-h-0`: lets this shrink (via its default `flex-shrink:
+                1`) below its own content height once the board doesn't fit,
+                so IT scrolls instead of the stage around it — the action row
+                below, `flex-none`, then always keeps its own full size and
+                is never pushed out of view (visual-polish-2 pass, owner bug:
+                "Comprobar" sat below the fold on a 5-pair board; up to 8
+                pairs is the authored ceiling). */}
+            <div className={cn('flex min-h-0 flex-col overflow-y-auto', manyPairs ? 'gap-4' : 'gap-6')}>
+              <div
+                data-testid="matching-prompts"
+                className={cn('grid', manyPairs ? 'gap-2' : 'gap-3', manyPairs ? STAGE_TWO_COL_GRID : 'grid-cols-1')}
+              >
               {items.map((item) => {
                 const tileId = placements[item.id];
                 const tile = tileId ? (byId.get(tileId) ?? null) : null;
@@ -521,7 +544,8 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
                     key={item.id}
                     data-testid={`matching-prompt-${item.id}`}
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-3 sm:gap-4 sm:p-4',
+                      'flex flex-wrap items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-3 sm:gap-4',
+                      manyPairs ? 'sm:p-3' : 'sm:p-4',
                       locked && 'border-success-strong bg-success-strong/10',
                     )}
                   >
@@ -543,34 +567,38 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
                   </div>
                 );
               })}
+              </div>
+
+              <ul
+                ref={trayRef}
+                data-testid="matching-tray"
+                aria-label={t.matchTrayLabel}
+                className="flex list-none gap-3 overflow-x-auto p-0 pb-2 sm:flex-wrap sm:overflow-visible"
+              >
+                {trayIds.map((id) => {
+                  const item = byId.get(id);
+                  if (!item) return null;
+                  return (
+                    <li key={id} className="shrink-0 basis-36 sm:basis-44">
+                      <MatchTile
+                        id={id}
+                        label={item.answer}
+                        disabled={!playing}
+                        picked={pickedId === id}
+                        dragging={activeId === id}
+                        reducedMotion={reducedMotion}
+                        onClick={() => handleTrayTileClick(id)}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
 
-            <ul
-              ref={trayRef}
-              data-testid="matching-tray"
-              aria-label={t.matchTrayLabel}
-              className="flex list-none gap-3 overflow-x-auto p-0 pb-2 sm:flex-wrap sm:overflow-visible"
-            >
-              {trayIds.map((id) => {
-                const item = byId.get(id);
-                if (!item) return null;
-                return (
-                  <li key={id} className="shrink-0 basis-36 sm:basis-44">
-                    <MatchTile
-                      id={id}
-                      label={item.answer}
-                      disabled={!playing}
-                      picked={pickedId === id}
-                      dragging={activeId === id}
-                      reducedMotion={reducedMotion}
-                      onClick={() => handleTrayTileClick(id)}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-
-            <div className="flex justify-end">
+            {/* `flex-none`, a SIBLING of the scrollable div above (never a
+                child of it) — the one guarantee that matters most: this
+                button can never scroll out of view, on any size. */}
+            <div data-testid="matching-actions" className="flex flex-none justify-end">
               <Button type="button" data-testid="matching-check" className="min-h-11" onClick={handleCheck} disabled={!playing}>
                 {t.matchCheck}
               </Button>

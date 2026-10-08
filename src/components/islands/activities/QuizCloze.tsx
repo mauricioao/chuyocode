@@ -421,7 +421,7 @@ export default function QuizCloze({ lang, payload, seed }: QuizClozeProps) {
   if (phase === 'done') {
     return (
       <div data-testid="quiz-cloze" className="flex min-h-0 flex-1 flex-col gap-4">
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex flex-none items-center justify-end gap-1">
           <GameSoundToggle
             muted={sound.muted}
             onToggle={sound.toggleMuted}
@@ -445,7 +445,9 @@ export default function QuizCloze({ lang, payload, seed }: QuizClozeProps) {
 
   return (
     <div data-testid="quiz-cloze" className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      {/* `flex-none`: a tidy chrome row that NEVER shrinks — same owner bug
+          `QuizMatching.tsx`'s own control row documents. */}
+      <div data-testid="cloze-controls" className="flex flex-none items-center justify-between gap-2">
         <Button
           type="button"
           variant="outline"
@@ -494,8 +496,10 @@ export default function QuizCloze({ lang, payload, seed }: QuizClozeProps) {
             center it in the stage's own available height instead of
             pinning to the top and leaving the rest empty (visual-polish
             pass), same reasoning `QuizMatching`'s own content wrapper
-            documents. */}
-        <div className="flex min-h-0 flex-1 flex-col justify-center gap-6">
+            documents. Only THIS outer row is centered, never the
+            scrollable div below — see that file's own header on why. */}
+        <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
+          <div data-testid="cloze-stage" className="flex min-h-0 flex-col gap-6 overflow-y-auto">
           <p
             // `cloze-game-sentence-*`, not `cloze-sentence-*`: `ClozeEditor.tsx`'s
             // own authoring row already owns that prefix (its bracket-text
@@ -555,8 +559,12 @@ export default function QuizCloze({ lang, payload, seed }: QuizClozeProps) {
               );
             })}
           </ul>
+          </div>
 
-          <div className="flex justify-end">
+          {/* `flex-none`, a SIBLING of the scrollable div above — same
+              "never scrolls away" guarantee `QuizMatching.tsx`'s own action
+              row documents. */}
+          <div className="flex flex-none justify-end">
             <Button
               type="button"
               data-testid="cloze-check"
