@@ -240,12 +240,11 @@ function MatchSlot({
         <button
           type="button"
           data-testid={`matching-slot-button-${promptId}`}
+          aria-label={emptyLabel}
           onClick={onPlacePicked}
           disabled={disabled || !canPlacePicked}
           className="flex h-full w-full items-center justify-center bg-transparent p-0"
-        >
-          <span className="px-3 text-sm font-sans text-muted-foreground">{emptyLabel}</span>
-        </button>
+        />
       )}
     </span>
   );

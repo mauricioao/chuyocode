@@ -193,4 +193,13 @@ describe('QuizMatching', () => {
       expect(screen.getByTestId('game-sound-toggle').getAttribute('aria-pressed')).toBe('true');
     });
   });
+
+  describe('empty slots (build item 4, "quieter empty slots")', () => {
+    it('keeps "Casilla vacía" as the accessible name, without repeating it as visible text', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const slotButton = screen.getByTestId('matching-slot-button-s1');
+      expect(slotButton.getAttribute('aria-label')).toBe('Casilla vacía');
+      expect(slotButton.textContent).toBe('');
+    });
+  });
 });
