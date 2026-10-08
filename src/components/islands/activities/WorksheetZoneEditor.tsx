@@ -1437,7 +1437,7 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
   // portal targets. Same markup/testids either way, so callers querying
   // `tool-zone`/`tool-hand` never need to know which.
   const toolCluster = (
-    <div data-testid="tool-cluster" className="flex flex-nowrap items-center gap-1">
+    <div data-testid="tool-cluster" className="flex flex-nowrap items-center gap-1 lg:flex-col">
       {/* The Zona tool uses the SAME plus/cross icon component (`PlusIcon`,
           same weight) its own tooltip ("Zona (V)") already named before
           this pass. */}

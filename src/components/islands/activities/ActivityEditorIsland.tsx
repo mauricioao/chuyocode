@@ -943,21 +943,28 @@ export default function ActivityEditorIsland({
           // edges; scrolls on its own if the picker/uploader ever overflows.
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
             {/* Zero-block activity: `BlockList` itself renders the "Elige
-                con qué seguir" heading right above this same picker. */}
-            <BlockList
-              lang={lang}
-              blocks={blocks}
-              activeBlockId={activeBlockId}
-              selectedZoneId={selectedZoneId}
-              resolveImageUrl={resolveImageUrl}
-              onSetActiveBlock={setActiveBlockId}
-              onSelectZone={setSelectedZoneId}
-              onBlocksChange={changeBlocks}
-              incompleteBlockId={incompleteTarget?.blockId ?? null}
-              incompleteZoneId={incompleteTarget?.zoneId ?? null}
-              incompleteMessage={incompleteMessage}
-              sideToolsPortalTarget={worksheetToolsSlot}
-            />
+                con qué seguir" heading right above this same picker — but
+                only while the picker is actually still showing. Once the
+                worksheet card has been chosen and the uploader's own drop
+                zone is up (`showUploader`), that heading no longer applies
+                to anything on screen, so `BlockList` (and its heading) is
+                skipped entirely here. */}
+            {!showUploader && (
+              <BlockList
+                lang={lang}
+                blocks={blocks}
+                activeBlockId={activeBlockId}
+                selectedZoneId={selectedZoneId}
+                resolveImageUrl={resolveImageUrl}
+                onSetActiveBlock={setActiveBlockId}
+                onSelectZone={setSelectedZoneId}
+                onBlocksChange={changeBlocks}
+                incompleteBlockId={incompleteTarget?.blockId ?? null}
+                incompleteZoneId={incompleteTarget?.zoneId ?? null}
+                incompleteMessage={incompleteMessage}
+                sideToolsPortalTarget={worksheetToolsSlot}
+              />
+            )}
 
             {!showUploader && (
               <BlockTypePicker
