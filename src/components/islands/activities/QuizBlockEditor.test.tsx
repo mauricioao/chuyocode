@@ -316,6 +316,14 @@ describe('QuizBlockEditor — fits the focus block and scrolls inside it', () =>
     }
   });
 
+  it('reserves room on the preview column for the floating side toolbar\'s docked slot, so it never covers the preview\'s own Comprobar button', () => {
+    render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
+    expect(classesOf('quiz-col-preview-b1')).toEqual(expect.arrayContaining(['lg:pr-16']));
+    // The questions column sits beside it, away from the docked rail's own
+    // right-edge slot — it keeps its original, smaller gutter.
+    expect(classesOf('quiz-col-questions-b1')).not.toEqual(expect.arrayContaining(['lg:pr-16']));
+  });
+
   it('lets the empty state scroll inside the block too', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
     expect(classesOf('quiz-editor-b1')).toEqual(

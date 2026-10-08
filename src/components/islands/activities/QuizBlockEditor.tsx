@@ -775,7 +775,16 @@ export default function QuizBlockEditor({
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}
-          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'questions' && 'max-lg:hidden')}
+          // `lg:pr-16`: reserves room for `EditorSideToolbar`'s own docked
+          // rail (visual-polish pass, owner report — the rail's default
+          // docked slot, right-center of the window, sat right on top of
+          // this column's own "Comprobar" button around 1230px). The ROOT's
+          // own identical gutter was deliberately removed for the worksheet
+          // CANVAS (`ActivityEditorIsland.tsx`'s own header, "CANVAS
+          // EVERYWHERE" — overlapping empty canvas there is the point, not a
+          // bug); this column is not canvas, it hosts real interactive
+          // controls, so it keeps its own gutter instead.
+          className={cn(QUIZ_COLUMN_CLASS, 'lg:pr-16', mobileTab === 'questions' && 'max-lg:hidden')}
         >
           {previewColumn}
         </div>
