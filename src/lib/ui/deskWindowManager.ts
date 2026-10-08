@@ -37,7 +37,11 @@ import {
 } from '../deskWindowsState';
 import { clampWindowDragOffset, type WindowRect } from '../deskWindowDragMath';
 import { isDeskWindowMessageEnvelope } from './deskWindowMessaging';
-import { renderMinimizedWindowsTrayFrom, type MinimizedWindowEntry } from './minimizedWindows';
+import {
+  renderMinimizedWindowsTrayFrom,
+  measureMaxVisibleMinimizedChips,
+  type MinimizedWindowEntry,
+} from './minimizedWindows';
 import { readPersistedDeskWindows, writePersistedDeskWindows } from './deskWindowsPersistence';
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
@@ -657,6 +661,13 @@ export function initDeskWindowManager(
         thumbnail: null,
         t: w.z,
       }));
+      // Independent blocks, stacked upward (owner spec 2026-10-07, round 2):
+      // collapse the oldest into "+N" only once the stack would otherwise
+      // grow tall enough to cover the folders column — see
+      // `@lib/ui/minimizedWindows#computeMaxVisibleMinimizedChips`.
+      const maxVisible = trayWrapper
+        ? measureMaxVisibleMinimizedChips(entries.length, trayWrapper, doc)
+        : entries.length;
       renderMinimizedWindowsTrayFrom(
         trayContainer,
         entries,
@@ -664,6 +675,8 @@ export function initDeskWindowManager(
         (id) => void requestClose(id),
         () => render(),
         doc,
+        '+{n}',
+        maxVisible,
       );
     }
 
@@ -958,6 +971,11 @@ export function initDeskWindowManager(
     }
   }
   win.addEventListener('message', (event) => void onMessage(event));
+  // Independent-blocks stacking (owner spec 2026-10-07, round 2): how many
+  // minimized windows fit without covering the folders column depends on
+  // the CURRENT viewport height — a resize needs the same re-measure a
+  // fresh `render()` already does on every dispatch.
+  win.addEventListener('resize', () => render());
 
   // Restore-after-reload: materialize every restored window's own frame
   // BEFORE `initialWindow` (this request's own route) is opened, so that
