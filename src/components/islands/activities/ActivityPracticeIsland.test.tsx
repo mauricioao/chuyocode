@@ -78,7 +78,7 @@ describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => 
     renderIsland([WORKSHEET, QUIZ]);
     expect(screen.getByRole('tablist')).toBeTruthy();
     expect(screen.getByTestId('practice-tab-w1').textContent).toContain('Hoja 1');
-    expect(screen.getByTestId('practice-tab-q1').textContent).toContain('Preguntas');
+    expect(screen.getByTestId('practice-tab-q1').textContent).toContain('Básico');
   });
 
   it('uses the block\'s own name over the positional default', () => {
@@ -438,7 +438,7 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     },
   };
 
-  it('shows no Comprobar hint while the quiz tab is in Preguntas mode', () => {
+  it('shows no Comprobar hint while the quiz tab is in Básico mode', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
   });
@@ -447,18 +447,18 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
     expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
-      'Comprobar corrige el modo "Preguntas".',
+      'Comprobar corrige el modo "Básico".',
     );
   });
 
-  it('hides the hint again once switched back to Preguntas', () => {
+  it('hides the hint again once switched back to Básico', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
     fireEvent.click(screen.getByTestId('quiz-game-mode-quiz'));
     expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
   });
 
-  it('preserves Preguntas-mode answers across a switch to Tarjetas and back', () => {
+  it('preserves Básico-mode answers across a switch to Tarjetas and back', () => {
     renderIsland([THREE_QUESTION_QUIZ]);
     const input = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'sits' } });
@@ -476,7 +476,7 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     fireEvent.click(screen.getByTestId('quiz-game-mode-match'));
     expect(screen.getByTestId('quiz-matching')).toBeTruthy();
     expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
-      'Comprobar corrige el modo "Preguntas".',
+      'Comprobar corrige el modo "Básico".',
     );
   });
 

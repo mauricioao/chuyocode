@@ -449,11 +449,11 @@ export const UI_LABELS = {
         pageDescription: 'Elegir el tipo de contenido para una nueva actividad.',
         heading: 'Elige el punto de partida',
         worksheet: {
-          title: 'Hoja de trabajo',
+          title: 'Worksheet',
           description: 'Sube una hoja o PDF y marca dónde van las respuestas.',
         },
         questions: {
-          title: 'Preguntas',
+          title: 'Básico',
           description:
             'Escribe preguntas; el alumno las responde y además puede jugarlas como tarjetas, ruleta, ahorcado…',
         },
@@ -497,8 +497,8 @@ export const UI_LABELS = {
         changeImageConfirmTitle: '¿Cambiar la imagen de esta hoja?',
         changeImageConfirmBody: 'Las zonas dibujadas sobre la imagen actual se perderán.',
         changeImageConfirmAccept: 'Cambiar',
-        worksheetLabel: 'Hoja de trabajo',
-        quizLabel: 'Preguntas',
+        worksheetLabel: 'Worksheet',
+        quizLabel: 'Básico',
         // Creator polish round 2.
         blockNameLabel: 'Nombre del bloque',
         blockNamePlaceholder: 'Nombre del bloque',
@@ -763,13 +763,13 @@ export const UI_LABELS = {
       // switcher between "Preguntas"/"Tarjetas"/"Parejas" plus the copy for
       // the two alternate games themselves.
       gameModes: {
-        modeQuiz: 'Preguntas',
+        modeQuiz: 'Básico',
         modeCards: 'Tarjetas',
         modeMatch: 'Parejas',
         // Footer hint (practice player redesign's Comprobar/Reintentar row):
         // shown only while a quiz tab sits in Tarjetas/Parejas, since
         // Comprobar keeps grading the Preguntas-mode answers only.
-        gradesQuizModeHint: 'Comprobar corrige el modo "Preguntas".',
+        gradesQuizModeHint: 'Comprobar corrige el modo "Básico".',
         // Tarjetas (flashcards).
         cardFlipHint: 'Tocar o pulsar Espacio para dar vuelta',
         cardPrev: 'Anterior',
@@ -1028,8 +1028,8 @@ export const UI_LABELS = {
         levelLabel: 'Nivel',
         typeLabel: 'Tipo',
         typeAll: 'Todos',
-        typeWorksheet: 'Hoja de trabajo',
-        typeQuiz: 'Preguntas',
+        typeWorksheet: 'Worksheet',
+        typeQuiz: 'Básico',
         sortLabel: 'Ordenar por',
         sortRecientes: 'Más recientes',
         sortGustadas: 'Más gustadas',
@@ -1128,8 +1128,8 @@ export const UI_LABELS = {
         choicesLabel: 'Opciones',
         answersHeading: 'Clave de respuestas',
         explanationLabel: 'Por qué',
-        worksheetLabel: 'Hoja',
-        quizLabel: 'Preguntas',
+        worksheetLabel: 'Worksheet',
+        quizLabel: 'Básico',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -1860,7 +1860,7 @@ export const UI_LABELS = {
           description: 'Upload a worksheet or a PDF and mark where the answers go.',
         },
         questions: {
-          title: 'Questions',
+          title: 'Basic',
           description:
             'Write questions; learners answer them and can also play them as flashcards, a wheel, hangman…',
         },
@@ -1897,7 +1897,7 @@ export const UI_LABELS = {
         changeImageConfirmBody: 'The zones drawn on the current image will be lost.',
         changeImageConfirmAccept: 'Change',
         worksheetLabel: 'Worksheet',
-        quizLabel: 'Questions',
+        quizLabel: 'Basic',
         // Creator polish round 2.
         blockNameLabel: 'Block name',
         blockNamePlaceholder: 'Block name',
@@ -2076,10 +2076,10 @@ export const UI_LABELS = {
         explanationHeading: 'Why?',
       },
       gameModes: {
-        modeQuiz: 'Questions',
+        modeQuiz: 'Basic',
         modeCards: 'Cards',
         modeMatch: 'Match',
-        gradesQuizModeHint: 'Check grades the "Questions" mode.',
+        gradesQuizModeHint: 'Check grades the "Basic" mode.',
         cardFlipHint: 'Tap or press Space to flip',
         cardPrev: 'Previous',
         cardNext: 'Next',
@@ -2261,7 +2261,7 @@ export const UI_LABELS = {
         typeLabel: 'Type',
         typeAll: 'All',
         typeWorksheet: 'Worksheet',
-        typeQuiz: 'Questions',
+        typeQuiz: 'Basic',
         sortLabel: 'Sort by',
         sortRecientes: 'Most recent',
         sortGustadas: 'Most liked',
@@ -2342,8 +2342,8 @@ export const UI_LABELS = {
         choicesLabel: 'Options',
         answersHeading: 'Answer key',
         explanationLabel: 'Why',
-        worksheetLabel: 'Sheet',
-        quizLabel: 'Questions',
+        worksheetLabel: 'Worksheet',
+        quizLabel: 'Basic',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',

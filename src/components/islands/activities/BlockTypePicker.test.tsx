@@ -6,14 +6,14 @@ import BlockTypePicker from './BlockTypePicker';
 describe('BlockTypePicker', () => {
   it('renders the worksheet and questions cards, in Spanish', () => {
     render(<BlockTypePicker lang="es" onSelectWorksheet={vi.fn()} onSelectQuestions={vi.fn()} />);
-    expect(screen.getByTestId('picker-worksheet').textContent).toContain('Hoja de trabajo');
-    expect(screen.getByTestId('picker-questions').textContent).toContain('Preguntas');
+    expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
+    expect(screen.getByTestId('picker-questions').textContent).toContain('Básico');
   });
 
   it('renders in English', () => {
     render(<BlockTypePicker lang="en" onSelectWorksheet={vi.fn()} onSelectQuestions={vi.fn()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
-    expect(screen.getByTestId('picker-questions').textContent).toContain('Questions');
+    expect(screen.getByTestId('picker-questions').textContent).toContain('Basic');
   });
 
   it('calls onSelectWorksheet when the worksheet card is chosen', () => {

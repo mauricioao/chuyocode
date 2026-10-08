@@ -12,7 +12,7 @@ describe('QuizGameModeSwitcher', () => {
 
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(3);
-    expect(screen.getByText('Preguntas')).toBeTruthy();
+    expect(screen.getByText('Básico')).toBeTruthy();
     expect(screen.getByText('Tarjetas')).toBeTruthy();
     expect(screen.getByText('Parejas')).toBeTruthy();
   });
@@ -40,7 +40,7 @@ describe('QuizGameModeSwitcher', () => {
 
   it('renders English labels for lang="en"', () => {
     render(<QuizGameModeSwitcher lang="en" modes={['quiz', 'cards', 'match']} active="quiz" onChange={vi.fn()} />);
-    expect(screen.getByText('Questions')).toBeTruthy();
+    expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Cards')).toBeTruthy();
     expect(screen.getByText('Match')).toBeTruthy();
   });
