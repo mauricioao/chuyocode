@@ -11,6 +11,7 @@
  */
 import { normalizeAnswer } from '@/lib/exerciseGrading';
 import { splitLabelAtBlank, type Payload, type Slot } from '@/lib/exercisePayload';
+import type { QuizTemplate } from './blocks';
 
 /**
  * One playable game item, derived from a quiz slot — one question, one
@@ -215,6 +216,38 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
   if (payload && trueFalseEligibleCount(payload) >= MIN_TRUEFALSE_ITEMS) modes.push('truefalse');
   if (items.length >= MIN_OPENBOX_ITEMS) modes.push('openbox');
   return modes;
+}
+
+/**
+ * Which {@link GameMode} a template WANTS to start in — `'match'` for the
+ * `'match'` template ("Une las parejas"); the other template names have no
+ * shipped game yet, so they (and `undefined`, "Básico") want `'quiz'`.
+ */
+const TEMPLATE_DEFAULT_MODE: Record<QuizTemplate, GameMode> = {
+  match: 'match',
+  reorder: 'quiz',
+  cloze: 'quiz',
+  groupsort: 'quiz',
+};
+
+/**
+ * A quiz block's own STARTING game mode (template plumbing, build item 2):
+ * the template's wanted mode (see {@link TEMPLATE_DEFAULT_MODE}) when the
+ * caller is actually eligible for it right now, `'quiz'` otherwise — a
+ * template never forces a mode the current content cannot play (e.g. fewer
+ * than `MIN_MATCH_ITEMS` unique answers), it only PREFERS one. The player
+ * can still switch away via `QuizGameModeSwitcher` once practising; this
+ * only decides where a fresh render starts.
+ */
+export function initialGameMode(
+  template: QuizTemplate | undefined,
+  items: readonly GameItem[],
+  payload?: Payload,
+): GameMode {
+  if (!template) return 'quiz';
+  const wanted = TEMPLATE_DEFAULT_MODE[template];
+  if (wanted === 'quiz') return 'quiz';
+  return availableGameModes(items, payload).includes(wanted) ? wanted : 'quiz';
 }
 
 /**

@@ -492,6 +492,30 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     fireEvent.click(screen.getByTestId('practice-tab-q1'));
     expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
   });
+
+  it('a block with the "match" template starts straight in Parejas mode, with no click needed', () => {
+    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.getByTestId('quiz-game-mode-match').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('practice-quiz-mode-hint').textContent).toBe(
+      'Comprobar corrige el modo "Básico".',
+    );
+  });
+
+  it('a "match"-templated block still falls back to Básico when not eligible for match (too few unique answers)', () => {
+    const tooFew: QuizBlock = {
+      id: 'q2',
+      type: 'quiz',
+      template: 'match',
+      payload: {
+        pools: {},
+        slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+      },
+    };
+    renderIsland([tooFew]);
+    expect(screen.queryByTestId('quiz-matching')).toBeNull();
+    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+  });
 });
 
 describe('ActivityPracticeIsland — hydration (Bug 1, React error #418)', () => {

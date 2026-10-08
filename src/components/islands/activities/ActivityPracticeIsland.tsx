@@ -73,7 +73,7 @@ import { gradeZones, type GradableZone } from '@/lib/activities/grading';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import { comparatorForRenderable } from '@/components/islands/mechanics/registry';
 import type { ExerciseResponse } from '@/lib/exercisePayload';
-import type { GameMode } from '@/lib/activities/gameModes';
+import { deriveGameItems, initialGameMode, type GameMode } from '@/lib/activities/gameModes';
 import { Button } from '@/components/ui/button';
 import { Emoji } from '@/components/ui/Emoji';
 import { cn } from '@/lib/utils';
@@ -121,10 +121,12 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const [quizResponses, setQuizResponses] = useState<Record<string, ExerciseResponse>>({});
   const [quizResults, setQuizResults] = useState<Record<string, GradeResult> | undefined>(undefined);
   // D1 "Una actividad, muchos juegos": each quiz block's own active game mode
-  // (Preguntas/Tarjetas/Parejas), remembered per block id while this island
+  // (Básico/Tarjetas/Parejas), remembered per block id while this island
   // stays mounted — never persisted, and never reset by Reintentar (a mode
-  // choice is not an answer). Missing entry = `'quiz'`, same default
-  // `QuizBlockPractice`'s own `mode` prop already falls back to.
+  // choice is not an answer). A missing entry falls back to the block's own
+  // TEMPLATE default (`quizModeFor` below, template plumbing build item 2)
+  // rather than a hardcoded `'quiz'`, so a "Une las parejas" activity opens
+  // straight into Parejas when eligible.
   const [quizModes, setQuizModes] = useState<Record<string, GameMode>>({});
   const [activeTab, setActiveTab] = useState<string>(() => blocks[0]?.id ?? '');
   const [zoomSlot, setZoomSlot] = useState<HTMLDivElement | null>(null);
@@ -177,6 +179,13 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const handleQuizModeChange = useCallback((blockId: string, mode: GameMode) => {
     setQuizModes((prev) => ({ ...prev, [blockId]: mode }));
   }, []);
+
+  /** This block's current (or, before any switch, its template's own default) game mode. */
+  const quizModeFor = useCallback(
+    (block: QuizBlock): GameMode =>
+      quizModes[block.id] ?? initialGameMode(block.template, deriveGameItems(block.payload), block.payload),
+    [quizModes],
+  );
 
   const handleCheck = useCallback(() => {
     stopAllSpeech();
@@ -232,11 +241,12 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
   const activeBlock = blocks.find((b) => b.id === activeTab) ?? blocks[0];
   const showTabs = blocks.length > 1;
   // D1: while the active tab's quiz block sits in Tarjetas/Parejas, Comprobar
-  // still only grades that block's Preguntas-mode answers — the footer says
-  // so rather than leaving the learner to guess why an ungraded game did
-  // nothing when they pressed it.
-  const activeQuizModeHint =
-    activeBlock?.type === 'quiz' && (quizModes[activeBlock.id] ?? 'quiz') !== 'quiz';
+  // still only grades that block's Básico-mode answers — the footer says so
+  // rather than leaving the learner to guess why an ungraded game did
+  // nothing when they pressed it. Also true from the very first render of a
+  // "Une las parejas" activity, which starts in Parejas (its own template
+  // default), not Básico.
+  const activeQuizModeHint = activeBlock?.type === 'quiz' && quizModeFor(activeBlock as QuizBlock) !== 'quiz';
 
   const activateByIndex = useCallback(
     (index: number) => {
@@ -484,7 +494,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 onChange={(slotId, value) => handleQuizChange(activeBlock.id, slotId, value)}
                 outcomes={quizResults?.[activeBlock.id]?.slots}
                 disabled={graded}
-                mode={quizModes[activeBlock.id] ?? 'quiz'}
+                mode={quizModeFor(activeBlock as QuizBlock)}
                 onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
               />
             </div>
@@ -604,7 +614,7 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                   onChange={(slotId, value) => handleQuizChange(activeBlock.id, slotId, value)}
                   outcomes={quizResults?.[activeBlock.id]?.slots}
                   disabled={graded}
-                  mode={quizModes[activeBlock.id] ?? 'quiz'}
+                  mode={quizModeFor(activeBlock as QuizBlock)}
                   onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
                 />
               )}

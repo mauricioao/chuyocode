@@ -134,6 +134,47 @@ describe('parseBlocks — quiz block', () => {
   });
 });
 
+describe('parseBlocks — quiz block: template (build item 2, template plumbing)', () => {
+  it('accepts a missing template (undefined = "Básico")', () => {
+    const result = parseBlocks([quizBlock()]);
+    expect((result as Block[])[0]).not.toHaveProperty('template');
+  });
+
+  it('accepts the "match" template, in both submit and draft mode', () => {
+    expect(parseBlocks([quizBlock({ template: 'match' })])).toEqual([
+      { id: 'b1', type: 'quiz', payload: expect.any(Object), template: 'match' },
+    ]);
+    expect(parseBlocks([quizBlock({ template: 'match' })], 'draft')).toEqual([
+      { id: 'b1', type: 'quiz', payload: expect.any(Object), template: 'match' },
+    ]);
+  });
+
+  it('accepts every reserved template name', () => {
+    for (const template of ['match', 'reorder', 'cloze', 'groupsort']) {
+      const result = parseBlocks([quizBlock({ template })]);
+      expect((result as Block[])[0]).toMatchObject({ template });
+    }
+  });
+
+  it('rejects an unknown template in submit mode (fails the whole block)', () => {
+    expect(parseBlocks([quizBlock({ template: 'bingo' })])).toBeNull();
+    expect(parseBlocks([quizBlock({ template: 'bingo' })], 'submit')).toBeNull();
+  });
+
+  it('ignores (not rejects) an unknown template in draft mode', () => {
+    const result = parseBlocks([quizBlock({ template: 'bingo' })], 'draft');
+    expect(result).not.toBeNull();
+    expect((result as Block[])[0]).not.toHaveProperty('template');
+  });
+
+  it('rejects a non-string template in submit mode, ignores it in draft mode', () => {
+    expect(parseBlocks([quizBlock({ template: 42 })])).toBeNull();
+    const draft = parseBlocks([quizBlock({ template: 42 })], 'draft');
+    expect(draft).not.toBeNull();
+    expect((draft as Block[])[0]).not.toHaveProperty('template');
+  });
+});
+
 describe('parseBlocks — worksheet block: image', () => {
   it('accepts a worksheet block with a valid image and one zone', () => {
     const result = parseBlocks([worksheetBlock()]);

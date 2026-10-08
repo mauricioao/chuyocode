@@ -10,6 +10,7 @@ import {
   hangmanEligible,
   trueFalseEligibleCount,
   deriveTrueFalseItems,
+  initialGameMode,
   type GameItem,
   type TrueFalseItem,
 } from './gameModes';
@@ -172,6 +173,36 @@ describe('availableGameModes', () => {
       { id: '3', prompt: 'c', answer: 'a blue bird' },
     ];
     expect(availableGameModes(items)).toEqual(['quiz', 'cards', 'speak', 'wheel', 'openbox']);
+  });
+});
+
+describe('initialGameMode (template plumbing, build item 2)', () => {
+  const eligibleForMatch: GameItem[] = [
+    { id: '1', prompt: 'a', answer: 'a red cat' },
+    { id: '2', prompt: 'b', answer: 'a brown dog' },
+    { id: '3', prompt: 'c', answer: 'a blue bird' },
+  ];
+  const tooFewForMatch: GameItem[] = [
+    { id: '1', prompt: 'a', answer: 'a red cat' },
+    { id: '2', prompt: 'b', answer: 'a brown dog' },
+  ];
+
+  it('starts in quiz with no template ("Básico")', () => {
+    expect(initialGameMode(undefined, eligibleForMatch)).toBe('quiz');
+  });
+
+  it('starts in match for the match template, when eligible', () => {
+    expect(initialGameMode('match', eligibleForMatch)).toBe('match');
+  });
+
+  it('falls back to quiz for the match template when not (yet) eligible', () => {
+    expect(initialGameMode('match', tooFewForMatch)).toBe('quiz');
+  });
+
+  it('falls back to quiz for a reserved template with no shipped game yet', () => {
+    expect(initialGameMode('reorder', eligibleForMatch)).toBe('quiz');
+    expect(initialGameMode('cloze', eligibleForMatch)).toBe('quiz');
+    expect(initialGameMode('groupsort', eligibleForMatch)).toBe('quiz');
   });
 
   it('offers anagram/hangman only once an eligible single-word answer exists', () => {

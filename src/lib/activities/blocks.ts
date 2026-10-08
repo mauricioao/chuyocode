@@ -96,6 +96,19 @@ export interface WorksheetBlock {
   zones: Zone[];
 }
 
+/**
+ * An authoring preset over a `QuizBlock`'s payload (Wordwall-style "Cambiar
+ * plantilla"): a template is both a starting shape for the question editor
+ * AND the practice's own DEFAULT game mode (`gameModes.ts`'s
+ * `initialGameMode`) — the player can still switch to any other mode the
+ * SAME payload is eligible for, a template never restricts `availableGameModes`.
+ * `undefined` = "Básico", the plain quiz template this field predates.
+ * Only `'match'` ("Une las parejas") has a shipped practice experience so
+ * far; the other three names are reserved plumbing for templates not built
+ * yet, kept here so a value authored today never has to migrate shape later.
+ */
+export type QuizTemplate = 'match' | 'reorder' | 'cloze' | 'groupsort';
+
 /** The existing traditional exercise payload, as one activity block. */
 export interface QuizBlock {
   id: string;
@@ -103,6 +116,8 @@ export interface QuizBlock {
   /** Author-editable label (creator polish round 2). `undefined` = use the positional default ("Hoja N") in the UI. */
   name?: string;
   payload: Payload;
+  /** See {@link QuizTemplate}. `undefined` = "Básico" (the default before this field existed). */
+  template?: QuizTemplate;
 }
 
 export type Block = WorksheetBlock | QuizBlock;
@@ -145,6 +160,7 @@ export type BlocksParseMode = 'draft' | 'submit';
 
 const ZONE_KINDS: ReadonlySet<string> = new Set(['text', 'choice']);
 const ROTATIONS: ReadonlySet<number> = new Set([0, 90, 180, 270]);
+const QUIZ_TEMPLATES: ReadonlySet<string> = new Set(['match', 'reorder', 'cloze', 'groupsort']);
 
 /** Narrow `unknown` to a plain object without trusting its keys. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -374,6 +390,14 @@ function parseWorksheetBlock(
  * `'draft'` quiz block may have zero questions, or a question with no answer
  * yet, exactly like a `'draft'` worksheet zone — see
  * {@link BlocksParseMode}'s own doc.
+ *
+ * `template` gets its OWN, asymmetric posture (template plumbing, build item
+ * 2): missing entirely is always fine (`undefined` = "Básico"), but an
+ * unrecognized value is only an error in `'submit'` mode (fails the whole
+ * block, same all-or-nothing rule every other field here follows) — in
+ * `'draft'` it is silently ignored instead (template stays `undefined`), so
+ * a client running code newer or older than this server's own
+ * {@link QuizTemplate} vocabulary can still autosave.
  */
 function parseQuizBlock(
   id: string,
@@ -383,7 +407,19 @@ function parseQuizBlock(
 ): QuizBlock | null {
   const payload = parsePayload(value.payload, mode);
   if (!payload) return null;
-  return { id, type: 'quiz', name, payload };
+
+  let template: QuizTemplate | undefined;
+  if (value.template !== undefined) {
+    if (typeof value.template === 'string' && QUIZ_TEMPLATES.has(value.template)) {
+      template = value.template as QuizTemplate;
+    } else if (mode === 'submit') {
+      return null;
+    }
+  }
+
+  const block: QuizBlock = { id, type: 'quiz', name, payload };
+  if (template) block.template = template;
+  return block;
 }
 
 /** Parse one block, or `null` if its own shape is unusable. */
