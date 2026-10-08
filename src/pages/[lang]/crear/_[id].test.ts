@@ -214,7 +214,7 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(sectionMatch?.[1]).not.toContain('overflow-hidden');
   });
 
-  it('shows the activity title in the window title bar, and the muted autosave status next to it', async () => {
+  it('shows the activity title in the window title bar', async () => {
     editableActivity.value = {
       id: 'abc',
       title: 'Mi actividad',
@@ -233,8 +233,10 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(html).toContain('id="desk-window-title"');
     const titleIndex = html.indexOf('id="desk-window-title"');
     expect(html.slice(titleIndex, titleIndex + 400)).toContain('Mi actividad');
-    expect(html).toContain('id="desk-window-status"');
-    expect(html).toContain('Guardado hace un momento');
+    // The title bar's own muted autosave status span is gone (owner report:
+    // redundant with the side toolbar's own save-status icon) — `[id].astro`
+    // no longer passes `status` to `DeskWindow`, so it never renders.
+    expect(html).not.toContain('id="desk-window-status"');
   });
 
   // "No side bands" polish (owner report: the grey canvas sat as a centred

@@ -87,7 +87,6 @@ import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/
  * change either way, same id, same `textContent` write.
  */
 const DESK_WINDOW_TITLE_ID = 'desk-window-title';
-const DESK_WINDOW_STATUS_ID = 'desk-window-status';
 /**
  * The window title bar's own EDITABLE title group ("desktop" redesign PART
  * 6b polish — owner report: a duplicated title, once in the title bar, once
@@ -609,25 +608,17 @@ export default function ActivityEditorIsland({
     };
   }, [flushForMinimize, confirmCloseForWindow]);
 
-  // The window title bar's own live title/status (PART 6b) — see
-  // `DESK_WINDOW_TITLE_ID`/`DESK_WINDOW_STATUS_ID`'s own doc above for why
-  // this is a direct `textContent` write rather than a portal.
+  // The window title bar's own live title (PART 6b) — see
+  // `DESK_WINDOW_TITLE_ID`'s own doc above for why this is a direct
+  // `textContent` write rather than a portal. The title bar's own muted
+  // autosave status span is GONE (owner report: redundant with the side
+  // toolbar's own save-status icon, which is now the ONE save indicator —
+  // see `SaveStatusIndicator.tsx`); `[id].astro` no longer passes `status`/
+  // `statusId` to `DeskWindow`, so there is nothing left here to sync.
   useEffect(() => {
     const el = document.getElementById(DESK_WINDOW_TITLE_ID);
     if (el) el.textContent = title.trim() || t.titleFallback;
   }, [title, t.titleFallback]);
-
-  useEffect(() => {
-    const el = document.getElementById(DESK_WINDOW_STATUS_ID);
-    if (!el) return;
-    if (saveState === 'saving') el.textContent = t.titlebarSaving;
-    else if (saveState === 'error') el.textContent = t.errorStatus;
-    // 'idle'/'pending'/'saved' all read as the SAME ambient "saved a moment
-    // ago" copy here (approved mockup) — the SIDE TOOLBAR's own indicator
-    // (`saveLabels` below) is where the finer-grained "unsaved" state still
-    // shows, unchanged.
-    else el.textContent = t.titlebarSaved;
-  }, [saveState, t.titlebarSaving, t.errorStatus, t.titlebarSaved]);
 
   // The window title bar's own `actions` slot (PART 6b) — resolved once on
   // mount; `DeskWindow.astro` always renders this node (empty) before this

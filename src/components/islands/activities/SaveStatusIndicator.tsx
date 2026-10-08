@@ -45,9 +45,14 @@ export interface SaveStatusIndicatorProps {
 export default function SaveStatusIndicator({ status, onRetry, labels }: SaveStatusIndicatorProps) {
   if (status === 'error') {
     // Icon-only, clickable — no separate "Reintentar" text (creator polish
-    // round 3, owner feedback #1).
+    // round 3, owner feedback #1). Explicit `aria-live="polite"` (title bar
+    // redesign, owner report: this icon is now the editor's ONE save
+    // indicator) — a `<button>` appearing/disappearing has no implicit
+    // `role="status"` the way the other three branches below do, so a
+    // screen reader needs this spelled out to announce the failure without
+    // focus moving here on its own.
     return (
-      <span data-testid="save-status" data-status="error">
+      <span data-testid="save-status" data-status="error" aria-live="polite">
         <Button
           type="button"
           size="icon-sm"
@@ -65,7 +70,14 @@ export default function SaveStatusIndicator({ status, onRetry, labels }: SaveSta
 
   if (status === 'saving') {
     return (
-      <span data-testid="save-status" data-status="saving" role="status" aria-label={labels.saving} title={labels.saving}>
+      <span
+        data-testid="save-status"
+        data-status="saving"
+        role="status"
+        aria-live="polite"
+        aria-label={labels.saving}
+        title={labels.saving}
+      >
         <CircleNotchIcon aria-hidden="true" className="animate-spin text-muted-foreground" size={18} />
       </span>
     );
@@ -73,7 +85,14 @@ export default function SaveStatusIndicator({ status, onRetry, labels }: SaveSta
 
   if (status === 'pending') {
     return (
-      <span data-testid="save-status" data-status="unsaved" role="status" aria-label={labels.unsaved} title={labels.unsaved}>
+      <span
+        data-testid="save-status"
+        data-status="unsaved"
+        role="status"
+        aria-live="polite"
+        aria-label={labels.unsaved}
+        title={labels.unsaved}
+      >
         <CircleNotchIcon aria-hidden="true" className="text-muted-foreground" size={18} />
       </span>
     );
@@ -81,7 +100,14 @@ export default function SaveStatusIndicator({ status, onRetry, labels }: SaveSta
 
   // 'saved' or the initial 'idle' state (nothing to save yet) both read as "saved".
   return (
-    <span data-testid="save-status" data-status="saved" role="status" aria-label={labels.saved} title={labels.saved}>
+    <span
+      data-testid="save-status"
+      data-status="saved"
+      role="status"
+      aria-live="polite"
+      aria-label={labels.saved}
+      title={labels.saved}
+    >
       <CheckCircleIcon aria-hidden="true" weight="fill" className="text-success" size={18} />
     </span>
   );

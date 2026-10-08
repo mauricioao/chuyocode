@@ -68,7 +68,7 @@ beforeEach(() => {
   // four stand-in nodes by hand.
   document.body.insertAdjacentHTML(
     'beforeend',
-    '<span id="desk-window-title"></span><span id="desk-window-status"></span><div id="desk-window-title-group"></div><div id="desk-window-actions"></div>',
+    '<span id="desk-window-title"></span><div id="desk-window-title-group"></div><div id="desk-window-actions"></div>',
   );
 });
 
@@ -87,7 +87,6 @@ afterEach(() => {
   // the next (same reasoning as the hash reset above).
   sessionStorage.clear();
   document.getElementById('desk-window-title')?.remove();
-  document.getElementById('desk-window-status')?.remove();
   document.getElementById('desk-window-title-group')?.remove();
   document.getElementById('desk-window-actions')?.remove();
 });
@@ -372,29 +371,6 @@ describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
     expect(document.getElementById('desk-window-title')?.textContent).toBe('New activity');
   });
 
-  it('shows the muted "saved a moment ago" status by default, "Guardando…" while saving, and the error text on failure', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-    vi.stubGlobal('fetch', fetchMock);
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento');
-
-    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('save-button'));
-    });
-    expect(document.getElementById('desk-window-status')?.textContent).toBe('No se pudo guardar');
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('save-retry'));
-    });
-    await waitFor(() =>
-      expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento'),
-    );
-  });
-
   it('renders "Ver como presentación" and "Enviar a revisión" into the window title bar actions slot, not the header row', () => {
     renderEditor();
     const actionsSlot = document.getElementById('desk-window-actions');
@@ -624,14 +600,13 @@ describe('ActivityEditorIsland — dirty tracking and save', () => {
     });
 
     await waitFor(() =>
-      expect(document.getElementById('desk-window-status')?.textContent).toBe('Guardado hace un momento'),
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/actividades/act-1/guardar',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ title: 'Mi actividad', level: 'A2', blocks: [] }),
-      }),
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/actividades/act-1/guardar',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ title: 'Mi actividad', level: 'A2', blocks: [] }),
+        }),
+      ),
     );
   });
 
