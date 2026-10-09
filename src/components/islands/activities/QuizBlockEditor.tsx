@@ -107,9 +107,11 @@ import {
   addGroupSortGroup,
   addGroupSortItems,
   deriveGroupSortRows,
+  MAX_GROUPSORT_GROUPS,
   removeGroupSortGroup,
   removeGroupSortItem,
 } from '@/lib/activities/groupSort';
+import { TemplateEditorLayout } from './TemplateEditorKit';
 
 /** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
 const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
@@ -127,6 +129,7 @@ export const COPY = {
     dragHandle: 'Reordenar pregunta',
     tabQuestions: 'Preguntas',
     tabPreview: 'Vista previa',
+    previewEmpty: 'Aquí verás el juego en cuanto escribas el contenido.',
     tip1: 'Escribe la pregunta',
     tip2: 'Toca el círculo de la correcta',
     tip3: 'Agrega otra pregunta',
@@ -154,6 +157,7 @@ export const COPY = {
     dragHandle: 'Reorder question',
     tabQuestions: 'Questions',
     tabPreview: 'Preview',
+    previewEmpty: 'The game shows up here as soon as you write the content.',
     tip1: 'Write the question',
     tip2: "Tap the correct answer's circle",
     tip3: 'Add another question',
@@ -355,7 +359,12 @@ export default function QuizBlockEditor({
   function handleContainerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
-    addQuestion();
+    // `cloze`/`groupsort` own their rows through their own commits — a plain
+    // `addQuestion` row would be an invisible stray slot in those blocks.
+    if (isCloze) addClozeRow();
+    else if (isGroupSort) {
+      if (groupSortRows.length < MAX_GROUPSORT_GROUPS) addGroupSortRow();
+    } else addQuestion();
   }
 
   const cardNodeRefs = useRef<Record<string, HTMLLIElement | null>>({});
@@ -706,6 +715,33 @@ export default function QuizBlockEditor({
     <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} template={template} />
   ) : null;
 
+  // TEMPLATE EDITORS (owner report: "no va a juego con los sombreados y
+  // estilos de nuestro escritorio"): the four templates share one desk-native
+  // work area — the authoring sheet beside the live preview's stage card,
+  // stacked on phones (no tabs: both are short enough to scroll through) —
+  // see `TemplateEditorKit.tsx`'s own header. Básico keeps the layout below.
+  const templateColumn = isMatch
+    ? matchColumn
+    : isReorder
+      ? reorderColumn
+      : isCloze
+        ? clozeColumn
+        : isGroupSort
+          ? groupSortColumn
+          : null;
+  if (templateColumn) {
+    return (
+      <TemplateEditorLayout
+        blockId={blockId}
+        sheet={templateColumn}
+        preview={previewColumn}
+        stageLabel={t.tabPreview}
+        stageEmptyText={t.previewEmpty}
+        onKeyDownCapture={handleContainerKeyDown}
+      />
+    );
+  }
+
   // HEIGHT CHAIN: in the editor's desktop focus layout the expanded block has
   // a fixed height and clips its overflow (BlockList). The root and the
   // two-column grid must take that height (`flex-1 min-h-0`), and each column
@@ -718,7 +754,7 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
-        {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
+        {questionsColumn}
       </div>
     );
   }
@@ -771,20 +807,22 @@ export default function QuizBlockEditor({
           data-testid={`quiz-col-questions-${blockId}`}
           className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'preview' && 'max-lg:hidden')}
         >
-          {isMatch ? matchColumn : isReorder ? reorderColumn : isCloze ? clozeColumn : isGroupSort ? groupSortColumn : questionsColumn}
+          {questionsColumn}
         </div>
         <div
           data-testid={`quiz-col-preview-${blockId}`}
-          // `lg:pr-16`: reserves room for `EditorSideToolbar`'s own docked
-          // rail (visual-polish pass, owner report — the rail's default
-          // docked slot, right-center of the window, sat right on top of
-          // this column's own "Comprobar" button around 1230px). The ROOT's
-          // own identical gutter was deliberately removed for the worksheet
-          // CANVAS (`ActivityEditorIsland.tsx`'s own header, "CANVAS
-          // EVERYWHERE" — overlapping empty canvas there is the point, not a
-          // bug); this column is not canvas, it hosts real interactive
-          // controls, so it keeps its own gutter instead.
-          className={cn(QUIZ_COLUMN_CLASS, 'lg:pr-16', mobileTab === 'questions' && 'max-lg:hidden')}
+          // NO WHITE STRIP ON THE RIGHT (build item 6, owner report: "se
+          // sigue viendo esa franja blanca a la derecha"): this column used
+          // to reserve `lg:pr-16` so `EditorSideToolbar`'s own docked rail
+          // (right-center of the window) would never sit on top of this
+          // column's own "Comprobar" button — which left a visibly empty
+          // gutter down the right edge. FLOATING COMPROBAR (build item 5)
+          // already clears the docked rail on its own (`QuizLivePreview`'s
+          // own `editorOffset`, `FLOATING_CHECK_BAR_EDITOR_OFFSET`), so this
+          // column no longer needs a reserved gutter at all — it now runs
+          // edge to edge like every other column, with the toolbar floating
+          // OVER it instead.
+          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'questions' && 'max-lg:hidden')}
         >
           {previewColumn}
         </div>

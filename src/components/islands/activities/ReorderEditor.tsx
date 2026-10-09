@@ -2,8 +2,10 @@
  * ReorderEditor — the authoring surface for a `template: 'reorder'` quiz
  * block ("Reordenar"). A `reorder` block is not a question/answer pair like
  * `match`'s own `MatchPairsEditor` — it is a plain list of SENTENCES to
- * reorder, so this renders one row per sentence: "Oración correcta", Enter
- * adds a row, "×" removes it. Mirrors `MatchPairsEditor.tsx`'s own posture
+ * reorder, so this renders one grouped-list row per sentence
+ * (`TemplateEditorKit.tsx`): Enter adds a row, "×" removes it, and right
+ * under each sentence a live mini-preview shows its words shuffled the way
+ * the game will deal them. Mirrors `MatchPairsEditor.tsx`'s own posture
  * (stateless, single column instead of two).
  *
  * SAME STORAGE AS EVERY OTHER TEMPLATE: a sentence is still exactly one
@@ -15,24 +17,43 @@
  * keeps both in sync on every keystroke — see its own `onSentenceChange`.
  */
 import { useEffect, useRef } from 'react';
-import { TrashIcon } from '@phosphor-icons/react/dist/ssr/Trash';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
+import { seedFromString, shuffleWithSeed } from '@/lib/activities/gameModes';
+import {
+  AddRow,
+  GroupLabel,
+  MiniChip,
+  RowRemoveButton,
+  SheetHeader,
+  StatusNote,
+  TemplateField,
+  TemplateGroup,
+  TemplateRow,
+  useExitingItems,
+} from './TemplateEditorKit';
 
 export const COPY = {
   es: {
+    title: 'Reordenar',
+    instruction: 'Escribe cada oración bien ordenada; el juego mezcla sus palabras.',
+    groupLabel: 'Oraciones',
     sentenceHeader: 'Oración correcta',
     sentencePlaceholder: 'Escribe la oración completa',
     removeSentence: 'Quitar esta oración',
-    addSentence: '+ Agregar oración',
-    minSentenceHint: 'Agrega al menos una oración de 2 o más palabras para jugar',
+    addSentence: 'Agregar oración',
+    minSentenceHint: 'Agrega al menos una oración de 2 o más palabras',
+    ready: (n: number) => `Listo para jugar · ${n === 1 ? '1 oración' : `${n} oraciones`}`,
   },
   en: {
+    title: 'Reorder',
+    instruction: 'Write each sentence in order; the game shuffles its words.',
+    groupLabel: 'Sentences',
     sentenceHeader: 'Correct sentence',
     sentencePlaceholder: 'Write the full sentence',
     removeSentence: 'Remove this sentence',
-    addSentence: '+ Add sentence',
-    minSentenceHint: 'Add at least one sentence of 2 or more words to play',
+    addSentence: 'Add sentence',
+    minSentenceHint: 'Add at least one sentence of 2 or more words',
+    ready: (n: number) => `Ready to play · ${n === 1 ? '1 sentence' : `${n} sentences`}`,
   },
 } as const;
 
@@ -42,10 +63,24 @@ function copyFor(lang: string): Copy {
   return lang === 'en' ? COPY.en : COPY.es;
 }
 
-/** A sentence needs at least this many words to be reorderable — mirrors `gameModes.ts`'s own word-count rule. */
-function wordCount(text: string): number {
-  const trimmed = text.trim();
-  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+function wordsOf(text: string): string[] {
+  return text.trim().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * The sentence's words in a stable shuffled order — seeded by the sentence
+ * itself, so the preview never jumps between renders, and never the
+ * original order (a sentence always starts scrambled in the game too).
+ */
+function shuffledWords(sentence: string): string[] {
+  const words = wordsOf(sentence);
+  if (words.length < 2) return words;
+  const order = shuffleWithSeed(
+    words.map((_, i) => i),
+    seedFromString(sentence),
+  );
+  if (order.every((wordIndex, i) => wordIndex === i)) [order[0], order[1]] = [order[1]!, order[0]!];
+  return order.map((i) => words[i]!);
 }
 
 export interface ReorderSentence {
@@ -76,67 +111,79 @@ export default function ReorderEditor({
 }: ReorderEditorProps) {
   const t = copyFor(lang);
   const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const exits = useExitingItems(onRemove);
 
   useEffect(() => {
     if (!focusSlotId) return;
     fieldRefs.current[focusSlotId]?.focus();
   }, [focusSlotId]);
 
-  const playableCount = sentences.filter((s) => wordCount(s.sentence) >= 2).length;
+  const playableCount = sentences.filter((s) => wordsOf(s.sentence).length >= 2).length;
 
   return (
-    <div data-testid={`reorder-editor-${blockId}`} className="flex flex-col gap-3">
-      {playableCount === 0 && (
-        <p data-testid={`reorder-hint-${blockId}`} className="text-sm text-muted-foreground">
+    <div data-testid={`reorder-editor-${blockId}`} className="flex flex-col">
+      <SheetHeader icon={ArrowsDownUpIcon} tone="violet" title={t.title} instruction={t.instruction} />
+
+      {sentences.length > 0 && <GroupLabel>{t.groupLabel}</GroupLabel>}
+
+      <TemplateGroup ariaLabel={t.groupLabel} testId={`reorder-list-${blockId}`}>
+        {sentences.map((item, index) => {
+          const preview = shuffledWords(item.sentence);
+          return (
+            <TemplateRow key={item.rowId} testId={`reorder-row-${item.slotId}`} leaving={exits.isLeaving(item.rowId)}>
+              <div className="flex items-center">
+                <TemplateField
+                  ref={(node) => {
+                    fieldRefs.current[item.slotId] = node;
+                  }}
+                  aria-label={`${t.sentenceHeader} ${index + 1}`}
+                  placeholder={t.sentencePlaceholder}
+                  data-testid={`reorder-sentence-${item.slotId}`}
+                  value={item.sentence}
+                  onChange={(event) => onSentenceChange(item.slotId, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.ctrlKey || event.metaKey) return;
+                    const isLast = sentences[sentences.length - 1]?.slotId === item.slotId;
+                    if (!isLast) return;
+                    event.preventDefault();
+                    onAdd();
+                  }}
+                  className="flex-1"
+                />
+                <div className="flex w-9 shrink-0 justify-end pr-3">
+                  <RowRemoveButton
+                    label={`${t.removeSentence} ${index + 1}`}
+                    testId={`reorder-remove-${item.slotId}`}
+                    onRemove={() => exits.remove(item.rowId, item.rowId, item.slotId)}
+                  />
+                </div>
+              </div>
+              {preview.length >= 2 && (
+                <div
+                  aria-hidden="true"
+                  data-testid={`reorder-preview-${item.slotId}`}
+                  className="-mt-1 flex flex-wrap gap-1 pb-3 pl-4 pr-12"
+                >
+                  {preview.map((word, i) => (
+                    <MiniChip key={`${i}-${word}`}>{word}</MiniChip>
+                  ))}
+                </div>
+              )}
+            </TemplateRow>
+          );
+        })}
+        <AddRow label={t.addSentence} testId={`reorder-add-${blockId}`} onClick={onAdd} />
+      </TemplateGroup>
+
+      {playableCount > 0 ? (
+        <StatusNote tone="ready" testId={`reorder-ready-${blockId}`}>
+          {t.ready(playableCount)}
+        </StatusNote>
+      ) : (
+        <StatusNote tone="warn" testId={`reorder-hint-${blockId}`}>
           {t.minSentenceHint}
-        </p>
+        </StatusNote>
       )}
-
-      {sentences.length > 0 && (
-        <div data-testid={`reorder-list-${blockId}`} role="table" aria-label={t.sentenceHeader} className="flex flex-col gap-2">
-          {sentences.map((item, index) => (
-            <div key={item.rowId} role="row" data-testid={`reorder-row-${item.slotId}`} className="flex items-center gap-2">
-              <Input
-                ref={(node) => {
-                  fieldRefs.current[item.slotId] = node;
-                }}
-                type="text"
-                aria-label={`${t.sentenceHeader} ${index + 1}`}
-                placeholder={t.sentencePlaceholder}
-                data-testid={`reorder-sentence-${item.slotId}`}
-                value={item.sentence}
-                onChange={(event) => onSentenceChange(item.slotId, event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || event.ctrlKey || event.metaKey) return;
-                  const isLast = sentences[sentences.length - 1]?.slotId === item.slotId;
-                  if (!isLast) return;
-                  event.preventDefault();
-                  onAdd();
-                }}
-                className={cn('min-h-11 min-w-0 flex-1 text-base')}
-              />
-              <button
-                type="button"
-                aria-label={t.removeSentence}
-                data-testid={`reorder-remove-${item.slotId}`}
-                onClick={() => onRemove(item.rowId, item.slotId)}
-                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-destructive"
-              >
-                <TrashIcon aria-hidden="true" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button
-        type="button"
-        data-testid={`reorder-add-${blockId}`}
-        onClick={onAdd}
-        className="min-h-11 w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
-      >
-        {t.addSentence}
-      </button>
     </div>
   );
 }

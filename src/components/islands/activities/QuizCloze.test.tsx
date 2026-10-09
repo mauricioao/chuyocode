@@ -223,9 +223,18 @@ describe('QuizCloze', () => {
       expect(screen.getByTestId('cloze-controls').className).toContain('flex-none');
     });
 
-    it('keeps "Comprobar" out of the scrollable sentence/tray area, so it can never scroll out of view', () => {
+    // FLOATING COMPROBAR (build item 5): "Comprobar" is now a `fixed`
+    // bottom-right overlay — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS`
+    // header.
+    it('floats "Comprobar" fixed at the stage\'s own bottom-right, out of the scrollable sentence/tray area', () => {
       render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
       expect(screen.getByTestId('cloze-stage').contains(screen.getByTestId('cloze-check'))).toBe(false);
+      expect(screen.getByTestId('cloze-actions').className).toContain('fixed');
+    });
+
+    it('offsets the floating Comprobar further left when rendered inside the editor', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" editorOffset />);
+      expect(screen.getByTestId('cloze-actions').className).toContain('lg:right-20');
     });
   });
 });

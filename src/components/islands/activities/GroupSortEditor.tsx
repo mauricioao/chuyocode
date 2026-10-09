@@ -4,47 +4,67 @@
  * questions — `groupSort.ts`'s own `GroupSortGroupRow` ({@link
  * GroupSortGroupRow}) renders instead of the full Google-Forms-style
  * {@link QuestionCard} list here, same posture as `MatchPairsEditor.tsx`/
- * `ReorderEditor.tsx`/`ClozeEditor.tsx`.
+ * `ReorderEditor.tsx`/`ClozeEditor.tsx` (`TemplateEditorKit.tsx`).
  *
- * ONE CARD PER GROUP: a name field plus its items as quick chips — type an
- * item, Enter adds it (a comma-separated paste adds several, same code path,
- * see `groupSort.ts`'s own header), "×" removes it. "+ Agregar grupo" stops
- * once {@link MAX_GROUPSORT_GROUPS} groups exist (owner spec: "keep it to 4
- * max for a big readable board"). Calm, non-blocking hints nudge towards
- * >= 2 groups and >= 2 items per group (`gameModes.ts`'s own eligibility
- * rule) rather than hard-blocking anything — exactly like `MatchPairsEditor`'s
- * own "Agrega al menos 3 parejas" hint.
+ * ONE SMALL GROUPED CARD PER GROUP: a coloured dot (its board colour, by
+ * order) and the group's name as the card's bold header field, then its
+ * items as white chips plus an inline "+ elemento" chip input — type an
+ * item, Enter adds it (a comma-separated paste adds several, same code
+ * path, see `groupSort.ts`'s own header), "×" removes it. "Agregar grupo" (a
+ * dashed ghost card) stops once {@link MAX_GROUPSORT_GROUPS} groups exist
+ * (owner spec: "keep it to 4 max for a big readable board"). Calm,
+ * non-blocking notes nudge towards >= 2 groups and >= 2 items per group
+ * (`gameModes.ts`'s own eligibility rule) rather than hard-blocking anything
+ * — exactly like `MatchPairsEditor`'s own "Agrega al menos 3 parejas" note.
  */
-import { useEffect, useRef, useState } from 'react';
-import { TrashIcon } from '@phosphor-icons/react/dist/ssr/Trash';
-import { Input } from '@/components/ui/input';
+import { useEffect, useRef } from 'react';
+import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
 import { cn } from '@/lib/utils';
 import { MAX_GROUPSORT_GROUPS, MIN_GROUPSORT_ITEMS_PER_GROUP, type GroupSortGroupRow } from '@/lib/activities/groupSort';
+import {
+  AddCard,
+  Chip,
+  ChipInput,
+  Footnote,
+  RowRemoveButton,
+  SheetHeader,
+  StatusNote,
+  TemplateCollapse,
+  TemplateField,
+  TemplateGroup,
+  useExitingItems,
+} from './TemplateEditorKit';
 
 export const COPY = {
   es: {
+    title: 'Ordenar por grupos',
+    instruction: 'Nombra cada grupo y escribe los elementos que le pertenecen.',
     groupNameLabel: 'Nombre del grupo',
     groupNamePlaceholder: 'Ej. Animales',
-    itemsLabel: 'Elementos',
-    itemPlaceholder: 'Escribe un elemento y presiona Enter',
+    itemPlaceholder: '+ elemento',
+    addItem: (n: number) => `Agregar elemento al grupo ${n}`,
     removeItem: 'Quitar elemento',
     removeGroup: 'Quitar este grupo',
-    addGroup: '+ Agregar grupo',
-    minGroupsHint: 'Agrega al menos 2 grupos para jugar',
-    minItemsHint: (n: number) => `Agrega al menos ${n} elementos a este grupo`,
+    addGroup: 'Agregar grupo',
+    minGroupsHint: 'Agrega al menos 2 grupos',
+    minItemsHint: (n: number) => `Agrega al menos ${n} elementos`,
     maxGroupsHint: `Máximo ${MAX_GROUPSORT_GROUPS} grupos, para que el tablero se lea bien`,
+    ready: (n: number) => `Listo para jugar · ${n} grupos`,
   },
   en: {
+    title: 'Sort into groups',
+    instruction: 'Name each group and write the items that belong to it.',
     groupNameLabel: 'Group name',
     groupNamePlaceholder: 'E.g. Animals',
-    itemsLabel: 'Items',
-    itemPlaceholder: 'Type an item and press Enter',
+    itemPlaceholder: '+ item',
+    addItem: (n: number) => `Add an item to group ${n}`,
     removeItem: 'Remove item',
     removeGroup: 'Remove this group',
-    addGroup: '+ Add group',
-    minGroupsHint: 'Add at least 2 groups to play',
-    minItemsHint: (n: number) => `Add at least ${n} items to this group`,
+    addGroup: 'Add group',
+    minGroupsHint: 'Add at least 2 groups',
+    minItemsHint: (n: number) => `Add at least ${n} items`,
     maxGroupsHint: `Up to ${MAX_GROUPSORT_GROUPS} groups, so the board stays easy to read`,
+    ready: (n: number) => `Ready to play · ${n} groups`,
   },
 } as const;
 
@@ -53,6 +73,9 @@ type Copy = (typeof COPY)[keyof typeof COPY];
 function copyFor(lang: string): Copy {
   return lang === 'en' ? COPY.en : COPY.es;
 }
+
+/** Each group's dot, by order — the same pop accents the desk uses (4 max, one each). */
+const GROUP_DOT_CLASS = ['bg-pop-sky', 'bg-pop-yellow', 'bg-pop-red', 'bg-pop-green'] as const;
 
 export interface GroupSortEditorProps {
   blockId: string;
@@ -80,130 +103,97 @@ export default function GroupSortEditor({
 }: GroupSortEditorProps) {
   const t = copyFor(lang);
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  // Each group's own in-progress "type an item" text — ephemeral UI state,
-  // never part of the authored `Draft` (same reasoning `QuestionCard.tsx`'s
-  // own `answerDraft` gives for its answer-chip input).
-  const [itemDrafts, setItemDrafts] = useState<Record<string, string>>({});
+  const exits = useExitingItems(onRemove);
 
   useEffect(() => {
     if (!focusSlotId) return;
     nameRefs.current[focusSlotId]?.focus();
   }, [focusSlotId]);
 
-  function commitItemDraft(slotId: string) {
-    const text = itemDrafts[slotId] ?? '';
-    if (text.trim() === '') return;
-    onAddItems(slotId, text);
-    setItemDrafts((prev) => ({ ...prev, [slotId]: '' }));
-  }
-
   const canAddMore = groups.length < MAX_GROUPSORT_GROUPS;
+  const ready = groups.length >= 2 && groups.every((g) => g.items.length >= MIN_GROUPSORT_ITEMS_PER_GROUP);
 
   return (
-    <div data-testid={`groupsort-editor-${blockId}`} className="flex flex-col gap-3">
-      {groups.length < 2 && (
-        <p data-testid={`groupsort-min-groups-hint-${blockId}`} className="text-sm text-muted-foreground">
-          {t.minGroupsHint}
-        </p>
-      )}
+    <div data-testid={`groupsort-editor-${blockId}`} className="flex flex-col">
+      <SheetHeader icon={SquaresFourIcon} tone="green" title={t.title} instruction={t.instruction} />
 
-      {groups.length > 0 && (
-        <div data-testid={`groupsort-list-${blockId}`} className="flex flex-col gap-3">
-          {groups.map((group, index) => (
-            <div
-              key={group.rowId}
-              data-testid={`groupsort-group-${group.slotId}`}
-              className="flex flex-col gap-2 rounded-lg border border-border p-3"
+      <div data-testid={`groupsort-list-${blockId}`} className="flex flex-col gap-3">
+        {groups.map((group, index) => (
+          <TemplateCollapse key={group.rowId} leaving={exits.isLeaving(group.rowId)}>
+            <TemplateGroup
+              ariaLabel={group.label.trim() || `${t.groupNameLabel} ${index + 1}`}
+              testId={`groupsort-group-${group.slotId}`}
+              className="template-card"
             >
-              <div className="flex items-center gap-2">
-                <Input
+              <div className="template-row flex items-center pl-4">
+                <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-full', GROUP_DOT_CLASS[index % 4])} />
+                <TemplateField
                   ref={(node) => {
                     nameRefs.current[group.slotId] = node;
                   }}
-                  type="text"
                   aria-label={`${t.groupNameLabel} ${index + 1}`}
                   placeholder={t.groupNamePlaceholder}
                   data-testid={`groupsort-name-${group.slotId}`}
                   value={group.label}
                   onChange={(event) => onLabelChange(group.slotId, event.target.value)}
-                  className={cn('min-h-11 min-w-0 flex-1 text-base font-medium')}
+                  className="flex-1 font-semibold"
                 />
-                <button
-                  type="button"
-                  aria-label={t.removeGroup}
-                  data-testid={`groupsort-remove-group-${group.slotId}`}
-                  onClick={() => onRemove(group.rowId)}
-                  className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-destructive"
-                >
-                  <TrashIcon aria-hidden="true" />
-                </button>
+                <div className="flex w-9 shrink-0 justify-end pr-3">
+                  <RowRemoveButton
+                    label={`${t.removeGroup} ${index + 1}`}
+                    testId={`groupsort-remove-group-${group.slotId}`}
+                    onRemove={() => exits.remove(group.rowId, group.rowId)}
+                  />
+                </div>
               </div>
 
-              <div
-                data-testid={`groupsort-items-${group.slotId}`}
-                aria-label={t.itemsLabel}
-                className="flex flex-wrap items-center gap-1.5"
-              >
-                {group.items.map((item) => (
-                  <span
-                    key={item.id}
-                    data-testid={`groupsort-item-${item.id}`}
-                    className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-sm text-foreground"
-                  >
-                    {item.text}
-                    <button
-                      type="button"
-                      aria-label={`${t.removeItem} ${item.text}`}
-                      data-testid={`groupsort-remove-item-${item.id}`}
-                      onClick={() => onRemoveItem(group.slotId, item.id)}
-                      className="flex max-lg:min-h-11 max-lg:min-w-11 items-center justify-center text-muted-foreground hover:text-destructive"
+              <div className="template-row flex flex-wrap items-center gap-1.5 px-4 py-3">
+                <div data-testid={`groupsort-items-${group.slotId}`} className="contents">
+                  {group.items.map((item) => (
+                    <Chip
+                      key={item.id}
+                      testId={`groupsort-item-${item.id}`}
+                      removeLabel={`${t.removeItem} ${item.text}`}
+                      removeTestId={`groupsort-remove-item-${item.id}`}
+                      onRemove={() => onRemoveItem(group.slotId, item.id)}
                     >
-                      <TrashIcon aria-hidden="true" size={12} />
-                    </button>
-                  </span>
-                ))}
+                      {item.text}
+                    </Chip>
+                  ))}
+                </div>
+                <ChipInput
+                  placeholder={t.itemPlaceholder}
+                  ariaLabel={t.addItem(index + 1)}
+                  testId={`groupsort-item-input-${group.slotId}`}
+                  onCommit={(text) => onAddItems(group.slotId, text)}
+                />
               </div>
+            </TemplateGroup>
 
-              <Input
-                type="text"
-                fieldSize="sm"
-                aria-label={`${t.itemsLabel} ${index + 1}`}
-                placeholder={t.itemPlaceholder}
-                data-testid={`groupsort-item-input-${group.slotId}`}
-                value={itemDrafts[group.slotId] ?? ''}
-                onChange={(event) => setItemDrafts((prev) => ({ ...prev, [group.slotId]: event.target.value }))}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || event.ctrlKey || event.metaKey) return;
-                  event.preventDefault();
-                  commitItemDraft(group.slotId);
-                }}
-                className="w-full max-w-sm"
-              />
+            {group.items.length < MIN_GROUPSORT_ITEMS_PER_GROUP && (
+              <StatusNote tone="warn" testId={`groupsort-min-items-hint-${group.slotId}`}>
+                {t.minItemsHint(MIN_GROUPSORT_ITEMS_PER_GROUP)}
+              </StatusNote>
+            )}
+          </TemplateCollapse>
+        ))}
 
-              {group.items.length < MIN_GROUPSORT_ITEMS_PER_GROUP && (
-                <p data-testid={`groupsort-min-items-hint-${group.slotId}`} className="text-xs text-muted-foreground">
-                  {t.minItemsHint(MIN_GROUPSORT_ITEMS_PER_GROUP)}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+        {canAddMore ? (
+          <AddCard label={t.addGroup} testId={`groupsort-add-${blockId}`} onClick={onAdd} />
+        ) : (
+          <Footnote testId={`groupsort-max-groups-hint-${blockId}`}>{t.maxGroupsHint}</Footnote>
+        )}
+      </div>
 
-      {canAddMore ? (
-        <button
-          type="button"
-          data-testid={`groupsort-add-${blockId}`}
-          onClick={onAdd}
-          className="min-h-11 w-fit rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
-        >
-          {t.addGroup}
-        </button>
-      ) : (
-        <p data-testid={`groupsort-max-groups-hint-${blockId}`} className="text-xs text-muted-foreground">
-          {t.maxGroupsHint}
-        </p>
-      )}
+      {groups.length < 2 ? (
+        <StatusNote tone="warn" testId={`groupsort-min-groups-hint-${blockId}`}>
+          {t.minGroupsHint}
+        </StatusNote>
+      ) : ready ? (
+        <StatusNote tone="ready" testId={`groupsort-ready-${blockId}`}>
+          {t.ready(groups.length)}
+        </StatusNote>
+      ) : null}
     </div>
   );
 }

@@ -103,7 +103,7 @@ describe('QuizLivePreview — opens in the template\'s own game (owner review of
     expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
   });
 
-  it('opens a "groupsort" block\'s preview in Ordenar por grupos, not Básico, and its own games badge counts only "Básico"/"Ordenar por grupos"', () => {
+  it('opens a "groupsort" block\'s preview in Ordenar por grupos, not Básico', () => {
     const GROUPSORT_PAYLOAD: Payload = {
       pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }, { id: 'rice', text: 'rice' }] },
       slots: [
@@ -114,7 +114,32 @@ describe('QuizLivePreview — opens in the template\'s own game (owner review of
     render(<QuizLivePreview blockId="b1" lang="es" payload={GROUPSORT_PAYLOAD} template="groupsort" />);
     expect(screen.getByTestId('quiz-groupsort')).toBeTruthy();
     expect(screen.queryByTestId('quiz-slot-g1')).toBeNull();
-    expect(screen.getByTestId('quiz-preview-games-badge-b1').textContent).toContain('2 juegos');
+  });
+});
+
+describe('QuizLivePreview — ONE TEMPLATE, ONE GAME (owner spec, build item 1)', () => {
+  const MATCH_PAYLOAD: Payload = {
+    pools: {},
+    slots: [
+      { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+      { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+    ],
+  };
+
+  it('never shows the mode switcher for a templated block', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    expect(screen.queryByTestId('quiz-game-mode-switcher')).toBeNull();
+  });
+
+  it('removes the "Estas preguntas se usan en N juegos" badge entirely for a templated block', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    expect(screen.queryByTestId('quiz-preview-games-badge-b1')).toBeNull();
+  });
+
+  it('keeps the games badge for Básico (no template)', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} />);
+    expect(screen.getByTestId('quiz-preview-games-badge-b1')).toBeTruthy();
   });
 });
 

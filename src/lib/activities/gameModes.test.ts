@@ -15,6 +15,7 @@ import {
   deriveGroupSortGroups,
   groupSortPoolName,
   modesForBlock,
+  TEMPLATE_GAME_SWITCHING_ENABLED,
   type GameItem,
   type GameMode,
   type TrueFalseItem,
@@ -382,14 +383,26 @@ describe('modesForBlock', () => {
     'groupsort',
   ];
 
-  it('restricts a groupsort-templated block to quiz and groupsort only — every other mode built from `deriveGameItems` would misleadingly collapse a group to just its first item', () => {
-    expect(modesForBlock(allModes, 'groupsort')).toEqual(['quiz', 'groupsort']);
+  it('TEMPLATE_GAME_SWITCHING_ENABLED is off (owner spec, "no combinemos") — one template, one game', () => {
+    expect(TEMPLATE_GAME_SWITCHING_ENABLED).toBe(false);
   });
 
-  it('leaves every other template (and Básico, undefined) unrestricted', () => {
-    expect(modesForBlock(allModes, 'match')).toEqual(allModes);
-    expect(modesForBlock(allModes, 'reorder')).toEqual(allModes);
-    expect(modesForBlock(allModes, 'cloze')).toEqual(allModes);
+  it('ONE TEMPLATE, ONE GAME: collapses a templated block to its own single game when eligible', () => {
+    expect(modesForBlock(allModes, 'match')).toEqual(['match']);
+    expect(modesForBlock(allModes, 'groupsort')).toEqual(['groupsort']);
+    // 'reorder'/'cloze' are not themselves in `allModes` above ('reorder' is
+    // derived separately via `reorderEligible`, 'cloze' via `payload`-aware
+    // `clozeEligibleCount`) — exercised on their own lists.
+    expect(modesForBlock(['quiz', 'reorder'], 'reorder')).toEqual(['reorder']);
+    expect(modesForBlock(['quiz', 'cloze'], 'cloze')).toEqual(['cloze']);
+  });
+
+  it('falls back to quiz alone when the template\'s own game is not yet eligible for the content', () => {
+    const noMatch: GameMode[] = ['quiz', 'cards', 'speak'];
+    expect(modesForBlock(noMatch, 'match')).toEqual(['quiz']);
+  });
+
+  it('leaves Básico (undefined) completely unrestricted', () => {
     expect(modesForBlock(allModes, undefined)).toEqual(allModes);
   });
 });

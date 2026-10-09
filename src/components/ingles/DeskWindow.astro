@@ -207,21 +207,53 @@ const {
     data-desk-window-titlebar
     class={`flex flex-none flex-wrap items-center gap-4 border-b border-border desk:flex-nowrap desk:cursor-grab ${ROW_PADDING_X} py-3`}
   >
-    <div class="flex items-center gap-2">
+    {/* TRAFFIC LIGHTS HIT AREA (owner spec: "mejora el área donde se puede
+        hacer click en los botones para cerrar, minimizar y maximizar, se
+        debe ser muy preciso para poder hacer click"): each light's own
+        clickable element is now a comfortable >=28x28px (`h-7 w-7`) box —
+        the visible DOT stays the original ~14px (`h-3.5 w-3.5`), centered
+        inside it via `inline-flex items-center justify-center` — rather
+        than the dot itself being the only clickable area. `group` on this
+        wrapper is what reveals every light's own macOS-style glyph (×/−/the
+        expand arrows) together on hover OR keyboard focus of ANY one of the
+        three (`group-hover`/`group-focus-within`), same as a real macOS
+        title bar. `measureTitlebarDragRegions` (`deskWindowTitlebarRegions.ts`)
+        excludes every `button`/`a` it finds by its OWN rendered rect, so the
+        larger hit area is automatically kept out of the drag regions too —
+        no change needed there. */}
+    <div class="group flex items-center gap-2">
       <a
         href={closeHref}
         data-desk-window-close
         aria-label={closeLabel}
         title={closeLabel}
-        class="h-3.5 w-3.5 rounded-full bg-pop-red focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      ></a>
+        class="relative inline-flex h-7 w-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span aria-hidden="true" class="h-3.5 w-3.5 rounded-full bg-pop-red"></span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 10 10"
+          class="pointer-events-none absolute h-2 w-2 text-black/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" />
+        </svg>
+      </a>
       <a
         href={closeHref}
         data-desk-window-minimize
         aria-label={minimizeLabel}
         title={minimizeLabel}
-        class="h-3.5 w-3.5 rounded-full bg-pop-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      ></a>
+        class="relative inline-flex h-7 w-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span aria-hidden="true" class="h-3.5 w-3.5 rounded-full bg-pop-yellow"></span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 10 10"
+          class="pointer-events-none absolute h-2 w-2 text-black/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <path d="M2 5H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" />
+        </svg>
+      </a>
       {/* Green (full screen) light — hidden below `desk:` (owner report,
           2026-10-07): every window is ALREADY full screen on a phone (the
           whole `.ingles-window` itself, see this file's own header), so
@@ -234,8 +266,24 @@ const {
         aria-label={fullScreenLabel}
         title={fullScreenLabel}
         aria-pressed={forceFullScreen ? 'true' : 'false'}
-        class="hidden h-3.5 w-3.5 rounded-full border-0 bg-pop-green p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:inline-block"
-      ></button>
+        class="relative hidden h-7 w-7 items-center justify-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:inline-flex"
+      >
+        <span aria-hidden="true" class="h-3.5 w-3.5 rounded-full bg-pop-green"></span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 10 10"
+          class="pointer-events-none absolute h-2 w-2 text-black/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <path
+            d="M2 4.5V2H4.5M8 5.5V8H5.5"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            fill="none"
+          />
+        </svg>
+      </button>
     </div>
     {/* PART 6b polish bugfix (owner-reported e2e regression: the PRACTICE
         window's own title bar grew past one row on a narrow phone) —

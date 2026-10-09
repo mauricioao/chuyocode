@@ -58,7 +58,10 @@ import {
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
 import {
+  FLOATING_CHECK_BAR_CLASS,
+  FLOATING_CHECK_BAR_EDITOR_OFFSET,
   PROMPT_SCALE,
+  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
@@ -74,6 +77,8 @@ export interface QuizMatchingProps {
   items: readonly GameItem[];
   /** Stable per-block seed (the block id) — `shuffleWithSeed`'s own input for the tray and "Reiniciar". */
   seed: string;
+  /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
+  editorOffset?: boolean;
 }
 
 /** How long correct/wrong settle visually before the board switches to the final result (ms). */
@@ -266,7 +271,7 @@ function MatchSlot({
   );
 }
 
-export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
+export default function QuizMatching({ lang, items, seed, editorOffset = false }: QuizMatchingProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -490,6 +495,25 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
         </Button>
       </div>
 
+      {/* FLOATING COMPROBAR (build item 5): Comprobar/Reintentar now float at
+          the stage's own bottom-right, outside both the "playing"/"done"
+          branches below so it never moves or disappears when the phase
+          switches — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
+      <div
+        data-testid="matching-actions"
+        className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+      >
+        {phase === 'done' ? (
+          <Button type="button" data-testid="matching-retry" className="min-h-11" onClick={handleReset}>
+            {t.matchRetry}
+          </Button>
+        ) : (
+          <Button type="button" data-testid="matching-check" className="min-h-11" onClick={handleCheck} disabled={!playing}>
+            {t.matchCheck}
+          </Button>
+        )}
+      </div>
+
       {phase === 'done' ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
           <p
@@ -499,9 +523,6 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
           >
             {finalScore} {t.matchResultOf} {total} {t.matchResultCorrect}
           </p>
-          <Button type="button" data-testid="matching-retry" className="min-h-11" onClick={handleReset}>
-            {t.matchRetry}
-          </Button>
         </div>
       ) : (
         <DndContext
@@ -529,7 +550,13 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
                 is never pushed out of view (visual-polish-2 pass, owner bug:
                 "Comprobar" sat below the fold on a 5-pair board; up to 8
                 pairs is the authored ceiling). */}
-            <div className={cn('flex min-h-0 flex-col overflow-y-auto', manyPairs ? 'gap-4' : 'gap-6')}>
+            <div
+              className={cn(
+                'flex min-h-0 flex-col overflow-y-auto',
+                manyPairs ? 'gap-4' : 'gap-6',
+                STAGE_BOTTOM_RESERVE_CLASS,
+              )}
+            >
               <div
                 data-testid="matching-prompts"
                 className={cn('grid', manyPairs ? 'gap-2' : 'gap-3', manyPairs ? STAGE_TWO_COL_GRID : 'grid-cols-1')}
@@ -593,15 +620,6 @@ export default function QuizMatching({ lang, items, seed }: QuizMatchingProps) {
                   );
                 })}
               </ul>
-            </div>
-
-            {/* `flex-none`, a SIBLING of the scrollable div above (never a
-                child of it) — the one guarantee that matters most: this
-                button can never scroll out of view, on any size. */}
-            <div data-testid="matching-actions" className="flex flex-none justify-end">
-              <Button type="button" data-testid="matching-check" className="min-h-11" onClick={handleCheck} disabled={!playing}>
-                {t.matchCheck}
-              </Button>
             </div>
           </div>
 

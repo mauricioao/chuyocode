@@ -214,6 +214,27 @@ describe('GET /[lang]/crear/[id] — owner render', () => {
     expect(sectionMatch?.[1]).not.toContain('overflow-hidden');
   });
 
+  // The template editors' dotted, edge-to-edge work area hangs off this hook
+  // (`global.css`'s `[data-editor-body]:has([data-template-canvas])`).
+  it('marks the body section as the editor body, the hook the template canvas styles', async () => {
+    editableActivity.value = {
+      id: 'abc',
+      title: 'Mi actividad',
+      level: 'B1',
+      blocks: [],
+      revisionId: 'rev-1',
+      revisionStatus: 'draft',
+      status: 'draft',
+      reviewNote: null,
+    };
+    const res = await render('https://chuyocode.test/es/crear/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/<section class="[^"]*overflow-y-auto bg-muted[^"]*" data-editor-body/);
+  });
+
   it('shows the activity title in the window title bar', async () => {
     editableActivity.value = {
       id: 'abc',

@@ -157,3 +157,43 @@ export const STAGE_BOX_MIN_HEIGHT_SCALE = 'min-h-[clamp(5rem,4.5rem+min(4cqw,2.2
  * (one column) with no `STAGE_CONTAINER` ancestor.
  */
 export const STAGE_TWO_COL_GRID = 'grid-cols-1 @lg:grid-cols-2';
+
+/**
+ * FLOATING COMPROBAR (owner spec, build item 5: "nuestro botón de comprobar
+ * siempre flotante en la parte inferior derecha"). Every game's own
+ * check/retry control anchors here — bottom-right, fixed to the nearest
+ * positioned/transformed ancestor, which in this app is always the desk
+ * window chrome itself (`DeskWindow.astro`'s own header: a dragged window's
+ * CSS `translate` already makes it the containing block for every `fixed`
+ * descendant) — so in practice this reads as "fixed to the window", the
+ * SAME corner in every game and every context (the four templates, Básico,
+ * worksheets; practice, full-screen focus mode, preview, the editor's own
+ * live preview), never the in-flow bottom of a scrolling board any more.
+ *
+ * Offset left of the DOCKED side toolbar at `lg:` (`EditorSideToolbar`'s own
+ * default docked slot, right-center of the window) only where that toolbar
+ * can actually be present — the editor's own live preview
+ * (`QuizLivePreview`, via its `editorOffset` prop) — see
+ * {@link FLOATING_CHECK_BAR_EDITOR_OFFSET}. Every other context (practice,
+ * full-screen, standalone preview) has no such toolbar and uses the plain
+ * value below unchanged.
+ *
+ * Every caller that renders this inside a SCROLLABLE stage must also give
+ * that scroll container `STAGE_BOTTOM_RESERVE_CLASS` (below), so the
+ * floating bar can never cover the last visible row/tile.
+ *
+ * `floating-check-bar` styles nothing by itself: it is the hook
+ * `global.css` uses inside the template editor (`TemplateEditorKit.tsx`) —
+ * on desktop it moves the bar 16px inside the stage card's own
+ * bottom-right corner; on phones, where the authoring sheet sits above the
+ * stage, it sticks to the bottom of the game instead of floating over the
+ * sheet.
+ */
+export const FLOATING_CHECK_BAR_CLASS =
+  'floating-check-bar fixed bottom-4 right-4 z-40 flex flex-wrap items-center justify-end gap-2';
+
+/** Added to {@link FLOATING_CHECK_BAR_CLASS} only inside the activity editor — see that token's own header. */
+export const FLOATING_CHECK_BAR_EDITOR_OFFSET = 'lg:right-20';
+
+/** Bottom padding reserved on a scrollable stage so {@link FLOATING_CHECK_BAR_CLASS} can never cover its last visible row/tile. */
+export const STAGE_BOTTOM_RESERVE_CLASS = 'pb-20';

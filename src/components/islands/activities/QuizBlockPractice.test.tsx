@@ -443,13 +443,14 @@ describe('QuizBlockPractice — "Ordenar por grupos" (groupsort) restricts its o
     },
   };
 
-  it('offers only "Básico" and "Ordenar por grupos" — not cards/match/anagram/etc., which would collapse a group to just its first item', () => {
+  it('ONE TEMPLATE, ONE GAME (owner spec, build item 1): shows no switcher at all — not even quiz/groupsort', () => {
+    // No lifted `mode` here (this bare component defaults to 'quiz' — the
+    // caller, e.g. `initialGameMode`, is what actually opens a template in
+    // its own game on mount; see the `mode="groupsort"` test right below).
+    // The one thing THIS test asserts is build item 1's own change: the
+    // switcher itself is gone, unlike the old "offers quiz + groupsort" list.
     render(<QuizBlockPractice lang="es" block={GROUPSORT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
-    expect(screen.getByTestId('quiz-game-mode-quiz')).toBeTruthy();
-    expect(screen.getByTestId('quiz-game-mode-groupsort')).toBeTruthy();
-    expect(screen.queryByTestId('quiz-game-mode-cards')).toBeNull();
-    expect(screen.queryByTestId('quiz-game-mode-match')).toBeNull();
-    expect(screen.queryByTestId('quiz-game-mode-anagram')).toBeNull();
+    expect(screen.queryByTestId('quiz-game-mode-switcher')).toBeNull();
   });
 
   it('renders the groupsort board when mode="groupsort"', () => {

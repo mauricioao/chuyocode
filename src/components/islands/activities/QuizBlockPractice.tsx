@@ -80,6 +80,8 @@ export interface QuizBlockPracticeProps {
   mode?: GameMode;
   /** Report a new mode for this block. Defaults to a no-op, matching `mode`'s own default. */
   onModeChange?: (mode: GameMode) => void;
+  /** Threaded straight through to every self-checking game's own floating Comprobar (build item 5) — true only from `QuizLivePreview` (the activity editor). Defaults to `false`. */
+  editorOffset?: boolean;
 }
 
 /** Modes this component can actually render. */
@@ -107,6 +109,7 @@ export default function QuizBlockPractice({
   disabled,
   mode = 'quiz',
   onModeChange = () => {},
+  editorOffset = false,
 }: QuizBlockPracticeProps) {
   const t = UI_LABELS[lang].activities.player;
   const payload = block.payload;
@@ -155,9 +158,11 @@ export default function QuizBlockPractice({
           <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
         )}
         {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
-        {effectiveMode === 'match' && <QuizMatching lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'match' && (
+          <QuizMatching lang={lang} items={gameItems} seed={block.id} editorOffset={editorOffset} />
+        )}
         {effectiveMode === 'reorder' && (
-          <QuizReorder lang={lang} items={reorderEligible(gameItems)} seed={block.id} />
+          <QuizReorder lang={lang} items={reorderEligible(gameItems)} seed={block.id} editorOffset={editorOffset} />
         )}
         {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
@@ -169,8 +174,12 @@ export default function QuizBlockPractice({
           <QuizTrueFalse lang={lang} items={deriveTrueFalseItems(payload, seedFromString(block.id))} />
         )}
         {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
-        {effectiveMode === 'cloze' && <QuizCloze lang={lang} payload={payload} seed={block.id} />}
-        {effectiveMode === 'groupsort' && <QuizGroupSort lang={lang} payload={payload} seed={block.id} />}
+        {effectiveMode === 'cloze' && (
+          <QuizCloze lang={lang} payload={payload} seed={block.id} editorOffset={editorOffset} />
+        )}
+        {effectiveMode === 'groupsort' && (
+          <QuizGroupSort lang={lang} payload={payload} seed={block.id} editorOffset={editorOffset} />
+        )}
       </div>
     );
   }

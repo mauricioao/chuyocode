@@ -200,6 +200,49 @@ function deriveOpenerTitle(opener: Element): string | null {
  * bar already lives in the HOST document (no `postMessage` round trip
  * needed).
  */
+/**
+ * One fallback-bar light: a comfortable >=28x28px (`h-7 w-7`) clickable hit
+ * area — same TRAFFIC LIGHTS HIT AREA fix as `DeskWindow.astro`'s own genuine
+ * title bar (see that file's own header) — around a ~14px (`h-3.5 w-3.5`)
+ * visible dot, plus a macOS-style glyph (`glyphPath`, a tiny inline SVG path)
+ * that fades in on hover/focus of `lights` (the shared `.group` wrapper
+ * below, matching the genuine title bar's own group-hover/group-focus-within
+ * reveal). Returns the OUTER `<button>` — callers attach their click
+ * listeners and read `.className`/dataset exactly as before; only its
+ * internal content changed.
+ */
+function buildFallbackLight(doc: Document, bgClass: string, glyphPath: string): HTMLButtonElement {
+  const button = doc.createElement('button');
+  button.type = 'button';
+  button.className =
+    'relative inline-flex h-7 w-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+  const dot = doc.createElement('span');
+  dot.setAttribute('aria-hidden', 'true');
+  dot.className = `h-3.5 w-3.5 rounded-full ${bgClass}`;
+  button.appendChild(dot);
+
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = doc.createElementNS(svgNs, 'svg');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('viewBox', '0 0 10 10');
+  svg.setAttribute(
+    'class',
+    'pointer-events-none absolute h-2 w-2 text-black/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+  );
+  const path = doc.createElementNS(svgNs, 'path');
+  path.setAttribute('d', glyphPath);
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '1.5');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute('fill', 'none');
+  svg.appendChild(path);
+  button.appendChild(svg);
+
+  return button;
+}
+
 function buildFallbackBar(doc: Document): {
   bar: HTMLElement;
   title: HTMLElement;
@@ -213,28 +256,25 @@ function buildFallbackBar(doc: Document): {
   bar.className =
     'absolute inset-x-0 top-0 z-10 flex h-11 flex-none items-center gap-3 border-b border-border bg-card px-4 desk:cursor-grab';
 
+  // `group` reveals every light's own glyph together on hover OR keyboard
+  // focus of ANY one of the three (`group-hover`/`group-focus-within` on
+  // each light's own SVG above), same as the genuine title bar.
   const lights = doc.createElement('div');
-  lights.className = 'flex flex-none items-center gap-2';
+  lights.className = 'group flex flex-none items-center gap-2';
 
-  const closeButton = doc.createElement('button');
-  closeButton.type = 'button';
+  const closeButton = buildFallbackLight(doc, 'bg-pop-red', 'M2 2L8 8M8 2L2 8');
   closeButton.dataset.deskWindowFallbackClose = '';
-  closeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-red';
   lights.appendChild(closeButton);
 
-  const minimizeButton = doc.createElement('button');
-  minimizeButton.type = 'button';
+  const minimizeButton = buildFallbackLight(doc, 'bg-pop-yellow', 'M2 5H8');
   minimizeButton.dataset.deskWindowFallbackMinimize = '';
-  minimizeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-yellow';
   lights.appendChild(minimizeButton);
 
   // Owner report (verified in a real browser): "working red/yellow/green" —
   // the fallback bar is a full three-light title bar, same as a genuine
   // desk window's own, not just close/minimize.
-  const maximizeButton = doc.createElement('button');
-  maximizeButton.type = 'button';
+  const maximizeButton = buildFallbackLight(doc, 'bg-pop-green', 'M2 4.5V2H4.5M8 5.5V8H5.5');
   maximizeButton.dataset.deskWindowFallbackMaximize = '';
-  maximizeButton.className = 'h-3.5 w-3.5 rounded-full bg-pop-green';
   lights.appendChild(maximizeButton);
 
   bar.appendChild(lights);

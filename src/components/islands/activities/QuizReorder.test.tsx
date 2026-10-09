@@ -184,11 +184,19 @@ describe('QuizReorder', () => {
       expect(screen.getByTestId('reorder-controls').className).toContain('flex-none');
     });
 
-    it('keeps "Comprobar" out of the scrollable line/tray area, so it can never scroll out of view', () => {
+    // FLOATING COMPROBAR (build item 5): "Comprobar" is now a `fixed`
+    // bottom-right overlay — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS`
+    // header.
+    it('floats "Comprobar" fixed at the stage\'s own bottom-right, out of the scrollable line/tray area', () => {
       render(<QuizReorder lang="es" items={items} seed="block-1" />);
       const checkButton = screen.getByTestId('reorder-check');
-      expect(checkButton.closest('div[class*="flex-none"][class*="justify-end"]')).toBeTruthy();
+      expect(screen.getByTestId('reorder-actions').className).toContain('fixed');
       expect(screen.getByTestId('reorder-stage').contains(checkButton)).toBe(false);
+    });
+
+    it('offsets the floating Comprobar further left when rendered inside the editor', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" editorOffset />);
+      expect(screen.getByTestId('reorder-actions').className).toContain('lg:right-20');
     });
   });
 });

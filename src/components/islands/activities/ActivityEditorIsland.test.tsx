@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
-import type { WorksheetBlock } from '@/lib/activities/blocks';
+import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
 
 const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
@@ -302,12 +302,22 @@ describe('ActivityEditorIsland — the window IS the frame (PART 6b polish, "dou
     expect(card.contains(screen.getByTestId('block-list'))).toBe(true);
   });
 
-  it('the title/level/status-badge header row is gone from the card body — relocated into the title bar', () => {
+  it('the title/level header row is gone from the card body — relocated into the title bar', () => {
     renderEditor();
     const card = screen.getByTestId('activity-editor-card');
     expect(card.contains(screen.getByTestId('activity-title-input'))).toBe(false);
     expect(card.contains(screen.getByTestId('activity-level-select'))).toBe(false);
-    expect(card.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
+  });
+
+  // TITLE BAR ORDER (build item 3): the status badge moved OUT of the title
+  // bar into a floating pill anchored to this card's own work area — the
+  // opposite containment from title/level above.
+  it('floats the status badge inside the card\'s own work area (desktop) — not in the title bar', () => {
+    renderEditor();
+    const card = screen.getByTestId('activity-editor-card');
+    expect(card.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+    const titleGroup = document.getElementById('desk-window-title-group')!;
+    expect(titleGroup.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
   });
 
   it('reserves safe-area-aware bottom room for the mobile bottom action bar, cleared at lg', () => {
@@ -366,12 +376,12 @@ describe('ActivityEditorIsland — no side toolbar while the empty-blocks picker
 });
 
 describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b polish)', () => {
-  it('portals the real controlled title input, level select and status badge into the title group slot', () => {
+  it('portals the real controlled title input and level select into the title group slot (status now floats separately, build item 3)', () => {
     renderEditor({ initialTitle: 'Mi actividad', initialLevel: 'B1' });
     const group = document.getElementById('desk-window-title-group')!;
     expect(group.contains(screen.getByTestId('activity-title-input'))).toBe(true);
     expect(group.contains(screen.getByTestId('activity-level-select'))).toBe(true);
-    expect(group.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
+    expect(group.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
   });
 
   it('has "Nueva actividad" as its placeholder and an accessible label', () => {
@@ -721,6 +731,53 @@ describe('ActivityEditorIsland — preview toggle', () => {
     expect(screen.getByTestId('worksheet-player')).toBeTruthy();
     fireEvent.click(screen.getByTestId('preview-toggle'));
     expect(screen.queryByTestId('activity-preview')).toBeNull();
+  });
+
+  // IMMEDIATE PREVIEW (owner spec, build item 2): a quiz block (Básico or
+  // templated) used to be filtered out of this preview entirely — only
+  // visible once submitted/approved. It now renders straight from the
+  // draft, the same real `QuizLivePreview` the per-block editor already
+  // uses.
+  it('renders a Básico quiz block immediately from the draft, with no submit/approval needed', () => {
+    const quizBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [quizBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
+  });
+
+  it('renders a templated quiz block as its own big game, immediately from the draft', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+          { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+          { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+        ],
+      },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+  });
+
+  it('renders both a worksheet and a quiz block together, in authored order', () => {
+    const quizBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, quizBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.getByTestId('worksheet-player')).toBeTruthy();
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
   });
 });
 

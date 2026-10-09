@@ -214,7 +214,7 @@ describe('ActivityPracticeIsland — tab bar (practice player redesign)', () => 
   });
 });
 
-describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar)', () => {
+describe('ActivityPracticeIsland — footer (zoom/score) and the floating Comprobar/Reintentar', () => {
   it('shows no footer when there is nothing gradable at all', () => {
     const unavailableQuiz: QuizBlock = {
       id: 'q2',
@@ -231,24 +231,27 @@ describe('ActivityPracticeIsland — footer (Comprobar/Reintentar, no sticky bar
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
   });
 
-  it('is a plain static row, never a sticky/floating bar', () => {
+  // FLOATING COMPROBAR (owner spec, build item 5 — supersedes this
+  // describe block's earlier "no sticky bar" decision): the actual button
+  // now floats `fixed` at the bottom-right, same corner every game stage
+  // uses, in its own container separate from the footer row.
+  it('floats Comprobar/Reintentar fixed at the bottom-right, outside the plain footer row', () => {
     renderIsland([QUIZ]);
-    expect(screen.getByTestId('practice-footer').className).not.toContain('sticky');
     expect(screen.getByTestId('practice-footer').className).not.toContain('fixed');
+    const actions = screen.getByTestId('practice-actions');
+    expect(actions.className).toContain('fixed');
+    expect(actions.className).toContain('bottom-4');
+    expect(actions.className).toContain('right-4');
+    expect(actions.contains(screen.getByTestId('practice-check-button'))).toBe(true);
+    expect(screen.getByTestId('practice-footer').contains(screen.getByTestId('practice-check-button'))).toBe(false);
   });
 
-  it('puts the zoom controls inside the FOOTER, on the left of Comprobar/Reintentar, for a single worksheet block', () => {
+  it('keeps the zoom controls inside the plain footer row, for a single worksheet block', () => {
     renderIsland([WORKSHEET]);
     expect(screen.queryByTestId('practice-tab-row')).toBeNull();
     const footer = screen.getByTestId('practice-footer');
     const zoomSlot = screen.getByTestId('worksheet-zoom-slot');
-    const checkButton = screen.getByTestId('practice-check-button');
     expect(footer.contains(zoomSlot)).toBe(true);
-    expect(footer.contains(checkButton)).toBe(true);
-    // Document order: the zoom slot comes before Comprobar (left before right).
-    expect(
-      zoomSlot.compareDocumentPosition(checkButton) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
   });
 
   it('shows Comprobar before grading', () => {
@@ -533,10 +536,10 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     expect(screen.getByTestId('quiz-flashcards')).toBeTruthy();
   });
 
-  it('a block with the "match" template starts straight in Parejas mode, with no click needed', () => {
+  it('a block with the "match" template starts straight in Parejas mode, with no click needed, and shows no switcher (ONE TEMPLATE, ONE GAME, build item 1)', () => {
     renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
     expect(screen.getByTestId('quiz-matching')).toBeTruthy();
-    expect(screen.getByTestId('quiz-game-mode-match').getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByTestId('quiz-game-mode-switcher')).toBeNull();
   });
 
   // ONE "COMPROBAR" (build item 2): a match-only activity's own board
@@ -564,12 +567,10 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
     );
   });
 
-  it('keeps the combined footer when switched to Tarjetas instead (not a self-checking mode)', () => {
-    renderIsland([{ ...THREE_QUESTION_QUIZ, template: 'match' }]);
-    fireEvent.click(screen.getByTestId('quiz-game-mode-cards'));
-    expect(screen.getByTestId('practice-footer')).toBeTruthy();
-    expect(screen.getByTestId('practice-check-button')).toBeTruthy();
-  });
+  // Superseded by ONE TEMPLATE, ONE GAME (build item 1): a "match"-templated
+  // block no longer offers Tarjetas (or any other generic alternate) at
+  // all — there is no switcher to click any more, see the "starts straight
+  // in Parejas mode" test above.
 
   it('a "match"-templated block still falls back to Básico when not eligible for match (too few unique answers)', () => {
     const tooFew: QuizBlock = {
