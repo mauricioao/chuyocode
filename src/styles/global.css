@@ -70,22 +70,54 @@
   --color-game-orange: #c46c08;
   --color-game-pink: #e44487;
 
-  /* Decorative accent set (visual-theme pass: Inglés "white desk" palette) —
-   * full colour but not oversaturated, meant to sit against the black-and-
-   * white character drawings. FILLS AND ICONS ONLY, never body text (a
-   * caption/label reaches for `--color-accent-ink` or a semantic role
-   * instead) — several of these do not clear 4.5:1 on white. Prefixed
+  /* Decorative accent set (UI-kit refactor, owner's averaged reference
+   * sheets) — full colour but not oversaturated, meant to sit against the
+   * black-and-white character drawings. FILLS AND ICONS ONLY, never body
+   * text (a caption/label reaches for `--color-accent-ink` or a semantic
+   * role instead) — several of these do not clear 4.5:1 on white. Prefixed
    * `pop-` so the name collides with neither a Tailwind default-palette
    * family (`red`, `sky`, `yellow`, `green`, `violet` all already exist as
    * numbered steps) nor a font-size step. Flat entries like `--color-
    * accent`/the game set above: no dark/light-scope override, since this
-   * decorative set is only ever used under `theme="ingles"`. */
-  --color-pop-red: #e9573f;
-  --color-pop-sky: #4db3e6;
-  --color-pop-sky-deep: #2f97cf;
-  --color-pop-yellow: #f2c230;
-  --color-pop-green: #3daa6b;
+   * decorative set is only ever used under `theme="ingles"`.
+   *
+   * NAMES ARE KEPT, ROLES MOVED (UI-kit refactor): the owner's new sheet
+   * names five accents (sky/mint/yellow/red/slate) with no parallel token
+   * set — `pop-sky`/`pop-red`/`pop-yellow` take the new sky/red/yellow
+   * values directly, and `pop-green` takes over the MINT role (every
+   * existing `bg-pop-green` call site keeps working, now mint-tinted)
+   * rather than minting a `pop-mint` name nobody would reference yet.
+   * `pop-violet` is untouched — the new sheet has no violet, and it still
+   * backs the C-band level-dock fill (`DeskScene.astro`), so removing it
+   * would leave that band with no colour at all.
+   *
+   * DEEP VARIANTS (new): a light accent fails white-text contrast (mint
+   * 1.46:1, sky ~2.4:1) — `-deep` steps are the text-bearing-FILL
+   * counterparts, white-on-them verified >=4.5:1 below. `pop-sky-deep`
+   * already existed (recomputed to the new sky's own deep step); `-red-deep`/
+   * `-mint-deep` are new. `pop-slate` is new, no deep variant needed (the
+   * sheet uses it as a flat UI accent, never a text-bearing fill). */
+  --color-pop-red: #f65754;
+  --color-pop-red-deep: #d1302c; /* white text: 5.04:1 (owner's #d93a36 alone only cleared ~4.56:1 — darkened for margin, per spec's own "adjust slightly" allowance) */
+  --color-pop-sky: #61c2f5;
+  --color-pop-sky-deep: #0b76bc; /* white text: 4.85:1 */
+  --color-pop-yellow: #fed94c;
+  --color-pop-green: #8fe7c7; /* mint role; decorative fills/dots only — never a text-bearing fill, use -mint-deep for that */
+  --color-pop-mint-deep: #0b7a54; /* white text: 5.35:1 */
   --color-pop-violet: #7e6be0;
+  --color-pop-slate: #667384;
+
+  /* Desk-window traffic lights (UI-kit refactor) — DELIBERATELY separate
+   * from the `pop-*` accent set above: the owner's sheet gives the lights
+   * their own macOS-style red/yellow/green, distinct from `pop-red`/`pop-
+   * yellow`/`pop-green` (which now also carry the mint remap above). Consumed
+   * by ONE shared constant (`@lib/ui/deskWindowLights`) so the two render
+   * paths that draw a window's lights — the genuine title bar
+   * (`DeskWindow.astro`) and the host's chrome-less fallback bar
+   * (`deskWindowManager.ts`) — can never drift onto different colours. */
+  --color-traffic-red: #ff4d4d;
+  --color-traffic-yellow: #febb38;
+  --color-traffic-green: #1ec754;
 
   /* Display face for headings (decision #1). Raleway Variable loads via
    * fonts.css; the system-sans stack is the swap fallback. */
@@ -360,16 +392,22 @@
 [data-theme='ingles'] {
   color-scheme: light;
 
-  --background: #f3f4f6;
-  --foreground: #1c1c1e;
+  /* UI-kit refactor: canvas/surface/ink renamed per the owner's averaged
+   * reference sheets (canvas #EEEFF4, surface #FFFFFF, ink #111215) —
+   * `--background`/`--card`/`--foreground` are the existing semantic-role
+   * names those three play, so the rename is a value swap only, no call
+   * site changes. Re-run `ingles-theme-contrast.test.ts` after any edit
+   * here. */
+  --background: #eeeff4;
+  --foreground: #111215;
   --card: #ffffff;
-  --card-foreground: #1c1c1e;
+  --card-foreground: #111215;
   --popover: #ffffff;
-  --popover-foreground: #1c1c1e;
+  --popover-foreground: #111215;
   --primary: #facc15;
-  --primary-foreground: #1c1c1e;
+  --primary-foreground: #111215;
   --secondary: #e9ebee;
-  --secondary-foreground: #1c1c1e;
+  --secondary-foreground: #111215;
   --muted: #e9ebee;
   --muted-foreground: #5f636a;
   /* Collapsed onto --muted-foreground: Inglés never distinguished the
@@ -378,51 +416,89 @@
    * that token's own note in the dark `:root`/`.dark` blocks above. */
   --muted-foreground-subtle: #5f636a;
   --accent: #e9ebee;
-  --accent-foreground: #1c1c1e;
+  --accent-foreground: #111215;
   --destructive: #c8371f;
   --destructive-foreground: #ffffff;
-  --success: #1e7d47;
+  /* Darkened from #1e7d47 (UI-kit refactor): the new, slightly darker canvas
+   * (#eeeff4) dropped that value to 4.48:1 on background — just under 4.5:1
+   * — so this one token moved down one notch for margin (5.12:1 on
+   * background, 5.88:1 on card). */
+  --success: #1b7340;
   /* The quiz "correct answer" accent (border/wash-background) and its paired
    * text/icon tone both collapse onto the SAME green ink here — Inglés's one
    * "correct!" colour — unlike dark, where the fill is a richer green and the
    * paired text is a lighter mint (see the dark blocks' own note). These used
    * to be the raw `emerald-500`/`emerald-300` steps. */
-  --success-strong: #1e7d47;
-  --success-strong-foreground: #1e7d47;
+  --success-strong: #1b7340;
+  --success-strong-foreground: #1b7340;
   /* The hint-lightbulb-icon tone: a dark amber ink, legible on both white and
    * the grey desk (used to be the raw `amber-400` step — see the dark
    * blocks' own note for why it is still its own role rather than reusing
    * accent-ink). */
   --hint: #8a6400;
-  --border: #dcdfe3;
+  /* Separator (UI-kit refactor, owner sheet): #c6c6c8, a visibly firmer
+   * line than the previous #dcdfe3 — still a flat guard below, not a
+   * contrast-rated role (a hairline divider, never text), so this is a
+   * straight value swap. */
+  --border: #c6c6c8;
   /* Spec starting value (#8b9097) clears 3:1 on #ffffff (3.21:1) but falls
    * just short on the #f3f4f6 desk background (2.92:1); darkened to #888d94
    * (same blue-grey hue) so the one token clears 3:1 on BOTH surfaces
-   * (3.04:1 on background, 3.34:1 on card). */
-  --input: #888d94;
+   * (3.04:1 on background, 3.34:1 on card). UI-kit refactor: the new,
+   * slightly darker canvas (#eeeff4) dropped that to 2.91:1 on background —
+   * darkened one more notch, same hue, to #7e838a (3.33:1 on background,
+   * 3.82:1 on card). */
+  --input: #7e838a;
   --ring: #1f78b4;
 
-  --color-surface: #f3f4f6;
+  --color-surface: #eeeff4;
   --color-surface-soft: #ffffff;
   --color-surface-muted: #e9ebee;
-  --color-platinum: #1c1c1e;
+  --color-platinum: #111215;
   --color-accent-ink: #1b6fa8;
   --color-accent-ink-hover: #155a89;
   --color-field: #ffffff;
-  --color-field-border: #888d94;
+  --color-field-border: #7e838a;
   --color-field-border-hover: #5f636a;
   --color-field-ring: rgb(31 120 180 / 0.4);
   --color-glass-ring: rgb(28 28 30 / 0.1);
   --color-glass-bg: rgb(255 255 255 / 0.7);
   --color-canvas-dot: rgb(28 28 30 / 0.08);
 
-  /* Shadows on light: neutral and layered like iOS widget material — a
-   * hairline ring plus soft, wide, low-opacity drop shadows. Never black,
-   * never hard (owner spec). */
-  --shadow-elevation-1: 0 0 0 0.5px rgb(28 28 30 / 0.06), 0 1px 2px rgb(28 28 30 / 0.04);
-  --shadow-elevation-2: 0 0 0 0.5px rgb(28 28 30 / 0.07), 0 6px 16px -4px rgb(28 28 30 / 0.1);
-  --shadow-elevation-3: 0 0 0 0.5px rgb(28 28 30 / 0.08), 0 12px 28px -6px rgb(28 28 30 / 0.12);
-  --shadow-floating: 0 0 0 0.5px rgb(28 28 30 / 0.08), 0 10px 28px -6px rgb(28 28 30 / 0.12), 0 2px 8px -2px rgb(28 28 30 / 0.08);
+  /* Window chrome band (UI-kit refactor, new): the desk-window title bar's
+   * own strip colour, a shade darker than the white `--card` stage it sits
+   * above — never a semantic role (nothing else reads "chrome"), just the
+   * one surface `DeskWindow.astro`'s titlebar div paints. */
+  --color-chrome: #f0f0f4;
+
+  /* Shadows on light (UI-kit refactor, owner sheet): ink-tinted
+   * rgb(17 18 21), never pure black, never hard — one soft/wide layer per
+   * level now (L1/L2/L3), not a baked-in hairline ring. `.ingles-glass`
+   * (below) adds its OWN rim + ring on top of these; a flat card/button
+   * that is not glass just gets the plain shadow. */
+  --shadow-elevation-1: 0 2px 8px rgb(17 18 21 / 0.06);
+  --shadow-elevation-2: 0 6px 20px rgb(17 18 21 / 0.1);
+  --shadow-elevation-3: 0 12px 40px rgb(17 18 21 / 0.14);
+  --shadow-floating: 0 10px 28px -6px rgb(17 18 21 / 0.14), 0 2px 8px -2px rgb(17 18 21 / 0.08);
+
+  /* The ONE glass recipe's own rim/ring (UI-kit refactor) — shared by
+   * `.ingles-glass` and, inside this scope, `.glass-floating` (see both
+   * rules below), so the two materials cannot visually diverge again. */
+  --ingles-glass-rim: inset 0 0.5px 0 rgb(255 255 255 / 0.6);
+  --ingles-glass-ring: 0 0 0 0.5px rgb(17 18 21 / 0.06);
+  /* A plain (non-glass) inset hairline — the dock tile / icon-chip style of
+   * "etched" edge, reused wherever a flat surface wants the same thin inner
+   * line instead of a full glass ring (UI-kit refactor: "replace arbitrary
+   * one-off shadows with the tokens... keep the inset hairline as a token
+   * if needed" — `DeskScene.astro`'s own level-dock tile). */
+  --ingles-inset-hairline: inset 0 0 0 0.5px rgb(17 18 21 / 0.1);
+
+  /* Hue glow for a FILLED interactive element (buttons — see the Inglés
+   * button kit below), ~25% of the fill's own hue, never on an outline/
+   * ghost/secondary control. */
+  --shadow-glow-sky: 0 4px 14px rgb(11 118 188 / 0.25);
+  --shadow-glow-red: 0 4px 14px rgb(209 48 44 / 0.25);
+  --shadow-glow-mint: 0 4px 14px rgb(11 122 84 / 0.25);
 }
 
 /* The light Inglés scope cannot change what a STATIC Tailwind utility

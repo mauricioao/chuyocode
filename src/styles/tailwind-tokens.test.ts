@@ -76,17 +76,39 @@ describe('tailwind theme tokens (CSS-first @theme)', () => {
     },
   );
 
-  // Visual-theme pass (white desk): decorative accent set for fills/icons
-  // only, prefixed `pop-` so it collides with neither a Tailwind default-
-  // palette family name (`red`, `sky`, `yellow`, `green`, `violet`) nor a
-  // font-size step.
+  // Decorative accent set for fills/icons only, prefixed `pop-` so it
+  // collides with neither a Tailwind default-palette family name (`red`,
+  // `sky`, `yellow`, `green`, `violet`) nor a font-size step. UI-kit
+  // refactor: values updated to the owner's averaged reference sheets
+  // (names kept, `pop-green` now plays the mint role — see `global.css`'s
+  // own comment on that block); `pop-violet` is untouched (no violet in the
+  // new sheet, still backs the C-band level-dock fill).
   it('exposes the pop-* decorative accent set at the spec values', () => {
-    expect(token('--color-pop-red')?.toLowerCase()).toBe('#e9573f');
-    expect(token('--color-pop-sky')?.toLowerCase()).toBe('#4db3e6');
-    expect(token('--color-pop-sky-deep')?.toLowerCase()).toBe('#2f97cf');
-    expect(token('--color-pop-yellow')?.toLowerCase()).toBe('#f2c230');
-    expect(token('--color-pop-green')?.toLowerCase()).toBe('#3daa6b');
+    expect(token('--color-pop-red')?.toLowerCase()).toBe('#f65754');
+    expect(token('--color-pop-sky')?.toLowerCase()).toBe('#61c2f5');
+    expect(token('--color-pop-sky-deep')?.toLowerCase()).toBe('#0b76bc');
+    expect(token('--color-pop-yellow')?.toLowerCase()).toBe('#fed94c');
+    expect(token('--color-pop-green')?.toLowerCase()).toBe('#8fe7c7');
     expect(token('--color-pop-violet')?.toLowerCase()).toBe('#7e6be0');
+  });
+
+  // Deep variants (UI-kit refactor, new): text-bearing-FILL counterparts for
+  // the light accents above — white text verified >=4.5:1 on each (see
+  // `global.css`'s own comment for the exact ratios).
+  it('exposes the deep-variant tokens for text-bearing fills', () => {
+    expect(token('--color-pop-red-deep')?.toLowerCase()).toBe('#d1302c');
+    expect(token('--color-pop-sky-deep')?.toLowerCase()).toBe('#0b76bc');
+    expect(token('--color-pop-mint-deep')?.toLowerCase()).toBe('#0b7a54');
+  });
+
+  // Slate accent + the desk-window's own dedicated traffic-light colours
+  // (UI-kit refactor, new) — deliberately separate from the `pop-*` set so
+  // the lights never drift when a `pop-*` value changes again later.
+  it('exposes the slate accent and the traffic-light tokens', () => {
+    expect(token('--color-pop-slate')?.toLowerCase()).toBe('#667384');
+    expect(token('--color-traffic-red')?.toLowerCase()).toBe('#ff4d4d');
+    expect(token('--color-traffic-yellow')?.toLowerCase()).toBe('#febb38');
+    expect(token('--color-traffic-green')?.toLowerCase()).toBe('#1ec754');
   });
 });
 
