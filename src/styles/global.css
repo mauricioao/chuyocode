@@ -1768,3 +1768,17 @@ html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome
     opacity: 1 !important;
   }
 }
+
+/* "Más" tooltip vs. its own open menu (UI round 2, carried over from round
+ * 1): the trigger's hover/focus tooltip bubble ([id].astro's own
+ * `ICON_TOOLTIP_BUBBLE_CLASS`) and the disclosure menu panel right below it
+ * share almost the same corner/offset (`top-full`, `mt-2`), so while the
+ * menu is open AND the pointer/focus is still on the trigger, the tooltip
+ * painted on top of the menu's own first row. Scoped to this one trigger
+ * (`data-desk-window-more`, [id].astro) via `:has()` — never a sitewide
+ * tooltip change — since this is the only tooltip that doubles as a menu's
+ * own disclosure trigger. */
+[data-desk-window-more]:has(input:checked) [role='tooltip'] {
+  opacity: 0;
+  pointer-events: none;
+}
