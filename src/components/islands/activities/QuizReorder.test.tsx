@@ -111,7 +111,7 @@ describe('QuizReorder', () => {
       expect(line(0).getAllByRole('button').map((b) => b.textContent)).toEqual(['Cats', 'sleep']);
     });
 
-    it('reaching the end shows the final score and "Reintentar"', () => {
+    it('reaching the end shows the shared GameResult screen, perfect and with no "Repasar"', () => {
       render(<QuizReorder lang="es" items={items} seed="block-1" />);
       fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
       fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
@@ -123,11 +123,40 @@ describe('QuizReorder', () => {
       fireEvent.click(screen.getByTestId('reorder-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      expect(screen.getByTestId('reorder-result').textContent).toBe('2 de 2 correctas');
-      expect(screen.getByTestId('reorder-retry')).toBeTruthy();
+      expect(screen.getByTestId('game-result-score').textContent).toBe('2 de 2 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('perfect');
+      expect(screen.getByTestId('game-result-play-again')).toBeTruthy();
+      // Every sentence had to be solved to get here, so there is nothing to review.
+      expect(screen.queryByTestId('game-result-review')).toBeNull();
     });
 
-    it('"Reintentar" on the result screen starts a fresh round at sentence 1', () => {
+    it('scores by FIRST-TRY accuracy, not eventual completion: a sentence gotten wrong before being fixed does not count', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      // Sentence 0: wrong on the first check (words swapped), then fixed.
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1')); // "sleep" first — wrong order
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      // Fix it: remove both, re-add in the right order.
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      // Sentence 1: correct on the first try.
+      fireEvent.click(screen.getByTestId('reorder-tile-1-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-1-w1'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      // Both sentences were eventually solved (2/2), but only ONE was right
+      // on its first check — the honest score is "1 de 2 a la primera".
+      expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 2 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
+    });
+
+    it('"Jugar de nuevo" on the result screen starts a fresh round at sentence 1', () => {
       render(<QuizReorder lang="es" items={items} seed="block-1" />);
       fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
       fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
@@ -138,9 +167,9 @@ describe('QuizReorder', () => {
       fireEvent.click(screen.getByTestId('reorder-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      fireEvent.click(screen.getByTestId('reorder-retry'));
+      fireEvent.click(screen.getByTestId('game-result-play-again'));
 
-      expect(screen.queryByTestId('reorder-result')).toBeNull();
+      expect(screen.queryByTestId('game-result')).toBeNull();
       expect(screen.getByTestId('reorder-position').textContent).toBe('1 de 2');
     });
   });

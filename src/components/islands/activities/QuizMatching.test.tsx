@@ -114,7 +114,8 @@ describe('QuizMatching', () => {
       fireEvent.click(screen.getByTestId('matching-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      expect(screen.getByTestId('matching-result').textContent).toBe('3 de 3 correctas');
+      expect(screen.getByTestId('game-result-score').textContent).toBe('3 de 3 correctas');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('perfect');
     });
 
     it('bounces a wrong placement back to the tray and scores it as incorrect', () => {
@@ -128,7 +129,8 @@ describe('QuizMatching', () => {
 
       act(() => vi.advanceTimersByTime(1000));
 
-      expect(screen.getByTestId('matching-result').textContent).toBe('1 de 3 correctas');
+      expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 3 correctas');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
     });
 
     it('counts an unplaced prompt as incorrect', () => {
@@ -139,22 +141,101 @@ describe('QuizMatching', () => {
       fireEvent.click(screen.getByTestId('matching-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      expect(screen.getByTestId('matching-result').textContent).toBe('1 de 3 correctas');
+      expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 3 correctas');
     });
 
-    it('offers "Reintentar" on the result screen, which starts a fresh round', () => {
+    it('offers "Jugar de nuevo" on the result screen, which starts a fresh round', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's1');
       fireEvent.click(screen.getByTestId('matching-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      fireEvent.click(screen.getByTestId('matching-retry'));
+      fireEvent.click(screen.getByTestId('game-result-play-again'));
 
-      expect(screen.queryByTestId('matching-result')).toBeNull();
+      expect(screen.queryByTestId('game-result')).toBeNull();
       expect(screen.getByTestId('quiz-matching')).toBeTruthy();
       for (const item of items) {
         expect(screen.getByTestId(`matching-tile-${item.id}`)).toBeTruthy();
       }
+    });
+
+    it('offers "Repasar las que fallé" only when there were mistakes, keeping the correct pair placed and sending only the wrong one back', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      place('s1', 's2'); // wrong: s1's answer in s2's slot
+      place('s3', 's3'); // correct
+      fireEvent.click(screen.getByTestId('matching-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByTestId('game-result-review')).toBeTruthy();
+      fireEvent.click(screen.getByTestId('game-result-review'));
+
+      expect(screen.queryByTestId('game-result')).toBeNull();
+      // s3's slot kept its correct tile, locked (no longer offered in the tray).
+      expect(screen.getByTestId('matching-slot-s3').getAttribute('data-filled')).toBe('true');
+      expect(tray().queryByTestId('matching-tile-s3')).toBeNull();
+      // s1's and s2's slots are empty again, their tiles back in the tray.
+      expect(screen.getByTestId('matching-slot-s2').getAttribute('data-filled')).toBeFalsy();
+      expect(tray().getByTestId('matching-tile-s1')).toBeTruthy();
+
+      // s1's slot was also left empty (never placed) by the first check —
+      // placing both tiles correctly and checking again reaches a perfect
+      // score.
+      place('s1', 's1');
+      place('s2', 's2');
+      fireEvent.click(screen.getByTestId('matching-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByTestId('game-result-score').textContent).toBe('3 de 3 correctas');
+      expect(screen.queryByTestId('game-result-review')).toBeNull();
+    });
+
+    it('omits "Repasar las que fallé" on a perfect round', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      place('s1', 's1');
+      place('s2', 's2');
+      place('s3', 's3');
+      fireEvent.click(screen.getByTestId('matching-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.queryByTestId('game-result-review')).toBeNull();
+    });
+
+    it('hides "Reiniciar" (it would duplicate "Jugar de nuevo") while the result screen is shown, and brings it back once play resumes', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      place('s1', 's1');
+      place('s2', 's2');
+      place('s3', 's3');
+      expect(screen.getByTestId('matching-reset')).toBeTruthy();
+
+      fireEvent.click(screen.getByTestId('matching-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.queryByTestId('matching-reset')).toBeNull();
+      // The sound toggle stays.
+      expect(screen.getByTestId('game-sound-toggle')).toBeTruthy();
+
+      fireEvent.click(screen.getByTestId('game-result-play-again'));
+      expect(screen.getByTestId('matching-reset')).toBeTruthy();
+    });
+
+    it('threads `nextHref`/`guest` down to the shared GameResult screen', () => {
+      render(
+        <QuizMatching
+          lang="es"
+          items={items}
+          seed="block-1"
+          nextHref="/es/ingles/actividades?nivel=a1"
+          guest={{ signUpHref: '/es/auth/entrar?mode=signup&next=%2Fes%2Fx' }}
+        />,
+      );
+      place('s1', 's1');
+      place('s2', 's2');
+      place('s3', 's3');
+      fireEvent.click(screen.getByTestId('matching-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByTestId('game-result-next').getAttribute('href')).toBe('/es/ingles/actividades?nivel=a1');
+      expect(screen.getByTestId('game-result-guest-banner')).toBeTruthy();
     });
 
     it('disables Comprobar and the board while settling', () => {

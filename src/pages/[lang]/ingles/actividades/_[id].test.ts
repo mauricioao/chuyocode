@@ -535,20 +535,25 @@ describe('GET /[lang]/ingles/actividades/[id] — "Compartir" (D8)', () => {
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)', () => {
-  it('renders the friendly guest banner with a sign-up link back to this page', async () => {
+  // The guest invite moved off the top of the page and into the result
+  // screen (UX-INGLES.md 6.3, build item N1) — `GameResult.tsx` renders it
+  // client-side only once a round ends, so the server-rendered page never
+  // has a top banner for anyone, guest or signed-in. `GameResult.test.tsx`
+  // covers the invite's own copy/link; this only checks the wiring that
+  // gets it there — the island receives a `guest` prop (serialized into its
+  // own `astro-island` props) only for an anonymous visitor.
+  it('renders no top guest banner for an anonymous visitor, and wires the sign-up href to the practice island instead', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: null },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="guest-banner"');
-    expect(html).toContain('Estás jugando como invitado');
-    expect(html).toContain('data-testid="guest-sign-up-link"');
-    expect(html).toContain('href="/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc"');
+    expect(html).not.toContain('data-testid="guest-banner"');
+    expect(html).toContain('signUpHref&quot;:[0,&quot;/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc&quot;');
   });
 
-  it('shows no guest banner for a signed-in visitor', async () => {
+  it('renders no top guest banner for a signed-in visitor either, and wires no guest prop', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -556,18 +561,7 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     });
     const html = await res.text();
     expect(html).not.toContain('data-testid="guest-banner"');
-  });
-
-  it('renders the English guest banner copy and sign-up label', async () => {
-    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
-    const res = await render('https://chuyocode.test/en/ingles/actividades/abc', {
-      params: { lang: 'en', id: 'abc' },
-      locals: { user: null },
-    });
-    const html = await res.text();
-    // The apostrophe is HTML-entity-escaped by the renderer (`&#39;`).
-    expect(html).toContain('playing as a guest');
-    expect(html).toContain('>Sign up<');
+    expect(html).not.toContain('signUpHref');
   });
 
   it('never mounts the per-user "Ya lo viste" view badge for an anonymous visitor', async () => {

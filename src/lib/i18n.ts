@@ -836,9 +836,8 @@ export const UI_LABELS = {
         // the attempt, "Reiniciar" starts a fresh shuffled round.
         matchReset: 'Reiniciar',
         matchCheck: 'Comprobar',
-        matchRetry: 'Reintentar',
-        // "4 de 5 correctas" — composed around the learner's score.
-        matchResultOf: 'de',
+        // "correctas" — this template's own word for `gameResult`'s shared
+        // "N de N ___" score line (build item N1, `GameResult.tsx`).
         matchResultCorrect: 'correctas',
         matchRemovePrefix: 'Quitar ficha',
         matchEmptySlot: 'Casilla vacía',
@@ -850,10 +849,6 @@ export const UI_LABELS = {
         // line below, in order, to rebuild it. "Comprobar" grades the current
         // sentence, advancing on a correct attempt.
         reorderCheck: 'Comprobar',
-        reorderRetry: 'Reintentar',
-        // "3 de 4 correctas" — composed around the learner's score.
-        reorderResultOf: 'de',
-        reorderResultCorrect: 'correctas',
         reorderSoundMute: 'Silenciar sonido',
         reorderSoundUnmute: 'Activar sonido',
         reorderPrev: 'Oración anterior',
@@ -927,10 +922,6 @@ export const UI_LABELS = {
         // at a time, its blanks shown inline, a shared word bank below.
         modeCloze: 'Completar la frase',
         clozeCheck: 'Comprobar',
-        clozeRetry: 'Reintentar',
-        // "3 de 4 correctas" — composed around the learner's score.
-        clozeResultOf: 'de',
-        clozeResultCorrect: 'correctas',
         clozeSoundMute: 'Silenciar sonido',
         clozeSoundUnmute: 'Activar sonido',
         clozePrev: 'Oración anterior',
@@ -945,15 +936,39 @@ export const UI_LABELS = {
         // into. "Comprobar" grades the whole board at once.
         modeGroupSort: 'Ordenar por grupos',
         groupSortCheck: 'Comprobar',
-        groupSortRetry: 'Reintentar',
-        // "9 de 9 bien ubicados" — composed around the learner's score.
-        groupSortResultOf: 'de',
-        groupSortResultCorrect: 'bien ubicados',
         groupSortSoundMute: 'Silenciar sonido',
         groupSortSoundUnmute: 'Activar sonido',
         groupSortTrayLabel: 'Elementos disponibles',
         groupSortEmptyGroup: 'Grupo vacío',
         groupSortRemovePrefix: 'Quitar elemento',
+      },
+      // GameResult (build item N1, UX audit F2): the ONE shared end-of-round
+      // screen for the four self-checking drag templates — see
+      // `GameResult.tsx`'s own header for the outcome rule and why only the
+      // practice page ever supplies `nextActivity`/the guest invite.
+      gameResult: {
+        perfect: '¡Perfecto!',
+        good: '¡Muy bien!',
+        retry: '¡Casi! Sigue practicando',
+        // "4 de 5 ___" — shared "de". Matching supplies its own last word
+        // (`matchResultCorrect`, "correctas"); Reorder/Cloze/GroupSort use
+        // `firstTryWord` below instead (they can only ever end at 100% of
+        // eventual completions — see each one's own `handleCheck`).
+        of: 'de',
+        defaultWord: 'correctas',
+        // "7 de 9 a la primera" — Reorder/Cloze/GroupSort only (owner review,
+        // build item N1 follow-up): those three can only ever reach "done"
+        // at 100% of eventual completions (a sentence/item keeps re-checking
+        // until it is right), so the HONEST score is first-try accuracy, not
+        // "correctas"/"bien ubicados" (which would always read "N de N").
+        // Matching keeps its own `matchResultCorrect` — it still grades a
+        // single attempt.
+        firstTryWord: 'a la primera',
+        nextActivity: 'Otra actividad',
+        playAgain: 'Jugar de nuevo',
+        reviewWrong: 'Repasar las que fallé',
+        guestInvite: '¿Te gustó? Crea tu cuenta gratis para guardar tus favoritas y crear las tuyas.',
+        guestSignUp: 'Crear cuenta',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -1017,14 +1032,6 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Descargar QR',
         shareNative: 'Más opciones',
-        // Guest play: friendly line shown only to an anonymous visitor,
-        // right below the header row — invites them to sign up without
-        // blocking anything they can already do (play, check answers,
-        // share, present). Neutral Latin-American tuteo, same register
-        // `src/lib/neutralSpanish.ts` enforces site-wide (owner decision,
-        // 2026-10-04) — "Estás"/"Crea"/"tus" address the reader directly.
-        guestBanner: 'Estás jugando como invitado. Crea tu cuenta gratis para dar corazones y crear tus propias actividades.',
-        guestSignUp: 'Crear cuenta',
         // "Desktop" redesign PART 6a (owner spec 2026-10-06): the practice
         // page opens as a WINDOW over the desk — see `DeskWindow.astro`'s own
         // header. The three "traffic light" buttons' accessible names; close
@@ -2282,8 +2289,6 @@ export const UI_LABELS = {
         cardsDone: 'Done! You reviewed every card.',
         matchReset: 'Reset',
         matchCheck: 'Check',
-        matchRetry: 'Try again',
-        matchResultOf: 'of',
         matchResultCorrect: 'correct',
         matchRemovePrefix: 'Remove tile',
         matchEmptySlot: 'Empty slot',
@@ -2291,9 +2296,6 @@ export const UI_LABELS = {
         matchSoundMute: 'Mute sound',
         matchSoundUnmute: 'Unmute sound',
         reorderCheck: 'Check',
-        reorderRetry: 'Try again',
-        reorderResultOf: 'of',
-        reorderResultCorrect: 'correct',
         reorderSoundMute: 'Mute sound',
         reorderSoundUnmute: 'Unmute sound',
         reorderPrev: 'Previous sentence',
@@ -2352,9 +2354,6 @@ export const UI_LABELS = {
         openboxClosedSuffix: 'closed',
         modeCloze: 'Complete the sentence',
         clozeCheck: 'Check',
-        clozeRetry: 'Retry',
-        clozeResultOf: 'of',
-        clozeResultCorrect: 'correct',
         clozeSoundMute: 'Mute sound',
         clozeSoundUnmute: 'Unmute sound',
         clozePrev: 'Previous sentence',
@@ -2368,15 +2367,24 @@ export const UI_LABELS = {
         // "Check" grades the whole board at once.
         modeGroupSort: 'Group sort',
         groupSortCheck: 'Check',
-        groupSortRetry: 'Retry',
-        // "9 of 9 correctly sorted" — composed around the learner's score.
-        groupSortResultOf: 'of',
-        groupSortResultCorrect: 'correctly sorted',
         groupSortSoundMute: 'Mute sound',
         groupSortSoundUnmute: 'Unmute sound',
         groupSortTrayLabel: 'Available items',
         groupSortEmptyGroup: 'Empty group',
         groupSortRemovePrefix: 'Remove item',
+      },
+      gameResult: {
+        perfect: 'Perfect!',
+        good: 'Well done!',
+        retry: 'Almost! Keep practicing',
+        of: 'of',
+        defaultWord: 'correct',
+        firstTryWord: 'on the first try',
+        nextActivity: 'Another activity',
+        playAgain: 'Play again',
+        reviewWrong: 'Review what I missed',
+        guestInvite: 'Liked it? Create a free account to save your favorites and make your own.',
+        guestSignUp: 'Create account',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -2417,8 +2425,6 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Download QR',
         shareNative: 'More options',
-        guestBanner: "You're playing as a guest. Create a free account to give hearts and make your own activities.",
-        guestSignUp: 'Sign up',
         windowClose: 'Close',
         windowMinimize: 'Minimize',
         windowFullScreen: 'Full screen',

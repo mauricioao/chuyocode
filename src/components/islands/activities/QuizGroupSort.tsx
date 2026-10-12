@@ -61,6 +61,7 @@ import {
   STAGE_BOX_MIN_HEIGHT_SCALE,
   TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
+import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 
 export interface QuizGroupSortProps {
   lang: Lang;
@@ -70,6 +71,10 @@ export interface QuizGroupSortProps {
   seed: string;
   /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
   editorOffset?: boolean;
+  /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
+  nextHref?: string;
+  /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
+  guest?: GameResultGuestInvite;
 }
 
 /** How long a fully-correct board stays visible before showing the final result (ms) — same value every sibling game uses for its own settle. */
@@ -269,7 +274,7 @@ function GroupBox({
   );
 }
 
-export default function QuizGroupSort({ lang, payload, seed, editorOffset = false }: QuizGroupSortProps) {
+export default function QuizGroupSort({ lang, payload, seed, editorOffset = false, nextHref, guest }: QuizGroupSortProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -296,6 +301,13 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
   const [wrongIds, setWrongIds] = useState<ReadonlySet<string>>(new Set());
   const [phase, setPhase] = useState<Phase>('playing');
   const [settling, setSettling] = useState(false);
+  // Honest score (owner review, build item N1 follow-up): this template only
+  // ever reaches "done" once every item is EVENTUALLY locked correct, so
+  // `lockedIds.size` alone always reads "N de N". `attempted` +
+  // `firstTryCorrect` instead track, per item, whether its VERY FIRST
+  // "Comprobar" was already right — see `handleCheck`'s own comment.
+  const [attempted, setAttempted] = useState<ReadonlySet<string>>(new Set());
+  const [firstTryCorrect, setFirstTryCorrect] = useState<ReadonlySet<string>>(new Set());
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -309,6 +321,8 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
     setWrongIds(new Set());
     setPhase('playing');
     setSettling(false);
+    setAttempted(new Set());
+    setFirstTryCorrect(new Set());
   }
 
   // A different block (or its own content changed) — start fresh.
@@ -432,19 +446,36 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
     if (locked || !isComplete) return;
     const newlyCorrect = new Set<string>();
     const newlyWrong = new Set<string>();
+    // First-try accuracy (owner review, build item N1 follow-up): an item
+    // reaches here at most once per "Comprobar" it is part of, and a locked
+    // (already-correct) item is skipped entirely above — so `!attempted.has`
+    // is exactly "this is this item's first-ever grading", decided once and
+    // never revisited even if a later check fixes it.
+    const newlyAttempted = new Set<string>();
+    const newlyFirstTryCorrect = new Set<string>();
 
     for (const [itemId, groupId] of Object.entries(placements)) {
       // Already confirmed correct by an earlier "Comprobar" — locked in
       // place, never re-graded.
       if (lockedIds.has(itemId)) continue;
-      if (correctGroupOf.get(itemId) === groupId) newlyCorrect.add(itemId);
-      else newlyWrong.add(itemId);
+      const firstAttempt = !attempted.has(itemId);
+      if (firstAttempt) newlyAttempted.add(itemId);
+      if (correctGroupOf.get(itemId) === groupId) {
+        newlyCorrect.add(itemId);
+        if (firstAttempt) newlyFirstTryCorrect.add(itemId);
+      } else {
+        newlyWrong.add(itemId);
+      }
     }
 
     const nextLocked = new Set(lockedIds);
     newlyCorrect.forEach((id) => nextLocked.add(id));
     setLockedIds(nextLocked);
     setWrongIds(newlyWrong);
+    if (newlyAttempted.size > 0) setAttempted((prev) => new Set([...prev, ...newlyAttempted]));
+    if (newlyFirstTryCorrect.size > 0) {
+      setFirstTryCorrect((prev) => new Set([...prev, ...newlyFirstTryCorrect]));
+    }
 
     if (newlyCorrect.size > 0) sound.play('correct');
     if (newlyWrong.size > 0) sound.play('wrong');
@@ -465,6 +496,13 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
   }
 
   if (phase === 'done') {
+    // Never with eventual mistakes (build item N1): "Comprobar" only ever
+    // reaches "done" once every item is locked correct (see `handleCheck`'s
+    // own header) — `GameResult`'s own "Repasar las que fallé" has nothing
+    // to apply to, and is omitted (no `onReviewWrong`). The SCORE shown is
+    // first-try accuracy instead (`firstTryCorrect.size`, owner review,
+    // build item N1 follow-up) — `total`/`total` would otherwise hide every
+    // wrong check along the way.
     return (
       <div data-testid="quiz-groupsort" className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="flex flex-none items-center justify-end gap-1">
@@ -475,22 +513,15 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
             labelUnmute={t.groupSortSoundUnmute}
           />
         </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
-          <p data-testid="groupsort-result" aria-live="polite" className="text-xl font-medium text-foreground sm:text-2xl">
-            {total} {t.groupSortResultOf} {total} {t.groupSortResultCorrect}
-          </p>
-        </div>
-
-        {/* FLOATING COMPROBAR (build item 5) — see `scale.ts`'s own
-            `FLOATING_CHECK_BAR_CLASS` header. */}
-        <div
-          data-testid="groupsort-actions"
-          className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
-        >
-          <Button type="button" data-testid="groupsort-retry" className="min-h-11" onClick={handleRetry}>
-            {t.groupSortRetry}
-          </Button>
-        </div>
+        <GameResult
+          lang={lang}
+          correct={firstTryCorrect.size}
+          total={total}
+          resultWord={UI_LABELS[lang].activities.gameResult.firstTryWord}
+          onPlayAgain={handleRetry}
+          nextHref={nextHref}
+          guest={guest}
+        />
       </div>
     );
   }

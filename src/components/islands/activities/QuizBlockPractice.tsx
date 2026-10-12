@@ -66,6 +66,7 @@ import QuizTrueFalse from './QuizTrueFalse';
 import QuizOpenBox from './QuizOpenBox';
 import QuizCloze from './QuizCloze';
 import QuizGroupSort from './QuizGroupSort';
+import type { GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -82,6 +83,10 @@ export interface QuizBlockPracticeProps {
   onModeChange?: (mode: GameMode) => void;
   /** Threaded straight through to every self-checking game's own floating Comprobar (build item 5) — true only from `QuizLivePreview` (the activity editor). Defaults to `false`. */
   editorOffset?: boolean;
+  /** Threaded straight through to the four drag templates' own `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
+  nextHref?: string;
+  /** Threaded straight through to the four drag templates' own `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
+  guest?: GameResultGuestInvite;
 }
 
 /** Modes this component can actually render. */
@@ -110,6 +115,8 @@ export default function QuizBlockPractice({
   mode = 'quiz',
   onModeChange = () => {},
   editorOffset = false,
+  nextHref,
+  guest,
 }: QuizBlockPracticeProps) {
   const t = UI_LABELS[lang].activities.player;
   const payload = block.payload;
@@ -159,10 +166,24 @@ export default function QuizBlockPractice({
         )}
         {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'match' && (
-          <QuizMatching lang={lang} items={gameItems} seed={block.id} editorOffset={editorOffset} />
+          <QuizMatching
+            lang={lang}
+            items={gameItems}
+            seed={block.id}
+            editorOffset={editorOffset}
+            nextHref={nextHref}
+            guest={guest}
+          />
         )}
         {effectiveMode === 'reorder' && (
-          <QuizReorder lang={lang} items={reorderEligible(gameItems)} seed={block.id} editorOffset={editorOffset} />
+          <QuizReorder
+            lang={lang}
+            items={reorderEligible(gameItems)}
+            seed={block.id}
+            editorOffset={editorOffset}
+            nextHref={nextHref}
+            guest={guest}
+          />
         )}
         {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
         {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
@@ -175,10 +196,24 @@ export default function QuizBlockPractice({
         )}
         {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
         {effectiveMode === 'cloze' && (
-          <QuizCloze lang={lang} payload={payload} seed={block.id} editorOffset={editorOffset} />
+          <QuizCloze
+            lang={lang}
+            payload={payload}
+            seed={block.id}
+            editorOffset={editorOffset}
+            nextHref={nextHref}
+            guest={guest}
+          />
         )}
         {effectiveMode === 'groupsort' && (
-          <QuizGroupSort lang={lang} payload={payload} seed={block.id} editorOffset={editorOffset} />
+          <QuizGroupSort
+            lang={lang}
+            payload={payload}
+            seed={block.id}
+            editorOffset={editorOffset}
+            nextHref={nextHref}
+            guest={guest}
+          />
         )}
       </div>
     );

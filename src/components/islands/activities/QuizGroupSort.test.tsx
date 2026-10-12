@@ -111,8 +111,11 @@ describe('QuizGroupSort', () => {
       fireEvent.click(screen.getByTestId('groupsort-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      expect(screen.getByTestId('groupsort-result').textContent).toBe('4 de 4 bien ubicados');
-      expect(screen.getByTestId('groupsort-retry')).toBeTruthy();
+      expect(screen.getByTestId('game-result-score').textContent).toBe('4 de 4 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('perfect');
+      expect(screen.getByTestId('game-result-play-again')).toBeTruthy();
+      // "Comprobar" only ever reaches "done" at 100%, so there is nothing to review.
+      expect(screen.queryByTestId('game-result-review')).toBeNull();
     });
 
     it('a wrong placement shakes and stays in place, fixable, without finishing the round', () => {
@@ -123,7 +126,7 @@ describe('QuizGroupSort', () => {
       place('rice', 'g2');
       fireEvent.click(screen.getByTestId('groupsort-check'));
 
-      expect(screen.queryByTestId('groupsort-result')).toBeNull();
+      expect(screen.queryByTestId('game-result')).toBeNull();
       expect(screen.getByTestId('groupsort-tile-dog').className).toContain('border-destructive');
       // Correct ones from the same check already settled green.
       expect(screen.getByTestId('groupsort-tile-cat').className).toContain('border-success-strong');
@@ -134,7 +137,31 @@ describe('QuizGroupSort', () => {
       fireEvent.click(screen.getByTestId('groupsort-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      expect(screen.getByTestId('groupsort-result').textContent).toBe('4 de 4 bien ubicados');
+      // Every item is eventually correct (4/4), but "dog" was wrong on its
+      // FIRST check — the honest score only counts the other three.
+      expect(screen.getByTestId('game-result-score').textContent).toBe('3 de 4 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('good');
+    });
+
+    it('scores by FIRST-TRY accuracy even when every item is eventually locked correct', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      place('dog', 'g2'); // wrong on purpose
+      place('cat', 'g2'); // wrong on purpose
+      place('bread', 'g2');
+      place('rice', 'g2');
+      fireEvent.click(screen.getByTestId('groupsort-check'));
+
+      fireEvent.click(group('g2').getByTestId('groupsort-tile-dog'));
+      place('dog', 'g1');
+      fireEvent.click(group('g2').getByTestId('groupsort-tile-cat'));
+      place('cat', 'g1');
+      fireEvent.click(screen.getByTestId('groupsort-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      // Only "bread" and "rice" were right on their first check (2/4) —
+      // below 70%, so the headline is the "retry" one, never "¡Perfecto!".
+      expect(screen.getByTestId('game-result-score').textContent).toBe('2 de 4 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
     });
 
     it('a locked (correct) item can no longer be picked up', () => {
@@ -148,7 +175,7 @@ describe('QuizGroupSort', () => {
       expect((screen.getByTestId('groupsort-tile-dog') as HTMLButtonElement).disabled).toBe(true);
     });
 
-    it('"Reintentar" on the result screen starts a fresh, empty board', () => {
+    it('"Jugar de nuevo" on the result screen starts a fresh, empty board', () => {
       render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
       place('dog', 'g1');
       place('cat', 'g1');
@@ -157,9 +184,9 @@ describe('QuizGroupSort', () => {
       fireEvent.click(screen.getByTestId('groupsort-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      fireEvent.click(screen.getByTestId('groupsort-retry'));
+      fireEvent.click(screen.getByTestId('game-result-play-again'));
 
-      expect(screen.queryByTestId('groupsort-result')).toBeNull();
+      expect(screen.queryByTestId('game-result')).toBeNull();
       for (const id of ['dog', 'cat', 'bread', 'rice']) {
         expect(tray().getByTestId(`groupsort-tile-${id}`)).toBeTruthy();
       }

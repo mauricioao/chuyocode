@@ -70,6 +70,7 @@ import {
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
 } from '@/components/islands/mechanics/scale';
+import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 
 export interface QuizReorderProps {
   lang: Lang;
@@ -79,6 +80,10 @@ export interface QuizReorderProps {
   seed: string;
   /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
   editorOffset?: boolean;
+  /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
+  nextHref?: string;
+  /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
+  guest?: GameResultGuestInvite;
 }
 
 /** How long a settled correct sentence stays visible before advancing (ms) — same value `QuizMatching` uses for its own settle. */
@@ -186,7 +191,7 @@ function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, d
   );
 }
 
-export default function QuizReorder({ lang, items, seed, editorOffset = false }: QuizReorderProps) {
+export default function QuizReorder({ lang, items, seed, editorOffset = false, nextHref, guest }: QuizReorderProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -206,6 +211,13 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
   const [activeId, setActiveId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('playing');
   const [settling, setSettling] = useState<ReadonlySet<number>>(new Set());
+  // Honest score (owner review, build item N1 follow-up): this template only
+  // ever reaches "done" once every sentence is EVENTUALLY solved, so `solved`
+  // alone always reads "N de N". `attempted` + `firstTryCorrect` instead
+  // track, per sentence, whether its VERY FIRST "Comprobar" was already
+  // right — see `handleCheck`'s own comment.
+  const [attempted, setAttempted] = useState<ReadonlySet<number>>(new Set());
+  const [firstTryCorrect, setFirstTryCorrect] = useState<ReadonlySet<number>>(new Set());
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -230,6 +242,8 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
     setActiveId(null);
     setPhase('playing');
     setSettling(new Set());
+    setAttempted(new Set());
+    setFirstTryCorrect(new Set());
   }
 
   // A different block (or its own item list changed) — start fresh.
@@ -241,6 +255,8 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
     setActiveId(null);
     setPhase('playing');
     setSettling(new Set());
+    setAttempted(new Set());
+    setFirstTryCorrect(new Set());
     // Deliberately keyed on `items` alone, same reasoning `QuizMatching`
     // documents at its own reset effect: a different block always brings a
     // different sentence list too.
@@ -342,12 +358,21 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
       currentPlacements.flatMap((tileId, i) => (tileId === correctSequence[i] ? [] : [tileId])),
     );
 
+    // First-try accuracy (owner review, build item N1 follow-up): whether
+    // THIS is the sentence's very first "Comprobar" ever, decided before
+    // `attempted` is updated below — a later retry can still fix the
+    // sentence (and `solved` will reflect that), but it can never turn into
+    // a first-try correct one after the fact.
+    const firstAttempt = !attempted.has(index);
+    if (firstAttempt) setAttempted((prev) => new Set(prev).add(index));
+
     if (wrongIds.size > 0) {
       setWrongFlash((prev) => ({ ...prev, [index]: wrongIds }));
       sound.play('wrong');
       return;
     }
 
+    if (firstAttempt) setFirstTryCorrect((prev) => new Set(prev).add(index));
     sound.play('correct');
     setSolved((prev) => new Set(prev).add(index));
     setSettling((prev) => new Set(prev).add(index));
@@ -371,6 +396,13 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
   const { isOver, setNodeRef: setLineRef } = useDroppable({ id: LINE_DROP_ID, disabled: locked });
 
   if (phase === 'done') {
+    // Never with eventual mistakes (build item N1): a sentence only ever
+    // advances once fully correct, so `solved.size` always equals `total`
+    // here — `GameResult`'s own "Repasar las que fallé" has nothing to
+    // apply to, and is omitted (no `onReviewWrong`). The SCORE shown is
+    // first-try accuracy instead (`firstTryCorrect.size`, owner review,
+    // build item N1 follow-up) — "N de N" would otherwise hide every wrong
+    // check along the way.
     return (
       <div data-testid="quiz-reorder" className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="flex flex-none items-center justify-end gap-1">
@@ -381,26 +413,15 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
             labelUnmute={t.reorderSoundUnmute}
           />
         </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
-          <p
-            data-testid="reorder-result"
-            aria-live="polite"
-            className="text-xl font-medium text-foreground sm:text-2xl"
-          >
-            {solved.size} {t.reorderResultOf} {total} {t.reorderResultCorrect}
-          </p>
-        </div>
-
-        {/* FLOATING COMPROBAR (build item 5) — see `scale.ts`'s own
-            `FLOATING_CHECK_BAR_CLASS` header. */}
-        <div
-          data-testid="reorder-actions"
-          className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
-        >
-          <Button type="button" data-testid="reorder-retry" className="min-h-11" onClick={resetAll}>
-            {t.reorderRetry}
-          </Button>
-        </div>
+        <GameResult
+          lang={lang}
+          correct={firstTryCorrect.size}
+          total={total}
+          resultWord={UI_LABELS[lang].activities.gameResult.firstTryWord}
+          onPlayAgain={resetAll}
+          nextHref={nextHref}
+          guest={guest}
+        />
       </div>
     );
   }

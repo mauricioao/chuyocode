@@ -141,6 +141,7 @@ let guestSignInHref = '';
 let guestSignUpHref = '';
 let closeHref = `/${lang}/`;
 let levelChip = '';
+let nextActivityHref = '';
 let canPresent = false;
 let shareLink = '';
 let shareQr: string | null = null;
@@ -207,6 +208,17 @@ if (!hostMode) {
 
   /** "A2 · Básico", or the "no level" copy — the title bar's own chip always renders, never conditionally omitted (same two states the old meta line already had). */
   levelChip = activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel;
+
+  /**
+   * "Otra actividad" (build item N1, UX-INGLES.md 6.3): the community
+   * catalog, filtered by this activity's own level when it has one — the
+   * catalog itself is guest-playable (6.2), so this works for an anonymous
+   * visitor too. Only this page ever supplies it; the editor preview keeps
+   * just "Jugar de nuevo" (`GameResult.tsx`'s own header).
+   */
+  nextActivityHref = activity.level
+    ? `/${lang}/ingles/actividades?nivel=${activity.level}`
+    : `/${lang}/ingles/actividades`;
 
   /**
    * "Presentar": shown whenever the activity has anything presentation mode
@@ -521,22 +533,18 @@ function heartsLabel(count: number): string {
       </p>
     )}
 
-    {/* Guest banner (owner-approved copy): a small, friendly line inviting
-        an anonymous visitor to create a free account — shown only when
-        there is no `user`, right below the header row. */}
-    {!user && (
-      <p
-        data-testid="guest-banner"
-        class={`flex-none border-b border-border bg-muted/30 text-xs text-muted-foreground ${ROW_PADDING_X} py-2`}
-      >
-        {t.guestBanner}{' '}
-        <a href={guestSignUpHref} data-testid="guest-sign-up-link" class="font-medium text-accent-ink hover:underline">
-          {t.guestSignUp}
-        </a>
-      </p>
-    )}
+    {/* Guest banner moved off the top of the page and into the result
+        screen (UX-INGLES.md 6.3, build item N1: "El aviso de invitado sale
+        de la parte de arriba y pasa a la pantalla final") — `guest` below
+        threads it down to `GameResult`. */}
 
-    <ActivityPracticeIsland client:load lang={lang} blocks={activity.blocks} />
+    <ActivityPracticeIsland
+      client:load
+      lang={lang}
+      blocks={activity.blocks}
+      nextHref={nextActivityHref}
+      guest={isGuest ? { signUpHref: guestSignUpHref } : undefined}
+    />
   </DeskWindow>
   )}
 </BaseLayout>
