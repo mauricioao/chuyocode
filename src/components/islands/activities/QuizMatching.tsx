@@ -57,6 +57,7 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -64,9 +65,6 @@ import {
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
 
 /** Past this many pairs, the prompt list switches to {@link STAGE_TWO_COL_GRID} on a wide stage — see that token's own header. */
@@ -140,14 +138,8 @@ function shuffledTray(items: readonly GameItem[], seed: string, round: number): 
   );
 }
 
-/** Shared visual base for every tile, tray or placed — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
-const TILE_BASE = cn(
-  'inline-flex w-full items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-);
+/** Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe (`mechanics/chip.ts`) — a tray tile sits at rest; `className` below layers {@link CHIP_PLACED} on once it is placed or tap-picked. */
+const TILE_BASE = cn(CHIP_STAGE, 'w-full');
 
 interface MatchTileProps {
   id: string;
@@ -187,7 +179,7 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
         TILE_BASE,
         'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && 'ring-2 ring-ring',
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
         gameTileTransitionClassName(reducedMotion),
         className,
       )}
@@ -236,9 +228,9 @@ function MatchSlot({
       data-over={isOver ? 'true' : undefined}
       data-filled={tile ? 'true' : undefined}
       className={cn(
-        'inline-flex min-w-32 flex-1 rounded-md border-2 transition-colors sm:min-w-48',
+        'inline-flex min-w-32 flex-1 sm:min-w-48',
         TILE_MIN_HEIGHT_SCALE,
-        tile ? 'items-stretch border-solid border-transparent' : 'items-center justify-center border-dashed border-input',
+        tile ? cn('items-stretch', BLANK_FILLED) : cn('items-center justify-center', BLANK_EMPTY),
         isOver && !locked && 'border-ring bg-accent/30',
         !tile && canPlacePicked && 'border-ring bg-accent/20',
         locked && 'border-success-strong bg-success-strong/10',
@@ -255,7 +247,7 @@ function MatchSlot({
           reducedMotion={reducedMotion}
           onClick={onRemove}
           ariaLabel={`${removeLabel} ${tile.answer}`}
-          className={cn('border-0', locked && 'text-success-strong-foreground')}
+          className={cn('border-0', CHIP_PLACED, locked && 'text-success-strong-foreground')}
         />
       ) : (
         <button
@@ -570,10 +562,16 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
                   <div
                     key={item.id}
                     data-testid={`matching-prompt-${item.id}`}
+                    // Soft surface, never a hard-bordered card (UI-kit
+                    // refactor, owner spec: "muy cuadrada") — `bg-card` +
+                    // `shadow-elevation-1` at radius 20, same material the
+                    // desk's own flat (non-glass) surfaces use. Correct
+                    // settles as a tint + ring, never a border, so the shape
+                    // itself never grows a visible edge.
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-3 sm:gap-4',
+                      'flex flex-wrap items-center gap-3 rounded-[20px] bg-card shadow-elevation-1 p-3 sm:gap-4',
                       manyPairs ? 'sm:p-3' : 'sm:p-4',
-                      locked && 'border-success-strong bg-success-strong/10',
+                      locked && 'ring-2 ring-success-strong bg-success-strong/10',
                     )}
                   >
                     <p className={cn('min-w-0 flex-1 font-medium text-foreground', PROMPT_SCALE)}>{item.prompt}</p>

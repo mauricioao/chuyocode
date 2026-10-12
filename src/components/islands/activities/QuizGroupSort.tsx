@@ -53,14 +53,12 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
   TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
 
@@ -118,14 +116,8 @@ const GROUPSORT_COPY: Record<'es' | 'en', GroupSortCopy> = {
   },
 };
 
-/** Shared visual base for every item tile — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
-const TILE_BASE = cn(
-  'inline-flex items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-);
+/** Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe (`mechanics/chip.ts`). */
+const TILE_BASE = CHIP_STAGE;
 
 interface ItemTileProps {
   id: string;
@@ -134,6 +126,8 @@ interface ItemTileProps {
   draggable: boolean;
   dragging: boolean;
   picked: boolean;
+  /** Already sitting in a group box — white/raised, same "placed" look every sibling mechanic's tile gets once it lands (`mechanics/chip.ts`'s {@link CHIP_PLACED}). A tray tile stays the grey glass rest state. */
+  placed: boolean;
   locked: boolean;
   wrong: boolean;
   reducedMotion: boolean;
@@ -141,7 +135,7 @@ interface ItemTileProps {
   ariaLabel?: string;
 }
 
-function ItemTile({ id, label, disabled, draggable, dragging, picked, locked, wrong, reducedMotion, onClick, ariaLabel }: ItemTileProps) {
+function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, locked, wrong, reducedMotion, onClick, ariaLabel }: ItemTileProps) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled: disabled || !draggable });
 
   return (
@@ -158,9 +152,10 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, locked, wr
       aria-label={ariaLabel}
       className={cn(
         TILE_BASE,
+        placed && CHIP_PLACED,
         draggable && 'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && 'ring-2 ring-ring',
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
         locked && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
         wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
         gameTileTransitionClassName(reducedMotion),
@@ -209,8 +204,13 @@ function GroupBox({
     <div
       ref={setNodeRef}
       data-testid={`groupsort-board-group-${groupId}`}
+      // Dashed capsule outline while empty ({@link BLANK_EMPTY}); border
+      // goes solid-transparent once the group holds items ({@link
+      // BLANK_FILLED}) — same shared blank the other mechanics' drop
+      // targets use, never a hard-bordered box.
       className={cn(
-        'flex flex-1 flex-col gap-2 rounded-lg border-2 border-dashed border-input bg-surface-soft p-3 transition-colors sm:min-w-48',
+        'flex flex-1 flex-col gap-2 p-3 sm:min-w-48',
+        items.length === 0 ? BLANK_EMPTY : BLANK_FILLED,
         STAGE_BOX_MIN_HEIGHT_SCALE,
         isOver && !disabled && 'border-ring bg-accent/20',
         canPlacePicked && !disabled && 'border-ring',
@@ -243,6 +243,7 @@ function GroupBox({
               draggable={!locked}
               dragging={activeId === item.id}
               picked={false}
+              placed
               locked={locked}
               wrong={wrong}
               reducedMotion={reducedMotion}
@@ -597,6 +598,7 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
                     draggable
                     dragging={activeId === id}
                     picked={pickedId === id}
+                    placed={false}
                     locked={false}
                     wrong={false}
                     reducedMotion={reducedMotion}

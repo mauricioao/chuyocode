@@ -64,7 +64,8 @@ import {
   type PoolPlacement,
 } from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
-import { CONTROL_SCALE, PROMPT_MEASURE, PROMPT_SCALE } from './scale';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_INLINE, CHIP_PLACED } from './chip';
+import { PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 import type { MechanicRendererProps } from './types';
 
 /**
@@ -152,18 +153,15 @@ function tileLabel(item: PoolItem): string {
  * and a tile does not visibly shrink the moment it is pulled out of the box.
  */
 /**
- * UI-kit refactor: a "grey glass capsule" at rest (the owner's `#d1d2d6`
- * family, softly translucent, `shadow-elevation-1`) — `TILE_PLACED` below
- * overrides this to a white, more-raised look once the tile is actually
- * placed or tap-picked, matching the approved spec's "placed/selected =
- * white raised".
+ * UI-kit refactor: a "grey glass capsule" at rest, white-and-raised once
+ * placed or tap-picked — the shared recipe every sibling drag mechanic now
+ * uses too (`mechanics/chip.ts`), so this file no longer hand-rolls its own
+ * copy of a string five other renderers would otherwise drift away from.
  */
-const TILE_BASE =
-  'inline-flex min-h-14 items-center justify-center gap-2 rounded-full border border-transparent bg-[#d1d2d6]/80 backdrop-blur-sm shadow-elevation-1 px-4 py-3 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ' +
-  CONTROL_SCALE;
+const TILE_BASE = CHIP_INLINE;
 
 /** White, raised — the placed tile inside a box, or a tap-picked pool tile. */
-const TILE_PLACED = 'bg-card shadow-elevation-2';
+const TILE_PLACED = CHIP_PLACED;
 
 /**
  * The box: the SHAPE of the target, identical in both states.
@@ -180,18 +178,18 @@ const TILE_PLACED = 'bg-card shadow-elevation-2';
  * exactly the same footprint whether it is empty or full — a tile that lands
  * must not make the sentence around it reflow.
  */
-const BOX_BASE =
-  'mx-1 inline-flex min-h-16 min-w-28 rounded-full border-2 align-middle transition-colors sm:min-w-40';
+const BOX_BASE = 'mx-1 inline-flex min-h-16 min-w-28 align-middle sm:min-w-40';
 
 /**
- * Empty: a dashed CAPSULE outline (UI-kit refactor: "blanks = dashed
- * capsule outline, grey ~50%") around a centred hint.
+ * Empty: a dashed CAPSULE outline (`mechanics/chip.ts`'s shared
+ * {@link BLANK_EMPTY} — "blanks = dashed capsule outline, grey ~50%")
+ * around a centred hint.
  *
  * THE DASHES ARE THE AFFORDANCE. They are the only thing that says "something
  * goes here", which is why the filled state below is the one that gives them up
  * — never this one.
  */
-const BOX_EMPTY = 'items-center justify-center border-dashed border-foreground/50';
+const BOX_EMPTY = cn('items-center justify-center', BLANK_EMPTY);
 
 /**
  * Filled: the tile IS the box.
@@ -207,7 +205,7 @@ const BOX_EMPTY = 'items-center justify-center border-dashed border-foreground/5
  * it lands. What remains visible is the tile's OWN solid border, which is what
  * distinguishes this state from the dashed empty one.
  */
-const BOX_FILLED = 'items-stretch border-solid border-transparent';
+const BOX_FILLED = cn('items-stretch', BLANK_FILLED);
 
 /**
  * The flow for one {@link PoolPlacement}: how the wrapper stacks, and which of

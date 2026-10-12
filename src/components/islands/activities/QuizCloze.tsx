@@ -64,6 +64,7 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -122,14 +123,8 @@ const CLOZE_COPY: Record<'es' | 'en', ClozeCopy> = {
   },
 };
 
-/** Shared visual base for one word tile — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
-const TILE_BASE = cn(
-  'inline-flex items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-);
+/** Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe (`mechanics/chip.ts`). */
+const TILE_BASE = CHIP_STAGE;
 
 interface ClozeTileButtonProps {
   id: string;
@@ -159,7 +154,7 @@ function ClozeTileButton({ id, label, disabled, dragging, picked, reducedMotion,
         TILE_BASE,
         'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && 'ring-2 ring-ring',
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
         gameTileTransitionClassName(reducedMotion),
       )}
     >
@@ -203,13 +198,17 @@ function ClozeBlankBox({
       onClick={onClick}
       disabled={disabled}
       aria-label={tile ? removeLabel : emptyLabel}
+      // Dashed capsule outline while empty ({@link BLANK_EMPTY}); filled,
+      // it becomes the same white-raised chip every placed tile gets
+      // ({@link BLANK_FILLED} + {@link CHIP_PLACED}) — the shared blank,
+      // never a hand-rolled bordered box.
       className={cn(
-        'mx-1 inline-flex min-w-24 items-center justify-center rounded-md border align-middle font-medium',
+        'mx-1 inline-flex min-w-24 items-center justify-center align-middle font-medium',
         TILE_MIN_HEIGHT_SCALE,
         TILE_PADDING_X_SCALE,
         TILE_PADDING_Y_SCALE,
         TILE_TEXT_SCALE,
-        tile ? 'border-input bg-card text-foreground' : 'border-dashed border-input bg-surface-soft text-muted-foreground',
+        tile ? cn(BLANK_FILLED, CHIP_PLACED, 'text-foreground') : cn(BLANK_EMPTY, 'text-muted-foreground'),
         isOver && !disabled && 'border-ring bg-accent/20',
         !tile && canPlacePicked && !disabled && 'border-ring bg-accent/10',
         wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
@@ -540,10 +539,14 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false }:
             // `QuizLivePreview` — two different elements must never share one
             // test id.
             data-testid={`cloze-game-sentence-${sentence.seq}`}
+            // Soft surface, never a hard-bordered card — same material
+            // `QuizMatching`'s own prompt row uses (UI-kit refactor, owner
+            // spec: "muy cuadrada"). Correct settles as a tint + ring, not
+            // a border.
             className={cn(
-              'rounded-lg border-2 border-dashed border-input bg-surface-soft p-4 leading-loose font-medium text-foreground',
+              'rounded-[20px] bg-card shadow-elevation-1 p-4 leading-loose font-medium text-foreground',
               TILE_TEXT_SCALE,
-              isSolved && 'border-success-strong bg-success-strong/10',
+              isSolved && 'ring-2 ring-success-strong bg-success-strong/10',
             )}
           >
             {sentence.segments.map((seg, i) => {
