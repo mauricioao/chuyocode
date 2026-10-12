@@ -65,6 +65,7 @@ import {
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
 import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -173,6 +174,8 @@ interface ClozeBlankBoxProps {
   tile: PoolItem | null;
   disabled: boolean;
   wrong: boolean;
+  /** UX audit F10 ("Al comprobar"): drives the ✓/✕ badge on top of this blank's own `wrong`/sentence-settled colour — never a new colour, see `CheckMark.tsx`'s own header. `undefined` for an ungraded (unfilled, or not-yet-checked) blank. */
+  grade?: GradeState;
   canPlacePicked: boolean;
   reducedMotion: boolean;
   onClick: () => void;
@@ -185,6 +188,7 @@ function ClozeBlankBox({
   tile,
   disabled,
   wrong,
+  grade,
   canPlacePicked,
   reducedMotion,
   onClick,
@@ -208,7 +212,7 @@ function ClozeBlankBox({
       // ({@link BLANK_FILLED} + {@link CHIP_PLACED}) — the shared blank,
       // never a hand-rolled bordered box.
       className={cn(
-        'mx-1 inline-flex min-w-24 items-center justify-center align-middle font-medium',
+        'relative mx-1 inline-flex min-w-24 items-center justify-center align-middle font-medium',
         TILE_MIN_HEIGHT_SCALE,
         TILE_PADDING_X_SCALE,
         TILE_PADDING_Y_SCALE,
@@ -221,6 +225,7 @@ function ClozeBlankBox({
       )}
     >
       {tile ? (tile.text ?? tile.id) : '___'}
+      {grade && <GradeMark state={grade} />}
     </button>
   );
 }
@@ -255,6 +260,9 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
   // right — see `handleCheck`'s own comment.
   const [attempted, setAttempted] = useState<ReadonlySet<number>>(new Set());
   const [firstTryCorrect, setFirstTryCorrect] = useState<ReadonlySet<number>>(new Set());
+  // UX audit F10: the one polite live-region sentence after "Comprobar" —
+  // see `CheckMark.tsx`'s own `gradeSummary` header for the exact wording.
+  const [announcement, setAnnouncement] = useState('');
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -271,6 +279,7 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
     setSettling(new Set());
     setAttempted(new Set());
     setFirstTryCorrect(new Set());
+    setAnnouncement('');
   }
 
   // A different block (or its own content changed) — start fresh.
@@ -285,6 +294,7 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
     setSettling(new Set());
     setAttempted(new Set());
     setFirstTryCorrect(new Set());
+    setAnnouncement('');
     // Deliberately keyed on `payload` alone, same reasoning `QuizMatching`/
     // `QuizReorder` document at their own reset effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -296,6 +306,13 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
     },
     [],
   );
+
+  // Every sentence change (manual ‹ ›, or the auto-advance after a correct
+  // settle below) clears the previous sentence's own announcement, same
+  // reasoning `QuizReorder.tsx`'s own identical effect documents.
+  useEffect(() => {
+    setAnnouncement('');
+  }, [index]);
 
   const trayOrder = useMemo(
     () => shuffleWithSeed(poolItems.map((item) => item.id), seedFromString(`${seed}:cloze:${round}`)),
@@ -422,11 +439,13 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
 
     if (wrong.size > 0) {
       setWrongSlots(wrong);
+      setAnnouncement(gradeSummary(lang, sentence.blankSlotIds.length - wrong.size, wrong.size) ?? '');
       sound.play('wrong');
       return;
     }
 
     if (firstAttempt) setFirstTryCorrect((prev) => new Set(prev).add(index));
+    setAnnouncement(gradeSummary(lang, sentence.blankSlotIds.length, 0) ?? '');
     sound.play('correct');
     setSolved((prev) => new Set(prev).add(index));
     setSettling((prev) => new Set(prev).add(index));
@@ -482,6 +501,9 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
 
   return (
     <div data-testid="quiz-cloze" className="flex min-h-0 flex-1 flex-col gap-4">
+      <div aria-live="polite" role="status" className="sr-only" data-testid="cloze-live-region">
+        {announcement}
+      </div>
       {/* `flex-none`: a tidy chrome row that NEVER shrinks — same owner bug
           `QuizMatching.tsx`'s own control row documents. */}
       <div data-testid="cloze-controls" className="flex flex-none items-center justify-between gap-2">
@@ -579,18 +601,25 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
               const slotId = seg.slotId as string;
               const tileId = response[slotId]?.[0];
               const tile = tileId ? (itemById.get(tileId) ?? null) : null;
+              const wrong = wrongSlots.has(slotId);
+              // UX audit F10: every blank in a FULLY solved sentence reads
+              // as correct (that is what `isSolved` means); a wrong check
+              // only flags the specific blanks `wrongSlots` names — same
+              // reasoning `QuizReorder.tsx`'s own identical comment gives.
+              const grade: GradeState | undefined = isSolved ? 'correct' : wrong ? 'wrong' : undefined;
               return (
                 <ClozeBlankBox
                   key={slotId}
                   slotId={slotId}
                   tile={tile}
                   disabled={locked}
-                  wrong={wrongSlots.has(slotId)}
+                  wrong={wrong}
+                  grade={grade}
                   canPlacePicked={pickedId !== null}
                   reducedMotion={reducedMotion}
                   onClick={() => handleBlankClick(slotId)}
                   emptyLabel={t.clozeBlankEmpty}
-                  removeLabel={`${t.clozeRemovePrefix} ${tile?.text ?? ''}`.trim()}
+                  removeLabel={`${t.clozeRemovePrefix} ${tile?.text ?? ''}`.trim() + gradeAriaSuffix(lang, grade)}
                 />
               );
             })}

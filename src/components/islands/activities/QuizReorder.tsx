@@ -64,6 +64,7 @@ import {
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
 import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -154,6 +155,8 @@ interface WordTileButtonProps {
   disabled: boolean;
   dragging: boolean;
   wrong: boolean;
+  /** UX audit F10 ("Al comprobar"): drives the ✓/✕ badge on top of this tile's own `wrong`/line-settled colour — never a new colour, see `CheckMark.tsx`'s own header. `undefined` for an ungraded tile (every tray tile, or a placed one before "Comprobar"). */
+  grade?: GradeState;
   reducedMotion: boolean;
   draggable: boolean;
   /** Already placed in the sentence line — white/raised, same "placed" look every sibling mechanic's tile gets once it lands (`mechanics/chip.ts`'s {@link CHIP_PLACED}). A tray tile (not yet placed) stays the grey glass rest state. */
@@ -162,7 +165,7 @@ interface WordTileButtonProps {
   ariaLabel?: string;
 }
 
-function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, draggable, placed, onClick, ariaLabel }: WordTileButtonProps) {
+function WordTileButton({ id, label, disabled, dragging, wrong, grade, reducedMotion, draggable, placed, onClick, ariaLabel }: WordTileButtonProps) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled: disabled || !draggable });
 
   return (
@@ -178,6 +181,7 @@ function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, d
       aria-pressed={dragging}
       aria-label={ariaLabel}
       className={cn(
+        'relative',
         TILE_BASE,
         placed && CHIP_PLACED,
         draggable && 'touch-none',
@@ -187,6 +191,7 @@ function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, d
       )}
     >
       {label}
+      {grade && <GradeMark state={grade} />}
     </button>
   );
 }
@@ -218,6 +223,12 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
   // right — see `handleCheck`'s own comment.
   const [attempted, setAttempted] = useState<ReadonlySet<number>>(new Set());
   const [firstTryCorrect, setFirstTryCorrect] = useState<ReadonlySet<number>>(new Set());
+  // UX audit F10: the one polite live-region sentence after "Comprobar" —
+  // see `CheckMark.tsx`'s own `gradeSummary` header for the exact wording.
+  // Cleared on every reset AND on every sentence change (manual ‹ ›, or the
+  // auto-advance below), same reasoning the marks themselves clear: it is
+  // only ever true of the CURRENT sentence's own last check.
+  const [announcement, setAnnouncement] = useState('');
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -244,6 +255,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
     setSettling(new Set());
     setAttempted(new Set());
     setFirstTryCorrect(new Set());
+    setAnnouncement('');
   }
 
   // A different block (or its own item list changed) — start fresh.
@@ -257,11 +269,19 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
     setSettling(new Set());
     setAttempted(new Set());
     setFirstTryCorrect(new Set());
+    setAnnouncement('');
     // Deliberately keyed on `items` alone, same reasoning `QuizMatching`
     // documents at its own reset effect: a different block always brings a
     // different sentence list too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
+
+  // Every sentence change (manual ‹ ›, or the auto-advance after a correct
+  // settle below) clears the previous sentence's own announcement, so it
+  // never reads stale once a different sentence is on screen.
+  useEffect(() => {
+    setAnnouncement('');
+  }, [index]);
 
   useEffect(() => () => {
     if (settleTimeout.current) clearTimeout(settleTimeout.current);
@@ -368,11 +388,13 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
 
     if (wrongIds.size > 0) {
       setWrongFlash((prev) => ({ ...prev, [index]: wrongIds }));
+      setAnnouncement(gradeSummary(lang, currentPlacements.length - wrongIds.size, wrongIds.size) ?? '');
       sound.play('wrong');
       return;
     }
 
     if (firstAttempt) setFirstTryCorrect((prev) => new Set(prev).add(index));
+    setAnnouncement(gradeSummary(lang, currentPlacements.length, 0) ?? '');
     sound.play('correct');
     setSolved((prev) => new Set(prev).add(index));
     setSettling((prev) => new Set(prev).add(index));
@@ -430,6 +452,9 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
 
   return (
     <div data-testid="quiz-reorder" className="flex min-h-0 flex-1 flex-col gap-4">
+      <div aria-live="polite" role="status" className="sr-only" data-testid="reorder-live-region">
+        {announcement}
+      </div>
       {/* `flex-none`: a tidy chrome row that NEVER shrinks (visual-polish-2
           pass, same owner bug `QuizMatching.tsx`'s own control row
           documents — with no floor a squeezed row lets its own button
@@ -524,6 +549,14 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
             {currentPlacements.map((tileId) => {
               const tile = tileById.get(tileId);
               if (!tile) return null;
+              const wrong = currentWrong.has(tileId);
+              // UX audit F10: every word in a FULLY solved line reads as
+              // correct (that is what `isSolved` means); a wrong check only
+              // flags the specific words `currentWrong` names — a correctly
+              // placed word mid-attempt stays ungraded (no mark) until the
+              // whole sentence is confirmed, same as this line's own
+              // existing colour signal (only `isSolved`/`wrong` ever paint).
+              const grade: GradeState | undefined = isSolved ? 'correct' : wrong ? 'wrong' : undefined;
               return (
                 <li key={tileId}>
                   <WordTileButton
@@ -531,12 +564,13 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
                     label={tile.word}
                     disabled={locked}
                     dragging={false}
-                    wrong={currentWrong.has(tileId)}
+                    wrong={wrong}
+                    grade={grade}
                     reducedMotion={reducedMotion}
                     draggable={false}
                     placed
                     onClick={() => removeTile(tileId)}
-                    ariaLabel={`${t.reorderRemovePrefix} ${tile.word}`}
+                    ariaLabel={`${t.reorderRemovePrefix} ${tile.word}${gradeAriaSuffix(lang, grade)}`}
                   />
                 </li>
               );

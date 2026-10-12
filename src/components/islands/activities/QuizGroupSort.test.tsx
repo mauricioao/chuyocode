@@ -143,6 +143,49 @@ describe('QuizGroupSort', () => {
       expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('good');
     });
 
+    describe('✓/✕ marks (UX audit F10: correct/wrong must not rely on colour alone)', () => {
+      it('shows no marks before "Comprobar" is pressed', () => {
+        render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+        place('dog', 'g1');
+
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+        expect(screen.getByTestId('groupsort-live-region').textContent).toBe('');
+      });
+
+      it('marks correct items ✓ and the wrong one ✕ on the same check, and announces the summary', () => {
+        render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+        place('dog', 'g2'); // wrong group on purpose
+        place('cat', 'g1');
+        place('bread', 'g2');
+        place('rice', 'g2');
+        fireEvent.click(screen.getByTestId('groupsort-check'));
+
+        expect(within(screen.getByTestId('groupsort-tile-dog')).getByTestId('grade-mark-wrong')).toBeTruthy();
+        expect(screen.getByTestId('groupsort-tile-dog').getAttribute('aria-label')).toContain('incorrecta');
+        expect(within(screen.getByTestId('groupsort-tile-cat')).getByTestId('grade-mark-correct')).toBeTruthy();
+        expect(screen.getByTestId('groupsort-tile-cat').getAttribute('aria-label')).toContain('correcta');
+        expect(screen.getByTestId('groupsort-live-region').textContent).toBe('3 correctas, 1 incorrecta');
+      });
+
+      it('reports only what the CURRENT check graded, not the running total', () => {
+        render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+        place('dog', 'g2'); // wrong on purpose
+        place('cat', 'g1');
+        place('bread', 'g2');
+        place('rice', 'g2');
+        fireEvent.click(screen.getByTestId('groupsort-check'));
+
+        fireEvent.click(group('g2').getByTestId('groupsort-tile-dog'));
+        place('dog', 'g1');
+        fireEvent.click(screen.getByTestId('groupsort-check'));
+
+        // Cat/bread/rice were already locked by the first check and are
+        // never re-graded — only "dog" was part of THIS check.
+        expect(screen.getByTestId('groupsort-live-region').textContent).toBe('1 correcta');
+      });
+    });
+
     it('scores by FIRST-TRY accuracy even when every item is eventually locked correct', () => {
       render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
       place('dog', 'g2'); // wrong on purpose

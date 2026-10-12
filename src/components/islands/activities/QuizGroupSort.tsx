@@ -54,6 +54,7 @@ import {
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
 import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -142,6 +143,10 @@ interface ItemTileProps {
 
 function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, locked, wrong, reducedMotion, onClick, ariaLabel }: ItemTileProps) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled: disabled || !draggable });
+  // UX audit F10 ("Al comprobar"): drives the ✓/✕ badge on top of this
+  // tile's own `locked`/`wrong` colour — never a new colour, see
+  // `CheckMark.tsx`'s own header.
+  const grade: GradeState | undefined = locked ? 'correct' : wrong ? 'wrong' : undefined;
 
   return (
     <button
@@ -156,6 +161,7 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, lo
       aria-pressed={picked || dragging}
       aria-label={ariaLabel}
       className={cn(
+        'relative',
         TILE_BASE,
         placed && CHIP_PLACED,
         draggable && 'touch-none',
@@ -167,6 +173,7 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, lo
       )}
     >
       {label}
+      {grade && <GradeMark state={grade} />}
     </button>
   );
 }
@@ -185,6 +192,7 @@ interface GroupBoxProps {
   reducedMotion: boolean;
   emptyLabel: string;
   removeLabel: string;
+  lang: Lang;
 }
 
 /** One group's own big labelled box — a drop target that holds EVERY tile currently placed in it, not just one. */
@@ -202,6 +210,7 @@ function GroupBox({
   reducedMotion,
   emptyLabel,
   removeLabel,
+  lang,
 }: GroupBoxProps) {
   const { isOver, setNodeRef } = useDroppable({ id: groupDropId(groupId), disabled });
 
@@ -253,7 +262,7 @@ function GroupBox({
               wrong={wrong}
               reducedMotion={reducedMotion}
               onClick={locked ? () => {} : canPlacePicked ? onPlacePicked : () => onRemoveItem(item.id)}
-              ariaLabel={`${removeLabel} ${label2}`}
+              ariaLabel={`${removeLabel} ${label2}${gradeAriaSuffix(lang, locked ? 'correct' : wrong ? 'wrong' : undefined)}`}
             />
           );
         })}
@@ -308,6 +317,9 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
   // "Comprobar" was already right — see `handleCheck`'s own comment.
   const [attempted, setAttempted] = useState<ReadonlySet<string>>(new Set());
   const [firstTryCorrect, setFirstTryCorrect] = useState<ReadonlySet<string>>(new Set());
+  // UX audit F10: the one polite live-region sentence after "Comprobar" —
+  // see `CheckMark.tsx`'s own `gradeSummary` header for the exact wording.
+  const [announcement, setAnnouncement] = useState('');
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -323,6 +335,7 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
     setSettling(false);
     setAttempted(new Set());
     setFirstTryCorrect(new Set());
+    setAnnouncement('');
   }
 
   // A different block (or its own content changed) — start fresh.
@@ -472,6 +485,9 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
     newlyCorrect.forEach((id) => nextLocked.add(id));
     setLockedIds(nextLocked);
     setWrongIds(newlyWrong);
+    // Reports what THIS "Comprobar" just graded, not the board's running
+    // total — an already-locked item was skipped above, never re-counted.
+    setAnnouncement(gradeSummary(lang, newlyCorrect.size, newlyWrong.size) ?? '');
     if (newlyAttempted.size > 0) setAttempted((prev) => new Set([...prev, ...newlyAttempted]));
     if (newlyFirstTryCorrect.size > 0) {
       setFirstTryCorrect((prev) => new Set([...prev, ...newlyFirstTryCorrect]));
@@ -530,6 +546,9 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
 
   return (
     <div data-testid="quiz-groupsort" className="flex min-h-0 flex-1 flex-col gap-4">
+      <div aria-live="polite" role="status" className="sr-only" data-testid="groupsort-live-region">
+        {announcement}
+      </div>
       {/* `flex-none`: a tidy chrome row that NEVER shrinks — same owner bug
           `QuizMatching.tsx`'s own control row documents. */}
       <div data-testid="groupsort-controls" className="flex flex-none items-center justify-end gap-1">
@@ -605,6 +624,7 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
                   reducedMotion={reducedMotion}
                   emptyLabel={t.groupSortEmptyGroup}
                   removeLabel={t.groupSortRemovePrefix}
+                  lang={lang}
                 />
               );
             })}

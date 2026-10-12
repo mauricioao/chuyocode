@@ -144,6 +144,61 @@ describe('QuizMatching', () => {
       expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 3 correctas');
     });
 
+    describe('✓/✕ marks (UX audit F10: correct/wrong must not rely on colour alone)', () => {
+      it('shows no marks before "Comprobar" is pressed', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's1');
+
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('');
+      });
+
+      it('marks a correct slot with a ✓ badge and "correcta" in its accessible name, and announces the summary', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's1');
+        place('s2', 's2');
+        place('s3', 's3');
+
+        fireEvent.click(screen.getByTestId('matching-check'));
+
+        const slot = screen.getByTestId('matching-slot-s1');
+        expect(within(slot).getByTestId('grade-mark-correct')).toBeTruthy();
+        expect(screen.getByTestId('matching-tile-s1').getAttribute('aria-label')).toContain('correcta');
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('3 correctas');
+      });
+
+      it('marks a wrong slot with a ✕ badge and "incorrecta" in its accessible name during the brief settle window', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's2'); // wrong: s1's answer in s2's slot
+        place('s3', 's3'); // correct
+
+        fireEvent.click(screen.getByTestId('matching-check'));
+
+        const wrongSlot = screen.getByTestId('matching-slot-s2');
+        expect(within(wrongSlot).getByTestId('grade-mark-wrong')).toBeTruthy();
+        expect(screen.getByTestId('matching-tile-s1').getAttribute('aria-label')).toContain('incorrecta');
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('1 correcta, 1 incorrecta');
+
+        // Gone once the wrong tile settles back into the tray.
+        act(() => vi.advanceTimersByTime(1000));
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+      });
+
+      it('clears every mark and the announcement on "Jugar de nuevo"', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's1');
+        fireEvent.click(screen.getByTestId('matching-check'));
+        act(() => vi.advanceTimersByTime(1000));
+        expect(screen.getByTestId('matching-live-region').textContent).not.toBe('');
+
+        fireEvent.click(screen.getByTestId('game-result-play-again'));
+
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('');
+      });
+    });
+
     it('offers "Jugar de nuevo" on the result screen, which starts a fresh round', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's1');
