@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeContentBBox,
+  computeExteriorMask,
   despill,
   hueDistance,
   keyAlpha,
@@ -131,73 +132,174 @@ describe('despill', () => {
   });
 });
 
+describe('computeExteriorMask', () => {
+  it('marks background connected to the canvas border as exterior', () => {
+    const width = 10;
+    const height = 10;
+    const alpha = new Uint8ClampedArray(width * height); // all background
+    const mask = computeExteriorMask(alpha, width, height);
+    expect(Array.from(mask)).toEqual(Array.from({ length: width * height }, () => 1));
+  });
+
+  it('does not mark a background-colored pocket fully enclosed by opaque ink as exterior', () => {
+    // A 10x10 opaque ring with one transparent pixel sealed in the middle —
+    // like a gap between curl loops in dense hair: it keys out the same as
+    // real background, but ink surrounds it on every side.
+    const width = 10;
+    const height = 10;
+    const alpha = new Uint8ClampedArray(width * height).fill(255); // opaque everywhere
+    alpha[5 * width + 5] = 0; // one sealed background-colored pocket
+    const mask = computeExteriorMask(alpha, width, height);
+    expect(mask[5 * width + 5]).toBe(0);
+  });
+});
+
 describe('stripSupportLines', () => {
-  function buildGrid(width: number, height: number, fill: (x: number, y: number) => number) {
+  // Small, fast settings for test grids: a run only needs to reach
+  // minRunLength to be considered, scanSide only needs a couple of steps to
+  // read a clear verdict, and 2 open-background pixels are enough to confirm
+  // a run as a genuine floating prop line.
+  const opts = { minRunLength: 10, scanDistance: 6, fillRun: 2, minFloatingPixels: 3 };
+
+  function buildGrids(width: number, height: number, fill: (x: number, y: number) => { a: number; d?: boolean }) {
     const alpha = new Uint8ClampedArray(width * height);
+    const dark = new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) alpha[y * width + x] = fill(x, y);
+      for (let x = 0; x < width; x++) {
+        const { a, d } = fill(x, y);
+        alpha[y * width + x] = a;
+        dark[y * width + x] = d ? 1 : 0;
+      }
     }
-    return alpha;
+    const exterior = computeExteriorMask(alpha, width, height);
+    return { alpha, dark, exterior };
   }
 
-  it('removes a long horizontal line flanked by background above and below', () => {
+  it('removes a long horizontal ink run floating free in background on both sides', () => {
     const width = 100;
     const height = 40;
     const lineY = 20;
-    const alpha = buildGrid(width, height, (_x, y) => (y === lineY ? 255 : 0));
-    const result = stripSupportLines(alpha, width, height);
-    for (let x = 0; x < width; x++) {
-      expect(result[lineY * width + x]).toBe(0);
-    }
+    const { alpha, dark, exterior } = buildGrids(width, height, (_x, y) => (y === lineY ? { a: 255, d: true } : { a: 0 }));
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    for (let x = 0; x < width; x++) expect(result[lineY * width + x]).toBe(0);
   });
 
-  it('removes a long vertical line flanked by background left and right', () => {
+  it('removes a long vertical ink run floating free in background on both sides', () => {
     const width = 40;
     const height = 100;
     const lineX = 20;
-    const alpha = buildGrid(width, height, (x, _y) => (x === lineX ? 255 : 0));
-    const result = stripSupportLines(alpha, width, height);
-    for (let y = 0; y < height; y++) {
-      expect(result[y * width + lineX]).toBe(0);
-    }
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, _y) => (x === lineX ? { a: 255, d: true } : { a: 0 }));
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    for (let y = 0; y < height; y++) expect(result[y * width + lineX]).toBe(0);
   });
 
-  it('keeps a line segment that touches a body mass on one side (e.g. a chin resting on it)', () => {
+  it('removes the whole confirmed line, including the stretch that merely touches a body mass on one side', () => {
     const width = 100;
     const height = 40;
     const lineY = 20;
-    // Body mass fills rows 0..19 for x in [40,60): the chin sits right above
-    // the line, so that stretch of the line is the body's own bottom edge.
-    const alpha = buildGrid(width, height, (x, y) => {
-      if (x >= 40 && x < 60 && y < lineY) return 255; // body above
-      if (y === lineY) return 255; // the full-width line
-      return 0;
+    // Body fill sits directly above the line for x in [40,60) (e.g. a chin
+    // resting on the ledge) — floating stretches on both sides confirm the
+    // run as a real prop line, so even the body-adjacent stretch is cut:
+    // the body's own edge is simply the trimmed image boundary there.
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => {
+      if (y === lineY) return { a: 255, d: true }; // the full-width ink run
+      if (x >= 40 && x < 60 && y < lineY) return { a: 255 }; // body fill above, not ink
+      return { a: 0 };
     });
-    const result = stripSupportLines(alpha, width, height);
-    // Background-flanked stretches of the line are gone.
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    for (let x = 0; x < width; x++) expect(result[lineY * width + x]).toBe(0);
+  });
+
+  it('keeps a stretch of a confirmed line that is genuinely enclosed by body fill on both sides', () => {
+    const width = 100;
+    const height = 40;
+    const lineY = 20;
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => {
+      if (y === lineY) return { a: 255, d: true }; // the full-width ink run
+      // Fill sandwiches the run on both sides only for x in [40,60).
+      if (x >= 40 && x < 60 && (y < lineY ? lineY - y <= 5 : y - lineY <= 5)) return { a: 255 };
+      return { a: 0 };
+    });
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    for (let x = 40; x < 60; x++) expect(result[lineY * width + x]).toBe(255);
     expect(result[lineY * width + 5]).toBe(0);
     expect(result[lineY * width + 90]).toBe(0);
-    // The stretch under the body is left as the body's own contour.
-    expect(result[lineY * width + 45]).toBe(255);
   });
 
-  it('leaves a short stroke (e.g. an eyebrow) alone when shorter than the minimum run length', () => {
+  it('never flags a run shorter than the minimum run length', () => {
     const width = 100;
     const height = 40;
     const lineY = 20;
-    const alpha = buildGrid(width, height, (x, y) => (y === lineY && x >= 30 && x < 35 ? 255 : 0));
-    const result = stripSupportLines(alpha, width, height);
-    for (let x = 30; x < 35; x++) {
-      expect(result[lineY * width + x]).toBe(255);
-    }
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) =>
+      y === lineY && x >= 30 && x < 35 ? { a: 255, d: true } : { a: 0 },
+    );
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    for (let x = 30; x < 35; x++) expect(result[lineY * width + x]).toBe(255);
   });
 
-  it('does not touch body content far from any background-flanked line', () => {
+  it('preserves a long straight body contour that always has fill on one side (never floats on both)', () => {
+    // A pant-leg-like edge: a dead-straight ink run with solid fabric fill
+    // immediately on its inner side for its entire length, and open
+    // background on its outer side. It never floats free on both sides, so
+    // despite being long, straight, and background-adjacent, it must never
+    // be mistaken for a prop line.
+    const width = 60;
+    const height = 50;
+    const lineX = 20;
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => {
+      const inContour = y >= 5 && y < 45;
+      if (x === lineX && inContour) return { a: 255, d: true };
+      if (x > lineX && x <= lineX + 5 && inContour) return { a: 255 }; // fabric fill, inner side
+      return { a: 0 }; // open background, outer side
+    });
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    expect(Array.from(result)).toEqual(Array.from(alpha));
+  });
+
+  it('preserves every edge of a filled, dark-outlined shape (closed contour, never floats on both sides)', () => {
+    const width = 60;
+    const height = 50;
+    const rect = { left: 10, top: 10, right: 50, bottom: 40 };
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => {
+      const onBorder = (x === rect.left || x === rect.right - 1) && y >= rect.top && y < rect.bottom
+        ? true
+        : (y === rect.top || y === rect.bottom - 1) && x >= rect.left && x < rect.right;
+      if (onBorder) return { a: 255, d: true };
+      const inside = x > rect.left && x < rect.right - 1 && y > rect.top && y < rect.bottom - 1;
+      if (inside) return { a: 255 }; // white fill interior
+      return { a: 0 };
+    });
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    expect(Array.from(result)).toEqual(Array.from(alpha));
+  });
+
+  it('does not touch opaque content that was never classified as ink (dark=false)', () => {
     const width = 50;
     const height = 50;
-    const alpha = buildGrid(width, height, (x, y) => (x > 10 && x < 40 && y > 10 && y < 40 ? 255 : 0));
-    const result = stripSupportLines(alpha, width, height);
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => (x > 10 && x < 40 && y > 10 && y < 40 ? { a: 255 } : { a: 0 }));
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
     expect(Array.from(result)).toEqual(Array.from(alpha));
+  });
+
+  it('does not mistake a dense-hair-like texture (ink riddled with small sealed gaps) for a prop line', () => {
+    // Simulates curly hair: a big dark mass with many small background-
+    // colored pockets (the gaps between curl loops) that are NOT connected
+    // to the real exterior background. A long straight dark run threading
+    // between those pockets must survive, because every "background" pixel
+    // it finds nearby is a sealed pocket, never the real exterior.
+    const width = 80;
+    const height = 80;
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => {
+      const inHair = x >= 5 && x < 75 && y >= 5 && y < 75;
+      if (!inHair) return { a: 0 }; // real exterior background around the hair mass
+      const pocket = x % 6 === 2 && y % 6 === 2; // small sealed pockets every 6px
+      if (pocket) return { a: 0 };
+      return { a: 255, d: true }; // dense ink
+    });
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    // The long straight probe row/column through the hair mass is untouched.
+    for (let x = 30; x < 50; x++) expect(result[40 * width + x]).toBe(255);
+    for (let y = 30; y < 50; y++) expect(result[y * width + 40]).toBe(255);
   });
 });
 

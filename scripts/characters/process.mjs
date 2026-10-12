@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import {
   computeContentBBox,
+  computeExteriorMask,
   despill,
   keyAlpha,
   layoutWithPadding,
@@ -53,8 +54,12 @@ const QA_ROOT = join(OUT_ROOT, '_qa');
 const CHARACTERS = {
   Paco: [
     { source: 'Asoma por arriba.jpg', slug: 'asoma-arriba', kind: 'support', flushEdge: 'bottom' },
-    { source: 'Asoma por la derecha.jpg', slug: 'asoma-derecha', kind: 'support', flushEdge: 'right' },
-    { source: 'Asoma por la izquierda.jpg', slug: 'asoma-izquierda', kind: 'support', flushEdge: 'left' },
+    // "Peeking from the right" means the box is to the LEFT of the body, so
+    // the body itself is cut on its left side (where the box edge is) and
+    // opens up freely to the right — the flush (zero-padding) side is the
+    // side of the removed line, not the side the character "peeks toward".
+    { source: 'Asoma por la derecha.jpg', slug: 'asoma-derecha', kind: 'support', flushEdge: 'left' },
+    { source: 'Asoma por la izquierda.jpg', slug: 'asoma-izquierda', kind: 'support', flushEdge: 'right' },
     { source: 'Sentado en un borde.jpg', slug: 'sentado-borde', kind: 'support', flushEdge: null },
     { source: 'Apoyado de codo.jpg', slug: 'apoyado-codo', kind: 'support', flushEdge: 'bottom' },
     { source: 'Saluda.jpg', slug: 'saluda', kind: 'pose', flushEdge: null },
@@ -69,8 +74,8 @@ const CHARACTERS = {
   Vanina: [
     { source: 'Avatar.jpg', slug: 'avatar', kind: 'avatar', flushEdge: null },
     { source: 'Asoma por arriba de una caja.jpg', slug: 'asoma-arriba', kind: 'support', flushEdge: 'bottom' },
-    { source: 'Asoma por el costado derecho.jpg', slug: 'asoma-derecha', kind: 'support', flushEdge: 'right' },
-    { source: 'Asoma por el costado izquierdo.jpg', slug: 'asoma-izquierda', kind: 'support', flushEdge: 'left' },
+    { source: 'Asoma por el costado derecho.jpg', slug: 'asoma-derecha', kind: 'support', flushEdge: 'left' },
+    { source: 'Asoma por el costado izquierdo.jpg', slug: 'asoma-izquierda', kind: 'support', flushEdge: 'right' },
     // 'Asoma por el costado izquierdo_alter.jpg' is intentionally NOT mapped:
     // unlike every other source, it has no chroma-green background at all
     // (sampled corners are flat #FFFFFF), so there is nothing to key out —
@@ -89,7 +94,7 @@ const CHARACTERS = {
       source: 'Recostada de espaldas contra el costado de una caja.jpg',
       slug: 'recostada-espaldas',
       kind: 'support',
-      flushEdge: null,
+      flushEdge: 'right',
     },
     {
       source: 'Acostada boca abajo leyendo sobre una caja.jpg',
@@ -148,6 +153,9 @@ async function processOne(character, entry) {
   }
 
   const alpha = new Uint8ClampedArray(width * height);
+  // Ink-candidate pixels for the support-line scan: opaque and dark, as
+  // opposed to opaque-and-light white fill (which a prop line never is).
+  const dark = new Uint8Array(width * height);
   for (let p = 0; p < width * height; p++) {
     const i = p * 4;
     const r = data[i];
@@ -160,9 +168,11 @@ async function processOne(character, entry) {
     data[i + 2] = despilled.b;
     data[i + 3] = a;
     alpha[p] = a;
+    dark[p] = a > 40 && Math.max(despilled.r, despilled.g, despilled.b) < 70 ? 1 : 0;
   }
 
-  const cleanedAlpha = stripSupportLines(alpha, width, height);
+  const exterior = computeExteriorMask(alpha, width, height);
+  const cleanedAlpha = stripSupportLines(alpha, dark, exterior, width, height);
   for (let p = 0; p < width * height; p++) {
     const cleaned = cleanedAlpha[p];
     if (cleaned !== alpha[p]) data[p * 4 + 3] = cleaned;
@@ -280,58 +290,97 @@ async function buildGridSheet(entries, background, outPath) {
 }
 
 async function buildFlushCardSheet(entries, outPath) {
-  // One support pose per row, composited flush against a white rounded
-  // "glass card" mock, so a leftover line, halo, or gap at the flush edge is
-  // obvious at a glance.
-  const cardWidth = 520;
-  const cardHeight = 360;
-  const cardRadius = 28;
-  const rowHeight = cardHeight + PAD * 2 + LABEL_HEIGHT;
+  // Each support pose, scaled LARGER than a white rounded "glass card" mock
+  // along the axis perpendicular to its flush cut, with the figure's flush
+  // edge inset slightly INTO the card (figure composited on top) so the
+  // figure genuinely overlaps/occludes part of the card near that edge —
+  // like hands resting on a box's surface — while the rest of the body
+  // breaks past the card's bounds. This is the real "breaking the box"
+  // composition: a leftover line, halo, or gap at the cut is obvious, and
+  // so is a wrongly-chosen flush side (the cut would float off the card).
+  const cardShortSide = 260;
+  const cardRadius = 22;
+  const figureTarget = 480; // figure's long-side render size
+  const overlapInset = Math.round(cardShortSide * 0.12);
 
-  const composites = [];
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
+  const rows = [];
+  for (const entry of entries) {
     const pngPath = join(OUT_ROOT, entry.character, `${entry.slug}.png`);
-    const resized = await sharp(pngPath)
-      .resize({ width: cardWidth - 40, height: cardHeight - 40, fit: 'inside', withoutEnlargement: true })
-      .toBuffer();
-    const meta = await sharp(resized).metadata();
-    const top = PAD + i * rowHeight;
+    const meta = await sharp(pngPath).metadata();
+    const scale = figureTarget / Math.max(meta.width, meta.height);
+    const figW = Math.max(1, Math.round(meta.width * scale));
+    const figH = Math.max(1, Math.round(meta.height * scale));
+    const figBuf = await sharp(pngPath).resize({ width: figW, height: figH }).toBuffer();
 
-    const card = await sharp({
-      create: { width: cardWidth, height: cardHeight, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    const vertical = entry.flushEdge === 'left' || entry.flushEdge === 'right';
+    const cardW = vertical ? cardShortSide : Math.max(cardShortSide, figW + 100);
+    const cardH = vertical ? Math.max(cardShortSide, figH + 100) : cardShortSide;
+    const cardBuf = await sharp({
+      create: { width: cardW, height: cardH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
       .composite([
         {
           input: Buffer.from(
-            `<svg width="${cardWidth}" height="${cardHeight}">
-              <rect x="0" y="0" width="${cardWidth}" height="${cardHeight}" rx="${cardRadius}" fill="#ffffff" />
-            </svg>`,
+            `<svg width="${cardW}" height="${cardH}"><rect x="0" y="0" width="${cardW}" height="${cardH}" rx="${cardRadius}" fill="#ffffff"/></svg>`,
           ),
         },
       ])
       .png()
       .toBuffer();
 
-    let figLeft = Math.round((cardWidth - meta.width) / 2);
-    let figTop = cardHeight - meta.height; // flush bottom by default
-    if (entry.flushEdge === 'left') figLeft = 0;
-    if (entry.flushEdge === 'right') figLeft = cardWidth - meta.width;
-    if (entry.flushEdge === 'bottom' || entry.flushEdge === null) figTop = cardHeight - meta.height;
+    let rowW;
+    let rowH;
+    let figLeft;
+    let figTop;
+    let cardLeft;
+    let cardTop;
+    if (entry.flushEdge === 'bottom') {
+      rowW = Math.max(figW, cardW);
+      rowH = figH + cardH - overlapInset;
+      figLeft = Math.round((rowW - figW) / 2);
+      figTop = 0;
+      cardLeft = Math.round((rowW - cardW) / 2);
+      cardTop = figH - overlapInset; // card's top edge sits INSIDE the figure's flush-bottom line
+    } else if (entry.flushEdge === 'left') {
+      rowW = figW + cardW - overlapInset;
+      rowH = Math.max(figH, cardH);
+      cardLeft = 0;
+      cardTop = Math.round((rowH - cardH) / 2);
+      figLeft = cardW - overlapInset; // figure's flush-left line sits INSIDE the card
+      figTop = Math.round((rowH - figH) / 2);
+    } else {
+      // right
+      rowW = figW + cardW - overlapInset;
+      rowH = Math.max(figH, cardH);
+      figLeft = 0;
+      figTop = Math.round((rowH - figH) / 2);
+      cardLeft = figW - overlapInset; // card's left edge sits INSIDE the figure's flush-right line
+      cardTop = Math.round((rowH - cardH) / 2);
+    }
 
-    const composedCard = await sharp(card)
-      .composite([{ input: resized, left: figLeft, top: figTop }])
+    const row = await sharp({
+      create: { width: rowW, height: rowH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    })
+      .composite([
+        { input: cardBuf, left: cardLeft, top: cardTop },
+        { input: figBuf, left: figLeft, top: figTop }, // figure on top: it occludes the card in the overlap zone
+      ])
       .png()
       .toBuffer();
 
-    composites.push({ input: composedCard, left: PAD, top });
-    composites.push({ input: svgLabel(`${entry.character}/${entry.slug}`, cardWidth), left: PAD, top: top + cardHeight });
+    rows.push({ row, width: rowW, height: rowH, label: `${entry.character}/${entry.slug} (flush ${entry.flushEdge})` });
   }
 
-  const sheetHeight = PAD + entries.length * rowHeight;
-  await sharp({
-    create: { width: cardWidth + PAD * 2, height: sheetHeight, channels: 4, background: '#1c1c1e' },
-  })
+  const sheetWidth = Math.max(...rows.map((r) => r.width)) + PAD * 2;
+  const composites = [];
+  let y = PAD;
+  for (const r of rows) {
+    composites.push({ input: r.row, left: Math.round((sheetWidth - r.width) / 2), top: y });
+    composites.push({ input: svgLabel(r.label, sheetWidth), left: 0, top: y + r.height });
+    y += r.height + LABEL_HEIGHT + PAD;
+  }
+
+  await sharp({ create: { width: sheetWidth, height: y, channels: 4, background: '#1c1c1e' } })
     .composite(composites)
     .png()
     .toFile(outPath);

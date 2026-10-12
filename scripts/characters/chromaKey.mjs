@@ -100,73 +100,185 @@ export function despill(r, g, b, alpha) {
 }
 
 /**
- * Removes the thin straight support-line artifact: a long, perfectly flat
- * run of opaque pixels with background immediately flanking it on both
- * sides (above/below for a horizontal run, left/right for a vertical one).
- * A run that is background-flanked on only one side is a body contour (e.g.
- * a chin or fingertip resting on the line) and is left untouched, per spec.
+ * Flood-fills from the canvas border to find the single *exterior*
+ * background region — the open page around the character — as opposed to
+ * small background-colored pockets fully enclosed by ink (e.g. the gaps
+ * between curl loops in dense curly hair, which key out to transparent just
+ * like the real background but are not connected to it).
  *
- * Operates on a flat alpha array (row-major, one byte per pixel) and
- * returns a new array; does not mutate the input.
+ * `stripSupportLines` uses this to tell "floats in open space" (a real prop
+ * line) apart from "happens to have a nearby enclosed gap" (ordinary hair/
+ * clothing texture) — both read as nearby transparent pixels, but only the
+ * former is actually open.
+ *
+ * Returns a Uint8Array mask (1 = exterior background) the same size as
+ * `alpha`.
  */
-export function stripSupportLines(alpha, width, height, opts = {}) {
+export function computeExteriorMask(alpha, width, height, bgThreshold = 16) {
+  const mask = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let qHead = 0;
+  let qTail = 0;
+  const isBg = (idx) => alpha[idx] <= bgThreshold;
+  const seed = (idx) => {
+    if (isBg(idx) && !mask[idx]) {
+      mask[idx] = 1;
+      queue[qTail++] = idx;
+    }
+  };
+  for (let x = 0; x < width; x++) {
+    seed(x); // top row
+    seed((height - 1) * width + x); // bottom row
+  }
+  for (let y = 0; y < height; y++) {
+    seed(y * width); // left column
+    seed(y * width + width - 1); // right column
+  }
+  while (qHead < qTail) {
+    const idx = queue[qHead++];
+    const x = idx % width;
+    const y = (idx - x) / width;
+    if (x > 0) seed(idx - 1);
+    if (x < width - 1) seed(idx + 1);
+    if (y > 0) seed(idx - width);
+    if (y < height - 1) seed(idx + width);
+  }
+  return mask;
+}
+
+/**
+ * Removes the stray support-line artifact: a long, perfectly straight run of
+ * dark ink (a row or column with zero deviation) representing a box/ledge
+ * edge the generator baked into "peeking/leaning/sitting/hanging" poses.
+ *
+ * A straight run alone is not enough to call it a prop line — a hand-drawn
+ * body contour (a pant leg, a raised sleeve) is often straight for a long
+ * stretch too, and always has solid body fill immediately on its inner side
+ * for its *entire* length. A real prop line, by contrast, is drawn as an
+ * independent flat surface: somewhere along it, it floats completely free in
+ * open background — nothing but background on *both* perpendicular sides —
+ * because the line keeps going past where the body actually is. So the test
+ * is two-phase per run:
+ *
+ *   1. Confirm: walking outward from the run on both perpendicular sides,
+ *      does some stretch of it reach background on both sides before
+ *      reaching solid fill on either? If never, it's a body contour — leave
+ *      the whole run untouched.
+ *   2. Once confirmed as a prop line, remove it along its *entire* length,
+ *      including the stretch that merely touches the body on one side (e.g.
+ *      a chin or a hand resting on it — the body is simply cut there, and
+ *      the trimmed image's own edge becomes that cut, so no stroke is
+ *      needed) — except any stretch genuinely enclosed by body fill on
+ *      *both* sides (a decorative line fully inside a sleeve or hem, which
+ *      a prop line never actually passes through, but a worth keeping the
+ *      distinction for).
+ *
+ * `dark` flags ink-candidate pixels (opaque + low brightness), computed by
+ * the caller from the same despilled RGB used to build `alpha`. `exterior`
+ * is the mask from `computeExteriorMask`: only background connected to the
+ * canvas border counts as "floating in open space" — an enclosed pocket
+ * (e.g. a gap between curl loops in dense hair) never does, no matter how
+ * close it sits to a long straight ink run, so ordinary hair/clothing
+ * texture is never mistaken for a prop line. Operates on flat row-major
+ * arrays and returns a new alpha array; does not mutate.
+ */
+export function stripSupportLines(alpha, dark, exterior, width, height, opts = {}) {
   const {
-    gap = 5,
-    minRunLength = Math.max(20, Math.round(width * 0.01)),
-    opaqueThreshold = 40,
-    bgThreshold = 16,
+    minRunLength = Math.max(50, Math.round(Math.min(width, height) * 0.025)),
+    scanDistance = 20,
+    fillRun = 3,
+    minFloatingPixels = 6,
+    fillThreshold = 200,
   } = opts;
   const out = Uint8ClampedArray.from(alpha);
 
-  const clearRun = (setPixel, start, end) => {
-    if (end - start >= minRunLength) {
-      for (let i = start; i < end; i++) setPixel(i);
+  /**
+   * Walks outward from (not including) the run pixel in one direction,
+   * looking for the first clear verdict: exterior background (returns
+   * 'open') or a run of solid opaque fill (returns 'fill'). 'unknown' if
+   * neither is reached within `scanDistance` (stays inside ambiguous/ink
+   * pixels, or runs off the canvas).
+   */
+  function scanSide(getSample, maxSteps) {
+    let consecutiveFill = 0;
+    for (let s = 1; s <= maxSteps; s++) {
+      const sample = getSample(s);
+      if (sample === null) return 'open'; // ran off the canvas: nothing out there
+      const [a, isDark, isExterior] = sample;
+      if (isExterior) return 'open';
+      if (a >= fillThreshold && !isDark) {
+        consecutiveFill++;
+        if (consecutiveFill >= fillRun) return 'fill';
+      } else {
+        consecutiveFill = 0;
+      }
     }
-  };
+    return 'unknown';
+  }
 
-  // Horizontal runs.
-  if (height > gap * 2) {
-    for (let y = gap; y < height - gap; y++) {
+  function processAxis(axisWidth, axisHeight, at, perpAt, writeIndex) {
+    // `at(main, cross)` reads the candidate/dark flag along the run;
+    // `perpAt(main, cross, step)` reads a perpendicular neighbor `step` away;
+    // `writeIndex(main, cross)` maps back to the flat (x, y) alpha index.
+    for (let cross = 0; cross < axisHeight; cross++) {
       let runStart = -1;
-      for (let x = 0; x <= width; x++) {
-        const candidate =
-          x < width &&
-          alpha[y * width + x] > opaqueThreshold &&
-          alpha[(y - gap) * width + x] <= bgThreshold &&
-          alpha[(y + gap) * width + x] <= bgThreshold;
-        if (candidate) {
-          if (runStart === -1) runStart = x;
-        } else if (runStart !== -1) {
-          clearRun((xx) => {
-            out[y * width + xx] = 0;
-          }, runStart, x);
-          runStart = -1;
+      for (let main = 0; main <= axisWidth; main++) {
+        const isCandidate = main < axisWidth && at(main, cross) === 1;
+        if (isCandidate) {
+          if (runStart === -1) runStart = main;
+          continue;
         }
+        if (runStart === -1) continue;
+        const runEnd = main;
+        if (runEnd - runStart >= minRunLength) {
+          const sides = [];
+          for (let m = runStart; m < runEnd; m++) {
+            const a = scanSide((s) => perpAt(m, cross, -s), scanDistance);
+            const b = scanSide((s) => perpAt(m, cross, s), scanDistance);
+            sides.push([a, b]);
+          }
+          const floatingPixels = sides.filter(([a, b]) => a === 'open' && b === 'open').length;
+          if (floatingPixels >= minFloatingPixels) {
+            // Confirmed prop line: remove everything except stretches fully
+            // enclosed by body fill on both sides.
+            for (let m = runStart; m < runEnd; m++) {
+              const [a, b] = sides[m - runStart];
+              if (!(a === 'fill' && b === 'fill')) out[writeIndex(m, cross)] = 0;
+            }
+          }
+        }
+        runStart = -1;
       }
     }
   }
 
-  // Vertical runs (independent pass over the original alpha, merged below).
-  if (width > gap * 2) {
-    for (let x = gap; x < width - gap; x++) {
-      let runStart = -1;
-      for (let y = 0; y <= height; y++) {
-        const candidate =
-          y < height &&
-          alpha[y * width + x] > opaqueThreshold &&
-          alpha[y * width + (x - gap)] <= bgThreshold &&
-          alpha[y * width + (x + gap)] <= bgThreshold;
-        if (candidate) {
-          if (runStart === -1) runStart = y;
-        } else if (runStart !== -1) {
-          clearRun((yy) => {
-            out[yy * width + x] = 0;
-          }, runStart, y);
-          runStart = -1;
-        }
-      }
-    }
-  }
+  // Horizontal runs: `cross` is the row y, `main` is x.
+  processAxis(
+    width,
+    height,
+    (x, y) => dark[y * width + x],
+    (x, y, step) => {
+      const yy = y + step;
+      if (yy < 0 || yy >= height) return null;
+      const idx = yy * width + x;
+      return [alpha[idx], dark[idx] === 1, exterior[idx] === 1];
+    },
+    (x, y) => y * width + x,
+  );
+
+  // Vertical runs: `cross` is the column x, `main` is y.
+  processAxis(
+    height,
+    width,
+    (y, x) => dark[y * width + x],
+    (y, x, step) => {
+      const xx = x + step;
+      if (xx < 0 || xx >= width) return null;
+      const idx = y * width + xx;
+      return [alpha[idx], dark[idx] === 1, exterior[idx] === 1];
+    },
+    (y, x) => y * width + x,
+  );
 
   return out;
 }
