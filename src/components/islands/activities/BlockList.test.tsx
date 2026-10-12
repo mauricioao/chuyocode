@@ -197,10 +197,10 @@ describe('BlockList — quiz blocks', () => {
 
   it('adding a question through the quiz editor updates the block via onBlocksChange', () => {
     render(<Harness initialBlocks={[quizBlock('b1')]} />);
-    // Empty quiz block: the example-first empty state's "Empezar en blanco"
-    // (item 4), not the trailing "+ Agregar pregunta" (that only appears
-    // once at least one question already exists).
-    fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
+    // Empty quiz block ("Varios juegos", R3): typing into the empty-list
+    // ghost row's question field (`MatchPairsEditor.tsx`'s own pattern)
+    // creates the first real row.
+    fireEvent.change(screen.getByTestId('varios-example-question-b1'), { target: { value: 'What color is the sky?' } });
     expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
   });
 

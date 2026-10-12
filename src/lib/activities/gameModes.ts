@@ -336,6 +336,85 @@ export function availableGameModes(items: readonly GameItem[], payload?: Payload
 }
 
 /**
+ * Locked modes whose gap to {@link availableGameModes} can be expressed as a
+ * plain "how many more eligible items" shortfall — `nearestLockedMode`'s own
+ * candidate list. `match` (blocked only by a duplicate answer, never fixed by
+ * adding MORE items) and `groupsort` (needs GROUP-shaped content no plain
+ * question ever creates) are excluded: more questions alone cannot close
+ * either gap, so neither is ever a meaningful "agrega N preguntas más" hint.
+ */
+const UNLOCK_GAP_CANDIDATES: readonly GameMode[] = [
+  'cards',
+  'match',
+  'reorder',
+  'speak',
+  'wheel',
+  'anagram',
+  'hangman',
+  'truefalse',
+  'openbox',
+  'cloze',
+];
+
+/**
+ * How many more eligible items `mode` needs to clear its own threshold in
+ * {@link availableGameModes} — reusing that function's own constants and
+ * eligibility helpers, never re-deriving them. `null` when `mode`'s gap
+ * cannot be expressed this way (`match` blocked by a duplicate answer rather
+ * than a count, or a mode needing `payload` that was not supplied).
+ */
+function unlockGapFor(mode: GameMode, items: readonly GameItem[], payload?: Payload): number | null {
+  switch (mode) {
+    case 'cards':
+      return Math.max(0, MIN_CARDS_ITEMS - items.length);
+    case 'match':
+      return hasUniqueAnswers(items) ? Math.max(0, MIN_MATCH_ITEMS - items.length) : null;
+    case 'reorder':
+      return Math.max(0, MIN_REORDER_ITEMS - reorderEligible(items).length);
+    case 'speak':
+      return Math.max(0, MIN_SPEAK_ITEMS - items.length);
+    case 'wheel':
+      return Math.max(0, MIN_WHEEL_ITEMS - items.length);
+    case 'anagram':
+      return Math.max(0, MIN_ANAGRAM_ITEMS - anagramEligible(items).length);
+    case 'hangman':
+      return Math.max(0, MIN_HANGMAN_ITEMS - hangmanEligible(items).length);
+    case 'truefalse':
+      return payload ? Math.max(0, MIN_TRUEFALSE_ITEMS - trueFalseEligibleCount(payload)) : null;
+    case 'openbox':
+      return Math.max(0, MIN_OPENBOX_ITEMS - items.length);
+    case 'cloze':
+      return payload ? Math.max(0, MIN_CLOZE_ITEMS - clozeEligibleCount(payload)) : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The still-locked mode closest to unlocking, with how many more eligible
+ * questions would close that gap — `null` once every expressible mode is
+ * already unlocked. Ties break by {@link UNLOCK_GAP_CANDIDATES}' own order
+ * (the same order `availableGameModes` pushes modes in). Built for "Varios
+ * juegos"' own status line (owner R3, "the status line tells what the
+ * content unlocks") — it reuses `availableGameModes`'s own rules rather than
+ * re-deriving them, so the two can never disagree about what is locked.
+ */
+export function nearestLockedMode(
+  items: readonly GameItem[],
+  payload?: Payload,
+): { mode: GameMode; gap: number } | null {
+  const unlocked = new Set(availableGameModes(items, payload));
+  let best: { mode: GameMode; gap: number } | null = null;
+  for (const mode of UNLOCK_GAP_CANDIDATES) {
+    if (unlocked.has(mode)) continue;
+    const gap = unlockGapFor(mode, items, payload);
+    if (gap === null || gap <= 0) continue;
+    if (!best || gap < best.gap) best = { mode, gap };
+  }
+  return best;
+}
+
+/**
  * ONE TEMPLATE, ONE GAME (owner spec 2026-10-08: "vamos a enfocarnos en que
  * cada opción de construcción cumpla un solo propósito y sea pulcro, no
  * combinemos"). While `false`, a TEMPLATED block (`match`/`reorder`/`cloze`/

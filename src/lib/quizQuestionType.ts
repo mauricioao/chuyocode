@@ -51,6 +51,23 @@ export function isDropGap(input: string): boolean {
   return input === 'drop';
 }
 
+/**
+ * Does this slot's shape need the full `QuestionCard` editor rather than
+ * "Varios juegos"' own simple question/answer row (R3, "the same building
+ * experience as the four templates")? The simple row has exactly one
+ * question field and one answer field, plus a toggle into `choice` — it has
+ * no blank-position/dropdown-vs-tiles UI for a `gap` question, and its single
+ * answer field cannot show more than one accepted answer without silently
+ * dropping the rest on the next edit. Both shapes stay fully editable, just
+ * through the old card instead — never lost, see `QuizBlockEditor.tsx`'s own
+ * per-row escape.
+ */
+export function needsAdvancedEditor(input: string, answerCount: number): boolean {
+  const segment = segmentForInput(input);
+  if (segment === 'gap') return true;
+  return segment === 'text' && answerCount > 1;
+}
+
 function inputForSegment(segment: QuestionSegment, asDrop: boolean): string {
   if (segment === 'text') return 'text';
   if (segment === 'gap') return asDrop ? 'drop' : 'select';
