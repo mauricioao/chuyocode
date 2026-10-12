@@ -23,6 +23,18 @@
  * `CHARACTER_WIDTHS`, every pose has its OWN pair here, since these are
  * portrait character cutouts at varying aspect ratios/display sizes, not one
  * uniform square badge.
+ *
+ * MIRRORED SIDE PEEKS, NEVER A SECOND FILE: the generator always draws a
+ * "peeking" pose facing the SAME way regardless of which side it peeks
+ * from (owner note, DIRECCION-VISUAL.md §4.5) — e.g. `asoma-izquierda`
+ * (peeking from the left) and the mirror image a caller would want for
+ * peeking from the RIGHT are the same artwork, flipped. A future caller
+ * that needs the opposite side reuses the SAME exported pose with Tailwind's
+ * `-scale-x-100` (`transform: scaleX(-1)`) rather than asking
+ * `export-web.mjs` to ship a second file — no entry for that mirrored side
+ * belongs in this registry. Not needed yet: the one peek wired today
+ * (`vanina/asoma-izquierda`, `DeskWindowManager.astro`) only ever shows on
+ * one side (the window's own left edge).
  */
 
 export type CharacterName = 'vanina' | 'paco';
