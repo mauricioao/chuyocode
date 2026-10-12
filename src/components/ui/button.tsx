@@ -37,7 +37,12 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+        // `text-primary` resolves to the kit's light yellow inside the
+        // `ingles` theme, which fails the 4.5:1 text contrast rule on the
+        // white stage (DIRECCION-VISUAL.md 3.1) — `ingles:text-accent-ink`
+        // (UI round 2) swaps it for the scope's own accent-ink role there
+        // ONLY; the frozen brand scope keeps `text-primary` unchanged.
+        link: "text-primary underline-offset-4 hover:underline ingles:text-accent-ink",
       },
       size: {
         default:
