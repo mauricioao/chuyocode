@@ -114,8 +114,9 @@ describe('PlacementIsland', () => {
     render(<PlacementIsland lang="es" />);
 
     const lastResult = screen.getByTestId('placement-last-result').textContent;
-    // Same "code · name" label the result screen shows, not the name alone.
-    expect(lastResult).toContain('A2 · Básico');
+    // The level's full display name, same as the result screen shows — it
+    // already carries its own code (i18n.ts's own "band + code" scheme).
+    expect(lastResult).toContain('Básico A2');
     expect(lastResult).toContain('2026-09-01');
     expect(screen.getByTestId('placement-start').textContent).toBe('Repetir el test');
   });

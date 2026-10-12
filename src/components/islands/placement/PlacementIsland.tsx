@@ -113,7 +113,7 @@ export default function PlacementIsland({ lang }: PlacementIslandProps) {
             {t.intro.lastResultPrefix}{' '}
             <span className="font-semibold text-foreground">
               {previousResult.estimatedLevel
-                ? `${previousResult.estimatedLevel} · ${levels[previousResult.estimatedLevel]}`
+                ? levels[previousResult.estimatedLevel]
                 : t.result.estimatedNone}
             </span>{' '}
             ({formatDate(previousResult.takenAt)})
@@ -213,14 +213,14 @@ export default function PlacementIsland({ lang }: PlacementIslandProps) {
       <div>
         <p className="text-sm text-muted-foreground">{t.result.estimatedLabel}</p>
         <p data-testid="placement-result-level" className="text-2xl font-bold text-accent-ink">
-          {r.estimatedLevel ? `${r.estimatedLevel} · ${levels[r.estimatedLevel]}` : t.result.estimatedNone}
+          {r.estimatedLevel ? levels[r.estimatedLevel] : t.result.estimatedNone}
         </p>
       </div>
 
       <div>
         <p className="text-sm text-muted-foreground">{t.result.recommendedLabel}</p>
         <p data-testid="placement-result-recommended" className="text-lg font-semibold text-foreground">
-          {allPassed ? t.result.recommendedAboveB2 : `${r.recommendedLevel} · ${levels[r.recommendedLevel]}`}
+          {allPassed ? t.result.recommendedAboveB2 : levels[r.recommendedLevel]}
         </p>
       </div>
 
@@ -236,9 +236,7 @@ export default function PlacementIsland({ lang }: PlacementIslandProps) {
                 entry.passed ? 'text-success' : 'text-muted-foreground',
               )}
             >
-              <span>
-                {entry.level} · {levels[entry.level]}
-              </span>
+              <span>{levels[entry.level]}</span>
               <span className="tabular-nums">
                 {entry.correct}/{entry.total}
               </span>

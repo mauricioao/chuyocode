@@ -71,7 +71,10 @@ const loading = eager ? 'eager' : 'lazy';
 
 const compact = variant === 'compact';
 const thumbnailUrl = activity.thumbnailPath ? publicImageUrl(activity.thumbnailPath) : null;
-const levelLine = activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : noLevel;
+// The level's full display name already carries its own code (e.g. "Básico
+// A2" — i18n.ts's own "band + code" scheme), so this never prefixes it with
+// the bare code again (that used to read "A2 · Básico").
+const levelLine = activity.level ? levelLabels[activity.level] : noLevel;
 
 function countLabel(count: number): string {
   return `${count} ${count === 1 ? blockCountOne : blockCountMany}`;

@@ -205,8 +205,8 @@ if (!hostMode) {
    */
   closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
 
-  /** "A2 · Básico", or the "no level" copy — the title bar's own chip always renders, never conditionally omitted (same two states the old meta line already had). */
-  levelChip = activity.level ? `${activity.level} · ${levelLabels[activity.level]}` : t.noLevel;
+  /** "Básico A2" (the level's full display name already carries its own code, i18n.ts's own "band + code" scheme), or the "no level" copy — the title bar's own chip always renders, never conditionally omitted (same two states the old meta line already had). */
+  levelChip = activity.level ? levelLabels[activity.level] : t.noLevel;
 
   /**
    * "Presentar": shown whenever the activity has anything presentation mode

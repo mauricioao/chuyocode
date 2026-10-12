@@ -30,7 +30,7 @@ import DeskCalendarWidget from '@components/ingles/DeskCalendarWidget.astro';
 import DeskWeatherWidget from '@components/ingles/DeskWeatherWidget.astro';
 import DeskPlayerWidget from '@components/ingles/DeskPlayerWidget';
 import { LEVELS, type Level } from '@lib/exerciseTaxonomy';
-import type { Lang } from '@lib/i18n';
+import { levelBand, type Lang } from '@lib/i18n';
 import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSceneData';
 
 interface Props {
@@ -47,7 +47,6 @@ interface Props {
   weatherCity: string;
   weatherLabel: string;
   playerLabels: DeskScenePlayerLabels;
-  levelLabels: Record<Level, string>;
   labels: DeskSceneLabels;
 }
 
@@ -64,7 +63,6 @@ const {
   weatherCity,
   weatherLabel,
   playerLabels,
-  levelLabels,
   labels: t,
 } = Astro.props as Props;
 
@@ -233,7 +231,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
               <a
                 href={`/${lang}/ingles/actividades?nivel=${level}`}
                 data-desk-window-open="community"
-                aria-label={`${level}, ${levelLabels[level]}`}
+                aria-label={`${level}, ${levelBand(lang, level)}`}
                 class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[inset_0_0_0_0.5px_rgb(28_28_30_/_0.1),0_1px_2px_rgb(28_28_30_/_0.06)]">
@@ -248,8 +246,12 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
                   ))}
                 </span>
                 <b class="text-[13px] leading-none text-foreground">{level}</b>
+                {/* The big code above already IS the code half of the level's
+                    full name ("Básico A1" — i18n.ts's own "band + code"
+                    scheme), so this small label shows only the band word,
+                    never the code again. */}
                 <small class="text-center text-[11px] leading-tight text-muted-foreground">
-                  {levelLabels[level]}
+                  {levelBand(lang, level)}
                 </small>
               </a>
             );
