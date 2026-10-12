@@ -471,6 +471,15 @@
    * one surface `DeskWindow.astro`'s titlebar div paints. */
   --color-chrome: #f0f0f4;
 
+  /* Display face (UI-kit refactor): ONE heavy grotesque — Inter Variable —
+   * replaces BOTH the brand's Raleway (headings) and the exercise's own
+   * former display face (`.exercise-face`, below, now retired) inside
+   * Inglés. `h1`/`h2`/`h3` (above) and every `font-display` utility call
+   * site (`DeskWindow.astro`'s title, `DeskHelper.astro`, …) pick this up
+   * automatically through the token — the brand default (`@theme`'s own
+   * Raleway) is untouched outside this scope. */
+  --font-display: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
   /* Shadows on light (UI-kit refactor, owner sheet): ink-tinted
    * rgb(17 18 21), never pure black, never hard — one soft/wide layer per
    * level now (L1/L2/L3), not a baked-in hairline ring. `.ingles-glass`
@@ -602,19 +611,18 @@
 }
 
 /* --- Display headings (decision #4) -------------------------------------- *
- * h1–h3 use the Raleway display face globally so every page (home, libros,
- * noticias, 404) inherits it without per-file class churn. `font-display:
- * swap` lives in the @font-face blocks (fonts.css); the system-sans fallback
- * keeps headings readable before the variable file loads (Raleway is a sans,
- * so the fallback stack matches the tailwind `display` token). */
+ * h1–h3 read the `--font-display` TOKEN now (UI-kit refactor), not a
+ * hardcoded family string, so the Inglés scope's own override (below, under
+ * `[data-theme='ingles']`) can swap every heading to Inter without a second
+ * copy of this rule — the brand default (`@theme`'s own `--font-display`,
+ * Raleway Variable) is unchanged outside that scope. `font-display: swap`
+ * lives in the @font-face blocks (fonts.css); the system-sans fallback
+ * keeps headings readable before the variable file loads (both faces are
+ * sans, so the fallback stack matches either one). */
 h1,
 h2,
 h3 {
-  font-family:
-    'Raleway Variable',
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
+  font-family: var(--font-display);
 }
 
 /* --- Skip-to-content link (decision #7, wired in PR 5) ------------------- *
@@ -663,29 +671,28 @@ h3 {
   transform: translateY(0);
 }
 
-/* --- The exercise display face ------------------------------------------ *
- * ChunkFive (see fonts.css for the licence and, more importantly, for the two
- * limitations of the face). Set on ONE element — `PROMPT_AREA` in
- * ExerciseIsland.tsx — which is the single surface all four mechanics render
- * into. Putting it there rather than on each renderer is the same one-place
- * argument `scale.ts` already makes about the size ramp: four mechanics, and
- * one of them is always the one nobody remembers to update.
+/* --- The exercise display face (UI-kit refactor) ------------------------ *
+ * The exercise's former single-weight, accentless display face is retired —
+ * Inter Variable (the SAME face the Inglés headings now use, see
+ * `--font-display`'s `[data-theme='ingles']` override above) takes over the
+ * exercise sentence too, regular weight, per the approved spec ("exercise
+ * sentence ~44px regular on desktop"). Set on ONE element — `PROMPT_AREA` in
+ * ExerciseIsland.tsx — which is the single surface all four mechanics
+ * render into. Putting it there rather than on each renderer is the same
+ * one-place argument `scale.ts` already makes about the size ramp: four
+ * mechanics, and one of them is always the one nobody remembers to update.
  *
  * A CLASS AND NOT A `@theme` TOKEN. A `--font-exercise` token would also give
  * Tailwind a `font-exercise` utility, and then the face would have two ways in
- * that can disagree — one carrying the two rules below and one not.
+ * that can disagree — one carrying the rule below and one not.
  *
- * `font-weight: 400` states what the face actually has, and
- * `font-synthesis: none` is the load-bearing line rather than a nicety: this
- * face ships a single weight, so any `font-bold`/`font-semibold` inside the
- * exercise would otherwise be FAKED by the browser, which smears an outline
- * over a design that is already ultra-bold. Both properties inherit, which is
- * harmless for the chrome that opts back out with `font-sans` — Raleway
- * Variable carries real weights, so it never needed synthesis either. */
+ * Inter is a REAL variable face (a full weight axis, unlike the old face's
+ * single 400) — `font-bold`/`font-semibold` inside the exercise now render
+ * their own real weight instead of a browser-faked one, so the old
+ * `font-synthesis: none` guard is gone too. */
 .exercise-face {
-  font-family: 'ChunkFive', 'Raleway Variable', ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
-  font-synthesis: none;
 }
 
 /* --- Thin, dark-theme scrollbar (creator polish round 3) ----------------- *

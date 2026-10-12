@@ -365,11 +365,12 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy, canPlacePicked, o
               not content: at `1em` inside a display-size sentence it would read as
               an answer already sitting in the box.
 
-              `font-sans` for the SAME reason, one level up: the hint is chrome the
-              app speaks, and the Spanish copy is "Casilla vacía". ChunkFive has no
-              accented glyphs, so inheriting the display face would render `í` — and
-              only `í` — in Raleway, in the middle of the word. Per-character
-              fallback is invisible to CSS and impossible to catch in review. */}
+              `font-sans` for a DIFFERENT reason now that the display face is Inter
+              Variable (UI-kit refactor, full accented-glyph coverage, so the old
+              ChunkFive per-character-fallback bug this comment used to warn about
+              no longer applies): the hint is chrome the app speaks, not exercise
+              CONTENT, and keeping it on the UI face is what visually tells the two
+              apart — see `.exercise-face`'s own header in global.css. */}
           <span className="font-sans px-3 text-sm text-muted-foreground">{copy.empty}</span>
         </button>
       )}

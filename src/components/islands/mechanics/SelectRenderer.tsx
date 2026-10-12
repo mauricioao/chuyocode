@@ -26,10 +26,11 @@ import type { MechanicRendererProps } from './types';
  * `font-sans` OPTS THIS CONTROL OUT OF THE EXERCISE DISPLAY FACE, and it is the
  * one mechanic that has to. A native `<select>` renders its closed state with a
  * SINGLE font — the element's own — so it cannot show the placeholder in one
- * face and the chosen answer in another. Its default state is the placeholder,
- * which is Spanish chrome ("Elegir una opción"), and ChunkFive has no accented
- * glyphs at all: the `ó` alone would fall back to Raleway mid-word, inside a
- * control the learner is looking straight at.
+ * face and the chosen answer in another. The display face is Inter Variable
+ * now (UI-kit refactor, full accented-glyph coverage — the old ChunkFive
+ * per-character-fallback bug this used to guard against is gone), but the
+ * distinction is still worth keeping: the placeholder is Spanish CHROME
+ * ("Elegir una opción"), not exercise content.
  *
  * The cost is real and accepted: an inline dropdown reads in the UI face while
  * the sentence around it reads in the display face. That is the same seam the

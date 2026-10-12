@@ -137,6 +137,26 @@ describe('[data-theme="ingles"] — WCAG contrast (visual-theme pass)', () => {
   });
 });
 
+// UI-kit refactor: ONE heavy grotesque (Inter Variable) replaces the brand's
+// Raleway for Inglés headings AND the exercise's own retired ChunkFive — see
+// `--font-display`'s override here and `.exercise-face`'s own rule, both in
+// global.css.
+describe('[data-theme="ingles"] — display face (UI-kit refactor)', () => {
+  it('overrides --font-display to Inter Variable, with a sans fallback', () => {
+    const display = tokenIn(ingles, '--font-display');
+    expect(display).toContain('Inter Variable');
+    expect(display).toContain('sans-serif');
+  });
+
+  it('never re-declares --font-display in [data-theme="brand"] (the brand keeps Raleway)', () => {
+    expect(brand).not.toMatch(/--font-display\s*:/);
+  });
+
+  it('retires ChunkFive entirely (no @font-face, no call site)', () => {
+    expect(css).not.toContain('ChunkFive');
+  });
+});
+
 describe('the dark brand must not move (guards "the home must not change")', () => {
   // The exact values `:root`/`.dark` have carried since before this feature —
   // a literal copy, not a re-derivation, so a future accidental edit to
