@@ -366,7 +366,10 @@ export default function PresentationIsland({
     return state.revealed ? `${base} — ${t.liveRevealed}` : base;
   }, [state, t, currentSlide]);
 
-  const levelLabel = level ? `${level} · ${levelLabels[level]}` : t.noLevel;
+  // The level's full display name already carries its own code (e.g. "Básico
+  // A2" — i18n.ts's own "band + code" scheme), so this never prefixes it
+  // with the bare code again.
+  const levelLabel = level ? levelLabels[level] : t.noLevel;
   const countLabel = useMemo(() => {
     const parts: string[] = [];
     if (questions.length > 0) {

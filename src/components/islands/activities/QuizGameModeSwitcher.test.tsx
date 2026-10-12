@@ -13,10 +13,10 @@ describe('QuizGameModeSwitcher', () => {
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(3);
     // The active mode's own label also appears in the compact trigger
-    // ("Básico ▾", build item 3) — scope to the mode list itself so this
-    // assertion is not ambiguous about which "Básico" it means.
+    // ("Varios juegos ▾", build item 3) — scope to the mode list itself so
+    // this assertion is not ambiguous about which "Varios juegos" it means.
     const list = screen.getByTestId('quiz-game-mode-switcher');
-    expect(within(list).getByText('Básico')).toBeTruthy();
+    expect(within(list).getByText('Varios juegos')).toBeTruthy();
     expect(within(list).getByText('Tarjetas')).toBeTruthy();
     expect(within(list).getByText('Parejas')).toBeTruthy();
   });
@@ -45,7 +45,7 @@ describe('QuizGameModeSwitcher', () => {
   it('renders English labels for lang="en"', () => {
     render(<QuizGameModeSwitcher lang="en" modes={['quiz', 'cards', 'match']} active="quiz" onChange={vi.fn()} />);
     const list = screen.getByTestId('quiz-game-mode-switcher');
-    expect(within(list).getByText('Basic')).toBeTruthy();
+    expect(within(list).getByText('Mixed games')).toBeTruthy();
     expect(within(list).getByText('Cards')).toBeTruthy();
     expect(within(list).getByText('Match')).toBeTruthy();
   });

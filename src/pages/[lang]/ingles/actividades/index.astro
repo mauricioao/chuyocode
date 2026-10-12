@@ -273,9 +273,12 @@ const TYPE_OPTIONS: Array<{ value: BlockTypeFilter | ''; label: string }> = [
 
 const levelOptions = [
   { value: '', label: t.allLevels, selected: activeLevel === null },
+  // The level's full display name already carries its own code (e.g.
+  // "Básico A2" — i18n.ts's own "band + code" scheme), so this never
+  // prefixes the option label with the bare code again.
   ...LEVELS.map((lvl) => ({
     value: lvl,
-    label: `${lvl} · ${levelLabels[lvl]}`,
+    label: levelLabels[lvl],
     selected: activeLevel === lvl,
   })),
 ];

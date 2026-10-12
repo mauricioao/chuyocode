@@ -18,6 +18,7 @@ import {
   isValidLang,
   getDefaultLang,
   resolveLang,
+  levelBand,
 } from './i18n';
 
 /** Every string reachable under `value`, at any depth, in arrays or objects. */
@@ -264,6 +265,38 @@ describe('UI_LABELS — english section keys', () => {
       for (const level of LEVELS) {
         expect(typeof levels[level]).toBe('string');
         expect(levels[level].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('derives the band word alone from each level\'s full display name ("band + code" scheme)', () => {
+    // es: two codes share each band (A1/A2, B1/B2, C1/C2).
+    expect(levelBand('es', 'A1')).toBe('Básico');
+    expect(levelBand('es', 'A2')).toBe('Básico');
+    expect(levelBand('es', 'B1')).toBe('Intermedio');
+    expect(levelBand('es', 'B2')).toBe('Intermedio');
+    expect(levelBand('es', 'C1')).toBe('Avanzado');
+    expect(levelBand('es', 'C2')).toBe('Avanzado');
+
+    expect(levelBand('en', 'A1')).toBe('Basic');
+    expect(levelBand('en', 'A2')).toBe('Basic');
+    expect(levelBand('en', 'B1')).toBe('Intermediate');
+    expect(levelBand('en', 'B2')).toBe('Intermediate');
+    expect(levelBand('en', 'C1')).toBe('Advanced');
+    expect(levelBand('en', 'C2')).toBe('Advanced');
+  });
+
+  it('never leaves the CEFR code inside the band word, for every level in both locales', () => {
+    // The whole point of `levelBand()`: a caller that already renders the
+    // code as its own element (the desk dock's tiles) must never repeat it.
+    for (const l of locales) {
+      for (const level of LEVELS) {
+        const band = levelBand(l, level);
+        expect(band.length).toBeGreaterThan(0);
+        expect(band).not.toContain(level);
+        // And the band is strictly shorter than the full display name —
+        // confirms something was actually stripped, not just returned as-is.
+        expect(band.length).toBeLessThan(UI_LABELS[l].english.levels[level].length);
       }
     }
   });

@@ -285,12 +285,12 @@ describe('ingles/index.astro (hub)', () => {
       for (const level of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']) {
         expect(html).toContain(`href="/es/ingles/actividades?nivel=${level}"`);
       }
-      expect(html).toContain('aria-label="A1, Principiante"');
+      expect(html).toContain('aria-label="A1, Básico"');
       expect(html).toContain('aria-label="A2, Básico"');
       expect(html).toContain('aria-label="B1, Intermedio"');
-      expect(html).toContain('aria-label="B2, Intermedio alto"');
+      expect(html).toContain('aria-label="B2, Intermedio"');
       expect(html).toContain('aria-label="C1, Avanzado"');
-      expect(html).toContain('aria-label="C2, Dominio"');
+      expect(html).toContain('aria-label="C2, Avanzado"');
     });
 
     it('fills progressively more bars per level, coloured by CEFR band', async () => {

@@ -10,6 +10,8 @@
  * Header/Footer used to stay autonomous in the design-system work unit (PR 2).
  */
 
+import type { Level } from './exerciseTaxonomy';
+
 /** Languages the site serves. `es` is primary; `en` is the secondary locale. */
 export const SUPPORTED_LANGS = ['es', 'en'] as const;
 
@@ -453,7 +455,7 @@ export const UI_LABELS = {
           description: 'Sube una hoja o PDF y marca dónde van las respuestas.',
         },
         questions: {
-          title: 'Básico',
+          title: 'Varios juegos',
           description: 'Escribe preguntas y juégalas de muchas formas.',
         },
         match: {
@@ -513,7 +515,7 @@ export const UI_LABELS = {
         changeImageConfirmBody: 'Las zonas dibujadas sobre la imagen actual se perderán.',
         changeImageConfirmAccept: 'Cambiar',
         worksheetLabel: 'Worksheet',
-        quizLabel: 'Básico',
+        quizLabel: 'Varios juegos',
         // Creator polish round 2.
         blockNameLabel: 'Nombre del bloque',
         blockNamePlaceholder: 'Nombre del bloque',
@@ -813,14 +815,14 @@ export const UI_LABELS = {
       // switcher between "Preguntas"/"Tarjetas"/"Parejas" plus the copy for
       // the two alternate games themselves.
       gameModes: {
-        modeQuiz: 'Básico',
+        modeQuiz: 'Varios juegos',
         modeCards: 'Tarjetas',
         modeMatch: 'Parejas',
         modeReorder: 'Reordenar',
         // Footer hint (practice player redesign's Comprobar/Reintentar row):
         // shown only while a quiz tab sits in Tarjetas/Parejas, since
         // Comprobar keeps grading the Preguntas-mode answers only.
-        gradesQuizModeHint: 'Comprobar corrige el modo "Básico".',
+        gradesQuizModeHint: 'Comprobar corrige el modo "Varios juegos".',
         // Tarjetas (flashcards).
         cardFlipHint: 'Tocar o pulsar Espacio para dar vuelta',
         cardPrev: 'Anterior',
@@ -1140,7 +1142,7 @@ export const UI_LABELS = {
         typeLabel: 'Tipo',
         typeAll: 'Todos',
         typeWorksheet: 'Worksheet',
-        typeQuiz: 'Básico',
+        typeQuiz: 'Varios juegos',
         sortLabel: 'Ordenar por',
         sortRecientes: 'Más recientes',
         sortGustadas: 'Más gustadas',
@@ -1252,13 +1254,13 @@ export const UI_LABELS = {
         answersHeading: 'Clave de respuestas',
         explanationLabel: 'Por qué',
         worksheetLabel: 'Worksheet',
-        quizLabel: 'Básico',
+        quizLabel: 'Varios juegos',
         // "Une las parejas" in print (build item 5): the block heading above
-        // its pair list — reads oddly as "Básico" (the Google-Forms-style
+        // its pair list — reads oddly as "Varios juegos" (the Google-Forms-style
         // quiz label) when the block is actually a pair list.
         matchLabel: 'Une las parejas',
         // "Reordenar" in print (Wordwall templates build): same reasoning as
-        // `matchLabel` above — "Básico" would misname a sentence list.
+        // `matchLabel` above — "Varios juegos" would misname a sentence list.
         reorderLabel: 'Reordenar',
         // "Completar la frase" in print: same reasoning as `matchLabel`.
         clozeLabel: 'Completar la frase',
@@ -1645,15 +1647,20 @@ export const UI_LABELS = {
         // tell the user the level is empty when it is full.
         focusesNoResults: 'No hay puntos gramaticales que coincidan con la búsqueda.',
       },
-      // Display names for the CEFR levels. The URL keeps the bare code; the
-      // screen adds what it means, because "B1" alone tells a beginner nothing.
+      // Display names for the CEFR levels (owner decision 2026-10-11, "banda +
+      // código"): band word plus the bare code, e.g. "Básico A1" — the URL
+      // still keeps the bare code alone (`?nivel=`), but the screen never
+      // shows just "A1" without saying what it means. Two codes share each
+      // band (A1/A2, B1/B2, C1/C2); `levelBand()` below derives the band word
+      // alone for UI that already renders the code as its own element (the
+      // desk dock's tiles), so neither ever repeats the code.
       levels: {
-        A1: 'Principiante',
-        A2: 'Básico',
-        B1: 'Intermedio',
-        B2: 'Intermedio alto',
-        C1: 'Avanzado',
-        C2: 'Dominio',
+        A1: 'Básico A1',
+        A2: 'Básico A2',
+        B1: 'Intermedio B1',
+        B2: 'Intermedio B2',
+        C1: 'Avanzado C1',
+        C2: 'Avanzado C2',
       },
       // NO `focuses` / `topics` / `skills` maps here, deliberately. Those are
       // exercise DATA, not chrome: their display labels are English in every
@@ -2016,7 +2023,7 @@ export const UI_LABELS = {
           description: 'Upload a worksheet or a PDF and mark where the answers go.',
         },
         questions: {
-          title: 'Basic',
+          title: 'Mixed games',
           description: 'Write questions and play them many ways.',
         },
         match: {
@@ -2068,7 +2075,7 @@ export const UI_LABELS = {
         changeImageConfirmBody: 'The zones drawn on the current image will be lost.',
         changeImageConfirmAccept: 'Change',
         worksheetLabel: 'Worksheet',
-        quizLabel: 'Basic',
+        quizLabel: 'Mixed games',
         // Creator polish round 2.
         blockNameLabel: 'Block name',
         blockNamePlaceholder: 'Block name',
@@ -2273,11 +2280,11 @@ export const UI_LABELS = {
         audioPause: 'Pause audio',
       },
       gameModes: {
-        modeQuiz: 'Basic',
+        modeQuiz: 'Mixed games',
         modeCards: 'Cards',
         modeMatch: 'Match',
         modeReorder: 'Reorder',
-        gradesQuizModeHint: 'Check grades the "Basic" mode.',
+        gradesQuizModeHint: 'Check grades the "Mixed games" mode.',
         cardFlipHint: 'Tap or press Space to flip',
         cardPrev: 'Previous',
         cardNext: 'Next',
@@ -2506,7 +2513,7 @@ export const UI_LABELS = {
         typeLabel: 'Type',
         typeAll: 'All',
         typeWorksheet: 'Worksheet',
-        typeQuiz: 'Basic',
+        typeQuiz: 'Mixed games',
         sortLabel: 'Sort by',
         sortRecientes: 'Most recent',
         sortGustadas: 'Most liked',
@@ -2593,7 +2600,7 @@ export const UI_LABELS = {
         answersHeading: 'Answer key',
         explanationLabel: 'Why',
         worksheetLabel: 'Worksheet',
-        quizLabel: 'Basic',
+        quizLabel: 'Mixed games',
         matchLabel: 'Match the pairs',
         reorderLabel: 'Reorder',
         clozeLabel: 'Complete the sentence',
@@ -2848,13 +2855,15 @@ export const UI_LABELS = {
         searchFocus: 'Search language points',
         focusesNoResults: 'No language points match that search.',
       },
+      // Mirrors the `es` block's "band + code" scheme (owner decision
+      // 2026-10-11): band word plus the bare code, e.g. "Basic A1".
       levels: {
-        A1: 'Beginner',
-        A2: 'Elementary',
-        B1: 'Intermediate',
-        B2: 'Upper intermediate',
-        C1: 'Advanced',
-        C2: 'Proficient',
+        A1: 'Basic A1',
+        A2: 'Basic A2',
+        B1: 'Intermediate B1',
+        B2: 'Intermediate B2',
+        C1: 'Advanced C1',
+        C2: 'Advanced C2',
       },
       // No `focuses` / `topics` / `skills` here either — see the `es` block.
       exercise: {
@@ -2904,4 +2913,18 @@ export const UI_LABELS = {
     },
   },
 } as const satisfies Record<Lang, unknown>;
+
+/**
+ * The band word alone from a level's localized display name — "Básico A1" ->
+ * "Básico", "Intermediate B2" -> "Intermediate" (see the `english.levels`
+ * comment for the "band + code" scheme this derives from). For UI that
+ * already renders the CEFR code as its own, visually distinct element (the
+ * desk dock's level tiles: big code, small band label underneath) so the
+ * code is never shown twice. Strips the trailing ` ${level}` off the full
+ * display name rather than duplicating the band words in a second map.
+ */
+export function levelBand(lang: Lang, level: Level): string {
+  const full: string = UI_LABELS[lang].english.levels[level];
+  return full.slice(0, full.length - level.length).trim();
+}
 

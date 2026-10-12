@@ -27,7 +27,7 @@ describe('BlockTypePicker', () => {
   it('renders the worksheet, questions, match, reorder and cloze cards, in Spanish', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
-    expect(screen.getByTestId('picker-questions').textContent).toContain('Básico');
+    expect(screen.getByTestId('picker-questions').textContent).toContain('Varios juegos');
     expect(screen.getByTestId('picker-match').textContent).toContain('Une las parejas');
     expect(screen.getByTestId('picker-reorder').textContent).toContain('Reordenar');
     expect(screen.getByTestId('picker-cloze').textContent).toContain('Completar la frase');
@@ -43,7 +43,7 @@ describe('BlockTypePicker', () => {
   it('renders in English', () => {
     render(<BlockTypePicker lang="en" {...noopHandlers()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
-    expect(screen.getByTestId('picker-questions').textContent).toContain('Basic');
+    expect(screen.getByTestId('picker-questions').textContent).toContain('Mixed games');
     expect(screen.getByTestId('picker-match').textContent).toContain('Match the pairs');
     expect(screen.getByTestId('picker-reorder').textContent).toContain('Reorder');
   });

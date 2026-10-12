@@ -33,7 +33,7 @@ const baseActivity: PublishedActivityCard = {
 const baseProps = {
   lang: 'es',
   activity: baseActivity,
-  levelLabels: { A1: 'Principiante', A2: 'Básico', B1: 'Intermedio', B2: 'Intermedio alto', C1: 'Avanzado', C2: 'Maestría' },
+  levelLabels: { A1: 'Básico A1', A2: 'Básico A2', B1: 'Intermedio B1', B2: 'Intermedio B2', C1: 'Avanzado C1', C2: 'Avanzado C2' },
   noLevel: 'Sin nivel',
   blockCountOne: 'bloque',
   blockCountMany: 'bloques',
@@ -160,7 +160,7 @@ describe('ActivityCard.astro — compact variant', () => {
 
   it('renders the level line', async () => {
     const html = await render({ ...baseProps, variant: 'compact' });
-    expect(html).toContain('B1 · Intermedio');
+    expect(html).toContain('Intermedio B1');
   });
 
   it('renders hearts and views counts', async () => {
