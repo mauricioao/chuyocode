@@ -289,16 +289,18 @@ defineInglesChromeTests('phone', { width: 390, height: 844 });
 
 /**
  * The hub (like every other Inglés page except the two guest-play activity
- * routes, `@lib/access.ts#requiresLogin`) is sign-in gated — this repo has
- * no e2e auth fixture yet, so an anonymous Playwright session gets
- * redirected to `/auth/entrar`. Each test below skips gracefully in that
+ * routes and the community catalog itself, `@lib/access.ts#requiresLogin`)
+ * is sign-in gated — this repo has no e2e auth fixture yet, so an anonymous
+ * Playwright session is sent to the catalog instead of `/auth/entrar` (owner
+ * decision 2026-10-11 — see the `hub -> catalog redirect` describe block
+ * below), never to the hub itself. Each test below skips gracefully in that
  * case (same posture as `findInglesActivityPath`'s own skip above) rather
- * than asserting against a sign-in page; they become real checks the moment
+ * than asserting against the wrong page; they become real checks the moment
  * an e2e auth fixture lands, with no change needed here.
  */
 async function gotoHubOrSkip(page: Page): Promise<boolean> {
   await page.goto('/es/ingles');
-  return !page.url().includes('/auth/entrar');
+  return /\/ingles\/?$/.test(new URL(page.url()).pathname);
 }
 
 /**
@@ -349,12 +351,32 @@ test.describe('INGLÉS HUB mode — /es/ingles (desktop redesign PART 1, item C)
   test('a non-hub Inglés page does NOT carry data-chrome-hub', async ({ page }) => {
     // `/propuestos` folded into the community catalog (owner spec
     // 2026-10-07) and is now a redirect there — go straight to the
-    // canonical non-hub route instead of relying on the redirect.
+    // canonical non-hub route instead of relying on the redirect. The
+    // catalog is guest-open (owner decision 2026-10-11), so this no longer
+    // needs a sign-in skip at all — an anonymous Playwright session reaches
+    // it directly.
     await page.goto('/es/ingles/actividades');
-    if (page.url().includes('/auth/entrar')) {
-      test.skip(true, 'Inglés subroutes are sign-in gated; no e2e auth fixture in this repo yet');
-    }
     const hub = await page.evaluate(() => document.documentElement.hasAttribute('data-chrome-hub'));
     expect(hub).toBe(false);
+  });
+});
+
+/**
+ * Guest browse (owner decision 2026-10-11, "guests can SEE and play"): the
+ * community catalog opens to anonymous visitors, and the hub itself sends
+ * one straight there instead of to the login wall. Unlike every other test
+ * in this file, these need no e2e auth fixture and no skip — an anonymous
+ * Playwright session is exactly the case under test.
+ */
+test.describe('hub -> catalog redirect for guests (owner decision 2026-10-11)', () => {
+  test('an anonymous visit to the hub ends on the activities catalog', async ({ page }) => {
+    await page.goto('/es/ingles');
+    await expect(page).toHaveURL(/\/es\/ingles\/actividades$/);
+  });
+
+  test('the guest sees the catalog with a sign-up banner, never a sign-in page', async ({ page }) => {
+    await page.goto('/es/ingles');
+    await expect(page.getByTestId('catalog-guest-banner')).toBeVisible();
+    await expect(page.getByTestId('guest-sign-up-link')).toBeVisible();
   });
 });

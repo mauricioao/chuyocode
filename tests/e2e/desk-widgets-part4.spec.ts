@@ -7,16 +7,22 @@ import { test, expect, type Page } from '@playwright/test';
  * The hub is sign-in gated (`@lib/access.ts#requiresLogin`) and this repo
  * has no e2e auth fixture yet — same posture as `chrome-visibility.spec.ts`'s
  * own `gotoHubOrSkip`: every test below skips gracefully when an anonymous
- * Playwright session gets redirected to `/auth/entrar`, rather than
- * asserting against a sign-in page. These become real checks the moment an
- * e2e auth fixture lands, with no change needed here.
+ * Playwright session does not actually land on the hub (it is sent to the
+ * now guest-open activities catalog instead, not the login wall — owner
+ * decision 2026-10-11), rather than asserting against the wrong page. These
+ * become real checks the moment an e2e auth fixture lands, with no change
+ * needed here.
  */
 
 const DESK_BREAKPOINT = { width: 1440, height: 900 };
 
 async function gotoHubOrSkip(page: Page): Promise<boolean> {
   await page.goto('/es/ingles');
-  return !page.url().includes('/auth/entrar');
+  // An anonymous visitor is now sent to the (guest-open) activities catalog
+  // instead of the login wall (owner decision 2026-10-11) — so "not entrar"
+  // no longer proves a signed-in session reached the hub; the loaded page
+  // must actually BE the hub.
+  return /\/ingles\/?$/.test(new URL(page.url()).pathname);
 }
 
 test.describe('desk hub widgets (PART 4)', () => {

@@ -134,7 +134,10 @@ describe('GET /[lang]/ingles/actividades — renders as a window over the desk (
     expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
   });
 
-  it('opens full screen with no desk behind it for a guest (TEMP/parity branch — unreachable in production, the route is gated)', async () => {
+  // Guest browse (owner decision 2026-10-11, "guests can SEE and play"): a
+  // real, reachable case now — an anonymous visitor's window opens full
+  // screen with no desk behind it, same as `[id].astro`'s own guest window.
+  it('opens full screen with no desk behind it for a guest, closing to the ChuyoCode home', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades', {
       params: { lang: 'es' },
       locals: { user: null },
@@ -143,6 +146,37 @@ describe('GET /[lang]/ingles/actividades — renders as a window over the desk (
     expect(html).toMatch(/<section[^>]*data-desk-window[^>]*data-fullscreen="true"[^>]*>/);
     expect(html).toContain('data-close-target="/es/"');
     expect(html).not.toContain('Para ti hoy');
+  });
+
+  it('shows the guest banner inviting an anonymous visitor to create an account', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', {
+      params: { lang: 'es' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="catalog-guest-banner"');
+    expect(html).toContain('Crea tu cuenta gratis para tener tu escritorio y crear tus propias actividades.');
+    const testidIndex = html.indexOf('data-testid="guest-sign-up-link"');
+    const start = html.lastIndexOf('<a', testidIndex);
+    const signUpLink = html.slice(start, html.indexOf('</a>', testidIndex));
+    expect(signUpLink).toContain('href="/es/auth/entrar?mode=signup&amp;next=');
+  });
+
+  it('never shows the guest banner for a signed-in visitor', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="catalog-guest-banner"');
+  });
+
+  it('hides the desk-host "Para ti hoy" folder and the novistas toggle for a guest, without hiding the catalog itself', async () => {
+    pageResult.value = { activities: [card({ id: 'act-1', title: 'Mi actividad' })], total: 1 };
+    const res = await render('https://chuyocode.test/es/ingles/actividades', {
+      params: { lang: 'es' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    expect(html).toContain('Mi actividad');
+    expect(html).not.toMatch(/name="novistas"/);
   });
 
   it('has a "+" create-activity shortcut in the title bar, linking to the creator', async () => {
