@@ -546,8 +546,39 @@
      * property on the editor's own block-list scroll container below, and
      * with the always-visible (never auto-hidden) thin scrollbar further
      * down this file — an auto-hidden scrollbar would still cause the same
-     * jump on hover/scroll. */
-    scrollbar-gutter: stable;
+     * jump on hover/scroll.
+     *
+     * `both-edges` (visual-polish pass, grey-strip bugfix): plain `stable`
+     * only ever reserves the gutter on the PHYSICAL right edge (LTR), so
+     * EVERY page carries a permanent ~15-17px wider margin on the right than
+     * the left, even on routes that never scroll at the document level at
+     * all — e.g. an Inglés exercise window, whose own `<body>` is locked to
+     * `overflow-hidden h-dvh` while it is open (`BaseLayout.astro`'s
+     * `staticOverlayLock`). A fullscreen guest window (`DeskWindow.astro`'s
+     * `forceFullScreen`, `fixed inset-0`) still sits inside that same
+     * right-shrunk canvas, so its content reads off-centre and the
+     * uncovered sliver on the right — Chromium paints an inactive reserved
+     * gutter with its own native track appearance, NOT the transparent
+     * `::-webkit-scrollbar-track` below, which only ever applies once a
+     * scrollbar is actually active — shows as a stray light-grey strip with
+     * nothing matching it on the left. Reserving the SAME width on both
+     * edges cancels the asymmetry: the desk/page centers correctly again,
+     * and whatever sliver Chromium still paints is now identical left and
+     * right, reading as a deliberate margin rather than a one-sided glitch.
+     * INVARIANT: this value must never regress to one-sided `stable` while
+     * any fixed/full-bleed surface (a desk window, a modal) is expected to
+     * sit flush and centered in the viewport. */
+    scrollbar-gutter: stable both-edges;
+    /* Grey-strip bugfix, part 2: give the root itself the SAME background
+     * token the page already paints with (`--background` — the desk's own
+     * `#EEEFF4` on `[data-theme='ingles']`), rather than leaving it
+     * transparent/UA-default. The classic "body background propagates to
+     * the canvas" rule already makes this a no-op on ordinary pages, but it
+     * removes any UA-default/`color-scheme: dark` canvas mismatch in the
+     * one place that rule does NOT reach: the reserved-but-inactive
+     * scrollbar-gutter strip itself, which is Chromium's own native track
+     * chrome, painted outside the normal content-painting pipeline. */
+    background-color: var(--background);
   }
 
   input,
