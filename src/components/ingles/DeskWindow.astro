@@ -188,8 +188,8 @@ const {
     // same as the existing below-`desk:`/guest full-screen sheet, never the
     // desktop-inset treatment below. See the `embedded` prop's own doc.
     !embedded && [
-      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px]',
-      'shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]',
+      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[20px]',
+      'shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]',
     ],
   ]}
 >
@@ -331,7 +331,7 @@ const {
           />
         </>
       ) : (
-        <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
+        <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.02em] text-foreground">
           {title}
         </b>
       )}

@@ -87,7 +87,7 @@ type PendingOpen = { kind: 'origin'; x: number; y: number } | { kind: 'cascade' 
  * bottom/side insets are unchanged.
  */
 const WRAPPER_CLASS =
-  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]';
+  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-16 desk:rounded-[20px] shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]';
 
 interface ManagedWindow {
   wrapper: HTMLElement;
