@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  PROMPT_SCALE,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTAINER,
   STAGE_CONTAINER_SIZE,
@@ -9,6 +10,23 @@ import {
   TILE_PADDING_Y_SCALE,
   TILE_TEXT_SCALE,
 } from './scale';
+
+describe('PROMPT_SCALE — the exercise prompt/sentence font-size ramp (UI-kit refactor)', () => {
+  it('stays a mobile-first stepped ramp: text-xl at rest, one sm: bump for a bigger phone/tablet', () => {
+    expect(PROMPT_SCALE).toMatch(/^text-xl\b/);
+    expect(PROMPT_SCALE).toMatch(/\bsm:text-2xl\b/);
+  });
+
+  it('the desktop step is gated on `desk:` (1100px, DeskWindow.astro\'s own chrome breakpoint), never `lg:`', () => {
+    expect(PROMPT_SCALE).not.toMatch(/\blg:/);
+    expect(PROMPT_SCALE).toMatch(/\bdesk:text-\[/);
+  });
+
+  it('lands on the owner\'s ~44px "readable from the back of the room" desktop size, the SAME ceiling TILE_TEXT_SCALE\'s own clamp uses — never a second, independently tuned number', () => {
+    expect(PROMPT_SCALE).toMatch(/\bdesk:text-\[2\.75rem\]$/);
+    expect(TILE_TEXT_SCALE).toContain('2.75rem');
+  });
+});
 
 describe('scale — shared game-stage sizing tokens (visual-polish pass)', () => {
   it('STAGE_CONTAINER marks a stage root as a width-only size container', () => {
