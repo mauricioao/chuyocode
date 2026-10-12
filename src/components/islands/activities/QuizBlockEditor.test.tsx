@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
 import type { Payload } from '@/lib/exercisePayload';
+import type { QuizTemplate } from '@/lib/activities/blocks';
 
 afterEach(() => {
   cleanup();
@@ -113,125 +114,331 @@ function GroupSortHarness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
-describe('QuizBlockEditor — empty state (item 4, example-first)', () => {
-  it('shows the empty-questions message, a 3-question example preview, and no question list or checklist', () => {
+/**
+ * "Cambiar de molde" (R2) harness — owns BOTH `payload` and `template`
+ * (mirroring `BlockList.tsx`'s own `updateQuizTemplate`, the ONE commit a
+ * conversion lands as), plus a tiny undo stack to demonstrate that one
+ * commit is one step, same as the island's real `pushHistory`.
+ */
+function ConvertHarness({
+  initialPayload,
+  initialTemplate,
+  onConvertSpy,
+}: {
+  initialPayload: Payload;
+  initialTemplate?: QuizTemplate;
+  onConvertSpy?: (payload: Payload, template: QuizTemplate | undefined) => void;
+}) {
+  const [state, setState] = useState<{ payload: Payload; template?: QuizTemplate }>(() =>
+    initialTemplate ? { payload: initialPayload, template: initialTemplate } : { payload: initialPayload },
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const historyRef = useRef<{ payload: Payload; template?: QuizTemplate }[]>([]);
+
+  return (
+    <>
+      <QuizBlockEditor
+        blockId="b1"
+        lang="es"
+        payload={state.payload}
+        template={state.template}
+        selectedSlotId={selectedSlotId}
+        onSelectSlot={setSelectedSlotId}
+        onPayloadChange={(payload) => setState((s) => ({ ...s, payload }))}
+        onConvert={(payload, template) => {
+          onConvertSpy?.(payload, template);
+          historyRef.current.push(state);
+          setState(template ? { payload, template } : { payload });
+        }}
+      />
+      <button
+        type="button"
+        data-testid="test-undo"
+        onClick={() => {
+          const previous = historyRef.current.pop();
+          if (previous) setState(previous);
+        }}
+      >
+        undo
+      </button>
+    </>
+  );
+}
+
+const MATCH_NO_REPEAT_PAYLOAD: Payload = {
+  pools: {},
+  slots: [
+    { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+    { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+    { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+  ],
+  blocks: [
+    { kind: 'row', id: 'row-s1', slotId: 's1' },
+    { kind: 'row', id: 'row-s2', slotId: 's2' },
+    { kind: 'row', id: 'row-s3', slotId: 's3' },
+  ],
+};
+
+const BASIC_CHOICE_PAYLOAD: Payload = {
+  pools: { p1: [{ id: 'o1', text: 'Paris' }, { id: 'o2', text: 'Berlin' }, { id: 'o3', text: 'Rome' }] },
+  slots: [{ id: 's1', label: 'Capital of France', input: 'choice', pool: 'p1', answer: ['o1'] }],
+  blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+};
+
+/** One choice question (2 distractors dropped) AND one text question with an extra accepted answer (1 dropped) — "two kinds at once". */
+const BASIC_MIXED_PAYLOAD: Payload = {
+  pools: { p1: [{ id: 'o1', text: 'Paris' }, { id: 'o2', text: 'Berlin' }, { id: 'o3', text: 'Rome' }] },
+  slots: [
+    { id: 's1', label: 'Capital of France', input: 'choice', pool: 'p1', answer: ['o1'] },
+    { id: 's2', label: 'Capital of Spain', input: 'text', answer: ['Madrid', 'madrid'] },
+  ],
+  blocks: [
+    { kind: 'row', id: 'row-s1', slotId: 's1' },
+    { kind: 'row', id: 'row-s2', slotId: 's2' },
+  ],
+};
+
+/** 2 answers share "Animals", 2 share "Vehicles", 1 ("apple" -> "Fruits") is alone and gets dropped converting to groupsort. */
+const MATCH_WITH_REPEATS_PAYLOAD: Payload = {
+  pools: {},
+  slots: [
+    { id: 's1', label: 'cat', input: 'text', answer: ['Animals'] },
+    { id: 's2', label: 'dog', input: 'text', answer: ['Animals'] },
+    { id: 's3', label: 'car', input: 'text', answer: ['Vehicles'] },
+    { id: 's4', label: 'bike', input: 'text', answer: ['Vehicles'] },
+    { id: 's5', label: 'apple', input: 'text', answer: ['Fruits'] },
+  ],
+  blocks: [
+    { kind: 'row', id: 'row-s1', slotId: 's1' },
+    { kind: 'row', id: 'row-s2', slotId: 's2' },
+    { kind: 'row', id: 'row-s3', slotId: 's3' },
+    { kind: 'row', id: 'row-s4', slotId: 's4' },
+    { kind: 'row', id: 'row-s5', slotId: 's5' },
+  ],
+};
+
+/** Two blanks plus two unclaimed distractor pool items — dropped converting to reorder. */
+const CLOZE_WITH_DISTRACTORS_PAYLOAD: Payload = {
+  pools: {
+    'b1-cloze-pool': [
+      { id: 'w1', text: 'was' },
+      { id: 'w2', text: 'received' },
+      { id: 'd1', text: 'extra1' },
+      { id: 'd2', text: 'extra2' },
+    ],
+  },
+  slots: [
+    { id: 'slot-a', label: 'I ___ travelling when I received a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] },
+    { id: 'slot-b', label: 'I was travelling when I ___ a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w2'] },
+  ],
+  blocks: [
+    { kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' },
+    { kind: 'row', id: 'row-cz-s0-b1-2', slotId: 'slot-b' },
+  ],
+};
+
+/** A `select`-mechanic gap question — a shape the simple row cannot show at all (R3's own per-row escape). */
+const GAP_PAYLOAD: Payload = {
+  pools: { p1: [{ id: 'w1', text: 'was' }, { id: 'w2', text: 'were' }] },
+  slots: [{ id: 's1', label: 'I ___ happy', input: 'select', pool: 'p1', answer: ['w1'] }],
+};
+
+describe('QuizBlockEditor — Varios juegos: empty state (ghost example row, R3)', () => {
+  it('shows one editable ghost row with teaching placeholders, no list or checklist', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
-    const empty = screen.getByTestId('quiz-empty-b1');
-    expect(empty.textContent).toContain('Agrega tu primera pregunta');
+    expect(screen.getByTestId('varios-example-b1')).toBeTruthy();
     expect(screen.queryByTestId('quiz-question-list-b1')).toBeNull();
     expect(screen.queryByTestId('quiz-checklist-b1')).toBeNull();
 
-    const preview = screen.getByTestId('quiz-example-preview-b1');
-    expect(preview.textContent).toContain('What color is the sky?');
-
-    const useExampleButton = screen.getByTestId('quiz-use-example-b1');
-    expect(empty.contains(useExampleButton)).toBe(true);
-    expect(useExampleButton.getAttribute('data-variant')).toBe('primary');
-
-    const startBlankButton = screen.getByTestId('quiz-start-blank-b1');
-    expect(empty.contains(startBlankButton)).toBe(true);
-    expect(startBlankButton.getAttribute('data-variant')).toBe('outline');
+    const question = screen.getByTestId('varios-example-question-b1') as HTMLInputElement;
+    const answer = screen.getByTestId('varios-example-answer-b1') as HTMLInputElement;
+    expect(question.placeholder).toBe('¿De qué color es el cielo?');
+    expect(answer.placeholder).toBe('azul');
   });
 
-  it('"Usar este ejemplo" fills the block with 3 submit-ready questions', () => {
+  it('typing into the ghost question field creates the first real row', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('quiz-use-example-b1'));
-    expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(3);
-    expect(screen.getByTestId('quiz-checklist-b1').textContent).toContain('todas con respuesta');
+    fireEvent.change(screen.getByTestId('varios-example-question-b1'), {
+      target: { value: 'What color is the sky?' },
+    });
+    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
+    const questionFields = screen.getAllByTestId(/^varios-question-/);
+    expect(questionFields).toHaveLength(1);
+    expect((questionFields[0] as HTMLInputElement).value).toBe('What color is the sky?');
   });
 
-  it('"Empezar en blanco" adds one empty question card, focused', () => {
+  it('typing into the ghost answer field creates the first real row too', () => {
     render(<Harness initialPayload={EMPTY_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
-    const cards = screen.getAllByTestId(/^question-card-/);
-    expect(cards).toHaveLength(1);
-    expect(cards[0]!.getAttribute('data-highlighted')).toBe('true');
+    fireEvent.change(screen.getByTestId('varios-example-answer-b1'), { target: { value: 'blue' } });
+    const answerFields = screen.getAllByTestId(/^varios-answer-/);
+    expect(answerFields).toHaveLength(1);
+    expect((answerFields[0] as HTMLInputElement).value).toBe('blue');
   });
 });
 
-describe('QuizBlockEditor — adding a question', () => {
-  it('"Empezar en blanco" from the empty state adds a question as an always-editable card and selects it', () => {
-    render(<Harness initialPayload={EMPTY_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('quiz-start-blank-b1'));
-
-    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
-    expect(screen.queryByTestId('quiz-empty-b1')).toBeNull();
-    const cards = screen.getAllByTestId(/^question-card-/);
-    expect(cards).toHaveLength(1);
-  });
-
-  it('the trailing "+ Agregar pregunta" button adds another question once at least one exists', () => {
+describe('QuizBlockEditor — Varios juegos: adding a question', () => {
+  it('"Agregar pregunta" adds another row once at least one exists', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
     fireEvent.click(screen.getByTestId('add-question-b1'));
-    expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(2);
+    expect(screen.getAllByTestId(/^varios-row-/)).toHaveLength(2);
   });
 
   it('Ctrl+Enter anywhere inside the block adds the next question', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    fireEvent.keyDown(screen.getByTestId('question-text-s1'), { key: 'Enter', ctrlKey: true });
-    expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(2);
+    fireEvent.keyDown(screen.getByTestId('varios-question-s1'), { key: 'Enter', ctrlKey: true });
+    expect(screen.getAllByTestId(/^varios-row-/)).toHaveLength(2);
   });
 });
 
-describe('QuizBlockEditor — editing a question', () => {
-  it('updates the sentence directly on the card', () => {
+describe('QuizBlockEditor — Varios juegos: editing a plain text question (round-trips to the same shape)', () => {
+  it('updates the question text directly on the row', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    const textarea = screen.getByTestId('question-text-s1');
-    fireEvent.change(textarea, { target: { value: 'The dog ___ on the rug' } });
-    expect((screen.getByTestId('question-text-s1') as HTMLTextAreaElement).value).toBe(
-      'The dog ___ on the rug',
+    fireEvent.change(screen.getByTestId('varios-question-s1'), { target: { value: 'The dog ___ on the rug' } });
+    expect((screen.getByTestId('varios-question-s1') as HTMLInputElement).value).toBe('The dog ___ on the rug');
+  });
+
+  it('updates the answer directly, keeping it a single-answer text question', () => {
+    const onPayloadChange = vi.fn();
+    render(
+      <QuizBlockEditor
+        blockId="b1"
+        lang="es"
+        payload={ONE_QUESTION_PAYLOAD}
+        selectedSlotId={null}
+        onSelectSlot={() => {}}
+        onPayloadChange={onPayloadChange}
+      />,
     );
-  });
-
-  it('changes the type to choice (preserving the accepted answer as an option) and adds another option', () => {
-    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('question-type-s1-choice'));
-    // text -> choice preserves 'sits' as the first option (quizQuestionType.ts).
-    expect(screen.getByTestId('question-options-s1').querySelectorAll('[data-testid^="question-option-text-"]'))
-      .toHaveLength(1);
-    fireEvent.click(screen.getByTestId('question-add-option-s1'));
-    expect(screen.getByTestId('question-options-s1').querySelectorAll('[data-testid^="question-option-text-"]'))
-      .toHaveLength(2);
+    fireEvent.change(screen.getByTestId('varios-answer-s1'), { target: { value: 'sat' } });
+    const payload = onPayloadChange.mock.calls[0]![0] as Payload;
+    expect(payload.slots[0]).toMatchObject({ id: 's1', input: 'text', answer: ['sat'] });
   });
 });
 
-describe('QuizBlockEditor — explanation (D5, "¿Por qué?")', () => {
-  it('starts empty, and types an explanation via the "Más opciones" panel', () => {
+describe('QuizBlockEditor — Varios juegos: "Agregar opciones" toggles a row into multiple choice, and back', () => {
+  it('reveals one option chip, already marked correct, preserving the text answer (changeQuestionSegment)', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('varios-add-options-s1'));
+    const options = screen.getByTestId('varios-options-s1').querySelectorAll('[data-testid^="varios-option-text-"]');
+    expect(options).toHaveLength(1);
+    expect((options[0] as HTMLInputElement).value).toBe('sits');
+  });
+
+  it('adds another option via "+ Agregar opción"', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('varios-add-options-s1'));
+    fireEvent.click(screen.getByTestId('varios-option-add-s1'));
+    const options = screen.getByTestId('varios-options-s1').querySelectorAll('[data-testid^="varios-option-text-"]');
+    expect(options).toHaveLength(2);
+  });
+
+  it('shows the already-marked-correct option for an existing choice question', () => {
+    render(<Harness initialPayload={BASIC_CHOICE_PAYLOAD} />);
+    expect(screen.getByTestId('varios-option-correct-s1-o1')).toHaveProperty('checked', true);
+  });
+
+  it('"Quitar opciones" switches back to a plain text answer, keeping the correct option\'s text', () => {
+    render(<Harness initialPayload={BASIC_CHOICE_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('varios-remove-options-s1'));
+    expect((screen.getByTestId('varios-answer-s1') as HTMLInputElement).value).toBe('Paris');
+  });
+});
+
+describe('QuizBlockEditor — Varios juegos: per-row "Editor avanzado" escape — shapes the simple row cannot show', () => {
+  it('a question with more than one accepted text answer opens automatically in the old card', () => {
+    render(<Harness initialPayload={BASIC_MIXED_PAYLOAD} />);
+    // s1 (choice) stays a simple row; s2 (2 accepted answers) escapes automatically.
+    expect(screen.getByTestId('varios-question-s1')).toBeTruthy();
+    expect(screen.queryByTestId('varios-answer-s2')).toBeNull();
+    expect(screen.getByTestId('question-card-s2')).toBeTruthy();
+    expect(screen.queryByTestId('varios-advanced-toggle-s2')).toBeNull(); // forced open: no manual close
+  });
+
+  it('a gap (select/drop) question opens automatically too, fully editable', () => {
+    render(<Harness initialPayload={GAP_PAYLOAD} />);
+    expect(screen.getByTestId('question-card-s1')).toBeTruthy();
+    expect(screen.getByTestId('question-type-s1-gap').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('every row can voluntarily open "Editor avanzado", and close it again when the shape allows', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+    fireEvent.click(screen.getByTestId('varios-advanced-toggle-s1'));
+    expect(screen.getByTestId('question-card-s1')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('varios-advanced-toggle-s1'));
+    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+    expect(screen.getByTestId('varios-question-s1')).toBeTruthy();
+  });
+});
+
+describe('QuizBlockEditor — Varios juegos: explanation (D5, "¿Por qué?") via the advanced editor', () => {
+  it('is reachable from the simple row only through "Editor avanzado"', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('varios-advanced-toggle-s1'));
     fireEvent.click(screen.getByTestId('question-more-options-s1'));
     const input = screen.getByTestId('question-explanation-s1') as HTMLTextAreaElement;
     expect(input.value).toBe('');
     fireEvent.change(input, { target: { value: 'Third person -s.' } });
-    expect((screen.getByTestId('question-explanation-s1') as HTMLTextAreaElement).value).toBe(
-      'Third person -s.',
-    );
+    expect((screen.getByTestId('question-explanation-s1') as HTMLTextAreaElement).value).toBe('Third person -s.');
   });
 });
 
-describe('QuizBlockEditor — duplicating a question', () => {
-  it('inserts a copy right after the original, with a fresh pool for pooled types', () => {
-    const payload: Payload = {
-      pools: { opts: [{ id: 'a', text: 'cat' }, { id: 'b', text: 'dog' }] },
-      slots: [{ id: 's1', label: 'Pick one', input: 'choice', pool: 'opts', answer: ['b'] }],
-    };
-    render(<Harness initialPayload={payload} />);
+describe('QuizBlockEditor — Varios juegos: duplicating a question (advanced editor)', () => {
+  it('inserts a copy right after the original, with a fresh pool for pooled types — the copy stays a simple row', () => {
+    render(<Harness initialPayload={BASIC_CHOICE_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('varios-advanced-toggle-s1'));
     fireEvent.click(screen.getByTestId('question-duplicate-s1'));
 
-    const cards = screen.getAllByTestId(/^question-card-/);
-    expect(cards).toHaveLength(2);
-    // The duplicate is a different slot id, so its own data-testid differs.
-    const duplicateId = cards[1]!.getAttribute('data-testid')!.replace('question-card-', '');
-    expect(duplicateId).not.toBe('s1');
-    expect(screen.getByTestId(`question-text-${duplicateId}`)).toBeTruthy();
+    expect(screen.getAllByTestId(/^varios-row-/)).toHaveLength(2);
+    // The original (still manually advanced) is the only `QuestionCard` — the
+    // duplicate is `choice` too, which the simple row shows directly.
+    expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(1);
   });
 });
 
-describe('QuizBlockEditor — removing a question', () => {
-  it('removes the question and clears its selection', () => {
+describe('QuizBlockEditor — Varios juegos: removing a question', () => {
+  it('removes the question and clears its selection, returning to the empty ghost row', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('question-delete-s1'));
-    expect(screen.getByTestId('quiz-empty-b1')).toBeTruthy();
-    expect(screen.queryByTestId('question-card-s1')).toBeNull();
+    fireEvent.click(screen.getByTestId('varios-remove-s1'));
+    expect(screen.getByTestId('varios-example-b1')).toBeTruthy();
+    expect(screen.queryByTestId('varios-row-s1')).toBeNull();
+  });
+});
+
+describe('QuizBlockEditor — Varios juegos: paste a whole list (N5, reuses parseMatchPairsPaste)', () => {
+  it('pasting into the empty ghost row yields one question per line, in one onPayloadChange call', () => {
+    const onPayloadChange = vi.fn();
+    render(
+      <QuizBlockEditor
+        blockId="b1"
+        lang="es"
+        payload={EMPTY_PAYLOAD}
+        selectedSlotId={null}
+        onSelectSlot={() => {}}
+        onPayloadChange={onPayloadChange}
+      />,
+    );
+    paste(screen.getByTestId('varios-example-question-b1'), 'dog = perro\ncat = gato');
+    expect(onPayloadChange).toHaveBeenCalledTimes(1);
+    const payload = onPayloadChange.mock.calls[0]![0] as Payload;
+    expect(payload.slots.map((s) => s.label)).toEqual(['dog', 'cat']);
+    expect(payload.slots.map((s) => s.answer)).toEqual([['perro'], ['gato']]);
+  });
+
+  it("pasting into an existing row's question field adds rows right after it", () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    paste(screen.getByTestId('varios-question-s1'), 'dog = perro\ncat = gato');
+    expect(screen.getAllByTestId(/^varios-row-/)).toHaveLength(3);
+  });
+
+  it('shows "Se agregaron N preguntas" right after a paste, reverting on the next edit', () => {
+    render(<Harness initialPayload={EMPTY_PAYLOAD} />);
+    paste(screen.getByTestId('varios-example-question-b1'), 'dog = perro\ncat = gato');
+    expect(screen.getByTestId('quiz-paste-feedback-b1').textContent).toBe('Se agregaron 2 preguntas');
+
+    const questionField = screen.getAllByTestId(/^varios-question-/)[0]!;
+    fireEvent.change(questionField, { target: { value: 'updated' } });
+    expect(screen.queryByTestId('quiz-paste-feedback-b1')).toBeNull();
   });
 });
 
@@ -270,9 +477,9 @@ describe('QuizBlockEditor — scrolling a newly added/selected question into vie
 describe('QuizBlockEditor — reordering questions', () => {
   it('renders a labeled, focusable drag handle per question, in question order', () => {
     render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
-    const cards = screen.getAllByTestId(/^question-card-/);
-    expect(cards[0]?.textContent).toContain('First');
-    expect(cards[1]?.textContent).toContain('Second');
+    const questionInputs = screen.getAllByTestId(/^varios-question-/) as HTMLInputElement[];
+    expect(questionInputs[0]?.value).toBe('First');
+    expect(questionInputs[1]?.value).toBe('Second');
 
     const handles = screen.getAllByLabelText('Reordenar pregunta', { selector: 'button' });
     expect(handles).toHaveLength(2);
@@ -280,12 +487,12 @@ describe('QuizBlockEditor — reordering questions', () => {
   });
 });
 
-describe('QuizBlockEditor — checklist', () => {
-  it('shows a complete badge when every question already has an answer', () => {
+describe('QuizBlockEditor — checklist / unlock status line (R3)', () => {
+  it('shows the unlock status line once every question already has an answer', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    const checklist = screen.getByTestId('quiz-checklist-b1');
-    expect(checklist.textContent).toContain('1 pregunta');
-    expect(checklist.textContent).toContain('todas con respuesta');
+    const status = screen.getByTestId('quiz-unlock-status-b1');
+    expect(status.textContent).toContain('Listo para jugar');
+    expect(status.textContent).toContain('1 pregunta');
   });
 
   it('lists an incomplete question and jumps to it on click', () => {
@@ -293,7 +500,8 @@ describe('QuizBlockEditor — checklist', () => {
     const item = screen.getByTestId('quiz-checklist-item-b1-s2');
     expect(item.textContent).toContain('Pregunta 2');
     fireEvent.click(item);
-    expect(screen.getByTestId('question-card-s2').getAttribute('data-highlighted')).toBe('true');
+    const highlighted = screen.getByTestId('varios-row-s2').querySelector('[data-highlighted="true"]');
+    expect(highlighted).toBeTruthy();
   });
 });
 
@@ -365,50 +573,6 @@ describe('QuizBlockEditor — live preview (items 3 and 8)', () => {
   });
 });
 
-describe('QuizBlockEditor — first-run tips (item 6)', () => {
-  it('shows step 1 anchored near the first question once a question exists', () => {
-    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    const tip = screen.getByTestId('quiz-first-run-tip');
-    expect(tip.textContent).toContain('Escribe la pregunta');
-  });
-
-  it('walks through all 3 steps via "Siguiente", ending on "Listo" at the add-question button', () => {
-    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    expect(screen.getByTestId('quiz-first-run-tip').textContent).toContain('Escribe la pregunta');
-
-    fireEvent.click(screen.getByTestId('quiz-first-run-tip-next'));
-    expect(screen.getByTestId('quiz-first-run-tip').textContent).toContain('Toca el círculo de la correcta');
-
-    fireEvent.click(screen.getByTestId('quiz-first-run-tip-next'));
-    const lastTip = screen.getByTestId('quiz-first-run-tip');
-    expect(lastTip.textContent).toContain('Agrega otra pregunta');
-    expect(screen.getByTestId('quiz-first-run-tip-next').textContent).toBe('Listo');
-
-    fireEvent.click(screen.getByTestId('quiz-first-run-tip-next'));
-    expect(screen.queryByTestId('quiz-first-run-tip')).toBeNull();
-  });
-
-  it('"Omitir" ends the tour immediately', () => {
-    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('quiz-first-run-tip-dismiss'));
-    expect(screen.queryByTestId('quiz-first-run-tip')).toBeNull();
-  });
-
-  it('never shows again once finished, even after remounting the editor', () => {
-    const { unmount } = render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('quiz-first-run-tip-dismiss'));
-    unmount();
-
-    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    expect(screen.queryByTestId('quiz-first-run-tip')).toBeNull();
-  });
-
-  it('only the first question card ever anchors a tip — a second question gets none', () => {
-    render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
-    expect(screen.getAllByTestId('quiz-first-run-tip')).toHaveLength(1);
-  });
-});
-
 describe('QuizBlockEditor — incomplete pointer', () => {
   it('shows the incomplete message on the pointed-to question', () => {
     render(
@@ -429,20 +593,11 @@ describe('QuizBlockEditor — incomplete pointer', () => {
   });
 });
 
-describe('QuizBlockEditor — hydration (useFirstRunTips reads localStorage, item 6)', () => {
-  it('does not report a recoverable hydration error when the tour has never been seen', async () => {
+describe('QuizBlockEditor — hydration', () => {
+  it('does not report a recoverable hydration error for a single simple row', async () => {
     const { recoverableErrors, consoleErrors } = await renderThenHydrate(() => (
       <Harness initialPayload={ONE_QUESTION_PAYLOAD} />
     ));
-    expect(recoverableErrors).toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  it('does not report a recoverable hydration error when the tour was already dismissed', async () => {
-    const { recoverableErrors, consoleErrors } = await renderThenHydrate(
-      () => <Harness initialPayload={ONE_QUESTION_PAYLOAD} />,
-      { localStorage: { 'chuyo:quiz-editor-tips-v1': '1' } },
-    );
     expect(recoverableErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   });
@@ -1293,5 +1448,117 @@ describe('QuizBlockEditor — "Ordenar por grupos": paste a whole list (N5)', ()
     const [realName] = screen.getAllByTestId(/^groupsort-name-/) as HTMLInputElement[];
     expect(realName.value).toBe('A');
     expect(document.activeElement).toBe(realName);
+  });
+});
+
+describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
+  it('shows the action in every quiz-based mold (Varios juegos, match, reorder, cloze, groupsort)', () => {
+    render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
+    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    cleanup();
+
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    cleanup();
+
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    cleanup();
+
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    cleanup();
+
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+  });
+
+  it('opens a sheet listing the 5 molds — the current one marked, unavailable ones disabled with their reason', () => {
+    render(<MatchHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+
+    expect(screen.getByTestId('change-mold-dialog-b1')).toBeTruthy();
+    expect(screen.getAllByTestId(/^change-mold-option-b1-/)).toHaveLength(5);
+
+    const current = screen.getByTestId('change-mold-option-b1-match') as HTMLButtonElement;
+    expect(current.textContent).toContain('Actual');
+    expect(current.disabled).toBe(true);
+
+    const groupsort = screen.getByTestId('change-mold-option-b1-groupsort') as HTMLButtonElement;
+    expect(groupsort.disabled).toBe(true);
+    expect(groupsort.textContent).toContain('Necesita al menos dos respuestas repetidas');
+
+    const basic = screen.getByTestId('change-mold-option-b1-basic') as HTMLButtonElement;
+    expect(basic.disabled).toBe(false);
+  });
+
+  it('choosing a mold converts the content, closes the sheet and shows "Cambiado a <molde>" in the status line', () => {
+    const onConvertSpy = vi.fn();
+    render(
+      <ConvertHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} initialTemplate="match" onConvertSpy={onConvertSpy} />,
+    );
+
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
+
+    expect(onConvertSpy).toHaveBeenCalledTimes(1); // ONE commit, ONE undo step upstream
+    expect(screen.queryByTestId('change-mold-dialog-b1')).toBeNull();
+    const status = screen.getByTestId('mold-status-b1');
+    expect(status.textContent).toContain('Cambiado a Varios juegos');
+    expect(status.textContent).toContain('Ctrl+Z para deshacer');
+    // The block now renders as the plain question list, not the match editor.
+    expect(screen.queryByTestId('match-pairs-editor-b1')).toBeNull();
+  });
+
+  it('names dropped options by their real kind — Varios juegos -> match', () => {
+    render(<ConvertHarness initialPayload={BASIC_CHOICE_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-match'));
+
+    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitaron 2 opciones');
+  });
+
+  it('names dropped pairs by their real kind, singular — match -> groupsort', () => {
+    render(<ConvertHarness initialPayload={MATCH_WITH_REPEATS_PAYLOAD} initialTemplate="match" />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-groupsort'));
+
+    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitó 1 pareja');
+  });
+
+  it('names dropped extra words by their real kind — cloze -> reorder', () => {
+    render(<ConvertHarness initialPayload={CLOZE_WITH_DISTRACTORS_PAYLOAD} initialTemplate="cloze" />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-reorder'));
+
+    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitaron 2 palabras extra');
+  });
+
+  it('joins two different dropped kinds naturally in one message', () => {
+    render(<ConvertHarness initialPayload={BASIC_MIXED_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-match'));
+
+    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitaron 2 opciones y 1 respuesta extra');
+  });
+
+  it('undoing restores the previous mold and content — one commit is one step', () => {
+    render(<ConvertHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} initialTemplate="match" />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
+    expect(screen.queryByTestId('match-pairs-editor-b1')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('test-undo'));
+    expect(screen.getByTestId('match-pairs-editor-b1')).toBeTruthy();
+  });
+
+  it('the live preview reflects the new game immediately after converting', () => {
+    render(<ConvertHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} initialTemplate="match" />);
+    fireEvent.click(screen.getByTestId('change-mold-b1'));
+    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
+
+    // Básico has no dedicated template sheet/preview split — its own
+    // question list renders directly, with the live preview beside it.
+    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
   });
 });

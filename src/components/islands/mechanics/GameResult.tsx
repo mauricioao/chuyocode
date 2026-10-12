@@ -40,14 +40,15 @@
  * + `aria-hidden`, the outcome is already carried in the headline text and
  * `data-outcome` for anything that needs it programmatically.
  *
- * SECONDARY ACTIONS USE `text-accent-ink`, NOT THE SHARED `Button` `link`
- * VARIANT'S OWN COLOR (owner review): `variant="link"` resolves to
- * `text-primary`, which is light yellow in the `ingles` theme — unreadable
- * on the white stage (fails the kit's 4.5:1 rule, `DIRECCION-VISUAL.md`
- * 3.1). That variant is owned by the UI-kit session, so it is not touched
- * here; these two buttons keep `variant="link"` for its underline-on-hover
- * behavior but override the color locally with `text-accent-ink` — the
- * same treatment the guest "Crear cuenta" link below already uses.
+ * SECONDARY ACTIONS JUST USE `variant="link"` (UI round 2): it used to
+ * resolve to `text-primary`, light yellow in the `ingles` theme and
+ * unreadable on the white stage (fails the kit's 4.5:1 rule,
+ * `DIRECCION-VISUAL.md` 3.1) — these two buttons locally overrode the
+ * color with `text-accent-ink` to work around it. The shared `Button`'s
+ * `link` variant itself now renders `text-accent-ink` inside the `ingles`
+ * theme (`button.tsx`), so that local override is redundant and gone; the
+ * guest "Crear cuenta" link below keeps its own explicit `text-accent-ink`
+ * since it is a plain `<a>`, not a `Button`.
  */
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -157,7 +158,7 @@ export default function GameResult({
                 type="button"
                 variant="link"
                 data-testid="game-result-review"
-                className="min-h-11 px-2 text-accent-ink"
+                className="min-h-11 px-2"
                 onClick={onReviewWrong}
               >
                 {t.reviewWrong}
@@ -168,7 +169,7 @@ export default function GameResult({
                 type="button"
                 variant="link"
                 data-testid="game-result-play-again"
-                className="min-h-11 px-2 text-accent-ink"
+                className="min-h-11 px-2"
                 onClick={onPlayAgain}
               >
                 {t.playAgain}

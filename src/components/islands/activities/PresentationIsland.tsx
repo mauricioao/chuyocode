@@ -40,6 +40,7 @@
  * and the stage fit are all pure client state that disappears on reload.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
 import { CaretRightIcon } from '@phosphor-icons/react/dist/ssr/CaretRight';
 import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
@@ -124,6 +125,16 @@ export interface PresentationIslandProps {
    * visitor browsing from), same gate `practiceUrl`/`qrSvg` already use.
    */
   nextActivityHref?: string;
+  /**
+   * Author preview (R1, owner decision 2026-10-12): the activity is not
+   * published yet, so its join QR would 404 for a student — the toggle/"Q"
+   * shortcut stays reachable (`qrAvailable` below), it just shows THIS
+   * message via toast instead of ever opening the overlay. Callers pass
+   * `qrSvg={null}` alongside this — belt-and-suspenders, since the real code
+   * must never even reach this component on that path. Omitted (every other
+   * caller) keeps today's behaviour unchanged.
+   */
+  qrBlockedMessage?: string;
 }
 
 type PresentCopy = (typeof UI_LABELS)[Lang]['activities']['present'];
@@ -155,6 +166,7 @@ export default function PresentationIsland({
   qrSvg,
   onExit,
   nextActivityHref,
+  qrBlockedMessage,
 }: PresentationIslandProps) {
   const t = UI_LABELS[lang].activities.present;
   const levelLabels = UI_LABELS[lang].english.levels;
@@ -303,11 +315,21 @@ export default function PresentationIsland({
   // below is what takes it back down once the presenter actually starts
   // teaching; the toggle/`Q` key keep working exactly as before afterwards,
   // this only changes the INITIAL state.
-  const [qrOverlayOpen, setQrOverlayOpen] = useState(Boolean(qrSvg));
+  const [qrOverlayOpen, setQrOverlayOpen] = useState(Boolean(qrSvg) && !qrBlockedMessage);
+  /**
+   * Author preview (R1): blocked message takes priority — a toast instead
+   * of ever opening the overlay, regardless of whether `qrSvg` happens to be
+   * set (callers always pass `qrSvg={null}` alongside it, see this file's
+   * own `qrBlockedMessage` doc, but this is the belt to that suspenders).
+   */
   const toggleQrOverlay = useCallback(() => {
+    if (qrBlockedMessage) {
+      toast(qrBlockedMessage);
+      return;
+    }
     if (!qrSvg) return;
     setQrOverlayOpen((open) => !open);
-  }, [qrSvg]);
+  }, [qrSvg, qrBlockedMessage]);
   /** Closes the QR overlay, if open — every "next" press runs this first (see `goNext`/the keyboard map below), regardless of whether that press reveals or actually advances the slide. A no-op once it is already closed, so later manual re-opens (toggle/`Q`) are never fought by this. */
   const closeQrOnAdvance = useCallback(() => {
     setQrOverlayOpen(false);
@@ -517,7 +539,7 @@ export default function PresentationIsland({
         revealDisabled={!isRevealable(state)}
         onFullscreen={toggleFullscreen}
         isFullscreen={isFullscreen}
-        qrAvailable={Boolean(qrSvg)}
+        qrAvailable={Boolean(qrSvg) || Boolean(qrBlockedMessage)}
         qrOverlayOpen={qrOverlayOpen}
         onToggleQr={toggleQrOverlay}
         exitHref={practiceUrl}

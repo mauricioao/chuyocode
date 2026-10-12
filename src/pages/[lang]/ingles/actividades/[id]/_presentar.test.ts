@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
-const { activityResult } = vi.hoisted(() => ({
+const { activityResult, editActivityResult } = vi.hoisted(() => ({
   activityResult: { value: null as unknown },
+  // Author preview (R1): the fallback read, tried only once
+  // `getPublishedActivity` returns `null` AND a visitor is signed in.
+  editActivityResult: { value: null as unknown },
 }));
 
+const getActivityForEditMock = vi.fn(async (..._args: unknown[]) => editActivityResult.value);
 vi.mock('@lib/activities/activities', () => ({
   getPublishedActivity: vi.fn(async () => activityResult.value),
+  getActivityForEdit: (...args: unknown[]) => getActivityForEditMock(...args),
 }));
 
 import PresentarPage from './presentar.astro';
@@ -25,6 +30,8 @@ async function render(
 
 beforeEach(() => {
   activityResult.value = null;
+  editActivityResult.value = null;
+  getActivityForEditMock.mockClear();
 });
 
 const QUIZ_ACTIVITY = {
@@ -284,5 +291,99 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — guest play (anonymou
     const html = await res.text();
     expect(html).toContain('data-testid="presentation-qr-toggle"');
     expect(html).toContain('/es/ingles/actividades/abc');
+  });
+});
+
+// Owner decision 2026-10-12 (R1): the author can present their OWN
+// unpublished activity too, but the join QR must never be offered for real
+// (it would 404 for a student) -- the toggle/`Q` shortcut stays reachable,
+// it just shows the owner's message instead of opening a real QR.
+describe('GET /[lang]/ingles/actividades/[id]/presentar -- author preview of an unpublished activity (owner decision 2026-10-12)', () => {
+  const DRAFT_EDIT = {
+    id: 'abc',
+    title: 'Mi borrador',
+    level: 'A2',
+    blocks: QUIZ_ACTIVITY.blocks,
+    revisionId: 'rev-1',
+    revisionStatus: 'draft',
+    status: 'draft',
+    reviewNote: null,
+    source: null,
+  };
+
+  it('404s for an anonymous visitor (never falls back to getActivityForEdit with no user)', async () => {
+    activityResult.value = null;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(404);
+    expect(getActivityForEditMock).not.toHaveBeenCalled();
+  });
+
+  it('404s for a different signed-in visitor, not this activity author', async () => {
+    activityResult.value = null;
+    editActivityResult.value = null;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'stranger-1' } },
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('renders 200 for the own author, a draft', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Mi borrador');
+  });
+
+  it('does NOT open the QR overlay by default (it would 404 for a student)', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="presentation-qr-overlay"');
+  });
+
+  it('still offers the QR toggle control, never a real QR code in the markup', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="presentation-qr-toggle"');
+    expect(html).not.toContain('data-testid="presentation-qr-overlay-image"');
+  });
+
+  it('the author preview response is never cacheable (private, no-store)', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('still offers "Otra actividad" at the end screen', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('nextActivityHref&quot;:[0,&quot;/es/ingles/actividades?nivel=A2&quot;');
   });
 });

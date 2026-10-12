@@ -165,15 +165,19 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
             >
               {t.edit}
             </a>
-            {activity.status === 'live' && (
-              <a
-                href={`/${lang}/ingles/actividades/${activity.id}`}
-                data-testid={`activity-view-${activity.id}`}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                {t.view}
-              </a>
-            )}
+            {/* "Ver" (owner decision 2026-10-12, R1): every status, not
+                just `live` — the author can open and play their OWN
+                activity regardless of review state; the practice page's
+                own author-preview mode is what actually renders a
+                draft/pending/rejected activity for them (`[id].astro`'s own
+                header). */}
+            <a
+              href={`/${lang}/ingles/actividades/${activity.id}`}
+              data-testid={`activity-view-${activity.id}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              {t.view}
+            </a>
             {activity.status === 'live' && activity.share && (
               // Wrapped so each row's dialog has its OWN unique test id to
               // scope against — `ShareDialog`'s internal testids

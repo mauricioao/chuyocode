@@ -121,6 +121,8 @@ export interface ReorderEditorProps {
    * `onExampleChange` for the full reasoning.
    */
   onExampleChange: (value: string) => void;
+  /** "Cambiar de molde" (R2) — rendered beside the title in {@link SheetHeader}. */
+  headerAction?: React.ReactNode;
 }
 
 export default function ReorderEditor({
@@ -133,6 +135,7 @@ export default function ReorderEditor({
   onRemove,
   onPasteSentences,
   onExampleChange,
+  headerAction,
 }: ReorderEditorProps) {
   const t = copyFor(lang);
   const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -168,7 +171,7 @@ export default function ReorderEditor({
 
   return (
     <div data-testid={`reorder-editor-${blockId}`} className="flex flex-col">
-      <SheetHeader icon={ArrowsDownUpIcon} tone="violet" title={t.title} instruction={t.instruction} />
+      <SheetHeader icon={ArrowsDownUpIcon} tone="violet" title={t.title} instruction={t.instruction} action={headerAction} />
 
       {sentences.length > 0 && <GroupLabel>{t.groupLabel}</GroupLabel>}
 

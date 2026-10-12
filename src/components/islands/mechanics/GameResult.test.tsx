@@ -149,7 +149,7 @@ describe('GameResult', () => {
   });
 
   describe('secondary action contrast (owner review: light yellow on white fails 4.5:1)', () => {
-    it('never renders a secondary action with the plain `text-primary` link color', () => {
+    it('relies on the shared Button link variant\'s own ingles:text-accent-ink override — no local color override left here (UI round 2)', () => {
       render(
         <GameResult
           lang="es"
@@ -162,8 +162,10 @@ describe('GameResult', () => {
       );
       for (const testId of ['game-result-review', 'game-result-play-again']) {
         const className = screen.getByTestId(testId).getAttribute('class') ?? '';
-        expect(className).not.toContain('text-primary');
-        expect(className).toContain('text-accent-ink');
+        // The fix now lives in `button.tsx`'s own `link` variant (scoped to
+        // the `ingles` theme via the `ingles:` variant) — these buttons no
+        // longer need their own local `text-accent-ink` override.
+        expect(className).toContain('ingles:text-accent-ink');
       }
     });
   });

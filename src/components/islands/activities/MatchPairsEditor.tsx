@@ -128,6 +128,8 @@ export interface MatchPairsEditorProps {
    * `QuizBlockEditor.tsx`'s own `addExampleMatchPair`).
    */
   onExampleChange: (field: 'question' | 'answer', value: string) => void;
+  /** "Cambiar de molde" (R2) — rendered beside the title in {@link SheetHeader}. */
+  headerAction?: React.ReactNode;
 }
 
 export default function MatchPairsEditor({
@@ -141,6 +143,7 @@ export default function MatchPairsEditor({
   onRemove,
   onPastePairs,
   onExampleChange,
+  headerAction,
 }: MatchPairsEditorProps) {
   const t = copyFor(lang);
   const questionRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -199,7 +202,7 @@ export default function MatchPairsEditor({
 
   return (
     <div data-testid={`match-pairs-editor-${blockId}`} className="flex flex-col">
-      <SheetHeader icon={ArrowsLeftRightIcon} tone="sky" title={t.title} instruction={t.instruction} />
+      <SheetHeader icon={ArrowsLeftRightIcon} tone="sky" title={t.title} instruction={t.instruction} action={headerAction} />
 
       {pairs.length > 0 && (
         <div aria-hidden="true" className={PAIR_GRID}>

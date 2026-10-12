@@ -15,6 +15,7 @@ import {
   deriveGroupSortGroups,
   groupSortPoolName,
   modesForBlock,
+  nearestLockedMode,
   TEMPLATE_GAME_SWITCHING_ENABLED,
   type GameItem,
   type GameMode,
@@ -541,6 +542,51 @@ describe('trueFalseEligibleCount / deriveTrueFalseItems', () => {
       { p1: [{ id: 'cat', text: 'cat' }, { id: 'dog', text: 'dog' }] },
     );
     expect(deriveTrueFalseItems(payload, 1).map((i) => i.id)).toEqual(['s2']);
+  });
+});
+
+describe('nearestLockedMode ("Varios juegos" unlock hint, R3)', () => {
+  it('picks the smallest gap, ties broken by candidate order (cards before reorder/speak/anagram/hangman at gap 1)', () => {
+    expect(nearestLockedMode([])).toEqual({ mode: 'cards', gap: 1 });
+  });
+
+  it('returns null once every mode expressible as a count gap is already unlocked', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'a red dog' },
+      { id: '3', prompt: 'c', answer: 'blue bird' },
+    ];
+    // cards/speak (>=1), wheel/openbox (>=2), match (3 unique answers),
+    // reorder (2 multi-word answers), anagram/hangman ('cat' alone) are all
+    // satisfied at once — `truefalse`/`cloze` need `payload`, so they are
+    // never candidates without one.
+    expect(nearestLockedMode(items)).toBeNull();
+  });
+
+  it('considers truefalse/cloze only when payload is supplied, picking the smaller of the two gaps', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'cat' },
+      { id: '2', prompt: 'b', answer: 'a red dog' },
+      { id: '3', prompt: 'c', answer: 'blue bird' },
+    ];
+    const payload = payloadWith([
+      { id: '1', label: 'a', input: 'text', answer: ['cat'] },
+      { id: '2', label: 'b', input: 'text', answer: ['a red dog'] },
+      { id: '3', label: 'c', input: 'text', answer: ['blue bird'] },
+    ]);
+    // Neither slot has a pool/gap, so `cloze` (needs 1) and `truefalse`
+    // (needs 2) are both still locked — `cloze`'s smaller gap wins.
+    expect(nearestLockedMode(items, payload)).toEqual({ mode: 'cloze', gap: 1 });
+  });
+
+  it('never offers match as a hint when its only blocker is a duplicate answer, not a count', () => {
+    const items: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'same' },
+      { id: '2', prompt: 'b', answer: 'same' },
+      { id: '3', prompt: 'c', answer: 'same' },
+    ];
+    const result = nearestLockedMode(items);
+    expect(result?.mode).not.toBe('match');
   });
 });
 

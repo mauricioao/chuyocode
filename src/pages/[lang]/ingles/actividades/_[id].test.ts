@@ -16,16 +16,23 @@ vi.mock('@lib/env', () => ({
   }),
 }));
 
-const { activityResult, heartedResult, hasHeartedActivityMock } = vi.hoisted(() => ({
+const { activityResult, heartedResult, hasHeartedActivityMock, editActivityResult } = vi.hoisted(() => ({
   activityResult: { value: null as unknown },
   heartedResult: { value: false },
   hasHeartedActivityMock: vi.fn(async () => heartedResult.value),
+  // Author preview (R1, "the author can open their own unpublished
+  // activity"): `getActivityForEdit` is the FALLBACK read, tried only once
+  // `getPublishedActivity` returns `null` AND a user is signed in — see
+  // this file's own "author preview" describe block below.
+  editActivityResult: { value: null as unknown },
 }));
 
 const getActivityCount = vi.fn();
 const getPublishedActivities = vi.fn();
+const getActivityForEditMock = vi.fn(async (..._args: unknown[]) => editActivityResult.value);
 vi.mock('@lib/activities/activities', () => ({
   getPublishedActivity: vi.fn(async () => activityResult.value),
+  getActivityForEdit: (...args: unknown[]) => getActivityForEditMock(...args),
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
   // N4: the "Mis actividades" folder's own read, same module — the desk
@@ -68,8 +75,10 @@ async function render(
 
 beforeEach(() => {
   activityResult.value = null;
+  editActivityResult.value = null;
   heartedResult.value = false;
   hasHeartedActivityMock.mockClear();
+  getActivityForEditMock.mockClear();
   getActivityCount.mockReset();
   getPublishedActivities.mockReset();
   getActivityCount.mockResolvedValue(null);
@@ -1214,5 +1223,181 @@ describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse +
       const idx = html.indexOf(`data-testid="${testid}"`);
       expect(html.slice(idx, idx + 600)).toContain(label);
     }
+  });
+});
+
+// Owner decision 2026-10-12 (R1): the author can open, play and present
+// their OWN activity even when it is not published (draft/pending/
+// rejected) -- everyone else (anonymous or any other signed-in visitor)
+// keeps getting the same plain 404 as today, so an id's existence is never
+// leaked. `getActivityForEdit` is tried ONLY as a fallback, once
+// `getPublishedActivity` returns `null` AND a visitor is signed in -- see
+// `[id].astro`'s own header.
+describe('GET /[lang]/ingles/actividades/[id] -- author preview of an unpublished activity (owner decision 2026-10-12)', () => {
+  const DRAFT_EDIT = {
+    id: 'abc',
+    title: 'Mi borrador',
+    level: 'A2',
+    blocks: [],
+    revisionId: 'rev-1',
+    revisionStatus: 'draft',
+    status: 'draft',
+    reviewNote: null,
+    source: null,
+  };
+
+  it('404s for an anonymous visitor (never falls back to getActivityForEdit with no user)', async () => {
+    activityResult.value = null;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(res.status).toBe(404);
+    expect(getActivityForEditMock).not.toHaveBeenCalled();
+  });
+
+  it('404s for a DIFFERENT signed-in visitor, not this activity author', async () => {
+    activityResult.value = null;
+    editActivityResult.value = null;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'stranger-1' } },
+    });
+    expect(res.status).toBe(404);
+    expect(getActivityForEditMock).toHaveBeenCalledWith('abc', 'stranger-1');
+  });
+
+  it('renders 200 with the player for the own author, a draft', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Mi borrador');
+    expect(getActivityForEditMock).toHaveBeenCalledWith('abc', 'user-1');
+  });
+
+  it('shows the status pill in the title bar -- Borrador', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="desk-window-status-chip"');
+    expect(html).toContain('Borrador');
+  });
+
+  it('shows En revision for a pending_review preview', async () => {
+    activityResult.value = null;
+    editActivityResult.value = { ...DRAFT_EDIT, status: 'pending_review', revisionStatus: 'pending_review' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('En revisión');
+  });
+
+  it('shows Rechazada for a rejected preview', async () => {
+    activityResult.value = null;
+    editActivityResult.value = { ...DRAFT_EDIT, status: 'rejected', reviewNote: 'Falta algo' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('Rechazada');
+  });
+
+  it('never shows the status pill for a normal published render', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="desk-window-status-chip"');
+  });
+
+  it('Compartir shows the owner message instead of the share dialog content -- pending_review wording', async () => {
+    activityResult.value = null;
+    editActivityResult.value = { ...DRAFT_EDIT, status: 'pending_review', revisionStatus: 'pending_review' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain(
+      'No se puede compartir la actividad porque está en revisión, por el momento solo está disponible para ti 😘',
+    );
+    expect(html).not.toContain('data-testid="exercise-qr"');
+    expect(html).not.toContain('data-testid="exercise-share-copy"');
+  });
+
+  it('Compartir shows the unpublished wording for a draft/rejected preview', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain(
+      'No se puede compartir la actividad porque todavía no está publicada, por el momento solo está disponible para ti 😘',
+    );
+  });
+
+  it('hides heart, Duplicar and Reportar entirely for the own unpublished preview', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="activity-heart-button"');
+    expect(html).not.toContain('data-testid="activity-heart-readonly"');
+    expect(html).not.toContain('data-testid="activity-heart-guest"');
+    expect(html).not.toContain('data-testid="duplicate-activity-button"');
+    expect(html).not.toContain('data-testid="activity-duplicate-guest"');
+    expect(html).not.toContain('data-testid="report-activity-button"');
+    expect(html).not.toContain('data-testid="activity-report-guest"');
+  });
+
+  it('never mounts the view badge (no visto call) for the own unpublished preview', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('ActivityViewBadge');
+  });
+
+  it('still offers Otra actividad via the practice island nextHref', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('/es/ingles/actividades?nivel=A2');
+  });
+
+  it('the author preview response is never cacheable (private, no-store)', async () => {
+    activityResult.value = null;
+    editActivityResult.value = DRAFT_EDIT;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 });

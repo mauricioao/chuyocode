@@ -146,24 +146,28 @@ export function SheetHeader({
   tone,
   title,
   instruction,
+  action,
 }: {
   icon: Icon;
   tone: SheetTone;
   title: string;
   instruction: string;
+  /** An optional trailing control, e.g. "Cambiar de molde" (R2) — sits beside the title, never wraps it. */
+  action?: ReactNode;
 }) {
   return (
-    <header className="flex items-center gap-3 pb-5">
+    <header className="flex items-start gap-3 pb-5">
       <span
         aria-hidden="true"
         className={cn('template-icon grid size-9 shrink-0 place-items-center', ICON_CHIP_TONE[tone])}
       >
         <IconComponent size={20} weight="bold" />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h2 className="text-[17px] font-semibold leading-[22px] tracking-[-0.01em] text-foreground">{title}</h2>
         <p className="text-[13px] leading-[18px] text-muted-foreground">{instruction}</p>
       </div>
+      {action && <div className="shrink-0">{action}</div>}
     </header>
   );
 }

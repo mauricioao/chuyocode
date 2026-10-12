@@ -4,10 +4,17 @@
  * practice"; rebuilt as the "practice player" in the "practice player
  * redesign" pass). Loads the activity + its PUBLISHED revision in one round
  * trip (`getPublishedActivity`, `@lib/activities/activities`) and 404s for
- * anything not `visible` — including the AUTHOR'S OWN non-live activity:
- * this route is the public player, not a preview, and an author checking
- * their own draft/pending work already has the editor's own preview mode
- * (`WorksheetPlayer`'s creator-preview, unchanged from PR B) for that.
+ * anything not `visible` — for every visitor EXCEPT the activity's own
+ * author (owner decision 2026-10-12, R1, "author preview"): `getPublishedActivity`
+ * returning `null` is now followed by ONE fallback read, `getActivityForEdit`
+ * (tried only when a visitor is SIGNED IN — a guest can never be an author),
+ * the SAME ownership-enforcing read the editor itself uses. Finding a row
+ * there means this exact visitor owns this exact non-live activity — render
+ * it (`isAuthorPreview` below), with the title bar's own status pill,
+ * "Compartir"/❤/Duplicar/Reportar/the "visto" badge all adjusted (see each
+ * one's own comment). Finding nothing there — a stranger, or no such
+ * activity at all — still 404s, identically for everyone, so an id's mere
+ * existence is never leaked.
  *
  * Under `ingles/**`, so this route is marked private/no-store by the
  * middleware exactly like every other gated page — same posture as
@@ -16,9 +23,9 @@
  * `@lib/access`'s `isPublicActivityRoute` carves this route (and its sibling
  * `presentar.astro`) out of the login wall for guest play (owner-approved —
  * a teacher's QR/WhatsApp link must not hit a login screen in class). The
- * `getPublishedActivity` 404 above is what actually protects a non-live
- * activity from an anonymous visitor — same 404 the author's own non-live
- * activity already gets, so there is nothing extra to gate here.
+ * `getPublishedActivity` 404 above (now softened only for the real author,
+ * per the paragraph above) is what actually protects a non-live activity
+ * from an anonymous visitor or any other stranger.
  *
  * ANONYMOUS VISITOR ("guest"): `user` below is `null`. `canHeart`/`canReport`/
  * `canDuplicate` were already `false` for a `null` user before this feature
@@ -73,7 +80,7 @@ import { FlagIcon } from '@phosphor-icons/react/dist/ssr/Flag';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { getPublishedActivity } from '@lib/activities/activities';
+import { getPublishedActivity, getActivityForEdit } from '@lib/activities/activities';
 import { hasPresentableContent } from '@lib/activities/presentationSlides';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { hasHeartedActivity } from '@lib/activities/hearts';
@@ -81,6 +88,7 @@ import { qrSvg, shareUrl } from '@lib/qr';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS, MENU_ITEM_CLASS } from '@lib/ui/iconTooltip';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
+import { markPrivate } from '@lib/httpCache';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -89,6 +97,16 @@ const lang: Lang | undefined =
 if (!lang) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
+
+// Under `ingles/**`, the middleware already marks every response on this
+// route `private, no-store` (`src/middleware.ts`'s own gated-section
+// posture) — this explicit call is belt-and-suspenders, same reasoning
+// `presentar.astro`'s own header documents for ITS identical call: a test
+// that renders this page directly (`src/testSupport/astroContainer.ts`)
+// never runs the middleware chain, so the author-preview render (which
+// must never be cacheable — it carries another visitor's draft content)
+// needs this set here too, not only trusted to middleware.
+markPrivate(Astro.response.headers);
 
 const { id } = Astro.params;
 if (!id) {
@@ -147,9 +165,72 @@ let shareLink = '';
 let shareQr: string | null = null;
 let whatsappHref = '';
 let sourceHref: string | null = null;
+/**
+ * Author preview (R1, owner decision 2026-10-12): true once this render is
+ * the activity's OWN author opening their draft/pending/rejected activity —
+ * never a stranger, never a guest (see the fallback read right below). Flips
+ * on a handful of things that would otherwise leak/mislead: the title bar's
+ * status pill, "Compartir"/presentation-QR becoming a blocked message
+ * instead of the real thing, and ❤/Duplicar/Reportar/the "visto" badge all
+ * hiding entirely rather than falling back to their normal guest/stranger
+ * shape.
+ */
+let isAuthorPreview = false;
+/** `activities.status` ('draft' | 'pending_review' | 'rejected' | 'live') for the preview above — `null` outside author-preview mode. */
+let previewStatus: string | null = null;
+let statusChip: string | null = null;
+/** `DeskWindow`'s own calm tone for `statusChip` (UI round 2) — see that prop's own doc; `'neutral'` is the default so a never-set `previewStatus` keeps today's plain pill. */
+let statusTone: 'neutral' | 'review' | 'caution' = 'neutral';
+let shareBlockedMessage: string | undefined;
+
+/** `activities.status` -> the `editor.status*` key that names it — same closed map `MisActividadesIsland`/`ActivityEditorIsland` each keep their own copy of. */
+const STATUS_LABEL_KEYS: Record<string, 'statusDraft' | 'statusPendingReview' | 'statusLive' | 'statusRejected'> = {
+  draft: 'statusDraft',
+  pending_review: 'statusPendingReview',
+  live: 'statusLive',
+  rejected: 'statusRejected',
+};
+
+/** `activities.status` -> `DeskWindow`'s `statusTone` (UI round 2: a calm tone per status, never red for "rejected"). */
+const STATUS_TONES: Record<string, 'neutral' | 'review' | 'caution'> = {
+  draft: 'neutral',
+  pending_review: 'review',
+  live: 'neutral',
+  rejected: 'caution',
+};
 
 if (!hostMode) {
   activity = await getPublishedActivity(id);
+
+  /**
+   * Fallback: NOT published, but maybe this is its own author previewing a
+   * draft/pending/rejected activity (owner decision 2026-10-12). Tried ONLY
+   * when there IS a signed-in user — a guest can never be an author, so this
+   * never runs an extra query for the overwhelmingly common "no such
+   * activity" 404 case. `getActivityForEdit` is the SAME read the editor
+   * itself uses (ownership enforced IN the query, see its own header) — this
+   * reuses it rather than a second bespoke query, so the author sees exactly
+   * the content the editor shows, including an in-progress draft's pending
+   * changes.
+   */
+  if (!activity && user) {
+    const preview = await getActivityForEdit(id, user.id);
+    if (preview) {
+      isAuthorPreview = true;
+      previewStatus = preview.status;
+      activity = {
+        id: preview.id,
+        title: preview.title,
+        level: preview.level,
+        blocks: preview.blocks,
+        authorId: user.id,
+        heartCount: 0,
+        viewTotal: 0,
+        source: preview.source,
+      };
+    }
+  }
+
   if (!activity) {
     return new Response(null, { status: 404, statusText: 'Not Found' });
   }
@@ -176,7 +257,11 @@ if (!hostMode) {
   // from `canHeart`/`canReport` above. `!canDuplicate` is exactly "no user"
   // here (never the author), so its fallback below is unconditionally the
   // guest one.
-  canDuplicate = user !== null;
+  // Author preview (R1): excluded here too — "Duplicar y adaptar" an
+  // activity that is not actually published yet makes no sense (there is
+  // nothing live to adapt a copy FROM), and the owner spec is explicit that
+  // Duplicar hides entirely for the author's own unpublished preview.
+  canDuplicate = user !== null && !isAuthorPreview;
 
   /**
    * Guest play: where "sign in to do this" sends an anonymous visitor —
@@ -252,6 +337,18 @@ if (!hostMode) {
    * unless IT is the duplicate.
    */
   sourceHref = activity.source?.visible ? `/${lang}/ingles/actividades/${activity.source.id}` : null;
+
+  // Author preview (R1): the title bar's own status pill, plus "Compartir"'s
+  // blocked message — chosen by the activity's own status, same two
+  // messages the presentation page's QR toggle reuses (`presentar.astro`).
+  if (isAuthorPreview && previewStatus) {
+    const editorT = UI_LABELS[lang].activities.editor;
+    const key = STATUS_LABEL_KEYS[previewStatus] ?? 'statusDraft';
+    statusChip = editorT[key];
+    statusTone = STATUS_TONES[previewStatus] ?? 'neutral';
+    shareBlockedMessage =
+      previewStatus === 'pending_review' ? t.authorPreviewSharePending : t.authorPreviewShareUnpublished;
+  }
 }
 
 function heartsLabel(count: number): string {
@@ -284,6 +381,8 @@ function heartsLabel(count: number): string {
     lang={lang}
     title={activity.title}
     levelChip={levelChip}
+    statusChip={statusChip}
+    statusTone={statusTone}
     closeHref={closeHref}
     closeLabel={t.windowClose}
     minimizeLabel={t.windowMinimize}
@@ -294,7 +393,10 @@ function heartsLabel(count: number): string {
     slot="overlay"
   >
     <Fragment slot="actions">
-      {canHeart ? (
+      {/* Author preview (R1): ❤ hides ENTIRELY — the count is a fake `0`
+          (see this file's own fallback above), and the real heart action
+          makes no sense on content nobody else can see yet. */}
+      {isAuthorPreview ? null : canHeart ? (
         <HeartButton client:load lang={lang} activityId={activity.id} heartCount={activity.heartCount} hearted={hearted} />
       ) : user ? (
         <span class="inline-flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="activity-heart-readonly">
@@ -325,7 +427,10 @@ function heartsLabel(count: number): string {
           path (this component's own header) — deferring hydration to idle
           only delays that same cosmetic counter by a beat, never drops it,
           and there is no click to lose on a badge with no button at all. */}
-      {user && <ActivityViewBadge client:idle lang={lang} activityId={activity.id} />}
+      {/* Author preview (R1): no "visto" tracking at all — the author's own
+          view of their unpublished activity is never a real "view" to
+          count. */}
+      {user && !isAuthorPreview && <ActivityViewBadge client:idle lang={lang} activityId={activity.id} />}
       {/* N6 (fewer equal-weight buttons while playing) + N6 FOLLOW-UP
           (phone title collapsed to "V…", owner report 2026-10-12 —
           `capturas/ux-n6-n7/practice-phone-390x844-more-open.png`):
@@ -356,6 +461,7 @@ function heartsLabel(count: number): string {
             whatsappHref={whatsappHref}
             downloadFileName={`${activity.id}.svg`}
             iconOnly
+            blockedMessage={shareBlockedMessage}
             labels={{
               trigger: t.share,
               title: t.shareTitle,
@@ -479,6 +585,7 @@ function heartsLabel(count: number): string {
                 whatsappHref={whatsappHref}
                 downloadFileName={`${activity.id}.svg`}
                 asMenuItem
+                blockedMessage={shareBlockedMessage}
                 labels={{
                   trigger: t.share,
                   title: t.shareTitle,
@@ -534,9 +641,11 @@ function heartsLabel(count: number): string {
                sits inside the "Más" overflow menu besides, so it is never
                the very first thing a visitor reaches for. */
             <DuplicateActivityButton client:idle lang={lang} activityId={activity.id} />
-          ) : (
-            /* Guest: `canDuplicate` is exactly "no user" here (the author
-               keeps the real button) — a plain link to sign-in instead. */
+          ) : isAuthorPreview ? null : (
+            /* Guest: a `null` user is the only other way `canDuplicate` is
+               false now — a plain link to sign-in instead. Author preview
+               (R1) hides this entirely instead (handled above): Duplicar an
+               activity that is not actually published makes no sense. */
             <a
               href={guestSignInHref}
               data-testid="activity-duplicate-guest"

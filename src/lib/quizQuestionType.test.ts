@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createEmptyDraft, setPool, setSlotAnswer, setSlotInput, setSlotPool, type Draft } from './authoringDraft';
 import { addRowBlock } from './authoringDraft';
-import { changeQuestionSegment, isDropGap, segmentForInput } from './quizQuestionType';
+import { changeQuestionSegment, isDropGap, needsAdvancedEditor, segmentForInput } from './quizQuestionType';
 
 function draftWithOneQuestion(input: string): Draft {
   const draft = addRowBlock(createEmptyDraft(), 'row-1', 's1');
@@ -33,6 +33,27 @@ describe('isDropGap', () => {
     expect(isDropGap('select')).toBe(false);
     expect(isDropGap('choice')).toBe(false);
     expect(isDropGap('text')).toBe(false);
+  });
+});
+
+describe('needsAdvancedEditor ("Varios juegos" per-row escape, R3)', () => {
+  it('is false for a plain text question with 0 or 1 accepted answer', () => {
+    expect(needsAdvancedEditor('text', 0)).toBe(false);
+    expect(needsAdvancedEditor('text', 1)).toBe(false);
+  });
+
+  it('is true for a text question with more than one accepted answer', () => {
+    expect(needsAdvancedEditor('text', 2)).toBe(true);
+  });
+
+  it('is false for choice, regardless of how many options it has', () => {
+    expect(needsAdvancedEditor('choice', 0)).toBe(false);
+    expect(needsAdvancedEditor('choice', 5)).toBe(false);
+  });
+
+  it('is true for a gap question (select or drop), regardless of answer count', () => {
+    expect(needsAdvancedEditor('select', 1)).toBe(true);
+    expect(needsAdvancedEditor('drop', 1)).toBe(true);
   });
 });
 

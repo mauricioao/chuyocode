@@ -93,11 +93,19 @@ describe('MisActividadesIsland — listing', () => {
     );
   });
 
-  it('only shows Ver for a live activity', () => {
-    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT, LIVE_WITH_PENDING]} />);
-    expect(screen.queryByTestId(`activity-view-${DRAFT.id}`)).toBeNull();
+  // Owner decision 2026-10-12 (R1): the author can open/play their OWN
+  // activity regardless of status (draft/pending/rejected/live) — "Ver"
+  // now links to the practice page for every row, not just live ones.
+  it('shows Ver for every activity, regardless of status', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT, LIVE_WITH_PENDING, REJECTED]} />);
+    expect(screen.getByTestId(`activity-view-${DRAFT.id}`).getAttribute('href')).toBe(
+      `/es/ingles/actividades/${DRAFT.id}`,
+    );
     expect(screen.getByTestId(`activity-view-${LIVE_WITH_PENDING.id}`).getAttribute('href')).toBe(
       `/es/ingles/actividades/${LIVE_WITH_PENDING.id}`,
+    );
+    expect(screen.getByTestId(`activity-view-${REJECTED.id}`).getAttribute('href')).toBe(
+      `/es/ingles/actividades/${REJECTED.id}`,
     );
   });
 });

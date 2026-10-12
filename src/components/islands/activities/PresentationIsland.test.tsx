@@ -1,9 +1,21 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { Block } from '@/lib/activities/blocks';
 import PresentationIsland from './PresentationIsland';
+
+// `sonner`'s named ESM export is non-configurable, so `vi.spyOn` on the
+// module namespace itself throws "Cannot redefine property" — same issue
+// `ShareDialog.test.tsx`'s own header documents. Replace the export with a
+// `vi.fn` wrapping the real implementation (still calls through) instead.
+vi.mock('sonner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('sonner')>();
+  const mockToast = vi.fn(actual.toast) as unknown as typeof actual.toast;
+  Object.assign(mockToast, actual.toast);
+  return { ...actual, toast: mockToast };
+});
 
 afterEach(() => {
   cleanup();
@@ -210,6 +222,37 @@ describe('PresentationIsland — QR overlay (N7: open by default on the FIRST sl
     expect(screen.queryByRole('button', { name: 'Mostrar QR' })).toBeNull();
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
     fireEvent.keyDown(window, { key: 'q' });
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+  });
+});
+
+// Author preview (R1, owner decision 2026-10-12): the activity is not
+// published yet — the join QR would 404 for a student, so it must never
+// open, by default or on demand. The toggle/"Q" shortcut stays reachable;
+// it shows the owner's own message via toast instead.
+describe('PresentationIsland — qrBlockedMessage (author preview, owner decision 2026-10-12)', () => {
+  const BLOCKED =
+    'No se puede compartir la actividad porque está en revisión, por el momento solo está disponible para ti 😘';
+
+  it('does not open the overlay on mount, even though the toggle is still offered', () => {
+    render(<PresentationIsland {...BASE_PROPS} qrSvg={null} qrBlockedMessage={BLOCKED} />);
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+    expect(qrToggle()).toBeTruthy();
+  });
+
+  it('shows the message via toast instead of opening the overlay, on a toggle click', () => {
+    vi.mocked(toast).mockClear();
+    render(<PresentationIsland {...BASE_PROPS} qrSvg={null} qrBlockedMessage={BLOCKED} />);
+    fireEvent.click(qrToggle());
+    expect(toast).toHaveBeenCalledWith(BLOCKED);
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+  });
+
+  it('shows the message via toast on the "Q" key too, never opening the overlay', () => {
+    vi.mocked(toast).mockClear();
+    render(<PresentationIsland {...BASE_PROPS} qrSvg={null} qrBlockedMessage={BLOCKED} />);
+    fireEvent.keyDown(window, { key: 'q' });
+    expect(toast).toHaveBeenCalledWith(BLOCKED);
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
   });
 });
