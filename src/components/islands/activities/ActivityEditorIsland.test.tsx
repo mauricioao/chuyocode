@@ -1227,7 +1227,7 @@ describe('ActivityEditorIsland — submit for review', () => {
     expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
     expect(screen.getByTestId('worksheet-zone-editor')).toBeTruthy();
     expect(screen.getByTestId('zone-incomplete-message').textContent).toContain(
-      'todavía no tiene una respuesta',
+      'Escribe la respuesta de esta zona',
     );
   });
 
