@@ -39,9 +39,21 @@ interface Props {
    * page, never a window) renders no such attribute at all.
    */
   openerId?: string | null;
+  /**
+   * N4 (owner spec, resolves UX-INGLES.md's F3/F5, "su globo muestra cuántas
+   * cambiaron de estado"): a small count pill on the folder's own corner —
+   * omitted entirely (no badge at all) when `null`/`0`. `badgeLabel` is its
+   * REQUIRED accessible name whenever a count is actually shown (e.g. "2
+   * actividades necesitan cambios") — the visible content stays the bare
+   * number, same "aria-label wins over visible text" posture the rest of
+   * the kit already uses for icon-only controls.
+   */
+  badgeCount?: number | null;
+  badgeLabel?: string | null;
 }
 
-const { href, label, meta, icon, peekSrc = null, openerId = null } = Astro.props;
+const { href, label, meta, icon, peekSrc = null, openerId = null, badgeCount = null, badgeLabel = null } = Astro.props;
+const hasBadge = badgeCount !== null && badgeCount > 0;
 const hasPeek = peekSrc !== null;
 const BACK_PATH =
   'M8 14a6 6 0 0 1 6-6h30l8 8h54a6 6 0 0 1 6 6v62a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z';
@@ -93,6 +105,17 @@ const BACK_PATH =
         hasPeek ? 'top-[67%]' : 'top-[56%]',
       ]}
     />
+    {
+      hasBadge && (
+        <span
+          data-testid="desk-folder-badge"
+          aria-label={badgeLabel ?? undefined}
+          class="absolute -top-1 -right-1 z-10 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[0.65rem] font-semibold text-primary-foreground shadow-elevation-1"
+        >
+          {badgeCount}
+        </span>
+      )
+    }
   </figure>
   <span class="label text-[13px] font-semibold text-foreground">{label}</span>
   {meta && <span class="meta -mt-1 text-xs text-muted-foreground">{meta}</span>}

@@ -96,6 +96,8 @@ import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
 import ClozeEditor, { type ClozeSentenceInput } from './ClozeEditor';
 import GroupSortEditor from './GroupSortEditor';
+import type { MatchPastePair } from '@/lib/activities/pasteMatchPairs';
+import type { GroupSortPasteOp } from '@/lib/activities/pasteGroupSort';
 import {
   applyClozeSentenceText,
   applyDistractorsText,
@@ -203,6 +205,63 @@ export interface QuizBlockEditorProps {
 function rowSlotId(draft: Draft, rowId: string): string | null {
   const block = draft.blocks.find((b) => b.id === rowId);
   return block?.kind === 'row' ? block.slotId : null;
+}
+
+/**
+ * A single row's worth of pasted content — the shared shape `insertRowsAfter`
+ * takes, whether it came from a `match` pair or a `reorder` sentence.
+ */
+interface PasteRowSpec {
+  label: string;
+  answer: string[];
+}
+
+/**
+ * Bulk-paste's own "fill from the focused row onward" rule (owner spec N5,
+ * "paste a whole list"), shared by `match` and `reorder` (both one `row`
+ * block + one plain-text `Slot` per row — `cloze`/`groupsort` have their own
+ * version of this, `pasteClozeSentences`/`pasteGroupSortOps` below, since
+ * their rows are not this shape). The row owning `fromSlotId` (`null` for the
+ * empty-list ghost row) is REUSED for the first pasted row when it is still
+ * completely empty; every other row is a brand-new `row` block, spliced right
+ * after it so order is preserved — never just appended at the list's end.
+ */
+function insertRowsAfter(baseDraft: Draft, fromSlotId: string | null, rows: PasteRowSpec[], mint: (prefix: string) => string): Draft {
+  if (rows.length === 0) return baseDraft;
+  let workingDraft = baseDraft;
+  let rowsToPlace = rows;
+  let anchorBlockId: string | null = null;
+
+  if (fromSlotId) {
+    const anchorBlock = workingDraft.blocks.find((b) => b.kind === 'row' && b.slotId === fromSlotId);
+    if (anchorBlock) {
+      anchorBlockId = anchorBlock.id;
+      const slot = workingDraft.slots.find((s) => s.id === fromSlotId);
+      if (slot && slot.label.trim() === '' && slot.answer.length === 0) {
+        const [first, ...rest] = rowsToPlace;
+        workingDraft = setRowLabel(workingDraft, fromSlotId, first!.label);
+        workingDraft = setSlotAnswer(workingDraft, fromSlotId, first!.answer);
+        rowsToPlace = rest;
+      }
+    }
+  }
+
+  if (rowsToPlace.length === 0) return workingDraft;
+
+  const newBlocks: RowBlock[] = [];
+  const newSlots: Slot[] = [];
+  rowsToPlace.forEach((row) => {
+    const rowId = mint('row');
+    const slotId = mint('slot');
+    newBlocks.push({ kind: 'row', id: rowId, slotId });
+    newSlots.push({ id: slotId, label: row.label, input: 'text', answer: row.answer });
+  });
+
+  const blocks = [...workingDraft.blocks];
+  const spliceAt = anchorBlockId ? blocks.findIndex((b) => b.id === anchorBlockId) + 1 : blocks.length;
+  blocks.splice(spliceAt, 0, ...newBlocks);
+
+  return { ...workingDraft, blocks, slots: [...workingDraft.slots, ...newSlots] };
 }
 
 function SortableQuestionCard({
@@ -404,6 +463,29 @@ export default function QuizBlockEditor({
       })
     : [];
 
+  // Bulk paste (owner spec N5, "paste a whole list"): every parsed line
+  // becomes one row, via the shared `insertRowsAfter` (this module's own
+  // header) — ONE commit, so the whole paste is one undo step.
+  function pasteMatchPairs(fromSlotId: string | null, rows: MatchPastePair[]) {
+    const rowSpecs: PasteRowSpec[] = rows.map((r) => ({ label: r.question, answer: r.answer.trim() === '' ? [] : [r.answer] }));
+    commit(insertRowsAfter(draft, fromSlotId, rowSpecs, nextId));
+  }
+
+  // The empty-list example row's own first keystroke (owner spec N5
+  // follow-up, "not a dead end"): adds the row AND sets `field`'s value on
+  // ONE freshly-built draft, in ONE `commit` — never two separate commits
+  // each reading the SAME pre-add `draft`, which would silently lose the add
+  // (the second commit's `draft` closure predates the first commit's state
+  // update, since React batches this handler's state updates into one).
+  function addExampleMatchPair(field: 'question' | 'answer', value: string) {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    let next = addRowBlock(draft, rowId, slotId);
+    next = field === 'question' ? setRowLabel(next, slotId, value) : setSlotAnswer(next, slotId, value.trim() === '' ? [] : [value]);
+    commit(next);
+    onSelectSlot(slotId);
+  }
+
   const matchColumn = (
     <MatchPairsEditor
       blockId={blockId}
@@ -414,6 +496,8 @@ export default function QuizBlockEditor({
       onAnswerChange={(slotId, answer) => commit(setSlotAnswer(draft, slotId, answer.trim() === '' ? [] : [answer]))}
       onAdd={addQuestion}
       onRemove={removeQuestion}
+      onPastePairs={pasteMatchPairs}
+      onExampleChange={addExampleMatchPair}
     />
   );
 
@@ -430,6 +514,25 @@ export default function QuizBlockEditor({
       })
     : [];
 
+  // Bulk paste, same posture as `pasteMatchPairs` above — one sentence per
+  // line, stored as both label and answer (see `reorderSentences`'s own
+  // header), ONE commit.
+  function pasteReorderSentences(fromSlotId: string | null, lines: string[]) {
+    const rowSpecs: PasteRowSpec[] = lines.map((line) => ({ label: line, answer: line.trim() === '' ? [] : [line] }));
+    commit(insertRowsAfter(draft, fromSlotId, rowSpecs, nextId));
+  }
+
+  // The empty-list example row's own first keystroke — see `addExampleMatchPair`'s own header for the full reasoning.
+  function addExampleReorderSentence(value: string) {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    let next = addRowBlock(draft, rowId, slotId);
+    next = setRowLabel(next, slotId, value);
+    next = setSlotAnswer(next, slotId, value.trim() === '' ? [] : [value]);
+    commit(next);
+    onSelectSlot(slotId);
+  }
+
   const reorderColumn = (
     <ReorderEditor
       blockId={blockId}
@@ -443,6 +546,8 @@ export default function QuizBlockEditor({
       }}
       onAdd={addQuestion}
       onRemove={removeQuestion}
+      onPasteSentences={pasteReorderSentences}
+      onExampleChange={addExampleReorderSentence}
     />
   );
 
@@ -472,6 +577,39 @@ export default function QuizBlockEditor({
     if (selectedSlotId === `${CLOZE_FOCUS_PREFIX}${seq}`) onSelectSlot(null);
   }
 
+  // Bulk paste, same posture as `pasteMatchPairs`/`pasteReorderSentences`
+  // above, but a cloze sentence is managed through `clozeSentences.ts`'s own
+  // commits rather than `insertRowsAfter` (its rows/slots differ per
+  // sentence, see this file's own `clozeColumn` header) — every pasted line
+  // folds into ONE working draft, committed once at the end.
+  function pasteClozeSentences(fromSeq: number | null, lines: string[]) {
+    if (lines.length === 0) return;
+    let workingDraft = draft;
+    let remaining = lines;
+    if (fromSeq !== null) {
+      const row = deriveClozeSentences(workingDraft).find((r) => r.seq === fromSeq);
+      if (row && row.text.trim() === '') {
+        workingDraft = applyClozeSentenceText(workingDraft, fromSeq, remaining[0]!, clozePoolName, nextId);
+        remaining = remaining.slice(1);
+      }
+    }
+    remaining.forEach((line) => {
+      const rows = deriveClozeSentences(workingDraft);
+      const seq = rows.length > 0 ? Math.max(...rows.map((r) => r.seq)) + 1 : 0;
+      workingDraft = applyClozeSentenceText(workingDraft, seq, line, clozePoolName, nextId);
+    });
+    commit(workingDraft);
+  }
+
+  // The empty-list example row's own first keystroke — `applyClozeSentenceText`
+  // already takes the raw text directly, so this is naturally ONE commit
+  // already (see `addExampleMatchPair`'s own header for the full reasoning).
+  function addExampleClozeSentence(value: string) {
+    const nextSeq = clozeRows.length > 0 ? Math.max(...clozeRows.map((r) => r.seq)) + 1 : 0;
+    commit(applyClozeSentenceText(draft, nextSeq, value, clozePoolName, nextId));
+    onSelectSlot(`${CLOZE_FOCUS_PREFIX}${nextSeq}`);
+  }
+
   const clozeColumn = (
     <ClozeEditor
       blockId={blockId}
@@ -483,6 +621,8 @@ export default function QuizBlockEditor({
       onAdd={addClozeRow}
       onRemove={removeClozeRow}
       onDistractorsChange={(text) => commit(applyDistractorsText(draft, clozePoolName, text, nextId))}
+      onPasteSentences={pasteClozeSentences}
+      onExampleChange={addExampleClozeSentence}
     />
   );
 
@@ -505,6 +645,77 @@ export default function QuizBlockEditor({
     commit(removeGroupSortGroup(draft, rowId, groupSortPoolName));
   }
 
+  // Bulk paste (owner spec N5): `Group: item, item` creates/fills a group; a
+  // line with no `:` adds its items to whichever group this SAME paste is
+  // currently filling (the nearest preceding `'group'` op, or the group the
+  // caret was already in when nothing precedes it — `pasteGroupSort.ts`'s own
+  // header). Brand-new groups respect {@link MAX_GROUPSORT_GROUPS}; extras
+  // are dropped and reported back as `overflow` for the status line. ONE
+  // working draft, ONE commit.
+  function pasteGroupSortOps(fromSlotId: string | null, ops: GroupSortPasteOp[]): { addedGroups: number; overflow: number } {
+    type Pending = { label: string | null; items: string[] };
+    const pending: Pending[] = [];
+    ops.forEach((op) => {
+      if (op.kind === 'group') {
+        pending.push({ label: op.label, items: [...op.items] });
+      } else if (pending.length > 0) {
+        pending[pending.length - 1]!.items.push(...op.items);
+      } else {
+        pending.push({ label: null, items: [...op.items] });
+      }
+    });
+
+    let workingDraft = draft;
+    let remaining = pending;
+    let addedGroups = 0;
+
+    if (fromSlotId) {
+      const focused = deriveGroupSortRows(workingDraft, groupSortPoolName).find((g) => g.slotId === fromSlotId);
+      const first = remaining[0];
+      if (focused && first && (first.label === null || (focused.label.trim() === '' && focused.items.length === 0))) {
+        if (first.label !== null) workingDraft = setRowLabel(workingDraft, fromSlotId, first.label);
+        if (first.items.length > 0) {
+          workingDraft = addGroupSortItems(workingDraft, fromSlotId, groupSortPoolName, first.items.join(', '), nextId);
+        }
+        addedGroups += 1;
+        remaining = remaining.slice(1);
+      }
+    }
+
+    // A labelless continuation with nowhere to land (nothing preceded it in
+    // this paste, and it did not merge into the focused group above) has no
+    // group to join — it is simply dropped, same as an unmatched bracket
+    // elsewhere in this editor.
+    const toCreate = remaining.filter((p): p is { label: string; items: string[] } => p.label !== null);
+    const available = Math.max(0, MAX_GROUPSORT_GROUPS - deriveGroupSortRows(workingDraft, groupSortPoolName).length);
+    const created = toCreate.slice(0, available);
+    const overflow = toCreate.length - created.length;
+
+    created.forEach((group) => {
+      const rowId = nextId('row');
+      const slotId = nextId('slot');
+      workingDraft = addGroupSortGroup(workingDraft, rowId, slotId, groupSortPoolName);
+      workingDraft = setRowLabel(workingDraft, slotId, group.label);
+      if (group.items.length > 0) {
+        workingDraft = addGroupSortItems(workingDraft, slotId, groupSortPoolName, group.items.join(', '), nextId);
+      }
+    });
+    addedGroups += created.length;
+
+    commit(workingDraft);
+    return { addedGroups, overflow };
+  }
+
+  // The empty-list example card's own first keystroke — see `addExampleMatchPair`'s own header for the full reasoning.
+  function addExampleGroupSortGroup(value: string) {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    let next = addGroupSortGroup(draft, rowId, slotId, groupSortPoolName);
+    next = setRowLabel(next, slotId, value);
+    commit(next);
+    onSelectSlot(slotId);
+  }
+
   const groupSortColumn = (
     <GroupSortEditor
       blockId={blockId}
@@ -516,6 +727,8 @@ export default function QuizBlockEditor({
       onRemoveItem={(slotId, itemId) => commit(removeGroupSortItem(draft, slotId, groupSortPoolName, itemId))}
       onAdd={addGroupSortRow}
       onRemove={removeGroupSortRow}
+      onPasteGroups={pasteGroupSortOps}
+      onExampleChange={addExampleGroupSortGroup}
     />
   );
 

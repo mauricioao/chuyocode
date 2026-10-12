@@ -100,6 +100,17 @@ const t = UI_LABELS[lang].activities.present;
 const practiceUrl = `/${lang}/ingles/actividades/${activity.id}`;
 const shareLink = shareUrl(new URL(practiceUrl, Astro.url));
 const shareQr = qrSvg(shareLink);
+
+/**
+ * "Otra actividad" (N7, next step at the end): the community catalog,
+ * filtered by this activity's own level when it has one — SAME URL logic as
+ * the practice page's own `nextActivityHref` (`[id].astro`'s own header,
+ * build item N1) — kept in sync by hand, since the two routes share no
+ * loader to factor it into.
+ */
+const nextActivityHref = activity.level
+  ? `/${lang}/ingles/actividades?nivel=${activity.level}`
+  : `/${lang}/ingles/actividades`;
 ---
 
 <BaseLayout lang={lang} title={activity.title} description={t.pageDescription} theme="ingles" bare fullHeight>
@@ -111,5 +122,6 @@ const shareQr = qrSvg(shareLink);
     practiceUrl={practiceUrl}
     qrSvg={shareQr}
     blocks={activity.blocks}
+    nextActivityHref={nextActivityHref}
   />
 </BaseLayout>

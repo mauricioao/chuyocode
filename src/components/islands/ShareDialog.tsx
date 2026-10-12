@@ -28,7 +28,7 @@ import { WhatsappLogoIcon } from '@phosphor-icons/react/dist/ssr/WhatsappLogo';
 import { QrCodeIcon } from '@phosphor-icons/react/dist/ssr/QrCode';
 import { ShareNetworkIcon } from '@phosphor-icons/react/dist/ssr/ShareNetwork';
 import { Button } from '@/components/ui/button';
-import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
+import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS, MENU_ITEM_CLASS } from '@/lib/ui/iconTooltip';
 import {
   Dialog,
   DialogContent,
@@ -109,6 +109,21 @@ export interface ShareDialogProps {
    * is completely unaffected — defaults to `false`.
    */
   iconOnly?: boolean;
+  /**
+   * N6 follow-up ("Más" menu labels, 2026-10-12 owner report): renders the
+   * trigger as a left-aligned, full-width "menu item" row instead — icon
+   * + an ALWAYS-visible text label (never only a hover/focus tooltip),
+   * `MENU_ITEM_CLASS` — the SAME row style `DuplicateActivityButton`/
+   * `ReportActivityButton` use, since all three live in the SAME "Más"
+   * panel on the practice page below the `sm` breakpoint. Mutually
+   * exclusive with `iconOnly` in practice (the practice page renders one
+   * trigger per breakpoint, CSS-toggled, never both props at once); this
+   * one's own `data-testid` is `exercise-share-menu` (not
+   * `exercise-share`), so the two co-existing DOM nodes never share one
+   * test id. Every other call site omits both and keeps the default
+   * icon-plus-visible-text button.
+   */
+  asMenuItem?: boolean;
 }
 
 /**
@@ -146,6 +161,7 @@ export default function ShareDialog({
   whatsappHref,
   downloadFileName,
   iconOnly = false,
+  asMenuItem = false,
 }: ShareDialogProps) {
   const tooltipId = useId();
   const [copied, setCopied] = useState(false);
@@ -215,7 +231,18 @@ export default function ShareDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        {iconOnly ? (
+        {asMenuItem ? (
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="exercise-share-menu"
+            aria-label={labels.trigger}
+            className={MENU_ITEM_CLASS}
+          >
+            <ShareNetworkIcon aria-hidden="true" size={18} />
+            <span>{labels.trigger}</span>
+          </Button>
+        ) : iconOnly ? (
           <Button
             type="button"
             variant="outline"

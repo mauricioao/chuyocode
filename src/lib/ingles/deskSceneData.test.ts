@@ -16,9 +16,11 @@ vi.mock('@lib/env', () => ({
 
 const getActivityCount = vi.fn();
 const getPublishedActivities = vi.fn();
+const getActivitiesByAuthor = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+  getActivitiesByAuthor: (...args: unknown[]) => getActivitiesByAuthor(...args),
 }));
 
 vi.mock('@lib/activities/storage', () => ({
@@ -34,8 +36,10 @@ function userFixture(displayName: string) {
 beforeEach(() => {
   getActivityCount.mockReset();
   getPublishedActivities.mockReset();
+  getActivitiesByAuthor.mockReset();
   getActivityCount.mockResolvedValue(null);
   getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
+  getActivitiesByAuthor.mockResolvedValue([]);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-01T12:00:00Z'));
 });
@@ -112,5 +116,66 @@ describe('loadDeskSceneData', () => {
     expect(getPublishedActivities).toHaveBeenCalledWith(
       expect.objectContaining({ viewerId: 'u1' }),
     );
+  });
+
+  describe('N4 — "Mis actividades" folder (meta/badge/toast data)', () => {
+    it('shows "Sin actividades todavía" for an author with nothing yet', async () => {
+      getActivitiesByAuthor.mockResolvedValue([]);
+      const data = await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(data.myActivitiesMeta).toBe('Sin actividades todavía');
+      expect(data.myActivitiesRejectedCount).toBe(0);
+      expect(data.myActivitiesBadgeLabel).toBeNull();
+    });
+
+    it('formats the singular/plural meta for 1 and more than 1', async () => {
+      getActivitiesByAuthor.mockResolvedValue([{ id: 'a1', title: 'One', status: 'draft' }]);
+      const one = await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(one.myActivitiesMeta).toBe('1 actividad');
+
+      getActivitiesByAuthor.mockResolvedValue([
+        { id: 'a1', title: 'One', status: 'draft' },
+        { id: 'a2', title: 'Two', status: 'live' },
+        { id: 'a3', title: 'Three', status: 'pending_review' },
+      ]);
+      const many = await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(many.myActivitiesMeta).toBe('3 actividades');
+    });
+
+    it('surfaces a badge count + accessible label only when something is rejected', async () => {
+      getActivitiesByAuthor.mockResolvedValue([
+        { id: 'a1', title: 'One', status: 'rejected' },
+        { id: 'a2', title: 'Two', status: 'rejected' },
+        { id: 'a3', title: 'Three', status: 'live' },
+      ]);
+      const data = await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(data.myActivitiesRejectedCount).toBe(2);
+      expect(data.myActivitiesBadgeLabel).toBe('2 actividades necesitan cambios');
+    });
+
+    it('uses the singular badge wording for exactly one rejected activity', async () => {
+      getActivitiesByAuthor.mockResolvedValue([{ id: 'a1', title: 'One', status: 'rejected' }]);
+      const data = await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(data.myActivitiesBadgeLabel).toBe('1 actividad necesita cambios');
+    });
+
+    it('passes the author id to getActivitiesByAuthor', async () => {
+      await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(getActivitiesByAuthor).toHaveBeenCalledWith('u1');
+    });
+
+    it('builds the toast-script snapshot from id/title/status only', async () => {
+      getActivitiesByAuthor.mockResolvedValue([
+        { id: 'a1', title: 'One', status: 'live', level: 'A1', blockCount: 2 },
+      ]);
+      const data = await loadDeskSceneData({ lang: 'es', user: userFixture('Ana'), geo: undefined });
+      expect(data.myActivitiesStatuses).toEqual([{ id: 'a1', title: 'One', status: 'live' }]);
+    });
+
+    it('never queries getActivitiesByAuthor and always marks the script data null for an anonymous visitor (TEMP local-dev screenshot override)', async () => {
+      const data = await loadDeskSceneData({ lang: 'es', user: null, geo: undefined });
+      expect(getActivitiesByAuthor).not.toHaveBeenCalled();
+      expect(data.myActivitiesMeta).toBe('Sin actividades todavía');
+      expect(data.myActivitiesStatuses).toBeNull();
+    });
   });
 });

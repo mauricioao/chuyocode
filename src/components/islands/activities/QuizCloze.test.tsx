@@ -11,7 +11,7 @@
  * such guarantee over its own shuffle order.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Payload } from '@/lib/exercisePayload';
 import { GAME_SOUND_MUTE_KEY } from '@/lib/activities/gameSounds';
 import QuizCloze from './QuizCloze';
@@ -149,23 +149,94 @@ describe('QuizCloze', () => {
       expect(screen.getByTestId('cloze-blank-slot-s0b0').textContent).toBe('was');
     });
 
-    it('reaching the end shows the final score and "Reintentar"', () => {
-      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
-      fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
-      fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
-      fireEvent.click(screen.getByTestId('cloze-check'));
-      act(() => vi.advanceTimersByTime(1000));
+    describe('✓/✕ marks (UX audit F10: correct/wrong must not rely on colour alone)', () => {
+      it('shows no marks before "Comprobar" is pressed', () => {
+        render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
+        fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
 
-      fireEvent.click(screen.getByTestId('cloze-tile-w-bark'));
-      fireEvent.click(screen.getByTestId('cloze-blank-slot-s1b0'));
-      fireEvent.click(screen.getByTestId('cloze-check'));
-      act(() => vi.advanceTimersByTime(1000));
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+        expect(screen.getByTestId('cloze-live-region').textContent).toBe('');
+      });
 
-      expect(screen.getByTestId('cloze-result').textContent).toBe('2 de 2 correctas');
-      expect(screen.getByTestId('cloze-retry')).toBeTruthy();
+      it('marks the correct blank with a ✓ during the brief settle window, and announces the summary', () => {
+        render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
+        fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+        fireEvent.click(screen.getByTestId('cloze-check'));
+
+        expect(screen.getByTestId('cloze-blank-slot-s0b0').getAttribute('aria-label')).toContain('correcta');
+        expect(within(screen.getByTestId('cloze-blank-slot-s0b0')).getByTestId('grade-mark-correct')).toBeTruthy();
+        expect(screen.getByTestId('cloze-live-region').textContent).toBe('1 correcta');
+
+        // Gone once the sentence advances.
+        act(() => vi.advanceTimersByTime(1000));
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+      });
+
+      it('marks both swapped blanks with a ✕, and announces the summary', () => {
+        render(<QuizCloze lang="es" payload={TWO_BLANK_PAYLOAD} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('cloze-tile-w-received'));
+        fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+        fireEvent.click(screen.getByTestId('cloze-tile-w-was'));
+        fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b1'));
+        fireEvent.click(screen.getByTestId('cloze-check'));
+
+        expect(screen.getByTestId('cloze-blank-slot-s0b0').getAttribute('aria-label')).toContain('incorrecta');
+        expect(within(screen.getByTestId('cloze-blank-slot-s0b0')).getByTestId('grade-mark-wrong')).toBeTruthy();
+        expect(within(screen.getByTestId('cloze-blank-slot-s0b1')).getByTestId('grade-mark-wrong')).toBeTruthy();
+        expect(screen.getByTestId('cloze-live-region').textContent).toBe('2 incorrectas');
+
+        // Fixable, same as the plain colour test above: clearing a wrong
+        // blank drops its own mark immediately.
+        fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+        expect(within(screen.getByTestId('cloze-blank-slot-s0b0')).queryByTestId('grade-mark-wrong')).toBeNull();
+      });
     });
 
-    it('"Reintentar" starts a fresh round at sentence 1', () => {
+    it('reaching the end shows the shared GameResult screen, perfect and with no "Repasar"', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
+      fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+      fireEvent.click(screen.getByTestId('cloze-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      fireEvent.click(screen.getByTestId('cloze-tile-w-bark'));
+      fireEvent.click(screen.getByTestId('cloze-blank-slot-s1b0'));
+      fireEvent.click(screen.getByTestId('cloze-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByTestId('game-result-score').textContent).toBe('2 de 2 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('perfect');
+      expect(screen.getByTestId('game-result-play-again')).toBeTruthy();
+      expect(screen.queryByTestId('game-result-review')).toBeNull();
+    });
+
+    it('scores by FIRST-TRY accuracy, not eventual completion: a blank gotten wrong before being fixed does not count', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      // Sentence 0: wrong on the first check (the other sentence's word).
+      fireEvent.click(screen.getByTestId('cloze-tile-w-bark'));
+      fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+      fireEvent.click(screen.getByTestId('cloze-check'));
+      // Fix it: clear the blank and place the right word.
+      fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+      fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
+      fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
+      fireEvent.click(screen.getByTestId('cloze-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      // Sentence 1: correct on the first try.
+      fireEvent.click(screen.getByTestId('cloze-tile-w-bark'));
+      fireEvent.click(screen.getByTestId('cloze-blank-slot-s1b0'));
+      fireEvent.click(screen.getByTestId('cloze-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 2 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
+    });
+
+    it('"Jugar de nuevo" starts a fresh round at sentence 1', () => {
       render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
       fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
       fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
@@ -176,9 +247,9 @@ describe('QuizCloze', () => {
       fireEvent.click(screen.getByTestId('cloze-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      fireEvent.click(screen.getByTestId('cloze-retry'));
+      fireEvent.click(screen.getByTestId('game-result-play-again'));
 
-      expect(screen.queryByTestId('cloze-result')).toBeNull();
+      expect(screen.queryByTestId('game-result')).toBeNull();
       expect(screen.getByTestId('cloze-position').textContent).toBe('1 de 2');
     });
   });

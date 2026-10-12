@@ -13,13 +13,16 @@ beforeEach(() => {
 });
 
 describe('DuplicateActivityButton', () => {
-  it('renders the trigger, idle — an icon button with an aria-label and a hover/focus tooltip, not visible text', () => {
+  // N6 follow-up (2026-10-12, "Más" menu labels): this button only ever
+  // lives inside the practice window's "Más" overflow menu now — icon +
+  // an ALWAYS-visible text label (`MENU_ITEM_CLASS`), not a hover-only
+  // tooltip, which was unusable on a touch device with no hover.
+  it('renders the trigger, idle — an icon button with an aria-label AND a visible text label, no tooltip', () => {
     render(<DuplicateActivityButton lang="es" activityId={ACTIVITY_ID} navigate={vi.fn()} />);
     const button = screen.getByTestId('duplicate-activity-button');
     expect(button.getAttribute('aria-label')).toBe('Duplicar');
-    const tooltip = button.querySelector('[role="tooltip"]');
-    expect(tooltip?.textContent).toBe('Duplicar');
-    expect(button.getAttribute('aria-describedby')).toBe(tooltip?.id);
+    expect(button.textContent).toBe('Duplicar');
+    expect(button.querySelector('[role="tooltip"]')).toBeNull();
     expect(screen.queryByTestId('duplicate-activity-error')).toBeNull();
   });
 

@@ -21,6 +21,8 @@ import { useEffect, useRef } from 'react';
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
 import { cn } from '@/lib/utils';
 import { MAX_GROUPSORT_GROUPS, MIN_GROUPSORT_ITEMS_PER_GROUP, type GroupSortGroupRow } from '@/lib/activities/groupSort';
+import { isMultilinePaste } from '@/lib/activities/pasteLines';
+import { parseGroupSortPaste, type GroupSortPasteOp } from '@/lib/activities/pasteGroupSort';
 import {
   AddCard,
   Chip,
@@ -33,6 +35,7 @@ import {
   TemplateField,
   TemplateGroup,
   useExitingItems,
+  usePasteFeedback,
 } from './TemplateEditorKit';
 
 export const COPY = {
@@ -50,6 +53,14 @@ export const COPY = {
     minItemsHint: (n: number) => `Agrega al menos ${n} elementos`,
     maxGroupsHint: `Máximo ${MAX_GROUPSORT_GROUPS} grupos, para que el tablero se lea bien`,
     ready: (n: number) => `Listo para jugar · ${n} grupos`,
+    pasteHint: 'Puedes pegar una lista: una por línea.',
+    pasted: (n: number) => `Se ${n === 1 ? 'agregó' : 'agregaron'} ${n === 1 ? '1 grupo' : `${n} grupos`}`,
+    pastedWithOverflow: (n: number, dropped: number) =>
+      `Se ${n === 1 ? 'agregó' : 'agregaron'} ${n === 1 ? '1 grupo' : `${n} grupos`} · ${dropped} no ${
+        dropped === 1 ? 'entró' : 'entraron'
+      } (máximo ${MAX_GROUPSORT_GROUPS})`,
+    exampleGroupName: 'Animals',
+    exampleItems: 'cat, dog',
   },
   en: {
     title: 'Sort into groups',
@@ -65,6 +76,12 @@ export const COPY = {
     minItemsHint: (n: number) => `Add at least ${n} items`,
     maxGroupsHint: `Up to ${MAX_GROUPSORT_GROUPS} groups, so the board stays easy to read`,
     ready: (n: number) => `Ready to play · ${n} groups`,
+    pasteHint: 'You can paste a list: one per line.',
+    pasted: (n: number) => `${n} ${n === 1 ? 'group' : 'groups'} added`,
+    pastedWithOverflow: (n: number, dropped: number) =>
+      `${n} ${n === 1 ? 'group' : 'groups'} added · ${dropped} did not fit (max ${MAX_GROUPSORT_GROUPS})`,
+    exampleGroupName: 'Animals',
+    exampleItems: 'cat, dog',
   },
 } as const;
 
@@ -88,6 +105,22 @@ export interface GroupSortEditorProps {
   onRemoveItem: (slotId: string, itemId: string) => void;
   onAdd: () => void;
   onRemove: (rowId: string) => void;
+  /**
+   * A bulk paste (2+ non-empty lines) landed in the group named `fromSlotId`
+   * (`null` for the empty-list example row) — `ops` is already parsed
+   * (`pasteGroupSort.ts`). One single commit upstream; returns how many
+   * groups actually landed and how many were dropped for the
+   * {@link MAX_GROUPSORT_GROUPS} cap, so the status line can say so. See
+   * `onPasteGroups` in `QuizBlockEditor.tsx`.
+   */
+  onPasteGroups: (fromSlotId: string | null, ops: GroupSortPasteOp[]) => { addedGroups: number; overflow: number };
+  /**
+   * The empty-list EXAMPLE card's own first keystroke (owner spec N5
+   * follow-up, "not a dead end"): creates the real group AND sets its name
+   * in ONE commit upstream — see `MatchPairsEditor.tsx`'s own
+   * `onExampleChange` for the full reasoning.
+   */
+  onExampleChange: (value: string) => void;
 }
 
 export default function GroupSortEditor({
@@ -100,10 +133,13 @@ export default function GroupSortEditor({
   onRemoveItem,
   onAdd,
   onRemove,
+  onPasteGroups,
+  onExampleChange,
 }: GroupSortEditorProps) {
   const t = copyFor(lang);
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const exits = useExitingItems(onRemove);
+  const feedback = usePasteFeedback(groups);
 
   useEffect(() => {
     if (!focusSlotId) return;
@@ -113,70 +149,114 @@ export default function GroupSortEditor({
   const canAddMore = groups.length < MAX_GROUPSORT_GROUPS;
   const ready = groups.length >= 2 && groups.every((g) => g.items.length >= MIN_GROUPSORT_ITEMS_PER_GROUP);
 
+  const soleEmptyGroup = groups.length === 1 && groups[0]!.label.trim() === '' && groups[0]!.items.length === 0;
+  const showTeachingPlaceholders = groups.length === 0 || soleEmptyGroup;
+  const filledCount = groups.filter((g) => g.label.trim() !== '').length;
+  const showPasteHint = filledCount < 2;
+
+  function handlePaste(fromSlotId: string | null, event: React.ClipboardEvent<HTMLInputElement>) {
+    const text = event.clipboardData.getData('text');
+    if (!isMultilinePaste(text)) return; // single-line paste: browser default behaviour, untouched
+    event.preventDefault();
+    const ops = parseGroupSortPaste(text);
+    const { addedGroups, overflow } = onPasteGroups(fromSlotId, ops);
+    feedback.show(overflow > 0 ? t.pastedWithOverflow(addedGroups, overflow) : t.pasted(addedGroups));
+  }
+
+  // The empty-list example card's own first keystroke (owner spec N5
+  // follow-up, "not a dead end") — see `MatchPairsEditor.tsx`'s own `onExampleChange` for the full reasoning.
+  function handleExampleNameChange(value: string) {
+    onExampleChange(value);
+  }
+
   return (
     <div data-testid={`groupsort-editor-${blockId}`} className="flex flex-col">
       <SheetHeader icon={SquaresFourIcon} tone="green" title={t.title} instruction={t.instruction} />
 
       <div data-testid={`groupsort-list-${blockId}`} className="flex flex-col gap-3">
-        {groups.map((group, index) => (
-          <TemplateCollapse key={group.rowId} leaving={exits.isLeaving(group.rowId)}>
-            <TemplateGroup
-              ariaLabel={group.label.trim() || `${t.groupNameLabel} ${index + 1}`}
-              testId={`groupsort-group-${group.slotId}`}
-              className="template-card"
-            >
-              <div className="template-row flex items-center pl-4">
-                <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-full', GROUP_DOT_CLASS[index % 4])} />
-                <TemplateField
-                  ref={(node) => {
-                    nameRefs.current[group.slotId] = node;
-                  }}
-                  aria-label={`${t.groupNameLabel} ${index + 1}`}
-                  placeholder={t.groupNamePlaceholder}
-                  data-testid={`groupsort-name-${group.slotId}`}
-                  value={group.label}
-                  onChange={(event) => onLabelChange(group.slotId, event.target.value)}
-                  className="flex-1 font-semibold"
-                />
-                <div className="flex w-9 shrink-0 justify-end pr-3">
-                  <RowRemoveButton
-                    label={`${t.removeGroup} ${index + 1}`}
-                    testId={`groupsort-remove-group-${group.slotId}`}
-                    onRemove={() => exits.remove(group.rowId, group.rowId)}
+        {groups.length === 0 && (
+          // The empty-list EXAMPLE card — a REAL, editable field; see
+          // `MatchPairsEditor.tsx`'s own one for the full reasoning.
+          // "+ Agregar grupo" (unchanged) still starts one by hand too.
+          <TemplateGroup ariaLabel={t.groupNameLabel} testId={`groupsort-ghost-group-${blockId}`} className="template-card">
+            <div className="template-row flex items-center pl-4">
+              <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-full', GROUP_DOT_CLASS[0])} />
+              <TemplateField
+                aria-label={t.groupNameLabel}
+                placeholder={t.exampleGroupName}
+                data-testid={`groupsort-ghost-name-${blockId}`}
+                value=""
+                onChange={(event) => handleExampleNameChange(event.target.value)}
+                onPaste={(event) => handlePaste(null, event)}
+                className="flex-1 font-semibold"
+              />
+              <div className="w-9 shrink-0" />
+            </div>
+          </TemplateGroup>
+        )}
+        {groups.map((group, index) => {
+          const isTeachingGroup = showTeachingPlaceholders && group.label.trim() === '' && group.items.length === 0;
+          return (
+            <TemplateCollapse key={group.rowId} leaving={exits.isLeaving(group.rowId)}>
+              <TemplateGroup
+                ariaLabel={group.label.trim() || `${t.groupNameLabel} ${index + 1}`}
+                testId={`groupsort-group-${group.slotId}`}
+                className="template-card"
+              >
+                <div className="template-row flex items-center pl-4">
+                  <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-full', GROUP_DOT_CLASS[index % 4])} />
+                  <TemplateField
+                    ref={(node) => {
+                      nameRefs.current[group.slotId] = node;
+                    }}
+                    aria-label={`${t.groupNameLabel} ${index + 1}`}
+                    placeholder={isTeachingGroup ? t.exampleGroupName : t.groupNamePlaceholder}
+                    data-testid={`groupsort-name-${group.slotId}`}
+                    value={group.label}
+                    onChange={(event) => onLabelChange(group.slotId, event.target.value)}
+                    onPaste={(event) => handlePaste(group.slotId, event)}
+                    className="flex-1 font-semibold"
+                  />
+                  <div className="flex w-9 shrink-0 justify-end pr-3">
+                    <RowRemoveButton
+                      label={`${t.removeGroup} ${index + 1}`}
+                      testId={`groupsort-remove-group-${group.slotId}`}
+                      onRemove={() => exits.remove(group.rowId, group.rowId)}
+                    />
+                  </div>
+                </div>
+
+                <div className="template-row flex flex-wrap items-center gap-1.5 px-4 py-3">
+                  <div data-testid={`groupsort-items-${group.slotId}`} className="contents">
+                    {group.items.map((item) => (
+                      <Chip
+                        key={item.id}
+                        testId={`groupsort-item-${item.id}`}
+                        removeLabel={`${t.removeItem} ${item.text}`}
+                        removeTestId={`groupsort-remove-item-${item.id}`}
+                        onRemove={() => onRemoveItem(group.slotId, item.id)}
+                      >
+                        {item.text}
+                      </Chip>
+                    ))}
+                  </div>
+                  <ChipInput
+                    placeholder={isTeachingGroup ? t.exampleItems : t.itemPlaceholder}
+                    ariaLabel={t.addItem(index + 1)}
+                    testId={`groupsort-item-input-${group.slotId}`}
+                    onCommit={(text) => onAddItems(group.slotId, text)}
                   />
                 </div>
-              </div>
+              </TemplateGroup>
 
-              <div className="template-row flex flex-wrap items-center gap-1.5 px-4 py-3">
-                <div data-testid={`groupsort-items-${group.slotId}`} className="contents">
-                  {group.items.map((item) => (
-                    <Chip
-                      key={item.id}
-                      testId={`groupsort-item-${item.id}`}
-                      removeLabel={`${t.removeItem} ${item.text}`}
-                      removeTestId={`groupsort-remove-item-${item.id}`}
-                      onRemove={() => onRemoveItem(group.slotId, item.id)}
-                    >
-                      {item.text}
-                    </Chip>
-                  ))}
-                </div>
-                <ChipInput
-                  placeholder={t.itemPlaceholder}
-                  ariaLabel={t.addItem(index + 1)}
-                  testId={`groupsort-item-input-${group.slotId}`}
-                  onCommit={(text) => onAddItems(group.slotId, text)}
-                />
-              </div>
-            </TemplateGroup>
-
-            {group.items.length < MIN_GROUPSORT_ITEMS_PER_GROUP && (
-              <StatusNote tone="warn" testId={`groupsort-min-items-hint-${group.slotId}`}>
-                {t.minItemsHint(MIN_GROUPSORT_ITEMS_PER_GROUP)}
-              </StatusNote>
-            )}
-          </TemplateCollapse>
-        ))}
+              {group.items.length < MIN_GROUPSORT_ITEMS_PER_GROUP && (
+                <StatusNote tone="warn" testId={`groupsort-min-items-hint-${group.slotId}`}>
+                  {t.minItemsHint(MIN_GROUPSORT_ITEMS_PER_GROUP)}
+                </StatusNote>
+              )}
+            </TemplateCollapse>
+          );
+        })}
 
         {canAddMore ? (
           <AddCard label={t.addGroup} testId={`groupsort-add-${blockId}`} onClick={onAdd} />
@@ -185,7 +265,11 @@ export default function GroupSortEditor({
         )}
       </div>
 
-      {groups.length < 2 ? (
+      {feedback.message ? (
+        <StatusNote tone="ready" testId={`groupsort-paste-feedback-${blockId}`}>
+          {feedback.message}
+        </StatusNote>
+      ) : groups.length < 2 ? (
         <StatusNote tone="warn" testId={`groupsort-min-groups-hint-${blockId}`}>
           {t.minGroupsHint}
         </StatusNote>
@@ -194,6 +278,7 @@ export default function GroupSortEditor({
           {t.ready(groups.length)}
         </StatusNote>
       ) : null}
+      {showPasteHint && <Footnote testId={`groupsort-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
     </div>
   );
 }

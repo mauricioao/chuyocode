@@ -1,28 +1,66 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
 
+// `loadDeskSceneData` (the desk behind the window, N4) pulls in
+// `@lib/profile` -> `@lib/access` -> `@lib/supabase` -> `loadEnv`, which
+// reads `import.meta.env` — stub it before any module that calls it, same
+// posture as `crear/_index.test.ts`.
+vi.mock('@lib/env', () => ({
+  loadEnv: () => ({
+    SANITY_PROJECT_ID: 'test-proj',
+    SANITY_DATASET: 'production',
+    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_ANON_KEY: 'test-anon',
+    SUPABASE_SERVICE_ROLE_KEY: '',
+    AD_HMAC_SECRET: '',
+  }),
+}));
+
 const { activitiesResult } = vi.hoisted(() => ({ activitiesResult: { value: [] as unknown[] } }));
 
+const getActivityCount = vi.fn();
+const getPublishedActivities = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
   getActivitiesByAuthor: vi.fn(async () => activitiesResult.value),
+  // The desk behind the HOST shell (`loadDeskSceneData`) reads both of these too.
+  getActivityCount: (...args: unknown[]) => getActivityCount(...args),
+  getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+}));
+
+vi.mock('@lib/activities/storage', () => ({
+  publicImageUrl: (path: string) => `https://public.example/${path}`,
 }));
 
 import MisActividadesPage from './index.astro';
 
+/**
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): this
+ * whole suite is about the WINDOW's own CONTENT (the listing, the
+ * delete/share actions) — which only ever renders for an EMBEDDED request
+ * now (`?ventana=1`, `@lib/ui/embeddedWindow`'s own header), so `render`
+ * simulates one by default. `GET … — HOST shell` below is the one describe
+ * block that deliberately omits it.
+ */
 async function render(
   url: string,
-  { params, locals }: { params: Record<string, string>; locals?: Record<string, unknown> },
+  { params, locals, embedded = true }: { params: Record<string, string>; locals?: Record<string, unknown>; embedded?: boolean },
 ) {
   const container = await createContainer();
+  const requestUrl = new URL(url);
+  if (embedded) requestUrl.searchParams.set('ventana', '1');
   return container.renderToResponse(MisActividadesPage, {
     locals: { user: null, ...locals },
     params,
-    request: new Request(url),
+    request: new Request(requestUrl),
   });
 }
 
 beforeEach(() => {
   activitiesResult.value = [];
+  getActivityCount.mockReset();
+  getPublishedActivities.mockReset();
+  getActivityCount.mockResolvedValue(null);
+  getPublishedActivities.mockResolvedValue({ activities: [], total: 0 });
 });
 
 describe('GET /[lang]/mis-actividades — routing', () => {
@@ -52,8 +90,19 @@ describe('GET /[lang]/mis-actividades — anonymous gate', () => {
   });
 });
 
-describe('GET /[lang]/mis-actividades — signed-in visitor', () => {
-  it('renders the empty state when the author has nothing', async () => {
+describe('GET /[lang]/mis-actividades — renders as a window over the desk (N4)', () => {
+  it('renders the DeskWindow shell, titled "Mis actividades", with its red/yellow lights pointed at the hub', async () => {
+    const res = await render('https://chuyocode.test/es/mis-actividades', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-desk-window');
+    expect(html).toContain('data-close-target="/es/ingles"');
+    expect(html).toContain('Mis actividades');
+  });
+
+  it('renders the empty state inside the window when the author has nothing', async () => {
     activitiesResult.value = [];
     const res = await render('https://chuyocode.test/es/mis-actividades', {
       params: { lang: 'es' },
@@ -93,14 +142,30 @@ describe('GET /[lang]/mis-actividades — signed-in visitor', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  it('renders a back button to the Inglés hub, beside the title (bugfix 2026-10-06: used to go to the ChuyoCode home instead)', async () => {
+  // Window-manager architecture: the desk no longer renders BEHIND an
+  // embedded window at all — it renders behind the HOST shell instead, a
+  // plain signed-in visit with no `?ventana=1` (`embedded: false` below).
+  it('renders the desk behind the HOST shell for a signed-in visitor, with the "Mis actividades" folder on it', async () => {
     const res = await render('https://chuyocode.test/es/mis-actividades', {
       params: { lang: 'es' },
       locals: { user: { id: 'user-1' } },
+      embedded: false,
     });
     const html = await res.text();
-    expect(html).toContain('data-back-button');
-    expect(html).toContain('href="/es/ingles"');
+    expect(html).toContain('Tu escritorio');
+    expect(html).toContain('data-desk-window-manager');
+    expect(html).not.toMatch(/<section[^>]*data-desk[^>]*\binert\b[^>]*>/);
+    expect(html).not.toContain('role="dialog"'); // this route itself only renders embedded.
+    expect(html).toContain('Mis actividades');
+  });
+
+  it('varies on Sec-Fetch-Dest, so a cache never serves the shell to the embedded request', async () => {
+    const res = await render('https://chuyocode.test/es/mis-actividades', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
   });
 });
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { Block } from '@/lib/activities/blocks';
 import PresentationIsland from './PresentationIsland';
@@ -67,6 +67,14 @@ function next() {
 
 function prev() {
   fireEvent.click(screen.getByTestId('presentation-prev'));
+}
+
+/** The control bar's own QR toggle — scoped (not a bare `getByRole`) because
+ * the overlay's own close button can carry the SAME accessible name
+ * ("Ocultar QR" text content) once the overlay is open (N7: open by
+ * default on mount), which would otherwise match twice. */
+function qrToggle() {
+  return within(screen.getByTestId('presentation-controls')).getByTestId('presentation-qr-toggle');
 }
 
 /** No `@testing-library/jest-dom` matchers configured in this repo (no global
@@ -140,34 +148,54 @@ describe('PresentationIsland — cover slide (title/level/count "title card")', 
   });
 });
 
-describe('PresentationIsland — "Mostrar QR" on-demand overlay (owner feedback 2026-10-06)', () => {
-  it('offers the control and shows the QR + scan hint as an overlay once pressed, from any slide', () => {
+describe('PresentationIsland — QR overlay (N7: open by default on the FIRST slide, "join by QR from the start")', () => {
+  it('shows the QR + the short "scan to play" hint as soon as the deck mounts, with no click needed', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
-    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mostrar QR' }));
     const overlay = screen.getByTestId('presentation-qr-overlay');
-    expect(overlay.textContent).toContain('Escanea el código');
+    expect(overlay.textContent).toContain('Escanea para jugar en tu celular');
     expect(screen.getByTestId('presentation-qr-overlay-image')).toBeTruthy();
+    // The toggle itself already reads "closed" (Ocultar QR = currently shown).
+    expect(attr(qrToggle(), 'aria-label')).toBe('Ocultar QR');
   });
 
-  it('toggles via the "Q" key, from any slide, without advancing/revealing', () => {
+  it('hides automatically once the presenter advances with "Siguiente"', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByTestId('presentation-qr-overlay')).toBeTruthy();
+    next();
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+  });
+
+  it('also hides on a keyboard "next" press (clicker/arrow/space/enter), not just the control bar button', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+  });
+
+  it('the toggle/"Q" key keep working afterwards — reopens and recloses on demand', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    // Closed here via the "Q" key itself (not "Siguiente" — that auto-hide
+    // path is covered by the two tests above), so this stays on slide 1,
+    // unrevealed, to isolate "does the toggle ever reveal/advance" below.
     fireEvent.keyDown(window, { key: 'q' });
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+
+    fireEvent.click(qrToggle());
     expect(screen.getByTestId('presentation-qr-overlay')).toBeTruthy();
     // Never a side effect on the deck itself (owner spec: "keep every other
-    // presentation behaviour" — the Q key must not also reveal/advance).
+    // presentation behaviour" — the Q key/button must not also reveal/advance).
     expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
 
-    fireEvent.keyDown(window, { key: 'Q' });
+    fireEvent.keyDown(window, { key: 'q' });
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+    fireEvent.keyDown(window, { key: 'Q' });
+    expect(screen.getByTestId('presentation-qr-overlay')).toBeTruthy();
   });
 
   it('closes via its own close button, and via Escape (without exiting the presentation)', () => {
     const assign = stubLocationAssign();
     render(<PresentationIsland {...BASE_PROPS} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mostrar QR' }));
+    // Already open on mount (N7) — no click needed to open it first.
     fireEvent.click(screen.getByTestId('presentation-qr-overlay-close'));
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
 
@@ -180,6 +208,7 @@ describe('PresentationIsland — "Mostrar QR" on-demand overlay (owner feedback 
   it('offers no control and no overlay when there is no QR to show (the editor preview)', () => {
     render(<PresentationIsland {...BASE_PROPS} practiceUrl={undefined} qrSvg={null} onExit={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Mostrar QR' })).toBeNull();
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
     fireEvent.keyDown(window, { key: 'q' });
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
   });
@@ -244,6 +273,53 @@ describe('PresentationIsland — the full flow (quiz-only deck)', () => {
     fireEvent.click(screen.getByTestId('presentation-prev'));
     expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
     expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
+  });
+});
+
+describe('PresentationIsland — "Otra actividad" at the end (N7, next step)', () => {
+  function walkToSummary() {
+    next(); // q1 revealed
+    next(); // q2 unrevealed
+    next(); // q2 revealed
+    next(); // -> summary
+  }
+
+  it('offers "Otra actividad" as the primary action, and "Volver a empezar" as secondary, when given a nextActivityHref', () => {
+    render(<PresentationIsland {...BASE_PROPS} nextActivityHref="/es/ingles/actividades?nivel=A2" />);
+    walkToSummary();
+
+    const nextActivity = screen.getByTestId('presentation-next-activity');
+    expect(attr(nextActivity, 'href')).toBe('/es/ingles/actividades?nivel=A2');
+    expect(nextActivity.textContent).toBe('Otra actividad');
+    expect(nextActivity.className).toContain('bg-primary');
+
+    const restart = screen.getByTestId('presentation-restart');
+    expect(restart.textContent).toBe('Volver a empezar');
+    // Secondary styling (owner review, same as `GameResult.tsx`): ink text, never a filled `bg-primary` pill.
+    expect(restart.className).toContain('text-accent-ink');
+    expect(restart.className).not.toContain('bg-primary');
+  });
+
+  it('"Otra actividad" points at the unfiltered catalog for an activity with no level', () => {
+    render(<PresentationIsland {...BASE_PROPS} nextActivityHref="/es/ingles/actividades" />);
+    walkToSummary();
+    expect(attr(screen.getByTestId('presentation-next-activity'), 'href')).toBe('/es/ingles/actividades');
+  });
+
+  it('"Volver a empezar" still restarts the deck when "Otra actividad" is also offered', () => {
+    render(<PresentationIsland {...BASE_PROPS} nextActivityHref="/es/ingles/actividades?nivel=A2" />);
+    walkToSummary();
+    fireEvent.click(screen.getByTestId('presentation-restart'));
+    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+  });
+
+  it('falls back to the single "Volver a empezar" primary button when no nextActivityHref is given (the editor preview)', () => {
+    render(<PresentationIsland {...BASE_PROPS} practiceUrl={undefined} qrSvg={null} onExit={vi.fn()} />);
+    walkToSummary();
+    expect(screen.queryByTestId('presentation-next-activity')).toBeNull();
+    const restart = screen.getByTestId('presentation-restart');
+    expect(restart.textContent).toBe('Volver a empezar');
+    expect(restart.className).toContain('bg-primary');
   });
 });
 
@@ -413,9 +489,16 @@ describe('PresentationIsland — keyboard map', () => {
     expect(() => fireEvent.keyDown(window, { key: 'f' })).not.toThrow();
   });
 
-  it('Escape navigates to the practice page', () => {
+  it('Escape navigates to the practice page (closing the default-open QR overlay first, N7)', () => {
     const assign = stubLocationAssign();
     render(<PresentationIsland {...BASE_PROPS} />);
+    // The QR overlay is open by default on mount (N7) — the FIRST Escape
+    // closes it, same "undo the last thing you opened" rule any other
+    // overlay already follows (unchanged by N7).
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(assign).toHaveBeenCalledWith('/es/ingles/actividades/abc');
   });
@@ -472,7 +555,8 @@ describe('PresentationIsland — control bar accessible names', () => {
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mostrar respuesta' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Mostrar QR' })).toBeTruthy();
+    // Open by default on mount (N7) — the toggle itself reads "Ocultar QR".
+    expect(attr(qrToggle(), 'aria-label')).toBe('Ocultar QR');
     expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Salir' })).toBeTruthy();
   });

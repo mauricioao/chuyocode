@@ -18,6 +18,7 @@
 import { useEffect, useRef } from 'react';
 import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquare';
 import { parseClozeText } from '@/lib/activities/clozeSentences';
+import { isMultilinePaste, parseSentencesPaste } from '@/lib/activities/pasteLines';
 import {
   AddRow,
   Chip,
@@ -32,6 +33,7 @@ import {
   TemplateGroup,
   TemplateRow,
   useExitingItems,
+  usePasteFeedback,
 } from './TemplateEditorKit';
 
 export const COPY = {
@@ -46,6 +48,9 @@ export const COPY = {
     addSentence: 'Agregar frase',
     minSentenceHint: 'Agrega al menos una frase con un espacio entre corchetes',
     ready: (n: number) => `Listo para jugar · ${n === 1 ? '1 frase' : `${n} frases`}`,
+    pasteHint: 'Puedes pegar una lista: una por línea.',
+    pasted: (n: number) => `Se ${n === 1 ? 'agregó' : 'agregaron'} ${n === 1 ? '1 frase' : `${n} frases`}`,
+    exampleSentence: 'She [is] my teacher',
     noBlanksYet: 'Todavía no hay espacios marcados',
     distractorsLabel: 'Palabras extra',
     distractorsHint: 'Se mezclan con las respuestas, pero no van en ningún espacio.',
@@ -64,6 +69,9 @@ export const COPY = {
     addSentence: 'Add sentence',
     minSentenceHint: 'Add at least one sentence with a blank in brackets',
     ready: (n: number) => `Ready to play · ${n === 1 ? '1 sentence' : `${n} sentences`}`,
+    pasteHint: 'You can paste a list: one per line.',
+    pasted: (n: number) => `${n} ${n === 1 ? 'sentence' : 'sentences'} added`,
+    exampleSentence: 'She [is] my teacher',
     noBlanksYet: 'No blanks marked yet',
     distractorsLabel: 'Extra words',
     distractorsHint: 'They are mixed in with the answers but fit no blank.',
@@ -114,6 +122,20 @@ export interface ClozeEditorProps {
   onAdd: () => void;
   onRemove: (seq: number) => void;
   onDistractorsChange: (text: string) => void;
+  /**
+   * A bulk paste (2+ non-empty lines) landed in the sentence at `fromSeq`
+   * (`null` for the empty-list example row) — `lines` is already split, one
+   * sentence per line, brackets untouched (`pasteLines.ts`). One single
+   * commit upstream; see `onPasteSentences` in `QuizBlockEditor.tsx`.
+   */
+  onPasteSentences: (fromSeq: number | null, lines: string[]) => void;
+  /**
+   * The empty-list EXAMPLE row's own first keystroke (owner spec N5
+   * follow-up, "not a dead end"): creates the real sentence AND sets its
+   * text in ONE commit upstream — see `MatchPairsEditor.tsx`'s own
+   * `onExampleChange` for the full reasoning.
+   */
+  onExampleChange: (value: string) => void;
 }
 
 export default function ClozeEditor({
@@ -126,10 +148,13 @@ export default function ClozeEditor({
   onAdd,
   onRemove,
   onDistractorsChange,
+  onPasteSentences,
+  onExampleChange,
 }: ClozeEditorProps) {
   const t = copyFor(lang);
   const fieldRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const exits = useExitingItems(onRemove);
+  const feedback = usePasteFeedback(sentences);
 
   useEffect(() => {
     if (focusSeq === null) return;
@@ -140,6 +165,26 @@ export default function ClozeEditor({
   const distractors = splitWords(distractorsText);
   const distractorKeys = wordKeys(distractors);
 
+  const soleEmptyRow = sentences.length === 1 && sentences[0]!.text.trim() === '';
+  const showTeachingPlaceholder = sentences.length === 0 || soleEmptyRow;
+  const filledCount = sentences.filter((s) => s.text.trim() !== '').length;
+  const showPasteHint = filledCount < 2;
+
+  function handlePaste(fromSeq: number | null, event: React.ClipboardEvent<HTMLInputElement>) {
+    const text = event.clipboardData.getData('text');
+    if (!isMultilinePaste(text)) return; // single-line paste: browser default behaviour, untouched
+    event.preventDefault();
+    const lines = parseSentencesPaste(text);
+    onPasteSentences(fromSeq, lines);
+    feedback.show(t.pasted(lines.length));
+  }
+
+  // The empty-list example row's own first keystroke (owner spec N5 follow-
+  // up, "not a dead end") — see `MatchPairsEditor.tsx`'s own `onExampleChange` for the full reasoning.
+  function handleExampleChange(value: string) {
+    onExampleChange(value);
+  }
+
   return (
     <div data-testid={`cloze-editor-${blockId}`} className="flex flex-col">
       <SheetHeader icon={BracketsSquareIcon} tone="yellow" title={t.title} instruction={t.instruction} />
@@ -147,6 +192,24 @@ export default function ClozeEditor({
       <section className="flex flex-col">
         {sentences.length > 0 && <GroupLabel>{t.groupLabel}</GroupLabel>}
         <TemplateGroup ariaLabel={t.groupLabel} testId={`cloze-list-${blockId}`}>
+          {sentences.length === 0 && (
+            // The empty-list EXAMPLE row — a REAL, editable field; see
+            // `MatchPairsEditor.tsx`'s own one for the full reasoning.
+            <TemplateRow testId={`cloze-ghost-row-${blockId}`}>
+              <div className="flex items-center">
+                <TemplateField
+                  aria-label={t.sentenceHeader}
+                  placeholder={t.exampleSentence}
+                  data-testid={`cloze-ghost-sentence-${blockId}`}
+                  value=""
+                  onChange={(event) => handleExampleChange(event.target.value)}
+                  onPaste={(event) => handlePaste(null, event)}
+                  className="flex-1"
+                />
+                <div className="w-9 shrink-0" />
+              </div>
+            </TemplateRow>
+          )}
           {sentences.map((item, index) => (
             <TemplateRow key={item.seq} testId={`cloze-row-${item.seq}`} leaving={exits.isLeaving(String(item.seq))}>
               <div className="flex items-center">
@@ -155,10 +218,11 @@ export default function ClozeEditor({
                     fieldRefs.current[item.seq] = node;
                   }}
                   aria-label={`${t.sentenceHeader} ${index + 1}`}
-                  placeholder={t.sentencePlaceholder}
+                  placeholder={showTeachingPlaceholder ? t.exampleSentence : t.sentencePlaceholder}
                   data-testid={`cloze-sentence-${item.seq}`}
                   value={item.text}
                   onChange={(event) => onSentenceChange(item.seq, event.target.value)}
+                  onPaste={(event) => handlePaste(item.seq, event)}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter' || event.ctrlKey || event.metaKey) return;
                     const isLast = sentences[sentences.length - 1]?.seq === item.seq;
@@ -200,7 +264,11 @@ export default function ClozeEditor({
           <AddRow label={t.addSentence} testId={`cloze-add-${blockId}`} onClick={onAdd} />
         </TemplateGroup>
 
-        {playableCount > 0 ? (
+        {feedback.message ? (
+          <StatusNote tone="ready" testId={`cloze-paste-feedback-${blockId}`}>
+            {feedback.message}
+          </StatusNote>
+        ) : playableCount > 0 ? (
           <StatusNote tone="ready" testId={`cloze-ready-${blockId}`}>
             {t.ready(playableCount)}
           </StatusNote>
@@ -210,6 +278,7 @@ export default function ClozeEditor({
           </StatusNote>
         )}
         <Footnote testId={`cloze-bracket-hint-${blockId}`}>{t.bracketHint}</Footnote>
+        {showPasteHint && <Footnote testId={`cloze-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
       </section>
 
       <section className="flex flex-col pt-6">

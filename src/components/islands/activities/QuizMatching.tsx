@@ -58,6 +58,7 @@ import {
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
 import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -66,6 +67,7 @@ import {
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
 } from '@/components/islands/mechanics/scale';
+import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 
 /** Past this many pairs, the prompt list switches to {@link STAGE_TWO_COL_GRID} on a wide stage — see that token's own header. */
 const MANY_PAIRS_THRESHOLD = 4;
@@ -77,6 +79,10 @@ export interface QuizMatchingProps {
   seed: string;
   /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
   editorOffset?: boolean;
+  /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
+  nextHref?: string;
+  /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
+  guest?: GameResultGuestInvite;
 }
 
 /** How long correct/wrong settle visually before the board switches to the final result (ms). */
@@ -212,6 +218,7 @@ interface MatchSlotProps {
   dragging: boolean;
   emptyLabel: string;
   removeLabel: string;
+  lang: 'es' | 'en';
 }
 
 /** The drop target next to a prompt — empty (a tap target once a tile is picked) or holding a tile (a tap target to remove it). */
@@ -228,8 +235,13 @@ function MatchSlot({
   dragging,
   emptyLabel,
   removeLabel,
+  lang,
 }: MatchSlotProps) {
   const { isOver, setNodeRef } = useDroppable({ id: slotIdFor(promptId), disabled: disabled || locked });
+  // UX audit F10 ("Al comprobar"): correct/wrong must not rely on colour
+  // alone — `grade` drives the ✓/✕ badge AND the accessible-name suffix
+  // below, on top of this slot's own existing `locked`/`wrong` colour.
+  const grade: GradeState | undefined = locked ? 'correct' : wrong ? 'wrong' : undefined;
 
   return (
     <span
@@ -238,7 +250,7 @@ function MatchSlot({
       data-over={isOver ? 'true' : undefined}
       data-filled={tile ? 'true' : undefined}
       className={cn(
-        'inline-flex min-w-32 flex-1 sm:min-w-48',
+        'relative inline-flex min-w-32 flex-1 sm:min-w-48',
         TILE_MIN_HEIGHT_SCALE,
         tile ? cn('items-stretch', BLANK_FILLED) : cn('items-center justify-center', BLANK_EMPTY),
         isOver && !locked && 'border-ring bg-accent/30',
@@ -256,7 +268,7 @@ function MatchSlot({
           dragging={dragging}
           reducedMotion={reducedMotion}
           onClick={onRemove}
-          ariaLabel={`${removeLabel} ${tile.answer}`}
+          ariaLabel={`${removeLabel} ${tile.answer}${gradeAriaSuffix(lang, grade)}`}
           // `w-full`: the ONE place a chip is stretched — a tile that has
           // landed in its slot fills that target completely, same as
           // `DropRenderer`'s own filled box (`TILE_BASE` itself never
@@ -283,11 +295,12 @@ function MatchSlot({
           className="flex h-full min-h-11 w-full items-center justify-center bg-transparent p-0"
         />
       )}
+      {grade && <GradeMark state={grade} />}
     </span>
   );
 }
 
-export default function QuizMatching({ lang, items, seed, editorOffset = false }: QuizMatchingProps) {
+export default function QuizMatching({ lang, items, seed, editorOffset = false, nextHref, guest }: QuizMatchingProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -305,6 +318,9 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
   const [lockedCorrect, setLockedCorrect] = useState<ReadonlySet<string>>(new Set());
   const [wrongFlash, setWrongFlash] = useState<ReadonlySet<string>>(new Set());
   const [finalScore, setFinalScore] = useState(0);
+  // UX audit F10: the one polite live-region sentence after "Comprobar" —
+  // see `CheckMark.tsx`'s own `gradeSummary` header for the exact wording.
+  const [announcement, setAnnouncement] = useState('');
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -319,6 +335,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
     setLockedCorrect(new Set());
     setWrongFlash(new Set());
     setFinalScore(0);
+    setAnnouncement('');
   }
 
   // A different block (or its own item list changed) — start a fresh round.
@@ -465,6 +482,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
     setFinalScore(correctIds.size);
     setPhase('checking');
     setWrongFlash(wrongIds);
+    setAnnouncement(gradeSummary(lang, correctIds.size, wrongIds.size) ?? '');
     if (correctIds.size > 0) sound.play('correct');
     if (wrongIds.size > 0) sound.play('wrong');
 
@@ -487,6 +505,20 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
     resetTo(round + 1);
   }
 
+  /**
+   * "Repasar las que fallé" (build item N1): unlike every other reset here,
+   * this one touches NOTHING — `handleCheck`'s own settle timeout already
+   * left `lockedCorrect`/`placements` holding only the correct pairs (wrong
+   * ones evicted back into `trayOrder`, which `trayIds` re-derives from on
+   * every render), so simply leaving "done" re-mounts the SAME board with
+   * the correct pairs already locked in place and the wrong tiles back in
+   * the tray. Pressing "Comprobar" again reaches `handleCheck`, which keeps
+   * accumulating into `lockedCorrect` rather than overwriting it.
+   */
+  function handleReviewWrong() {
+    setPhase('playing');
+  }
+
   if (total === 0) return null;
 
   const activeItem = activeId ? byId.get(activeId) : undefined;
@@ -495,6 +527,9 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
 
   return (
     <div data-testid="quiz-matching" className="flex min-h-0 flex-1 flex-col gap-4">
+      <div aria-live="polite" role="status" className="sr-only" data-testid="matching-live-region">
+        {announcement}
+      </div>
       {/* `flex-none`: a tidy chrome row that NEVER shrinks (visual-polish-2
           pass, owner bug: with no floor, this row got squeezed by the
           board's own overflow and "Reiniciar" painted over the first
@@ -506,40 +541,43 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
           labelMute={t.matchSoundMute}
           labelUnmute={t.matchSoundUnmute}
         />
-        <Button type="button" variant="outline" size="sm" data-testid="matching-reset" onClick={handleReset}>
-          {t.matchReset}
-        </Button>
-      </div>
-
-      {/* FLOATING COMPROBAR (build item 5): Comprobar/Reintentar now float at
-          the stage's own bottom-right, outside both the "playing"/"done"
-          branches below so it never moves or disappears when the phase
-          switches — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
-      <div
-        data-testid="matching-actions"
-        className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
-      >
-        {phase === 'done' ? (
-          <Button type="button" data-testid="matching-retry" className="min-h-11" onClick={handleReset}>
-            {t.matchRetry}
-          </Button>
-        ) : (
-          <Button type="button" data-testid="matching-check" className="min-h-11" onClick={handleCheck} disabled={!playing}>
-            {t.matchCheck}
+        {/* Hidden on the result screen (owner review, build item N1
+            follow-up): it would duplicate GameResult's own "Jugar de
+            nuevo" — the sound toggle stays, same posture every other
+            template's own control row already has. */}
+        {phase !== 'done' && (
+          <Button type="button" variant="outline" size="sm" data-testid="matching-reset" onClick={handleReset}>
+            {t.matchReset}
           </Button>
         )}
       </div>
 
-      {phase === 'done' ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
-          <p
-            data-testid="matching-result"
-            aria-live="polite"
-            className="text-xl font-medium text-foreground sm:text-2xl"
-          >
-            {finalScore} {t.matchResultOf} {total} {t.matchResultCorrect}
-          </p>
+      {/* FLOATING COMPROBAR (build item 5): outside both the "playing"/"done"
+          branches below so it never moves while playing — see `scale.ts`'s
+          own `FLOATING_CHECK_BAR_CLASS` header. Gone once "done": `GameResult`
+          below owns every action on the result screen (build item N1). */}
+      {phase !== 'done' && (
+        <div
+          data-testid="matching-actions"
+          className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+        >
+          <Button type="button" data-testid="matching-check" className="min-h-11" onClick={handleCheck} disabled={!playing}>
+            {t.matchCheck}
+          </Button>
         </div>
+      )}
+
+      {phase === 'done' ? (
+        <GameResult
+          lang={lang}
+          correct={finalScore}
+          total={total}
+          resultWord={t.matchResultCorrect}
+          onPlayAgain={handleReset}
+          onReviewWrong={finalScore < total ? handleReviewWrong : undefined}
+          nextHref={nextHref}
+          guest={guest}
+        />
       ) : (
         <DndContext
           id={`dnd-matching-${seed}`}
@@ -612,6 +650,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
                       dragging={activeId === tileId}
                       emptyLabel={t.matchEmptySlot}
                       removeLabel={t.matchRemovePrefix}
+                      lang={lang}
                     />
                   </div>
                 );

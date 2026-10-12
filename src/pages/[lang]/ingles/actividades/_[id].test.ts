@@ -28,6 +28,9 @@ vi.mock('@lib/activities/activities', () => ({
   getPublishedActivity: vi.fn(async () => activityResult.value),
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+  // N4: the "Mis actividades" folder's own read, same module — the desk
+  // behind this window's HOST shell loads it too (`loadDeskSceneData`).
+  getActivitiesByAuthor: vi.fn(async () => []),
 }));
 
 vi.mock('@lib/activities/hearts', () => ({
@@ -535,20 +538,25 @@ describe('GET /[lang]/ingles/actividades/[id] — "Compartir" (D8)', () => {
 });
 
 describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)', () => {
-  it('renders the friendly guest banner with a sign-up link back to this page', async () => {
+  // The guest invite moved off the top of the page and into the result
+  // screen (UX-INGLES.md 6.3, build item N1) — `GameResult.tsx` renders it
+  // client-side only once a round ends, so the server-rendered page never
+  // has a top banner for anyone, guest or signed-in. `GameResult.test.tsx`
+  // covers the invite's own copy/link; this only checks the wiring that
+  // gets it there — the island receives a `guest` prop (serialized into its
+  // own `astro-island` props) only for an anonymous visitor.
+  it('renders no top guest banner for an anonymous visitor, and wires the sign-up href to the practice island instead', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: null },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="guest-banner"');
-    expect(html).toContain('Estás jugando como invitado');
-    expect(html).toContain('data-testid="guest-sign-up-link"');
-    expect(html).toContain('href="/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc"');
+    expect(html).not.toContain('data-testid="guest-banner"');
+    expect(html).toContain('signUpHref&quot;:[0,&quot;/es/auth/entrar?mode=signup&amp;next=%2Fes%2Fingles%2Factividades%2Fabc&quot;');
   });
 
-  it('shows no guest banner for a signed-in visitor', async () => {
+  it('renders no top guest banner for a signed-in visitor either, and wires no guest prop', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -556,18 +564,7 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     });
     const html = await res.text();
     expect(html).not.toContain('data-testid="guest-banner"');
-  });
-
-  it('renders the English guest banner copy and sign-up label', async () => {
-    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
-    const res = await render('https://chuyocode.test/en/ingles/actividades/abc', {
-      params: { lang: 'en', id: 'abc' },
-      locals: { user: null },
-    });
-    const html = await res.text();
-    // The apostrophe is HTML-entity-escaped by the renderer (`&#39;`).
-    expect(html).toContain('playing as a guest');
-    expect(html).toContain('>Sign up<');
+    expect(html).not.toContain('signUpHref');
   });
 
   it('never mounts the per-user "Ya lo viste" view badge for an anonymous visitor', async () => {
@@ -823,12 +820,17 @@ describe('GET /[lang]/ingles/actividades/[id] — "Basado en" credit line (D7)',
 
 // T2 (practice page action bar redesign): Compartir/Duplicar/Reportar/
 // Presentar/Imprimir became icon buttons, each with an accessible name
-// (`aria-label`, never only the native `title`) and a hover/focus tooltip
-// (`role="tooltip"`, wired via `aria-describedby`) carrying that same label.
-// PART 6a moved this whole action bar into the window's title bar
-// (`actions` slot) — the buttons themselves are unchanged.
+// (`aria-label`, never only the native `title`). PART 6a moved this whole
+// action bar into the window's title bar (`actions` slot). N6 FOLLOW-UP
+// (2026-10-12): Imprimir/Duplicar/Reportar (and Compartir/Presentar's OWN
+// phone-only copies inside "Más") dropped the hover/focus tooltip — they
+// now carry an ALWAYS-visible text label instead (`MENU_ITEM_CLASS`, see
+// `iconTooltip.ts`'s own header) — only the STANDALONE `sm:`-and-up
+// Compartir/Presentar triggers, "Modo enfoque" and "Más" itself keep the
+// tooltip pattern (see the dedicated "N6 follow-up" describe block below
+// for the full breakpoint/menu-label contract).
 describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with tooltips (T2)', () => {
-  it('Presentar and Imprimir (plain Astro links) carry an accessible name and a linked tooltip', async () => {
+  it('the standalone Presentar trigger (`sm:` and up) carries an accessible name and a linked tooltip', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -854,12 +856,12 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
     expect(html).toContain('aria-label="Presentar"');
     expect(html).toContain('aria-describedby="action-present-tooltip"');
     expect(html).toContain('id="action-present-tooltip"');
-
-    expect(html).toContain('aria-label="Imprimir"');
-    expect(html).toContain('aria-describedby="action-print-tooltip"');
-    expect(html).toContain('id="action-print-tooltip"');
-
     expect(html).toContain('role="tooltip"');
+
+    // Imprimir (now "Más"-only, N6 follow-up): an accessible name, but no
+    // tooltip id left — a visible text label replaces it instead.
+    expect(html).toContain('aria-label="Imprimir"');
+    expect(html).not.toContain('action-print-tooltip');
   });
 
   // "Modo enfoque" (full-screen exercise mode, owner spec 2026-10-07): a
@@ -887,7 +889,10 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
     expect(greenLightIndex).not.toBe(toggleIndex);
   });
 
-  it('the Duplicar/Reportar guest fallback links also carry an accessible name and a linked tooltip', async () => {
+  // N6 follow-up: these are "Más"-only now too — a visible text label
+  // replaces the old hover/focus tooltip (see the dedicated describe block
+  // below for the full assertion on that visible label).
+  it('the Duplicar/Reportar guest fallback links carry an accessible name, no separate tooltip', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -897,11 +902,11 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
 
     expect(html).toContain('data-testid="activity-duplicate-guest"');
     expect(html).toContain('aria-label="Duplicar"');
-    expect(html).toContain('aria-describedby="action-duplicate-guest-tooltip"');
+    expect(html).not.toContain('action-duplicate-guest-tooltip');
 
     expect(html).toContain('data-testid="activity-report-guest"');
     expect(html).toContain('aria-label="Reportar"');
-    expect(html).toContain('aria-describedby="action-report-guest-tooltip"');
+    expect(html).not.toContain('action-report-guest-tooltip');
   });
 
   it('Compartir (ShareDialog) renders icon-only with iconOnly, keeping the share dialog itself unchanged', async () => {
@@ -916,5 +921,252 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
     // The island receives `iconOnly: true` as a prop (server-rendered island
     // payload), not visible text next to the icon in the static markup.
     expect(html).toContain('&quot;iconOnly&quot;:[0,true]');
+  });
+});
+
+// N6 (fewer equal-weight buttons while playing): at every width, the title
+// bar now shows ❤ + Compartir + Presentar + the focus-mode toggle directly,
+// with Imprimir/Duplicar/Reportar moved into the "Más" menu — reusing the
+// SAME phone dropdown pattern at every width, instead of the old
+// desktop-only flat row.
+describe('GET /[lang]/ingles/actividades/[id] — N6: fewer equal-weight buttons, "Más" at every width', () => {
+  it('keeps Compartir, Presentar and the focus-mode toggle OUTSIDE the "Más" panel', async () => {
+    activityResult.value = {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'q1',
+          type: 'quiz',
+          payload: {
+            pools: { opts: [{ id: 'a', text: 'x' }] },
+            slots: [{ id: 's1', label: 'x', input: 'choice', pool: 'opts', answer: ['a'] }],
+          },
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const morePanel = html.indexOf('data-desk-window-more-content');
+    expect(morePanel).toBeGreaterThan(-1);
+
+    expect(html.indexOf('data-testid="exercise-share"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-testid="exercise-share"')).toBeLessThan(morePanel);
+    expect(html.indexOf('data-testid="activity-present-link"')).toBeLessThan(morePanel);
+    expect(html.indexOf('id="activity-focus-mode-toggle"')).toBeLessThan(morePanel);
+  });
+
+  it('holds only Imprimir, Duplicar and Reportar inside "Más", in that order', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const morePanel = html.indexOf('data-desk-window-more-content');
+    const print = html.indexOf('data-testid="activity-print-link"');
+    const duplicate = html.indexOf('data-testid="duplicate-activity-button"');
+    const report = html.indexOf('data-testid="report-activity-button"');
+
+    expect(print).toBeGreaterThan(morePanel);
+    expect(duplicate).toBeGreaterThan(print);
+    expect(report).toBeGreaterThan(duplicate);
+
+    // Never duplicated OUTSIDE the panel (one copy of each action, same
+    // posture PART 6a already documented).
+    expect(html.indexOf('data-testid="activity-print-link"', print + 1)).toBe(-1);
+  });
+
+  it('the "Más" trigger is no longer desktop-only (no `desk:hidden` on it)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const triggerMatch = html.match(/<label[^>]*data-testid="activity-window-more-trigger"[^>]*class="([^"]*)"/);
+    expect(triggerMatch?.[1]).toBeTruthy();
+    expect(triggerMatch?.[1]).not.toContain('desk:hidden');
+  });
+
+  it('every item keeps its own test id/behavior for a guest, now inside "Más"', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    const morePanel = html.indexOf('data-desk-window-more-content');
+    expect(html.indexOf('data-testid="activity-duplicate-guest"')).toBeGreaterThan(morePanel);
+    expect(html.indexOf('data-testid="activity-report-guest"')).toBeGreaterThan(morePanel);
+    // Compartir/Presentar/focus-mode stay outside, same as for a signed-in visitor.
+    expect(html.indexOf('data-testid="exercise-share"')).toBeLessThan(morePanel);
+  });
+});
+
+// N6 FOLLOW-UP (owner report 2026-10-12, `capturas/ux-n6-n7/practice-phone-
+// 390x844-more-open.png`): the title collapsed to "V…" on a 390px phone —
+// five standalone icons (❤/Compartir/Presentar/Modo enfoque/Más) left no
+// room for it. Fix, by the STANDARD `sm` breakpoint (640px — not the custom
+// `desk:` one the rest of this page uses):
+//   - below `sm`: only ❤ and "Modo enfoque" stay standalone; Compartir and
+//     Presentar rejoin "Más" (phone order: Compartir, Presentar, Imprimir,
+//     Duplicar, Reportar).
+//   - `sm` and up: unchanged from N6 (Compartir/Presentar standalone; "Más"
+//     = Imprimir, Duplicar, Reportar).
+// ONE "Más" panel (not two menus): each of Compartir/Presentar is rendered
+// TWICE — once standalone (wrapped `hidden sm:contents`), once inside the
+// SAME panel (phone-only, `contents sm:hidden` / `sm:hidden`) — distinct
+// test ids (`exercise-share-menu`, `activity-present-link-menu`) keep the
+// two nodes unambiguous. Every item inside "Más" also gained a visible
+// icon+text label (`MENU_ITEM_CLASS`), replacing the old icon-only +
+// hover-tooltip-only pattern that had no text at all on a touch device.
+describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse + "Más" labels', () => {
+  function activityWithQuiz() {
+    return {
+      id: 'abc',
+      title: 'x',
+      level: null,
+      authorId: 'someone-else',
+      blocks: [
+        {
+          id: 'q1',
+          type: 'quiz',
+          payload: {
+            pools: { opts: [{ id: 'a', text: 'x' }] },
+            slots: [{ id: 's1', label: 'x', input: 'choice', pool: 'opts', answer: ['a'] }],
+          },
+        },
+      ],
+    };
+  }
+
+  /** The nearest `class="..."` attribute value around a given `data-testid`
+   * marker, regardless of whether `class` lands before or after it in the
+   * rendered attribute order (it differs between a plain Astro element and
+   * a React-rendered `Button`, which puts `class` first — see this file's
+   * own `triggerMatch` pattern above for the single-direction version). */
+  function classNear(html: string, testid: string): string | undefined {
+    const testidIdx = html.indexOf(`data-testid="${testid}"`);
+    if (testidIdx === -1) return undefined;
+    // The FULL enclosing tag (from its own `<` to its own `>`), regardless
+    // of whether `class` lands before or after `data-testid` in it (it
+    // differs between a plain Astro element and a React-rendered `Button`).
+    const tagStart = html.lastIndexOf('<', testidIdx);
+    const tagEnd = html.indexOf('>', testidIdx);
+    if (tagStart === -1 || tagEnd === -1) return undefined;
+    const tag = html.slice(tagStart, tagEnd + 1);
+    return tag.match(/class="([^"]*)"/)?.[1];
+  }
+
+  it('Compartir/Presentar standalone copies are hidden below `sm`, shown `sm:` and up', async () => {
+    activityResult.value = activityWithQuiz();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    // Exactly two `hidden sm:contents` wrappers: one around the standalone
+    // ShareDialog, one around the standalone Presentar link.
+    expect((html.match(/hidden sm:contents/g) ?? []).length).toBe(2);
+    expect(classNear(html, 'exercise-share')).toContain('size-9'); // the iconOnly trigger itself, untouched
+  });
+
+  it('"Modo enfoque" and "Más" stay visible at every width (never gain a `hidden`/`sm:hidden` class)', async () => {
+    activityResult.value = activityWithQuiz();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const focusClass = classNear(html, 'activity-focus-mode-toggle');
+    const moreClass = classNear(html, 'activity-window-more-trigger');
+    for (const cls of [focusClass, moreClass]) {
+      expect(cls).toBeTruthy();
+      expect(cls).not.toMatch(/(^|\s)hidden(\s|$)/);
+      expect(cls).not.toContain('sm:hidden');
+    }
+  });
+
+  it('"Más" holds Compartir, Presentar, Imprimir, Duplicar, Reportar in that order (phone order)', async () => {
+    activityResult.value = activityWithQuiz();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const morePanel = html.indexOf('data-desk-window-more-content');
+    const shareMenu = html.indexOf('data-testid="exercise-share-menu"');
+    const presentMenu = html.indexOf('data-testid="activity-present-link-menu"');
+    const print = html.indexOf('data-testid="activity-print-link"');
+    const duplicate = html.indexOf('data-testid="duplicate-activity-button"');
+    const report = html.indexOf('data-testid="report-activity-button"');
+
+    expect(morePanel).toBeGreaterThan(-1);
+    expect(shareMenu).toBeGreaterThan(morePanel);
+    expect(presentMenu).toBeGreaterThan(shareMenu);
+    expect(print).toBeGreaterThan(presentMenu);
+    expect(duplicate).toBeGreaterThan(print);
+    expect(report).toBeGreaterThan(duplicate);
+  });
+
+  it('Compartir/Presentar\'s "Más" copies are phone-only (`sm:hidden`/`contents sm:hidden`)', async () => {
+    activityResult.value = activityWithQuiz();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('contents sm:hidden'); // wraps the ShareDialog menu copy
+    expect(classNear(html, 'activity-present-link-menu')).toContain('sm:hidden');
+  });
+
+  it('every "Más" item carries a visible icon + text label (`min-h-11`), not just a hover tooltip', async () => {
+    activityResult.value = activityWithQuiz();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    const items: Array<[string, string]> = [
+      ['exercise-share-menu', 'Compartir'],
+      ['activity-present-link-menu', 'Presentar'],
+      ['activity-print-link', 'Imprimir'],
+      ['duplicate-activity-button', 'Duplicar'],
+      ['report-activity-button', 'Reportar'],
+    ];
+    for (const [testid, label] of items) {
+      const cls = classNear(html, testid);
+      expect(cls, `${testid} class`).toContain('min-h-11');
+      const idx = html.indexOf(`data-testid="${testid}"`);
+      const nearby = html.slice(idx, idx + 600);
+      expect(nearby, `${testid} label`).toContain(label);
+      // No separate hover-only tooltip bubble left on these — the label is
+      // already visible text (iconTooltip.ts's own header on why).
+      expect(nearby, `${testid} no tooltip`).not.toContain('role="tooltip"');
+    }
+  });
+
+  it('the guest fallback "Más" items (Duplicar/Reportar) also carry visible labels', async () => {
+    activityResult.value = activityWithQuiz();
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    const html = await res.text();
+    for (const [testid, label] of [
+      ['activity-duplicate-guest', 'Duplicar'],
+      ['activity-report-guest', 'Reportar'],
+    ] as const) {
+      const cls = classNear(html, testid);
+      expect(cls, `${testid} class`).toContain('min-h-11');
+      const idx = html.indexOf(`data-testid="${testid}"`);
+      expect(html.slice(idx, idx + 600)).toContain(label);
+    }
   });
 });

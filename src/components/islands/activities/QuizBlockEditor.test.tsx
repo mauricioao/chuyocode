@@ -998,3 +998,300 @@ describe('QuizBlockEditor — template editors share the desk-native sheet + sta
     expect(screen.getByTestId('groupsort-ready-b1').textContent).toBe('Listo para jugar · 2 grupos');
   });
 });
+
+/** Fires a multi/single-line clipboard paste at `element` (owner spec N5, "paste a whole list"). */
+function paste(element: HTMLElement, text: string) {
+  return fireEvent.paste(element, { clipboardData: { getData: () => text } });
+}
+
+describe('QuizBlockEditor — "Une las parejas": paste a whole list (N5)', () => {
+  it('pasting into the empty-list ghost row yields one pair per line, in one onPayloadChange call', () => {
+    const onPayloadChange = vi.fn();
+    function Harness2() {
+      const [payload, setPayload] = useState<Payload>(EMPTY_PAYLOAD);
+      return (
+        <QuizBlockEditor
+          blockId="b1"
+          lang="es"
+          payload={payload}
+          template="match"
+          selectedSlotId={null}
+          onSelectSlot={() => {}}
+          onPayloadChange={(p) => {
+            onPayloadChange(p);
+            setPayload(p);
+          }}
+        />
+      );
+    }
+    render(<Harness2 />);
+    paste(screen.getByTestId('match-pair-ghost-question-b1'), 'dog\tperro\ncat\tgato\nbird=pájaro');
+
+    expect(onPayloadChange).toHaveBeenCalledTimes(1); // the whole paste is ONE commit, so ONE undo step upstream
+    const questionInputs = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    const answerInputs = screen.getAllByTestId(/^match-pair-answer-/) as HTMLInputElement[];
+    expect(questionInputs.map((i) => i.value)).toEqual(['dog', 'cat', 'bird']);
+    expect(answerInputs.map((i) => i.value)).toEqual(['perro', 'gato', 'pájaro']);
+  });
+
+  it('replaces the focused EMPTY pair with the first line, inserting the rest right after it', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [
+        { id: 's1', label: '', input: 'text', answer: [] },
+        { id: 's2', label: 'kept', input: 'text', answer: ['kept-answer'] },
+      ],
+      blocks: [
+        { kind: 'row', id: 'row-s1', slotId: 's1' },
+        { kind: 'row', id: 'row-s2', slotId: 's2' },
+      ],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    paste(screen.getByTestId('match-pair-question-s1'), 'dog\tperro\ncat\tgato');
+
+    const questionInputs = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    expect(questionInputs.map((i) => i.value)).toEqual(['dog', 'cat', 'kept']);
+  });
+
+  it('shows "Se agregaron N parejas", which reverts to the normal status on the next edit', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    paste(screen.getByTestId('match-pair-ghost-question-b1'), 'dog\tperro\ncat\tgato');
+    expect(screen.getByTestId('match-pairs-paste-feedback-b1').textContent).toBe('Se agregaron 2 parejas');
+
+    fireEvent.change(screen.getAllByTestId(/^match-pair-question-/)[0]!, { target: { value: 'doggy' } });
+    expect(screen.queryByTestId('match-pairs-paste-feedback-b1')).toBeNull();
+  });
+
+  it('a single-line paste is left to the browser default (not intercepted)', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    const notPrevented = paste(screen.getByTestId('match-pair-ghost-question-b1'), 'just one line');
+    expect(notPrevented).toBe(true); // fireEvent returns true when no handler called preventDefault
+    expect(screen.queryByTestId('match-pairs-paste-feedback-b1')).toBeNull();
+  });
+
+  it('shows the example placeholder and the paste hint while the list is empty, hides the hint once 2+ pairs are filled', () => {
+    render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('match-pair-ghost-question-b1').getAttribute('placeholder')).toBe('dog');
+    expect(screen.getByTestId('match-pair-ghost-answer-b1').getAttribute('placeholder')).toBe('perro');
+    expect(screen.getByTestId('match-pairs-paste-hint-b1')).toBeTruthy();
+
+    paste(screen.getByTestId('match-pair-ghost-question-b1'), 'dog\tperro\ncat\tgato');
+    expect(screen.queryByTestId('match-pairs-paste-hint-b1')).toBeNull();
+    expect((screen.getAllByTestId(/^match-pair-question-/)[0] as HTMLInputElement).placeholder).toBe('Palabra o pregunta');
+  });
+
+  it('the empty-list example row is a REAL, editable field — not a dead end', () => {
+    const payloads: Payload[] = [];
+    function Harness2() {
+      const [payload, setPayload] = useState<Payload>(EMPTY_PAYLOAD);
+      const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+      return (
+        <QuizBlockEditor
+          blockId="b1"
+          lang="es"
+          payload={payload}
+          template="match"
+          selectedSlotId={selectedSlotId}
+          onSelectSlot={setSelectedSlotId}
+          onPayloadChange={(p) => {
+            payloads.push(p);
+            setPayload(p);
+          }}
+        />
+      );
+    }
+    render(<Harness2 />);
+    const ghost = screen.getByTestId('match-pair-ghost-question-b1') as HTMLInputElement;
+    expect(ghost.readOnly).toBe(false);
+    expect(ghost.disabled).toBe(false);
+
+    ghost.focus();
+    fireEvent.change(ghost, { target: { value: 'd' } });
+    expect(payloads).toHaveLength(1); // typing a character creates the row via onPayloadChange
+    expect(screen.queryByTestId('match-pair-ghost-question-b1')).toBeNull(); // it IS the first real row now
+    const [realQuestion] = screen.getAllByTestId(/^match-pair-question-/) as HTMLInputElement[];
+    expect(realQuestion.value).toBe('d');
+    // The caret follows: the next keystroke lands in the real row, not nowhere.
+    expect(document.activeElement).toBe(realQuestion);
+
+    fireEvent.change(realQuestion, { target: { value: 'dog' } });
+    expect(realQuestion.value).toBe('dog');
+  });
+});
+
+describe('QuizBlockEditor — "Reordenar": paste a whole list (N5)', () => {
+  it('pasting into the empty-list ghost row yields one sentence per line, in one onPayloadChange call', () => {
+    const onPayloadChange = vi.fn();
+    function Harness2() {
+      const [payload, setPayload] = useState<Payload>(EMPTY_PAYLOAD);
+      return (
+        <QuizBlockEditor
+          blockId="b1"
+          lang="es"
+          payload={payload}
+          template="reorder"
+          selectedSlotId={null}
+          onSelectSlot={() => {}}
+          onPayloadChange={(p) => {
+            onPayloadChange(p);
+            setPayload(p);
+          }}
+        />
+      );
+    }
+    render(<Harness2 />);
+    paste(screen.getByTestId('reorder-ghost-sentence-b1'), 'Cats sleep\nDogs bark\nBirds fly');
+
+    expect(onPayloadChange).toHaveBeenCalledTimes(1);
+    const sentenceInputs = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs.map((i) => i.value)).toEqual(['Cats sleep', 'Dogs bark', 'Birds fly']);
+  });
+
+  it('shows "Se agregaron N oraciones", hides the hint once 2+ sentences are filled', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('reorder-paste-hint-b1')).toBeTruthy();
+    paste(screen.getByTestId('reorder-ghost-sentence-b1'), 'Cats sleep\nDogs bark');
+    expect(screen.getByTestId('reorder-paste-feedback-b1').textContent).toBe('Se agregaron 2 oraciones');
+    expect(screen.queryByTestId('reorder-paste-hint-b1')).toBeNull();
+  });
+
+  it('a single-line paste is left to the browser default (not intercepted)', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    const notPrevented = paste(screen.getByTestId('reorder-ghost-sentence-b1'), 'just one sentence');
+    expect(notPrevented).toBe(true);
+    expect(screen.queryByTestId('reorder-paste-feedback-b1')).toBeNull();
+  });
+
+  it('the empty-list example row is a REAL, editable field — not a dead end', () => {
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    const ghost = screen.getByTestId('reorder-ghost-sentence-b1') as HTMLInputElement;
+    expect(ghost.readOnly).toBe(false);
+    expect(ghost.disabled).toBe(false);
+
+    ghost.focus();
+    fireEvent.change(ghost, { target: { value: 'C' } });
+    expect(screen.queryByTestId('reorder-ghost-sentence-b1')).toBeNull();
+    const [realSentence] = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    expect(realSentence.value).toBe('C');
+    expect(document.activeElement).toBe(realSentence);
+  });
+});
+
+describe('QuizBlockEditor — "Completar la frase": paste a whole list (N5)', () => {
+  it('pasting into the empty-list ghost row yields one sentence per line, brackets kept as typed', () => {
+    const onPayloadChange = vi.fn();
+    function Harness2() {
+      const [payload, setPayload] = useState<Payload>(EMPTY_PAYLOAD);
+      return (
+        <QuizBlockEditor
+          blockId="b1"
+          lang="es"
+          payload={payload}
+          template="cloze"
+          selectedSlotId={null}
+          onSelectSlot={() => {}}
+          onPayloadChange={(p) => {
+            onPayloadChange(p);
+            setPayload(p);
+          }}
+        />
+      );
+    }
+    render(<Harness2 />);
+    paste(screen.getByTestId('cloze-ghost-sentence-b1'), 'She [is] my teacher.\nThey [have] arrived.');
+
+    expect(onPayloadChange).toHaveBeenCalledTimes(1);
+    const sentenceInputs = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs.map((i) => i.value)).toEqual(['She [is] my teacher.', 'They [have] arrived.']);
+  });
+
+  it('replaces the focused EMPTY sentence with the first line, appending the rest', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('cloze-add-b1'));
+    const [firstField] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    paste(firstField, 'She [is] my teacher.\nThey [have] arrived.');
+
+    const sentenceInputs = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(sentenceInputs.map((i) => i.value)).toEqual(['She [is] my teacher.', 'They [have] arrived.']);
+  });
+
+  it('the empty-list example row is a REAL, editable field — not a dead end', () => {
+    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+    const ghost = screen.getByTestId('cloze-ghost-sentence-b1') as HTMLInputElement;
+    expect(ghost.readOnly).toBe(false);
+    expect(ghost.disabled).toBe(false);
+
+    ghost.focus();
+    fireEvent.change(ghost, { target: { value: 'S' } });
+    expect(screen.queryByTestId('cloze-ghost-sentence-b1')).toBeNull();
+    const [realSentence] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+    expect(realSentence.value).toBe('S');
+    expect(document.activeElement).toBe(realSentence);
+  });
+});
+
+describe('QuizBlockEditor — "Ordenar por grupos": paste a whole list (N5)', () => {
+  it('"Group: item, item" lines create one group each, in one onPayloadChange call', () => {
+    const onPayloadChange = vi.fn();
+    function Harness2() {
+      const [payload, setPayload] = useState<Payload>(EMPTY_PAYLOAD);
+      return (
+        <QuizBlockEditor
+          blockId="b1"
+          lang="es"
+          payload={payload}
+          template="groupsort"
+          selectedSlotId={null}
+          onSelectSlot={() => {}}
+          onPayloadChange={(p) => {
+            onPayloadChange(p);
+            setPayload(p);
+          }}
+        />
+      );
+    }
+    render(<Harness2 />);
+    paste(screen.getByTestId('groupsort-ghost-name-b1'), 'Animals: cat, dog\nColors: red, blue');
+
+    expect(onPayloadChange).toHaveBeenCalledTimes(1);
+    const nameInputs = screen.getAllByTestId(/^groupsort-name-/) as HTMLInputElement[];
+    expect(nameInputs.map((i) => i.value)).toEqual(['Animals', 'Colors']);
+  });
+
+  it('a line with no ":" adds its items to the group just created by the previous line', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    paste(screen.getByTestId('groupsort-ghost-name-b1'), 'Animals: cat\ndog, bird');
+
+    const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
+    const chips = within(screen.getByTestId(`groupsort-items-${slotId}`)).getAllByTestId(/^groupsort-item-/);
+    expect(chips.map((c) => c.textContent)).toEqual(['cat', 'dog', 'bird']);
+  });
+
+  it('drops groups past the 4-group cap and says so in the status line', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    paste(screen.getByTestId('groupsort-ghost-name-b1'), 'A: a\nB: b\nC: c\nD: d\nE: e');
+
+    expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(4);
+    expect(screen.getByTestId('groupsort-paste-feedback-b1').textContent).toContain('1 no entró');
+  });
+
+  it('shows the example placeholder and paste hint while the list is empty', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('groupsort-ghost-name-b1').getAttribute('placeholder')).toBe('Animals');
+    expect(screen.getByTestId('groupsort-paste-hint-b1')).toBeTruthy();
+  });
+
+  it('the empty-list example row is a REAL, editable field — not a dead end', () => {
+    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+    const ghost = screen.getByTestId('groupsort-ghost-name-b1') as HTMLInputElement;
+    expect(ghost.readOnly).toBe(false);
+    expect(ghost.disabled).toBe(false);
+
+    ghost.focus();
+    fireEvent.change(ghost, { target: { value: 'A' } });
+    expect(screen.queryByTestId('groupsort-ghost-name-b1')).toBeNull();
+    const [realName] = screen.getAllByTestId(/^groupsort-name-/) as HTMLInputElement[];
+    expect(realName.value).toBe('A');
+    expect(document.activeElement).toBe(realName);
+  });
+});

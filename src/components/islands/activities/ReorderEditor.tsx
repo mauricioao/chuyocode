@@ -19,8 +19,10 @@
 import { useEffect, useRef } from 'react';
 import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
 import { seedFromString, shuffleWithSeed } from '@/lib/activities/gameModes';
+import { isMultilinePaste, parseSentencesPaste } from '@/lib/activities/pasteLines';
 import {
   AddRow,
+  Footnote,
   GroupLabel,
   MiniChip,
   RowRemoveButton,
@@ -30,6 +32,7 @@ import {
   TemplateGroup,
   TemplateRow,
   useExitingItems,
+  usePasteFeedback,
 } from './TemplateEditorKit';
 
 export const COPY = {
@@ -43,6 +46,9 @@ export const COPY = {
     addSentence: 'Agregar oración',
     minSentenceHint: 'Agrega al menos una oración de 2 o más palabras',
     ready: (n: number) => `Listo para jugar · ${n === 1 ? '1 oración' : `${n} oraciones`}`,
+    pasteHint: 'Puedes pegar una lista: una por línea.',
+    pasted: (n: number) => `Se ${n === 1 ? 'agregó' : 'agregaron'} ${n === 1 ? '1 oración' : `${n} oraciones`}`,
+    exampleSentence: 'I like green apples',
   },
   en: {
     title: 'Reorder',
@@ -54,6 +60,9 @@ export const COPY = {
     addSentence: 'Add sentence',
     minSentenceHint: 'Add at least one sentence of 2 or more words',
     ready: (n: number) => `Ready to play · ${n === 1 ? '1 sentence' : `${n} sentences`}`,
+    pasteHint: 'You can paste a list: one per line.',
+    pasted: (n: number) => `${n} ${n === 1 ? 'sentence' : 'sentences'} added`,
+    exampleSentence: 'I like green apples',
   },
 } as const;
 
@@ -98,6 +107,20 @@ export interface ReorderEditorProps {
   onSentenceChange: (slotId: string, sentence: string) => void;
   onAdd: () => void;
   onRemove: (rowId: string, slotId: string) => void;
+  /**
+   * A bulk paste (2+ non-empty lines) landed in the sentence at `fromSlotId`
+   * (`null` for the empty-list example row) — `lines` is already split, one
+   * sentence per line (`pasteLines.ts`). One single commit upstream; see
+   * `onPasteSentences` in `QuizBlockEditor.tsx`.
+   */
+  onPasteSentences: (fromSlotId: string | null, lines: string[]) => void;
+  /**
+   * The empty-list EXAMPLE row's own first keystroke (owner spec N5
+   * follow-up, "not a dead end"): creates the real sentence AND sets its
+   * text in ONE commit upstream — see `MatchPairsEditor.tsx`'s own
+   * `onExampleChange` for the full reasoning.
+   */
+  onExampleChange: (value: string) => void;
 }
 
 export default function ReorderEditor({
@@ -108,10 +131,13 @@ export default function ReorderEditor({
   onSentenceChange,
   onAdd,
   onRemove,
+  onPasteSentences,
+  onExampleChange,
 }: ReorderEditorProps) {
   const t = copyFor(lang);
   const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const exits = useExitingItems(onRemove);
+  const feedback = usePasteFeedback(sentences);
 
   useEffect(() => {
     if (!focusSlotId) return;
@@ -120,6 +146,26 @@ export default function ReorderEditor({
 
   const playableCount = sentences.filter((s) => wordsOf(s.sentence).length >= 2).length;
 
+  const soleEmptyRow = sentences.length === 1 && sentences[0]!.sentence.trim() === '';
+  const showTeachingPlaceholder = sentences.length === 0 || soleEmptyRow;
+  const filledCount = sentences.filter((s) => s.sentence.trim() !== '').length;
+  const showPasteHint = filledCount < 2;
+
+  function handlePaste(fromSlotId: string | null, event: React.ClipboardEvent<HTMLInputElement>) {
+    const text = event.clipboardData.getData('text');
+    if (!isMultilinePaste(text)) return; // single-line paste: browser default behaviour, untouched
+    event.preventDefault();
+    const lines = parseSentencesPaste(text);
+    onPasteSentences(fromSlotId, lines);
+    feedback.show(t.pasted(lines.length));
+  }
+
+  // The empty-list example row's own first keystroke (owner spec N5 follow-
+  // up, "not a dead end") — see `MatchPairsEditor.tsx`'s own `onExampleChange` for the full reasoning.
+  function handleExampleChange(value: string) {
+    onExampleChange(value);
+  }
+
   return (
     <div data-testid={`reorder-editor-${blockId}`} className="flex flex-col">
       <SheetHeader icon={ArrowsDownUpIcon} tone="violet" title={t.title} instruction={t.instruction} />
@@ -127,6 +173,24 @@ export default function ReorderEditor({
       {sentences.length > 0 && <GroupLabel>{t.groupLabel}</GroupLabel>}
 
       <TemplateGroup ariaLabel={t.groupLabel} testId={`reorder-list-${blockId}`}>
+        {sentences.length === 0 && (
+          // The empty-list EXAMPLE row — a REAL, editable field; see
+          // `MatchPairsEditor.tsx`'s own one for the full reasoning.
+          <TemplateRow testId={`reorder-ghost-row-${blockId}`}>
+            <div className="flex items-center">
+              <TemplateField
+                aria-label={t.sentenceHeader}
+                placeholder={t.exampleSentence}
+                data-testid={`reorder-ghost-sentence-${blockId}`}
+                value=""
+                onChange={(event) => handleExampleChange(event.target.value)}
+                onPaste={(event) => handlePaste(null, event)}
+                className="flex-1"
+              />
+              <div className="w-9 shrink-0" />
+            </div>
+          </TemplateRow>
+        )}
         {sentences.map((item, index) => {
           const preview = shuffledWords(item.sentence);
           return (
@@ -137,10 +201,11 @@ export default function ReorderEditor({
                     fieldRefs.current[item.slotId] = node;
                   }}
                   aria-label={`${t.sentenceHeader} ${index + 1}`}
-                  placeholder={t.sentencePlaceholder}
+                  placeholder={showTeachingPlaceholder ? t.exampleSentence : t.sentencePlaceholder}
                   data-testid={`reorder-sentence-${item.slotId}`}
                   value={item.sentence}
                   onChange={(event) => onSentenceChange(item.slotId, event.target.value)}
+                  onPaste={(event) => handlePaste(item.slotId, event)}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter' || event.ctrlKey || event.metaKey) return;
                     const isLast = sentences[sentences.length - 1]?.slotId === item.slotId;
@@ -175,7 +240,11 @@ export default function ReorderEditor({
         <AddRow label={t.addSentence} testId={`reorder-add-${blockId}`} onClick={onAdd} />
       </TemplateGroup>
 
-      {playableCount > 0 ? (
+      {feedback.message ? (
+        <StatusNote tone="ready" testId={`reorder-paste-feedback-${blockId}`}>
+          {feedback.message}
+        </StatusNote>
+      ) : playableCount > 0 ? (
         <StatusNote tone="ready" testId={`reorder-ready-${blockId}`}>
           {t.ready(playableCount)}
         </StatusNote>
@@ -184,6 +253,7 @@ export default function ReorderEditor({
           {t.minSentenceHint}
         </StatusNote>
       )}
+      {showPasteHint && <Footnote testId={`reorder-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
     </div>
   );
 }

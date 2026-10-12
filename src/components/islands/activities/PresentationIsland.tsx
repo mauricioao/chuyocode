@@ -115,6 +115,15 @@ export interface PresentationIslandProps {
    * opened it (the caller's own job, not this component's).
    */
   onExit?: () => void;
+  /**
+   * N7 (join by QR from the start, "¡Listo!" next step): the final slide's
+   * new PRIMARY action — the community catalog, filtered by this
+   * activity's own level, SAME URL logic as the practice page's own
+   * `nextActivityHref` (`[id].astro`'s own header). Omitted for the
+   * editor's in-editor preview (no real published activity to send a
+   * visitor browsing from), same gate `practiceUrl`/`qrSvg` already use.
+   */
+  nextActivityHref?: string;
 }
 
 type PresentCopy = (typeof UI_LABELS)[Lang]['activities']['present'];
@@ -145,6 +154,7 @@ export default function PresentationIsland({
   practiceUrl,
   qrSvg,
   onExit,
+  nextActivityHref,
 }: PresentationIslandProps) {
   const t = UI_LABELS[lang].activities.present;
   const levelLabels = UI_LABELS[lang].english.levels;
@@ -286,11 +296,26 @@ export default function PresentationIsland({
   // there IS a QR to show (`qrSvg`, absent for the editor's in-editor
   // preview, which has no real published URL to encode — same gate the old
   // cover slide used). ----
-  const [qrOverlayOpen, setQrOverlayOpen] = useState(false);
+  //
+  // N7 (join by QR from the start, owner spec): OPEN BY DEFAULT on mount —
+  // the very first slide a class sees is now also the "scan to join"
+  // screen — whenever there is a QR to show at all. `closeQrOnAdvance`
+  // below is what takes it back down once the presenter actually starts
+  // teaching; the toggle/`Q` key keep working exactly as before afterwards,
+  // this only changes the INITIAL state.
+  const [qrOverlayOpen, setQrOverlayOpen] = useState(Boolean(qrSvg));
   const toggleQrOverlay = useCallback(() => {
     if (!qrSvg) return;
     setQrOverlayOpen((open) => !open);
   }, [qrSvg]);
+  /** Closes the QR overlay, if open — every "next" press runs this first (see `goNext`/the keyboard map below), regardless of whether that press reveals or actually advances the slide. A no-op once it is already closed, so later manual re-opens (toggle/`Q`) are never fought by this. */
+  const closeQrOnAdvance = useCallback(() => {
+    setQrOverlayOpen(false);
+  }, []);
+  const goNext = useCallback(() => {
+    closeQrOnAdvance();
+    dispatch({ type: 'next' });
+  }, [closeQrOnAdvance]);
 
   // ---- Keyboard map (section 6) — global: a presenter's clicker sends
   // PageDown/PageUp with focus wherever it happens to land, so this listens
@@ -348,11 +373,15 @@ export default function PresentationIsland({
           return;
       }
       event.preventDefault();
+      // N7: a keyboard "next" press (clicker/arrow/space/enter) closes the
+      // QR overlay too, same as the control bar's own `goNext` — see that
+      // callback's own doc.
+      if (action.type === 'next') closeQrOnAdvance();
       dispatch(action);
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [toggleFullscreen, toggleQrOverlay, qrOverlayOpen, exit, showControls]);
+  }, [toggleFullscreen, toggleQrOverlay, qrOverlayOpen, exit, showControls, closeQrOnAdvance]);
 
   // ---- Accessibility: a polite live region announces every slide change
   // (section 7; generalized from "Pregunta" to "Diapositiva" once a slide
@@ -417,7 +446,12 @@ export default function PresentationIsland({
             <GroupSortSlide slide={currentSlide} revealed={state.revealed} t={t} />
           )}
           {isSummarySlide(state) && (
-            <SummarySlide countLabel={countLabel} t={t} onRestart={() => dispatch({ type: 'restart' })} />
+            <SummarySlide
+              countLabel={countLabel}
+              t={t}
+              onRestart={() => dispatch({ type: 'restart' })}
+              nextActivityHref={nextActivityHref}
+            />
           )}
         </div>
 
@@ -478,7 +512,7 @@ export default function PresentationIsland({
         onFocus={handleControlsFocus}
         onBlur={handleControlsBlur}
         onPrev={() => dispatch({ type: 'prev' })}
-        onNext={() => dispatch({ type: 'next' })}
+        onNext={goNext}
         onReveal={() => dispatch({ type: 'reveal' })}
         revealDisabled={!isRevealable(state)}
         onFullscreen={toggleFullscreen}
@@ -1037,14 +1071,37 @@ function WorksheetZoneHighlight({
   );
 }
 
+/**
+ * N7 (next step at the end): "Otra actividad" — the SAME community catalog,
+ * filtered by this activity's own level, that the practice page's own
+ * `GameResult` already offers as its primary action, is now ALSO the
+ * primary action here, pushing "Volver a empezar" down to secondary.
+ * Omitted entirely when the host supplies no `nextActivityHref` (the
+ * editor's in-editor preview — see that prop's own doc on
+ * `PresentationIslandProps`), which keeps exactly today's one-button
+ * screen there.
+ *
+ * STYLING (owner review, same reasoning `GameResult.tsx`'s own header
+ * documents): the filled pill (`bg-primary`/`text-primary-foreground`) is
+ * what "Volver a empezar" used to look like ALONE — fine for a solid
+ * button (readable regardless of the `ingles` theme's light-yellow
+ * `--color-primary`, since the TEXT itself is `text-primary-foreground`,
+ * not `text-primary`), so "Otra actividad" simply inherits it verbatim.
+ * "Volver a empezar" moves to the kit's own secondary treatment instead —
+ * `text-accent-ink` on a plain, unfilled control — never `text-primary`
+ * (which GameResult's own header calls out as unreadable on white: light
+ * yellow text with no filled background behind it).
+ */
 function SummarySlide({
   countLabel,
   t,
   onRestart,
+  nextActivityHref,
 }: {
   countLabel: string;
   t: PresentCopy;
   onRestart: () => void;
+  nextActivityHref?: string;
 }) {
   return (
     <div
@@ -1057,15 +1114,39 @@ function SummarySlide({
       <h2 style={{ fontSize: 80 }} className="font-display font-bold text-foreground">
         {t.summaryTitle} {countLabel}
       </h2>
-      <button
-        type="button"
-        data-testid="presentation-restart"
-        onClick={onRestart}
-        style={{ fontSize: 32 }}
-        className="rounded-full bg-primary px-10 py-4 font-semibold text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        {t.restart}
-      </button>
+      <div className="flex flex-col items-center gap-3">
+        {nextActivityHref ? (
+          <a
+            href={nextActivityHref}
+            data-testid="presentation-next-activity"
+            style={{ fontSize: 32 }}
+            className="rounded-full bg-primary px-10 py-4 font-semibold text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {t.nextActivity}
+          </a>
+        ) : (
+          <button
+            type="button"
+            data-testid="presentation-restart"
+            onClick={onRestart}
+            style={{ fontSize: 32 }}
+            className="rounded-full bg-primary px-10 py-4 font-semibold text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {t.restart}
+          </button>
+        )}
+        {nextActivityHref && (
+          <button
+            type="button"
+            data-testid="presentation-restart"
+            onClick={onRestart}
+            style={{ fontSize: 24 }}
+            className="rounded-full px-4 py-2 font-semibold text-accent-ink transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t.restart}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

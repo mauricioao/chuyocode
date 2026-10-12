@@ -32,6 +32,9 @@ const { pageResult, dailyCandidatesResult, publishedMock, getActivityCount } = v
 vi.mock('@lib/activities/activities', () => ({
   getPublishedActivities: publishedMock,
   getActivityCount,
+  // N4: the "Mis actividades" folder's own read, same module — the desk
+  // behind this window's HOST shell loads it too (`loadDeskSceneData`).
+  getActivitiesByAuthor: vi.fn(async () => []),
   ACTIVITIES_PAGE_SIZE: 20,
 }));
 

@@ -59,6 +59,9 @@ const isHub = isInglesHubPath(Astro.url.pathname);
   dailyPickHref={desk.dailyPickHref}
   dailyPickMeta={desk.dailyPickMeta}
   dailyPickPeek={desk.dailyPickPeek}
+  myActivitiesMeta={desk.myActivitiesMeta}
+  myActivitiesBadgeCount={desk.myActivitiesRejectedCount}
+  myActivitiesBadgeLabel={desk.myActivitiesBadgeLabel}
   weatherLat={desk.weatherLat}
   weatherLon={desk.weatherLon}
   weatherCity={desk.weatherCity}
@@ -70,6 +73,7 @@ const isHub = isInglesHubPath(Astro.url.pathname);
     foldersLabel: hub.foldersLabel,
     communityTitle: hub.communityTitle,
     todayTitle: hub.todayTitle,
+    myActivitiesTitle: hub.myActivitiesTitle,
     createActivityLabel: UI_LABELS[lang].activities.start.pageTitle,
     widgetsLabel: hub.widgetsLabel,
     weatherUnavailable: hub.weatherUnavailable,
@@ -91,9 +95,31 @@ const isHub = isInglesHubPath(Astro.url.pathname);
   closeLabel={hub.helperClose}
 />
 
+{/* N4 (owner spec, resolves UX-INGLES.md's F3): the status-change toast's
+    own data — `null` for an anonymous visitor (`desk.myActivitiesStatuses`'s
+    own doc) renders NO marker at all, so the init script below has nothing
+    to read and skips itself entirely ("no script data", per this feature's
+    own task). The JSON itself is just `{id, title, status}` — no secrets,
+    nothing beyond what `MisActividadesIsland` already ships this same
+    visitor on `/[lang]/mis-actividades`. */}
+{desk.myActivitiesStatuses !== null && (
+  <div
+    hidden
+    data-desk-my-activities-notice
+    data-status={JSON.stringify(desk.myActivitiesStatuses)}
+    data-lang={lang}
+    data-published-template={hub.myActivityPublishedToast}
+    data-rejected-template={hub.myActivityRejectedToast}
+    data-view-label={hub.myActivityToastView}
+    data-fix-label={hub.myActivityToastFix}
+  />
+)}
+
 <script>
   import { initDeskHelper } from '@lib/ui/deskHelper';
   import { initDeskChromeOffset } from '@lib/ui/deskChrome';
+  import { initMyActivityStatusNotice } from '@lib/ui/myActivityStatusNotice';
+  import type { MyActivityStatusEntry } from '@lib/ingles/myActivityStatusToasts';
 
   // Same wiring the hub's own script used to own alone — see this file's
   // header. Idempotent/self-guarded (`deskHelper.ts#initDeskHelper`), so
@@ -105,6 +131,29 @@ const isHub = isInglesHubPath(Astro.url.pathname);
     // module's own header) — every desk host page needs this, not just the
     // hub, since every one of them drops the site header now.
     initDeskChromeOffset();
+
+    // N4: the status-change toast — self-guarded by its own diff (a
+    // snapshot that already matches produces zero toasts), so re-running it
+    // on every `astro:page-load` across different host pages is harmless,
+    // same posture as the two calls above.
+    const notice = document.querySelector<HTMLElement>('[data-desk-my-activities-notice]');
+    const raw = notice?.getAttribute('data-status');
+    if (notice && raw) {
+      try {
+        const entries = JSON.parse(raw) as MyActivityStatusEntry[];
+        if (Array.isArray(entries)) {
+          initMyActivityStatusNotice(entries, {
+            lang: notice.getAttribute('data-lang') ?? '',
+            published: notice.getAttribute('data-published-template') ?? '',
+            rejected: notice.getAttribute('data-rejected-template') ?? '',
+            viewLabel: notice.getAttribute('data-view-label') ?? '',
+            fixLabel: notice.getAttribute('data-fix-label') ?? '',
+          });
+        }
+      } catch {
+        // Malformed/empty data — never break the desk over the notice.
+      }
+    }
   };
 
   if (document.readyState === 'loading') {

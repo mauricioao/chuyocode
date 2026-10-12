@@ -18,14 +18,14 @@ describe('QuizGameModeSwitcher', () => {
     const list = screen.getByTestId('quiz-game-mode-switcher');
     expect(within(list).getByText('Varios juegos')).toBeTruthy();
     expect(within(list).getByText('Tarjetas')).toBeTruthy();
-    expect(within(list).getByText('Parejas')).toBeTruthy();
+    expect(within(list).getByText('Une las parejas')).toBeTruthy();
   });
 
   it('only renders modes actually available for the block', () => {
     render(<QuizGameModeSwitcher lang="es" modes={['quiz']} active="quiz" onChange={vi.fn()} />);
     expect(screen.getAllByRole('radio')).toHaveLength(1);
     expect(screen.queryByText('Tarjetas')).toBeNull();
-    expect(screen.queryByText('Parejas')).toBeNull();
+    expect(screen.queryByText('Une las parejas')).toBeNull();
   });
 
   it('marks the active mode as checked', () => {
@@ -47,13 +47,13 @@ describe('QuizGameModeSwitcher', () => {
     const list = screen.getByTestId('quiz-game-mode-switcher');
     expect(within(list).getByText('Mixed games')).toBeTruthy();
     expect(within(list).getByText('Cards')).toBeTruthy();
-    expect(within(list).getByText('Match')).toBeTruthy();
+    expect(within(list).getByText('Match the pairs')).toBeTruthy();
   });
 
-  it('renders "Cartas" for the speak mode', () => {
+  it('renders "Cartas para hablar" for the speak mode', () => {
     render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'speak']} active="quiz" onChange={vi.fn()} />);
     expect(screen.getAllByRole('radio')).toHaveLength(2);
-    expect(screen.getByText('Cartas')).toBeTruthy();
+    expect(screen.getByText('Cartas para hablar')).toBeTruthy();
   });
 
   it('renders "Ruleta" for the wheel mode', () => {

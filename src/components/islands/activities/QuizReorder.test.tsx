@@ -111,23 +111,101 @@ describe('QuizReorder', () => {
       expect(line(0).getAllByRole('button').map((b) => b.textContent)).toEqual(['Cats', 'sleep']);
     });
 
-    it('reaching the end shows the final score and "Reintentar"', () => {
-      render(<QuizReorder lang="es" items={items} seed="block-1" />);
-      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
-      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
-      fireEvent.click(screen.getByTestId('reorder-check'));
-      act(() => vi.advanceTimersByTime(1000));
+    describe('✓/✕ marks (UX audit F10: correct/wrong must not rely on colour alone)', () => {
+      it('shows no marks before "Comprobar" is pressed', () => {
+        render(<QuizReorder lang="es" items={items} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
 
-      fireEvent.click(screen.getByTestId('reorder-tile-1-w0'));
-      fireEvent.click(screen.getByTestId('reorder-tile-1-w1'));
-      fireEvent.click(screen.getByTestId('reorder-check'));
-      act(() => vi.advanceTimersByTime(1000));
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+        expect(screen.getByTestId('reorder-live-region').textContent).toBe('');
+      });
 
-      expect(screen.getByTestId('reorder-result').textContent).toBe('2 de 2 correctas');
-      expect(screen.getByTestId('reorder-retry')).toBeTruthy();
+      it('marks every word ✓ during the brief settle window for a correct order, and announces the summary', () => {
+        render(<QuizReorder lang="es" items={items} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w0')); // "Cats"
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w1')); // "sleep"
+        fireEvent.click(screen.getByTestId('reorder-check'));
+
+        expect(line(0).getAllByTestId('grade-mark-correct')).toHaveLength(2);
+        expect(screen.getByTestId('reorder-tile-0-w0').getAttribute('aria-label')).toContain('correcta');
+        expect(screen.getByTestId('reorder-live-region').textContent).toBe('2 correctas');
+
+        // Gone once the sentence advances.
+        act(() => vi.advanceTimersByTime(1000));
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+      });
+
+      it('marks every misplaced word ✕ (both swapped here), and announces the summary', () => {
+        render(<QuizReorder lang="es" items={items} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w1')); // "sleep" (wrong first)
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w0')); // "Cats"
+        fireEvent.click(screen.getByTestId('reorder-check'));
+
+        expect(line(0).getAllByTestId('grade-mark-wrong')).toHaveLength(2);
+        expect(screen.getByTestId('reorder-tile-0-w1').getAttribute('aria-label')).toContain('incorrecta');
+        expect(screen.getByTestId('reorder-live-region').textContent).toBe('2 incorrectas');
+      });
+
+      it('clears the ✕ marks once a wrong word is removed from the line', () => {
+        render(<QuizReorder lang="es" items={items} seed="block-1" />);
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+        fireEvent.click(screen.getByTestId('reorder-check'));
+        expect(screen.getAllByTestId('grade-mark-wrong').length).toBeGreaterThan(0);
+
+        fireEvent.click(screen.getByTestId('reorder-tile-0-w1')); // remove it
+
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+      });
     });
 
-    it('"Reintentar" on the result screen starts a fresh round at sentence 1', () => {
+    it('reaching the end shows the shared GameResult screen, perfect and with no "Repasar"', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      fireEvent.click(screen.getByTestId('reorder-tile-1-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-1-w1'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(screen.getByTestId('game-result-score').textContent).toBe('2 de 2 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('perfect');
+      expect(screen.getByTestId('game-result-play-again')).toBeTruthy();
+      // Every sentence had to be solved to get here, so there is nothing to review.
+      expect(screen.queryByTestId('game-result-review')).toBeNull();
+    });
+
+    it('scores by FIRST-TRY accuracy, not eventual completion: a sentence gotten wrong before being fixed does not count', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      // Sentence 0: wrong on the first check (words swapped), then fixed.
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1')); // "sleep" first — wrong order
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      // Fix it: remove both, re-add in the right order.
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      // Sentence 1: correct on the first try.
+      fireEvent.click(screen.getByTestId('reorder-tile-1-w0'));
+      fireEvent.click(screen.getByTestId('reorder-tile-1-w1'));
+      fireEvent.click(screen.getByTestId('reorder-check'));
+      act(() => vi.advanceTimersByTime(1000));
+
+      // Both sentences were eventually solved (2/2), but only ONE was right
+      // on its first check — the honest score is "1 de 2 a la primera".
+      expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 2 a la primera');
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
+    });
+
+    it('"Jugar de nuevo" on the result screen starts a fresh round at sentence 1', () => {
       render(<QuizReorder lang="es" items={items} seed="block-1" />);
       fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
       fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
@@ -138,9 +216,9 @@ describe('QuizReorder', () => {
       fireEvent.click(screen.getByTestId('reorder-check'));
       act(() => vi.advanceTimersByTime(1000));
 
-      fireEvent.click(screen.getByTestId('reorder-retry'));
+      fireEvent.click(screen.getByTestId('game-result-play-again'));
 
-      expect(screen.queryByTestId('reorder-result')).toBeNull();
+      expect(screen.queryByTestId('game-result')).toBeNull();
       expect(screen.getByTestId('reorder-position').textContent).toBe('1 de 2');
     });
   });

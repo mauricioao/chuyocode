@@ -67,6 +67,11 @@ export const NON_VOSEO_ACCENTED_WORDS = [
   // the future tense's `-é` ending no more forks tú/vos than `podrá`'s `-á`
   // does above. Premium pricing page FAQ (owner decision 2026-10-04).
   'podré',
+  // FIRST-person singular preterite ("Repasar las que fallé" — the player
+  // narrating their OWN round, "yo fallé"), not a second-person form: the
+  // voseo imperative/present of "fallar" would be "fallá"/"fallás", a
+  // different shape entirely. Shared result screen (build item N1).
+  'fallé',
   'quizá',
   'café',
   'sí',

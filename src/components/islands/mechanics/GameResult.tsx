@@ -1,0 +1,168 @@
+/**
+ * GameResult — the ONE shared end-of-round screen for every self-checking
+ * drag template (`QuizMatching`/`QuizReorder`/`QuizCloze`/`QuizGroupSort`),
+ * replacing each one's own "N de N" + "Reintentar" dead end (UX audit F2,
+ * `UX-INGLES.md` 6.3, build item N1). Structure, states and copy are owned
+ * here; every color/shadow/radius comes straight from the UI kit's existing
+ * tokens/classes (`Button`, `text-success-strong`, …) — nothing new.
+ *
+ * OUTCOME BY SCORE, not a fixed "well done": all correct -> "¡Perfecto!";
+ * at least 70% -> "¡Muy bien!"; otherwise -> "¡Casi! Sigue practicando".
+ * `data-outcome` carries this (`perfect`/`good`/`retry`) so a later pass can
+ * hook a character's reaction to it (Vanina) — this component does not
+ * render any character itself.
+ *
+ * ONE PRIMARY ACTION: "Otra actividad" (a real link to `nextHref`) when the
+ * host supplies one — only the practice page does, pointed at the community
+ * catalog filtered by this activity's own level; otherwise "Jugar de nuevo"
+ * IS the primary action. The editor preview and any other host pass neither
+ * `nextHref` nor `guest`, so they only ever see the one "Jugar de nuevo"
+ * button.
+ *
+ * "Repasar las que fallé" is the HOST's call, not this component's: it only
+ * renders when `onReviewWrong` is actually supplied AND the round ended
+ * with mistakes (`correct < total`) — a mechanic that cannot end with
+ * mistakes (every one of the other three self-checking games only ever
+ * reaches "done" at 100%, unlike `QuizMatching`'s single-shot check) never
+ * passes a handler, so the button never renders there regardless of score.
+ *
+ * GUEST INVITE: the host passes `guest` only on the practice page, for an
+ * anonymous visitor — this is also where the OLD page-top guest banner now
+ * lives (UX-INGLES.md 6.3: "El aviso de invitado sale de la parte de arriba
+ * y pasa a la pantalla final").
+ *
+ * ICON MATCHES THE OUTCOME (owner review): the success check (in the kit's
+ * success ink) only for "perfect"/"good" — "retry" gets a neutral,
+ * encouraging `ArrowCounterClockwise`, in ink at 60% (`text-foreground/60`,
+ * the kit's own "Texto al 60%" ink step), never the green check.
+ *
+ * SECONDARY ACTIONS USE `text-accent-ink`, NOT THE SHARED `Button` `link`
+ * VARIANT'S OWN COLOR (owner review): `variant="link"` resolves to
+ * `text-primary`, which is light yellow in the `ingles` theme — unreadable
+ * on the white stage (fails the kit's 4.5:1 rule, `DIRECCION-VISUAL.md`
+ * 3.1). That variant is owned by the UI-kit session, so it is not touched
+ * here; these two buttons keep `variant="link"` for its underline-on-hover
+ * behavior but override the color locally with `text-accent-ink` — the
+ * same treatment the guest "Crear cuenta" link below already uses.
+ */
+import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowCounterClockwise';
+import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+
+export type GameResultOutcome = 'perfect' | 'good' | 'retry';
+
+export interface GameResultGuestInvite {
+  /** Same destination the old top banner used — `/{lang}/auth/entrar?mode=signup&next=<current path>`. */
+  signUpHref: string;
+}
+
+export interface GameResultProps {
+  lang: Lang;
+  correct: number;
+  total: number;
+  /** This template's own wording for "correct"/"placed" (e.g. "correctas" vs "bien ubicados") — falls back to the shared word when omitted. */
+  resultWord?: string;
+  onPlayAgain: () => void;
+  /** Only ever rendered when the round ended with mistakes (`correct < total`) — omit entirely for a mechanic that cannot end that way. */
+  onReviewWrong?: () => void;
+  /** Set only by the practice page — the community catalog filtered by this activity's level. */
+  nextHref?: string;
+  /** Set only by the practice page, for an anonymous visitor. */
+  guest?: GameResultGuestInvite;
+  className?: string;
+}
+
+/** All correct -> "perfect"; at least 70% -> "good"; otherwise -> "retry" (owner spec, build item N1). */
+function outcomeFor(correct: number, total: number): GameResultOutcome {
+  if (total <= 0 || correct >= total) return 'perfect';
+  return correct / total >= 0.7 ? 'good' : 'retry';
+}
+
+export default function GameResult({
+  lang,
+  correct,
+  total,
+  resultWord,
+  onPlayAgain,
+  onReviewWrong,
+  nextHref,
+  guest,
+  className,
+}: GameResultProps) {
+  const t = UI_LABELS[lang].activities.gameResult;
+  const outcome = outcomeFor(correct, total);
+  const headline = outcome === 'perfect' ? t.perfect : outcome === 'good' ? t.good : t.retry;
+  const word = resultWord ?? t.defaultWord;
+  const showReview = correct < total && Boolean(onReviewWrong);
+  const Icon = outcome === 'retry' ? ArrowCounterClockwiseIcon : CheckCircleIcon;
+  const iconColor = outcome === 'retry' ? 'text-foreground/60' : 'text-success-strong';
+
+  return (
+    <div
+      data-testid="game-result"
+      data-outcome={outcome}
+      role="status"
+      aria-live="polite"
+      className={cn('flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center', className)}
+    >
+      <Icon aria-hidden="true" weight="bold" size={64} className={iconColor} data-testid="game-result-icon" />
+      <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
+      <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
+        {correct} {t.of} {total} {word}
+      </p>
+      <div className="flex flex-col items-center gap-2">
+        {nextHref ? (
+          <Button asChild className="min-h-11">
+            <a href={nextHref} data-testid="game-result-next">
+              {t.nextActivity}
+            </a>
+          </Button>
+        ) : (
+          <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
+            {t.playAgain}
+          </Button>
+        )}
+        {(showReview || nextHref) && (
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            {showReview && (
+              <Button
+                type="button"
+                variant="link"
+                data-testid="game-result-review"
+                className="min-h-11 px-2 text-accent-ink"
+                onClick={onReviewWrong}
+              >
+                {t.reviewWrong}
+              </Button>
+            )}
+            {nextHref && (
+              <Button
+                type="button"
+                variant="link"
+                data-testid="game-result-play-again"
+                className="min-h-11 px-2 text-accent-ink"
+                onClick={onPlayAgain}
+              >
+                {t.playAgain}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {guest && (
+        <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
+          {t.guestInvite}{' '}
+          <a
+            href={guest.signUpHref}
+            data-testid="game-result-guest-sign-up-link"
+            className="font-medium text-accent-ink hover:underline"
+          >
+            {t.guestSignUp}
+          </a>
+        </p>
+      )}
+    </div>
+  );
+}

@@ -88,12 +88,17 @@ import {
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTAINER_SIZE,
 } from '@/components/islands/mechanics/scale';
+import type { GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
 export interface ActivityPracticeIslandProps {
   lang: Lang;
   blocks: Block[];
+  /** Threaded straight through to the four drag templates' own `GameResult` (build item N1) — the community catalog filtered by this activity's level. Set only by the practice page; `undefined` everywhere else (the editor preview keeps just "Jugar de nuevo"). */
+  nextHref?: string;
+  /** Threaded straight through to the four drag templates' own `GameResult` (build item N1), for an anonymous visitor. Set only by the practice page. */
+  guest?: GameResultGuestInvite;
 }
 
 /**
@@ -121,7 +126,7 @@ interface TabResult {
   total: number;
 }
 
-export default function ActivityPracticeIsland({ lang, blocks }: ActivityPracticeIslandProps) {
+export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }: ActivityPracticeIslandProps) {
   const t = UI_LABELS[lang].activities.practice;
   const tEditor = UI_LABELS[lang].activities.editor;
   const tGameModes = UI_LABELS[lang].activities.gameModes;
@@ -543,6 +548,8 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                 disabled={graded}
                 mode={quizModeFor(activeBlock as QuizBlock)}
                 onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
+                nextHref={nextHref}
+                guest={guest}
               />
             </div>
           )}
@@ -677,6 +684,8 @@ export default function ActivityPracticeIsland({ lang, blocks }: ActivityPractic
                   disabled={graded}
                   mode={quizModeFor(activeBlock as QuizBlock)}
                   onModeChange={(mode) => handleQuizModeChange(activeBlock.id, mode)}
+                  nextHref={nextHref}
+                  guest={guest}
                 />
               )}
             </div>

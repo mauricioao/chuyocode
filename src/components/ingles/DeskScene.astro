@@ -42,6 +42,10 @@ interface Props {
   dailyPickHref: string;
   dailyPickMeta: string | null;
   dailyPickPeek: string | null;
+  /** N4: the "Mis actividades" folder, right before "+ Crear actividad" — the route itself is a constant (`/${lang}/mis-actividades`), computed inline below, same as the community folder's own `href`. */
+  myActivitiesMeta: string;
+  myActivitiesBadgeCount: number;
+  myActivitiesBadgeLabel: string | null;
   weatherLat: number;
   weatherLon: number;
   weatherCity: string;
@@ -58,6 +62,9 @@ const {
   dailyPickHref,
   dailyPickMeta,
   dailyPickPeek,
+  myActivitiesMeta,
+  myActivitiesBadgeCount,
+  myActivitiesBadgeLabel,
   weatherLat,
   weatherLon,
   weatherCity,
@@ -127,8 +134,9 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </div>
 
   {/* Folders — a right-edge column on desktop, a home-screen grid on
-      phones (3 items: "Actividades de la comunidad" + "Para ti hoy" +
-      "Crear actividad" fit a clean 2×2, one spot left over). "Ejercicios
+      phones (4 items since N4: "Actividades de la comunidad" + "Para ti
+      hoy" + "Mis actividades" + "Crear actividad" now fill a clean 2×2
+      exactly, no spot left over). "Ejercicios
       propuestos" folded into the community folder below (owner spec
       2026-10-07: "ya no tendremos ejercicios propuestos separados de
       actividades de la comunidad... de igual manera será una carpeta y
@@ -157,6 +165,22 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       icon="glowing-star"
       peekSrc={dailyPickPeek}
       openerId="today"
+    />
+    {/* N4 (owner spec, resolves UX-INGLES.md's F3/F5): the author's own
+        workspace, right before "+ Crear actividad" — same single-instance
+        window pattern as the community folder (`openerId="myActivities"`,
+        `@lib/deskWindowsState#classifyWindowRoute`'s own case for
+        `/[lang]/mis-actividades`). The badge is the "needs action" signal
+        (owner spec: "su globo muestra cuántas cambiaron de estado") — only
+        ever shown for a REJECTED activity, never for one merely in review. */}
+    <DeskFolder
+      href={`/${lang}/mis-actividades`}
+      label={t.myActivitiesTitle}
+      meta={myActivitiesMeta}
+      icon="books"
+      openerId="myActivities"
+      badgeCount={myActivitiesBadgeCount}
+      badgeLabel={myActivitiesBadgeLabel}
     />
     <a
       href={`/${lang}/crear`}
