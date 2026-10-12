@@ -71,6 +71,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVertical';
 import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
+import { LockSimpleIcon } from '@phosphor-icons/react/dist/ssr/LockSimple';
+import { ArrowsCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowsCounterClockwise';
 import { UI_LABELS } from '@/lib/i18n';
 import type { PoolItem, RowBlock, Slot } from '@/lib/exercisePayload';
 import {
@@ -94,7 +96,7 @@ import type { GameMode } from '@/lib/activities/gameModes';
 import ChangeMoldDialog from './ChangeMoldDialog';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
-import VariosJuegosRow from './VariosJuegosRow';
+import VariosJuegosRow, { ROW_GRID } from './VariosJuegosRow';
 import QuizLivePreview from './QuizLivePreview';
 import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
@@ -121,10 +123,12 @@ import {
 import {
   AddRow,
   Footnote,
+  GroupLabel,
   SheetHeader,
   StatusNote,
   TemplateEditorLayout,
   TemplateField,
+  TemplateGroup,
   TemplateRow,
   usePasteFeedback,
 } from './TemplateEditorKit';
@@ -136,6 +140,11 @@ export const COPY = {
   es: {
     addQuestion: 'Agregar pregunta',
     dragHandle: 'Reordenar pregunta',
+    // Column headers above the grouped list (UI round 2) — same wording
+    // `MatchPairsEditor.tsx`'s own `questionHeader`/`answerHeader` use
+    // (rule 6, §6.1: "a mold's name/label means the same thing everywhere").
+    questionHeader: 'Pregunta',
+    answerHeader: 'Respuesta',
     tabQuestions: 'Preguntas',
     tabPreview: 'Vista previa',
     previewEmpty: 'Aquí verás el juego en cuanto escribas el contenido.',
@@ -174,6 +183,8 @@ export const COPY = {
   en: {
     addQuestion: 'Add question',
     dragHandle: 'Reorder question',
+    questionHeader: 'Question',
+    answerHeader: 'Answer',
     tabQuestions: 'Questions',
     tabPreview: 'Preview',
     previewEmpty: 'The game shows up here as soon as you write the content.',
@@ -505,8 +516,9 @@ export default function QuizBlockEditor({
       type="button"
       data-testid={`change-mold-${blockId}`}
       onClick={() => setMoldDialogOpen(true)}
-      className="min-h-11 shrink-0 rounded-md px-2 py-1 text-[13px] font-medium text-accent-ink hover:bg-foreground/[0.05]"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium text-accent-ink hover:bg-foreground/[0.05]"
     >
+      <ArrowsCounterClockwiseIcon aria-hidden="true" size={14} weight="bold" />
       {t.changeMold}
     </button>
   );
@@ -952,6 +964,7 @@ export default function QuizBlockEditor({
               </StatusNote>
               {variosStatus.nearestLocked && variosStatus.nearestLocked.gap <= UNLOCK_HINT_MAX_GAP && (
                 <StatusNote tone="warn" testId={`quiz-unlock-hint-${blockId}`}>
+                  <LockSimpleIcon aria-hidden="true" size={12} weight="bold" className="inline-block shrink-0 -translate-y-px" />{' '}
                   {t.unlockHint(variosStatus.nearestLocked.gap, gameModeName(lang, variosStatus.nearestLocked.mode))}
                 </StatusNote>
               )}
@@ -975,41 +988,54 @@ export default function QuizBlockEditor({
         </div>
       )}
 
-      {!hasQuestions ? (
-        // The empty-list EXAMPLE row (owner spec N5 follow-up, "not a dead
-        // end" / R3, "the same building experience as the four templates")
-        // — exactly `MatchPairsEditor.tsx`'s own ghost row: a REAL, fully
-        // editable row whose placeholders teach the format; typing into
-        // either field creates the first real question right then
-        // (`addExampleQuestionRow`), never a separate persisted row of its
-        // own.
-        <TemplateRow testId={`varios-example-${blockId}`}>
-          <div className="grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.25rem] items-center">
-            <TemplateField
-              aria-label={t.addQuestion}
-              placeholder={t.exampleQuestion}
-              data-testid={`varios-example-question-${blockId}`}
-              value=""
-              onChange={(event) => addExampleQuestionRow('question', event.target.value)}
-              onPaste={(event) => handleVariosPaste(null, event)}
-            />
-            <span aria-hidden="true" className="h-7 w-px bg-foreground/[0.08]" />
-            <TemplateField
-              aria-label={t.addQuestion}
-              placeholder={t.exampleAnswer}
-              data-testid={`varios-example-answer-${blockId}`}
-              value=""
-              onChange={(event) => addExampleQuestionRow('answer', event.target.value)}
-              onPaste={(event) => handleVariosPaste(null, event)}
-            />
-            <div />
-          </div>
-        </TemplateRow>
-      ) : (
-        <>
+      {/* "Pregunta / Respuesta" column headers (UI round 2) — the SAME
+          pattern `MatchPairsEditor.tsx`'s own `PAIR_GRID` header row uses,
+          shown only once there is a real list to label (the lone example
+          row below only teaches the format, same gating as that file's own
+          header). */}
+      {hasQuestions && (
+        <div aria-hidden="true" className={ROW_GRID}>
+          <GroupLabel>{t.questionHeader}</GroupLabel>
+          <span />
+          <GroupLabel>{t.answerHeader}</GroupLabel>
+        </div>
+      )}
+
+      <TemplateGroup ariaLabel={`${t.questionHeader} / ${t.answerHeader}`} testId={`varios-table-${blockId}`}>
+        {!hasQuestions ? (
+          // The empty-list EXAMPLE row (owner spec N5 follow-up, "not a dead
+          // end" / R3, "the same building experience as the four templates")
+          // — exactly `MatchPairsEditor.tsx`'s own ghost row: a REAL, fully
+          // editable row whose placeholders teach the format; typing into
+          // either field creates the first real question right then
+          // (`addExampleQuestionRow`), never a separate persisted row of its
+          // own.
+          <TemplateRow testId={`varios-example-${blockId}`}>
+            <div className={ROW_GRID}>
+              <TemplateField
+                aria-label={t.addQuestion}
+                placeholder={t.exampleQuestion}
+                data-testid={`varios-example-question-${blockId}`}
+                value=""
+                onChange={(event) => addExampleQuestionRow('question', event.target.value)}
+                onPaste={(event) => handleVariosPaste(null, event)}
+              />
+              <span aria-hidden="true" className="h-7 w-px bg-foreground/[0.08]" />
+              <TemplateField
+                aria-label={t.addQuestion}
+                placeholder={t.exampleAnswer}
+                data-testid={`varios-example-answer-${blockId}`}
+                value=""
+                onChange={(event) => addExampleQuestionRow('answer', event.target.value)}
+                onPaste={(event) => handleVariosPaste(null, event)}
+              />
+              <div />
+            </div>
+          </TemplateRow>
+        ) : (
           <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
-              <ul data-testid={`quiz-question-list-${blockId}`} className="flex flex-col gap-3">
+              <ul data-testid={`quiz-question-list-${blockId}`} className="flex flex-col gap-3 py-1">
                 {questions.map((question, index) => {
                   const slotId = rowSlotId(draft, question.id);
                   const slot = slotId ? draft.slots.find((s) => s.id === slotId) : undefined;
@@ -1079,11 +1105,10 @@ export default function QuizBlockEditor({
               </ul>
             </SortableContext>
           </DndContext>
-
-          <AddRow label={t.addQuestion} testId={`add-question-${blockId}`} onClick={addQuestion} />
-          <Footnote testId={`quiz-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>
-        </>
-      )}
+        )}
+        {hasQuestions && <AddRow label={t.addQuestion} testId={`add-question-${blockId}`} onClick={addQuestion} />}
+      </TemplateGroup>
+      {hasQuestions && <Footnote testId={`quiz-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
     </div>
   );
 

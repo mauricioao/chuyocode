@@ -22,8 +22,10 @@
  * for a slot, never a second way to mutate it.
  */
 import { useState } from 'react';
+import { CheckIcon } from '@phosphor-icons/react/dist/ssr/Check';
 import { needsAdvancedEditor, segmentForInput } from '@/lib/quizQuestionType';
 import { cn } from '@/lib/utils';
+import { CHIP_INLINE } from '@/components/islands/mechanics/chip';
 import QuestionCard, { type QuestionCardProps } from './QuestionCard';
 import { RowRemoveButton, TemplateField, TemplateRow } from './TemplateEditorKit';
 
@@ -71,8 +73,8 @@ export interface VariosJuegosRowProps extends QuestionCardProps {
   onPasteIntoRow?: (event: React.ClipboardEvent<HTMLInputElement>) => void;
 }
 
-/** Pregunta | divider | Respuesta-or-opciones | "×" — same column shape `MatchPairsEditor.tsx`'s own `PAIR_GRID` uses. */
-const ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.25rem] items-start';
+/** Pregunta | divider | Respuesta-or-opciones | "×" — same column shape `MatchPairsEditor.tsx`'s own `PAIR_GRID` uses. Exported so `QuizBlockEditor.tsx`'s own column headers line up with these rows. */
+export const ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.25rem] items-start';
 
 export default function VariosJuegosRow(props: VariosJuegosRowProps) {
   const {
@@ -137,11 +139,23 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
         <span aria-hidden="true" className="h-7 w-px bg-foreground/[0.08]" />
         <div className="flex min-w-0 flex-col gap-2 py-2">
           {segment === 'choice' ? (
-            <div className="flex flex-col gap-1.5" data-testid={`varios-options-${slot.id}`}>
+            <div className="flex flex-wrap gap-2" data-testid={`varios-options-${slot.id}`}>
               {poolItems.map((item) => {
                 const correct = slot.answer[0] === item.id;
                 return (
-                  <div key={item.id} className="flex items-center gap-1.5">
+                  // Kit chip (`chip.ts`'s own `CHIP_INLINE` — never a new,
+                  // parallel capsule): the correct option is marked by the
+                  // success token's wash/ring PLUS a ✓ glyph, never color
+                  // alone (owner spec, rule 8 "legibilidad y contraste antes
+                  // que estilo").
+                  <div
+                    key={item.id}
+                    className={cn(
+                      CHIP_INLINE,
+                      'w-fit gap-1.5 pr-2',
+                      correct && 'bg-success-strong/10 ring-2 ring-success-strong',
+                    )}
+                  >
                     <input
                       type="radio"
                       name={`${slot.id}-varios-correct`}
@@ -157,7 +171,16 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
                       data-testid={`varios-option-text-${slot.id}-${item.id}`}
                       value={item.text ?? ''}
                       onChange={(event) => onSetOptionText(item.id, event.target.value)}
+                      className={cn('w-28', correct && 'font-medium text-success-strong')}
                     />
+                    {correct && (
+                      <CheckIcon
+                        aria-hidden="true"
+                        size={14}
+                        weight="bold"
+                        className="shrink-0 text-success-strong"
+                      />
+                    )}
                     <button
                       type="button"
                       aria-label={t.removeOption}
@@ -201,7 +224,7 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
               type="button"
               data-testid={segment === 'choice' ? `varios-remove-options-${slot.id}` : `varios-add-options-${slot.id}`}
               onClick={() => onTypeChange(segment === 'choice' ? 'text' : 'choice', false)}
-              className="w-fit text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              className="w-fit text-xs font-medium text-accent-ink hover:underline"
             >
               {segment === 'choice' ? t.removeOptions : t.addOptions}
             </button>
@@ -209,7 +232,7 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
               type="button"
               data-testid={`varios-advanced-toggle-${slot.id}`}
               onClick={() => setManualAdvanced(true)}
-              className="w-fit text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              className="w-fit text-xs font-medium text-accent-ink hover:underline"
             >
               {t.openAdvanced}
             </button>
