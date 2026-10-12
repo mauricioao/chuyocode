@@ -25,6 +25,7 @@
  * module's own header.
  */
 import { UI_LABELS, type Lang } from '@lib/i18n';
+import { characterPoseFallbackSrc, characterPoseSrcSet, characterPoseWidth } from '@/content/characterPoses';
 
 interface Props {
   lang: Lang;
@@ -38,6 +39,40 @@ const { lang, initialHref = null, initialTitle = null } = Astro.props;
 /** Robustness pass (owner spec): the calm notice shown instead of opening a 9th window when none of the minimized ones could be closed to make room — see `@lib/ui/deskWindowManager.ts#openWindow`'s own header. */
 const maxWindowsNoticeLabel = UI_LABELS[lang].english.hub.maxWindowsNotice;
 ---
+
+{/* VANINA PEEKING (visual-polish pass, DIRECCION-VISUAL.md §4.2 "asoma en
+    la ventana del ejercicio") — moved here, not `DeskWindow.astro` itself:
+    window-manager architecture means a signed-in visitor's real window
+    content always renders EMBEDDED now (the HOST iframe draws the desktop
+    inset/left edge — see `DeskWindow.astro`'s own `embedded` prop doc), so
+    THIS component — mounted only on a signed-in HOST shell, never for a
+    guest (see this file's own header) — is the one place that is reliably
+    "a non-fullscreen desk window, signed-in" at all. `desk:` only, `z-40`
+    (below the manager's own windows/iframes, which this module creates
+    client-side at a higher stacking order) so she reads as sitting BEHIND
+    whichever window is open. Positioned at the SAME static default inset
+    `DeskWindow.astro`'s own desktop inset used before this architecture —
+    not synced to a live drag position (see that component's own comment for
+    the same known limitation). UNVERIFIED VISUALLY: no signed-in session to
+    screenshot this pass — covered instead by `_[id].test.ts`'s own HOST-
+    shell assertions. */}
+<picture
+  data-testid="desk-window-manager-vanina-peek"
+  aria-hidden="true"
+  class="pointer-events-none fixed z-40 hidden h-[100px] w-10 desk:block desk:top-[calc(var(--chrome-header-offset)+80px)] desk:left-[calc(max(48px,(100vw-1240px)/2)-40px)]"
+>
+  <source type="image/avif" srcset={characterPoseSrcSet('vanina/asoma-izquierda', 'avif')} />
+  <source type="image/webp" srcset={characterPoseSrcSet('vanina/asoma-izquierda', 'webp')} />
+  <img
+    src={characterPoseFallbackSrc('vanina/asoma-izquierda')}
+    alt=""
+    width={characterPoseWidth('vanina/asoma-izquierda')}
+    height="100"
+    decoding="async"
+    loading="lazy"
+    class="block h-[100px] w-10"
+  />
+</picture>
 
 <div
   data-desk-window-manager
