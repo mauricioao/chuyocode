@@ -1443,6 +1443,19 @@ html[data-desk-behind] [data-chrome-footer] {
   translate: none !important;
 }
 
+/* The stage inset (`DeskWindow.astro`'s own `data-desk-window-body`, UI-kit
+ * refactor) drops its gap/radius/shadow for the SAME maximized state — a
+ * window that fills the viewport edge to edge, with no chrome visible
+ * around it, would otherwise still show an 8px chrome-coloured margin
+ * around its own content, which reads as a layout bug once nothing else on
+ * screen is inset. `!important` for the same reason the rule above needs
+ * it: this must win over the SAME-specificity `desk:` utility classes. */
+.ingles-window[data-fullscreen='true'] [data-desk-window-body] {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
 /* No drag below the `desk:` breakpoint either (PART 6c, owner spec
  * 2026-10-07) — the window is always full screen there, same reasoning as
  * the fullscreen override just above. `@lib/ui/deskWindowDrag` itself never

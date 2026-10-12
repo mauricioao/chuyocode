@@ -181,7 +181,13 @@ const {
   tabindex="-1"
   data-desk-window-embedded={embedded ? '' : undefined}
   class:list={[
-    'ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-card outline-none',
+    // `bg-chrome`, not `bg-card` (UI-kit refactor, stage-inset pass): the
+    // WINDOW's own surface is now the chrome band the titlebar always
+    // used, so the small gap `data-desk-window-body` opens around itself
+    // below reveals chrome, not a mismatched white sliver. The body itself
+    // carries its own `bg-card` unconditionally (below), so this is a no-op
+    // in every mode with no gap (mobile, embedded, maximized).
+    'ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-chrome outline-none',
     // EMBEDDED (window-manager architecture): the HOST frame element draws
     // the desktop inset/rounded corners/drop shadow now (and owns dragging/
     // maximizing it) — this window just fills the iframe at every width,
@@ -366,7 +372,31 @@ const {
       docked. See that component's own header. Harmless for every other
       caller (the practice window): nothing else reads this attribute or
       relies on it being a positioning context. */}
-  <div class="relative flex min-h-0 flex-1 flex-col overflow-clip" data-desk-window-body>
+  <div
+    class:list={[
+      // The white STAGE, inset inside the chrome window above it (UI-kit
+      // refactor, owner spec: the content area is a white card sitting a
+      // small gap inside the `#f0f0f4` chrome, not a flush white fill —
+      // `bg-card` unconditionally, since below `desk:`, embedded, and
+      // maximized all still want a plain white content area with no gap
+      // (see each branch's own note below).
+      'relative flex min-h-0 flex-1 flex-col overflow-clip bg-card',
+      // GAP + CONCENTRIC RADIUS, desk: and non-embedded only — the same two
+      // conditions the window's own desktop inset above is gated on (an
+      // embedded window's HOST iframe already draws this framing; below
+      // `desk:` the window is the full-screen sheet it always was, with no
+      // chrome gap to inset from). `mx-2`/`mb-2` is the owner's ~8px gap on
+      // the sides and bottom only — never the top, which stays flush
+      // against the titlebar's own bottom border, so only the BOTTOM
+      // corners need the concentric radius (window radius 20px − gap 8px
+      // = 12px); the top ones stay square where the titlebar meets it.
+      // `.ingles-window[data-fullscreen='true']`'s own override (global.css)
+      // zeroes this back out for the maximized green-light state, same
+      // reasoning that rule already applies to the window's own inset.
+      !embedded && 'desk:mx-2 desk:mb-2 desk:rounded-b-[12px] desk:shadow-[var(--shadow-elevation-1),var(--ingles-inset-hairline)]',
+    ]}
+    data-desk-window-body
+  >
     <slot />
   </div>
 </section>
