@@ -12,13 +12,34 @@
  *
  * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE — `markPrivate` runs
  * unconditionally, same reasoning as `crear/index.astro`.
+ *
+ * "DESKTOP" REDESIGN, N4 (owner spec, resolves UX-INGLES.md's F5: "Mis
+ * actividades" no está en el escritorio): this page now renders as a WINDOW
+ * over the desk too, following EXACTLY the shape `crear/index.astro` already
+ * documents (its own header has the full reasoning) — a signed-in HOST visit
+ * renders the desk plus `DeskWindowManager`, which opens THIS SAME route
+ * again as its own `<iframe>` (`?ventana=1` / `Sec-Fetch-Dest: iframe` —
+ * `@lib/ui/embeddedWindow`) instead of this file loading anything itself;
+ * the EMBEDDED branch below is exactly what that iframe renders — `DeskWindow`
+ * alone, no desk, `embedded` dropping the desktop inset/shadow (the host
+ * frame draws those now). No guest branch here (unlike the community
+ * catalog): this route has no guest-accessible shape at all — the auth gate
+ * below already redirects an anonymous visitor away before either branch
+ * renders, same as `crear/index.astro`'s own `hostMode = !embedded`.
+ * `@lib/deskWindowsState#classifyWindowRoute` has this route's own
+ * single-instance case (`'myActivities'`, constant id — same posture as
+ * `'community'`/`'create'`).
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
-import PageTitle from '@components/ui/PageTitle.astro';
+import DeskHost from '@components/ingles/DeskHost.astro';
+import DeskWindow from '@components/ingles/DeskWindow.astro';
+import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import MisActividadesIsland, { type MisActividadesActivity } from '@components/islands/activities/MisActividadesIsland';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getActivitiesByAuthor } from '@lib/activities/activities';
+import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
 import { qrSvg } from '@lib/qr';
 
 const routeLang = Astro.params.lang;
@@ -45,41 +66,96 @@ if (!user) {
 }
 
 const t = UI_LABELS[lang].activities.myActivities;
-const rawActivities = await getActivitiesByAuthor(user.id);
 
 /**
- * "Compartir" per row (D8), LIVE activities only — built the SAME way the
- * practice page's own share dialog is (`[id].astro` under
- * `ingles/actividades`, see its header): `Astro.url.origin` follows whatever
- * host actually served THIS page, so the link is correct on a Netlify
- * preview too, and the QR/WhatsApp href are computed here so no third party
- * ever learns which activity got shared.
+ * Window-manager architecture (`@lib/deskWindowsState`'s own header): is
+ * this request the window's own CONTENT, loaded inside the host's
+ * `<iframe>` — or a direct, HOST visit (always signed in — the gate above
+ * already redirects a guest away)? See `@lib/ui/embeddedWindow`'s own
+ * header. `Vary` so a cache never serves one shape to a request that asked
+ * for the other.
  */
-const activities: MisActividadesActivity[] = rawActivities.map((activity) => {
-  if (activity.status !== 'live') {
-    return { ...activity, share: null };
-  }
-  const url = `${Astro.url.origin}/${lang}/ingles/actividades/${activity.id}`;
-  const qr = qrSvg(url);
-  if (!qr) {
-    return { ...activity, share: null };
-  }
-  return {
-    ...activity,
-    share: { url, qr, whatsappHref: `https://wa.me/?text=${encodeURIComponent(`${activity.title} ${url}`)}` },
-  };
-});
+const embedded = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
+Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+const hostMode = !embedded;
+
+// Window-manager architecture: the HOST shell never renders the listing
+// itself (the manager opens THIS SAME route again, embedded, for its own
+// window — see this file's own header) — this read is skipped entirely in
+// that branch, same "one query per render" posture `actividades/index.astro`
+// already follows for its own grid query.
+let activities: MisActividadesActivity[] = [];
+if (!hostMode) {
+  const rawActivities = await getActivitiesByAuthor(user.id);
+
+  /**
+   * "Compartir" per row (D8), LIVE activities only — built the SAME way the
+   * practice page's own share dialog is (`[id].astro` under
+   * `ingles/actividades`, see its header): `Astro.url.origin` follows
+   * whatever host actually served THIS page, so the link is correct on a
+   * Netlify preview too, and the QR/WhatsApp href are computed here so no
+   * third party ever learns which activity got shared.
+   */
+  activities = rawActivities.map((activity) => {
+    if (activity.status !== 'live') {
+      return { ...activity, share: null };
+    }
+    const url = `${Astro.url.origin}/${lang}/ingles/actividades/${activity.id}`;
+    const qr = qrSvg(url);
+    if (!qr) {
+      return { ...activity, share: null };
+    }
+    return {
+      ...activity,
+      share: { url, qr, whatsappHref: `https://wa.me/?text=${encodeURIComponent(`${activity.title} ${url}`)}` },
+    };
+  });
+}
+
+/** The desk behind the window — same loader/component the hub and every
+ * other window route use. Loaded ONLY in host mode, same posture as
+ * `crear/index.astro`'s own `desk`. */
+let desk: Awaited<ReturnType<typeof loadDeskSceneData>> | null = null;
+if (hostMode) {
+  desk = await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo });
+}
 ---
 
-<BaseLayout lang={lang} title={t.pageTitle} description={t.pageDescription} theme="ingles">
-  <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-    {/* Bugfix, 2026-10-06 (owner report: back went to the ChuyoCode home
-        instead of the Inglés hub): this page is Inglés-area
-        (`@lib/backNavigation.ts`'s own `INGLES_AREA_ROOTS` lists
-        `mis-actividades`) — its logical parent is the hub, never the
-        ChuyoCode home, same rule every other Inglés-area page's `backHref`
-        already follows. */}
-    <PageTitle lang={lang} backHref={`/${lang}/ingles`}>{t.pageTitle}</PageTitle>
-    <MisActividadesIsland client:load lang={lang} initialActivities={activities} />
-  </section>
+<BaseLayout
+  lang={lang}
+  title={t.pageTitle}
+  description={t.pageDescription}
+  theme="ingles"
+  deskBehind={hostMode}
+  embedded={embedded}
+  windowManager={hostMode}
+>
+  {hostMode && desk && (
+    <>
+      <DeskHost lang={lang} desk={desk} />
+      <DeskWindowManager
+        slot="overlay"
+        lang={lang}
+        initialHref={`${Astro.url.pathname}${Astro.url.search}`}
+        initialTitle={t.pageTitle}
+      />
+    </>
+  )}
+
+  {!hostMode && (
+    <DeskWindow
+      lang={lang}
+      title={t.pageTitle}
+      closeHref={`/${lang}/ingles`}
+      closeLabel={t.windowClose}
+      minimizeLabel={t.windowMinimize}
+      fullScreenLabel={t.windowFullScreen}
+      embedded
+      slot="overlay"
+    >
+      <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <MisActividadesIsland client:load lang={lang} initialActivities={activities} />
+      </section>
+    </DeskWindow>
+  )}
 </BaseLayout>

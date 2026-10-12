@@ -39,9 +39,14 @@ vi.mock('@lib/env', () => ({
 // from the SAME module — mocked here so no network happens.
 const getActivityCount = vi.fn();
 const getPublishedActivities = vi.fn();
+// N4: the "Mis actividades" folder's own read, same module — mocked to an
+// empty list by default so no test below has to know about it unless it is
+// actually asserting on the folder/badge/toast data.
+const getActivitiesByAuthor = vi.fn(async (..._args: unknown[]) => [] as unknown[]);
 vi.mock('@lib/activities/activities', () => ({
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+  getActivitiesByAuthor: (...args: unknown[]) => getActivitiesByAuthor(...args),
   ACTIVITIES_PAGE_SIZE: 20,
 }));
 

@@ -24,11 +24,11 @@
  * existing window's `href` and focuses it, never duplicates it).
  */
 
-export type DeskWindowKind = 'activity' | 'editor' | 'community' | 'create';
+export type DeskWindowKind = 'activity' | 'editor' | 'community' | 'create' | 'myActivities';
 
 export interface WindowRouteMatch {
   kind: DeskWindowKind;
-  /** The dedupe key — `activity:<id>` / `editor:<id>` / the constant `'community'` / `'create'`. */
+  /** The dedupe key — `activity:<id>` / `editor:<id>` / the constant `'community'` / `'create'` / `'myActivities'`. */
   id: string;
   /** Only present for `'activity'`/`'editor'` — the activity id itself. */
   activityId?: string;
@@ -55,6 +55,12 @@ export function classifyWindowRoute(pathname: string): WindowRouteMatch | null {
   // `@lib/access#requiresLogin`'s own posture (shape only).
   if (segments.length === 2 && segments[1] === 'crear') {
     return { kind: 'create', id: 'create' };
+  }
+  // N4 (owner spec, resolves UX-INGLES.md's F5: "Mis actividades" no está en
+  // el escritorio): the author's own workspace, single-instance just like
+  // `community`/`create` — a constant id, never duplicated.
+  if (segments.length === 2 && segments[1] === 'mis-actividades') {
+    return { kind: 'myActivities', id: 'myActivities' };
   }
   if (segments.length === 3 && segments[1] === 'crear' && segments[2].length > 0) {
     return { kind: 'editor', id: `editor:${segments[2]}`, activityId: segments[2] };

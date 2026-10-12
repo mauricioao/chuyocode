@@ -34,6 +34,10 @@ describe('classifyWindowRoute', () => {
     expect(classifyWindowRoute('/en/crear/xyz9')).toEqual({ kind: 'editor', id: 'editor:xyz9', activityId: 'xyz9' });
   });
 
+  it('matches the author\'s own "Mis actividades" workspace (N4, single-instance window like community/create)', () => {
+    expect(classifyWindowRoute('/es/mis-actividades')).toEqual({ kind: 'myActivities', id: 'myActivities' });
+  });
+
   it('does not match presentar/imprimir (target=_top routes)', () => {
     expect(classifyWindowRoute('/es/ingles/actividades/abc123/presentar')).toBeNull();
     expect(classifyWindowRoute('/es/ingles/actividades/abc123/imprimir')).toBeNull();

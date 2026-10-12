@@ -77,10 +77,15 @@ test.describe('activity editor window (PART 6b), signed-in', () => {
     await expect(page).toHaveURL(/\/es\/crear\/some-id$/);
   });
 
-  // `/mis-actividades` itself stays a plain page (no `DeskScene`/tray) —
-  // the chip is written to `sessionStorage` immediately regardless, and
-  // becomes VISIBLE the next time the author is on a page that renders the
-  // desk (the hub, or another window) — this test checks it from there.
+  // This assertion predates N4 ("Mis actividades" folder on the desk):
+  // `/mis-actividades` now ALSO renders as a desk window host/embedded shell
+  // (`mis-actividades/index.astro`'s own header) rather than a plain page,
+  // same as every other window route — unrelated to what THIS test actually
+  // checks (the editor's own minimize destination), still skipped for lack
+  // of an e2e auth fixture either way. The chip is written to
+  // `sessionStorage` immediately regardless, and becomes VISIBLE the next
+  // time the author is on a page that renders the desk (the hub, or another
+  // window) — this test checks it from there.
   test('minimizing records a tray chip, visible from the hub, and reopening lands back on the same editor URL', async ({
     page,
   }) => {

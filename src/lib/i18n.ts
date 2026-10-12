@@ -1114,6 +1114,11 @@ export const UI_LABELS = {
         deleteConfirmCancel: 'Cancelar',
         deleteConfirmAccept: 'Eliminar',
         deleteError: 'No se pudo eliminar la actividad. Inténtalo de nuevo.',
+        // Window chrome (N4, same posture as `explore.windowClose`/etc —
+        // duplicated per section, see that key's own comment).
+        windowClose: 'Cerrar',
+        windowMinimize: 'Minimizar',
+        windowFullScreen: 'Pantalla completa',
       },
       // Public feed (`/[lang]/ingles/actividades`, PR D "Activities
       // practice") — live activities only, newest published first. Under
@@ -1592,6 +1597,22 @@ export const UI_LABELS = {
         helperAvatarLabel: 'Ayuda de {name}',
         helperOtherTip: 'Otro tip',
         helperClose: 'Cerrar ayuda',
+        // N4 (owner spec, resolves UX-INGLES.md's F3/F5): the "Mis
+        // actividades" folder, right before "+ Crear actividad" — its own
+        // meta line and the "needs action" badge for rejected activities.
+        myActivitiesTitle: 'Mis actividades',
+        myActivitiesEmptyMeta: 'Sin actividades todavía',
+        // The badge's own accessible name — `{n}` is replaced by the
+        // rejected count (`DeskFolder`'s own `badgeLabel`, never shown for 0).
+        myActivitiesBadgeOne: '{n} actividad necesita cambios',
+        myActivitiesBadgeMany: '{n} actividades necesitan cambios',
+        // Status-change toast on the desk (F3: "el autor no se entera de la
+        // aprobación o del rechazo") — `{title}` is the activity's own
+        // title, in curly quotes per the owner's copy.
+        myActivityPublishedToast: 'Tu actividad «{title}» ya está publicada',
+        myActivityRejectedToast: 'Tu actividad «{title}» necesita cambios',
+        myActivityToastView: 'Ver',
+        myActivityToastFix: 'Corregir',
       },
       // Copy for the curated-exercises picker `/[lang]/ingles/propuestos` and the
       // `[level]/[focus]` listing. The old "coming soon" teaser lived here and
@@ -2480,6 +2501,9 @@ export const UI_LABELS = {
         deleteConfirmCancel: 'Cancel',
         deleteConfirmAccept: 'Delete',
         deleteError: 'Could not delete the activity. Try again.',
+        windowClose: 'Close',
+        windowMinimize: 'Minimize',
+        windowFullScreen: 'Full screen',
       },
       explore: {
         pageTitle: 'Community activities',
@@ -2823,6 +2847,14 @@ export const UI_LABELS = {
         helperAvatarLabel: 'Help from {name}',
         helperOtherTip: 'Another tip',
         helperClose: 'Close help',
+        myActivitiesTitle: 'My activities',
+        myActivitiesEmptyMeta: 'No activities yet',
+        myActivitiesBadgeOne: '{n} activity needs changes',
+        myActivitiesBadgeMany: '{n} activities need changes',
+        myActivityPublishedToast: 'Your activity "{title}" is now published',
+        myActivityRejectedToast: 'Your activity "{title}" needs changes',
+        myActivityToastView: 'View',
+        myActivityToastFix: 'Fix',
       },
       section: {
         // Matches the Spanish move: name the section, not its audience.

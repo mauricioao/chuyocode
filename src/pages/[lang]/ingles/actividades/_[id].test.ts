@@ -28,6 +28,9 @@ vi.mock('@lib/activities/activities', () => ({
   getPublishedActivity: vi.fn(async () => activityResult.value),
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+  // N4: the "Mis actividades" folder's own read, same module — the desk
+  // behind this window's HOST shell loads it too (`loadDeskSceneData`).
+  getActivitiesByAuthor: vi.fn(async () => []),
 }));
 
 vi.mock('@lib/activities/hearts', () => ({

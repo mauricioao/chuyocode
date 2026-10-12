@@ -21,6 +21,9 @@ const getPublishedActivities = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
+  // N4: the "Mis actividades" folder's own read, same module — the desk
+  // behind this window's HOST shell loads it too (`loadDeskSceneData`).
+  getActivitiesByAuthor: vi.fn(async () => []),
 }));
 
 const getExerciseCount = vi.fn();

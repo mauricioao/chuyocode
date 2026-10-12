@@ -18,10 +18,11 @@
  */
 import type { User } from '@supabase/supabase-js';
 import { UI_LABELS, type Lang } from '@lib/i18n';
-import { getActivityCount, getPublishedActivities } from '@lib/activities/activities';
+import { getActivityCount, getPublishedActivities, getActivitiesByAuthor } from '@lib/activities/activities';
 import { pickDailyActivity } from '@lib/activities/dailyPick';
 import { publicImageUrl } from '@lib/activities/storage';
 import { nameFrom } from '@lib/profile';
+import type { MyActivityStatusEntry } from '@lib/ingles/myActivityStatusToasts';
 
 /** Netlify's own request geo shape (`Astro.locals.netlify?.context?.geo`) — only the three fields this module reads. */
 export interface DeskSceneGeo {
@@ -46,6 +47,7 @@ export interface DeskSceneLabels {
   foldersLabel: string;
   communityTitle: string;
   todayTitle: string;
+  myActivitiesTitle: string;
   createActivityLabel: string;
   widgetsLabel: string;
   weatherUnavailable: string;
@@ -67,6 +69,28 @@ export interface DeskSceneData {
   weatherCity: string;
   weatherLabel: string;
   playerLabels: DeskScenePlayerLabels;
+  /**
+   * N4 (owner spec, resolves UX-INGLES.md's F3/F5) — the "Mis actividades"
+   * folder's own meta line: "3 actividades" / "1 actividad" / "Sin
+   * actividades todavía" (never degrades to `null`, unlike
+   * {@link activityCountLabel} — an author with zero activities is a real,
+   * always-renderable state here, not a failed query).
+   */
+  myActivitiesMeta: string;
+  /** The folder's own small "needs action" badge — how many of the author's activities are `'rejected'`. */
+  myActivitiesRejectedCount: number;
+  /** The badge's accessible name (e.g. "2 actividades necesitan cambios") — `null` whenever {@link myActivitiesRejectedCount} is 0 (no badge renders at all). */
+  myActivitiesBadgeLabel: string | null;
+  /**
+   * The desk's own status-change-toast init script data
+   * (`@lib/ingles/myActivityStatusToasts`) — `null` for an anonymous
+   * visitor (the TEMP local-dev screenshot override is the only way this
+   * happens in practice; `Astro.locals.user` is non-null in production for
+   * every page that mounts the desk) rather than an empty array, so the
+   * script can tell "nothing to diff" apart from "no author session at
+   * all" and skip itself entirely.
+   */
+  myActivitiesStatuses: MyActivityStatusEntry[] | null;
 }
 
 /** Netlify's own request geo when present; Lima otherwise — see `index.astro`'s original header for why this is also exactly what local `astro dev` always gets. */
@@ -79,6 +103,12 @@ function round2(value: number): number {
 /** "12 ejercicios" / "1 ejercicio", or `null` when the count degraded (never "0 …"). */
 function formatCount(count: number | null, one: string, many: string): string | null {
   if (count === null) return null;
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/** The "Mis actividades" folder's own meta line — unlike {@link formatCount}, 0 is a real, always-shown state here ("Sin actividades todavía"), never a degraded count. */
+function formatMyActivitiesMeta(count: number, one: string, many: string, emptyLabel: string): string {
+  if (count === 0) return emptyLabel;
   return `${count} ${count === 1 ? one : many}`;
 }
 
@@ -106,16 +136,37 @@ export async function loadDeskSceneData(opts: {
   };
 
   // One cheap count plus the top-hearted pool `pickDailyActivity` picks
-  // from, in parallel — same shape as `index.astro`'s original query. The
-  // curated-exercise count ("Ejercicios propuestos") was dropped here when
-  // that folder folded into "Actividades de la comunidad" — see
-  // `DeskScene.astro`'s own header.
-  const [activityCount, heartedPool] = await Promise.all([
+  // from, plus (N4) the author's own activities for the "Mis actividades"
+  // folder's meta/badge/toast data — all in parallel, same "one query per
+  // render" posture `index.astro`'s original query already had. Skipped
+  // entirely for an anonymous visitor (the TEMP local-dev screenshot
+  // override is the only way that happens in practice — see this module's
+  // own `DeskSceneData.myActivitiesStatuses` doc).
+  const [activityCount, heartedPool, myActivities] = await Promise.all([
     getActivityCount(),
     getPublishedActivities({ level: null, page: 1, orden: 'gustadas', viewerId: user?.id ?? null }),
+    user ? getActivitiesByAuthor(user.id) : Promise.resolve([]),
   ]);
 
   const activityCountLabel = formatCount(activityCount, t.activityCountOne, t.activityCountMany);
+
+  const myActivitiesMeta = formatMyActivitiesMeta(
+    myActivities.length,
+    t.activityCountOne,
+    t.activityCountMany,
+    t.myActivitiesEmptyMeta,
+  );
+  const myActivitiesRejectedCount = myActivities.filter((activity) => activity.status === 'rejected').length;
+  const myActivitiesBadgeLabel =
+    myActivitiesRejectedCount === 0
+      ? null
+      : (myActivitiesRejectedCount === 1 ? t.myActivitiesBadgeOne : t.myActivitiesBadgeMany).replace(
+          '{n}',
+          String(myActivitiesRejectedCount),
+        );
+  const myActivitiesStatuses: MyActivityStatusEntry[] | null = user
+    ? myActivities.map((activity) => ({ id: activity.id, title: activity.title, status: activity.status }))
+    : null;
 
   const dailyPick = pickDailyActivity(heartedPool.activities, new Date());
   const dailyPickHref = dailyPick
@@ -139,5 +190,9 @@ export async function loadDeskSceneData(opts: {
     weatherCity,
     weatherLabel,
     playerLabels,
+    myActivitiesMeta,
+    myActivitiesRejectedCount,
+    myActivitiesBadgeLabel,
+    myActivitiesStatuses,
   };
 }
