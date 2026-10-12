@@ -136,6 +136,8 @@ export interface ClozeEditorProps {
    * `onExampleChange` for the full reasoning.
    */
   onExampleChange: (value: string) => void;
+  /** "Cambiar de molde" (R2) — rendered beside the title in {@link SheetHeader}. */
+  headerAction?: React.ReactNode;
 }
 
 export default function ClozeEditor({
@@ -150,6 +152,7 @@ export default function ClozeEditor({
   onDistractorsChange,
   onPasteSentences,
   onExampleChange,
+  headerAction,
 }: ClozeEditorProps) {
   const t = copyFor(lang);
   const fieldRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -187,7 +190,7 @@ export default function ClozeEditor({
 
   return (
     <div data-testid={`cloze-editor-${blockId}`} className="flex flex-col">
-      <SheetHeader icon={BracketsSquareIcon} tone="yellow" title={t.title} instruction={t.instruction} />
+      <SheetHeader icon={BracketsSquareIcon} tone="yellow" title={t.title} instruction={t.instruction} action={headerAction} />
 
       <section className="flex flex-col">
         {sentences.length > 0 && <GroupLabel>{t.groupLabel}</GroupLabel>}

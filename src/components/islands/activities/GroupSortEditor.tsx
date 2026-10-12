@@ -121,6 +121,8 @@ export interface GroupSortEditorProps {
    * `onExampleChange` for the full reasoning.
    */
   onExampleChange: (value: string) => void;
+  /** "Cambiar de molde" (R2) — rendered beside the title in {@link SheetHeader}. */
+  headerAction?: React.ReactNode;
 }
 
 export default function GroupSortEditor({
@@ -135,6 +137,7 @@ export default function GroupSortEditor({
   onRemove,
   onPasteGroups,
   onExampleChange,
+  headerAction,
 }: GroupSortEditorProps) {
   const t = copyFor(lang);
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -171,7 +174,7 @@ export default function GroupSortEditor({
 
   return (
     <div data-testid={`groupsort-editor-${blockId}`} className="flex flex-col">
-      <SheetHeader icon={SquaresFourIcon} tone="green" title={t.title} instruction={t.instruction} />
+      <SheetHeader icon={SquaresFourIcon} tone="green" title={t.title} instruction={t.instruction} action={headerAction} />
 
       <div data-testid={`groupsort-list-${blockId}`} className="flex flex-col gap-3">
         {groups.length === 0 && (

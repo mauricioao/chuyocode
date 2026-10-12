@@ -68,7 +68,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVertical';
+import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { Button } from '@/components/ui/button';
+import { UI_LABELS } from '@/lib/i18n';
 import type { PoolItem, RowBlock, Slot } from '@/lib/exercisePayload';
 import {
   addRowBlock,
@@ -85,7 +87,9 @@ import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionT
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
 import { createExampleDraft, EXAMPLE_QUESTION_PROMPTS } from '@/lib/quizExampleQuestions';
 import type { Payload } from '@/lib/exercisePayload';
-import type { QuizTemplate } from '@/lib/activities/blocks';
+import type { QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
+import { convertBlock, type DroppedItem } from '@/lib/activities/templateConversion';
+import ChangeMoldDialog from './ChangeMoldDialog';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFirstRunTips } from '@/hooks/useFirstRunTips';
 import { cn } from '@/lib/utils';
@@ -113,7 +117,7 @@ import {
   removeGroupSortGroup,
   removeGroupSortItem,
 } from '@/lib/activities/groupSort';
-import { TemplateEditorLayout } from './TemplateEditorKit';
+import { SheetHeader, StatusNote, TemplateEditorLayout, usePasteFeedback } from './TemplateEditorKit';
 
 /** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
 const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
@@ -140,6 +144,14 @@ export const COPY = {
     tipDismiss: 'Omitir',
     questionsCount: (n: number) => (n === 1 ? '1 pregunta' : `${n} preguntas`),
     allComplete: 'todas con respuesta',
+    // "Varios juegos" own mold title/instruction, shown only here — the
+    // other 4 templates already carry their own via `SheetHeader`.
+    basicInstruction: 'Escribe cada pregunta con su respuesta.',
+    // "Cambiar de molde" (R2, decision 3 of §8): same action in every
+    // quiz-based editor's own `SheetHeader`, next to its mold title.
+    changeMold: 'Cambiar de molde',
+    moldChanged: (name: string) => `Cambiado a ${name}`,
+    moldUndoHint: 'Ctrl+Z para deshacer',
     reason: (n: number, reason: ChecklistReason): string => {
       switch (reason) {
         case 'quiz_no_answer':
@@ -168,6 +180,10 @@ export const COPY = {
     tipDismiss: 'Skip',
     questionsCount: (n: number) => (n === 1 ? '1 question' : `${n} questions`),
     allComplete: 'all with an answer',
+    basicInstruction: 'Write each question with its answer.',
+    changeMold: 'Change mold',
+    moldChanged: (name: string) => `Changed to ${name}`,
+    moldUndoHint: 'Ctrl+Z to undo',
     reason: (n: number, reason: ChecklistReason): string => {
       switch (reason) {
         case 'quiz_no_answer':
@@ -196,9 +212,61 @@ export interface QuizBlockEditorProps {
   selectedSlotId: string | null;
   onSelectSlot: (slotId: string | null) => void;
   onPayloadChange: (payload: Payload) => void;
+  /**
+   * "Cambiar de molde" (R2): the author chose a different mold — `payload`
+   * is the converted content, `template` the block's own new mold
+   * (`undefined` for "Varios juegos"). The caller (`BlockList.tsx`) commits
+   * both in ONE step, so the whole conversion is one undo step upstream.
+   * Optional only so every existing render site keeps compiling unchanged;
+   * every real mount wires it (`BlockList.tsx`).
+   */
+  onConvert?: (payload: Payload, template: QuizTemplate | undefined) => void;
   /** The exact question `findIncompleteBlock` pointed back to on a rejected submit — `null`/absent otherwise. */
   incompleteSlotId?: string | null;
   incompleteMessage?: string | null;
+}
+
+/** `UI_LABELS[lang].activities.start`'s own title for a mold — the SAME name `BlockTypePicker.tsx`'s gallery and `ChangeMoldDialog.tsx` use (rule 6, §6.1: "a mold's name means the same thing everywhere"). */
+function moldTitle(lang: string, template: QuizTemplate | undefined): string {
+  const start = UI_LABELS[lang === 'en' ? 'en' : 'es'].activities.start;
+  const key = (template ?? 'questions') as keyof typeof start;
+  return (start[key] as { title: string }).title;
+}
+
+/**
+ * The status line's own wording for what a conversion dropped (owner
+ * follow-up on `fcbb354`'s review: "never say 'opciones' for pairs/words/
+ * questions"). Each `DroppedItem.kind` gets its own noun, singular or
+ * plural by its own count — never the generic "opciones" every kind used
+ * to borrow.
+ */
+const DROPPED_NOUNS: Record<DroppedItem['kind'], { es: [string, string]; en: [string, string] }> = {
+  options: { es: ['opción', 'opciones'], en: ['option', 'options'] },
+  answers: { es: ['respuesta extra', 'respuestas extra'], en: ['extra answer', 'extra answers'] },
+  pairs: { es: ['pareja', 'parejas'], en: ['pair', 'pairs'] },
+  words: { es: ['palabra extra', 'palabras extra'], en: ['extra word', 'extra words'] },
+  questions: { es: ['pregunta', 'preguntas'], en: ['question', 'questions'] },
+  sentences: { es: ['oración', 'oraciones'], en: ['sentence', 'sentences'] },
+  groups: { es: ['grupo', 'grupos'], en: ['group', 'groups'] },
+};
+
+/** "a, b y c" (es) / "a, b and c" (en) — every part but the last joined by a comma, the last by the conjunction. */
+function joinNatural(parts: string[], lang: string): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  const conjunction = lang === 'en' ? 'and' : 'y';
+  return `${parts.slice(0, -1).join(', ')} ${conjunction} ${parts[parts.length - 1]}`;
+}
+
+/** "se quitaron 2 opciones y 1 respuesta extra" / "2 options and 1 extra answer removed" — one clause per dropped kind, verb/count agreement on the TOTAL dropped. */
+function droppedPhrase(lang: string, dropped: readonly DroppedItem[]): string {
+  const localeKey = lang === 'en' ? 'en' : 'es';
+  const total = dropped.reduce((sum, item) => sum + item.count, 0);
+  const parts = dropped.map((item) => {
+    const [singular, plural] = DROPPED_NOUNS[item.kind][localeKey];
+    return `${item.count} ${item.count === 1 ? singular : plural}`;
+  });
+  const joined = joinNatural(parts, lang);
+  return lang === 'en' ? `${joined} removed` : `${total === 1 ? 'se quitó' : 'se quitaron'} ${joined}`;
 }
 
 /** One row block's slot id — only `row` blocks are ever authored here. */
@@ -315,6 +383,7 @@ export default function QuizBlockEditor({
   selectedSlotId,
   onSelectSlot,
   onPayloadChange,
+  onConvert = () => {},
   incompleteSlotId = null,
   incompleteMessage = null,
 }: QuizBlockEditorProps) {
@@ -339,6 +408,54 @@ export default function QuizBlockEditor({
   const [mobileTab, setMobileTab] = useState<'questions' | 'preview'>('questions');
   const debouncedPayload = useDebouncedValue(payload, 300);
   const tips = useFirstRunTips(FIRST_RUN_TIPS_KEY, FIRST_RUN_TIPS_STEPS);
+
+  // "Cambiar de molde" (R2): the dialog, and the status line's own transient
+  // feedback — same `usePasteFeedback` mechanism the 4 template editors
+  // already use for their own bulk-paste feedback (`TemplateEditorKit.tsx`):
+  // it reverts on the VERY NEXT change to `payload`, except the one this
+  // conversion itself just caused.
+  const [moldDialogOpen, setMoldDialogOpen] = useState(false);
+  const moldFeedback = usePasteFeedback(payload);
+
+  function handleChooseMold(to: QuizTemplate | undefined) {
+    const current: QuizBlock = template
+      ? { id: blockId, type: 'quiz', payload, template }
+      : { id: blockId, type: 'quiz', payload };
+    const { block: nextBlock, dropped } = convertBlock(current, to);
+    onConvert(nextBlock.payload, nextBlock.template);
+    setMoldDialogOpen(false);
+    const parts = [t.moldChanged(moldTitle(lang, to))];
+    if (dropped.length > 0) parts.push(droppedPhrase(lang, dropped));
+    parts.push(t.moldUndoHint);
+    moldFeedback.show(parts.join(' · '));
+  }
+
+  const changeMoldButton = (
+    <button
+      type="button"
+      data-testid={`change-mold-${blockId}`}
+      onClick={() => setMoldDialogOpen(true)}
+      className="min-h-11 shrink-0 rounded-md px-2 py-1 text-[13px] font-medium text-accent-ink hover:bg-foreground/[0.05]"
+    >
+      {t.changeMold}
+    </button>
+  );
+
+  const moldStatusLine = moldFeedback.message ? (
+    <StatusNote tone="ready" testId={`mold-status-${blockId}`}>
+      {moldFeedback.message}
+    </StatusNote>
+  ) : null;
+
+  const changeMoldDialog = (
+    <ChangeMoldDialog
+      lang={lang}
+      open={moldDialogOpen}
+      block={template ? { id: blockId, type: 'quiz', payload, template } : { id: blockId, type: 'quiz', payload }}
+      onOpenChange={setMoldDialogOpen}
+      onChoose={handleChooseMold}
+    />
+  );
 
   const counterRef = useRef(0);
   function nextId(prefix: string): string {
@@ -498,6 +615,7 @@ export default function QuizBlockEditor({
       onRemove={removeQuestion}
       onPastePairs={pasteMatchPairs}
       onExampleChange={addExampleMatchPair}
+      headerAction={changeMoldButton}
     />
   );
 
@@ -548,6 +666,7 @@ export default function QuizBlockEditor({
       onRemove={removeQuestion}
       onPasteSentences={pasteReorderSentences}
       onExampleChange={addExampleReorderSentence}
+      headerAction={changeMoldButton}
     />
   );
 
@@ -623,6 +742,7 @@ export default function QuizBlockEditor({
       onDistractorsChange={(text) => commit(applyDistractorsText(draft, clozePoolName, text, nextId))}
       onPasteSentences={pasteClozeSentences}
       onExampleChange={addExampleClozeSentence}
+      headerAction={changeMoldButton}
     />
   );
 
@@ -729,6 +849,7 @@ export default function QuizBlockEditor({
       onRemove={removeGroupSortRow}
       onPasteGroups={pasteGroupSortOps}
       onExampleChange={addExampleGroupSortGroup}
+      headerAction={changeMoldButton}
     />
   );
 
@@ -944,14 +1065,22 @@ export default function QuizBlockEditor({
           : null;
   if (templateColumn) {
     return (
-      <TemplateEditorLayout
-        blockId={blockId}
-        sheet={templateColumn}
-        preview={previewColumn}
-        stageLabel={t.tabPreview}
-        stageEmptyText={t.previewEmpty}
-        onKeyDownCapture={handleContainerKeyDown}
-      />
+      <>
+        <TemplateEditorLayout
+          blockId={blockId}
+          sheet={
+            <>
+              {moldStatusLine}
+              {templateColumn}
+            </>
+          }
+          preview={previewColumn}
+          stageLabel={t.tabPreview}
+          stageEmptyText={t.previewEmpty}
+          onKeyDownCapture={handleContainerKeyDown}
+        />
+        {changeMoldDialog}
+      </>
     );
   }
 
@@ -967,7 +1096,16 @@ export default function QuizBlockEditor({
         data-testid={`quiz-editor-${blockId}`}
         onKeyDownCapture={handleContainerKeyDown}
       >
+        <SheetHeader
+          icon={ListChecksIcon}
+          tone="sky"
+          title={moldTitle(lang, undefined)}
+          instruction={t.basicInstruction}
+          action={changeMoldButton}
+        />
+        {moldStatusLine}
         {questionsColumn}
+        {changeMoldDialog}
       </div>
     );
   }
@@ -978,6 +1116,15 @@ export default function QuizBlockEditor({
       data-testid={`quiz-editor-${blockId}`}
       onKeyDownCapture={handleContainerKeyDown}
     >
+      <SheetHeader
+        icon={ListChecksIcon}
+        tone="sky"
+        title={moldTitle(lang, undefined)}
+        instruction={t.basicInstruction}
+        action={changeMoldButton}
+      />
+      {moldStatusLine}
+
       {/* Mobile-only tab bar (PURE CSS: `lg:hidden`, not a JS/isDesktop branch
           — see this file's own header). Desktop shows both columns at once
           side by side and never reads `mobileTab`. */}
@@ -1040,6 +1187,7 @@ export default function QuizBlockEditor({
           {previewColumn}
         </div>
       </div>
+      {changeMoldDialog}
     </div>
   );
 }
