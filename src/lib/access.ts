@@ -10,13 +10,24 @@
  * request/response round trip, and so the single spot a future subscription
  * check replaces is obvious rather than scattered across every gated route.
  *
- * ONE CARVE-OUT (guest play): the practice and presentation-mode pages for a
- * PUBLISHED activity are reachable without signing in — {@link isPublicActivityRoute}
- * — so a teacher's QR/WhatsApp link does not hit the login wall in class.
- * `hasAccess` is the only function that knows about it; `requiresLogin` stays
- * exactly as it was, so the middleware still treats these two routes as
- * "private, no-store" (the rendered page differs by visitor) even though
- * they no longer redirect an anonymous one away.
+ * TWO CARVE-OUTS, both guest-facing:
+ *   - Guest play: the practice and presentation-mode pages for a PUBLISHED
+ *     activity are reachable without signing in — {@link isPublicActivityRoute}
+ *     — so a teacher's QR/WhatsApp link does not hit the login wall in class.
+ *   - Guest browse (owner decision 2026-10-11): the community catalog itself
+ *     (`/[lang]/ingles/actividades`, no id) is ALSO reachable without signing
+ *     in — {@link isPublicCatalogRoute} — so an anonymous visitor can see and
+ *     play the community's activities, same as someone handed a direct link.
+ *     The desk hub (`/[lang]/ingles`) stays account-only; `src/middleware.ts`
+ *     sends an anonymous visitor there straight to this catalog instead of
+ *     the login wall.
+ * `hasAccess` is the only function that knows about either one; `requiresLogin`
+ * stays exactly as it was, so the middleware still treats every one of these
+ * routes as "private, no-store" (the rendered page differs by visitor) even
+ * though they no longer redirect an anonymous one away. Every WRITE endpoint
+ * under `/api/actividades/**` still requires a real account (`requireUser()`)
+ * regardless of either carve-out — this only ever widens what an anonymous
+ * visitor can SEE, never what they can DO.
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from './supabase';
@@ -59,8 +70,10 @@ export function requiresLogin(pathname: string): boolean {
  *   - `/<lang>/ingles/actividades/<id>`             (practice)
  *   - `/<lang>/ingles/actividades/<id>/presentar`   (presentation mode)
  *
- * Does NOT match the catalog (`/<lang>/ingles/actividades`, no `<id>`),
- * `imprimir`, or anything else — those stay fully gated.
+ * Does NOT match the catalog (`/<lang>/ingles/actividades`, no `<id>`) —
+ * that one has its OWN carve-out, {@link isPublicCatalogRoute}, since it is a
+ * different shape of "public" (a list, not one activity) — nor `imprimir` or
+ * anything else, which stay fully gated.
  *
  * SHAPE ONLY, same pure/zero-I/O posture as {@link requiresLogin}: whether
  * the activity at `<id>` is actually published is for the PAGE itself to
@@ -82,6 +95,29 @@ export function isPublicActivityRoute(pathname: string): boolean {
 
   if (segments.length === 5) return true; // .../actividades/<id>
   return segments.length === 6 && segments[5] === 'presentar'; // .../<id>/presentar
+}
+
+/**
+ * Is this exactly the community activities catalog — `/<lang>/ingles/actividades`,
+ * with or without a trailing slash — never a nested id, `imprimir`, or
+ * anything else?
+ *
+ * GUEST BROWSE (owner decision 2026-10-11): unlike {@link isPublicActivityRoute},
+ * this carve-out is a LIST, not one activity — "guests can SEE and play" the
+ * whole community catalog, while the desk hub (`/<lang>/ingles`) stays
+ * account-only. `src/middleware.ts` is what sends an anonymous visitor who
+ * lands on the hub straight here instead of to the login wall.
+ *
+ * SHAPE ONLY, same pure/zero-I/O posture as {@link isPublicActivityRoute}:
+ * the page itself still decides what an anonymous visitor actually sees in
+ * the list (`getPublishedActivities`, live activities only) — never here.
+ *
+ * @param pathname - A request path, e.g. `/es/ingles/actividades`.
+ */
+export function isPublicCatalogRoute(pathname: string): boolean {
+  const segments = pathname.split('/');
+  if (segments[2] !== 'ingles' || segments[3] !== 'actividades') return false;
+  return !segments[4]; // no id segment — or '' from a trailing slash.
 }
 
 /**
@@ -216,10 +252,11 @@ function isEntitled(user: Pick<User, 'id'> | null): boolean {
  * May this visitor see this path?
  *
  * A public section is always accessible, signed in or not. The two guest-play
- * activity routes ({@link isPublicActivityRoute}) are accessible to EVERY
- * visitor too — the page itself is what turns an anonymous visit to a
- * non-published activity into a 404, not this gate. Every other gated
- * section defers to {@link isEntitled}.
+ * activity routes ({@link isPublicActivityRoute}) AND the community catalog
+ * ({@link isPublicCatalogRoute}) are accessible to EVERY visitor too — the
+ * page itself is what turns an anonymous visit to a non-published activity
+ * into a 404, not this gate. Every other gated section — including the
+ * `/<lang>/ingles` hub itself — defers to {@link isEntitled}.
  *
  * @param user - The server-verified caller from `Astro.locals.user`, or
  *   `null` for an anonymous visitor.
@@ -232,7 +269,7 @@ export function hasAccess(
   if (!requiresLogin(pathname)) {
     return true;
   }
-  if (isPublicActivityRoute(pathname)) {
+  if (isPublicActivityRoute(pathname) || isPublicCatalogRoute(pathname)) {
     return true;
   }
   return isEntitled(user);

@@ -49,6 +49,7 @@ import {
   requiresLogin,
   hasAccess,
   isPublicActivityRoute,
+  isPublicCatalogRoute,
   getPlan,
   clearAccessClient,
   USER_SUBSCRIPTIONS_TABLE,
@@ -129,12 +130,33 @@ describe('hasAccess', () => {
     expect(hasAccess(null, '/es/ingles/actividades/abc123/presentar')).toBe(true);
   });
 
-  it('still denies an anonymous visitor the activities catalog', () => {
-    expect(hasAccess(null, '/es/ingles/actividades')).toBe(false);
+  // Guest browse (owner decision 2026-10-11): the catalog itself is now a
+  // second guest carve-out, independent of the two activity routes above —
+  // see `isPublicCatalogRoute`.
+  it('now allows an anonymous visitor to browse the activities catalog', () => {
+    expect(hasAccess(null, '/es/ingles/actividades')).toBe(true);
+  });
+
+  it('allows an anonymous visitor to browse the catalog with a trailing slash too', () => {
+    expect(hasAccess(null, '/es/ingles/actividades/')).toBe(true);
+  });
+
+  it('still denies an anonymous visitor the hub itself', () => {
+    expect(hasAccess(null, '/es/ingles')).toBe(false);
+  });
+
+  it('still denies an anonymous visitor the aventura/nivel hub sub-pages', () => {
+    expect(hasAccess(null, '/es/ingles/aventura')).toBe(false);
+    expect(hasAccess(null, '/es/ingles/nivel')).toBe(false);
   });
 
   it('still denies an anonymous visitor the print page', () => {
     expect(hasAccess(null, '/es/ingles/actividades/abc123/imprimir')).toBe(false);
+  });
+
+  it('still denies an anonymous visitor cursos and perfil', () => {
+    expect(hasAccess(null, '/es/cursos')).toBe(false);
+    expect(hasAccess(null, '/es/perfil')).toBe(false);
   });
 });
 
@@ -158,6 +180,30 @@ describe('isPublicActivityRoute', () => {
     ['/es/crear/abc123', 'the editor (different section entirely)'],
   ])('is false for %s (%s)', (pathname) => {
     expect(isPublicActivityRoute(pathname)).toBe(false);
+  });
+});
+
+// Guest browse (owner decision 2026-10-11): a second, independent carve-out
+// — the catalog itself, never a nested id.
+describe('isPublicCatalogRoute', () => {
+  it.each([
+    ['/es/ingles/actividades', 'the catalog itself'],
+    ['/en/ingles/actividades', 'the catalog itself, en'],
+    ['/es/ingles/actividades/', 'the catalog with a trailing slash'],
+  ])('is true for %s (%s)', (pathname) => {
+    expect(isPublicCatalogRoute(pathname)).toBe(true);
+  });
+
+  it.each([
+    ['/es/ingles/actividades/abc123', 'the practice page — isPublicActivityRoute\'s own carve-out'],
+    ['/es/ingles/actividades/abc123/presentar', 'presentation mode'],
+    ['/es/ingles/actividades/abc123/imprimir', 'the print page'],
+    ['/es/ingles', 'the hub itself'],
+    ['/es/ingles/aventura', 'a hub sub-page'],
+    ['/es/cursos', 'a different gated section'],
+    ['/es/libros', 'a public section entirely'],
+  ])('is false for %s (%s)', (pathname) => {
+    expect(isPublicCatalogRoute(pathname)).toBe(false);
   });
 });
 

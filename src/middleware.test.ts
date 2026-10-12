@@ -420,26 +420,31 @@ describe('identity resolution fails open when getUser() throws', () => {
 // Gating Inglés/Cursos behind login (`@lib/access`). Libros, Noticias and the
 // home page must stay untouched by this — see the final block below.
 describe('gating private sections', () => {
-  it('redirects an anonymous visitor away from a gated ingles path with a safe next', async () => {
+  // Owner decision 2026-10-11: the hub itself sends an anonymous visitor to
+  // the (now guest-open) community catalog instead of the login wall — see
+  // the `hub -> catalog redirect for guests` describe block below for the
+  // full behavior. A gated path NESTED under the hub (a level, a curated
+  // exercise, …) still goes to `entrar` exactly as before.
+  it('redirects an anonymous visitor away from a gated ingles sub-page with a safe next', async () => {
     armSession(anonymous());
-    const { result } = run('/es/ingles');
+    const { result } = run('/es/ingles/A1/present-simple');
     const res = await result;
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      '/es/auth/entrar?next=%2Fes%2Fingles',
+      '/es/auth/entrar?next=%2Fes%2Fingles%2FA1%2Fpresent-simple',
     );
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
   it('carries the original query string in next, safely encoded', async () => {
     armSession(anonymous());
-    const { result } = run('/es/ingles?nivel=B1');
+    const { result } = run('/es/ingles/A1/present-simple?foo=B1');
     const res = await result;
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      '/es/auth/entrar?next=%2Fes%2Fingles%3Fnivel%3DB1',
+      '/es/auth/entrar?next=%2Fes%2Fingles%2FA1%2Fpresent-simple%3Ffoo%3DB1',
     );
   });
 
@@ -492,7 +497,7 @@ describe('gating private sections', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  it('flushes a buffered session cookie onto the gate redirect too', async () => {
+  it('flushes a buffered session cookie onto the gate redirect too (the hub -> catalog redirect included)', async () => {
     const { pendingCookies } = armSession(anonymous());
     pendingCookies.push('sb-x-auth-token=cleared; Path=/; Max-Age=0');
     const { result } = run('/es/ingles');
@@ -533,6 +538,77 @@ describe('gating private sections', () => {
     expect(res.status).toBe(200);
     expect(next).toHaveBeenCalledOnce();
     expect(res.headers.has('cache-control')).toBe(false);
+  });
+});
+
+// Owner decision 2026-10-11: open the community catalog to guests, and send
+// an anonymous visitor to the hub straight to it instead of the login wall —
+// `@lib/access`'s `isPublicCatalogRoute` and `src/middleware.ts`'s own
+// `isInglesHubRoot`.
+describe('hub -> catalog redirect for guests', () => {
+  it('sends an anonymous visitor from the bare hub to the catalog, not entrar', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/es/ingles/actividades');
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('works the same with a trailing slash on the hub', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/es/ingles/actividades');
+  });
+
+  it('drops any query string on the hub -> catalog redirect (the hub takes no params of its own)', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles?foo=bar');
+    const res = await result;
+
+    expect(res.headers.get('location')).toBe('/es/ingles/actividades');
+  });
+
+  it('uses the request lang', async () => {
+    armSession(anonymous());
+    const { result } = run('/en/ingles');
+    const res = await result;
+
+    expect(res.headers.get('location')).toBe('/en/ingles/actividades');
+  });
+
+  it('never redirects a signed-in visitor away from the hub', async () => {
+    armSession(signedInWithConsent('user-30'));
+    const { result } = run('/es/ingles');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+
+  it('still sends an anonymous visitor to entrar (not the catalog) for a hub sub-page', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/aventura');
+    const res = await result;
+
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/entrar?next=%2Fes%2Fingles%2Faventura',
+    );
+  });
+
+  it('lets an anonymous visitor browse the catalog itself directly, query string included (guest browse)', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/actividades?nivel=B1');
+    const res = await result;
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 });
 
@@ -672,7 +748,9 @@ describe('age consent gate', () => {
 
 // Guest play (owner-approved): the practice and presentation-mode pages for a
 // PUBLISHED activity are reachable without signing in — `@lib/access`'s
-// `isPublicActivityRoute`. Everything else under `ingles/**` stays gated.
+// `isPublicActivityRoute`. The catalog itself is now ALSO reachable (guest
+// browse, `isPublicCatalogRoute`, its own describe block above) — everything
+// else under `ingles/**` stays gated.
 describe('guest play — the two public activity routes', () => {
   it('lets an anonymous visitor through to the practice page', async () => {
     armSession(anonymous());
@@ -708,16 +786,13 @@ describe('guest play — the two public activity routes', () => {
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  it('still redirects an anonymous visitor away from the activities catalog', async () => {
+  it('now lets an anonymous visitor browse the activities catalog (guest browse)', async () => {
     armSession(anonymous());
     const { result } = run('/es/ingles/actividades');
     const res = await result;
 
-    expect(next).not.toHaveBeenCalled();
-    expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe(
-      '/es/auth/entrar?next=%2Fes%2Fingles%2Factividades',
-    );
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
   });
 
   it('still redirects an anonymous visitor away from the print page', async () => {
@@ -789,13 +864,25 @@ describe('security headers on every response', () => {
     expectSecurityHeaders(res);
   });
 
-  it('carries the headers on the gate\'s own 303 (built with new Response)', async () => {
+  it('carries the headers on the gate\'s own 303 to entrar (built with new Response)', async () => {
+    armSession(anonymous());
+    const { result } = run('/es/ingles/A1/present-simple');
+    const res = await result;
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      '/es/auth/entrar?next=%2Fes%2Fingles%2FA1%2Fpresent-simple',
+    );
+    expectSecurityHeaders(res);
+  });
+
+  it('carries the headers on the gate\'s own hub -> catalog 303 too', async () => {
     armSession(anonymous());
     const { result } = run('/es/ingles');
     const res = await result;
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/es/auth/entrar?next=%2Fes%2Fingles');
+    expect(res.headers.get('location')).toBe('/es/ingles/actividades');
     expectSecurityHeaders(res);
   });
 

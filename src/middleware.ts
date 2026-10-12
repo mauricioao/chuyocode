@@ -79,6 +79,25 @@ export function needsSession(pathname: string): boolean {
   return firstSegment !== '_astro' && !firstSegment.includes('.');
 }
 
+/**
+ * Is this the bare Inglés desk hub — `/<lang>/ingles`, with or without a
+ * trailing slash — and nothing nested under it?
+ *
+ * Owner decision 2026-10-11: the hub stays account-only, but an anonymous
+ * visitor who lands on it should not hit the login wall — they should land
+ * on the community catalog instead (`@lib/access`'s `isPublicCatalogRoute`),
+ * which IS open to guests. This predicate is what the gate below uses to
+ * pick that redirect target instead of `/auth/entrar`. Scoped to EXACTLY the
+ * hub root: `/<lang>/ingles/aventura`, `/<lang>/ingles/nivel`, and every
+ * other `ingles/**` sub-page keep going to the login wall as before.
+ *
+ * @param pathname - Request path, e.g. `/es/ingles`.
+ */
+function isInglesHubRoot(pathname: string): boolean {
+  const segments = pathname.split('/');
+  return segments[2] === 'ingles' && !segments[3];
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
   // FIRST, always, on every path. `App.Locals.user` is `User | null` and never
   // optional, so a path that forgets this assignment is a type error rather
@@ -164,12 +183,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const gated = !isNonLocalePath && requiresLogin(pathname);
 
   if (gated && !hasAccess(context.locals.user, pathname)) {
-    // `next`, via `safeNextPath` — same open-redirect guard the magic-link
-    // routes use, since a query string is attacker-controlled.
-    const next = safeNextPath(`${pathname}${context.url.search}`);
-    const headers = new Headers({
-      location: `/${context.locals.lang}/auth/entrar?next=${encodeURIComponent(next)}`,
-    });
+    // The hub itself (`/<lang>/ingles`, nothing nested) sends an anonymous
+    // visitor to the community catalog instead of the login wall — owner
+    // decision 2026-10-11, "guests can SEE and play" — since the catalog is
+    // ITSELF a guest carve-out (`@lib/access`'s `isPublicCatalogRoute`).
+    // Every other gated path (crear, cursos, perfil, ingles/aventura,
+    // ingles/nivel, the print page, …) keeps going to `/auth/entrar` exactly
+    // as before. The hub takes no query params of its own, so none is
+    // forwarded — unlike the `entrar` redirect below, which carries `next`.
+    const headers = new Headers();
+    if (isInglesHubRoot(pathname)) {
+      headers.set('location', `/${context.locals.lang}/ingles/actividades`);
+    } else {
+      // `next`, via `safeNextPath` — same open-redirect guard the magic-link
+      // routes use, since a query string is attacker-controlled.
+      const next = safeNextPath(`${pathname}${context.url.search}`);
+      headers.set(
+        'location',
+        `/${context.locals.lang}/auth/entrar?next=${encodeURIComponent(next)}`,
+      );
+    }
     // Flushed even on this exit: a rotated/cleared session cookie must reach
     // the browser on every response, redirects included (same rule the auth
     // endpoints follow).

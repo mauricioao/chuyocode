@@ -6,16 +6,21 @@
  * the viewer has already seen them (`?novistas=1`), sortable by recency,
  * hearts, or views (`?orden=`), paginated 20/page.
  *
- * Under `ingles/**`, so this route is ALREADY gated and marked
- * private/no-store by the middleware (`@lib/access`'s `GATED_SECTIONS`,
- * `src/middleware.ts`'s own header comment) — no per-page gate or
- * `markPrivate` call is needed here, unlike `/[lang]/crear` or
- * `/[lang]/mis-actividades`, which sit OUTSIDE that section. `Astro.locals.user`
- * is therefore expected non-null in production — the `isGuest` branch below
- * exists only for parity with `[id].astro`'s own documented pattern
- * (defensive, and what the TEMP local override needs for screenshots); a
- * real anonymous visitor is redirected away by the middleware before this
- * page ever runs, so `isGuest` is always `false` in practice.
+ * Under `ingles/**`, so this route is marked private/no-store by the
+ * middleware (`@lib/access`'s `GATED_SECTIONS`, `src/middleware.ts`'s own
+ * header comment) exactly like every other page in the section — no
+ * per-page `markPrivate` call is needed here, unlike `/[lang]/crear` or
+ * `/[lang]/mis-actividades`, which sit OUTSIDE it.
+ *
+ * GUEST BROWSE (owner decision 2026-10-11, "guests can SEE and play"):
+ * unlike the rest of `ingles/**`, this one route is NOT sign-in gated —
+ * `@lib/access`'s `isPublicCatalogRoute` carves it out, same mechanism
+ * `isPublicActivityRoute` already uses for the practice/presentation-mode
+ * pages. An anonymous visitor who lands on the hub (`/[lang]/ingles`) is
+ * sent straight HERE by the middleware instead of to the login wall. `user`
+ * below is a REAL `null` in production now — the `isGuest` branch mirrors
+ * `[id].astro`'s own guest handling (full-screen window, no desk behind it,
+ * a short sign-up banner) rather than being a defensive/unreachable branch.
  *
  * "DESKTOP" REDESIGN, community-folds-into-propuestos pass (owner spec
  * 2026-10-07, "ya no tendremos ejercicios propuestos separados de
@@ -112,9 +117,9 @@ const viewerId = user?.id ?? null;
  * this request the window's own CONTENT, loaded inside the host's
  * `<iframe>` — or a direct, HOST visit? See `@lib/ui/embeddedWindow`'s own
  * header. `Vary` so a cache never serves one shape to a request that asked
- * for the other. In production `isGuest` is always `false` here (see this
- * file's own header), so `hostMode` is effectively just `!embedded` — the
- * `isGuest` term is kept for parity with every other window route anyway.
+ * for the other. A guest's window never renders through the host/manager
+ * shell either, same as `[id].astro`'s own guest handling — so `hostMode`
+ * is `false` for them regardless of `embedded`.
  */
 const embedded = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
 Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
@@ -309,19 +314,32 @@ if (novistas) chips.push({ key: 'novistas', label: t.novistasChip, href: hrefWit
 /**
  * The window's red/yellow lights ("desktop" redesign, same pattern
  * `[id].astro`'s own header documents): the Inglés hub/desk for a
- * signed-in visitor, the ChuyoCode home for a guest.
+ * signed-in visitor, the ChuyoCode home for a guest — whose hub would only
+ * ask them to sign in (middleware now sends them back HERE from the hub
+ * instead, but there is no reason to send a guest back to a hub they
+ * cannot see).
  */
 const closeHref = isGuest ? `/${lang}/` : `/${lang}/ingles`;
 
 /**
+ * Guest browse: where "create an account" sends an anonymous visitor —
+ * straight back to THIS exact catalog (with its current filters) once
+ * they are signed in, same `next` pattern `[id].astro`'s own guest banner
+ * uses. `ventana` is stripped first, same reasoning as there — a guest's
+ * window never renders through the manager, so the embedded marker has no
+ * business surviving into a redirect target they would land back on as a
+ * normal, full-chrome page.
+ */
+const guestCurrentUrl = new URL(Astro.url);
+guestCurrentUrl.searchParams.delete('ventana');
+const guestSignUpHref = `/${lang}/auth/entrar?mode=signup&next=${encodeURIComponent(`${guestCurrentUrl.pathname}${guestCurrentUrl.search}`)}`;
+
+/**
  * The desk behind the HOST shell — window-manager architecture: embedded
  * never has a desk behind it any more (the manager owns that, over on the
- * HOST page), and neither did a guest's window. Same loader/component the
- * hub and every other window route use. In production `isGuest` is always
- * `false` here (the middleware already redirects an anonymous visitor away
- * from every `ingles/**` route before this page ever runs), so this branch
- * exists only for parity with `[id].astro` and the TEMP local-dev
- * screenshot override.
+ * HOST page), and neither does a guest's window (same as `[id].astro`'s
+ * own guest handling). Same loader/component the hub and every other
+ * window route use.
  */
 const desk = hostMode
   ? await loadDeskSceneData({ lang, user, geo: Astro.locals.netlify?.context?.geo })
@@ -433,6 +451,23 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
         </ul>
       )
     }
+
+    {/* Guest banner (owner-approved copy, guest browse 2026-10-11): a
+        small, discreet line inviting an anonymous visitor to create a
+        free account — shown only when there is no `user`, same style/
+        pattern as `[id].astro`'s own guest banner. Never blocks anything
+        a guest can already do here (browse, filter, open an activity). */}
+    {isGuest && (
+      <p
+        data-testid="catalog-guest-banner"
+        class={`flex-none border-b border-border bg-muted/30 text-xs text-muted-foreground ${ROW_PADDING_X} py-2`}
+      >
+        {t.guestBanner}{' '}
+        <a href={guestSignUpHref} data-testid="guest-sign-up-link" class="font-medium text-accent-ink hover:underline">
+          {t.guestSignUp}
+        </a>
+      </p>
+    )}
 
     {/* The scrollable body — grid + pagination together, so pagination
         always sits at the bottom of whatever is currently on screen,

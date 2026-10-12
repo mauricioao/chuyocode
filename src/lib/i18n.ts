@@ -1167,6 +1167,13 @@ export const UI_LABELS = {
         windowClose: 'Cerrar',
         windowMinimize: 'Minimizar',
         windowFullScreen: 'Pantalla completa',
+        // Guest browse (owner decision 2026-10-11, "guests can SEE and
+        // play"): same discreet, friendly-line pattern as
+        // `practice.guestBanner` — shown only to an anonymous visitor,
+        // inviting them to create an account without blocking anything they
+        // can already do here (browse, open, play).
+        guestBanner: 'Crea tu cuenta gratis para tener tu escritorio y crear tus propias actividades.',
+        guestSignUp: 'Crear cuenta',
       },
       // Moderator queue (`/[lang]/admin/actividades`, PR E "Moderation").
       // `report.reasons` (above) is reused for the "Reportadas" tab's report
@@ -2515,6 +2522,8 @@ export const UI_LABELS = {
         windowClose: 'Close',
         windowMinimize: 'Minimize',
         windowFullScreen: 'Full screen',
+        guestBanner: 'Create a free account to get your desk and make your own activities.',
+        guestSignUp: 'Sign up',
       },
       moderation: {
         pageTitle: 'Moderation',

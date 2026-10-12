@@ -6,13 +6,19 @@ import { test, expect, type Page } from '@playwright/test';
  *
  * Same posture as `desk-widgets-part4.spec.ts`'s own `gotoHubOrSkip`: the
  * hub is sign-in gated and this repo has no e2e auth fixture yet, so every
- * test below skips gracefully when an anonymous Playwright session gets
- * redirected to `/auth/entrar` rather than asserting against a sign-in page.
+ * test below skips gracefully when an anonymous Playwright session does not
+ * actually land on the hub (it is sent to the now guest-open activities
+ * catalog instead, not the login wall — owner decision 2026-10-11) rather
+ * than asserting against the wrong page.
  */
 
 async function gotoHubOrSkip(page: Page): Promise<boolean> {
   await page.goto('/es/ingles');
-  return !page.url().includes('/auth/entrar');
+  // An anonymous visitor is now sent to the (guest-open) activities catalog
+  // instead of the login wall (owner decision 2026-10-11) — so "not entrar"
+  // no longer proves a signed-in session reached the hub; the loaded page
+  // must actually BE the hub.
+  return /\/ingles\/?$/.test(new URL(page.url()).pathname);
 }
 
 test.describe('desk helper (PART 5) — desktop, wide (open by default)', () => {
