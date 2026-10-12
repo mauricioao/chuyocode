@@ -35,7 +35,7 @@ export interface GameItem {
 /**
  * A playable mode for a quiz block. `speak` (Cartas/speaking cards), `wheel`
  * (Ruleta), `anagram` (Anagrama), `hangman` (Ahorcado), `truefalse`
- * (Verdadero o falso) and `openbox` (Abre la caja) are the Wordwall-style
+ * (Verdadero o falso) and `openbox` (Caja sorpresa) are the Wordwall-style
  * "switch template" games added in batch 1, alongside the original
  * `cards`/`match`. `groupsort` ("Ordenar por grupos") is the big drag-each-
  * item-into-its-group board.
@@ -94,7 +94,7 @@ const MIN_HANGMAN_ITEMS = 1;
 /** `truefalse` needs at least two eligible statements — one is a guaranteed "verdadero". */
 const MIN_TRUEFALSE_ITEMS = 2;
 
-/** `openbox` (Abre la caja) needs at least two boxes — one box is not a grid. */
+/** `openbox` (Caja sorpresa) needs at least two boxes — one box is not a grid. */
 const MIN_OPENBOX_ITEMS = 2;
 
 /** `cloze` needs at least one drag-and-drop gap to fill in. */

@@ -80,10 +80,10 @@ describe('QuizGameModeSwitcher', () => {
     expect(screen.getByText('Verdadero o falso')).toBeTruthy();
   });
 
-  it('renders "Abre la caja" for the openbox mode', () => {
+  it('renders "Caja sorpresa" for the openbox mode', () => {
     render(<QuizGameModeSwitcher lang="es" modes={['quiz', 'openbox']} active="quiz" onChange={vi.fn()} />);
     expect(screen.getAllByRole('radio')).toHaveLength(2);
-    expect(screen.getByText('Abre la caja')).toBeTruthy();
+    expect(screen.getByText('Caja sorpresa')).toBeTruthy();
   });
 
   it('renders "Reordenar" for the reorder mode', () => {
