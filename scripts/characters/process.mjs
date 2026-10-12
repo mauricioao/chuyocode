@@ -30,13 +30,18 @@ import {
   computeContentBBox,
   computeExteriorMask,
   despill,
-  keepLargestOpaqueComponent,
   keyAlpha,
   layoutWithPadding,
+  removeLineDebrisComponents,
   rgbToHsv,
   sampleBackground,
   stripSupportLines,
+  trimFlushResidue,
 } from './chromaKey.mjs';
+
+// Collected across the whole run and printed/flagged at the end — see
+// processOne()'s debris-loss guard.
+const debrisWarnings = [];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SOURCE_ROOT = join(__dirname, '..', '..', '..', 'ChuyoCode_others', 'Personajes');
@@ -174,10 +179,26 @@ async function processOne(character, entry) {
 
   const exterior = computeExteriorMask(alpha, width, height);
   const lineStripped = stripSupportLines(alpha, dark, exterior, width, height);
-  // Discard anything left disconnected from the main silhouette (e.g. a
-  // stub of the removed line stranded near a flush edge) rather than
-  // trusting the bbox to land exactly on the body.
-  const cleanedAlpha = keepLargestOpaqueComponent(lineStripped, width, height);
+
+  // Discard only components that look like leftover line debris (tiny, or a
+  // thin elongated sliver) and that contain no white fill — a hand, a held
+  // book/sign, a foot etc. always has fill and is never dropped, no matter
+  // how small or separate from the rest of the body it is.
+  const { alpha: debrisFree, totalBefore, totalAfter } = removeLineDebrisComponents(lineStripped, dark, width, height);
+  const lossFraction = totalBefore === 0 ? 0 : (totalBefore - totalAfter) / totalBefore;
+  console.log(
+    `  opaque px ${totalBefore} -> ${totalAfter} (${(lossFraction * 100).toFixed(3)}% lost to debris removal)`,
+  );
+  if (lossFraction > 0.003) {
+    const msg = `${character}/${entry.slug}: debris removal dropped ${(lossFraction * 100).toFixed(2)}% of opaque pixels (${totalBefore} -> ${totalAfter}) — likely a legitimate part (hand/book/sign/foot), not debris. Investigate before shipping.`;
+    console.warn(`  !! ${msg}`);
+    debrisWarnings.push(msg);
+  }
+
+  // A stub that merely touches the main silhouette through a thin bridge
+  // survives the component filter (it's "part of" a fill-containing
+  // component); if it's right on the flush edge, trim it off directly.
+  const cleanedAlpha = trimFlushResidue(debrisFree, dark, width, height, entry.flushEdge);
   for (let p = 0; p < width * height; p++) {
     const cleaned = cleanedAlpha[p];
     if (cleaned !== alpha[p]) data[p * 4 + 3] = cleaned;
@@ -236,6 +257,11 @@ async function processAll() {
   await mkdir(OUT_ROOT, { recursive: true });
   await writeFile(join(OUT_ROOT, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`\nWrote ${manifest.length} masters + manifest.json to ${OUT_ROOT}`);
+  if (debrisWarnings.length > 0) {
+    console.warn(`\n!!!! ${debrisWarnings.length} master(s) lost more than 0.3% of their opaque pixels to debris removal !!!!`);
+    for (const w of debrisWarnings) console.warn(`  - ${w}`);
+    process.exitCode = 1;
+  }
   return manifest;
 }
 

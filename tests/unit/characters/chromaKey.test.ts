@@ -4,12 +4,13 @@ import {
   computeExteriorMask,
   despill,
   hueDistance,
-  keepLargestOpaqueComponent,
   keyAlpha,
   layoutWithPadding,
+  removeLineDebrisComponents,
   rgbToHsv,
   sampleBackground,
   stripSupportLines,
+  trimFlushResidue,
 } from '../../../scripts/characters/chromaKey.mjs';
 
 describe('rgbToHsv', () => {
@@ -334,41 +335,124 @@ describe('stripSupportLines', () => {
   });
 });
 
-describe('keepLargestOpaqueComponent', () => {
-  function buildAlpha(width: number, height: number, fill: (x: number, y: number) => number) {
+describe('removeLineDebrisComponents', () => {
+  function buildGrids(width: number, height: number, fill: (x: number, y: number) => { a: number; d?: boolean }) {
     const alpha = new Uint8ClampedArray(width * height);
+    const dark = new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) alpha[y * width + x] = fill(x, y);
+      for (let x = 0; x < width; x++) {
+        const { a, d } = fill(x, y);
+        alpha[y * width + x] = a;
+        dark[y * width + x] = d ? 1 : 0;
+      }
     }
-    return alpha;
+    return { alpha, dark };
   }
 
-  it('discards a small disconnected blob and keeps the large one', () => {
-    const width = 50;
-    const height = 50;
-    const alpha = buildAlpha(width, height, (x, y) => {
-      const inBody = x >= 5 && x < 35 && y >= 5 && y < 45; // 30x40 = 1200px
-      const inStub = x >= 40 && x < 45 && y >= 40 && y < 45; // 5x5 = 25px, disconnected
-      return inBody || inStub ? 255 : 0;
+  it('keeps two disconnected filled shapes (e.g. body + a gripping hand) and removes a thin fill-less stub', () => {
+    const width = 100;
+    const height = 60;
+    const body = { left: 5, right: 50, top: 5, bottom: 55 }; // 45x50, white fill
+    const hand = { left: 70, right: 80, top: 10, bottom: 20 }; // 10x10, disconnected, white fill
+    const stubY = 55;
+    const stub = { left: 85, right: 95 }; // 10px long, 1px thick, bare ink, disconnected
+    const { alpha, dark } = buildGrids(width, height, (x, y) => {
+      const inBody = x >= body.left && x < body.right && y >= body.top && y < body.bottom;
+      const inHand = x >= hand.left && x < hand.right && y >= hand.top && y < hand.bottom;
+      if (inBody || inHand) return { a: 255 }; // white fill, not ink
+      if (y === stubY && x >= stub.left && x < stub.right) return { a: 255, d: true }; // bare ink stub
+      return { a: 0 };
     });
-    const result = keepLargestOpaqueComponent(alpha, width, height);
-    expect(result[10 * width + 10]).toBe(255); // body survives
-    expect(result[42 * width + 42]).toBe(0); // stub discarded
+    const { alpha: result, totalBefore, totalAfter } = removeLineDebrisComponents(alpha, dark, width, height);
+    expect(result[10 * width + 10]).toBe(255); // body kept
+    expect(result[15 * width + 75]).toBe(255); // hand kept, despite being the smaller, separate shape
+    expect(result[stubY * width + 90]).toBe(0); // stub removed
+    expect(totalAfter).toBeLessThan(totalBefore);
   });
 
-  it('leaves a single component untouched', () => {
-    const width = 20;
-    const height = 20;
-    const alpha = buildAlpha(width, height, (x, y) => (x >= 5 && x < 15 && y >= 5 && y < 15 ? 255 : 0));
-    const result = keepLargestOpaqueComponent(alpha, width, height);
-    expect(Array.from(result)).toEqual(Array.from(alpha));
+  it('never drops a component that has white fill, no matter how small relative to the rest', () => {
+    const width = 100;
+    const height = 100;
+    const big = { left: 5, right: 90, top: 5, bottom: 90 }; // dominates total opaque area
+    const tiny = { left: 95, right: 98, top: 95, bottom: 98 }; // 3x3, disconnected, white fill
+    const { alpha, dark } = buildGrids(width, height, (x, y) => {
+      const inBig = x >= big.left && x < big.right && y >= big.top && y < big.bottom;
+      const inTiny = x >= tiny.left && x < tiny.right && y >= tiny.top && y < tiny.bottom;
+      return inBig || inTiny ? { a: 255 } : { a: 0 };
+    });
+    const { alpha: result } = removeLineDebrisComponents(alpha, dark, width, height);
+    expect(result[96 * width + 96]).toBe(255);
+  });
+
+  it('drops a tiny fill-less speck of dust', () => {
+    const width = 200;
+    const height = 200;
+    const body = { left: 10, right: 190, top: 10, bottom: 190 };
+    const { alpha, dark } = buildGrids(width, height, (x, y) => {
+      if (x >= body.left && x < body.right && y >= body.top && y < body.bottom) return { a: 255 };
+      if (x === 5 && y === 5) return { a: 255, d: true }; // isolated 1px ink speck
+      return { a: 0 };
+    });
+    const { alpha: result } = removeLineDebrisComponents(alpha, dark, width, height);
+    expect(result[5 * width + 5]).toBe(0);
+    expect(result[100 * width + 100]).toBe(255);
   });
 
   it('leaves a fully transparent image untouched', () => {
     const width = 10;
     const height = 10;
     const alpha = new Uint8ClampedArray(width * height);
-    const result = keepLargestOpaqueComponent(alpha, width, height);
+    const dark = new Uint8Array(width * height);
+    const { alpha: result, totalBefore, totalAfter } = removeLineDebrisComponents(alpha, dark, width, height);
+    expect(Array.from(result)).toEqual(Array.from(alpha));
+    expect(totalBefore).toBe(0);
+    expect(totalAfter).toBe(0);
+  });
+});
+
+describe('trimFlushResidue', () => {
+  function buildGrids(width: number, height: number, fill: (x: number, y: number) => { a: number; d?: boolean }) {
+    const alpha = new Uint8ClampedArray(width * height);
+    const dark = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const { a, d } = fill(x, y);
+        alpha[y * width + x] = a;
+        dark[y * width + x] = d ? 1 : 0;
+      }
+    }
+    return { alpha, dark };
+  }
+
+  it('removes fill-less columns right at a left flush edge, stopping at the first column with fill', () => {
+    const width = 50;
+    const height = 30;
+    const { alpha, dark } = buildGrids(width, height, (x, y) => {
+      if (x < 3) return { a: 255, d: true }; // debris stub spanning the full height, no fill
+      if (x < 10 && y >= 5 && y < 25) return { a: 255 }; // real content starts at x=3
+      return { a: 0 };
+    });
+    const result = trimFlushResidue(alpha, dark, width, height, 'left');
+    for (let x = 0; x < 3; x++) {
+      for (let y = 0; y < height; y++) expect(result[y * width + x]).toBe(0);
+    }
+    expect(result[10 * width + 5]).toBe(255); // real content untouched
+  });
+
+  it('does nothing when fill starts immediately at the flush edge', () => {
+    const width = 30;
+    const height = 30;
+    const { alpha, dark } = buildGrids(width, height, (x) => (x < 10 ? { a: 255 } : { a: 0 }));
+    const result = trimFlushResidue(alpha, dark, width, height, 'left');
+    expect(Array.from(result)).toEqual(Array.from(alpha));
+  });
+
+  it('is a no-op when there is no flush edge', () => {
+    const width = 10;
+    const height = 10;
+    const alpha = new Uint8ClampedArray(width * height).fill(255);
+    const dark = new Uint8Array(width * height).fill(1);
+    const result = trimFlushResidue(alpha, dark, width, height, null);
     expect(Array.from(result)).toEqual(Array.from(alpha));
   });
 });

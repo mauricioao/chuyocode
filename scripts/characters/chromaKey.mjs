@@ -333,53 +333,148 @@ export function stripSupportLines(alpha, dark, exterior, width, height, opts = {
 }
 
 /**
- * Keeps only the largest 4-connected component of opaque pixels and zeroes
- * every other one. A cleanup pass for after line-stripping: a stray stub of
- * the removed line that survived right at the flush edge (separated from
- * the body by even a 1px transparent gap) is, by construction, its own
- * disconnected component — small next to the character — so this discards
- * it outright instead of relying on trimming to land in the right place.
- * Returns a new alpha array; does not mutate. A single component (or an
- * empty image) is returned unchanged.
+ * Discards 4-connected opaque components that look like leftover line
+ * debris, and nothing else. "Keep only the largest component" is too blunt:
+ * a hand gripping a ledge, a held book or sign, or a foot can be a
+ * perfectly legitimate component of its own — sometimes the entire point of
+ * the pose — not just smaller than the head+torso blob, but genuinely
+ * disconnected from it by design. Dropping by size/rank alone deletes them.
+ *
+ * A component is debris, and only ever dropped, when BOTH of these hold:
+ *   1. It contains no white-fill pixel (`dark[p] !== 1` while opaque) — a
+ *      hand, book, sign, shoe etc. always has some fill; a bare ink stroke
+ *      never does. This check alone protects every legitimate body part.
+ *   2. It is either tiny (under `minAreaFraction` of all opaque pixels) or
+ *      a thin elongated sliver (bounding-box aspect ratio over
+ *      `elongatedAspect`, and mean thickness — area over its long side —
+ *      at most `elongatedMaxThickness` px): the shape of a stray line stub,
+ *      not a drawn body part.
+ *
+ * Returns `{ alpha, totalBefore, totalAfter }` — the caller is expected to
+ * guard on how much opaque area was actually discarded, since silently
+ * losing a large legitimate part is exactly the failure mode this guards
+ * against. Does not mutate the input.
  */
-export function keepLargestOpaqueComponent(alpha, width, height, opaqueThreshold = 40) {
+export function removeLineDebrisComponents(alpha, dark, width, height, opts = {}) {
+  const { opaqueThreshold = 40, minAreaFraction = 0.002, elongatedAspect = 8, elongatedMaxThickness = 6 } = opts;
   const n = width * height;
   const componentId = new Int32Array(n).fill(-1);
   const queue = new Int32Array(n);
-  const sizes = [];
+  const components = [];
+  let totalOpaque = 0;
   for (let start = 0; start < n; start++) {
-    if (alpha[start] <= opaqueThreshold || componentId[start] !== -1) continue;
-    const id = sizes.length;
+    if (alpha[start] <= opaqueThreshold) continue;
+    totalOpaque++;
+    if (componentId[start] !== -1) continue;
+    const id = components.length;
     let qHead = 0;
     let qTail = 0;
     componentId[start] = id;
     queue[qTail++] = start;
     let size = 0;
+    let left = width;
+    let right = -1;
+    let top = height;
+    let bottom = -1;
+    let hasFill = false;
     while (qHead < qTail) {
       const idx = queue[qHead++];
       size++;
       const x = idx % width;
       const y = (idx - x) / width;
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+      if (dark[idx] !== 1) hasFill = true;
       const neighbors = [];
       if (x > 0) neighbors.push(idx - 1);
       if (x < width - 1) neighbors.push(idx + 1);
       if (y > 0) neighbors.push(idx - width);
       if (y < height - 1) neighbors.push(idx + width);
-      for (const n2 of neighbors) {
-        if (alpha[n2] > opaqueThreshold && componentId[n2] === -1) {
-          componentId[n2] = id;
-          queue[qTail++] = n2;
+      for (const nb of neighbors) {
+        if (alpha[nb] > opaqueThreshold && componentId[nb] === -1) {
+          componentId[nb] = id;
+          queue[qTail++] = nb;
         }
       }
     }
-    sizes.push(size);
+    components.push({ id, size, left, right, top, bottom, hasFill });
   }
-  if (sizes.length <= 1) return Uint8ClampedArray.from(alpha);
-  let largestId = 0;
-  for (let i = 1; i < sizes.length; i++) if (sizes[i] > sizes[largestId]) largestId = i;
+
+  const drop = new Uint8Array(components.length);
+  for (const c of components) {
+    if (c.hasFill) continue; // never drop a component with any white fill
+    const longSide = Math.max(c.right - c.left + 1, c.bottom - c.top + 1);
+    const shortSide = Math.max(1, Math.min(c.right - c.left + 1, c.bottom - c.top + 1));
+    const isTiny = c.size < totalOpaque * minAreaFraction;
+    const isElongatedSliver = longSide / shortSide > elongatedAspect && c.size / longSide <= elongatedMaxThickness;
+    if (isTiny || isElongatedSliver) drop[c.id] = 1;
+  }
+
   const out = Uint8ClampedArray.from(alpha);
+  let totalAfter = totalOpaque;
   for (let i = 0; i < n; i++) {
-    if (alpha[i] > opaqueThreshold && componentId[i] !== largestId) out[i] = 0;
+    const id = componentId[i];
+    if (id !== -1 && drop[id]) {
+      out[i] = 0;
+      totalAfter--;
+    }
+  }
+  return { alpha: out, totalBefore: totalOpaque, totalAfter };
+}
+
+/**
+ * For the side of the canvas meant to sit flush (zero padding) against a UI
+ * edge, zeros any leading rows/columns — starting right at that edge and
+ * moving inward — that have ink but no white-fill pixel anywhere in them: a
+ * lone stroke stub that survived exactly at the cut (typically merged into
+ * the main silhouette through a thin bridge, so `removeLineDebrisComponents`
+ * can't isolate it as its own component) rather than genuine body content.
+ * Stops as soon as a row/column with fill is found — that is real content,
+ * left untouched — or gives up without trimming anything after `maxSteps`
+ * fill-less rows/columns, on the assumption that it ran into legitimately
+ * thin content (e.g. a bare fingertip outline) rather than debris. A no-op
+ * when `flushEdge` is null. Returns a new alpha array; does not mutate.
+ */
+export function trimFlushResidue(alpha, dark, width, height, flushEdge, opts = {}) {
+  const { opaqueThreshold = 40, maxSteps = 12 } = opts;
+  const out = Uint8ClampedArray.from(alpha);
+  if (!flushEdge) return out;
+
+  const vertical = flushEdge === 'left' || flushEdge === 'right';
+  const outerLen = vertical ? width : height;
+  const innerLen = vertical ? height : width;
+  const idxOf = (o, i) => (vertical ? i * width + o : o * width + i);
+  const step = flushEdge === 'left' || flushEdge === 'top' ? 1 : -1;
+
+  let started = false;
+  let o = flushEdge === 'left' || flushEdge === 'top' ? 0 : outerLen - 1;
+  const toClear = [];
+  for (; o >= 0 && o < outerLen; o += step) {
+    let hasOpaque = false;
+    let hasFill = false;
+    for (let i = 0; i < innerLen; i++) {
+      const idx = idxOf(o, i);
+      if (alpha[idx] > opaqueThreshold) {
+        hasOpaque = true;
+        if (dark[idx] !== 1) hasFill = true;
+      }
+    }
+    if (!hasOpaque) {
+      if (started) break; // a gap right after a debris streak: stop, don't guess further
+      continue; // still outside any content
+    }
+    if (hasFill) break; // real content: this line and everything past it stays
+    started = true;
+    toClear.push(o);
+    if (toClear.length >= maxSteps) {
+      toClear.length = 0; // too much fill-less content to call it debris confidently
+      break;
+    }
+  }
+  for (const line of toClear) {
+    for (let i = 0; i < innerLen; i++) out[idxOf(line, i)] = 0;
   }
   return out;
 }
