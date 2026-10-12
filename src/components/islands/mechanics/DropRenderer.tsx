@@ -151,9 +151,19 @@ function tileLabel(item: PoolItem): string {
  * (see the render below), so `1em` resolves to the same pixels in both places
  * and a tile does not visibly shrink the moment it is pulled out of the box.
  */
+/**
+ * UI-kit refactor: a "grey glass capsule" at rest (the owner's `#d1d2d6`
+ * family, softly translucent, `shadow-elevation-1`) — `TILE_PLACED` below
+ * overrides this to a white, more-raised look once the tile is actually
+ * placed or tap-picked, matching the approved spec's "placed/selected =
+ * white raised".
+ */
 const TILE_BASE =
-  'inline-flex min-h-14 items-center justify-center gap-2 rounded-md border border-input bg-card px-4 py-3 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ' +
+  'inline-flex min-h-14 items-center justify-center gap-2 rounded-full border border-transparent bg-[#d1d2d6]/80 backdrop-blur-sm shadow-elevation-1 px-4 py-3 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ' +
   CONTROL_SCALE;
+
+/** White, raised — the placed tile inside a box, or a tap-picked pool tile. */
+const TILE_PLACED = 'bg-card shadow-elevation-2';
 
 /**
  * The box: the SHAPE of the target, identical in both states.
@@ -171,16 +181,17 @@ const TILE_BASE =
  * must not make the sentence around it reflow.
  */
 const BOX_BASE =
-  'mx-1 inline-flex min-h-16 min-w-28 rounded-md border-2 align-middle transition-colors sm:min-w-40';
+  'mx-1 inline-flex min-h-16 min-w-28 rounded-full border-2 align-middle transition-colors sm:min-w-40';
 
 /**
- * Empty: a dashed outline around a centred hint.
+ * Empty: a dashed CAPSULE outline (UI-kit refactor: "blanks = dashed
+ * capsule outline, grey ~50%") around a centred hint.
  *
  * THE DASHES ARE THE AFFORDANCE. They are the only thing that says "something
  * goes here", which is why the filled state below is the one that gives them up
  * — never this one.
  */
-const BOX_EMPTY = 'items-center justify-center border-dashed border-input';
+const BOX_EMPTY = 'items-center justify-center border-dashed border-foreground/50';
 
 /**
  * Filled: the tile IS the box.
@@ -344,8 +355,10 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy, canPlacePicked, o
           aria-label={copy.remove(tileLabel(tile))}
           // `flex-1` fills the box's main axis; `BOX_FILLED`'s `items-stretch`
           // fills the cross one. Together they are what makes the placed tile
-          // FILL its target instead of floating inside it.
-          className={cn(TILE_BASE, 'flex-1')}
+          // FILL its target instead of floating inside it. `TILE_PLACED`
+          // (white, raised) overrides the grey-glass resting look once the
+          // tile has actually landed.
+          className={cn(TILE_BASE, TILE_PLACED, 'flex-1')}
         >
           <TileFace item={tile} />
         </button>
@@ -428,7 +441,7 @@ function PoolTile({ item, disabled, focusRef, picked, onTogglePick }: PoolTilePr
       // screen reader's point of view — "this tile is currently held" — so
       // this merges both rather than picking one.
       aria-pressed={picked || isDragging}
-      className={cn(TILE_BASE, isDragging && 'opacity-50', picked && 'ring-2 ring-ring', 'touch-none')}
+      className={cn(TILE_BASE, picked && TILE_PLACED, isDragging && 'opacity-50', picked && 'ring-2 ring-ring', 'touch-none')}
     >
       <TileFace item={item} />
     </button>

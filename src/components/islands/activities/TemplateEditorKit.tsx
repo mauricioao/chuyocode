@@ -131,11 +131,14 @@ export function TemplateEditorLayout({
 export type SheetTone = 'sky' | 'violet' | 'yellow' | 'green';
 
 const ICON_CHIP_TONE: Record<SheetTone, string> = {
-  sky: 'bg-pop-sky text-white',
+  sky: 'bg-pop-sky-deep text-white',
   violet: 'bg-pop-violet text-white',
   // White on yellow is unreadable; the same dark ink "Enviar a revisión" uses.
   yellow: 'bg-pop-yellow text-[#3a2e00]',
-  green: 'bg-pop-green text-white',
+  // UI-kit refactor: `pop-green` now plays the light MINT role (see
+  // global.css's own comment) — white is unreadable on it (~1.46:1), so this
+  // reaches for `-mint-deep` instead, same posture as `sky` above.
+  green: 'bg-pop-mint-deep text-white',
 };
 
 export function SheetHeader({

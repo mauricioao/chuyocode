@@ -832,6 +832,74 @@ h3 {
  * --color-surface-soft)`, which resolves to white here) — no second
  * fallback needed. */
 
+/* --- Inglés button kit (UI-kit refactor) ---------------------------------
+ * `button.tsx` (CVA) is SHARED with the frozen brand — every rule below is
+ * scoped under `[data-theme='ingles']` and keyed off the exact `data-slot`/
+ * `data-size`/`data-variant` attributes that component already writes on
+ * every render, so the component file itself stays byte-identical and the
+ * brand button outside Inglés is untouched.
+ *
+ * CAPSULE + HUGGING SIZES, every variant: `sm`/`default`/`lg` map onto the
+ * spec's own 28/34/50px ladder (the closest existing size steps), with
+ * padding-x ~0.85x height, same ratio at every step. `button.tsx` never
+ * sets a width utility, so "hug the label" is already the default — these
+ * rules only touch height/padding/radius, never `width`.
+ *
+ * GLASS HIGHLIGHT + HUE GLOW, filled variants only (`default`/`primary`/
+ * `destructive`): a <=15% white top highlight plus a soft glow in the
+ * fill's own hue. `outline`/`secondary`/`ghost`/`link` keep the capsule
+ * shape above but stay flat — they are not "filled" elements. */
+[data-theme='ingles'] [data-slot='button'] {
+  border-radius: 999px;
+}
+
+[data-theme='ingles'] [data-slot='button'][data-size='sm'] {
+  height: 28px;
+  padding-inline: 24px;
+}
+[data-theme='ingles'] [data-slot='button'][data-size='default'] {
+  height: 34px;
+  padding-inline: 29px;
+}
+[data-theme='ingles'] [data-slot='button'][data-size='lg'] {
+  height: 50px;
+  padding-inline: 43px;
+}
+
+/* Primary (incl. "Comprobar") — sky-deep fill, white text (4.85:1, see
+ * `--color-pop-sky-deep`'s own comment). */
+[data-theme='ingles'] [data-slot='button'][data-variant='default'],
+[data-theme='ingles'] [data-slot='button'][data-variant='primary'] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.15), rgb(255 255 255 / 0) 45%),
+    var(--color-pop-sky-deep);
+  color: #fff;
+  box-shadow: var(--shadow-glow-sky);
+}
+[data-theme='ingles'] [data-slot='button'][data-variant='default']:hover,
+[data-theme='ingles'] [data-slot='button'][data-variant='primary']:hover {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.15), rgb(255 255 255 / 0) 45%),
+    color-mix(in srgb, var(--color-pop-sky-deep) 85%, black);
+}
+
+/* Destructive — red-deep fill, white text (5.04:1). The shared button's
+ * own destructive variant is a soft `/10` TINT (brand default); this
+ * overrides it to a solid fill inside Inglés only. */
+[data-theme='ingles'] [data-slot='button'][data-variant='destructive'] {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.15), rgb(255 255 255 / 0) 45%),
+    var(--color-pop-red-deep);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: var(--shadow-glow-red);
+}
+[data-theme='ingles'] [data-slot='button'][data-variant='destructive']:hover {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.15), rgb(255 255 255 / 0) 45%),
+    color-mix(in srgb, var(--color-pop-red-deep) 85%, black);
+}
+
 /* --- Desk calendar widget cells ("desktop" redesign PART 3) --------------
  * Plain selectors, not Tailwind utilities: `@lib/ui/deskWidgets.ts` injects
  * the day grid's `<td>`/`<span>` cells as a raw HTML string at runtime,
