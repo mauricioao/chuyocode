@@ -563,23 +563,23 @@
      * `both-edges` (visual-polish pass, grey-strip bugfix): plain `stable`
      * only ever reserves the gutter on the PHYSICAL right edge (LTR), so
      * EVERY page carries a permanent ~15-17px wider margin on the right than
-     * the left, even on routes that never scroll at the document level at
-     * all — e.g. an Inglés exercise window, whose own `<body>` is locked to
-     * `overflow-hidden h-dvh` while it is open (`BaseLayout.astro`'s
-     * `staticOverlayLock`). A fullscreen guest window (`DeskWindow.astro`'s
-     * `forceFullScreen`, `fixed inset-0`) still sits inside that same
-     * right-shrunk canvas, so its content reads off-centre and the
-     * uncovered sliver on the right — Chromium paints an inactive reserved
-     * gutter with its own native track appearance, NOT the transparent
-     * `::-webkit-scrollbar-track` below, which only ever applies once a
-     * scrollbar is actually active — shows as a stray light-grey strip with
-     * nothing matching it on the left. Reserving the SAME width on both
-     * edges cancels the asymmetry: the desk/page centers correctly again,
-     * and whatever sliver Chromium still paints is now identical left and
-     * right, reading as a deliberate margin rather than a one-sided glitch.
-     * INVARIANT: this value must never regress to one-sided `stable` while
-     * any fixed/full-bleed surface (a desk window, a modal) is expected to
-     * sit flush and centered in the viewport. */
+     * the left — Chromium paints an inactive reserved gutter with its own
+     * native track appearance, NOT the transparent `::-webkit-scrollbar-
+     * track` below (that pseudo-element only applies once a scrollbar is
+     * actually active), so the reservation itself shows as a stray light-
+     * grey strip with nothing matching it on the left. Reserving the SAME
+     * width on both edges cancels that asymmetry for ordinary, in-flow page
+     * content.
+     *
+     * NEVER near a fixed/full-bleed surface, though (regression caught by
+     * `tests/e2e/desk-window-part6a.spec.ts`'s own "full-screen sheet on
+     * phones" check): Chromium's `scrollbar-gutter` reservation also shrinks
+     * the initial containing block FIXED-positioned descendants measure
+     * against, so `both-edges` shifted a guest's fullscreen `DeskWindow`
+     * (`fixed inset-0`) ~10px off the true left edge too — trading the
+     * original one-sided bug for a smaller but still-wrong symmetric one on
+     * exactly the surface the bug report was about. The override directly
+     * below exists for that reason — read it before touching this value. */
     scrollbar-gutter: stable both-edges;
     /* Grey-strip bugfix, part 2: give the root itself the SAME background
      * token the page already paints with (`--background` — the desk's own
@@ -591,6 +591,23 @@
      * scrollbar-gutter strip itself, which is Chromium's own native track
      * chrome, painted outside the normal content-painting pipeline. */
     background-color: var(--background);
+  }
+
+  /* Grey-strip bugfix, part 3 (regression fix): a desk window — guest
+   * fullscreen (`forceFullScreen`, `fixed inset-0`) or the legacy signed-in
+   * desktop-inset shape, `DeskWindow.astro`'s own `[data-desk-window]` root
+   * either way — locks `<body>` to `overflow-hidden h-dvh` for as long as it
+   * is open (`BaseLayout.astro`'s `staticOverlayLock`), so the document can
+   * NEVER scroll while one is present: the page-level reservation above has
+   * nothing to protect there and only pushes/narrows the window's own fixed
+   * box. `:has()` turns it off for exactly that state, giving the window
+   * back a true, gutter-free `0` left edge — simpler and more correct than
+   * any "symmetric" reservation, which would still leave an unwanted,
+   * merely-even sliver on a surface that is supposed to be perfectly flush.
+   * INVARIANT: this selector must keep matching every desk-window root —
+   * if that attribute is ever renamed, update it here too. */
+  :root:has([data-desk-window]) {
+    scrollbar-gutter: auto;
   }
 
   input,

@@ -211,6 +211,16 @@ describe('scrollbar (creator polish round 3 — no layout jump)', () => {
     expect(css).toMatch(/:root\s*{[^}]*background-color:\s*var\(--background\);/);
   });
 
+  // Regression fix (caught by tests/e2e/desk-window-part6a.spec.ts's own
+  // "full-screen sheet on phones" check): `both-edges` shrinks the fixed-
+  // position containing block too, pushing a guest's fullscreen DeskWindow
+  // ~10px off its true left edge. The document can never scroll while a
+  // desk window is open (body is locked to overflow-hidden), so the
+  // reservation has nothing to protect there — turn it off for that state.
+  it('turns the gutter reservation off while any desk window is open, so it sits perfectly flush', () => {
+    expect(css).toMatch(/:root:has\(\[data-desk-window\]\)\s*{[^}]*scrollbar-gutter:\s*auto;/);
+  });
+
   it('declares a thin, dark-theme scrollbar for Firefox (scrollbar-width/scrollbar-color)', () => {
     expect(css).toMatch(/scrollbar-width:\s*thin;/);
     expect(css).toMatch(/scrollbar-color:\s*var\(--muted\)\s+transparent;/);
