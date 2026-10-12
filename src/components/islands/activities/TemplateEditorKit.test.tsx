@@ -13,6 +13,7 @@ import {
   TemplateGroup,
   TemplateRow,
   useExitingItems,
+  usePasteFeedback,
 } from './TemplateEditorKit';
 
 afterEach(() => {
@@ -226,5 +227,42 @@ describe('StatusNote', () => {
     const note = screen.getByRole('status');
     expect(note.textContent).toBe('Listo para jugar · 3 parejas');
     expect(note.getAttribute('data-tone')).toBe('ready');
+  });
+});
+
+/** A tiny harness: `rows` is a brand-new array every edit, exactly like a `QuizBlockEditor` draft commit. */
+function PasteFeedbackHarness({ onShowRef }: { onShowRef: (show: (message: string) => void) => void }) {
+  const [rows, setRows] = useState<string[]>(['a']);
+  const feedback = usePasteFeedback(rows);
+  onShowRef((message) => {
+    setRows((prev) => [...prev]); // a fresh array identity, as a real paste commit would produce
+    feedback.show(message);
+  });
+  return (
+    <div>
+      <p data-testid="feedback">{feedback.message ?? ''}</p>
+      <button type="button" data-testid="edit" onClick={() => setRows((prev) => [...prev, 'x'])}>
+        edit
+      </button>
+    </div>
+  );
+}
+
+describe('usePasteFeedback', () => {
+  it('shows the message right after it is set', () => {
+    let show: (message: string) => void = () => {};
+    render(<PasteFeedbackHarness onShowRef={(fn) => (show = fn)} />);
+    act(() => show('Se agregaron 3 parejas'));
+    expect(screen.getByTestId('feedback').textContent).toBe('Se agregaron 3 parejas');
+  });
+
+  it('reverts to nothing on the next edit, not on a timer', () => {
+    let show: (message: string) => void = () => {};
+    render(<PasteFeedbackHarness onShowRef={(fn) => (show = fn)} />);
+    act(() => show('Se agregaron 3 parejas'));
+    expect(screen.getByTestId('feedback').textContent).toBe('Se agregaron 3 parejas');
+
+    fireEvent.click(screen.getByTestId('edit'));
+    expect(screen.getByTestId('feedback').textContent).toBe('');
   });
 });

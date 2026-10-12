@@ -447,6 +447,37 @@ export function MiniChip({ tone = 'neutral', children }: { tone?: 'neutral' | 'y
 }
 
 /**
+ * Transient feedback shown in a template editor's status line right after a
+ * bulk paste (owner spec N5, "paste a whole list"): `show(message)` displays
+ * it in place of the editor's normal ready/warn text; it reverts on the very
+ * next edit — ANY further change to `rows` (a keystroke, add, remove) —
+ * never on a timer. `rows` is whatever prop array the paste itself just
+ * replaced (`pairs`/`sentences`/`groups`/…): its identity changes on every
+ * commit in this app (`QuizBlockEditor`'s own `commit` always derives a
+ * brand-new array), so comparing identities tells the ONE re-render the
+ * paste itself causes apart from any edit that follows it.
+ */
+export function usePasteFeedback(rows: unknown): { message: string | null; show: (message: string) => void } {
+  const [message, setMessage] = useState<string | null>(null);
+  const expectingOwnUpdate = useRef(false);
+
+  useEffect(() => {
+    if (expectingOwnUpdate.current) {
+      expectingOwnUpdate.current = false;
+      return;
+    }
+    setMessage(null);
+  }, [rows]);
+
+  const show = useCallback((next: string) => {
+    expectingOwnUpdate.current = true;
+    setMessage(next);
+  }, []);
+
+  return { message, show };
+}
+
+/**
  * Removal with an exit animation: `remove(key, ...args)` marks `key` as
  * leaving (its {@link TemplateCollapse} folds away) and calls `onRemove(...
  * args)` {@link ITEM_EXIT_MS} later — or immediately when motion is reduced
