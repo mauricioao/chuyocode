@@ -1616,22 +1616,17 @@ html[data-desk-behind] [data-chrome-footer] {
   display: none !important;
 }
 
-/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06): below `desk:`
- * the title bar has no room for six 44px/36px icon buttons in one row
- * (owner report: it used to wrap into a tall second row) — a plain
+/* "Más" overflow menu (PART 6a phone layout fix, 2026-10-06; N6, 2026-10-12:
+ * now a dropdown at EVERY width, not just below `desk:`) — a plain
  * checkbox + `<label>` CSS-only disclosure (`[id].astro`'s own markup:
  * `peer`/`peer-checked:flex`), collapsed by default, NO JS REQUIRED (same
  * no-JS-first posture as the traffic lights, `DeskWindow.astro`'s own
- * header). At `desk:` and up the trigger is hidden (`desk:hidden`) and the
- * panel must ALWAYS render as a plain row instead, regardless of the
- * checkbox — `!important` here is what wins that over `peer-checked:flex`
- * needing the box to stay CHECKED below `desk:`, same posture
- * `.ingles-window[data-fullscreen='true']` already takes above. */
-@media (min-width: 1100px) {
-  [data-desk-window-more] > [data-desk-window-more-content] {
-    display: flex !important;
-  }
-}
+ * header). N6 moved "Compartir"/"Presentar"/the focus-mode toggle OUT of
+ * this menu and dropped the old `@media (min-width: 1100px)` override that
+ * forced the panel to always render as a flat row at `desk:` — with only
+ * "Imprimir"/"Duplicar"/"Reportar" left inside, the SAME phone dropdown
+ * pattern now also fits comfortably on desktop, so there is no reason left
+ * for it to behave differently there. */
 
 /* The one INGLÉS header transition that must NOT animate: collapsing once it
  * has fully scrolled out of view, compensated in the same tick by a matching

@@ -19,15 +19,16 @@ describe('ReportActivityButton — closed by default', () => {
     expect(screen.queryByTestId('report-activity-dialog')).toBeNull();
   });
 
-  // T2 (practice page action bar redesign): icon-only trigger, the label as
-  // its accessible name, and a hover/focus tooltip carrying that same label.
-  it('is an icon button whose accessible name and tooltip are both "Reportar"', () => {
+  // N6 follow-up (2026-10-12, "Más" menu labels): this button only ever
+  // lives inside the practice window's "Más" overflow menu now — icon +
+  // an ALWAYS-visible text label (`MENU_ITEM_CLASS`), not a hover-only
+  // tooltip, which was unusable on a touch device with no hover.
+  it('is an icon button whose accessible name AND visible text are both "Reportar", no tooltip', () => {
     render(<ReportActivityButton lang="es" activityId={ACTIVITY_ID} />);
     const button = screen.getByTestId('report-activity-button');
     expect(button.getAttribute('aria-label')).toBe('Reportar');
-    const tooltip = button.querySelector('[role="tooltip"]');
-    expect(tooltip?.textContent).toBe('Reportar');
-    expect(button.getAttribute('aria-describedby')).toBe(tooltip?.id);
+    expect(button.textContent).toBe('Reportar');
+    expect(button.querySelector('[role="tooltip"]')).toBeNull();
   });
 });
 

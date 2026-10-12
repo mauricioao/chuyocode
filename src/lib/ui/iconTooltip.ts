@@ -50,3 +50,19 @@ export const ICON_TOOLTIP_TRIGGER_CLASS =
 /** The tooltip bubble itself — a sibling/child of the trigger, shown via `group-hover`/`group-focus-within` (never `group-focus`, which would skip touch/click focus-without-:focus-visible-support edge cases this codebase already favors elsewhere — see `WorksheetPlayer`'s own explanation popover). */
 export const ICON_TOOLTIP_BUBBLE_CLASS =
   'pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-max max-w-[min(12rem,calc(100vw-2rem))] -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs whitespace-nowrap text-background opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100';
+
+/**
+ * MENU_ITEM_CLASS — the practice window's own "Más" overflow menu row (N6
+ * follow-up, 2026-10-12 owner report: the menu's icon-only buttons carried
+ * no visible text at all, just a hover tooltip — unusable on a touch
+ * device with no hover). Every entry inside that menu (Imprimir, Duplicar,
+ * Reportar always; Compartir/Presentar below the `sm` breakpoint too, see
+ * `[id].astro`'s own header) uses this instead of
+ * {@link ICON_TOOLTIP_TRIGGER_CLASS} — icon + an ALWAYS-visible text
+ * label, left-aligned, full width, >=44px tall (`min-h-11`) so it reads as
+ * one ordinary vertical menu list rather than a row of icon tiles. No
+ * tooltip bubble needed alongside it (the label is already visible, so a
+ * redundant hover echo would just be noise).
+ */
+export const MENU_ITEM_CLASS =
+  'group relative flex min-h-11 w-full items-center justify-start gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';

@@ -215,7 +215,18 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     expect(gap).toBeLessThan(8);
   });
 
-  test('the title bar stays one row (hearts and the "Más" trigger fit) and the page never scrolls horizontally', async ({
+  // N6 (fewer equal-weight buttons while playing, 2026-10-06) + N6 FOLLOW-UP
+  // (owner report 2026-10-12: the title collapsed to "V…" at 390px — five
+  // standalone icons left no room for it). Final contract, by the STANDARD
+  // `sm` breakpoint (640px — not the custom `desk:` one everything else on
+  // this page uses):
+  //   - below `sm` (this 360px viewport): only ❤ and "Modo enfoque" stay
+  //     directly visible; Compartir/Presentar rejoin "Más" alongside
+  //     Imprimir/Duplicar/Reportar (phone order: Compartir, Presentar,
+  //     Imprimir, Duplicar, Reportar).
+  //   - `sm` and up: Compartir/Presentar/"Modo enfoque" stay directly
+  //     visible; "Más" holds only Imprimir/Duplicar/Reportar.
+  test('below `sm`: only ❤ and "Modo enfoque" stay directly visible, and the page never scrolls horizontally', async ({
     page,
   }) => {
     const path = await findInglesActivityPath(page);
@@ -224,25 +235,19 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(path!);
 
-    const titlebar = page.locator('[data-testid="desk-window-titlebar"]');
-    const box = await titlebar.boundingBox();
-    expect(box).not.toBeNull();
-    // A single row (lights/title + hearts/Más, `py-3` + 36px icons)
-    // comfortably fits under 64px; the pre-fix wrap measured over 110px
-    // (two stacked rows).
-    if (box) expect(box.height).toBeLessThan(64);
-
     await expect(page.locator('[data-testid="activity-heart-guest"]')).toBeVisible();
-    // "Compartir" moved into the "Más" overflow menu on phone (bugfix,
-    // owner report: the title bar had no room left) — not directly visible
-    // in the row anymore; see the "move behind the Más menu" test below.
+    await expect(page.locator('[data-testid="activity-focus-mode-toggle"]')).toBeVisible();
+    await expect(page.locator('[data-testid="activity-window-more-trigger"]')).toBeVisible();
+    // The `sm:`-and-up standalone triggers are present in the DOM (a
+    // SEPARATE node from their "Más" copies) but hidden at this width.
     await expect(page.locator('[data-testid="exercise-share"]')).toBeHidden();
+    await expect(page.locator('[data-testid="activity-present-link"]')).toBeHidden();
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(360);
   });
 
-  test('"Compartir"/"Duplicar"/"Reportar"/"Presentar"/"Imprimir" move behind the "Más" menu, reachable once opened', async ({
+  test('below `sm`: "Más" holds Compartir, Presentar, Imprimir, Duplicar, Reportar — each with a visible label', async ({
     page,
   }) => {
     const path = await findInglesActivityPath(page);
@@ -251,19 +256,34 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(path!);
 
-    const shareTrigger = page.locator('[data-testid="exercise-share"]');
+    const shareMenuItem = page.locator('[data-testid="exercise-share-menu"]');
+    const presentMenuItem = page.locator('[data-testid="activity-present-link-menu"]');
     const printLink = page.locator('[data-testid="activity-print-link"]');
-    await expect(shareTrigger).toBeHidden();
+
+    await expect(shareMenuItem).toBeHidden();
+    await expect(presentMenuItem).toBeHidden();
     await expect(printLink).toBeHidden();
 
     const moreTrigger = page.locator('[data-testid="activity-window-more-trigger"]');
     await expect(moreTrigger).toBeVisible();
     await moreTrigger.click();
-    await expect(shareTrigger).toBeVisible();
+
+    await expect(shareMenuItem).toBeVisible();
+    await expect(shareMenuItem).toHaveText('Compartir');
+    await expect(presentMenuItem).toBeVisible();
+    await expect(presentMenuItem).toHaveText('Presentar');
     await expect(printLink).toBeVisible();
+    await expect(printLink).toHaveText('Imprimir');
+
+    // Phone order: Compartir, Presentar, Imprimir, …
+    const order = await page.locator('[data-desk-window-more-content] [data-testid]').evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-testid')),
+    );
+    expect(order.indexOf('exercise-share-menu')).toBeLessThan(order.indexOf('activity-present-link-menu'));
+    expect(order.indexOf('activity-present-link-menu')).toBeLessThan(order.indexOf('activity-print-link'));
   });
 
-  test('at `desk:` and up, the "Más" trigger is hidden and every action is directly visible again', async ({
+  test('`sm` and up: Compartir/Presentar/"Modo enfoque" stay directly visible, "Más" holds only Imprimir/Duplicar/Reportar', async ({
     page,
   }) => {
     const path = await findInglesActivityPath(page);
@@ -272,8 +292,18 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(path!);
 
-    await expect(page.locator('[data-testid="activity-window-more-trigger"]')).toBeHidden();
+    await expect(page.locator('[data-testid="activity-window-more-trigger"]')).toBeVisible();
     await expect(page.locator('[data-testid="exercise-share"]')).toBeVisible();
-    await expect(page.locator('[data-testid="activity-print-link"]')).toBeVisible();
+    await expect(page.locator('[data-testid="activity-present-link"]')).toBeVisible();
+    await expect(page.locator('[data-testid="activity-focus-mode-toggle"]')).toBeVisible();
+    // The phone-only "Más" copies exist in the DOM but are hidden here.
+    await expect(page.locator('[data-testid="exercise-share-menu"]')).toBeHidden();
+    await expect(page.locator('[data-testid="activity-present-link-menu"]')).toBeHidden();
+
+    const printLink = page.locator('[data-testid="activity-print-link"]');
+    await expect(printLink).toBeHidden();
+    await page.locator('[data-testid="activity-window-more-trigger"]').click();
+    await expect(printLink).toBeVisible();
+    await expect(printLink).toHaveText('Imprimir');
   });
 });

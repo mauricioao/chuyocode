@@ -321,10 +321,42 @@ describe('ShareDialog — iconOnly trigger (T2)', () => {
   });
 });
 
+// N6 follow-up (2026-10-12, "Más" menu labels): `asMenuItem` renders the
+// trigger as a left-aligned, full-width "menu item" row — icon + an
+// ALWAYS-visible text label (never only a hover tooltip) — the practice
+// page's own phone-only copy of Compartir inside "Más" (`[id].astro`'s own
+// header on why there are two DOM nodes, one per breakpoint).
+describe('ShareDialog — asMenuItem trigger (N6 follow-up)', () => {
+  it('renders a left-aligned row with a visible text label, a distinct test id, no tooltip, opening the same dialog', async () => {
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} asMenuItem />);
+
+    // A distinct test id from the `iconOnly`/default triggers — so a page
+    // that renders both at once (one per breakpoint) never has two
+    // elements sharing `exercise-share`.
+    expect(screen.queryByTestId('exercise-share')).toBeNull();
+    const trigger = screen.getByTestId('exercise-share-menu');
+    expect(trigger.textContent).toBe('Compartir');
+    expect(trigger.getAttribute('aria-label')).toBe('Compartir');
+    expect(trigger.querySelector('[role="tooltip"]')).toBeNull();
+    expect(trigger.className).toContain('min-h-11');
+    expect(trigger.className).toContain('w-full');
+
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+  });
+});
+
 describe('ShareDialog — hydration (Bug 1, React error #418)', () => {
   it('does not report a recoverable hydration error', async () => {
     const { recoverableErrors } = await renderThenHydrate(() => (
       <ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} whatsappHref={WHATSAPP_HREF} downloadFileName="act.svg" />
+    ));
+    expect(recoverableErrors).toEqual([]);
+  });
+
+  it('does not report a recoverable hydration error for the asMenuItem trigger either', async () => {
+    const { recoverableErrors } = await renderThenHydrate(() => (
+      <ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} asMenuItem />
     ));
     expect(recoverableErrors).toEqual([]);
   });

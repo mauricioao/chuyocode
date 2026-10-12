@@ -15,12 +15,12 @@
  * surfaces inline, next to the button, via `aria-live` so it is announced
  * without stealing focus.
  */
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { CopySimpleIcon } from '@phosphor-icons/react/dist/ssr/CopySimple';
 import { SpinnerGapIcon } from '@phosphor-icons/react/dist/ssr/SpinnerGap';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
+import { MENU_ITEM_CLASS } from '@/lib/ui/iconTooltip';
 import { isEmbeddedWindowDom, postDeskWindowMessage } from '@/lib/ui/deskWindowMessaging';
 
 export interface DuplicateActivityButtonProps {
@@ -58,7 +58,6 @@ export default function DuplicateActivityButton({
   const t = UI_LABELS[lang].activities.practice;
   const [status, setStatus] = useState<Status>('idle');
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const tooltipId = useId();
   const label = status === 'duplicating' ? t.duplicating : t.duplicate;
 
   async function duplicate() {
@@ -93,17 +92,14 @@ export default function DuplicateActivityButton({
         aria-disabled={status === 'duplicating'}
         aria-busy={status === 'duplicating'}
         aria-label={label}
-        aria-describedby={tooltipId}
-        className={ICON_TOOLTIP_TRIGGER_CLASS}
+        className={MENU_ITEM_CLASS}
       >
         {status === 'duplicating' ? (
-          <SpinnerGapIcon aria-hidden="true" size={16} className="animate-spin" />
+          <SpinnerGapIcon aria-hidden="true" size={18} className="animate-spin" />
         ) : (
-          <CopySimpleIcon aria-hidden="true" size={16} />
+          <CopySimpleIcon aria-hidden="true" size={18} />
         )}
-        <span role="tooltip" id={tooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
-          {label}
-        </span>
+        <span>{label}</span>
       </button>
       {errorMessage && (
         <p role="alert" data-testid="duplicate-activity-error" className="text-xs text-destructive">
