@@ -367,7 +367,7 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
-  it('renders Abre la caja when mode="openbox"', () => {
+  it('renders Caja sorpresa when mode="openbox"', () => {
     render(
       <QuizBlockPractice
         lang="es"

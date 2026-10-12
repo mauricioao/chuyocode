@@ -912,9 +912,9 @@ export const UI_LABELS = {
         tfWrong: 'Incorrecto',
         tfScorePrefix: 'Puntaje',
         tfPlayAgain: 'Jugar de nuevo',
-        // Abre la caja (Wordwall "Open the box"): a grid of numbered boxes,
+        // Caja sorpresa (Wordwall "Open the box"): a grid of numbered boxes,
         // each hiding one question.
-        modeOpenBox: 'Abre la caja',
+        modeOpenBox: 'Caja sorpresa',
         openboxHint: 'Toca una caja para abrirla.',
         openboxReveal: 'Ver respuesta',
         openboxBoxAriaPrefix: 'Caja',

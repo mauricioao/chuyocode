@@ -1,5 +1,5 @@
 /**
- * QuizOpenBox — "Abre la caja" (batch 1's Wordwall "Open the box"), one of
+ * QuizOpenBox — "Caja sorpresa" (batch 1's Wordwall "Open the box"), one of
  * the alternate games a `quiz` block's own questions can be replayed as
  * (`gameModes.ts`'s `deriveGameItems`). A grid of numbered boxes, one per
  * item; opening a box reveals its prompt (with `SpeakButton`) behind a
