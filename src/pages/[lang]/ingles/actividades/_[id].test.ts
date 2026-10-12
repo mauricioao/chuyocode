@@ -255,6 +255,34 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     expect(html).toContain('id="desk-helper"');
   });
 
+  // Visual-polish pass, DIRECCION-VISUAL.md §4.2 "asoma en la ventana del
+  // ejercicio": the HOST shell (`DeskWindowManager.astro`) is the one place
+  // that reliably IS "a non-fullscreen desk window, signed-in" under the
+  // window-manager architecture (see `_[id].test.ts`'s own header + the
+  // embedded-window test above) — Vanina peeks from here, desktop-only.
+  // Unverified visually this pass (no signed-in session to screenshot).
+  it("renders Vanina peeking from the window edge on the host shell, desktop-only", async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+      embedded: false,
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="desk-window-manager-vanina-peek"');
+    expect(html).toMatch(/data-testid="desk-window-manager-vanina-peek"[^>]*aria-hidden="true"/);
+    expect(html).toMatch(/data-testid="desk-window-manager-vanina-peek"[^>]*class="[^"]*\bhidden\b[^"]*\bdesk:block\b/);
+    expect(html).toContain('/images/characters/vanina/asoma-izquierda-40.webp');
+  });
+
+  it('renders no Vanina peek at all behind the window for a guest (no host shell mounts)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: null },
+    });
+    expect(await res.text()).not.toContain('desk-window-manager-vanina-peek');
+  });
+
   it('renders no desk at all behind the window for a guest', async () => {
     activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
@@ -355,6 +383,24 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     const html = await res.text();
     expect(html).not.toContain('data-fullscreen');
     expect(html).toContain('aria-pressed="false"');
+  });
+
+  // Visual-polish pass, DIRECCION-VISUAL.md §4.2 "asoma en la ventana del
+  // ejercicio": `DeskWindow.astro` can render Vanina peeking from its own
+  // outer left edge, but ONLY for the legacy, non-`embedded` desktop-inset
+  // shape (see that component's own guard, `!forceFullScreen && !embedded`).
+  // Window-manager architecture (this whole suite's own header): a
+  // signed-in visitor's real window content is ALWAYS `embedded` now — the
+  // HOST iframe element draws the desktop inset instead, so Vanina never
+  // renders from in here. `DeskWindowManager.test.ts` covers the real,
+  // reachable case (the HOST shell, signed-in only).
+  it('never renders the legacy window-edge Vanina peek on an embedded window (the HOST iframe owns that chrome now)', async () => {
+    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [] };
+    const signedIn = await render('https://chuyocode.test/es/ingles/actividades/abc', {
+      params: { lang: 'es', id: 'abc' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(await signedIn.text()).not.toContain('data-testid="desk-window-vanina-peek"');
   });
 
   // The "‹" back arrow to the community list is GONE (owner spec 2026-10-07,

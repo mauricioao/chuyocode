@@ -121,24 +121,30 @@ describe('GameResult', () => {
     });
   });
 
-  describe('icon by outcome (owner review: must never show the check on a "retry" outcome)', () => {
-    it('shows the success check, in the success color, for "perfect"', () => {
+  describe('Vanina reaction by outcome (visual-polish pass: must never show the wrong reaction)', () => {
+    it('shows "celebra" for "perfect"', () => {
       render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
-      expect(icon.getAttribute('class')).toContain('text-success-strong');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/celebra');
     });
 
-    it('shows the success check, in the success color, for "good"', () => {
+    it('shows "casi" for "good"', () => {
       render(<GameResult lang="es" correct={7} total={10} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
-      expect(icon.getAttribute('class')).toContain('text-success-strong');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/casi');
     });
 
-    it('shows a neutral, non-success icon for "retry" — never the green check', () => {
+    it('shows "animo" for "retry" — never a celebratory pose', () => {
       render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
-      expect(icon.getAttribute('class')).not.toContain('text-success-strong');
-      expect(icon.getAttribute('class')).toContain('text-foreground/60');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/animo');
+    });
+
+    it('is decorative only (empty alt, aria-hidden) — the outcome already carries in the headline and data-outcome', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const img = screen.getByTestId('game-result-icon').querySelector('img')!;
+      expect(img.getAttribute('alt')).toBe('');
+      expect(img.getAttribute('aria-hidden')).toBe('true');
     });
   });
 

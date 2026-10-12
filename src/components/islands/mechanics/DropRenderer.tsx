@@ -439,7 +439,7 @@ function PoolTile({ item, disabled, focusRef, picked, onTogglePick }: PoolTilePr
       // screen reader's point of view — "this tile is currently held" — so
       // this merges both rather than picking one.
       aria-pressed={picked || isDragging}
-      className={cn(TILE_BASE, picked && TILE_PLACED, isDragging && 'opacity-50', picked && 'ring-2 ring-ring', 'touch-none')}
+      className={cn(TILE_BASE, picked && TILE_PLACED, isDragging && 'opacity-50', picked && 'ring-2 ring-inset ring-ring', 'touch-none')}
     >
       <TileFace item={item} />
     </button>

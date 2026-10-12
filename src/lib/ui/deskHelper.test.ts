@@ -8,7 +8,6 @@ import {
 } from './deskHelper';
 import { clearDeskHelperTipsCacheForTests } from './deskHelperTipsClient';
 import { DESK_HELPER_QUEUE_STORAGE_KEY } from './deskHelperQueue';
-import { CHARACTERS } from '@/content/characters';
 
 const FULL_TIPS = [
   { id: 'tip-a', character: 'bruno', html: '<em>a</em>' },
@@ -143,7 +142,7 @@ describe('initDeskHelper — "Otro tip"', () => {
     await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1)); // cached — no second fetch
   });
 
-  it('renders the next tip\'s name, html and avatar — changing the speaking character', async () => {
+  it('renders the next tip\'s html, keeping Vanina as the one helper voice (visual-polish pass: no more per-tip character)', async () => {
     setDom('tip-a');
     initDeskHelper(document, fakeFetch(), fakeStorage());
     const next = document.getElementById('desk-helper-next') as HTMLButtonElement;
@@ -158,13 +157,9 @@ describe('initDeskHelper — "Otro tip"', () => {
     const shownId = root.getAttribute('data-tip-id');
     const shownTip = FULL_TIPS.find((t) => t.id === shownId)!;
     expect(['tip-b', 'tip-c']).toContain(shownId);
-    expect(document.querySelector('[data-desk-helper-name]')?.textContent).toBe(
-      CHARACTERS[shownTip.character as keyof typeof CHARACTERS].alt.es,
-    );
     expect(document.querySelector('[data-desk-helper-tip]')?.innerHTML).toBe(shownTip.html);
-    expect(document.getElementById('desk-helper-avatar')?.getAttribute('aria-label')).toBe(
-      `Ayuda de ${CHARACTERS[shownTip.character as keyof typeof CHARACTERS].alt.es}`,
-    );
+    // Name/avatar never change per tip any more — always Vanina.
+    expect(document.getElementById('desk-helper-avatar')?.getAttribute('aria-label')).toBe('Ayuda de Vanina');
   });
 
   it('never immediately repeats the tip already on screen', async () => {

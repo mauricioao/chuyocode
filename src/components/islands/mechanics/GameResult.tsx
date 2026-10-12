@@ -31,10 +31,14 @@
  * lives (UX-INGLES.md 6.3: "El aviso de invitado sale de la parte de arriba
  * y pasa a la pantalla final").
  *
- * ICON MATCHES THE OUTCOME (owner review): the success check (in the kit's
- * success ink) only for "perfect"/"good" — "retry" gets a neutral,
- * encouraging `ArrowCounterClockwise`, in ink at 60% (`text-foreground/60`,
- * the kit's own "Texto al 60%" ink step), never the green check.
+ * VANINA REACTS TO THE OUTCOME (visual-polish pass, owner-approved cast
+ * split, DIRECCION-VISUAL.md §4.2 "reacciona a Comprobar" — replacing the
+ * generic colored check/retry icon this doc comment used to describe here):
+ * `perfect` (all correct) -> `celebra`; `good` (≥70%) -> `casi`; `retry`
+ * (<70%, including a first attempt that failed outright) -> `animo`. Pure
+ * black-ink line art (DIRECCION-VISUAL.md §4.1), decorative only — `alt=""`
+ * + `aria-hidden`, the outcome is already carried in the headline text and
+ * `data-outcome` for anything that needs it programmatically.
  *
  * SECONDARY ACTIONS USE `text-accent-ink`, NOT THE SHARED `Button` `link`
  * VARIANT'S OWN COLOR (owner review): `variant="link"` resolves to
@@ -45,11 +49,10 @@
  * behavior but override the color locally with `text-accent-ink` — the
  * same treatment the guest "Crear cuenta" link below already uses.
  */
-import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
-import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowCounterClockwise';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { characterPoseFallbackSrc, characterPoseSrcSet, characterPoseWidth, type CharacterPoseKey } from '@/content/characterPoses';
 
 export type GameResultOutcome = 'perfect' | 'good' | 'retry';
 
@@ -80,6 +83,13 @@ function outcomeFor(correct: number, total: number): GameResultOutcome {
   return correct / total >= 0.7 ? 'good' : 'retry';
 }
 
+/** Vanina's own reaction pose per outcome tier — see this file's own header. */
+const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
+  perfect: 'vanina/celebra',
+  good: 'vanina/casi',
+  retry: 'vanina/animo',
+};
+
 export default function GameResult({
   lang,
   correct,
@@ -96,8 +106,7 @@ export default function GameResult({
   const headline = outcome === 'perfect' ? t.perfect : outcome === 'good' ? t.good : t.retry;
   const word = resultWord ?? t.defaultWord;
   const showReview = correct < total && Boolean(onReviewWrong);
-  const Icon = outcome === 'retry' ? ArrowCounterClockwiseIcon : CheckCircleIcon;
-  const iconColor = outcome === 'retry' ? 'text-foreground/60' : 'text-success-strong';
+  const pose = OUTCOME_POSE[outcome];
 
   return (
     <div
@@ -107,7 +116,24 @@ export default function GameResult({
       aria-live="polite"
       className={cn('flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center', className)}
     >
-      <Icon aria-hidden="true" weight="bold" size={64} className={iconColor} data-testid="game-result-icon" />
+      {/* Vanina's reaction, 120-160px tall (`h-40` = 160px CSS, the tallest
+          display height `scripts/characters/export-web.mjs` exported this
+          pose at) — `w-auto` keeps the master's own aspect ratio, never
+          stretched. Decorative only: the outcome is already in the headline
+          text below and in `data-outcome` above. */}
+      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-40 w-auto">
+        <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
+        <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
+        <img
+          src={characterPoseFallbackSrc(pose)}
+          alt=""
+          aria-hidden="true"
+          width={characterPoseWidth(pose)}
+          height={160}
+          decoding="async"
+          className="h-40 w-auto"
+        />
+      </picture>
       <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
       <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
         {correct} {t.of} {total} {word}

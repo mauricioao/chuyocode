@@ -60,6 +60,8 @@ import {
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
+  STAGE_CONTENT_MEASURE,
+  STAGE_SAFE_INSET_CLASS,
   TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
 import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
@@ -166,7 +168,7 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, lo
         placed && CHIP_PLACED,
         draggable && 'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
         locked && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
         wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
         gameTileTransitionClassName(reducedMotion),
@@ -595,9 +597,16 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="groupsort-stage"
-            className={cn('flex min-h-0 flex-col gap-6 overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS)}
+            className={cn(
+              'flex min-h-0 flex-col gap-6 overflow-y-auto',
+              STAGE_BOTTOM_RESERVE_CLASS,
+              STAGE_SAFE_INSET_CLASS,
+            )}
           >
-          <div data-testid="groupsort-board" className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <div
+            data-testid="groupsort-board"
+            className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap', STAGE_CONTENT_MEASURE)}
+          >
             {groups.map((group) => {
               // Every item CURRENTLY sitting in this group box: `placements`
               // keeps its entry even once an item is locked correct (`handleCheck`
