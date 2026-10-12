@@ -4,10 +4,18 @@
  * tip bubble that steps in from the bottom-left ("desktop" redesign PART 5,
  * owner spec 2026-10-06, approved mockup
  * `ChuyoCode_others/propuestas/ingles-escritorio/index.html`'s `.helper` /
- * `.bubble` / `.who`; art: Open Peeps busts, `@/content/characters`, same
- * five named mascots already used elsewhere on Inglés). Owner's words: "los
- * avatares podrían salir como una ayuda muchas veces desde la parte inferior
- * izquierda con un globo de texto dando ayudas o cosas así".
+ * `.bubble` / `.who`). Owner's words: "los avatares podrían salir como una
+ * ayuda muchas veces desde la parte inferior izquierda con un globo de texto
+ * dando ayudas o cosas así".
+ *
+ * VANINA IS THE HELPER (visual-polish pass, owner-approved cast split,
+ * DIRECCION-VISUAL.md §4.2: "Vanina = la profe... avatar del ayudante"):
+ * the avatar/name used to rotate across the old five Open Peeps bust mascots
+ * (`@/content/characters`, one per tip's own `character` field) — now it is
+ * always Vanina's line-art avatar (`@/content/characterPoses`, the NEW pose
+ * registry, a deliberate sibling of the old one — see its own header for
+ * why). Only the TIP TEXT still cycles; `tip.character` stays in the
+ * content/type for a future use, simply unread here now.
  *
  * HUB ONLY — `index.astro` is the one and only call site; practice, the
  * editor and presentation pages never render this.
@@ -57,7 +65,7 @@
  * needs so "Otro tip" never immediately re-shows it), and its name/HTML/
  * avatar are already painted directly into the markup below.
  */
-import { CHARACTERS, characterFallbackSrc, characterSrcSet } from '@/content/characters';
+import { characterPoseFallbackSrc, characterPoseSrcSet } from '@/content/characterPoses';
 import { DESK_HELPER_TIPS, pickRandomTipIndex } from '@/content/deskHelperTips';
 import type { Lang } from '@lib/i18n';
 
@@ -74,9 +82,15 @@ const { lang, landmarkLabel, avatarLabelTemplate, otherTipLabel, closeLabel } = 
 const tips = DESK_HELPER_TIPS;
 const defaultIndex = pickRandomTipIndex(tips.length);
 const defaultTip = tips[defaultIndex];
-const defaultName = CHARACTERS[defaultTip.character].alt[lang];
+// VANINA IS THE HELPER (visual-polish pass, owner-approved cast split —
+// "Vanina = the teacher (exercise and helper)"): every tip now speaks in
+// her single voice, never the old per-tip rotating mascot (`tip.character`
+// still lives in the content — `DESK_HELPER_TIPS`/`deskHelperTips.json` —
+// unread here on purpose, kept for a future filter/picker same as `topic`/
+// `level`). `DESK_HELPER_NAME` is a proper noun, same in `es`/`en`.
+const DESK_HELPER_NAME = 'Vanina';
 const defaultHtml = defaultTip[lang];
-const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
+const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAME);
 ---
 
 <aside
@@ -98,11 +112,11 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
     class="relative block h-16 w-16 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-24 desk:w-24"
   >
     <picture class="block h-full w-full overflow-hidden rounded-full">
-      <source data-desk-helper-avif type="image/avif" srcset={characterSrcSet(defaultTip.character, 'avif')} />
-      <source data-desk-helper-webp type="image/webp" srcset={characterSrcSet(defaultTip.character, 'webp')} />
+      <source data-desk-helper-avif type="image/avif" srcset={characterPoseSrcSet('vanina/avatar', 'avif')} />
+      <source data-desk-helper-webp type="image/webp" srcset={characterPoseSrcSet('vanina/avatar', 'webp')} />
       <img
         data-desk-helper-img
-        src={characterFallbackSrc(defaultTip.character)}
+        src={characterPoseFallbackSrc('vanina/avatar')}
         alt=""
         width="124"
         height="124"
@@ -119,7 +133,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', defaultName);
     aria-live="polite"
     class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
   >
-    <b data-desk-helper-name class="mb-0.5 block font-semibold">{defaultName}</b>
+    <b data-desk-helper-name class="mb-0.5 block font-semibold">{DESK_HELPER_NAME}</b>
     <span data-desk-helper-tip set:html={defaultHtml} />
     <br />
     <button

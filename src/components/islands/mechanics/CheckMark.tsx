@@ -21,6 +21,14 @@
  * element must carry `relative` for this to anchor correctly — never added
  * here, since this component does not own the chip's own class list.
  *
+ * SAFE-INSET INVARIANT (visual-polish pass, owner bug: this mark used to get
+ * clipped at the top/right of a graded row flush against its scroll
+ * container). Overlapping the corner means this mark paints ~6px past the
+ * chip's own border box (`-top-1.5 -right-1.5`) plus half its `size-5` icon —
+ * the caller's scroll/overflow ancestor MUST reserve `STAGE_SAFE_INSET_CLASS`
+ * (`scale.ts`) as its own padding so that outset always lands inside the
+ * ancestor's padding band (where overflow clips) rather than past it.
+ *
  * DARK success/error FILL, WHITE GLYPH (`DIRECCION-VISUAL.md` §3: "todo
  * botón con texto blanco usa la versión oscura" — white text needs the DARK
  * variant, never the pale one). Reusing the SAME `success-strong`/

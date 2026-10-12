@@ -207,3 +207,36 @@ export const FLOATING_CHECK_BAR_EDITOR_OFFSET = 'lg:right-20';
 
 /** Bottom padding reserved on a scrollable stage so {@link FLOATING_CHECK_BAR_CLASS} can never cover its last visible row/tile. */
 export const STAGE_BOTTOM_RESERVE_CLASS = 'pb-20';
+
+/**
+ * SAFE INSET (visual-polish pass, owner bug: "el borde de cada ejercicio se
+ * corta" — a correct row's own ring and its corner `GradeMark` were clipped
+ * by the scroll container they sit in, because that container's edge sat
+ * flush against the stage's own `overflow-clip`/`overflow-y-auto` box with
+ * zero reserved margin).
+ *
+ * INVARIANT: every scroll/overflow container inside the exercise stage must
+ * carry this as its own padding. Overflow clips at the PADDING edge, not the
+ * content edge, so anything a row/chip paints OUTSIDE its own border box —
+ * an inset ring (still inside the box, but a non-inset ring or the corner
+ * {@link GradeMark} from `CheckMark.tsx` extend past it) — has room to render
+ * inside this reserved band instead of being cut off. 16px covers the
+ * largest outset any one decoration reaches: `GradeMark`'s own `-top-1.5
+ * -right-1.5` (6px) plus its `size-5` (20px) icon overlapping the corner,
+ * and the `shadow-elevation-1`/`-2` blur radius (≤12px) riding along a
+ * row's own edge. Scoped to Inglés only (`[data-theme='ingles']`) — the
+ * exercise stage is the one surface this is for.
+ */
+export const STAGE_SAFE_INSET_CLASS = 'p-[var(--stage-safe-inset)]';
+
+/**
+ * Readable measure for the exercise CONTENT column (visual-polish pass,
+ * owner bug: "es muy ancho el ejercicio" — a Matching/GroupSort/Reorder/
+ * Cloze row used to stretch across the whole ~1400px stage). Centres the
+ * rows/tray block in the stage rather than letting it hug the stage's own
+ * edges — same `mx-auto max-w-[…]` recipe {@link PROMPT_MEASURE} already
+ * uses for the prompt sentence, just a wider cap: rows hold real UI (chips,
+ * slots), not prose, so they get more room than the `~64ch` prompt measure,
+ * but still stop well short of the full stage so no row spans edge to edge.
+ */
+export const STAGE_CONTENT_MEASURE = 'mx-auto w-full max-w-[760px]';

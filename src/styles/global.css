@@ -508,6 +508,18 @@
   --shadow-glow-sky: 0 4px 14px rgb(11 118 188 / 0.25);
   --shadow-glow-red: 0 4px 14px rgb(209 48 44 / 0.25);
   --shadow-glow-mint: 0 4px 14px rgb(11 122 84 / 0.25);
+
+  /* Exercise stage SAFE INSET (visual-polish pass, owner bug: "el borde de
+   * cada ejercicio se corta" — a correct row's own ring, and the corner
+   * check/cross `GradeMark`, were clipped by the scroll container they sit
+   * in). INVARIANT: every scroll/overflow container inside the exercise
+   * stage (`STAGE_SAFE_INSET_CLASS`, `src/components/islands/mechanics/
+   * scale.ts`) carries this as its own padding, so a decoration can never
+   * touch — let alone cross — a clipping edge. 16px is sized to the
+   * largest outset any one decoration reaches: `GradeMark`'s `-top-1.5
+   * -right-1.5` (6px) plus half its `size-5` icon overlapping the corner,
+   * and the widest `shadow-elevation-2` blur (≤12px) riding a row's edge. */
+  --stage-safe-inset: 16px;
 }
 
 /* The light Inglés scope cannot change what a STATIC Tailwind utility
@@ -546,8 +558,56 @@
      * property on the editor's own block-list scroll container below, and
      * with the always-visible (never auto-hidden) thin scrollbar further
      * down this file — an auto-hidden scrollbar would still cause the same
-     * jump on hover/scroll. */
-    scrollbar-gutter: stable;
+     * jump on hover/scroll.
+     *
+     * `both-edges` (visual-polish pass, grey-strip bugfix): plain `stable`
+     * only ever reserves the gutter on the PHYSICAL right edge (LTR), so
+     * EVERY page carries a permanent ~15-17px wider margin on the right than
+     * the left — Chromium paints an inactive reserved gutter with its own
+     * native track appearance, NOT the transparent `::-webkit-scrollbar-
+     * track` below (that pseudo-element only applies once a scrollbar is
+     * actually active), so the reservation itself shows as a stray light-
+     * grey strip with nothing matching it on the left. Reserving the SAME
+     * width on both edges cancels that asymmetry for ordinary, in-flow page
+     * content.
+     *
+     * NEVER near a fixed/full-bleed surface, though (regression caught by
+     * `tests/e2e/desk-window-part6a.spec.ts`'s own "full-screen sheet on
+     * phones" check): Chromium's `scrollbar-gutter` reservation also shrinks
+     * the initial containing block FIXED-positioned descendants measure
+     * against, so `both-edges` shifted a guest's fullscreen `DeskWindow`
+     * (`fixed inset-0`) ~10px off the true left edge too — trading the
+     * original one-sided bug for a smaller but still-wrong symmetric one on
+     * exactly the surface the bug report was about. The override directly
+     * below exists for that reason — read it before touching this value. */
+    scrollbar-gutter: stable both-edges;
+    /* Grey-strip bugfix, part 2: give the root itself the SAME background
+     * token the page already paints with (`--background` — the desk's own
+     * `#EEEFF4` on `[data-theme='ingles']`), rather than leaving it
+     * transparent/UA-default. The classic "body background propagates to
+     * the canvas" rule already makes this a no-op on ordinary pages, but it
+     * removes any UA-default/`color-scheme: dark` canvas mismatch in the
+     * one place that rule does NOT reach: the reserved-but-inactive
+     * scrollbar-gutter strip itself, which is Chromium's own native track
+     * chrome, painted outside the normal content-painting pipeline. */
+    background-color: var(--background);
+  }
+
+  /* Grey-strip bugfix, part 3 (regression fix): a desk window — guest
+   * fullscreen (`forceFullScreen`, `fixed inset-0`) or the legacy signed-in
+   * desktop-inset shape, `DeskWindow.astro`'s own `[data-desk-window]` root
+   * either way — locks `<body>` to `overflow-hidden h-dvh` for as long as it
+   * is open (`BaseLayout.astro`'s `staticOverlayLock`), so the document can
+   * NEVER scroll while one is present: the page-level reservation above has
+   * nothing to protect there and only pushes/narrows the window's own fixed
+   * box. `:has()` turns it off for exactly that state, giving the window
+   * back a true, gutter-free `0` left edge — simpler and more correct than
+   * any "symmetric" reservation, which would still leave an unwanted,
+   * merely-even sliver on a surface that is supposed to be perfectly flush.
+   * INVARIANT: this selector must keep matching every desk-window root —
+   * if that attribute is ever renamed, update it here too. */
+  :root:has([data-desk-window]) {
+    scrollbar-gutter: auto;
   }
 
   input,

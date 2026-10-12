@@ -50,8 +50,8 @@ import type { MechanicRendererProps } from './types';
  */
 const TILE =
   'flex min-h-20 items-center gap-4 rounded-[20px] bg-card shadow-elevation-1 p-4 transition-shadow sm:p-5 ' +
-  'has-data-[state=checked]:shadow-elevation-2 has-data-[state=checked]:ring-2 has-data-[state=checked]:ring-accent-ink has-data-[state=checked]:bg-accent/10 ' +
-  'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring';
+  'has-data-[state=checked]:shadow-elevation-2 has-data-[state=checked]:ring-2 has-data-[state=checked]:ring-inset has-data-[state=checked]:ring-accent-ink has-data-[state=checked]:bg-accent/10 ' +
+  'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring';
 
 export default function ChoiceRenderer({
   slot,

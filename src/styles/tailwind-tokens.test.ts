@@ -197,8 +197,28 @@ describe('no raw Tailwind palette color is re-declared inside a theme scope (the
 // the page level PLUS a thin, always-visible (never auto-hidden) scrollbar —
 // an auto-hidden one would still cause the same jump on hover/scroll.
 describe('scrollbar (creator polish round 3 — no layout jump)', () => {
-  it('reserves the scrollbar gutter at the page level', () => {
-    expect(css).toMatch(/:root\s*{[^}]*scrollbar-gutter:\s*stable;/);
+  it('reserves the scrollbar gutter at the page level, symmetrically on both edges', () => {
+    // visual-polish grey-strip bugfix: one-sided `stable` reserved space on
+    // the right edge only, which read as off-centre content and a stray
+    // light-grey strip with nothing matching it on the left (see this rule's
+    // own comment in global.css). `both-edges` cancels that asymmetry.
+    expect(css).toMatch(/:root\s*{[^}]*scrollbar-gutter:\s*stable both-edges;/);
+  });
+
+  it('paints the root with the same --background token the page already uses', () => {
+    // Removes any UA-default/`color-scheme: dark` canvas mismatch in the
+    // reserved-but-inactive gutter strip itself (global.css's own comment).
+    expect(css).toMatch(/:root\s*{[^}]*background-color:\s*var\(--background\);/);
+  });
+
+  // Regression fix (caught by tests/e2e/desk-window-part6a.spec.ts's own
+  // "full-screen sheet on phones" check): `both-edges` shrinks the fixed-
+  // position containing block too, pushing a guest's fullscreen DeskWindow
+  // ~10px off its true left edge. The document can never scroll while a
+  // desk window is open (body is locked to overflow-hidden), so the
+  // reservation has nothing to protect there — turn it off for that state.
+  it('turns the gutter reservation off while any desk window is open, so it sits perfectly flush', () => {
+    expect(css).toMatch(/:root:has\(\[data-desk-window\]\)\s*{[^}]*scrollbar-gutter:\s*auto;/);
   });
 
   it('declares a thin, dark-theme scrollbar for Firefox (scrollbar-width/scrollbar-color)', () => {

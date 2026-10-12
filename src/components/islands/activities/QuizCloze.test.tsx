@@ -123,6 +123,13 @@ describe('QuizCloze', () => {
       fireEvent.click(screen.getByTestId('cloze-tile-w-sleep'));
       fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
       fireEvent.click(screen.getByTestId('cloze-check'));
+
+      // Mid-settle: the sentence card itself flags correct with an INSET
+      // ring (visual-polish pass — a plain `ring-*` paints outside the
+      // border box and was what clipped at the stage's own edge).
+      const sentence = screen.getByTestId('cloze-stage').querySelector('[data-testid^="cloze-game-sentence-"]');
+      expect(sentence!.className).toContain('ring-inset');
+
       act(() => vi.advanceTimersByTime(1000));
 
       expect(screen.getByTestId('cloze-position').textContent).toBe('2 de 2');
@@ -306,6 +313,23 @@ describe('QuizCloze', () => {
     it('offsets the floating Comprobar further left when rendered inside the editor', () => {
       render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" editorOffset />);
       expect(screen.getByTestId('cloze-actions').className).toContain('lg:right-20');
+    });
+  });
+
+  // Stage layout system (visual-polish pass, owner bug: "el borde de cada
+  // ejercicio se corta y es muy ancho el ejercicio").
+  describe('stage layout system', () => {
+    it('reserves the safe inset as padding on the scrollable stage', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      expect(screen.getByTestId('cloze-stage').className).toContain('p-[var(--stage-safe-inset)]');
+    });
+
+    it('caps the sentence card at a readable measure, centred in the stage', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      const sentence = screen.getByTestId('cloze-stage').querySelector('[data-testid^="cloze-game-sentence-"]');
+      expect(sentence).toBeTruthy();
+      expect(sentence!.className).toContain('max-w-[760px]');
+      expect(sentence!.className).toContain('mx-auto');
     });
   });
 });

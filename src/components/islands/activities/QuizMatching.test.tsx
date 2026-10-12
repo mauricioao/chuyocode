@@ -380,4 +380,45 @@ describe('QuizMatching', () => {
       expect(screen.getByTestId('matching-prompts').className).toContain('@lg:grid-cols-2');
     });
   });
+
+  // Stage layout system (visual-polish pass, owner bug: "el borde de cada
+  // ejercicio se corta y es muy ancho el ejercicio").
+  describe('stage layout system', () => {
+    it('reserves the safe inset as padding on the scrollable stage, so a row\'s own decorations never touch a clipping edge', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('matching-stage-scroll').className).toContain('p-[var(--stage-safe-inset)]');
+    });
+
+    it('caps the prompts column at a readable measure, centred in the stage', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const grid = screen.getByTestId('matching-prompts').className;
+      expect(grid).toContain('max-w-[760px]');
+      expect(grid).toContain('mx-auto');
+    });
+
+    it('lays out a prompt row as a two-equal-column grid (term | slot) with the kit\'s row anatomy, stacking under a narrow container', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const row = screen.getByTestId('matching-prompt-s1').className;
+      expect(row).toContain('grid');
+      expect(row).toContain('grid-cols-1');
+      expect(row).toContain('@[420px]:grid-cols-2');
+      expect(row).toContain('gap-4');
+      expect(row).toContain('py-3');
+      expect(row).toContain('px-4');
+      expect(row).toContain('min-h-16');
+      expect(row).toContain('rounded-[20px]');
+    });
+
+    it('settles a correct row with an INSET ring, never a plain ring that would paint outside the row\'s own box', () => {
+      vi.useFakeTimers();
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      place('s1', 's1');
+      place('s2', 's2');
+      place('s3', 's3');
+      fireEvent.click(screen.getByTestId('matching-check'));
+
+      expect(screen.getByTestId('matching-prompt-s1').className).toContain('ring-inset');
+      vi.useRealTimers();
+    });
+  });
 });

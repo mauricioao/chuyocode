@@ -70,6 +70,8 @@ import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
+  STAGE_CONTENT_MEASURE,
+  STAGE_SAFE_INSET_CLASS,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
   TILE_PADDING_Y_SCALE,
@@ -160,7 +162,7 @@ function ClozeTileButton({ id, label, disabled, dragging, picked, reducedMotion,
         TILE_BASE,
         'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
         gameTileTransitionClassName(reducedMotion),
       )}
     >
@@ -577,7 +579,11 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="cloze-stage"
-            className={cn('flex min-h-0 flex-col gap-6 overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS)}
+            className={cn(
+              'flex min-h-0 flex-col gap-6 overflow-y-auto',
+              STAGE_BOTTOM_RESERVE_CLASS,
+              STAGE_SAFE_INSET_CLASS,
+            )}
           >
           <p
             // `cloze-game-sentence-*`, not `cloze-sentence-*`: `ClozeEditor.tsx`'s
@@ -588,12 +594,16 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
             data-testid={`cloze-game-sentence-${sentence.seq}`}
             // Soft surface, never a hard-bordered card — same material
             // `QuizMatching`'s own prompt row uses (UI-kit refactor, owner
-            // spec: "muy cuadrada"). Correct settles as a tint + ring, not
-            // a border.
+            // spec: "muy cuadrada"). Correct settles as a tint + INSET ring
+            // (visual-polish pass — a plain `ring-*` paints outside the
+            // border box and clips at the stage's own edge), not a border.
+            // Capped at the shared readable measure, centred in the stage —
+            // same recipe `QuizMatching`'s own prompt column uses.
             className={cn(
               'rounded-[20px] bg-card shadow-elevation-1 p-4 leading-loose font-medium text-foreground',
               TILE_TEXT_SCALE,
-              isSolved && 'ring-2 ring-success-strong bg-success-strong/10',
+              STAGE_CONTENT_MEASURE,
+              isSolved && 'ring-2 ring-inset ring-success-strong bg-success-strong/10',
             )}
           >
             {sentence.segments.map((seg, i) => {

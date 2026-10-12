@@ -68,6 +68,19 @@ const CHARACTERS = {
     { source: 'Asoma por la izquierda.jpg', slug: 'asoma-izquierda', kind: 'support', flushEdge: 'right' },
     { source: 'Sentado en un borde.jpg', slug: 'sentado-borde', kind: 'support', flushEdge: null },
     { source: 'Apoyado de codo.jpg', slug: 'apoyado-codo', kind: 'support', flushEdge: 'bottom' },
+    // New source (visual-polish pass, owner addition): BOTH forearms rest on
+    // a horizontal line near the BOTTOM of the frame — same "leaning on a
+    // ledge" silhouette as `apoyado-codo` above, just with two elbows instead
+    // of one, so the same flush-bottom treatment applies.
+    { source: 'Apoyado de codos.jpg', slug: 'apoyado-codos', kind: 'support', flushEdge: 'bottom' },
+    // New source: Paco leans his back/side against a vertical line running
+    // the full height of the frame on the RIGHT — that line is the invisible
+    // wall, so the flush (zero-padding) side is the right edge.
+    { source: 'Recostado de espaldas.jpg', slug: 'recostado-espaldas', kind: 'support', flushEdge: 'right' },
+    // New source: a plain head-and-shoulders bust, same crop as Vanina's own
+    // `avatar` — the helper-avatar fallback (`DeskHelper.astro`) needed a
+    // Paco option too (direction doc 4.4 "Avatar: Falta").
+    { source: 'Avatar.jpg', slug: 'avatar', kind: 'avatar', flushEdge: null },
     { source: 'Saluda.jpg', slug: 'saluda', kind: 'pose', flushEdge: null },
     { source: 'Señala.jpg', slug: 'senala', kind: 'pose', flushEdge: null },
     { source: 'Celebra.jpg', slug: 'celebra', kind: 'pose', flushEdge: null },
@@ -108,11 +121,15 @@ const CHARACTERS = {
       kind: 'support',
       flushEdge: null,
     },
+    // Replaced source (visual-polish pass): both fists are raised to grip
+    // the box's bottom edge from below, right at the TOP of the frame — the
+    // grip is the flush (zero-padding) side, same reasoning as every other
+    // "peeking/leaning" support pose above.
     {
       source: 'Colgada del borde inferior de una caja.jpg',
       slug: 'colgada-borde',
       kind: 'support',
-      flushEdge: null,
+      flushEdge: 'top',
     },
     { source: 'Saluda.jpg', slug: 'saluda', kind: 'pose', flushEdge: null },
     {

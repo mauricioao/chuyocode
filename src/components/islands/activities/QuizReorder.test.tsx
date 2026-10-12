@@ -277,4 +277,20 @@ describe('QuizReorder', () => {
       expect(screen.getByTestId('reorder-actions').className).toContain('lg:right-20');
     });
   });
+
+  // Stage layout system (visual-polish pass, owner bug: "el borde de cada
+  // ejercicio se corta y es muy ancho el ejercicio").
+  describe('stage layout system', () => {
+    it('reserves the safe inset as padding on the scrollable stage', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('reorder-stage').className).toContain('p-[var(--stage-safe-inset)]');
+    });
+
+    it('caps the sentence line at a readable measure, centred in the stage', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      const line = screen.getByTestId('reorder-line-0').className;
+      expect(line).toContain('max-w-[760px]');
+      expect(line).toContain('mx-auto');
+    });
+  });
 });

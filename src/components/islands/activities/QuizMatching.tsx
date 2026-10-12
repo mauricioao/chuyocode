@@ -64,6 +64,8 @@ import {
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
   PROMPT_SCALE,
   STAGE_BOTTOM_RESERVE_CLASS,
+  STAGE_CONTENT_MEASURE,
+  STAGE_SAFE_INSET_CLASS,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
 } from '@/components/islands/mechanics/scale';
@@ -195,7 +197,7 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
         TILE_BASE,
         'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
         gameTileTransitionClassName(reducedMotion),
         className,
       )}
@@ -605,15 +607,22 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                 "Comprobar" sat below the fold on a 5-pair board; up to 8
                 pairs is the authored ceiling). */}
             <div
+              data-testid="matching-stage-scroll"
               className={cn(
                 'flex min-h-0 flex-col overflow-y-auto',
                 manyPairs ? 'gap-4' : 'gap-6',
                 STAGE_BOTTOM_RESERVE_CLASS,
+                STAGE_SAFE_INSET_CLASS,
               )}
             >
               <div
                 data-testid="matching-prompts"
-                className={cn('grid', manyPairs ? 'gap-2' : 'gap-3', manyPairs ? STAGE_TWO_COL_GRID : 'grid-cols-1')}
+                className={cn(
+                  'grid',
+                  manyPairs ? 'gap-2' : 'gap-3',
+                  manyPairs ? STAGE_TWO_COL_GRID : 'grid-cols-1',
+                  STAGE_CONTENT_MEASURE,
+                )}
               >
               {items.map((item) => {
                 const tileId = placements[item.id];
@@ -624,19 +633,31 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                   <div
                     key={item.id}
                     data-testid={`matching-prompt-${item.id}`}
-                    // Soft surface, never a hard-bordered card (UI-kit
-                    // refactor, owner spec: "muy cuadrada") — `bg-card` +
+                    // ROW ANATOMY (visual-polish pass, owner bug: "el borde
+                    // de cada ejercicio se corta y es muy ancho"). A CSS
+                    // grid, not flex-wrap: two EQUAL columns (term | slot),
+                    // `gap-4` (16px) between them, `py-3 px-4` (12px/16px)
+                    // row padding, `min-h-16` (64px) floor — the fixed
+                    // anatomy the owner asked for, not a scale that drifts
+                    // with pair count. Below the row's own 420px container
+                    // width (`@max-[420px]:`, reading the SAME `@container`
+                    // ancestor `STAGE_TWO_COL_GRID` above does, not the
+                    // viewport) the term stacks above the slot instead of
+                    // squeezing two columns into a phone-width row. Soft
+                    // surface, never a hard-bordered card (UI-kit refactor,
+                    // owner spec: "muy cuadrada") — `bg-card` +
                     // `shadow-elevation-1` at radius 20, same material the
                     // desk's own flat (non-glass) surfaces use. Correct
-                    // settles as a tint + ring, never a border, so the shape
-                    // itself never grows a visible edge.
+                    // settles as an INSET tint ring (visual-polish pass —
+                    // plain `ring-*` paints OUTSIDE the border box and was
+                    // what clipped at the stage's own edge), never a border,
+                    // so the shape itself never grows a visible edge.
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-[20px] bg-card shadow-elevation-1 p-3 sm:gap-4',
-                      manyPairs ? 'sm:p-3' : 'sm:p-4',
-                      locked && 'ring-2 ring-success-strong bg-success-strong/10',
+                      'grid grid-cols-1 @[420px]:grid-cols-2 items-center gap-4 rounded-[20px] bg-card shadow-elevation-1 py-3 px-4 min-h-16',
+                      locked && 'ring-2 ring-inset ring-success-strong bg-success-strong/10',
                     )}
                   >
-                    <p className={cn('min-w-0 flex-1 font-medium text-foreground', PROMPT_SCALE)}>{item.prompt}</p>
+                    <p className={cn('min-w-0 font-medium text-foreground', PROMPT_SCALE)}>{item.prompt}</p>
                     <MatchSlot
                       promptId={item.id}
                       tile={tile}
