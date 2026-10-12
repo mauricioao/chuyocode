@@ -159,7 +159,7 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     expect(html).toContain('A2');
   });
 
-  it('offers "Mostrar QR" in the controls instead of a cover QR shown automatically (owner feedback 2026-10-06)', async () => {
+  it('offers "Mostrar/Ocultar QR" in the controls, never a QR baked into the cover slide itself (owner feedback 2026-10-06)', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
@@ -167,7 +167,50 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="presentation-qr-toggle"');
     expect(html).not.toContain('data-testid="presentation-cover-qr"');
-    expect(html).not.toContain('data-testid="presentation-qr-overlay"');
+  });
+
+  // N7 (join by QR from the start): the on-demand overlay now opens BY
+  // DEFAULT on the first slide a class ever sees — see
+  // `PresentationIsland.test.tsx`'s own "N7" describe block for the full
+  // behavior (auto-hide on "Siguiente", toggle/`Q` still working
+  // afterwards); this only confirms the real route wires a real `qrSvg`
+  // through, so that default-open state has something to show.
+  it('shows the QR overlay with the "scan to play" line by default, right in the SSR markup', async () => {
+    activityResult.value = QUIZ_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="presentation-qr-overlay"');
+    expect(html).toContain('Escanea para jugar en tu celular');
+    // The toggle itself already reads "closed" (Ocultar QR = currently shown).
+    expect(html).toContain('aria-label="Ocultar QR"');
+  });
+
+  // N7 (next step at the end): "Otra actividad" — same URL logic as the
+  // practice page's own `nextActivityHref` (`[id].astro`'s own header) —
+  // wired into the island's serialized props, same pattern
+  // `_[id].test.ts`'s own `signUpHref` check uses for a client-only prop.
+  describe('— "Otra actividad" wiring (N7)', () => {
+    it('filters the catalog by level when the activity has one', async () => {
+      activityResult.value = QUIZ_ACTIVITY; // level: 'A2'
+      const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+        params: { lang: 'es', id: 'abc' },
+      });
+      const html = await res.text();
+      expect(html).toContain(
+        'nextActivityHref&quot;:[0,&quot;/es/ingles/actividades?nivel=A2&quot;',
+      );
+    });
+
+    it('points at the unfiltered catalog when the activity has no level', async () => {
+      activityResult.value = WORKSHEET_ONLY_ACTIVITY; // level: null
+      const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+        params: { lang: 'es', id: 'abc' },
+      });
+      const html = await res.text();
+      expect(html).toContain('nextActivityHref&quot;:[0,&quot;/es/ingles/actividades&quot;');
+    });
   });
 
   it('has no site header/footer chrome (bare layout)', async () => {

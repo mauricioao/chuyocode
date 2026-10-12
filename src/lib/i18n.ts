@@ -1288,7 +1288,12 @@ export const UI_LABELS = {
         // activity has presentable worksheet pages too.
         worksheetCountOne: 'hoja',
         worksheetCountMany: 'hojas',
-        scanHint: 'Escanea el código para abrir esta actividad en el teléfono.',
+        // N7 (join-by-QR from the start): shown on the overlay whenever it
+        // is open, including the FIRST slide's own default-open state —
+        // shorter and play-framed, replacing the old generic "open this
+        // activity" wording now that the overlay doubles as the class's
+        // join screen.
+        scanHint: 'Escanea para jugar en tu celular',
         qrAlt: 'Código QR para abrir esta actividad en un teléfono',
         // "Mostrar QR" control (owner feedback 2026-10-06): the QR moved
         // from the old cover-only screen to an on-demand overlay, reachable
@@ -1297,6 +1302,11 @@ export const UI_LABELS = {
         hideQr: 'Ocultar QR',
         summaryTitle: '¡Listo!',
         restart: 'Volver a empezar',
+        // N7: the final slide's new PRIMARY action — same copy/destination
+        // logic as the practice page's own `nextActivityHref` (the
+        // community catalog, filtered by level) — `GameResult.tsx`'s own
+        // `nextActivity` key, same wording.
+        nextActivity: 'Otra actividad',
         prev: 'Anterior',
         next: 'Siguiente',
         reveal: 'Mostrar respuesta',
@@ -2629,12 +2639,13 @@ export const UI_LABELS = {
         questionsCountMany: 'questions',
         worksheetCountOne: 'sheet',
         worksheetCountMany: 'sheets',
-        scanHint: 'Scan the code to open this activity on a phone.',
+        scanHint: 'Scan to play on your phone',
         qrAlt: 'QR code to open this activity on a phone',
         showQr: 'Show QR',
         hideQr: 'Hide QR',
         summaryTitle: 'All done!',
         restart: 'Start over',
+        nextActivity: 'Another activity',
         prev: 'Previous',
         next: 'Next',
         reveal: 'Show answer',
