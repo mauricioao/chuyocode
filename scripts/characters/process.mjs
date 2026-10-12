@@ -30,6 +30,7 @@ import {
   computeContentBBox,
   computeExteriorMask,
   despill,
+  keepLargestOpaqueComponent,
   keyAlpha,
   layoutWithPadding,
   rgbToHsv,
@@ -172,7 +173,11 @@ async function processOne(character, entry) {
   }
 
   const exterior = computeExteriorMask(alpha, width, height);
-  const cleanedAlpha = stripSupportLines(alpha, dark, exterior, width, height);
+  const lineStripped = stripSupportLines(alpha, dark, exterior, width, height);
+  // Discard anything left disconnected from the main silhouette (e.g. a
+  // stub of the removed line stranded near a flush edge) rather than
+  // trusting the bbox to land exactly on the body.
+  const cleanedAlpha = keepLargestOpaqueComponent(lineStripped, width, height);
   for (let p = 0; p < width * height; p++) {
     const cleaned = cleanedAlpha[p];
     if (cleaned !== alpha[p]) data[p * 4 + 3] = cleaned;
@@ -386,6 +391,38 @@ async function buildFlushCardSheet(entries, outPath) {
     .toFile(outPath);
 }
 
+const HEADS_ROOT = join(QA_ROOT, 'heads');
+
+/**
+ * One full-resolution head crop per master: the top 45% of the image
+ * (height-wise, full width), composited onto the Inglés canvas color
+ * #EEEFF4, downscaled only if its longest side exceeds 1000px. Thin
+ * leftover-line artifacts and flush-edge gaps are easy to miss at contact-
+ * sheet thumbnail scale; this is the close-up pass for actually catching
+ * them.
+ */
+async function buildHeadCrop(entry) {
+  const pngPath = join(OUT_ROOT, entry.character, `${entry.slug}.png`);
+  const meta = await sharp(pngPath).metadata();
+  const cropHeight = Math.max(1, Math.round(meta.height * 0.45));
+  const cropped = await sharp(pngPath).extract({ left: 0, top: 0, width: meta.width, height: cropHeight }).toBuffer();
+
+  const composed = await sharp({
+    create: { width: meta.width, height: cropHeight, channels: 4, background: { r: 0xee, g: 0xef, b: 0xf4, alpha: 1 } },
+  })
+    .composite([{ input: cropped }])
+    .png()
+    .toBuffer();
+
+  const outDir = join(HEADS_ROOT, entry.character);
+  await mkdir(outDir, { recursive: true });
+  const longSide = Math.max(meta.width, cropHeight);
+  const resize = longSide > 1000 ? { width: meta.width > cropHeight ? 1000 : undefined, height: meta.width > cropHeight ? undefined : 1000 } : null;
+  let pipeline = sharp(composed);
+  if (resize) pipeline = pipeline.resize({ ...resize, withoutEnlargement: true });
+  await pipeline.png().toFile(join(outDir, `${entry.slug}.png`));
+}
+
 async function buildQa(manifest) {
   await mkdir(QA_ROOT, { recursive: true });
   const byCharacter = new Map();
@@ -401,7 +438,9 @@ async function buildQa(manifest) {
       await buildFlushCardSheet(flushEntries, join(QA_ROOT, `${character}-flush-card.png`));
     }
   }
+  for (const entry of manifest) await buildHeadCrop(entry);
   console.log(`Wrote QA contact sheets to ${QA_ROOT}`);
+  console.log(`Wrote full-resolution head crops to ${HEADS_ROOT}`);
 }
 
 const args = process.argv.slice(2);

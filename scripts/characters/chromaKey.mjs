@@ -173,24 +173,67 @@ export function computeExteriorMask(alpha, width, height, bgThreshold = 16) {
  *      a prop line never actually passes through, but a worth keeping the
  *      distinction for).
  *
+ * A solid dark mass (hair, a shadow) is *also* a long straight dark run in
+ * plenty of rows/columns just by being a big 2D blob — and the background-
+ * colored pockets between curl loops inside it can, through a winding chain
+ * of adjacent gaps, actually connect to the real exterior background, so
+ * floating-confirmation alone is not reliable protection. The structural
+ * fact that separates a support line from a mass is thickness: the line's
+ * own ink is only a few px *across its perpendicular direction*, while a
+ * mass stays dark far beyond that everywhere. So before any background
+ * reasoning, a pixel is only a *candidate* when the maximal contiguous run
+ * of dark pixels through it, measured perpendicular to the scan direction,
+ * is at most `maxLineThickness` — this alone keeps the run detector out of
+ * hair/clothing masses entirely, categorically, regardless of their texture.
+ *
  * `dark` flags ink-candidate pixels (opaque + low brightness), computed by
  * the caller from the same despilled RGB used to build `alpha`. `exterior`
  * is the mask from `computeExteriorMask`: only background connected to the
  * canvas border counts as "floating in open space" — an enclosed pocket
- * (e.g. a gap between curl loops in dense hair) never does, no matter how
- * close it sits to a long straight ink run, so ordinary hair/clothing
- * texture is never mistaken for a prop line. Operates on flat row-major
- * arrays and returns a new alpha array; does not mutate.
+ * never does, so a thin decorative stroke still isn't mistaken for a prop
+ * line just because it has a nearby gap. Operates on flat row-major arrays
+ * and returns a new alpha array; does not mutate.
  */
 export function stripSupportLines(alpha, dark, exterior, width, height, opts = {}) {
   const {
     minRunLength = Math.max(50, Math.round(Math.min(width, height) * 0.025)),
+    maxLineThickness = 16,
     scanDistance = 20,
     fillRun = 3,
     minFloatingPixels = 6,
     fillThreshold = 200,
   } = opts;
   const out = Uint8ClampedArray.from(alpha);
+
+  /**
+   * Marks, for every dark pixel, whether the maximal contiguous run of dark
+   * pixels through it along `axis` is at most `maxThickness` long.
+   */
+  function computeThinMask(axis) {
+    const thin = new Uint8Array(width * height);
+    const [outerLen, innerLen, index] =
+      axis === 'vertical'
+        ? [width, height, (outer, inner) => inner * width + outer]
+        : [height, width, (outer, inner) => outer * width + inner];
+    for (let o = 0; o < outerLen; o++) {
+      let i = 0;
+      while (i < innerLen) {
+        if (dark[index(o, i)] !== 1) {
+          i++;
+          continue;
+        }
+        let end = i;
+        while (end < innerLen && dark[index(o, end)] === 1) end++;
+        const isThin = end - i <= maxLineThickness ? 1 : 0;
+        for (let k = i; k < end; k++) thin[index(o, k)] = isThin;
+        i = end;
+      }
+    }
+    return thin;
+  }
+
+  const thinVertical = computeThinMask('vertical'); // perpendicular thickness for horizontal runs
+  const thinHorizontal = computeThinMask('horizontal'); // perpendicular thickness for vertical runs
 
   /**
    * Walks outward from (not including) the run pixel in one direction,
@@ -256,7 +299,10 @@ export function stripSupportLines(alpha, dark, exterior, width, height, opts = {
   processAxis(
     width,
     height,
-    (x, y) => dark[y * width + x],
+    (x, y) => {
+      const idx = y * width + x;
+      return dark[idx] === 1 && thinVertical[idx] === 1 ? 1 : 0;
+    },
     (x, y, step) => {
       const yy = y + step;
       if (yy < 0 || yy >= height) return null;
@@ -270,7 +316,10 @@ export function stripSupportLines(alpha, dark, exterior, width, height, opts = {
   processAxis(
     height,
     width,
-    (y, x) => dark[y * width + x],
+    (y, x) => {
+      const idx = y * width + x;
+      return dark[idx] === 1 && thinHorizontal[idx] === 1 ? 1 : 0;
+    },
     (y, x, step) => {
       const xx = x + step;
       if (xx < 0 || xx >= width) return null;
@@ -280,6 +329,58 @@ export function stripSupportLines(alpha, dark, exterior, width, height, opts = {
     (y, x) => y * width + x,
   );
 
+  return out;
+}
+
+/**
+ * Keeps only the largest 4-connected component of opaque pixels and zeroes
+ * every other one. A cleanup pass for after line-stripping: a stray stub of
+ * the removed line that survived right at the flush edge (separated from
+ * the body by even a 1px transparent gap) is, by construction, its own
+ * disconnected component — small next to the character — so this discards
+ * it outright instead of relying on trimming to land in the right place.
+ * Returns a new alpha array; does not mutate. A single component (or an
+ * empty image) is returned unchanged.
+ */
+export function keepLargestOpaqueComponent(alpha, width, height, opaqueThreshold = 40) {
+  const n = width * height;
+  const componentId = new Int32Array(n).fill(-1);
+  const queue = new Int32Array(n);
+  const sizes = [];
+  for (let start = 0; start < n; start++) {
+    if (alpha[start] <= opaqueThreshold || componentId[start] !== -1) continue;
+    const id = sizes.length;
+    let qHead = 0;
+    let qTail = 0;
+    componentId[start] = id;
+    queue[qTail++] = start;
+    let size = 0;
+    while (qHead < qTail) {
+      const idx = queue[qHead++];
+      size++;
+      const x = idx % width;
+      const y = (idx - x) / width;
+      const neighbors = [];
+      if (x > 0) neighbors.push(idx - 1);
+      if (x < width - 1) neighbors.push(idx + 1);
+      if (y > 0) neighbors.push(idx - width);
+      if (y < height - 1) neighbors.push(idx + width);
+      for (const n2 of neighbors) {
+        if (alpha[n2] > opaqueThreshold && componentId[n2] === -1) {
+          componentId[n2] = id;
+          queue[qTail++] = n2;
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  if (sizes.length <= 1) return Uint8ClampedArray.from(alpha);
+  let largestId = 0;
+  for (let i = 1; i < sizes.length; i++) if (sizes[i] > sizes[largestId]) largestId = i;
+  const out = Uint8ClampedArray.from(alpha);
+  for (let i = 0; i < n; i++) {
+    if (alpha[i] > opaqueThreshold && componentId[i] !== largestId) out[i] = 0;
+  }
   return out;
 }
 

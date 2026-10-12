@@ -4,6 +4,7 @@ import {
   computeExteriorMask,
   despill,
   hueDistance,
+  keepLargestOpaqueComponent,
   keyAlpha,
   layoutWithPadding,
   rgbToHsv,
@@ -300,6 +301,75 @@ describe('stripSupportLines', () => {
     // The long straight probe row/column through the hair mass is untouched.
     for (let x = 30; x < 50; x++) expect(result[40 * width + x]).toBe(255);
     for (let y = 30; y < 50; y++) expect(result[y * width + 40]).toBe(255);
+  });
+
+  it('keeps a solid hair block fully opaque when a 2px support line runs straight through it', () => {
+    // A solid block (hair) 40px tall, 60px wide — far thicker than any real
+    // ink stroke — crossed by a 2px-thick line that extends well past the
+    // block into open background on both ends. The block must survive
+    // untouched (it is never even a *candidate*, being far too thick); only
+    // the thin stretches of the line outside the block must go.
+    const width = 100;
+    const height = 60;
+    const block = { left: 20, right: 80, top: 10, bottom: 50 };
+    const lineRows = [29, 30];
+    const { alpha, dark, exterior } = buildGrids(width, height, (x, y) => {
+      const inBlock = x >= block.left && x < block.right && y >= block.top && y < block.bottom;
+      const onLine = lineRows.includes(y);
+      if (inBlock || onLine) return { a: 255, d: true };
+      return { a: 0 };
+    });
+    const result = stripSupportLines(alpha, dark, exterior, width, height, opts);
+    // The block is fully opaque, including the rows the line passes through.
+    for (let y = block.top; y < block.bottom; y++) {
+      for (let x = block.left; x < block.right; x++) {
+        expect(result[y * width + x]).toBe(255);
+      }
+    }
+    // The line is gone everywhere outside the block.
+    for (const y of lineRows) {
+      for (let x = 0; x < block.left; x++) expect(result[y * width + x]).toBe(0);
+      for (let x = block.right; x < width; x++) expect(result[y * width + x]).toBe(0);
+    }
+  });
+});
+
+describe('keepLargestOpaqueComponent', () => {
+  function buildAlpha(width: number, height: number, fill: (x: number, y: number) => number) {
+    const alpha = new Uint8ClampedArray(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) alpha[y * width + x] = fill(x, y);
+    }
+    return alpha;
+  }
+
+  it('discards a small disconnected blob and keeps the large one', () => {
+    const width = 50;
+    const height = 50;
+    const alpha = buildAlpha(width, height, (x, y) => {
+      const inBody = x >= 5 && x < 35 && y >= 5 && y < 45; // 30x40 = 1200px
+      const inStub = x >= 40 && x < 45 && y >= 40 && y < 45; // 5x5 = 25px, disconnected
+      return inBody || inStub ? 255 : 0;
+    });
+    const result = keepLargestOpaqueComponent(alpha, width, height);
+    expect(result[10 * width + 10]).toBe(255); // body survives
+    expect(result[42 * width + 42]).toBe(0); // stub discarded
+  });
+
+  it('leaves a single component untouched', () => {
+    const width = 20;
+    const height = 20;
+    const alpha = buildAlpha(width, height, (x, y) => (x >= 5 && x < 15 && y >= 5 && y < 15 ? 255 : 0));
+    const result = keepLargestOpaqueComponent(alpha, width, height);
+    expect(Array.from(result)).toEqual(Array.from(alpha));
+  });
+
+  it('leaves a fully transparent image untouched', () => {
+    const width = 10;
+    const height = 10;
+    const alpha = new Uint8ClampedArray(width * height);
+    const result = keepLargestOpaqueComponent(alpha, width, height);
+    expect(Array.from(result)).toEqual(Array.from(alpha));
   });
 });
 
