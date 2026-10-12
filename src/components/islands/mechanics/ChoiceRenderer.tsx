@@ -40,11 +40,18 @@ import type { MechanicRendererProps } from './types';
  *
  * `min-h-20` is the tile's floor, not its height: a two-word option and a
  * clause-long one sit on the same grid row and must not be two different sizes.
+ *
+ * SOFT SURFACE, NEVER A HARD-BORDERED BOX (UI-kit refactor, owner spec: "muy
+ * cuadrada" — the same bug the drag mechanics' own tiles were fixed for,
+ * `mechanics/chip.ts`'s header). `rounded-[20px] bg-card shadow-elevation-1`
+ * is the SAME soft-card recipe `QuizMatching`'s own prompt row and
+ * `QuizCloze`'s own sentence card use; selection settles as a ring + tint,
+ * never a border, so the shape itself never grows a visible edge.
  */
 const TILE =
-  'flex min-h-20 items-center gap-4 rounded-lg border-2 border-border bg-surface-soft p-4 transition-colors sm:p-5 ' +
-  'has-data-[state=checked]:border-accent-ink has-data-[state=checked]:bg-accent/10 ' +
-  'has-[:focus-visible]:border-accent-ink';
+  'flex min-h-20 items-center gap-4 rounded-[20px] bg-card shadow-elevation-1 p-4 transition-shadow sm:p-5 ' +
+  'has-data-[state=checked]:shadow-elevation-2 has-data-[state=checked]:ring-2 has-data-[state=checked]:ring-accent-ink has-data-[state=checked]:bg-accent/10 ' +
+  'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring';
 
 export default function ChoiceRenderer({
   slot,

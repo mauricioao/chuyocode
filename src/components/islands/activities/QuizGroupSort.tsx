@@ -583,7 +583,10 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
             ref={trayRef}
             data-testid="groupsort-tray"
             aria-label={t.groupSortTrayLabel}
-            className="flex list-none gap-3 overflow-x-auto p-0 pb-2 sm:flex-wrap sm:overflow-visible"
+            // Always `flex-wrap`, never a horizontal scroller below `sm` —
+            // same mobile-tray-clipping bug `QuizMatching.tsx`'s own tray
+            // documents.
+            className="flex list-none flex-wrap gap-3 p-0 pb-2"
           >
             {trayIds.map((id) => {
               const item = itemById.get(id);

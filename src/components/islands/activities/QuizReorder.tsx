@@ -526,7 +526,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
             ref={trayRef}
             data-testid="reorder-tray"
             aria-label={t.reorderTrayLabel}
-            className="flex list-none flex-wrap gap-3 overflow-x-auto p-0 pb-2 sm:overflow-visible"
+            className="flex list-none flex-wrap gap-3 p-0 pb-2"
           >
             {trayIds.map((id) => {
               const tile = tileById.get(id);

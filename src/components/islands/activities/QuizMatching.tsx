@@ -138,8 +138,18 @@ function shuffledTray(items: readonly GameItem[], seed: string, round: number): 
   );
 }
 
-/** Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe (`mechanics/chip.ts`) — a tray tile sits at rest; `className` below layers {@link CHIP_PLACED} on once it is placed or tap-picked. */
-const TILE_BASE = cn(CHIP_STAGE, 'w-full');
+/**
+ * Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe
+ * (`mechanics/chip.ts`) — a tray tile sits at rest, hugging its own label;
+ * `className` below layers {@link CHIP_PLACED} on once it is placed or
+ * tap-picked, and `MatchSlot` adds `w-full` ITSELF only for the tile that
+ * has actually landed in a slot (so the chip fills the target it was
+ * dropped into, same as `DropRenderer`'s own filled box) — never here,
+ * where it would force every tray tile to one shared fixed width again
+ * (owner bug: "agua" clipped off a 390px tray because every chip, short or
+ * long, was stretched to the same ~245px box).
+ */
+const TILE_BASE = CHIP_STAGE;
 
 interface MatchTileProps {
   id: string;
@@ -247,7 +257,11 @@ function MatchSlot({
           reducedMotion={reducedMotion}
           onClick={onRemove}
           ariaLabel={`${removeLabel} ${tile.answer}`}
-          className={cn('border-0', CHIP_PLACED, locked && 'text-success-strong-foreground')}
+          // `w-full`: the ONE place a chip is stretched — a tile that has
+          // landed in its slot fills that target completely, same as
+          // `DropRenderer`'s own filled box (`TILE_BASE` itself never
+          // forces a width, see that token's own header).
+          className={cn('border-0 w-full', CHIP_PLACED, locked && 'text-success-strong-foreground')}
         />
       ) : (
         <button
@@ -256,7 +270,17 @@ function MatchSlot({
           aria-label={emptyLabel}
           onClick={onPlacePicked}
           disabled={disabled || !canPlacePicked}
-          className="flex h-full w-full items-center justify-center bg-transparent p-0"
+          // `min-h-11` (44px) is a FLOOR, not decoration (bug found while
+          // auditing tap-to-place): `h-full` on a flex item with no own
+          // content percentage-resolves to 0 against this span's own
+          // `auto` height (the min-height CLAMP that visually sizes the
+          // span is not a `height` the percentage can resolve against), so
+          // this empty-slot tap target silently had ZERO hit area — every
+          // mouse/touch tap on an empty slot missed. `DropRenderer`'s own
+          // empty box never hit this because its hint text gives the
+          // button real content to size from; this one has none. The
+          // floor also satisfies the owner's own "≥44px tap target" bar.
+          className="flex h-full min-h-11 w-full items-center justify-center bg-transparent p-0"
         />
       )}
     </span>
@@ -598,13 +622,20 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
                 ref={trayRef}
                 data-testid="matching-tray"
                 aria-label={t.matchTrayLabel}
-                className="flex list-none gap-3 overflow-x-auto p-0 pb-2 sm:flex-wrap sm:overflow-visible"
+                // Always `flex-wrap`, never a horizontal scroller (owner
+                // bug: below `sm` this used to be `overflow-x-auto` with
+                // wrapping opt-in only from `sm` up, which is what clipped
+                // "agua" off the edge of a 390px tray with no visible
+                // scrollbar to hint it was there). Wrapping is correct at
+                // every width down to 320px once each tile hugs its own
+                // label instead of sharing one fixed basis — see `TILE_BASE`.
+                className="flex list-none flex-wrap gap-3 p-0 pb-2"
               >
                 {trayIds.map((id) => {
                   const item = byId.get(id);
                   if (!item) return null;
                   return (
-                    <li key={id} className="shrink-0 basis-36 sm:basis-44">
+                    <li key={id} className="shrink-0">
                       <MatchTile
                         id={id}
                         label={item.answer}

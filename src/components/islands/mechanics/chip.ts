@@ -39,10 +39,20 @@ const CHIP_MATERIAL =
 /** `drop`'s own inline scale — a control spliced into a sentence at `1em` (see `scale.ts`'s `CONTROL_SCALE` header). */
 export const CHIP_INLINE = cn(CHIP_MATERIAL, 'min-h-14 px-4 py-3', CONTROL_SCALE);
 
-/** The four big-stage games' shared "readable from the back of the room" scale. */
+/**
+ * The four big-stage games' shared "readable from the back of the room" scale.
+ *
+ * `min-w-11` (44px) is a FLOOR only, for a very short label ("sí", "ok") —
+ * this chip otherwise hugs its own text via `CHIP_MATERIAL`'s `inline-flex`
+ * plus the padding/height clamps, never a fixed width (owner bug: a tray of
+ * answer chips used to share one wide fixed box regardless of how short or
+ * long each word was, which is also what let a narrow phone's tray overflow
+ * instead of wrapping — see each caller's own tray `<li>`, which must stay
+ * unsized too for this to hug correctly).
+ */
 export const CHIP_STAGE = cn(
   CHIP_MATERIAL,
-  'text-center font-medium',
+  'text-center font-medium min-w-11',
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
   TILE_PADDING_Y_SCALE,

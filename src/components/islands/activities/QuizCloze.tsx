@@ -575,7 +575,7 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false }:
             ref={trayRef}
             data-testid="cloze-tray"
             aria-label={t.clozeTrayLabel}
-            className="flex list-none flex-wrap gap-3 overflow-x-auto p-0 pb-2 sm:overflow-visible"
+            className="flex list-none flex-wrap gap-3 p-0 pb-2"
           >
             {trayIds.map((id) => {
               const item = itemById.get(id);
