@@ -55,6 +55,8 @@
  * is free to leave it for the desk or the header, same as any other
  * non-modal floating window.
  */
+import { ClockIcon } from '@phosphor-icons/react/dist/ssr/Clock';
+import { NotePencilIcon } from '@phosphor-icons/react/dist/ssr/NotePencil';
 import type { Lang } from '@lib/i18n';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { DESK_WINDOW_LIGHT_CLASS } from '@lib/ui/deskWindowLights';
@@ -152,6 +154,17 @@ interface Props {
    */
   statusChip?: string | null;
   /**
+   * UI round 2 (visual pass, 2026-10-12): which calm tone `statusChip`
+   * reads in — never red/error, even for "Rechazada" (owner spec: "no debe
+   * parecer un error"). `'neutral'` (Borrador) keeps today's plain
+   * `bg-muted` pill; `'review'` (En revisión) gets the kit's accent-ink
+   * wash plus a small clock glyph; `'caution'` (Rechazada) stays just as
+   * calm — the SAME muted pill as `'neutral'`, with a small note-pencil
+   * glyph instead of a color change, so the only signal is "this needs a
+   * look", never "something broke". Ignored when `statusChip` is unset.
+   */
+  statusTone?: 'neutral' | 'review' | 'caution';
+  /**
    * EMBEDDED (window-manager architecture): true when this window renders
    * inside the host's own `<iframe>` (`@lib/ui/embeddedWindow`'s own
    * header). The HOST frame element now draws the desktop inset/rounded
@@ -179,6 +192,7 @@ const {
   statusId = 'desk-window-status',
   titleEditable = false,
   statusChip = null,
+  statusTone = 'neutral',
   embedded = false,
 } = Astro.props;
 ---
@@ -369,8 +383,16 @@ const {
       {!titleEditable && statusChip && (
         <span
           data-testid="desk-window-status-chip"
-          class="shrink-0 whitespace-nowrap rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
+          data-tone={statusTone}
+          class:list={[
+            'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium',
+            statusTone === 'review'
+              ? 'border-transparent bg-accent-ink/10 text-accent-ink'
+              : 'border-border bg-muted text-foreground',
+          ]}
         >
+          {statusTone === 'review' && <ClockIcon aria-hidden="true" size={12} weight="bold" />}
+          {statusTone === 'caution' && <NotePencilIcon aria-hidden="true" size={12} weight="bold" />}
           {statusChip}
         </span>
       )}

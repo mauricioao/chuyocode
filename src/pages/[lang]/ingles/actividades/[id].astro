@@ -179,6 +179,8 @@ let isAuthorPreview = false;
 /** `activities.status` ('draft' | 'pending_review' | 'rejected' | 'live') for the preview above — `null` outside author-preview mode. */
 let previewStatus: string | null = null;
 let statusChip: string | null = null;
+/** `DeskWindow`'s own calm tone for `statusChip` (UI round 2) — see that prop's own doc; `'neutral'` is the default so a never-set `previewStatus` keeps today's plain pill. */
+let statusTone: 'neutral' | 'review' | 'caution' = 'neutral';
 let shareBlockedMessage: string | undefined;
 
 /** `activities.status` -> the `editor.status*` key that names it — same closed map `MisActividadesIsland`/`ActivityEditorIsland` each keep their own copy of. */
@@ -187,6 +189,14 @@ const STATUS_LABEL_KEYS: Record<string, 'statusDraft' | 'statusPendingReview' | 
   pending_review: 'statusPendingReview',
   live: 'statusLive',
   rejected: 'statusRejected',
+};
+
+/** `activities.status` -> `DeskWindow`'s `statusTone` (UI round 2: a calm tone per status, never red for "rejected"). */
+const STATUS_TONES: Record<string, 'neutral' | 'review' | 'caution'> = {
+  draft: 'neutral',
+  pending_review: 'review',
+  live: 'neutral',
+  rejected: 'caution',
 };
 
 if (!hostMode) {
@@ -335,6 +345,7 @@ if (!hostMode) {
     const editorT = UI_LABELS[lang].activities.editor;
     const key = STATUS_LABEL_KEYS[previewStatus] ?? 'statusDraft';
     statusChip = editorT[key];
+    statusTone = STATUS_TONES[previewStatus] ?? 'neutral';
     shareBlockedMessage =
       previewStatus === 'pending_review' ? t.authorPreviewSharePending : t.authorPreviewShareUnpublished;
   }
@@ -371,6 +382,7 @@ function heartsLabel(count: number): string {
     title={activity.title}
     levelChip={levelChip}
     statusChip={statusChip}
+    statusTone={statusTone}
     closeHref={closeHref}
     closeLabel={t.windowClose}
     minimizeLabel={t.windowMinimize}
