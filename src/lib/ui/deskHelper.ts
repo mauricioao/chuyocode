@@ -21,7 +21,6 @@
  * module used to own is GONE — there is no more "today's tip" to correct
  * once the pick is random on every render.
  */
-import { CHARACTERS, characterFallbackSrc, characterSrcSet } from '@/content/characters';
 import { readTipQueue, takeNextTipId, writeTipQueue } from '@lib/ui/deskHelperQueue';
 import { loadFullTips, type DeskHelperClientTip } from '@lib/ui/deskHelperTipsClient';
 import { boxesIntersect } from '@lib/ui/deskHelperCollision';
@@ -81,18 +80,17 @@ function writeStoredFold(folded: boolean): void {
   }
 }
 
-/** Paints `tip` into the bubble/avatar — shared by the initial server-picked tip's `data-*` bookkeeping (no re-render needed, the markup already shows it) and every "Otro tip" click. */
+/** Vanina is the one helper voice now (visual-polish pass, owner-approved cast split) — see `DeskHelper.astro`'s own header for why this no longer reads `tip.character`. Proper noun, same in `es`/`en`. */
+const DESK_HELPER_NAME = 'Vanina';
+
+/** Paints `tip` into the bubble/avatar — shared by the initial server-picked tip's `data-*` bookkeeping (no re-render needed, the markup already shows it) and every "Otro tip" click. Only the TIP TEXT changes; the name/avatar stay Vanina's. */
 function render(
   root: HTMLElement,
   tip: DeskHelperClientTip,
-  lang: Lang,
+  _lang: Lang,
   avatarLabelTemplate: string,
 ): void {
-  const name = CHARACTERS[tip.character].alt[lang];
   root.setAttribute('data-tip-id', tip.id);
-
-  const nameEl = root.querySelector<HTMLElement>('[data-desk-helper-name]');
-  if (nameEl) nameEl.textContent = name;
 
   // `tip.html` is AUTHORED content (`DESK_HELPER_TIPS`, via the
   // `/desk-tips-{lang}.json` endpoint), never visitor input — same
@@ -101,15 +99,12 @@ function render(
   const tipEl = root.querySelector<HTMLElement>('[data-desk-helper-tip]');
   if (tipEl) tipEl.innerHTML = tip.html;
 
+  // Name/avatar/aria-label never change per tip any more — they are set
+  // once in `DeskHelper.astro`'s own server render and stay Vanina's.
+  // Re-asserting the label here is still worthwhile cheap insurance against
+  // any future caller that mutates it outside this module.
   const avatar = root.querySelector<HTMLElement>('[data-desk-helper-avatar]');
-  if (avatar) avatar.setAttribute('aria-label', avatarLabelTemplate.replace('{name}', name));
-
-  const avifEl = root.querySelector<HTMLSourceElement>('[data-desk-helper-avif]');
-  if (avifEl) avifEl.srcset = characterSrcSet(tip.character, 'avif');
-  const webpEl = root.querySelector<HTMLSourceElement>('[data-desk-helper-webp]');
-  if (webpEl) webpEl.srcset = characterSrcSet(tip.character, 'webp');
-  const imgEl = root.querySelector<HTMLImageElement>('[data-desk-helper-img]');
-  if (imgEl) imgEl.src = characterFallbackSrc(tip.character);
+  if (avatar) avatar.setAttribute('aria-label', avatarLabelTemplate.replace('{name}', DESK_HELPER_NAME));
 }
 
 function setFolded(root: HTMLElement, bubble: HTMLElement, avatar: HTMLElement, folded: boolean): void {

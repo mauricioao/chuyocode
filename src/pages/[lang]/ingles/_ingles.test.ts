@@ -64,7 +64,6 @@ import PropuestosPage from './propuestos/index.astro';
 import ListingPage from './[level]/[focus]/index.astro';
 import DetailPage from './[level]/[focus]/[slug].astro';
 import { DESK_HELPER_TIPS } from '@/content/deskHelperTips';
-import { CHARACTERS } from '@/content/characters';
 
 type PageComponent = Parameters<
   Awaited<ReturnType<typeof createContainer>>['renderToResponse']
@@ -156,6 +155,18 @@ describe('ingles/index.astro (hub)', () => {
     expect(playerIsland).toBeDefined();
     expect(playerIsland).not.toContain('data-desk-widget');
     expect(html).toMatch(/data-desk-widget="player"[^>]*>\s*<astro-island/);
+  });
+
+  // Visual-polish pass, DIRECCION-VISUAL.md §4.3 "romper la caja": Paco sits
+  // on the clock widget's own top edge, desktop only.
+  it('renders Paco on the desk, decorative and desktop-only, never on the mobile grid', async () => {
+    const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="desk-scene-paco"');
+    expect(html).toMatch(/data-testid="desk-scene-paco"[^>]*aria-hidden="true"/);
+    expect(html).toMatch(/data-testid="desk-scene-paco"[^>]*class="[^"]*\bhidden\b[^"]*\bdesk:block\b/);
+    expect(html).toContain('/images/characters/paco/sentado-borde-71.webp');
   });
 
   describe('greeting', () => {
@@ -333,24 +344,25 @@ describe('ingles/index.astro (hub)', () => {
       return DESK_HELPER_TIPS[0];
     }
 
-    it('renders the landmark and the character image with a decorative (empty) alt', async () => {
+    it('renders the landmark and Vanina\'s avatar image with a decorative (empty) alt', async () => {
       const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
       const html = await res.text();
 
       expect(html).toContain('aria-label="Ayuda"');
-      const tip = pickedTip();
-      expect(html).toContain(`/images/characters/${tip.character}-v2-128.webp`);
+      // Vanina is the one helper voice now (visual-polish pass, owner-
+      // approved cast split) — the avatar no longer varies per tip.
+      expect(html).toContain('/images/characters/vanina/avatar-114.webp');
       expect(html).toMatch(/<img[^>]+data-desk-helper-img[^>]+alt=""/);
     });
 
-    it('renders the server-picked tip bubble, in Spanish, naming the speaking character, keyed by its id', async () => {
+    it('renders the server-picked tip bubble, in Spanish, naming Vanina as the helper, keyed by its id', async () => {
       const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
       const html = await res.text();
 
       const tip = pickedTip();
-      expect(html).toContain(CHARACTERS[tip.character].alt.es);
+      expect(html).toContain('Vanina');
       expect(html).toContain(tip.es);
-      expect(html).toContain('aria-label="Ayuda de');
+      expect(html).toContain('aria-label="Ayuda de Vanina"');
       expect(html).toContain(`data-tip-id="${tip.id}"`);
       expect(html).toContain('data-lang="es"');
       // Never embeds the full 100-tip list in the page itself (PART 7's own
