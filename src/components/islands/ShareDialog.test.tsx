@@ -20,6 +20,22 @@ import { toast } from 'sonner';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ShareDialog, { COPIED_RESET_MS, type ShareLabels } from './ShareDialog';
 
+// `sonner`'s named ESM export is non-configurable, so `vi.spyOn` on the
+// module namespace itself (to spy the bare `toast(message)` call, as the
+// author-preview "blockedMessage" tests below need) throws "Cannot redefine
+// property". `toast.success`/etc. are ordinary WRITABLE properties on the
+// function object, which is why the existing clipboard tests below can
+// `vi.spyOn(toast, 'success')` directly with no module mock at all — only
+// the bare call needs this: replace the export with a `vi.fn` wrapping the
+// real implementation (still calls through, so `toast.success` keeps
+// working unmocked) with every real property copied onto it.
+vi.mock('sonner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('sonner')>();
+  const mockToast = vi.fn(actual.toast) as unknown as typeof actual.toast;
+  Object.assign(mockToast, actual.toast);
+  return { ...actual, toast: mockToast };
+});
+
 const URL_UNDER_TEST =
   'https://chuyocode.com/es/ingles/A2/past-simple/refactor-the-legacy-module';
 
@@ -359,5 +375,40 @@ describe('ShareDialog — hydration (Bug 1, React error #418)', () => {
       <ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} asMenuItem />
     ));
     expect(recoverableErrors).toEqual([]);
+  });
+});
+
+// Author preview (R1, owner decision 2026-10-12): the activity is not
+// published yet, so there is nothing real to share — clicking any trigger
+// shows the owner's own message via toast instead of opening the dialog.
+// Every variant (default/iconOnly/asMenuItem) keeps its own markup/testid,
+// it just never mounts a `role="dialog"`.
+describe('ShareDialog — blockedMessage (author preview, owner decision 2026-10-12)', () => {
+  const BLOCKED =
+    'No se puede compartir la actividad porque está en revisión, por el momento solo está disponible para ti 😘';
+
+  it('shows the message via toast instead of opening the dialog (default trigger)', () => {
+    vi.mocked(toast).mockClear();
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} blockedMessage={BLOCKED} />);
+    const trigger = screen.getByTestId('exercise-share');
+    fireEvent.click(trigger);
+    expect(toast).toHaveBeenCalledWith(BLOCKED);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows the message for the iconOnly trigger too, never the dialog content', () => {
+    vi.mocked(toast).mockClear();
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} iconOnly blockedMessage={BLOCKED} />);
+    fireEvent.click(screen.getByTestId('exercise-share'));
+    expect(toast).toHaveBeenCalledWith(BLOCKED);
+    expect(screen.queryByTestId('exercise-qr')).toBeNull();
+  });
+
+  it('shows the message for the asMenuItem trigger too, never the dialog content', () => {
+    vi.mocked(toast).mockClear();
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} asMenuItem blockedMessage={BLOCKED} />);
+    fireEvent.click(screen.getByTestId('exercise-share-menu'));
+    expect(toast).toHaveBeenCalledWith(BLOCKED);
+    expect(screen.queryByTestId('exercise-qr')).toBeNull();
   });
 });

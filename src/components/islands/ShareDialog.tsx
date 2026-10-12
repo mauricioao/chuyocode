@@ -124,6 +124,15 @@ export interface ShareDialogProps {
    * icon-plus-visible-text button.
    */
   asMenuItem?: boolean;
+  /**
+   * Author preview (R1, owner decision 2026-10-12): the activity is not
+   * published yet, so there is nothing real to share — the trigger shows
+   * THIS message via the app's existing toast instead of opening the dialog
+   * at all. No `DialogContent` (QR/copy link/WhatsApp) is ever mounted while
+   * this is set; every other prop here is simply ignored. Omitted (every
+   * other caller) keeps today's behaviour unchanged.
+   */
+  blockedMessage?: string;
 }
 
 /**
@@ -162,6 +171,7 @@ export default function ShareDialog({
   downloadFileName,
   iconOnly = false,
   asMenuItem = false,
+  blockedMessage,
 }: ShareDialogProps) {
   const tooltipId = useId();
   const [copied, setCopied] = useState(false);
@@ -226,6 +236,68 @@ export default function ShareDialog({
     anchor.download = downloadFileName;
     anchor.click();
     URL.revokeObjectURL(blobUrl);
+  }
+
+  // Author preview (R1): same trigger markup/testid per variant as below,
+  // but a plain button that toasts `blockedMessage` instead of opening a
+  // `Dialog` — there is no `DialogContent`/QR/copy-link at all on this path,
+  // so there is nothing for a keyboard/screen-reader user to reach past the
+  // trigger either.
+  if (blockedMessage) {
+    const onClick = () => toast(blockedMessage);
+    if (asMenuItem) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="exercise-share-menu"
+          aria-label={labels.trigger}
+          className={MENU_ITEM_CLASS}
+          onClick={onClick}
+        >
+          <ShareNetworkIcon aria-hidden="true" size={18} />
+          <span>{labels.trigger}</span>
+        </Button>
+      );
+    }
+    if (iconOnly) {
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-lg"
+          data-testid="exercise-share"
+          aria-label={labels.trigger}
+          aria-describedby={tooltipId}
+          className={ICON_TOOLTIP_TRIGGER_CLASS}
+          onClick={onClick}
+        >
+          <ShareNetworkIcon aria-hidden="true" size={16} />
+          <span role="tooltip" id={tooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+            {labels.trigger}
+          </span>
+        </Button>
+      );
+    }
+    return (
+      <Button type="button" variant="outline" size="sm" data-testid="exercise-share" onClick={onClick}>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          {SHARE_PATHS.map((d) => (
+            <path key={d} d={d} />
+          ))}
+        </svg>
+        {labels.trigger}
+      </Button>
+    );
   }
 
   return (

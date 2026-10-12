@@ -139,6 +139,19 @@ interface Props {
    */
   titleEditable?: boolean;
   /**
+   * Author preview (R1, owner decision 2026-10-12): "Borrador"/"En
+   * revisión"/"Rechazada" — the SAME status label text + pill style
+   * `MisActividadesIsland`/`ActivityEditorIsland` already use
+   * (`rounded-full border border-border bg-muted …`), shown right in the
+   * title bar so it is obvious at a glance that this render is a private
+   * preview, never the public one. `null`/omitted (every other caller, and
+   * a normal published render) renders nothing — never shown next to
+   * `levelChip` unless the caller has one. Unlike `levelChip`, this is NEVER
+   * hidden below `sm:` — it is the one privacy signal on the page, so it
+   * must survive on a phone too.
+   */
+  statusChip?: string | null;
+  /**
    * EMBEDDED (window-manager architecture): true when this window renders
    * inside the host's own `<iframe>` (`@lib/ui/embeddedWindow`'s own
    * header). The HOST frame element now draws the desktop inset/rounded
@@ -165,6 +178,7 @@ const {
   status = null,
   statusId = 'desk-window-status',
   titleEditable = false,
+  statusChip = null,
   embedded = false,
 } = Astro.props;
 ---
@@ -350,6 +364,14 @@ const {
       {!titleEditable && levelChip && (
         <span class="hidden shrink-0 whitespace-nowrap rounded-full bg-[rgb(61_170_107_/_0.14)] px-2.5 py-0.5 text-xs font-semibold text-[#1e6b43] sm:inline-block">
           {levelChip}
+        </span>
+      )}
+      {!titleEditable && statusChip && (
+        <span
+          data-testid="desk-window-status-chip"
+          class="shrink-0 whitespace-nowrap rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
+        >
+          {statusChip}
         </span>
       )}
       {status != null && (

@@ -699,9 +699,13 @@ export interface PublishedActivity {
  *
  * `visible = true` (i.e. `status = 'live'`) is the ONLY access rule: no
  * ownership check, because the practice page is public to any signed-in
- * visitor, not just the author — a non-live activity 404s for everyone,
- * author included (the editor's own preview covers that case instead; see
- * `WorksheetPlayer`'s creator-preview mode).
+ * visitor, not just the author — a non-live activity 404s for everyone
+ * through THIS read. The practice/presentation pages (owner decision
+ * 2026-10-12, "author preview") fall back to `getActivityForEdit` — which
+ * DOES enforce ownership — only once this returns `null` AND a visitor is
+ * signed in, so the author can still open/play/present their own
+ * draft/pending/rejected activity without this function needing to know
+ * about it.
  *
  * FAIL-SAFE: `null` on any failure — same posture as `getActivityForEdit`.
  */

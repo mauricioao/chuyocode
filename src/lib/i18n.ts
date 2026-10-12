@@ -1034,6 +1034,16 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Descargar QR',
         shareNative: 'Más opciones',
+        // Author preview (R1, owner decision 2026-10-12): the activity is
+        // not published yet, so there is nothing real to share/join —
+        // "Compartir" and the presentation page's QR toggle both show one
+        // of these two instead, chosen by the activity's own status
+        // (`pending_review` vs `draft`/`rejected`) — see `[id].astro`'s own
+        // header on `isAuthorPreview`.
+        authorPreviewSharePending:
+          'No se puede compartir la actividad porque está en revisión, por el momento solo está disponible para ti 😘',
+        authorPreviewShareUnpublished:
+          'No se puede compartir la actividad porque todavía no está publicada, por el momento solo está disponible para ti 😘',
         // "Desktop" redesign PART 6a (owner spec 2026-10-06): the practice
         // page opens as a WINDOW over the desk — see `DeskWindow.astro`'s own
         // header. The three "traffic light" buttons' accessible names; close
@@ -2470,6 +2480,10 @@ export const UI_LABELS = {
         shareWhatsapp: 'WhatsApp',
         shareDownloadQr: 'Download QR',
         shareNative: 'More options',
+        authorPreviewSharePending:
+          "This activity can't be shared because it's in review — for now it's only available to you 😘",
+        authorPreviewShareUnpublished:
+          "This activity can't be shared because it isn't published yet — for now it's only available to you 😘",
         windowClose: 'Close',
         windowMinimize: 'Minimize',
         windowFullScreen: 'Full screen',
