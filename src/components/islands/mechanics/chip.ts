@@ -32,9 +32,19 @@ import {
   TILE_TEXT_SCALE,
 } from './scale';
 
-/** The material + shape every tile shares, before either scale below is layered on top. */
+/**
+ * The material + shape every tile shares, before either scale below is
+ * layered on top.
+ *
+ * `focus-visible:ring-inset` (visual-polish pass, safe-inset system — see
+ * `scale.ts`'s own `STAGE_SAFE_INSET_CLASS` header): a plain `ring-*` is a
+ * `box-shadow`, painted OUTSIDE the border box, which a tile flush against
+ * its scroll container's padding edge would have clipped. `-inset` keeps the
+ * ring inside the box instead, same fix every other correct/incorrect/
+ * selected ring in the big-stage games now uses.
+ */
 const CHIP_MATERIAL =
-  'inline-flex items-center justify-center gap-2 rounded-full border border-transparent bg-[#d1d2d6]/80 backdrop-blur-sm shadow-elevation-1 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-2 rounded-full border border-transparent bg-[#d1d2d6]/80 backdrop-blur-sm shadow-elevation-1 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** `drop`'s own inline scale — a control spliced into a sentence at `1em` (see `scale.ts`'s `CONTROL_SCALE` header). */
 export const CHIP_INLINE = cn(CHIP_MATERIAL, 'min-h-14 px-4 py-3', CONTROL_SCALE);

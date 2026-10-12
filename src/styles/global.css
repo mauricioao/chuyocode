@@ -508,6 +508,18 @@
   --shadow-glow-sky: 0 4px 14px rgb(11 118 188 / 0.25);
   --shadow-glow-red: 0 4px 14px rgb(209 48 44 / 0.25);
   --shadow-glow-mint: 0 4px 14px rgb(11 122 84 / 0.25);
+
+  /* Exercise stage SAFE INSET (visual-polish pass, owner bug: "el borde de
+   * cada ejercicio se corta" — a correct row's own ring, and the corner
+   * check/cross `GradeMark`, were clipped by the scroll container they sit
+   * in). INVARIANT: every scroll/overflow container inside the exercise
+   * stage (`STAGE_SAFE_INSET_CLASS`, `src/components/islands/mechanics/
+   * scale.ts`) carries this as its own padding, so a decoration can never
+   * touch — let alone cross — a clipping edge. 16px is sized to the
+   * largest outset any one decoration reaches: `GradeMark`'s `-top-1.5
+   * -right-1.5` (6px) plus half its `size-5` icon overlapping the corner,
+   * and the widest `shadow-elevation-2` blur (≤12px) riding a row's edge. */
+  --stage-safe-inset: 16px;
 }
 
 /* The light Inglés scope cannot change what a STATIC Tailwind utility

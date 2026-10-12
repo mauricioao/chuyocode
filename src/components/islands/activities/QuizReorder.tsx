@@ -70,6 +70,8 @@ import {
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
+  STAGE_CONTENT_MEASURE,
+  STAGE_SAFE_INSET_CLASS,
 } from '@/components/islands/mechanics/scale';
 import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 
@@ -522,7 +524,11 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="reorder-stage"
-            className={cn('flex min-h-0 flex-col gap-6 overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS)}
+            className={cn(
+              'flex min-h-0 flex-col gap-6 overflow-y-auto',
+              STAGE_BOTTOM_RESERVE_CLASS,
+              STAGE_SAFE_INSET_CLASS,
+            )}
           >
           <ol
             ref={setLineRef}
@@ -532,11 +538,14 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
             // affordance, `mechanics/chip.ts`'s {@link BLANK_EMPTY}); once
             // the line holds words the border goes solid-transparent
             // ({@link BLANK_FILLED}) — "no box" once filled, same as a
-            // single-tile blank, the row of chips speaks for itself.
+            // single-tile blank, the row of chips speaks for itself. Capped
+            // at the shared readable measure, centred in the stage — same
+            // recipe `QuizMatching`'s own prompt column uses.
             className={cn(
               'flex list-none flex-wrap items-center gap-2 p-3 sm:gap-3',
               currentPlacements.length === 0 ? BLANK_EMPTY : BLANK_FILLED,
               STAGE_BOX_MIN_HEIGHT_SCALE,
+              STAGE_CONTENT_MEASURE,
               isOver && !locked && 'border-ring bg-accent/20',
               isSolved && 'border-success-strong bg-success-strong/10',
             )}
