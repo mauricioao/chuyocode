@@ -19,11 +19,21 @@
 /**
  * Font-size ramp for the prompt — the sentence or question being answered.
  *
- * MOBILE FIRST. `text-xl` (20px) at 320px is already a step above body copy and
- * still leaves room for an inline control on the same line; the display sizes
- * are opt-in at `sm` and `lg`, so a phone never inherits a desktop headline.
+ * MOBILE FIRST. `text-xl` (20px) at 320px is already a step above body copy
+ * and still leaves room for an inline control on the same line; `sm:text-2xl`
+ * (24px) is the one bump for a bigger phone/tablet. The DESKTOP step is
+ * `desk:` (1100px), not `lg:` (1024px) — deliberately the SAME breakpoint
+ * `DeskWindow.astro`'s own chrome switches on: below it the window is
+ * always the full-screen sheet (mobile posture regardless of viewport
+ * width), so a `lg:` step in between would grow the text a notch before the
+ * window itself ever leaves "mobile" behind. UI-kit refactor, owner spec
+ * ("readable from the back of the room" — the same bar the big-stage drag
+ * tiles' own `TILE_TEXT_SCALE` ceiling is held to): `text-[2.75rem]` is
+ * exactly that ceiling's 44px, so a static sentence and the drag games'
+ * own tiles land on the SAME desktop size instead of two independently
+ * tuned numbers that could drift apart.
  */
-export const PROMPT_SCALE = 'text-xl sm:text-2xl lg:text-3xl';
+export const PROMPT_SCALE = 'text-xl sm:text-2xl desk:text-[2.75rem]';
 
 /**
  * Readability cap for the prompt. Deliberately in `em`, not `rem` or a

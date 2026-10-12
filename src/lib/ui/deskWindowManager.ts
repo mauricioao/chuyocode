@@ -44,6 +44,7 @@ import {
   type MinimizedWindowEntry,
 } from './minimizedWindows';
 import { readPersistedDeskWindows, writePersistedDeskWindows } from './deskWindowsPersistence';
+import { DESK_WINDOW_LIGHT_CLASS } from './deskWindowLights';
 
 const DESK_BREAKPOINT_QUERY = '(min-width: 1100px)';
 
@@ -86,7 +87,7 @@ type PendingOpen = { kind: 'origin'; x: number; y: number } | { kind: 'cascade' 
  * bottom/side insets are unchanged.
  */
 const WRAPPER_CLASS =
-  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-16 desk:rounded-[18px] shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]';
+  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-16 desk:rounded-[20px] shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]';
 
 interface ManagedWindow {
   wrapper: HTMLElement;
@@ -147,7 +148,7 @@ function buildLoader(doc: Document, win: Window): HTMLElement {
   loader.className = 'pointer-events-none absolute inset-0 flex flex-col bg-card transition-opacity duration-200';
 
   const titlebar = doc.createElement('div');
-  titlebar.className = 'flex h-11 flex-none items-center gap-2 border-b border-border px-4';
+  titlebar.className = 'flex h-11 flex-none items-center gap-2 border-b border-border bg-chrome px-4';
   const lights = doc.createElement('div');
   lights.className = 'flex items-center gap-2';
   for (let i = 0; i < 3; i += 1) {
@@ -254,7 +255,7 @@ function buildFallbackBar(doc: Document): {
   bar.hidden = true;
   bar.dataset.deskWindowFallbackBar = '';
   bar.className =
-    'absolute inset-x-0 top-0 z-10 flex h-11 flex-none items-center gap-3 border-b border-border bg-card px-4 desk:cursor-grab';
+    'absolute inset-x-0 top-0 z-10 flex h-11 flex-none items-center gap-3 border-b border-border bg-chrome px-4 desk:cursor-grab';
 
   // `group` reveals every light's own glyph together on hover OR keyboard
   // focus of ANY one of the three (`group-hover`/`group-focus-within` on
@@ -262,18 +263,18 @@ function buildFallbackBar(doc: Document): {
   const lights = doc.createElement('div');
   lights.className = 'group flex flex-none items-center gap-2';
 
-  const closeButton = buildFallbackLight(doc, 'bg-pop-red', 'M2 2L8 8M8 2L2 8');
+  const closeButton = buildFallbackLight(doc, DESK_WINDOW_LIGHT_CLASS.close, 'M2 2L8 8M8 2L2 8');
   closeButton.dataset.deskWindowFallbackClose = '';
   lights.appendChild(closeButton);
 
-  const minimizeButton = buildFallbackLight(doc, 'bg-pop-yellow', 'M2 5H8');
+  const minimizeButton = buildFallbackLight(doc, DESK_WINDOW_LIGHT_CLASS.minimize, 'M2 5H8');
   minimizeButton.dataset.deskWindowFallbackMinimize = '';
   lights.appendChild(minimizeButton);
 
   // Owner report (verified in a real browser): "working red/yellow/green" —
   // the fallback bar is a full three-light title bar, same as a genuine
   // desk window's own, not just close/minimize.
-  const maximizeButton = buildFallbackLight(doc, 'bg-pop-green', 'M2 4.5V2H4.5M8 5.5V8H5.5');
+  const maximizeButton = buildFallbackLight(doc, DESK_WINDOW_LIGHT_CLASS.fullscreen, 'M2 4.5V2H4.5M8 5.5V8H5.5');
   maximizeButton.dataset.deskWindowFallbackMaximize = '';
   lights.appendChild(maximizeButton);
 

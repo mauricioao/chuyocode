@@ -57,6 +57,7 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
@@ -64,9 +65,6 @@ import {
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
 
 /** Past this many pairs, the prompt list switches to {@link STAGE_TWO_COL_GRID} on a wide stage — see that token's own header. */
@@ -140,14 +138,18 @@ function shuffledTray(items: readonly GameItem[], seed: string, round: number): 
   );
 }
 
-/** Shared visual base for every tile, tray or placed — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
-const TILE_BASE = cn(
-  'inline-flex w-full items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-);
+/**
+ * Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe
+ * (`mechanics/chip.ts`) — a tray tile sits at rest, hugging its own label;
+ * `className` below layers {@link CHIP_PLACED} on once it is placed or
+ * tap-picked, and `MatchSlot` adds `w-full` ITSELF only for the tile that
+ * has actually landed in a slot (so the chip fills the target it was
+ * dropped into, same as `DropRenderer`'s own filled box) — never here,
+ * where it would force every tray tile to one shared fixed width again
+ * (owner bug: "agua" clipped off a 390px tray because every chip, short or
+ * long, was stretched to the same ~245px box).
+ */
+const TILE_BASE = CHIP_STAGE;
 
 interface MatchTileProps {
   id: string;
@@ -187,7 +189,7 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
         TILE_BASE,
         'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && 'ring-2 ring-ring',
+        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-ring'),
         gameTileTransitionClassName(reducedMotion),
         className,
       )}
@@ -236,9 +238,9 @@ function MatchSlot({
       data-over={isOver ? 'true' : undefined}
       data-filled={tile ? 'true' : undefined}
       className={cn(
-        'inline-flex min-w-32 flex-1 rounded-md border-2 transition-colors sm:min-w-48',
+        'inline-flex min-w-32 flex-1 sm:min-w-48',
         TILE_MIN_HEIGHT_SCALE,
-        tile ? 'items-stretch border-solid border-transparent' : 'items-center justify-center border-dashed border-input',
+        tile ? cn('items-stretch', BLANK_FILLED) : cn('items-center justify-center', BLANK_EMPTY),
         isOver && !locked && 'border-ring bg-accent/30',
         !tile && canPlacePicked && 'border-ring bg-accent/20',
         locked && 'border-success-strong bg-success-strong/10',
@@ -255,7 +257,11 @@ function MatchSlot({
           reducedMotion={reducedMotion}
           onClick={onRemove}
           ariaLabel={`${removeLabel} ${tile.answer}`}
-          className={cn('border-0', locked && 'text-success-strong-foreground')}
+          // `w-full`: the ONE place a chip is stretched — a tile that has
+          // landed in its slot fills that target completely, same as
+          // `DropRenderer`'s own filled box (`TILE_BASE` itself never
+          // forces a width, see that token's own header).
+          className={cn('border-0 w-full', CHIP_PLACED, locked && 'text-success-strong-foreground')}
         />
       ) : (
         <button
@@ -264,7 +270,17 @@ function MatchSlot({
           aria-label={emptyLabel}
           onClick={onPlacePicked}
           disabled={disabled || !canPlacePicked}
-          className="flex h-full w-full items-center justify-center bg-transparent p-0"
+          // `min-h-11` (44px) is a FLOOR, not decoration (bug found while
+          // auditing tap-to-place): `h-full` on a flex item with no own
+          // content percentage-resolves to 0 against this span's own
+          // `auto` height (the min-height CLAMP that visually sizes the
+          // span is not a `height` the percentage can resolve against), so
+          // this empty-slot tap target silently had ZERO hit area — every
+          // mouse/touch tap on an empty slot missed. `DropRenderer`'s own
+          // empty box never hit this because its hint text gives the
+          // button real content to size from; this one has none. The
+          // floor also satisfies the owner's own "≥44px tap target" bar.
+          className="flex h-full min-h-11 w-full items-center justify-center bg-transparent p-0"
         />
       )}
     </span>
@@ -570,10 +586,16 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
                   <div
                     key={item.id}
                     data-testid={`matching-prompt-${item.id}`}
+                    // Soft surface, never a hard-bordered card (UI-kit
+                    // refactor, owner spec: "muy cuadrada") — `bg-card` +
+                    // `shadow-elevation-1` at radius 20, same material the
+                    // desk's own flat (non-glass) surfaces use. Correct
+                    // settles as a tint + ring, never a border, so the shape
+                    // itself never grows a visible edge.
                     className={cn(
-                      'flex flex-wrap items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-3 sm:gap-4',
+                      'flex flex-wrap items-center gap-3 rounded-[20px] bg-card shadow-elevation-1 p-3 sm:gap-4',
                       manyPairs ? 'sm:p-3' : 'sm:p-4',
-                      locked && 'border-success-strong bg-success-strong/10',
+                      locked && 'ring-2 ring-success-strong bg-success-strong/10',
                     )}
                   >
                     <p className={cn('min-w-0 flex-1 font-medium text-foreground', PROMPT_SCALE)}>{item.prompt}</p>
@@ -600,13 +622,20 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false }
                 ref={trayRef}
                 data-testid="matching-tray"
                 aria-label={t.matchTrayLabel}
-                className="flex list-none gap-3 overflow-x-auto p-0 pb-2 sm:flex-wrap sm:overflow-visible"
+                // Always `flex-wrap`, never a horizontal scroller (owner
+                // bug: below `sm` this used to be `overflow-x-auto` with
+                // wrapping opt-in only from `sm` up, which is what clipped
+                // "agua" off the edge of a 390px tray with no visible
+                // scrollbar to hint it was there). Wrapping is correct at
+                // every width down to 320px once each tile hugs its own
+                // label instead of sharing one fixed basis — see `TILE_BASE`.
+                className="flex list-none flex-wrap gap-3 p-0 pb-2"
               >
                 {trayIds.map((id) => {
                   const item = byId.get(id);
                   if (!item) return null;
                   return (
-                    <li key={id} className="shrink-0 basis-36 sm:basis-44">
+                    <li key={id} className="shrink-0">
                       <MatchTile
                         id={id}
                         label={item.answer}

@@ -63,15 +63,12 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import {
   FLOATING_CHECK_BAR_CLASS,
   FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
 
 export interface QuizReorderProps {
@@ -143,14 +140,8 @@ const REORDER_COPY: Record<'es' | 'en', ReorderCopy> = {
   },
 };
 
-/** Shared visual base for every word tile — the shared "big stage" scale (`mechanics/scale.ts`), same recipe every sibling game uses. */
-const TILE_BASE = cn(
-  'inline-flex items-center justify-center rounded-md border border-input bg-card text-center font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-);
+/** Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe (`mechanics/chip.ts`). */
+const TILE_BASE = CHIP_STAGE;
 
 interface WordTileButtonProps {
   id: string;
@@ -160,11 +151,13 @@ interface WordTileButtonProps {
   wrong: boolean;
   reducedMotion: boolean;
   draggable: boolean;
+  /** Already placed in the sentence line — white/raised, same "placed" look every sibling mechanic's tile gets once it lands (`mechanics/chip.ts`'s {@link CHIP_PLACED}). A tray tile (not yet placed) stays the grey glass rest state. */
+  placed: boolean;
   onClick: () => void;
   ariaLabel?: string;
 }
 
-function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, draggable, onClick, ariaLabel }: WordTileButtonProps) {
+function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, draggable, placed, onClick, ariaLabel }: WordTileButtonProps) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled: disabled || !draggable });
 
   return (
@@ -181,6 +174,7 @@ function WordTileButton({ id, label, disabled, dragging, wrong, reducedMotion, d
       aria-label={ariaLabel}
       className={cn(
         TILE_BASE,
+        placed && CHIP_PLACED,
         draggable && 'touch-none',
         dragging && 'opacity-40',
         wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
@@ -488,8 +482,14 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
             ref={setLineRef}
             data-testid={`reorder-line-${index}`}
             aria-label={t.reorderLineLabel}
+            // Dashed capsule outline while empty (the shared blank
+            // affordance, `mechanics/chip.ts`'s {@link BLANK_EMPTY}); once
+            // the line holds words the border goes solid-transparent
+            // ({@link BLANK_FILLED}) — "no box" once filled, same as a
+            // single-tile blank, the row of chips speaks for itself.
             className={cn(
-              'flex list-none flex-wrap items-center gap-2 rounded-lg border-2 border-dashed border-input bg-surface-soft p-3 sm:gap-3',
+              'flex list-none flex-wrap items-center gap-2 p-3 sm:gap-3',
+              currentPlacements.length === 0 ? BLANK_EMPTY : BLANK_FILLED,
               STAGE_BOX_MIN_HEIGHT_SCALE,
               isOver && !locked && 'border-ring bg-accent/20',
               isSolved && 'border-success-strong bg-success-strong/10',
@@ -513,6 +513,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
                     wrong={currentWrong.has(tileId)}
                     reducedMotion={reducedMotion}
                     draggable={false}
+                    placed
                     onClick={() => removeTile(tileId)}
                     ariaLabel={`${t.reorderRemovePrefix} ${tile.word}`}
                   />
@@ -525,7 +526,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
             ref={trayRef}
             data-testid="reorder-tray"
             aria-label={t.reorderTrayLabel}
-            className="flex list-none flex-wrap gap-3 overflow-x-auto p-0 pb-2 sm:overflow-visible"
+            className="flex list-none flex-wrap gap-3 p-0 pb-2"
           >
             {trayIds.map((id) => {
               const tile = tileById.get(id);
@@ -540,6 +541,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false }:
                     wrong={false}
                     reducedMotion={reducedMotion}
                     draggable
+                    placed={false}
                     onClick={() => appendTile(id)}
                   />
                 </li>

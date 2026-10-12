@@ -57,6 +57,7 @@
  */
 import type { Lang } from '@lib/i18n';
 import { ROW_PADDING_X } from '@lib/ui/layout';
+import { DESK_WINDOW_LIGHT_CLASS } from '@lib/ui/deskWindowLights';
 
 interface Props {
   lang: Lang;
@@ -180,15 +181,21 @@ const {
   tabindex="-1"
   data-desk-window-embedded={embedded ? '' : undefined}
   class:list={[
-    'ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-card outline-none',
+    // `bg-chrome`, not `bg-card` (UI-kit refactor, stage-inset pass): the
+    // WINDOW's own surface is now the chrome band the titlebar always
+    // used, so the small gap `data-desk-window-body` opens around itself
+    // below reveals chrome, not a mismatched white sliver. The body itself
+    // carries its own `bg-card` unconditionally (below), so this is a no-op
+    // in every mode with no gap (mobile, embedded, maximized).
+    'ingles-window fixed inset-0 z-50 flex flex-col overflow-clip rounded-none bg-chrome outline-none',
     // EMBEDDED (window-manager architecture): the HOST frame element draws
     // the desktop inset/rounded corners/drop shadow now (and owns dragging/
     // maximizing it) — this window just fills the iframe at every width,
     // same as the existing below-`desk:`/guest full-screen sheet, never the
     // desktop-inset treatment below. See the `embedded` prop's own doc.
     !embedded && [
-      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[18px]',
-      'shadow-[0_0_0_1px_rgb(28_28_30_/_0.08),0_30px_80px_rgb(28_28_30_/_0.22)]',
+      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[20px]',
+      'shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]',
     ],
   ]}
 >
@@ -205,7 +212,7 @@ const {
   <div
     data-testid="desk-window-titlebar"
     data-desk-window-titlebar
-    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border desk:flex-nowrap desk:cursor-grab ${ROW_PADDING_X} py-3`}
+    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border bg-chrome desk:flex-nowrap desk:cursor-grab ${ROW_PADDING_X} py-3`}
   >
     {/* TRAFFIC LIGHTS HIT AREA (owner spec: "mejora el área donde se puede
         hacer click en los botones para cerrar, minimizar y maximizar, se
@@ -229,7 +236,7 @@ const {
         title={closeLabel}
         class="relative inline-flex h-7 w-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span aria-hidden="true" class="h-3.5 w-3.5 rounded-full bg-pop-red"></span>
+        <span aria-hidden="true" class={`h-3.5 w-3.5 rounded-full ${DESK_WINDOW_LIGHT_CLASS.close}`}></span>
         <svg
           aria-hidden="true"
           viewBox="0 0 10 10"
@@ -245,7 +252,7 @@ const {
         title={minimizeLabel}
         class="relative inline-flex h-7 w-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span aria-hidden="true" class="h-3.5 w-3.5 rounded-full bg-pop-yellow"></span>
+        <span aria-hidden="true" class={`h-3.5 w-3.5 rounded-full ${DESK_WINDOW_LIGHT_CLASS.minimize}`}></span>
         <svg
           aria-hidden="true"
           viewBox="0 0 10 10"
@@ -268,7 +275,7 @@ const {
         aria-pressed={forceFullScreen ? 'true' : 'false'}
         class="relative hidden h-7 w-7 items-center justify-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring desk:inline-flex"
       >
-        <span aria-hidden="true" class="h-3.5 w-3.5 rounded-full bg-pop-green"></span>
+        <span aria-hidden="true" class={`h-3.5 w-3.5 rounded-full ${DESK_WINDOW_LIGHT_CLASS.fullscreen}`}></span>
         <svg
           aria-hidden="true"
           viewBox="0 0 10 10"
@@ -294,7 +301,14 @@ const {
         to wrap at all, and its ORIGINAL `items-baseline`, no-wrap layout
         (text truncates/shrinks to fit one line instead) is kept byte
         identical for it. */}
-    <div class={titleEditable ? 'flex min-w-0 flex-1 flex-wrap items-center gap-2.5' : 'flex min-w-0 flex-1 items-baseline gap-2.5'}>
+    <div
+      class={titleEditable
+        ? 'flex min-w-0 flex-1 flex-wrap items-center gap-2.5'
+        /* Centered bold title (UI-kit refactor, macOS-style chrome) — only
+           the plain-text branch: the editable title above has its own
+           documented left-alignment/wrap needs (narrow-phone overlap fix,
+           see this prop's own doc) that a centered flex would fight. */
+        : 'flex min-w-0 flex-1 items-baseline justify-center gap-2.5'}>
       {titleEditable ? (
         <>
           {/* SSR/no-JS + `aria-labelledby` fallback only — visually hidden,
@@ -323,7 +337,7 @@ const {
           />
         </>
       ) : (
-        <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground">
+        <b id={titleId} class="min-w-0 truncate font-display text-[19px] font-extrabold tracking-[-0.02em] text-foreground">
           {title}
         </b>
       )}
@@ -358,7 +372,31 @@ const {
       docked. See that component's own header. Harmless for every other
       caller (the practice window): nothing else reads this attribute or
       relies on it being a positioning context. */}
-  <div class="relative flex min-h-0 flex-1 flex-col overflow-clip" data-desk-window-body>
+  <div
+    class:list={[
+      // The white STAGE, inset inside the chrome window above it (UI-kit
+      // refactor, owner spec: the content area is a white card sitting a
+      // small gap inside the `#f0f0f4` chrome, not a flush white fill —
+      // `bg-card` unconditionally, since below `desk:`, embedded, and
+      // maximized all still want a plain white content area with no gap
+      // (see each branch's own note below).
+      'relative flex min-h-0 flex-1 flex-col overflow-clip bg-card',
+      // GAP + CONCENTRIC RADIUS, desk: and non-embedded only — the same two
+      // conditions the window's own desktop inset above is gated on (an
+      // embedded window's HOST iframe already draws this framing; below
+      // `desk:` the window is the full-screen sheet it always was, with no
+      // chrome gap to inset from). `mx-2`/`mb-2` is the owner's ~8px gap on
+      // the sides and bottom only — never the top, which stays flush
+      // against the titlebar's own bottom border, so only the BOTTOM
+      // corners need the concentric radius (window radius 20px − gap 8px
+      // = 12px); the top ones stay square where the titlebar meets it.
+      // `.ingles-window[data-fullscreen='true']`'s own override (global.css)
+      // zeroes this back out for the maximized green-light state, same
+      // reasoning that rule already applies to the window's own inset.
+      !embedded && 'desk:mx-2 desk:mb-2 desk:rounded-b-[12px] desk:shadow-[var(--shadow-elevation-1),var(--ingles-inset-hairline)]',
+    ]}
+    data-desk-window-body
+  >
     <slot />
   </div>
 </section>

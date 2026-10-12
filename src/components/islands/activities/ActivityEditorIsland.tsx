@@ -1006,7 +1006,11 @@ export default function ActivityEditorIsland({
         type="button"
         size="sm"
         data-testid="submit-for-review-button"
-        className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+        // `!` (UI-kit refactor): the Inglés button kit (global.css) gives the
+        // shared default/primary variant a sky-deep fill via a CSS attribute
+        // selector, which otherwise outranks these plain utilities — `!`
+        // forces this one call site's deliberate yellow back on top.
+        className="!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80"
         onClick={openSubmitDialog}
       >
         {t.submitForReview}
@@ -1111,7 +1115,7 @@ export default function ActivityEditorIsland({
           type="button"
           size="sm"
           data-testid="submit-for-review-button"
-          className="border-pop-yellow bg-pop-yellow text-[#3a2e00] hover:bg-pop-yellow/80"
+          className="!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80"
           onClick={openSubmitDialog}
         >
           {t.submitForReview}

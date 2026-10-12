@@ -64,7 +64,8 @@ import {
   type PoolPlacement,
 } from '@/lib/exercisePayload';
 import BlankSentence from './BlankSentence';
-import { CONTROL_SCALE, PROMPT_MEASURE, PROMPT_SCALE } from './scale';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_INLINE, CHIP_PLACED } from './chip';
+import { PROMPT_MEASURE, PROMPT_SCALE } from './scale';
 import type { MechanicRendererProps } from './types';
 
 /**
@@ -151,9 +152,16 @@ function tileLabel(item: PoolItem): string {
  * (see the render below), so `1em` resolves to the same pixels in both places
  * and a tile does not visibly shrink the moment it is pulled out of the box.
  */
-const TILE_BASE =
-  'inline-flex min-h-14 items-center justify-center gap-2 rounded-md border border-input bg-card px-4 py-3 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ' +
-  CONTROL_SCALE;
+/**
+ * UI-kit refactor: a "grey glass capsule" at rest, white-and-raised once
+ * placed or tap-picked — the shared recipe every sibling drag mechanic now
+ * uses too (`mechanics/chip.ts`), so this file no longer hand-rolls its own
+ * copy of a string five other renderers would otherwise drift away from.
+ */
+const TILE_BASE = CHIP_INLINE;
+
+/** White, raised — the placed tile inside a box, or a tap-picked pool tile. */
+const TILE_PLACED = CHIP_PLACED;
 
 /**
  * The box: the SHAPE of the target, identical in both states.
@@ -170,17 +178,18 @@ const TILE_BASE =
  * exactly the same footprint whether it is empty or full — a tile that lands
  * must not make the sentence around it reflow.
  */
-const BOX_BASE =
-  'mx-1 inline-flex min-h-16 min-w-28 rounded-md border-2 align-middle transition-colors sm:min-w-40';
+const BOX_BASE = 'mx-1 inline-flex min-h-16 min-w-28 align-middle sm:min-w-40';
 
 /**
- * Empty: a dashed outline around a centred hint.
+ * Empty: a dashed CAPSULE outline (`mechanics/chip.ts`'s shared
+ * {@link BLANK_EMPTY} — "blanks = dashed capsule outline, grey ~50%")
+ * around a centred hint.
  *
  * THE DASHES ARE THE AFFORDANCE. They are the only thing that says "something
  * goes here", which is why the filled state below is the one that gives them up
  * — never this one.
  */
-const BOX_EMPTY = 'items-center justify-center border-dashed border-input';
+const BOX_EMPTY = cn('items-center justify-center', BLANK_EMPTY);
 
 /**
  * Filled: the tile IS the box.
@@ -196,7 +205,7 @@ const BOX_EMPTY = 'items-center justify-center border-dashed border-input';
  * it lands. What remains visible is the tile's OWN solid border, which is what
  * distinguishes this state from the dashed empty one.
  */
-const BOX_FILLED = 'items-stretch border-solid border-transparent';
+const BOX_FILLED = cn('items-stretch', BLANK_FILLED);
 
 /**
  * The flow for one {@link PoolPlacement}: how the wrapper stacks, and which of
@@ -344,8 +353,10 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy, canPlacePicked, o
           aria-label={copy.remove(tileLabel(tile))}
           // `flex-1` fills the box's main axis; `BOX_FILLED`'s `items-stretch`
           // fills the cross one. Together they are what makes the placed tile
-          // FILL its target instead of floating inside it.
-          className={cn(TILE_BASE, 'flex-1')}
+          // FILL its target instead of floating inside it. `TILE_PLACED`
+          // (white, raised) overrides the grey-glass resting look once the
+          // tile has actually landed.
+          className={cn(TILE_BASE, TILE_PLACED, 'flex-1')}
         >
           <TileFace item={tile} />
         </button>
@@ -365,11 +376,12 @@ function DropBox({ id, slotId, tile, disabled, onRemove, copy, canPlacePicked, o
               not content: at `1em` inside a display-size sentence it would read as
               an answer already sitting in the box.
 
-              `font-sans` for the SAME reason, one level up: the hint is chrome the
-              app speaks, and the Spanish copy is "Casilla vacía". ChunkFive has no
-              accented glyphs, so inheriting the display face would render `í` — and
-              only `í` — in Raleway, in the middle of the word. Per-character
-              fallback is invisible to CSS and impossible to catch in review. */}
+              `font-sans` for a DIFFERENT reason now that the display face is Inter
+              Variable (UI-kit refactor, full accented-glyph coverage, so the old
+              ChunkFive per-character-fallback bug this comment used to warn about
+              no longer applies): the hint is chrome the app speaks, not exercise
+              CONTENT, and keeping it on the UI face is what visually tells the two
+              apart — see `.exercise-face`'s own header in global.css. */}
           <span className="font-sans px-3 text-sm text-muted-foreground">{copy.empty}</span>
         </button>
       )}
@@ -427,7 +439,7 @@ function PoolTile({ item, disabled, focusRef, picked, onTogglePick }: PoolTilePr
       // screen reader's point of view — "this tile is currently held" — so
       // this merges both rather than picking one.
       aria-pressed={picked || isDragging}
-      className={cn(TILE_BASE, isDragging && 'opacity-50', picked && 'ring-2 ring-ring', 'touch-none')}
+      className={cn(TILE_BASE, picked && TILE_PLACED, isDragging && 'opacity-50', picked && 'ring-2 ring-ring', 'touch-none')}
     >
       <TileFace item={item} />
     </button>

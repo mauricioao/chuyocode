@@ -625,7 +625,7 @@ function QuestionSlide({
         >
           <span
             style={{ fontSize: 24 }}
-            className="font-semibold uppercase tracking-wide text-muted-foreground"
+            className="font-semibold text-muted-foreground"
           >
             {t.answerLabel}
           </span>
@@ -1008,7 +1008,7 @@ function WorksheetZoneHighlight({
           <div className="flex flex-col items-center gap-2" style={{ maxWidth: 640 }}>
             <span
               style={{ fontSize: 24 }}
-              className="rounded-md bg-background/90 px-3 py-1 font-semibold uppercase tracking-wide text-muted-foreground shadow-elevation-1"
+              className="rounded-md bg-background/90 px-3 py-1 font-semibold text-muted-foreground shadow-elevation-1"
             >
               {t.answerLabel}
             </span>
