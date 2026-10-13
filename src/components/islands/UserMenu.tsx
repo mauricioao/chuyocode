@@ -67,21 +67,15 @@
  * the first commit always matches SSR, and a plain (non-hydration) render
  * updates it moments later.
  *
- * MOBILE HAMBURGER MENU (mobile layout pass): `Header.astro`'s own
- * `#mobile-menu` panel (opened by the hamburger button, `md:hidden`) used to
- * show only the primary nav links — no way to sign in, get to "Mis
- * actividades", or sign out without first finding the avatar chip. That
- * panel is plain server-rendered markup, though, and per this file's own
- * "byte-identical for every visitor" constraint above, `Header.astro` still
- * can't read `Astro.locals.user` to add those entries itself. Instead, THIS
- * island (already the one client-side source of truth for who is signed in)
- * portals a second copy of its account actions into an empty, pre-rendered
- * slot inside that panel (`#mobile-menu-account`, found by id after mount) —
- * one `/api/me` fetch, two renderings: the avatar+dropdown stays in the top
- * bar exactly as before, at every breakpoint, and the SAME state additionally
- * reaches the hamburger panel. `createPortal` returns `null` gracefully if
- * that element isn't found (an older layout, or a test rendering this
- * component in isolation) — the top-bar rendering is entirely unaffected.
+ * NO SEPARATE MOBILE COPY (owner decision, visual-bugs pass): `Header.astro`'s
+ * `#mobile-menu` hamburger panel used to get a SECOND copy of the account
+ * entries (Perfil/Crear actividad/Mis actividades/Moderación/Cerrar sesión),
+ * portaled in here once this island knew who was signed in. The owner
+ * reported it redundant — the SAME options are already one tap away from the
+ * avatar trigger's own dropdown below, reachable at every breakpoint — and
+ * asked for the duplicate removed rather than just restyled. The hamburger
+ * panel is nav-links only now; `Header.astro` no longer renders an
+ * `#mobile-menu-account` slot for this island to find.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -110,9 +104,6 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
 
 /** Gap (px) between the trigger and the portaled dropdown below it — the pixel equivalent of the old `mt-2` Tailwind utility this replaces. */
 const MENU_GAP_PX = 8;
-
-/** The id `Header.astro`'s `#mobile-menu` panel reserves for this island's portaled account entries — see the file header. */
-export const MOBILE_MENU_ACCOUNT_SLOT_ID = 'mobile-menu-account';
 
 export interface UserMenuProps {
   /** Active locale. Drives the sign-in link target and every other href this island builds. */
@@ -218,16 +209,6 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
     if (cached) setState(cached);
   }, []);
 
-  // Mobile hamburger menu (mobile layout pass) — see the file header. Found
-  // by id after mount (`Header.astro` already renders the empty slot in its
-  // static markup); stays `null` — and the portal below simply renders
-  // nothing extra — if that slot isn't present (this component under test in
-  // isolation, or an older layout).
-  const [mobileMenuSlot, setMobileMenuSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setMobileMenuSlot(document.getElementById(MOBILE_MENU_ACCOUNT_SLOT_ID));
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -319,79 +300,6 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
     };
   }, [open, close]);
 
-  /**
-   * The account entries `Header.astro`'s hamburger panel gets, portaled into
-   * `mobileMenuSlot` — see the file header. `null` while still loading (the
-   * panel simply keeps showing only its nav links until the real state
-   * arrives, same "no visible jump" posture as the top-bar placeholder
-   * above; the panel starts closed, so this never causes a flash either way).
-   */
-  function mobileAccountEntries(): React.ReactNode {
-    if (state.status === 'loading') return null;
-
-    if (state.status === 'signed-out') {
-      const signInHref = isAuthPagePath(currentPathname())
-        ? `/${lang}/auth/entrar`
-        : `/${lang}/auth/entrar?next=${encodeURIComponent(currentPath())}`;
-      return (
-        <a href={signInHref} data-testid="mobile-account-signin" className="py-1 text-sm font-medium text-primary">
-          {t.signIn}
-        </a>
-      );
-    }
-
-    const { profile } = state;
-    return (
-      <>
-        {/* T3: links to the signed-in visitor's own account settings
-            (`/[lang]/perfil`) — replaces "Eliminar mi cuenta", which moved to
-            that page's own "Zona de peligro" section. Owner spec: "Perfil"
-            is the FIRST entry, "Cerrar sesión" always last. */}
-        <a
-          href={`/${lang}/perfil`}
-          data-testid="mobile-account-profile"
-          className="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
-        >
-          {t.profile}
-        </a>
-        <a href={`/${lang}/crear`} data-testid="mobile-account-create-activity" className="py-1 text-sm font-medium text-muted-foreground hover:text-primary">
-          {t.createActivity}
-        </a>
-        <a
-          href={`/${lang}/mis-actividades`}
-          data-testid="mobile-account-my-activities"
-          className="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
-        >
-          {t.myActivities}
-        </a>
-        {profile.isModerator && (
-          <a
-            href={`/${lang}/admin/actividades`}
-            data-testid="mobile-account-moderation"
-            className="flex items-center justify-between py-1 text-sm font-medium text-muted-foreground hover:text-primary"
-          >
-            <span>{t.moderation}</span>
-            {profile.moderationPendingCount > 0 && (
-              <span
-                data-testid="mobile-account-moderation-badge"
-                className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground"
-              >
-                {profile.moderationPendingCount}
-              </span>
-            )}
-          </a>
-        )}
-        <form method="POST" action="/api/auth/signout" data-astro-reload onSubmit={() => clearMeCache()}>
-          <button type="submit" data-testid="mobile-account-signout" className="w-full py-1 text-left text-sm font-medium text-muted-foreground hover:text-primary">
-            {t.signOut}
-          </button>
-        </form>
-      </>
-    );
-  }
-
-  const mobilePortal = mobileMenuSlot ? createPortal(mobileAccountEntries(), mobileMenuSlot) : null;
-
   if (state.status === 'loading') {
     // A NEUTRAL circle, sized like the avatar button below (`h-9 w-9
     // rounded-full`) — never the "Ingresar" pill shape. Which one the real
@@ -439,7 +347,6 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
           <span>{t.signUp}</span>
         </a>
         */}
-        {mobilePortal}
       </div>
     );
   }
@@ -564,7 +471,6 @@ export default function UserMenu({ lang, labels }: UserMenuProps) {
           </div>,
           document.body,
         )}
-      {mobilePortal}
     </div>
   );
 }

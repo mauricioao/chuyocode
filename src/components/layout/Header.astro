@@ -339,28 +339,32 @@ const navLinks = [
       </div>
     </div>
 
+    {/* Owner report ("las opciones del header estan muy pegadas"): this panel
+        used to render `flex-col gap-2` with no base `flex`, so toggling off
+        `hidden` left the nav at its element default (`display: block`) —
+        `flex-col`/`gap-2` never applied, and the `<a>` links (inline by
+        default) ran together with no line breaks or spacing
+        ("LibrosNoticiasInglés"). Tailwind emits `.hidden{display:none}`
+        AFTER `.flex{display:flex}` in its generated stylesheet (the `display`
+        utility group's own fixed order), so `hidden flex` is the standard
+        idiom here: closed state wins on specificity-tie source order, open
+        state (JS removes only the `hidden` class) is left with a real flex
+        column. */}
     <nav
       id="mobile-menu"
-      class="hidden flex-col gap-2 border-t border-border px-4 py-3 md:hidden"
+      class="hidden flex flex-col gap-2 border-t border-border px-4 py-3 md:hidden"
       aria-label="Mobile"
     >
       {
         navLinks.map((link) => (
           <a
             href={link.href}
-            class="py-1 text-sm font-medium text-muted-foreground hover:text-primary"
+            class="flex min-h-11 items-center text-sm font-medium text-muted-foreground hover:text-primary"
           >
             {link.label}
           </a>
         ))
       }
-      {/* Account entries (Ingresar / Crear actividad / Mis actividades /
-          Moderación / Cerrar sesión) — empty here on purpose, this panel must
-          stay byte-identical for every visitor (see the file header's 🔴
-          note). `UserMenu` (already mounted above, client-only) portals its
-          own account actions into this exact slot once it knows who is signed
-          in — see that component's own header. */}
-      <div id="mobile-menu-account" class="flex flex-col gap-2 border-t border-border pt-2" />
     </nav>
   </header>
 )}

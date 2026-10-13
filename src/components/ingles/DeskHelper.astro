@@ -37,11 +37,15 @@
  * MUST run:
  *
  *  1. A tiny classic (non-module) `is:inline` script, right below the
- *     markup, decides the FOLD state before first paint (phones below the
- *     `desk:` breakpoint, and the 1100-1440px desktop range where an open
- *     bubble can collide with the centred levels dock, both start folded;
- *     a session choice already in `sessionStorage` wins over either) — same
- *     "decide before paint, duplicate a few lines on purpose" posture as
+ *     markup, decides the FOLD state before first paint — THREE ranges
+ *     (mobile-layout polish round, owner spec "open by default below
+ *     `desk:`"): below `desk:` (1100px) starts OPEN (the in-flow mobile
+ *     card has nothing else to collide with — see the "IN FLOW BELOW
+ *     `desk:`" note below); the 1100-1440px desktop range starts FOLDED
+ *     (an open bubble there can collide with the centred levels dock); 1440px
+ *     and up starts OPEN again — a session choice already in
+ *     `sessionStorage` wins over any of the three. Same "decide before
+ *     paint, duplicate a few lines on purpose" posture as
  *     `BaseLayout.astro`'s own chrome-visibility script. Folding is a much
  *     bigger visual change than swapping a few words of text, so it is the
  *     one thing here that cannot wait for the deferred module below.
@@ -64,6 +68,33 @@
  * a plain `data-tip-id` attribute (the dedupe key the client-side queue
  * needs so "Otro tip" never immediately re-shows it), and its name/HTML/
  * avatar are already painted directly into the markup below.
+ *
+ * IN FLOW BELOW `desk:` (owner report, "pantalla rota" — a FIXED helper on a
+ * phone always covers something underneath it; the resize fix only stopped
+ * it covering content it had no business reaching after a stale resize, it
+ * never addressed a fresh mobile load, where the avatar sat `fixed
+ * bottom-left` over whatever the page's own last row happened to be — the
+ * A1 level tile in the owner's own screenshot): below `desk:`, this `<aside>`
+ * is a normal flex ROW — never `position: fixed` — slotted into
+ * `DeskScene.astro`'s own flex column right after the levels dock
+ * (`<slot name="helper">`, `order-4`, bumping the widgets section to
+ * `order-5`), full width with the same page gutter every other mobile row
+ * uses. `desk:` restores the ORIGINAL fixed bottom-left composition
+ * byte-for-byte (same classes, now under a `desk:` prefix) — this file's
+ * "SAME ELEMENTS, TWO POSTURES" note just below the markup covers exactly
+ * which classes do that.
+ *
+ * MOBILE POLISH ROUND (owner report, "a lonely ~56px circle with nothing
+ * next to it reads as a stray image"): below `desk:`, OPEN is the tip
+ * rendered as a compact in-flow CARD — the kit's own surface treatment
+ * (white `bg-card`, `shadow-elevation-1`, `rounded-[20px]`, NOT the
+ * desktop bubble's thick black `border-2`/18px radius/speech-bubble tail,
+ * which only read right floating free over the desk). FOLDED never goes
+ * back to a bare circle either: a NEW `#desk-helper-fold-label` element
+ * (`desk:hidden` always — desktop's fold stays the original bare avatar)
+ * shows one line, `foldedLabel` ("Un tip de Vanina"), next to the avatar.
+ * Both the avatar AND this label open the helper — `@lib/ui/deskHelper.ts`
+ * wires the same handler to both.
  */
 import { characterPoseFallbackSrc, characterPoseSrcSet } from '@/content/characterPoses';
 import { DESK_HELPER_TIPS, pickRandomTipIndex } from '@/content/deskHelperTips';
@@ -75,9 +106,11 @@ interface Props {
   avatarLabelTemplate: string;
   otherTipLabel: string;
   closeLabel: string;
+  /** Mobile-layout polish round: the folded state's own one-line label ("Un tip de Vanina") — never a bare avatar circle with nothing next to it. Unused at `desk:`, which keeps the original bare-avatar fold. */
+  foldedLabel: string;
 }
 
-const { lang, landmarkLabel, avatarLabelTemplate, otherTipLabel, closeLabel } = Astro.props;
+const { lang, landmarkLabel, avatarLabelTemplate, otherTipLabel, closeLabel, foldedLabel } = Astro.props;
 
 const tips = DESK_HELPER_TIPS;
 const defaultIndex = pickRandomTipIndex(tips.length);
@@ -93,6 +126,15 @@ const defaultHtml = defaultTip[lang];
 const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAME);
 ---
 
+{/* SAME ELEMENTS, TWO POSTURES: every class below is either shared
+    (identical at both postures) or explicitly split mobile-base vs.
+    `desk:`-prefixed — never a duplicated second markup tree, so the single
+    `id`-based DOM queries `@lib/ui/deskHelper.ts` already uses keep working
+    unchanged. Mobile (below `desk:`): a normal flex ROW, in flow, full
+    width, `order-4` (right after the levels dock — see `DeskScene.astro`'s
+    own `<slot name="helper">`). `desk:` and up: BYTE-IDENTICAL to this
+    file's pre-existing fixed bottom-left composition — every `desk:`-only
+    class pair below is that exact original value, just re-scoped. */}
 <aside
   id="desk-helper"
   data-desk-helper
@@ -100,7 +142,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
   data-tip-id={defaultTip.id}
   data-lang={lang}
   data-avatar-label-template={avatarLabelTemplate}
-  class="fixed bottom-[calc(10px+var(--desk-helper-lift,0px)+var(--desk-helper-dock-lift,0px))] left-5 z-[5] flex items-end transition-[bottom] duration-200 ease-out motion-reduce:transition-none"
+  class="order-4 flex w-full items-start gap-3 px-4 desk:order-none desk:w-auto desk:items-end desk:gap-0 desk:px-0 desk:fixed desk:bottom-[calc(10px+var(--desk-helper-lift,0px)+var(--desk-helper-dock-lift,0px))] desk:left-5 desk:z-[5] desk:transition-[bottom] desk:duration-200 desk:ease-out desk:motion-reduce:transition-none"
 >
   <button
     type="button"
@@ -109,7 +151,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
     aria-expanded="true"
     aria-controls="desk-helper-bubble"
     aria-label={defaultAvatarLabel}
-    class="relative block h-16 w-16 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-24 desk:w-24"
+    class="relative block h-14 w-14 shrink-0 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-24 desk:w-24"
   >
     <picture class="block h-full w-full overflow-hidden rounded-full">
       <source data-desk-helper-avif type="image/avif" srcset={characterPoseSrcSet('vanina/avatar', 'avif')} />
@@ -132,12 +174,44 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
     </picture>
   </button>
 
+  {/* FOLDED, mobile only (owner report: "a lonely ~56px circle with
+      nothing next to it reads as a stray image") — never a bare avatar
+      below `desk:`. `desk:hidden` unconditionally: desktop's fold stays the
+      original bare avatar, untouched. `hidden` (the toggleable class) +
+      `flex` (the folded-row layout) together, SAME "hidden flex" idiom as
+      `Header.astro`'s own mobile nav panel — `@lib/ui/deskHelper.ts#setFolded`
+      toggles the `hidden` token via `classList`, never the native attribute,
+      specifically so it cannot lose to this element's own always-on `flex`.
+      Opens the helper exactly like the avatar does (same click handler). */}
+  <button
+    type="button"
+    id="desk-helper-fold-label"
+    data-desk-helper-fold-label
+    aria-controls="desk-helper-bubble"
+    aria-expanded="false"
+    class="hidden min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[20px] border border-border bg-card px-3.5 text-left shadow-elevation-1 desk:hidden"
+  >
+    <span class="text-[13px] font-medium text-foreground">{foldedLabel}</span>
+  </button>
+
+  {/* OPEN — below `desk:` this is a compact IN-FLOW tip card: the kit's own
+      surface treatment (white `bg-card`, `shadow-elevation-1`,
+      `rounded-[20px]`, a plain `border-border` hairline), never the
+      desktop-only speech-bubble look (thick black `border-2`, 18px radius,
+      a drawn tail pointing at a FIXED avatar — none of that reads right for
+      a card sitting in normal page flow). `desk:` restores that original
+      bubble styling byte-for-byte. The floating speech-bubble's own
+      `-ml-*`/`mb-[*]`/`max-w-[*]` (pulling it close to and lifting it above
+      the FIXED avatar) are ALSO `desk:`-only for the same reason — mobile
+      instead just fills the row's remaining width (`min-w-0 flex-1`,
+      `desk:flex-none` restores the original non-growing, content-sized
+      box). */}
   <div
     id="desk-helper-bubble"
     data-desk-helper-bubble
     role="status"
     aria-live="polite"
-    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
+    class="relative min-w-0 flex-1 rounded-[20px] border border-border bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground shadow-elevation-1 [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:rounded-[18px] desk:border-2 desk:border-foreground desk:shadow-none desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:flex-none desk:text-[13.5px]"
   >
     <b data-desk-helper-name class="mb-0.5 block font-semibold">{DESK_HELPER_NAME}</b>
     <span data-desk-helper-tip set:html={defaultHtml} />
@@ -171,11 +245,11 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
         fill already shares with the border. `overflow-visible` is required
         for that negative-y portion to actually paint — Astro clips an
         `<svg>` to its own box by default. Pinned to the bubble's
-        lower-left corner at every breakpoint (same posture as the old
-        tail, which never had a `desk:` override either) so it keeps
-        curving down toward the avatar regardless of font-size/width. */}
+        lower-left corner, pointing down toward a FIXED avatar below it —
+        `desk:`-only now: an inline mobile row has no floating bubble for a
+        tail to point from. */}
     <svg
-      class="absolute -bottom-[19px] left-[22px] h-[21px] w-[26px] overflow-visible"
+      class="hidden h-[21px] w-[26px] overflow-visible desk:absolute desk:-bottom-[19px] desk:left-[22px] desk:block"
       viewBox="0 0 26 21"
       aria-hidden="true"
     >
@@ -196,6 +270,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
   (function () {
     var bubble = document.getElementById('desk-helper-bubble');
     var avatar = document.getElementById('desk-helper-avatar');
+    var foldLabel = document.getElementById('desk-helper-fold-label');
     if (!bubble || !avatar) return;
     var STORAGE_KEY = 'ingles-desk-helper-folded';
     var stored = null;
@@ -204,11 +279,21 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
     } catch (e) {
       stored = null;
     }
-    // Open by default only at/above 1440px — `@lib/ui/deskHelper.ts`'s own
-    // `DESK_HELPER_OPEN_MIN_WIDTH`, duplicated here on purpose so the FOLD
-    // decision runs before first paint (see this file's own header).
-    var folded = stored === null ? !window.matchMedia('(min-width: 1440px)').matches : stored === 'true';
+    // THREE ranges (mobile-layout polish round) — `@lib/ui/deskHelper.ts`'s
+    // own `DESK_BREAKPOINT_WIDTH`/`DESK_HELPER_OPEN_MIN_WIDTH`, duplicated
+    // here on purpose so the FOLD decision runs before first paint (see
+    // this file's own header): below `desk:` (1100px) OPEN by default — the
+    // in-flow mobile card never collides with anything; 1100-1440px FOLDED
+    // (the dock-collision range); 1440px and up OPEN again.
+    var isDesktopRange = window.matchMedia('(min-width: 1100px)').matches;
+    var isWideEnough = window.matchMedia('(min-width: 1440px)').matches;
+    var defaultFolded = isDesktopRange && !isWideEnough;
+    var folded = stored === null ? defaultFolded : stored === 'true';
     bubble.hidden = folded;
     avatar.setAttribute('aria-expanded', String(!folded));
+    if (foldLabel) {
+      foldLabel.classList.toggle('hidden', !folded);
+      foldLabel.setAttribute('aria-expanded', String(!folded));
+    }
   })();
 </script>

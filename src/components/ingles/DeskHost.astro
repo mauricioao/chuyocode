@@ -80,20 +80,27 @@ const isHub = isInglesHubPath(Astro.url.pathname);
     weatherAttribution: hub.weatherAttribution,
     levelShortcutTitle: hub.levelShortcutTitle,
   }}
-/>
-
-{/* Floating character helper (PART 5) — every HOST page now, not just the
-    hub (see this file's own header on the bug this fixes). Practice/editor/
-    presentation pages rendered EMBEDDED (inside the host's own iframe) still
-    never render it — only the host shell, which is always a signed-in
-    desk-behind-a-window visit, ever reaches this component at all. */}
-<DeskHelper
-  lang={lang}
-  landmarkLabel={hub.helperLandmarkLabel}
-  avatarLabelTemplate={hub.helperAvatarLabel}
-  otherTipLabel={hub.helperOtherTip}
-  closeLabel={hub.helperClose}
-/>
+>
+  {/* Floating character helper (PART 5) — every HOST page now, not just the
+      hub (see this file's own header on the bug this fixes). Practice/editor/
+      presentation pages rendered EMBEDDED (inside the host's own iframe)
+      still never render it — only the host shell, which is always a
+      signed-in desk-behind-a-window visit, ever reaches this component at
+      all. `slot="helper"` — mobile-layout follow-up (owner report, a FIXED
+      helper always covers SOMETHING on a phone): `DeskScene.astro`'s own
+      `<slot name="helper">` places it in normal mobile flow, right after
+      the levels dock, instead of this component rendering it as a plain
+      sibling AFTER the whole desk. */}
+  <DeskHelper
+    slot="helper"
+    lang={lang}
+    landmarkLabel={hub.helperLandmarkLabel}
+    avatarLabelTemplate={hub.helperAvatarLabel}
+    otherTipLabel={hub.helperOtherTip}
+    closeLabel={hub.helperClose}
+    foldedLabel={hub.helperFoldedLabel}
+  />
+</DeskScene>
 
 {/* N4 (owner spec, resolves UX-INGLES.md's F3): the status-change toast's
     own data — `null` for an anonymous visitor (`desk.myActivitiesStatuses`'s

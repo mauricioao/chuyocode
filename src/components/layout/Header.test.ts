@@ -178,30 +178,49 @@ describe('Header.astro — persists across navigations (navigation-without-flick
   });
 });
 
-// Mobile layout pass: the hamburger panel's own account-entries slot —
-// UserMenu (already mounted above) portals into it client-side once it
-// knows who is signed in. The slot itself must stay EMPTY server-side (see
-// the describe block above's own "byte-identical for every visitor" note).
-describe('Header.astro — mobile menu account slot (mobile layout pass)', () => {
-  it('renders an empty slot for UserMenu to portal its mobile account entries into', async () => {
+// Mobile layout pass / owner bug report ("acá borrar las opciones del
+// usuario, ya las tienes al hacer click en su logo, las opciones del header
+// estan muy pegadas"): the hamburger panel used to get a second, duplicate
+// copy of the account entries (portaled in by `UserMenu`) AND rendered its
+// nav links with no `flex` base class, so they ran together with no spacing.
+// Both are fixed now: no account slot at all (the avatar dropdown already
+// covers every breakpoint — see `UserMenu.test.tsx`), and the links render
+// as a real flex column with comfortable (>=44px) tap targets.
+describe('Header.astro — mobile menu panel (visual bugs pass)', () => {
+  it('renders no account-entries slot — the avatar dropdown is the only account menu now', async () => {
     const container = await createContainer();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
-    expect(html).toMatch(/<div id="mobile-menu-account"[^>]*>\s*<\/div>/);
+    expect(html).not.toContain('id="mobile-menu-account"');
   });
 
-  it('the slot lives inside the #mobile-menu panel, not the always-visible top bar', async () => {
+  it('renders the panel with a real flex column (not just `flex-col` with no base `display:flex`)', async () => {
+    const container = await createContainer();
+    const html = await container.renderToString(Header, {
+      props: { lang: 'es' },
+    });
+    const navMatch = html.match(/<nav id="mobile-menu" class="([^"]*)"/);
+    expect(navMatch).not.toBeNull();
+    const navClasses = navMatch![1];
+    expect(navClasses).toContain('flex');
+    expect(navClasses).toContain('flex-col');
+    expect(navClasses).toContain('gap-2');
+  });
+
+  it('gives every nav link a >=44px tap target (min-h-11)', async () => {
     const container = await createContainer();
     const html = await container.renderToString(Header, {
       props: { lang: 'es' },
     });
     const mobileMenuIdx = html.indexOf('id="mobile-menu"');
-    const slotIdx = html.indexOf('id="mobile-menu-account"');
     const mobileMenuCloseIdx = html.indexOf('</nav>', mobileMenuIdx);
-    expect(mobileMenuIdx).toBeGreaterThan(-1);
-    expect(slotIdx).toBeGreaterThan(mobileMenuIdx);
-    expect(slotIdx).toBeLessThan(mobileMenuCloseIdx);
+    const panelHtml = html.slice(mobileMenuIdx, mobileMenuCloseIdx);
+    const linkMatches = [...panelHtml.matchAll(/<a[^>]*class="([^"]*)"[^>]*>/g)];
+    expect(linkMatches.length).toBeGreaterThan(0);
+    for (const match of linkMatches) {
+      expect(match[1]).toContain('min-h-11');
+    }
   });
 });
 

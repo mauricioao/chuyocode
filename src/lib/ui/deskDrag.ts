@@ -47,6 +47,27 @@
  * LATEST call's widgets/positions through {@link stateByDoc}, which every
  * call overwrites, so a reset after a re-init still resets the widgets
  * actually on screen.
+ *
+ * STALE ABSOLUTE POSITIONING ACROSS A RESIZE (owner report, "pantalla rota"
+ * — widgets piled up on top of each other and the greeting on a phone):
+ * this module only ever checked `matchMedia` ONCE, at init. A visitor who
+ * loaded the desk at `desk:` width or wider — where every widget gets
+ * switched to `position: absolute` with a DESKTOP-computed `left`/`top`,
+ * see `placeAbsolute` below — and then resized the SAME page down below the
+ * breakpoint with no reload (DevTools responsive-mode, a window resize, a
+ * foldable/rotated device) kept those stale desktop pixel coordinates
+ * forever: an inline style always wins over the mobile flow-layout classes
+ * underneath it, so the widgets stayed absolutely stacked near their old
+ * desktop spot instead of returning to the phone's normal 2-column flow.
+ * `@lib/ui/deskWindowDrag.ts` already solves the identical problem for the
+ * floating window's own drag offset (`win.addEventListener('resize', …)`,
+ * clearing it below `desk:`) — the `resize` listener below mirrors that
+ * exact pattern for the widgets: below the breakpoint it clears every
+ * widget's inline placement (`clearPlacement`, flow layout takes back
+ * over); at/above it, it re-runs `placeAbsolute` so a stored/dragged
+ * position re-clamps against the new desktop width. Wired at most once per
+ * `doc` — same `wiredDocs` guard, same "always read the LATEST state
+ * through `stateByDoc`" reasoning as the reset listener right below it.
  */
 import {
   clampPosition,
@@ -101,6 +122,21 @@ function sizeOf(el: HTMLElement): Size {
   return { w: rect.width, h: rect.height };
 }
 
+function isDesktop(): boolean {
+  return typeof matchMedia === 'function' && matchMedia(DESK_BREAKPOINT_QUERY).matches;
+}
+
+/** Undoes every inline style {@link DragState.placeAbsolute} sets, returning the widget to whatever the mobile flow-layout classes already say — see this file's own header, "STALE ABSOLUTE POSITIONING ACROSS A RESIZE". */
+function clearPlacement(widget: HTMLElement): void {
+  widget.style.position = '';
+  widget.style.margin = '';
+  widget.style.gridColumn = '';
+  widget.style.gridRow = '';
+  widget.style.width = '';
+  widget.style.left = '';
+  widget.style.top = '';
+}
+
 /**
  * The current call's own widgets, live persisted positions and how to reset
  * them — see this file's own header ("RE-INIT ACROSS NAVIGATIONS"). A fresh
@@ -122,7 +158,7 @@ const wiredDocs = new WeakSet<Document>();
 
 /** Wires drag + keyboard for every `[data-desk-widget]` inside the first `[data-desk]` ancestor, if any — a no-op below the `desk:` breakpoint, on a page with no desk, or with no widgets. Safe to call more than once (re-reads the DOM fresh each time); the hub page's own script calls it once per load/navigation, same as `initDeskWidgets`. */
 export function initDeskDrag(doc: Document = document): void {
-  if (typeof matchMedia !== 'function' || !matchMedia(DESK_BREAKPOINT_QUERY).matches) return;
+  if (!isDesktop()) return;
 
   const desk = doc.querySelector<HTMLElement>(DESK_SELECTOR);
   const widgets = Array.from(doc.querySelectorAll<HTMLElement>(WIDGET_SELECTOR));
@@ -301,6 +337,26 @@ export function initDeskDrag(doc: Document = document): void {
       }
 
       dispatchArrangeVisibility(false, doc);
+    });
+
+    // STALE ABSOLUTE POSITIONING ACROSS A RESIZE — see this file's own
+    // header. Below `desk:`, every widget's inline placement is cleared
+    // (back to the mobile flow-layout classes); at/above it, every widget
+    // is re-placed so a stored/dragged position re-clamps against the new
+    // desktop width — same "always read the LATEST state through
+    // `stateByDoc`" reasoning as the reset listener just above.
+    window.addEventListener('resize', () => {
+      const latest = stateByDoc.get(doc);
+      if (!latest) return;
+
+      if (!isDesktop()) {
+        for (const widget of latest.widgets) clearPlacement(widget);
+        return;
+      }
+      for (const widget of latest.widgets) {
+        const id = widget.getAttribute('data-desk-widget');
+        if (id) latest.placeAbsolute(widget, id);
+      }
     });
   }
 }

@@ -13,7 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { findVoseo } from '@/lib/neutralSpanish';
 import { UI_LABELS } from '@/lib/i18n';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
-import UserMenu, { MOBILE_MENU_ACCOUNT_SLOT_ID } from './UserMenu';
+import UserMenu from './UserMenu';
 import type { Profile } from '@/lib/profile';
 import { readMeCache, writeMeCache } from '@/lib/meCache';
 
@@ -77,24 +77,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  document.getElementById(MOBILE_MENU_ACCOUNT_SLOT_ID)?.remove();
   sessionStorage.clear();
   window.history.pushState({}, '', '/');
 });
-
-/**
- * `Header.astro`'s own empty `#mobile-menu-account` slot — see `UserMenu.tsx`'s
- * own header. Real component tests don't render `Header.astro` itself, so
- * these tests stand the slot up by hand, the same way a real page already
- * has it present (empty) in its server-rendered markup before this island
- * ever mounts.
- */
-function withMobileMenuSlot(): HTMLElement {
-  const slot = document.createElement('div');
-  slot.id = MOBILE_MENU_ACCOUNT_SLOT_ID;
-  document.body.appendChild(slot);
-  return slot;
-}
 
 describe('UserMenu — loading', () => {
   it('renders a fixed-size placeholder before the fetch resolves', () => {
@@ -563,98 +548,41 @@ describe('UserMenu — localization', () => {
   });
 });
 
-describe('UserMenu — mobile hamburger menu account entries (mobile layout pass)', () => {
-  it('does nothing (no crash, no stray nodes) when Header\'s mobile-menu slot is not present', async () => {
+// Owner report ("acá borrar las opciones del usuario, ya las tienes al hacer
+// click en su logo"): `UserMenu` used to portal a SECOND copy of the account
+// entries into `Header.astro`'s `#mobile-menu` hamburger panel
+// (`#mobile-menu-account`). That portal is gone — the avatar trigger's own
+// dropdown (tested above, `user-menu-dropdown`) is the only account menu now,
+// reachable at every breakpoint. These tests pin the absence: even when a
+// page still had a leftover `#mobile-menu-account` node (an older cached
+// bundle, for example), this component must never write into it again.
+describe('UserMenu — no duplicate mobile account menu (visual bugs pass)', () => {
+  it('signed in: renders no mobile-account-* entries anywhere in the document', async () => {
+    stubMe(PASSWORD_PROFILE);
+    render(<UserMenu lang="es" labels={esLabels} />);
+
+    await screen.findByTestId('user-menu-trigger');
+    expect(document.querySelector('[data-testid^="mobile-account-"]')).toBeNull();
+  });
+
+  it('signed out: renders no mobile-account-signin entry anywhere in the document', async () => {
     stubMe(null);
     render(<UserMenu lang="es" labels={esLabels} />);
+
     await screen.findByTestId('user-menu-signin');
-    // Nothing to assert on directly — the absence of a crash IS the test;
-    // the top-bar rendering above is proof the component still works fine.
+    expect(document.querySelector('[data-testid^="mobile-account-"]')).toBeNull();
   });
 
-  it('signed out: portals a single "Ingresar" link into the slot', async () => {
-    const slot = withMobileMenuSlot();
-    stubMe(null);
-    render(<UserMenu lang="es" labels={esLabels} />);
+  it('never writes into a leftover #mobile-menu-account node (no crash, nothing portaled)', async () => {
+    const slot = document.createElement('div');
+    slot.id = 'mobile-menu-account';
+    document.body.appendChild(slot);
 
-    await screen.findByTestId('user-menu-signin'); // top-bar rendering, unaffected
-    const mobileLink = await screen.findByTestId('mobile-account-signin');
-    expect(slot.contains(mobileLink)).toBe(true);
-    expect(mobileLink.textContent).toBe(UI_LABELS.es.auth.userMenu.signIn);
-    expect(mobileLink.getAttribute('href')).toContain('/es/auth/entrar');
-  });
-
-  it('signed in: portals Crear actividad / Mis actividades / Cerrar sesión, no moderación for an ordinary user', async () => {
-    const slot = withMobileMenuSlot();
     stubMe(PASSWORD_PROFILE);
     render(<UserMenu lang="es" labels={esLabels} />);
+    await screen.findByTestId('user-menu-trigger');
 
-    const create = await screen.findByTestId('mobile-account-create-activity');
-    expect(slot.contains(create)).toBe(true);
-    expect(create.getAttribute('href')).toBe('/es/crear');
-
-    const mine = screen.getByTestId('mobile-account-my-activities');
-    expect(mine.getAttribute('href')).toBe('/es/mis-actividades');
-
-    expect(screen.queryByTestId('mobile-account-moderation')).toBeNull();
-
-    const signOutForm = screen.getByTestId('mobile-account-signout').closest('form');
-    expect(signOutForm?.getAttribute('action')).toBe('/api/auth/signout');
-    expect(signOutForm?.hasAttribute('data-astro-reload')).toBe(true);
-
-    // The top-bar avatar+dropdown still renders too — the portal is ADDITIVE.
-    expect(screen.getByTestId('user-menu-trigger')).toBeTruthy();
-  });
-
-  // T3: same move as the desktop dropdown's own test above.
-  it('portals "Perfil" too (not "Eliminar mi cuenta", which moved to that page)', async () => {
-    const slot = withMobileMenuSlot();
-    stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" labels={esLabels} />);
-
-    const entry = await screen.findByTestId('mobile-account-profile');
-    expect(slot.contains(entry)).toBe(true);
-    expect(entry.getAttribute('href')).toBe('/es/perfil');
-    expect(entry.textContent).toBe(UI_LABELS.es.auth.userMenu.profile);
-
-    expect(screen.queryByTestId('mobile-account-delete-account')).toBeNull();
-    expect(screen.queryByTestId('delete-account-dialog')).toBeNull();
-  });
-
-  it('signed in as a moderator: portals the moderación entry with its pending-count badge', async () => {
-    withMobileMenuSlot();
-    stubMe(MODERATOR_PROFILE);
-    render(<UserMenu lang="es" labels={esLabels} />);
-
-    const moderation = await screen.findByTestId('mobile-account-moderation');
-    expect(moderation.getAttribute('href')).toBe('/es/admin/actividades');
-    expect(screen.getByTestId('mobile-account-moderation-badge').textContent).toBe('4');
-  });
-
-  // Owner spec, same order as the top-bar dropdown: "Perfil" first, "Cerrar
-  // sesión" last — asserted through the actual rendered DOM order inside
-  // the portaled slot.
-  it('orders the portaled entries: Perfil, Crear actividad, Mis actividades, Cerrar sesión', async () => {
-    const slot = withMobileMenuSlot();
-    stubMe(PASSWORD_PROFILE);
-    render(<UserMenu lang="es" labels={esLabels} />);
-
-    await screen.findByTestId('mobile-account-profile');
-    const testIds = Array.from(slot.children).map((child) => child.getAttribute('data-testid'));
-
-    expect(testIds).toEqual([
-      'mobile-account-profile',
-      'mobile-account-create-activity',
-      'mobile-account-my-activities',
-      null, // the sign-out <form> wraps its <button>, so it carries no data-testid itself
-    ]);
-    expect(slot.children[3]?.querySelector('[data-testid="mobile-account-signout"]')).toBeTruthy();
-  });
-
-  it('portals nothing while still loading (avoids a flash of empty-state content)', () => {
-    const slot = withMobileMenuSlot();
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<UserMenu lang="es" labels={esLabels} />);
     expect(slot.childElementCount).toBe(0);
+    slot.remove();
   });
 });

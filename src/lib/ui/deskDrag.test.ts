@@ -198,3 +198,71 @@ describe('initDeskDrag — arrange reset', () => {
     expect(clock.style.top).toBe('10px');
   });
 });
+
+// Owner report ("version móvil del inglés pantalla rota, mala distribución"):
+// a visitor who loaded the desk at `desk:` width or wider — switching every
+// widget to `position: absolute` with a DESKTOP-computed `left`/`top` — and
+// then resized the SAME page down below the breakpoint with no reload kept
+// those stale desktop pixel coordinates forever (an inline style always wins
+// over the mobile flow-layout classes underneath it), piling the widgets up
+// on top of each other and the greeting. `@lib/ui/deskWindowDrag.ts` already
+// solves the identical class of bug for the floating window's own drag
+// offset; these tests pin the matching `resize` behaviour here.
+describe('initDeskDrag — stale absolute positioning across a resize', () => {
+  /** Lets a test flip `matchMedia`'s answer AFTER `initDeskDrag` already ran, to simulate a live resize crossing the breakpoint with no reload. */
+  function stubDesktop(matches: boolean): void {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: query.includes('min-width') && matches, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    );
+  }
+
+  it('clears every widget’s inline placement on resize once the viewport drops below the breakpoint', () => {
+    initDeskDrag(document);
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+    const weather = document.querySelector('[data-desk-widget="weather"]') as HTMLElement;
+    expect(clock.style.position).toBe('absolute');
+
+    stubDesktop(false); // resized down, no reload
+    window.dispatchEvent(new Event('resize'));
+
+    for (const widget of [clock, weather]) {
+      expect(widget.style.position).toBe('');
+      expect(widget.style.left).toBe('');
+      expect(widget.style.top).toBe('');
+      expect(widget.style.width).toBe('');
+      expect(widget.style.margin).toBe('');
+    }
+  });
+
+  it('re-places the widgets (re-clamped) on a resize that stays at/above the breakpoint', () => {
+    initDeskDrag(document);
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+
+    stubDesktop(true); // still desktop, just a narrower/wider desktop width
+    window.dispatchEvent(new Event('resize'));
+
+    expect(clock.style.position).toBe('absolute');
+    expect(clock.style.left).toBe('20px'); // re-clamped against the same fixed desk rect
+  });
+
+  it('a later resize back up to desktop re-applies absolute positioning again', () => {
+    initDeskDrag(document);
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+
+    stubDesktop(false);
+    window.dispatchEvent(new Event('resize'));
+    expect(clock.style.position).toBe('');
+
+    stubDesktop(true);
+    window.dispatchEvent(new Event('resize'));
+    expect(clock.style.position).toBe('absolute');
+  });
+
+  it('a resize-driven clear never breaks on a page with no desk/widgets (self-guarded)', () => {
+    initDeskDrag(document);
+    document.body.innerHTML = ''; // the desk navigated away entirely
+    stubDesktop(false);
+    expect(() => window.dispatchEvent(new Event('resize'))).not.toThrow();
+  });
+});
