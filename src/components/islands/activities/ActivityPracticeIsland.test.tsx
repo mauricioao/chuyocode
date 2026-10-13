@@ -310,11 +310,17 @@ describe('ActivityPracticeIsland — footer (zoom/score) and the floating Compro
     });
   });
 
-  it('swaps Comprobar for Reintentar once graded', () => {
+  // Worksheet result overlay (owner bug report): grading now opens the
+  // centred `GameResult` dialog instead of swapping Comprobar for a small
+  // "Reintentar" capsule — see the dedicated describe block below for the
+  // overlay's own contract. `practice-retry-button` is retired entirely.
+  it('swaps Comprobar for the result overlay once graded', () => {
     renderIsland([WORKSHEET]);
     fireEvent.click(screen.getByTestId('practice-check-button'));
     expect(screen.queryByTestId('practice-check-button')).toBeNull();
-    expect(screen.getByTestId('practice-retry-button')).toBeTruthy();
+    expect(screen.queryByTestId('practice-retry-button')).toBeNull();
+    expect(screen.getByTestId('practice-result-overlay')).toBeTruthy();
+    expect(screen.getByTestId('game-result')).toBeTruthy();
   });
 
   it('disables inputs once graded', () => {
@@ -324,20 +330,119 @@ describe('ActivityPracticeIsland — footer (zoom/score) and the floating Compro
     expect(textInput.disabled).toBe(true);
   });
 
-  it('Reintentar clears every answer and result, and re-enables inputs', () => {
+  it('Reintentar (inside the result overlay) clears every answer and result, and re-enables inputs', () => {
     renderIsland([WORKSHEET]);
     const textInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
     fireEvent.change(textInput, { target: { value: 'cat' } });
     fireEvent.click(screen.getByTestId('practice-check-button'));
 
-    fireEvent.click(screen.getByTestId('practice-retry-button'));
+    fireEvent.click(screen.getByTestId('game-result-play-again'));
 
     expect(screen.queryByTestId('practice-score')).toBeNull();
+    expect(screen.queryByTestId('practice-result-overlay')).toBeNull();
     expect(screen.queryByTestId('player-zone-result-z1')).toBeNull();
     const freshInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
     expect(freshInput.value).toBe('');
     expect(freshInput.disabled).toBe(false);
     expect(screen.getByTestId('practice-check-button')).toBeTruthy();
+  });
+});
+
+describe('ActivityPracticeIsland — worksheet result overlay (owner bug report: tiny bottom-right Reintentar capsule overlapped the feedback, with no score/time shown)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('opens the result overlay on Comprobar, with score + outcome + time, and no floating button while it is open', () => {
+    renderIsland([WORKSHEET]);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    const overlay = screen.getByTestId('practice-result-overlay');
+    expect(overlay.contains(screen.getByTestId('game-result-score'))).toBe(true);
+    expect(overlay.contains(screen.getByTestId('game-result-time'))).toBe(true);
+    expect(screen.queryByTestId('practice-view-result-button')).toBeNull();
+    expect(screen.queryByTestId('practice-check-button')).toBeNull();
+  });
+
+  it('gives the dialog an accessible sr-only title and description (owner follow-up: Radix warned with none)', () => {
+    renderIsland([WORKSHEET]);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    const overlay = screen.getByRole('dialog');
+    const titleId = overlay.getAttribute('aria-labelledby');
+    const descriptionId = overlay.getAttribute('aria-describedby');
+    expect(titleId).toBeTruthy();
+    expect(descriptionId).toBeTruthy();
+    expect(document.getElementById(titleId!)?.textContent).toBe('Resultado');
+    // Mirrors GameResult's own score line — nothing filled in on WORKSHEET's 2 zones.
+    expect(document.getElementById(descriptionId!)?.textContent).toBe('0 de 2 correctas');
+  });
+
+  it('"Revisar respuestas" closes the overlay without resetting anything — the marked zones stay visible', () => {
+    renderIsland([WORKSHEET]);
+    const textInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(textInput, { target: { value: 'cat' } });
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    fireEvent.click(screen.getByTestId('game-result-secondary-action'));
+
+    expect(screen.queryByTestId('practice-result-overlay')).toBeNull();
+    // The sheet's own feedback is still there — nothing was reset.
+    expect(screen.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
+    expect(textInput.value).toBe('cat');
+    expect(textInput.disabled).toBe(true);
+  });
+
+  it('shows a "Ver resultado" pill in the floating slot once reviewing, which reopens the overlay', () => {
+    renderIsland([WORKSHEET]);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    fireEvent.click(screen.getByTestId('game-result-secondary-action'));
+
+    const pill = screen.getByTestId('practice-view-result-button');
+    expect(screen.getByTestId('practice-actions').contains(pill)).toBe(true);
+
+    fireEvent.click(pill);
+    expect(screen.getByTestId('practice-result-overlay')).toBeTruthy();
+  });
+
+  it('never shows the old bottom-right "Reintentar" capsule again, at any point after grading', () => {
+    renderIsland([WORKSHEET]);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    expect(screen.queryByTestId('practice-retry-button')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('game-result-secondary-action'));
+    expect(screen.queryByTestId('practice-retry-button')).toBeNull();
+    expect(screen.getByTestId('practice-actions').textContent).not.toContain('Reintentar');
+  });
+
+  it('Escape closes the overlay, same as "Revisar respuestas"', () => {
+    renderIsland([WORKSHEET]);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    expect(screen.getByTestId('practice-result-overlay')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('practice-result-overlay')).toBeNull();
+  });
+
+  it('makes "Otra actividad" the primary action when the host supplies `nextHref`', () => {
+    render(<ActivityPracticeIsland lang="es" blocks={[WORKSHEET]} nextHref="/es/ingles/actividades?nivel=a1" />);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    const next = screen.getByTestId('game-result-next');
+    expect(next.getAttribute('href')).toBe('/es/ingles/actividades?nivel=a1');
+  });
+
+  it('tracks elapsed time since mount, formatted on the overlay, and resets it on Reintentar', () => {
+    vi.useFakeTimers();
+    renderIsland([WORKSHEET]);
+
+    vi.advanceTimersByTime(83_000);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    expect(screen.getByTestId('game-result-time').textContent).toBe('Tiempo: 1 min 23 s');
+
+    fireEvent.click(screen.getByTestId('game-result-play-again'));
+    vi.advanceTimersByTime(10_000);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+    expect(screen.getByTestId('game-result-time').textContent).toBe('Tiempo: 10 s');
   });
 });
 
@@ -399,7 +504,7 @@ describe('ActivityPracticeIsland — quiz questions grade into the combined scor
     fireEvent.change(input, { target: { value: 'sits' } });
     fireEvent.click(screen.getByTestId('practice-check-button'));
 
-    fireEvent.click(screen.getByTestId('practice-retry-button'));
+    fireEvent.click(screen.getByTestId('game-result-play-again'));
 
     expect(screen.queryByTestId('quiz-slot-result-s1')).toBeNull();
     const freshInput = screen.getByTestId('quiz-slot-s1').querySelector('input') as HTMLInputElement;
@@ -452,7 +557,7 @@ describe('ActivityPracticeIsland — speech (D4)', () => {
     fireEvent.click(screen.getByTestId('practice-check-button'));
     fireEvent.click(screen.getByTestId('speak-button'));
     synth.cancel.mockClear();
-    fireEvent.click(screen.getByTestId('practice-retry-button'));
+    fireEvent.click(screen.getByTestId('game-result-play-again'));
 
     expect(synth.cancel).toHaveBeenCalled();
   });
@@ -760,6 +865,79 @@ describe('ActivityPracticeIsland — "Modo enfoque" (full-screen exercise mode, 
 
     // Still page 1 — the key reached the input (cursor movement), not the pager.
     expect(screen.getByTestId('practice-focus-mode-page').textContent).toBe('1 / 2');
+  });
+});
+
+describe('ActivityPracticeIsland — worksheet result overlay in "modo enfoque" (owner follow-up: "the owner may well be in full screen when this happens")', () => {
+  function mountToggleButton(): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.id = 'activity-focus-mode-toggle';
+    button.setAttribute('aria-pressed', 'false');
+    document.body.appendChild(button);
+    return button;
+  }
+
+  afterEach(() => {
+    document.getElementById('activity-focus-mode-toggle')?.remove();
+  });
+
+  it('opens the SAME result overlay from the focus-mode Comprobar, nested inside the focus-mode container (not a hidden document.body sibling)', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle); // enter focus mode
+    fireEvent.click(screen.getByTestId('practice-focus-mode-check'));
+
+    const focusMode = screen.getByTestId('practice-focus-mode');
+    const overlay = screen.getByTestId('practice-result-overlay');
+    expect(focusMode.contains(overlay)).toBe(true);
+    expect(screen.getByTestId('game-result')).toBeTruthy();
+  });
+
+  it('removes the old small Reintentar bar — never rendered again once graded in focus mode', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('practice-focus-mode-check'));
+    expect(screen.queryByTestId('practice-focus-mode-retry')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('game-result-secondary-action')); // "Revisar respuestas"
+    expect(screen.queryByTestId('practice-focus-mode-retry')).toBeNull();
+  });
+
+  it('shows a "Ver resultado" pill in the focus-mode floating bar once reviewing, which reopens the SAME overlay', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('practice-focus-mode-check'));
+    fireEvent.click(screen.getByTestId('game-result-secondary-action'));
+
+    expect(screen.queryByTestId('practice-result-overlay')).toBeNull();
+    const pill = screen.getByTestId('practice-focus-mode-view-result-button');
+    expect(screen.getByTestId('practice-focus-mode-actions').contains(pill)).toBe(true);
+
+    fireEvent.click(pill);
+    const overlay = screen.getByTestId('practice-result-overlay');
+    expect(screen.getByTestId('practice-focus-mode').contains(overlay)).toBe(true);
+  });
+
+  it('Reintentar (inside the overlay) resets answers and keeps working from focus mode', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    const input = screen
+      .getByTestId('practice-focus-mode')
+      .querySelector('[data-testid="player-zone-z1"] input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'cat' } });
+    fireEvent.click(screen.getByTestId('practice-focus-mode-check'));
+
+    fireEvent.click(screen.getByTestId('game-result-play-again'));
+
+    expect(screen.queryByTestId('practice-result-overlay')).toBeNull();
+    expect(screen.getByTestId('practice-focus-mode-check')).toBeTruthy();
+    const freshInput = screen
+      .getByTestId('practice-focus-mode')
+      .querySelector('[data-testid="player-zone-z1"] input') as HTMLInputElement;
+    expect(freshInput.value).toBe('');
   });
 });
 

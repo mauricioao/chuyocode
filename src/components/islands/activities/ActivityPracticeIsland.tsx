@@ -88,7 +88,8 @@ import {
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTAINER_SIZE,
 } from '@/components/islands/mechanics/scale';
-import type { GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
+import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -130,11 +131,50 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
   const t = UI_LABELS[lang].activities.practice;
   const tEditor = UI_LABELS[lang].activities.editor;
   const tGameModes = UI_LABELS[lang].activities.gameModes;
+  // Only for the result dialog's own sr-only `DialogDescription` — mirrors
+  // `GameResult`'s own "N de M correctas" score line (no custom `resultWord`
+  // is ever passed here, so the shared `defaultWord` always matches).
+  const tGameResult = UI_LABELS[lang].activities.gameResult;
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, boolean> | undefined>(undefined);
   const [quizResponses, setQuizResponses] = useState<Record<string, ExerciseResponse>>({});
   const [quizResults, setQuizResults] = useState<Record<string, GradeResult> | undefined>(undefined);
+  // Worksheet result overlay (owner bug report: the old bottom-right
+  // "Reintentar" capsule overlapped the floating Comprobar area and the
+  // per-zone feedback, with no score/time shown at all). `resultOverlayOpen`
+  // is true right after Comprobar — opening the centred `GameResult` dialog
+  // — and false while the learner is reviewing the marked sheet underneath
+  // (closed via "Revisar respuestas", Escape, or a backdrop click). The
+  // floating slot then shows a "Ver resultado" pill instead of a button,
+  // which simply flips this back to `true` — in BOTH the normal view and
+  // "modo enfoque" (owner follow-up: "the owner may well be in full screen
+  // when this happens"), one shared Dialog instance, re-targeted at the
+  // right portal container below. Declared early (ahead of `handleCheck`
+  // below) only so `focusModeActive`, declared further down, can also be
+  // hoisted up next to it — see that declaration's own note.
+  const [resultOverlayOpen, setResultOverlayOpen] = useState(false);
+  // Elapsed time for the CURRENT attempt (owner spec: "cuanto tiempo
+  // tardaste"). Starts at MOUNT (not the first interaction — simplest, and
+  // "first interaction" has no single well-defined moment across zones/
+  // quiz slots/tabs); frozen into `elapsedMs` at Comprobar; restarted at
+  // Reintentar. `null` before the first Comprobar, so `GameResult` renders
+  // no time line yet.
+  const startTimeRef = useRef(Date.now());
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  // "Modo enfoque" full-screen mode (declared in full further down, next to
+  // its own `focusModeHost`/`focusModeContainer`/`exitFocusMode` machinery)
+  // — only THIS flag is hoisted up here so the result Dialog's own
+  // `container` prop (below) can read it: while focus mode is active, the
+  // dialog portals INTO `focusModeContainer` (the actual `z-[80]` div)
+  // instead of `document.body` — needed, not just nice to have, because the
+  // REAL Fullscreen API (`requestFullscreen`, used here whenever available)
+  // only ever paints the fullscreen element's own subtree; a
+  // `document.body`-level sibling would simply never be visible at all
+  // regardless of z-index while true fullscreen is engaged. Hoisting one
+  // boolean's `useState` call is safe: hook call order only has to stay the
+  // same across renders, not match this file's narrative order.
+  const [focusModeActive, setFocusModeActive] = useState(false);
   // D1 "Una actividad, muchos juegos": each quiz block's own active game mode
   // (Básico/Tarjetas/Parejas), remembered per block id while this island
   // stays mounted — never persisted, and never reset by Reintentar (a mode
@@ -214,6 +254,12 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
       nextQuizResults[block.id] = check(block.payload, quizResponses[block.id] ?? {}, comparatorForRenderable);
     }
     setQuizResults(nextQuizResults);
+
+    setElapsedMs(Date.now() - startTimeRef.current);
+    // Opens in BOTH the normal view and "modo enfoque" — the shared Dialog
+    // below re-targets its own portal container depending on
+    // `focusModeActive`, so there is nothing mode-specific to decide here.
+    setResultOverlayOpen(true);
   }, [allZones, values, quizBlocks, quizResponses]);
 
   const handleRetry = useCallback(() => {
@@ -222,6 +268,9 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
     setResults(undefined);
     setQuizResponses({});
     setQuizResults(undefined);
+    setResultOverlayOpen(false);
+    setElapsedMs(null);
+    startTimeRef.current = Date.now();
   }, []);
 
   const graded = results !== undefined;
@@ -335,11 +384,23 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
   // The answers themselves (`values`/`quizResponses`) and results
   // never reset — they already live in THIS component's own state, read by
   // both the normal and focus-mode views alike (owner requirement: "las
-  // respuestas... son el mismo estado que la vista normal").
-  const [focusModeActive, setFocusModeActive] = useState(false);
+  // respuestas... son el mismo estado que la vista normal"). `focusModeActive`
+  // itself is declared earlier, next to `resultOverlayOpen` — see that
+  // declaration's own note.
   const [focusModeHost] = useState<HTMLDivElement | null>(() =>
     typeof document === 'undefined' ? null : document.createElement('div'),
   );
+  // The ACTUAL `z-[80]` focus-mode div itself (captured via its own `ref`
+  // below) — not `focusModeHost`, which is just a bare, unstyled mount
+  // point. The result Dialog's `container` targets THIS node while focus
+  // mode is active: nested inside it, the dialog's own `z-50` is compared
+  // against focus mode's OTHER children (the `z-10` exit button, the
+  // `z-40` floating bar) within that div's own stacking context, so it
+  // correctly paints on top — portaling into `focusModeHost` instead would
+  // make the dialog a plain SIBLING of the `z-80` div, still losing to it.
+  // `null` whenever focus mode isn't mounted (React clears a ref on
+  // unmount), so this never lingers stale once focus mode exits.
+  const [focusModeContainer, setFocusModeContainer] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!focusModeHost) return undefined;
@@ -556,28 +617,78 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
         </div>
       )}
 
-      {/* FLOATING COMPROBAR (build item 5): the actual check/retry button,
-          floated out of the footer row below into the same fixed
-          bottom-right corner every game stage now uses — see
-          `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
+      {/* FLOATING COMPROBAR (build item 5): the actual check button, floated
+          out of the footer row below into the same fixed bottom-right
+          corner every game stage now uses — see `scale.ts`'s own
+          `FLOATING_CHECK_BAR_CLASS` header.
+          WORKSHEET RESULT OVERLAY (owner bug report): the old "Reintentar"
+          capsule that used to show here once graded is gone — it
+          overlapped the floating Comprobar area and the per-zone feedback,
+          and said nothing about score/time. Grading now opens the centred
+          `GameResult` dialog below instead; while the learner is reviewing
+          the marked sheet with the overlay closed, this slot shows a
+          compact "Ver resultado" pill that reopens it. Nothing renders here
+          at all while the overlay is open (nothing useful left to float). */}
       {showCombinedFooter && (
         <div data-testid="practice-actions" className={FLOATING_CHECK_BAR_CLASS}>
           {!graded ? (
             <Button type="button" data-testid="practice-check-button" className="min-h-11" onClick={handleCheck}>
               {t.check}
             </Button>
-          ) : (
+          ) : !resultOverlayOpen ? (
             <Button
               type="button"
               variant="outline"
-              data-testid="practice-retry-button"
+              data-testid="practice-view-result-button"
               className="min-h-11"
-              onClick={handleRetry}
+              onClick={() => setResultOverlayOpen(true)}
             >
-              {t.retry}
+              {t.viewResult}
             </Button>
-          )}
+          ) : null}
         </div>
+      )}
+
+      {/* The result dialog itself — centred over a blurred backdrop,
+          reusing the kit's own `Dialog`/`GameResult` (owner spec: "la misma
+          experiencia de final de juego que tienen las plantillas"). Escape
+          and a backdrop click both resolve to "Revisar respuestas" for
+          free: `DialogContent`'s own Radix primitives already call
+          `onOpenChange(false)` for both, same as "Revisar respuestas" itself
+          — now `GameResult`'s own `secondaryAction` slot, grouped with its
+          other actions in the SAME row (owner follow-up: it used to sit
+          alone below the guest line).
+          ONE shared instance for BOTH the normal view and "modo enfoque":
+          `container` re-targets the portal into `focusModeContainer` (the
+          actual `z-[80]` div, captured by its own `ref`) while focus mode
+          is active (see `focusModeActive`'s own note above on why — a
+          `document.body`-level sibling never paints at all under the real
+          Fullscreen API), falling back to Radix's own `document.body`
+          default otherwise. */}
+      {showCombinedFooter && (
+        <Dialog open={resultOverlayOpen} onOpenChange={setResultOverlayOpen}>
+          <DialogContent
+            data-testid="practice-result-overlay"
+            showCloseButton={false}
+            container={focusModeActive ? (focusModeContainer ?? undefined) : undefined}
+            className="max-w-md rounded-[26px] p-6 shadow-elevation-3"
+          >
+            <DialogTitle className="sr-only">{t.resultTitle}</DialogTitle>
+            <DialogDescription className="sr-only">
+              {correctCount} {tGameResult.of} {totalCount} {tGameResult.defaultWord}
+            </DialogDescription>
+            <GameResult
+              lang={lang}
+              correct={correctCount}
+              total={totalCount}
+              onPlayAgain={handleRetry}
+              nextHref={nextHref}
+              guest={guest}
+              elapsedMs={elapsedMs ?? undefined}
+              secondaryAction={{ label: t.reviewAnswers, onClick: () => setResultOverlayOpen(false) }}
+            />
+          </DialogContent>
+        </Dialog>
       )}
 
       {showCombinedFooter && (
@@ -645,6 +756,7 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
         activeBlock &&
         createPortal(
           <div
+            ref={setFocusModeContainer}
             data-testid="practice-focus-mode"
             className="fixed inset-0 z-[80] flex flex-col bg-background"
           >
@@ -739,24 +851,29 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
                 corner the normal (non-full-screen) view and every game
                 stage use — see `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS`
                 header. No editor offset here: the editor has no "modo
-                enfoque" of its own. */}
+                enfoque" of its own.
+                WORKSHEET RESULT OVERLAY (owner follow-up: "the owner may
+                well be in full screen when this happens"): same "Ver
+                resultado" pill as the normal view's own slot, once graded
+                and the shared dialog above is closed — Reintentar itself
+                now lives only inside that dialog, same as the normal view. */}
             {showCombinedFooter && isLastPage && (
               <div data-testid="practice-focus-mode-actions" className={FLOATING_CHECK_BAR_CLASS}>
                 {!graded ? (
                   <Button type="button" data-testid="practice-focus-mode-check" className="min-h-11" onClick={handleCheck}>
                     {t.check}
                   </Button>
-                ) : (
+                ) : !resultOverlayOpen ? (
                   <Button
                     type="button"
                     variant="outline"
-                    data-testid="practice-focus-mode-retry"
+                    data-testid="practice-focus-mode-view-result-button"
                     className="min-h-11"
-                    onClick={handleRetry}
+                    onClick={() => setResultOverlayOpen(true)}
                   >
-                    {t.retry}
+                    {t.viewResult}
                   </Button>
-                )}
+                ) : null}
               </div>
             )}
           </div>,

@@ -52,6 +52,7 @@
  */
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { formatElapsedTime } from '@/lib/formatElapsedTime';
 import { Button } from '@/components/ui/button';
 import { characterPoseFallbackSrc, characterPoseSrcSet, characterPoseWidth, type CharacterPoseKey } from '@/content/characterPoses';
 
@@ -60,6 +61,19 @@ export type GameResultOutcome = 'perfect' | 'good' | 'retry';
 export interface GameResultGuestInvite {
   /** Same destination the old top banner used — `/{lang}/auth/entrar?mode=signup&next=<current path>`. */
   signUpHref: string;
+}
+
+/**
+ * One extra `variant="link"` action in the SAME row as "Jugar de nuevo"/
+ * "Repasar las que fallé" — e.g. the worksheet result overlay's own
+ * "Revisar respuestas" (closes the dialog so the marked sheet is visible).
+ * A generic slot rather than a worksheet-specific prop: any future host can
+ * reuse it for its own one extra action, without `GameResult` knowing what
+ * it does.
+ */
+export interface GameResultSecondaryAction {
+  label: string;
+  onClick: () => void;
 }
 
 export interface GameResultProps {
@@ -75,6 +89,16 @@ export interface GameResultProps {
   nextHref?: string;
   /** Set only by the practice page, for an anonymous visitor. */
   guest?: GameResultGuestInvite;
+  /**
+   * How long this attempt took, in milliseconds (worksheet result overlay,
+   * owner bug report: "con todos los indicadores de cuanto tiempo
+   * tardaste") — renders as a "Tiempo: 1 min 23 s" line via the pure
+   * `formatElapsedTime`. Omitted entirely (every caller before this one)
+   * renders no time line at all.
+   */
+  elapsedMs?: number;
+  /** One extra secondary action, rendered in the same row as "Jugar de nuevo"/"Repasar las que fallé" — see {@link GameResultSecondaryAction}. */
+  secondaryAction?: GameResultSecondaryAction;
   className?: string;
 }
 
@@ -106,6 +130,8 @@ export default function GameResult({
   onReviewWrong,
   nextHref,
   guest,
+  elapsedMs,
+  secondaryAction,
   className,
 }: GameResultProps) {
   const t = UI_LABELS[lang].activities.gameResult;
@@ -158,6 +184,11 @@ export default function GameResult({
         <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
           {correct} {t.of} {total} {word}
         </p>
+        {typeof elapsedMs === 'number' && (
+          <p data-testid="game-result-time" className="text-sm text-muted-foreground">
+            {t.time}: {formatElapsedTime(elapsedMs)}
+          </p>
+        )}
         <div className="flex flex-col items-center gap-2">
           {nextHref ? (
             <Button asChild className="min-h-11">
@@ -170,7 +201,7 @@ export default function GameResult({
               {t.playAgain}
             </Button>
           )}
-          {(showReview || nextHref) && (
+          {(showReview || nextHref || secondaryAction) && (
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
               {showReview && (
                 <Button
@@ -192,6 +223,17 @@ export default function GameResult({
                   onClick={onPlayAgain}
                 >
                   {t.playAgain}
+                </Button>
+              )}
+              {secondaryAction && (
+                <Button
+                  type="button"
+                  variant="link"
+                  data-testid="game-result-secondary-action"
+                  className="min-h-11 px-2"
+                  onClick={secondaryAction.onClick}
+                >
+                  {secondaryAction.label}
                 </Button>
               )}
             </div>
