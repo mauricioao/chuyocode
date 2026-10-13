@@ -146,6 +146,17 @@ describe('GameResult', () => {
       expect(img.getAttribute('alt')).toBe('');
       expect(img.getAttribute('aria-hidden')).toBe('true');
     });
+
+    // UI round 2 (owner feedback, 2026-10-12): character images are NEVER
+    // shrunk to fit ("contain") — they crop instead (`object-cover`),
+    // filling their fixed box edge-to-edge, same rule every character
+    // image follows now (`DeskHelper.astro`'s own avatar).
+    it("crops Vanina's reaction to fill its box (object-cover, never object-contain)", () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const img = screen.getByTestId('game-result-icon').querySelector('img')!;
+      expect(img.className).toMatch(/\bobject-cover\b/);
+      expect(img.className).not.toMatch(/\bobject-contain\b/);
+    });
   });
 
   describe('secondary action contrast (owner review: light yellow on white fails 4.5:1)', () => {

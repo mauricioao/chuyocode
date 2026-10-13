@@ -117,12 +117,17 @@ export default function GameResult({
       aria-live="polite"
       className={cn('flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center', className)}
     >
-      {/* Vanina's reaction, 120-160px tall (`h-40` = 160px CSS, the tallest
-          display height `scripts/characters/export-web.mjs` exported this
-          pose at) — `w-auto` keeps the master's own aspect ratio, never
-          stretched. Decorative only: the outcome is already in the headline
-          text below and in `data-outcome` above. */}
-      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-40 w-auto">
+      {/* Vanina's reaction — a FIXED, slightly larger box (owner feedback,
+          UI round 2: the previous `h-40 w-auto` box read as narrow), never
+          shrunk to fit: `object-cover` crops to fill it, keeping the
+          master's own proportions (never stretched/distorted) — the SAME
+          crop rule every character image follows now (`DeskHelper.astro`'s
+          own avatar). `object-[50%_15%]` keeps the head/shoulders in frame
+          regardless of a pose's own width (the three outcome poses are not
+          all the same aspect ratio), cropping the lower body first.
+          Decorative only: the outcome is already in the headline text below
+          and in `data-outcome` above. */}
+      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-48 w-36 overflow-hidden rounded-xl">
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
         <img
@@ -132,64 +137,70 @@ export default function GameResult({
           width={characterPoseWidth(pose)}
           height={160}
           decoding="async"
-          className="h-40 w-auto"
+          className="block h-full w-full object-cover object-[50%_15%]"
         />
       </picture>
-      <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
-      <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
-        {correct} {t.of} {total} {word}
-      </p>
-      <div className="flex flex-col items-center gap-2">
-        {nextHref ? (
-          <Button asChild className="min-h-11">
-            <a href={nextHref} data-testid="game-result-next">
-              {t.nextActivity}
+      {/* Comfortable reading measure for the headline/score/buttons (owner
+          feedback, UI round 2: the success state read a bit narrow) —
+          independent of the character box above, which keeps its own
+          fixed size. */}
+      <div className="flex w-full max-w-[30rem] flex-col items-center gap-4">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
+        <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
+          {correct} {t.of} {total} {word}
+        </p>
+        <div className="flex flex-col items-center gap-2">
+          {nextHref ? (
+            <Button asChild className="min-h-11">
+              <a href={nextHref} data-testid="game-result-next">
+                {t.nextActivity}
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
+              {t.playAgain}
+            </Button>
+          )}
+          {(showReview || nextHref) && (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              {showReview && (
+                <Button
+                  type="button"
+                  variant="link"
+                  data-testid="game-result-review"
+                  className="min-h-11 px-2"
+                  onClick={onReviewWrong}
+                >
+                  {t.reviewWrong}
+                </Button>
+              )}
+              {nextHref && (
+                <Button
+                  type="button"
+                  variant="link"
+                  data-testid="game-result-play-again"
+                  className="min-h-11 px-2"
+                  onClick={onPlayAgain}
+                >
+                  {t.playAgain}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+        {guest && (
+          <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
+            {t.guestInvite}{' '}
+            <a
+              href={guest.signUpHref}
+              data-testid="game-result-guest-sign-up-link"
+              className="font-medium text-accent-ink hover:underline"
+            >
+              {t.guestSignUp}
             </a>
-          </Button>
-        ) : (
-          <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
-            {t.playAgain}
-          </Button>
-        )}
-        {(showReview || nextHref) && (
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            {showReview && (
-              <Button
-                type="button"
-                variant="link"
-                data-testid="game-result-review"
-                className="min-h-11 px-2"
-                onClick={onReviewWrong}
-              >
-                {t.reviewWrong}
-              </Button>
-            )}
-            {nextHref && (
-              <Button
-                type="button"
-                variant="link"
-                data-testid="game-result-play-again"
-                className="min-h-11 px-2"
-                onClick={onPlayAgain}
-              >
-                {t.playAgain}
-              </Button>
-            )}
-          </div>
+          </p>
         )}
       </div>
-      {guest && (
-        <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
-          {t.guestInvite}{' '}
-          <a
-            href={guest.signUpHref}
-            data-testid="game-result-guest-sign-up-link"
-            className="font-medium text-accent-ink hover:underline"
-          >
-            {t.guestSignUp}
-          </a>
-        </p>
-      )}
     </div>
   );
 }
