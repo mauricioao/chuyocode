@@ -84,11 +84,17 @@ function outcomeFor(correct: number, total: number): GameResultOutcome {
   return correct / total >= 0.7 ? 'good' : 'retry';
 }
 
-/** Vanina's own reaction pose per outcome tier — see this file's own header. */
+/**
+ * Vanina's own reaction pose per outcome tier — must match each outcome's
+ * OWN headline, not just its score tier (owner feedback, UI round 2: "casi"
+ * — hand on head, oops face — showed for "good"/"¡Muy bien!", contradicting
+ * the text). `perfect` -> `celebra`; `good` ("¡Muy bien!") -> `pulgar-
+ * arriba`; `retry` ("¡Casi! Sigue practicando") -> `casi`.
+ */
 const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
   perfect: 'vanina/celebra',
-  good: 'vanina/casi',
-  retry: 'vanina/animo',
+  good: 'vanina/pulgar-arriba',
+  retry: 'vanina/casi',
 };
 
 export default function GameResult({
@@ -117,17 +123,20 @@ export default function GameResult({
       aria-live="polite"
       className={cn('flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center', className)}
     >
-      {/* Vanina's reaction — a FIXED, slightly larger box (owner feedback,
-          UI round 2: the previous `h-40 w-auto` box read as narrow), never
-          shrunk to fit: `object-cover` crops to fill it, keeping the
-          master's own proportions (never stretched/distorted) — the SAME
-          crop rule every character image follows now (`DeskHelper.astro`'s
-          own avatar). `object-[50%_15%]` keeps the head/shoulders in frame
-          regardless of a pose's own width (the three outcome poses are not
-          all the same aspect ratio), cropping the lower body first.
-          Decorative only: the outcome is already in the headline text below
-          and in `data-outcome` above. */}
-      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-48 w-36 overflow-hidden rounded-xl">
+      {/* Vanina's reaction — a fixed HEIGHT per breakpoint, `width: auto`
+          (owner feedback, UI round 2: an `object-cover` box cropped the
+          full-body "celebra" pose's own hands/feet, which read as a
+          mistake — the "never shrink to fit" rule means keeping the WHOLE
+          silhouette, at a consistent height, never letterboxing OR
+          cropping). `object-cover` stays reserved for a fixed-SHAPE frame
+          that is part of the design, like `DeskHelper.astro`'s own circular
+          avatar — this is a free-standing figure, not a portrait crop.
+          176px desktop/laptop, 144px on phones <=400px wide (both exported
+          at 176 @1x/2x — `scripts/characters/export-web.mjs` — so the phone
+          size is only ever downscaled, never upscaled). Decorative only:
+          the outcome is already in the headline text below and in
+          `data-outcome` above. */}
+      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-44 w-auto max-[400px]:h-36">
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
         <img
@@ -135,9 +144,9 @@ export default function GameResult({
           alt=""
           aria-hidden="true"
           width={characterPoseWidth(pose)}
-          height={160}
+          height={176}
           decoding="async"
-          className="block h-full w-full object-cover object-[50%_15%]"
+          className="block h-44 w-auto max-[400px]:h-36"
         />
       </picture>
       {/* Comfortable reading measure for the headline/score/buttons (owner

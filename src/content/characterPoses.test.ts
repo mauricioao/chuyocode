@@ -47,11 +47,11 @@ describe('characterPoseSrcSet / characterPoseFallbackSrc / characterPoseWidth', 
   });
 
   it('falls back to the smallest (1x) WebP width', () => {
-    expect(characterPoseFallbackSrc('vanina/celebra')).toBe('/images/characters/vanina/celebra-90.webp');
+    expect(characterPoseFallbackSrc('vanina/celebra')).toBe('/images/characters/vanina/celebra-99.webp');
   });
 
   it('reports the 1x file width for the <img width> attribute', () => {
-    expect(characterPoseWidth('vanina/casi')).toBe(119);
+    expect(characterPoseWidth('vanina/casi')).toBe(131);
   });
 });
 

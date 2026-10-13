@@ -45,9 +45,14 @@ const PUBLIC_ROOT = join(__dirname, '..', '..', 'public', 'images', 'characters'
 const POSES = [
   { character: 'vanina', slug: 'avatar', displayHeightCss: 112 }, // desk helper avatar (desk: h-28 = 112px)
   { character: 'paco', slug: 'avatar', displayHeightCss: 112 }, // desk helper avatar fallback-of-fallback parity
-  { character: 'vanina', slug: 'celebra', displayHeightCss: 160 }, // GameResult: all correct
-  { character: 'vanina', slug: 'casi', displayHeightCss: 160 }, // GameResult: some wrong
-  { character: 'vanina', slug: 'animo', displayHeightCss: 160 }, // GameResult: mostly wrong / first attempt failed
+  // GameResult (UI round 2, owner feedback): a fixed HEIGHT per breakpoint,
+  // `width: auto` — never `object-fit: cover` (that cropped the full-body
+  // "celebra" pose's own hands/feet). 176 is the TALLEST CSS height any
+  // GameResult breakpoint renders these at (desktop/laptop; phones <=400px
+  // render them at 144 instead, downscaled from this same export).
+  { character: 'vanina', slug: 'celebra', displayHeightCss: 176 }, // GameResult: perfect
+  { character: 'vanina', slug: 'pulgar-arriba', displayHeightCss: 176 }, // GameResult: good ("¡Muy bien!")
+  { character: 'vanina', slug: 'casi', displayHeightCss: 176 }, // GameResult: retry ("¡Casi! Sigue practicando")
   { character: 'vanina', slug: 'asoma-izquierda', displayHeightCss: 100 }, // peeking from the exercise window's outer left edge, desktop only
   { character: 'paco', slug: 'sentado-borde', displayHeightCss: 140 }, // sitting on a desk widget's top edge
 ];
