@@ -215,13 +215,14 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       matches the mockup's own source order (clock, calendar, player,
       weather), which is also what the drag system (`@lib/ui/deskDrag`)
       falls back to positioning from on a visitor's very first visit.
-      `order-4` on phones (AFTER the levels dock, owner mobile-layout
-      spec: "widgets as a compact ... row ... → footer") — desktop's own
-      `desk:order-none` restores plain DOM order there, where widgets sit
-      top-left and the dock is independently pinned bottom-centre. */}
+      `order-5` on phones (AFTER the levels dock AND the helper row, owner
+      mobile-layout spec: "widgets as a compact ... row ... → footer") —
+      desktop's own `desk:order-none` restores plain DOM order there, where
+      widgets sit top-left and the dock is independently pinned
+      bottom-centre. */}
   <section
     aria-label={t.widgetsLabel}
-    class="order-4 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
+    class="order-5 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
   >
     <DeskClockWidget />
     <DeskCalendarWidget />
@@ -241,8 +242,9 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
 
   {/* Levels dock — bottom centre on desktop, a horizontal scroller on
       phones, right after the folders grid there (owner mobile-layout spec:
-      "folders → 'Ir directo a tu nivel' → widgets → footer" — `order-3`,
-      BEFORE the widgets section's own `order-4` above). LEVELS ONLY again
+      "folders → 'Ir directo a tu nivel' → [helper] → widgets → footer" —
+      `order-3`, BEFORE the helper slot's own `order-4` and the widgets
+      section's own `order-5` above). LEVELS ONLY again
       (PART 6c, owner spec 2026-10-07): the minimized-windows tray moved OUT
       to its own fixed bottom-right container (`MinimizedWindowsTray.astro`,
       mounted once by `BaseLayout.astro`) — a small rectangle per window, not
@@ -290,4 +292,17 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       </nav>
     </div>
   </div>
+
+  {/* Helper — slotted in HERE specifically (owner spec, mobile-layout
+      follow-up): "a row after the levels bar". `DeskHelper.astro`'s own
+      root `<aside>` carries its OWN `order-4`/`desk:order-none` (and, at
+      `desk:`, switches itself to `position: fixed`, which removes it from
+      this flex flow entirely regardless of DOM position — see that
+      component's own header) — this slot only decides WHERE in the DOM
+      tree it lands, which is what controls its mobile flow position.
+      `DeskHost.astro` is the one caller, passing `<DeskHelper slot="helper"
+      .../>` as a child of this component. Empty (no-op) wherever nothing is
+      passed — every OTHER desk host branch with no helper renders nothing
+      extra here. */}
+  <slot name="helper" />
 </section>

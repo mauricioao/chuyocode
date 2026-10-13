@@ -64,6 +64,23 @@
  * a plain `data-tip-id` attribute (the dedupe key the client-side queue
  * needs so "Otro tip" never immediately re-shows it), and its name/HTML/
  * avatar are already painted directly into the markup below.
+ *
+ * IN FLOW BELOW `desk:` (owner report, "pantalla rota" — a FIXED helper on a
+ * phone always covers something underneath it; the resize fix only stopped
+ * it covering content it had no business reaching after a stale resize, it
+ * never addressed a fresh mobile load, where the avatar sat `fixed
+ * bottom-left` over whatever the page's own last row happened to be — the
+ * A1 level tile in the owner's own screenshot): below `desk:`, this `<aside>`
+ * is a normal flex ROW — never `position: fixed` — slotted into
+ * `DeskScene.astro`'s own flex column right after the levels dock
+ * (`<slot name="helper">`, `order-4`, bumping the widgets section to
+ * `order-5`), full width with the same page gutter every other mobile row
+ * uses. Folded: just the avatar circle. Open: avatar + the tip rendered
+ * INLINE next to it (no floating speech-bubble tail — that only makes sense
+ * pointing at a FIXED avatar). `desk:` restores the ORIGINAL fixed
+ * bottom-left composition byte-for-byte (same classes, now under a `desk:`
+ * prefix) — this file's "SAME ELEMENTS, TWO POSTURES" note just below the
+ * markup covers exactly which classes do that.
  */
 import { characterPoseFallbackSrc, characterPoseSrcSet } from '@/content/characterPoses';
 import { DESK_HELPER_TIPS, pickRandomTipIndex } from '@/content/deskHelperTips';
@@ -93,6 +110,15 @@ const defaultHtml = defaultTip[lang];
 const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAME);
 ---
 
+{/* SAME ELEMENTS, TWO POSTURES: every class below is either shared
+    (identical at both postures) or explicitly split mobile-base vs.
+    `desk:`-prefixed — never a duplicated second markup tree, so the single
+    `id`-based DOM queries `@lib/ui/deskHelper.ts` already uses keep working
+    unchanged. Mobile (below `desk:`): a normal flex ROW, in flow, full
+    width, `order-4` (right after the levels dock — see `DeskScene.astro`'s
+    own `<slot name="helper">`). `desk:` and up: BYTE-IDENTICAL to this
+    file's pre-existing fixed bottom-left composition — every `desk:`-only
+    class pair below is that exact original value, just re-scoped. */}
 <aside
   id="desk-helper"
   data-desk-helper
@@ -100,7 +126,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
   data-tip-id={defaultTip.id}
   data-lang={lang}
   data-avatar-label-template={avatarLabelTemplate}
-  class="fixed bottom-[calc(10px+var(--desk-helper-lift,0px)+var(--desk-helper-dock-lift,0px))] left-5 z-[5] flex items-end transition-[bottom] duration-200 ease-out motion-reduce:transition-none"
+  class="order-4 flex w-full items-start gap-3 px-4 desk:order-none desk:w-auto desk:items-end desk:gap-0 desk:px-0 desk:fixed desk:bottom-[calc(10px+var(--desk-helper-lift,0px)+var(--desk-helper-dock-lift,0px))] desk:left-5 desk:z-[5] desk:transition-[bottom] desk:duration-200 desk:ease-out desk:motion-reduce:transition-none"
 >
   <button
     type="button"
@@ -109,7 +135,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
     aria-expanded="true"
     aria-controls="desk-helper-bubble"
     aria-label={defaultAvatarLabel}
-    class="relative block h-16 w-16 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-24 desk:w-24"
+    class="relative block h-14 w-14 shrink-0 cursor-pointer rounded-full border-2 border-foreground bg-card p-0 desk:h-24 desk:w-24"
   >
     <picture class="block h-full w-full overflow-hidden rounded-full">
       <source data-desk-helper-avif type="image/avif" srcset={characterPoseSrcSet('vanina/avatar', 'avif')} />
@@ -132,12 +158,17 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
     </picture>
   </button>
 
+  {/* The floating speech-bubble's own `-ml-*`/`mb-[*]`/`max-w-[*]` (pulling
+      it close to and lifting it above the FIXED avatar) only make sense for
+      that fixed composition — `desk:`-only below. Mobile instead just fills
+      the row's remaining width (`min-w-0 flex-1`, `desk:flex-none` restores
+      the original non-growing, content-sized box). */}
   <div
     id="desk-helper-bubble"
     data-desk-helper-bubble
     role="status"
     aria-live="polite"
-    class="relative -ml-2 mb-[58px] max-w-[250px] rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:text-[13.5px]"
+    class="relative min-w-0 flex-1 rounded-[18px] border-2 border-foreground bg-card py-3 pr-9 pl-3.5 text-[13px] text-foreground [&_em]:rounded-[3px] [&_em]:bg-pop-yellow/35 [&_em]:px-[3px] [&_em]:not-italic desk:-ml-3.5 desk:mb-[76px] desk:max-w-[290px] desk:flex-none desk:text-[13.5px]"
   >
     <b data-desk-helper-name class="mb-0.5 block font-semibold">{DESK_HELPER_NAME}</b>
     <span data-desk-helper-tip set:html={defaultHtml} />
@@ -171,11 +202,11 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
         fill already shares with the border. `overflow-visible` is required
         for that negative-y portion to actually paint — Astro clips an
         `<svg>` to its own box by default. Pinned to the bubble's
-        lower-left corner at every breakpoint (same posture as the old
-        tail, which never had a `desk:` override either) so it keeps
-        curving down toward the avatar regardless of font-size/width. */}
+        lower-left corner, pointing down toward a FIXED avatar below it —
+        `desk:`-only now: an inline mobile row has no floating bubble for a
+        tail to point from. */}
     <svg
-      class="absolute -bottom-[19px] left-[22px] h-[21px] w-[26px] overflow-visible"
+      class="hidden h-[21px] w-[26px] overflow-visible desk:absolute desk:-bottom-[19px] desk:left-[22px] desk:block"
       viewBox="0 0 26 21"
       aria-hidden="true"
     >
