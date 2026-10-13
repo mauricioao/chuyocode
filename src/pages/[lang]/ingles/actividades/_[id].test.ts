@@ -255,32 +255,21 @@ describe('GET /[lang]/ingles/actividades/[id] — the desk behind the window (PA
     expect(html).toContain('id="desk-helper"');
   });
 
-  // Visual-polish pass, DIRECCION-VISUAL.md §4.2 "asoma en la ventana del
-  // ejercicio": the HOST shell (`DeskWindowManager.astro`) is the one place
-  // that reliably IS "a non-fullscreen desk window, signed-in" under the
-  // window-manager architecture (see `_[id].test.ts`'s own header + the
-  // embedded-window test above) — Vanina peeks from here, desktop-only.
-  // Unverified visually this pass (no signed-in session to screenshot).
-  it("renders Vanina peeking from the window edge on the host shell, desktop-only", async () => {
+  // UI round 2 (owner feedback, 2026-10-12): on the real desk Vanina
+  // rendered in front of the calendar widget, not beside any window — root
+  // cause: a fixed, viewport-relative offset (the window's OLD static
+  // desktop inset), never anchored to an actual window element, so she
+  // still painted at that same screen position even with no window open.
+  // Removed; see `DeskWindowManager.astro`'s own history for the removed
+  // markup (`957fc59`).
+  it('never renders a Vanina peek on the host shell (removed, UI round 2)', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: { id: 'user-1' } },
       embedded: false,
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="desk-window-manager-vanina-peek"');
-    expect(html).toMatch(/data-testid="desk-window-manager-vanina-peek"[^>]*aria-hidden="true"/);
-    expect(html).toMatch(/data-testid="desk-window-manager-vanina-peek"[^>]*class="[^"]*\bhidden\b[^"]*\bdesk:block\b/);
-    expect(html).toContain('/images/characters/vanina/asoma-izquierda-40.webp');
-  });
-
-  it('renders no Vanina peek at all behind the window for a guest (no host shell mounts)', async () => {
-    activityResult.value = { id: 'abc', title: 'x', level: null, blocks: [], authorId: 'someone-else' };
-    const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
-      params: { lang: 'es', id: 'abc' },
-      locals: { user: null },
-    });
-    expect(await res.text()).not.toContain('desk-window-manager-vanina-peek');
+    expect(html).not.toContain('desk-window-manager-vanina-peek');
   });
 
   it('renders no desk at all behind the window for a guest', async () => {
