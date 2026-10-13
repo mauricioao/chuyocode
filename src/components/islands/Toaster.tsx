@@ -51,14 +51,18 @@ export default function Toaster() {
     <SonnerToaster
       theme="dark"
       position={position}
-      // UI round 2 (visual pass): the default 32px edge offset put a
-      // bottom-anchored toast right on top of the activity stage's own
-      // floating "Comprobar"/"Reintentar" bar and the desk's minimized-
-      // windows tray — both also fixed to the bottom-right corner
+      // UI round 2 (visual pass): the default edge offset put a bottom-
+      // anchored toast right on top of the activity stage's own floating
+      // "Comprobar"/"Reintentar" bar and the desk's minimized-windows tray
+      // — both also fixed to the bottom-right corner
       // (`FLOATING_CHECK_BAR_CLASS`/`MinimizedWindowsTray.astro`). A bigger
       // bottom offset only (top is unused) clears both regardless of which
-      // page/position is showing.
+      // page/position is showing. Sonner uses a SEPARATE `mobileOffset`
+      // below its own 600px breakpoint — `offset` alone left a phone-width
+      // toast overlapping the floating Comprobar bar (verified: both boxes
+      // shared the same y-range at 390x844), so both must be set.
       offset={{ bottom: '88px' }}
+      mobileOffset={{ bottom: '88px' }}
       icons={{
         success: <CheckCircleIcon weight="fill" className="text-success" aria-hidden="true" />,
       }}
