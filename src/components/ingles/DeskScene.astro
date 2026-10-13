@@ -214,10 +214,14 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       it back to the 2-column span row 2 actually needs). DOM order
       matches the mockup's own source order (clock, calendar, player,
       weather), which is also what the drag system (`@lib/ui/deskDrag`)
-      falls back to positioning from on a visitor's very first visit. */}
+      falls back to positioning from on a visitor's very first visit.
+      `order-4` on phones (AFTER the levels dock, owner mobile-layout
+      spec: "widgets as a compact ... row ... → footer") — desktop's own
+      `desk:order-none` restores plain DOM order there, where widgets sit
+      top-left and the dock is independently pinned bottom-centre. */}
   <section
     aria-label={t.widgetsLabel}
-    class="order-3 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
+    class="order-4 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
   >
     <DeskClockWidget />
     <DeskCalendarWidget />
@@ -236,12 +240,14 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </section>
 
   {/* Levels dock — bottom centre on desktop, a horizontal scroller on
-      phones. LEVELS ONLY again (PART 6c, owner spec 2026-10-07): the
-      minimized-windows tray moved OUT to its own fixed bottom-right
-      container (`MinimizedWindowsTray.astro`, mounted once by
-      `BaseLayout.astro`) — a small rectangle per window, not a chip squeezed
-      in here next to the level tiles. */}
-  <div class="order-4 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
+      phones, right after the folders grid there (owner mobile-layout spec:
+      "folders → 'Ir directo a tu nivel' → widgets → footer" — `order-3`,
+      BEFORE the widgets section's own `order-4` above). LEVELS ONLY again
+      (PART 6c, owner spec 2026-10-07): the minimized-windows tray moved OUT
+      to its own fixed bottom-right container (`MinimizedWindowsTray.astro`,
+      mounted once by `BaseLayout.astro`) — a small rectangle per window, not
+      a chip squeezed in here next to the level tiles. */}
+  <div class="order-3 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
     <div
       data-desk-dock
