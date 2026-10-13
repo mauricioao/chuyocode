@@ -1229,6 +1229,21 @@ describe('WorksheetZoneEditor — keyboard zone creation (accessibility)', () =>
     expect(document.activeElement).toBe(firstAnswer);
   });
 
+  it('orders the properties panel: answer type, answers, text to listen to, explanation', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'Enter' });
+    const kind = screen.getByRole('radiogroup', { name: 'Tipo de respuesta' });
+    const answer = screen.getByLabelText('Respuestas aceptadas 1');
+    const speak = screen.getByTestId('zone-properties-speak-input');
+    const explanation = screen.getByTestId('zone-properties-explanation-input');
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(kind, answer)).toBe(true);
+    expect(follows(answer, speak)).toBe(true);
+    expect(follows(speak, explanation)).toBe(true);
+  });
+
   it('announces the creation via an aria-live region', () => {
     render(<Harness />);
     mockFittedViewport();

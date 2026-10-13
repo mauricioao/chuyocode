@@ -1441,23 +1441,6 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         </Button>
       </div>
 
-      {/* D4 "Escuchar/Listen": optional per-zone text for the practice
-          player's speaker affordance — a worksheet image has no
-          machine-readable text otherwise. Applies to both zone kinds. */}
-      <div className="mt-4 flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">{t.zoneSpeakLabel}</span>
-        <Input
-          type="text"
-          fieldSize="sm"
-          data-testid="zone-properties-speak-input"
-          aria-label={t.zoneSpeakLabel}
-          value={selectedZone.speak ?? ''}
-          maxLength={MAX_ZONE_SPEAK_LENGTH}
-          placeholder={t.zoneSpeakPlaceholder}
-          onChange={(e) => setSpeak(e.target.value)}
-        />
-      </div>
-
       {selectedZone.kind === 'text' && (
         <div className="mt-4 flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
@@ -1545,6 +1528,24 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
           </Button>
         </div>
       )}
+
+      {/* D4 "Escuchar/Listen": optional per-zone text for the practice
+          player's speaker affordance — a worksheet image has no
+          machine-readable text otherwise. Applies to both zone kinds, and
+          sits after the answers: type, answers, then the extras. */}
+      <div className="mt-4 flex flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">{t.zoneSpeakLabel}</span>
+        <Input
+          type="text"
+          fieldSize="sm"
+          data-testid="zone-properties-speak-input"
+          aria-label={t.zoneSpeakLabel}
+          value={selectedZone.speak ?? ''}
+          maxLength={MAX_ZONE_SPEAK_LENGTH}
+          placeholder={t.zoneSpeakPlaceholder}
+          onChange={(e) => setSpeak(e.target.value)}
+        />
+      </div>
 
       {/* D5 "¿Por qué?": optional per-zone explanation, shown to the
           learner only once they check and get THIS zone wrong. Sits under
