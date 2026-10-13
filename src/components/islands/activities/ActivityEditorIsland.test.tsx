@@ -943,6 +943,31 @@ describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
     link.remove();
   });
 
+  // Bug "al guardar y salir me crea un sub escritorio" (2026-10-13): the
+  // window's own traffic lights are `<a href="/<lang>/ingles">` anchors. If
+  // this guard swallows their click, `deskWindow.ts` never runs its own
+  // close()/minimize() (which already asks this editor via `confirmClose`),
+  // and "Guardar y salir" then navigates the IFRAME to the hub — a desk
+  // nested inside the window. The window controls must reach their owner.
+  it.each(['data-desk-window-close', 'data-desk-window-minimize'])(
+    'leaves a window control (%s) to the window shell while dirty: no modal from this guard, click not swallowed',
+    (attr) => {
+      renderEditor();
+      fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });
+
+      const control = createInternalLink('/es/ingles');
+      control.setAttribute(attr, '');
+      const shellHandler = vi.fn();
+      control.addEventListener('click', shellHandler);
+
+      fireEvent.click(control, { button: 0 });
+
+      expect(shellHandler).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('unsaved-changes-modal')).toBeNull();
+      control.remove();
+    },
+  );
+
   it('"Cancelar" closes the modal without navigating', () => {
     renderEditor();
     fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'x' } });

@@ -71,7 +71,7 @@ import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
-import { EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
+import { DESK_WINDOW_ATTR, EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useHydrated } from '@/hooks/useHydrated';
@@ -491,6 +491,12 @@ export default function ActivityEditorIsland({
       const target = e.target as Element | null;
       const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
       if (!anchor) return;
+      // The window's own traffic lights are `<a href="/<lang>/ingles">`
+      // anchors owned by `deskWindow.ts`, whose close()/minimize() already
+      // ask this editor through `confirmClose`. Swallowing their click here
+      // would instead navigate THIS iframe to the hub after "Guardar y
+      // salir" — a whole desk nested inside the window.
+      if (anchor.hasAttribute(DESK_WINDOW_ATTR.close) || anchor.hasAttribute(DESK_WINDOW_ATTR.minimize)) return;
       if (anchor.target && anchor.target !== '_self') return;
       if (anchor.hasAttribute('download')) return;
       let url: URL;
