@@ -245,6 +245,17 @@ const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
  */
 const MOBILE_TOOLBAR_PEEK_OFFSET = 'bottom-[calc(2.5rem+env(safe-area-inset-bottom))]';
 
+/** True when a key event comes from somewhere the user types text. */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  );
+}
+
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
@@ -665,6 +676,10 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
 
   const handleViewportKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // The zone properties panel renders inside this viewport, so every key
+      // typed in its fields bubbles here. Canvas shortcuts must never swallow
+      // a character someone is typing: any editable target opts out.
+      if (isEditableTarget(e.target)) return;
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
         handleZoomIn();
@@ -1441,23 +1456,6 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
         </Button>
       </div>
 
-      {/* D4 "Escuchar/Listen": optional per-zone text for the practice
-          player's speaker affordance — a worksheet image has no
-          machine-readable text otherwise. Applies to both zone kinds. */}
-      <div className="mt-4 flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">{t.zoneSpeakLabel}</span>
-        <Input
-          type="text"
-          fieldSize="sm"
-          data-testid="zone-properties-speak-input"
-          aria-label={t.zoneSpeakLabel}
-          value={selectedZone.speak ?? ''}
-          maxLength={MAX_ZONE_SPEAK_LENGTH}
-          placeholder={t.zoneSpeakPlaceholder}
-          onChange={(e) => setSpeak(e.target.value)}
-        />
-      </div>
-
       {selectedZone.kind === 'text' && (
         <div className="mt-4 flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{t.zoneAnswersLabel}</span>
@@ -1545,6 +1543,24 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
           </Button>
         </div>
       )}
+
+      {/* D4 "Escuchar/Listen": optional per-zone text for the practice
+          player's speaker affordance — a worksheet image has no
+          machine-readable text otherwise. Applies to both zone kinds, and
+          sits after the answers: type, answers, then the extras. */}
+      <div className="mt-4 flex flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">{t.zoneSpeakLabel}</span>
+        <Input
+          type="text"
+          fieldSize="sm"
+          data-testid="zone-properties-speak-input"
+          aria-label={t.zoneSpeakLabel}
+          value={selectedZone.speak ?? ''}
+          maxLength={MAX_ZONE_SPEAK_LENGTH}
+          placeholder={t.zoneSpeakPlaceholder}
+          onChange={(e) => setSpeak(e.target.value)}
+        />
+      </div>
 
       {/* D5 "¿Por qué?": optional per-zone explanation, shown to the
           learner only once they check and get THIS zone wrong. Sits under
