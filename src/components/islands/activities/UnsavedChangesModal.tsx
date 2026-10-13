@@ -56,36 +56,40 @@ export default function UnsavedChangesModal({
             {labels.saveError}
           </p>
         )}
-        {/* Three actions, longer labels than the two-button `DialogFooter`
-            pattern elsewhere (`ReportActivityButton`, `ModerationQueueIsland`,
-            etc.) ever has to fit: at `sm:` and up, `DialogContent` is still
-            only `max-w-sm` (384px) regardless of viewport width, so a plain
-            `sm:flex-row` — no wrap — let "Guardar y salir" overflow past the
-            dialog's right edge (owner report, "botón fuera de la caja").
-            `sm:flex-wrap` keeps every button at its own intrinsic width
-            (`shrink-0`, `whitespace-nowrap` — `Button`'s own base classes)
-            and lets a button that doesn't fit drop to its own line instead
-            of spilling out of the box, at any width. */}
-        <div className="flex flex-col-reverse flex-wrap gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          <Button type="button" variant="ghost" data-testid="unsaved-modal-cancel" onClick={onCancel}>
-            {labels.cancel}
-          </Button>
+        {/* Three actions, stacked (owner report "botón fuera de la caja", UI
+            round 2 follow-up): a two-button `DialogFooter` row
+            (`ReportActivityButton`, `ModerationQueueIsland`, etc.) is the
+            kit's own exception, not its default — the kit's iOS-style alert
+            rule for THREE actions is a full-width capsule stack, primary
+            first, same at every width (DIRECCION-VISUAL.md §3.2: "lo que se
+            toca o flota: cápsula"). `w-full` on every button is also what
+            makes the original overflow structurally impossible now: a
+            full-width button can never spill past its own `max-w-sm`
+            dialog's edge, at any label length/locale — no `sm:` row, no
+            wrap needed. DOM order IS visual order (top to bottom, primary
+            first) — no `flex-col-reverse` trick required either. */}
+        <div className="flex flex-col gap-2">
           <Button
             type="button"
-            variant="outline"
-            data-testid="unsaved-modal-leave"
-            onClick={onLeaveWithoutSaving}
-          >
-            {labels.leaveWithoutSaving}
-          </Button>
-          <Button
-            type="button"
+            className="w-full rounded-full"
             data-testid="unsaved-modal-save-and-leave"
             disabled={saving}
             loading={saving}
             onClick={onSaveAndLeave}
           >
             {labels.saveAndLeave}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full rounded-full"
+            data-testid="unsaved-modal-leave"
+            onClick={onLeaveWithoutSaving}
+          >
+            {labels.leaveWithoutSaving}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full rounded-full" data-testid="unsaved-modal-cancel" onClick={onCancel}>
+            {labels.cancel}
           </Button>
         </div>
       </DialogContent>
