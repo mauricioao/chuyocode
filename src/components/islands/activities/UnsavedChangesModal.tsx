@@ -56,7 +56,17 @@ export default function UnsavedChangesModal({
             {labels.saveError}
           </p>
         )}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        {/* Three actions, longer labels than the two-button `DialogFooter`
+            pattern elsewhere (`ReportActivityButton`, `ModerationQueueIsland`,
+            etc.) ever has to fit: at `sm:` and up, `DialogContent` is still
+            only `max-w-sm` (384px) regardless of viewport width, so a plain
+            `sm:flex-row` — no wrap — let "Guardar y salir" overflow past the
+            dialog's right edge (owner report, "botón fuera de la caja").
+            `sm:flex-wrap` keeps every button at its own intrinsic width
+            (`shrink-0`, `whitespace-nowrap` — `Button`'s own base classes)
+            and lets a button that doesn't fit drop to its own line instead
+            of spilling out of the box, at any width. */}
+        <div className="flex flex-col-reverse flex-wrap gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
           <Button type="button" variant="ghost" data-testid="unsaved-modal-cancel" onClick={onCancel}>
             {labels.cancel}
           </Button>

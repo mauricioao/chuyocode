@@ -104,6 +104,23 @@ describe('UnsavedChangesModal', () => {
     expect(screen.getByTestId('unsaved-changes-modal')).toBeTruthy();
   });
 
+  it('wraps the actions row instead of letting a button overflow the dialog at any width (owner report: "botón fuera de la caja")', () => {
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    const actions = screen.getByTestId('unsaved-modal-save-and-leave').closest('div');
+    expect(actions?.className).toContain('flex-wrap');
+    expect(actions?.className).toContain('sm:flex-wrap');
+  });
+
   it('calls onCancel when dismissed via the overlay/Escape (Radix onOpenChange)', () => {
     const onCancel = vi.fn();
     render(
