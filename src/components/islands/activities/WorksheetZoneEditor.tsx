@@ -245,6 +245,17 @@ const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
  */
 const MOBILE_TOOLBAR_PEEK_OFFSET = 'bottom-[calc(2.5rem+env(safe-area-inset-bottom))]';
 
+/** True when a key event comes from somewhere the user types text. */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  );
+}
+
 type DragMode =
   | { kind: 'draw'; start: { x: number; y: number } }
   | { kind: 'move'; zoneId: string; start: { x: number; y: number }; original: Rect }
@@ -665,6 +676,10 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
 
   const handleViewportKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // The zone properties panel renders inside this viewport, so every key
+      // typed in its fields bubbles here. Canvas shortcuts must never swallow
+      // a character someone is typing: any editable target opts out.
+      if (isEditableTarget(e.target)) return;
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
         handleZoomIn();

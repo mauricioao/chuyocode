@@ -1229,6 +1229,31 @@ describe('WorksheetZoneEditor — keyboard zone creation (accessibility)', () =>
     expect(document.activeElement).toBe(firstAnswer);
   });
 
+  it('lets the properties panel fields receive every key the canvas uses as a shortcut', () => {
+    render(<Harness />);
+    mockFittedViewport();
+    fireEvent.keyDown(screen.getByTestId('zone-viewport'), { key: 'Enter' });
+    const fields = [
+      screen.getByLabelText('Respuestas aceptadas 1'),
+      screen.getByTestId('zone-properties-speak-input'),
+      screen.getByTestId('zone-properties-explanation-input'),
+    ];
+    for (const field of fields) {
+      const letters = 'abcdefghijklmnopqrstuvwxyzñ'.split('');
+      const keys = [
+        ...letters,
+        ...letters.map((l) => l.toUpperCase()),
+        ...'0123456789'.split(''),
+        '+', '=', '-', '_', ' ', 'Enter',
+      ];
+      for (const key of keys) {
+        // fireEvent returns false when a handler called preventDefault(),
+        // which is what swallowed the typed character.
+        expect(fireEvent.keyDown(field, { key }), `${key} in ${field.tagName}`).toBe(true);
+      }
+    }
+  });
+
   it('orders the properties panel: answer type, answers, text to listen to, explanation', () => {
     render(<Harness />);
     mockFittedViewport();
