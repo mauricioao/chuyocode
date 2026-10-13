@@ -208,10 +208,15 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   </nav>
 
   {/* Widgets — top-left on desktop (160/160/320 columns × 2 rows, 20px
-      gaps, exactly the mockup's own `.widgets`), two columns on phones
-      (clock+calendar side by side, player/weather full width — the
-      `col-span-2` below, unprefixed, is the phone layout; `desk:` swaps
-      it back to the 2-column span row 2 actually needs). DOM order
+      gaps, exactly the mockup's own `.widgets`), two columns on phones:
+      clock+calendar stay the 2-column pair, player AND weather each get
+      `col-span-2` (full width) — the player widget used to have no
+      `col-span-2` at all, squeezed into a single half-width column where
+      its own title/quote wrapped word by word (owner report, mobile-layout
+      polish round). `desk:col-span-1` restores the player's original
+      single-column desktop placement (column 3, 320px) — weather keeps its
+      own pre-existing `desk:col-span-2` (columns 1-2, row 2) unchanged. DOM
+      order
       matches the mockup's own source order (clock, calendar, player,
       weather), which is also what the drag system (`@lib/ui/deskDrag`)
       falls back to positioning from on a visitor's very first visit.
@@ -227,7 +232,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
     <DeskClockWidget />
     <DeskCalendarWidget />
     {/* The drag identity lives on this Astro wrapper, never on the React island's own root: `deskDrag` edits its widget's attributes and inline styles, and doing that to React-owned markup before hydration made React report a hydration mismatch. */}
-    <div data-desk-widget="player" class="w-full max-w-[320px] desk:w-[320px]">
+    <div data-desk-widget="player" class="col-span-2 w-full desk:col-span-1 desk:w-[320px]">
       <DeskPlayerWidget labels={playerLabels} client:load />
     </div>
     <DeskWeatherWidget
@@ -251,11 +256,29 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       a chip squeezed in here next to the level tiles. */}
   <div class="order-3 grid justify-items-center gap-2 desk:order-none desk:absolute desk:bottom-10 desk:left-1/2 desk:-translate-x-1/2">
     <span class="text-center text-sm text-muted-foreground">{t.levelShortcutTitle}</span>
+    {/* RESPONSIVE LEVEL TILES (owner report, mobile-layout polish round:
+        B2 was cut mid-item at the right edge, C1/C2 fully hidden with no
+        affordance that there was more to scroll to). Three postures, same
+        elements throughout:
+          - Below 360px: the ORIGINAL fixed-width (`w-[76px]`) scrolling
+            tray, now with `snap-x`/`snap-mandatory` (`snap-start` per item)
+            for a clean stop-on-item scroll, and a right-edge `mask-image`
+            fade so a visitor can SEE there is more before they scroll.
+          - 360px up to `desk:` (`min-[360px]:max-desk:`, this codebase's own
+            compound-range variant — `max-desk:` comes from the SAME
+            `--breakpoint-desk` theme token `desk:` does, see `global.css`):
+            the six tiles become equal-width flex items (`flex-1`) that fill
+            the row exactly — no scroll needed, nothing cut off.
+          - `desk:` and up: untouched, the original fixed-width tray
+            (`desk:` was never in either of the two ranges above). */}
     <div
       data-desk-dock
-      class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5 desk:max-w-none desk:overflow-visible"
+      class="ingles-glass flex max-w-full items-stretch gap-2.5 overflow-x-auto rounded-[26px] p-2.5 snap-x snap-mandatory scroll-px-2.5 [mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)] min-[360px]:max-desk:overflow-visible min-[360px]:max-desk:[mask-image:none] desk:max-w-none desk:overflow-visible desk:[mask-image:none]"
     >
-      <nav aria-label={t.levelShortcutTitle} class="flex shrink-0 gap-2.5">
+      <nav
+        aria-label={t.levelShortcutTitle}
+        class="flex shrink-0 gap-2.5 min-[360px]:max-desk:w-full min-[360px]:max-desk:flex-1 min-[360px]:max-desk:shrink"
+      >
         {
           LEVELS.map((level, index) => {
             const band = bandOf(level);
@@ -264,9 +287,9 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
                 href={`/${lang}/ingles/actividades?nivel=${level}`}
                 data-desk-window-open="community"
                 aria-label={`${level}, ${levelBand(lang, level)}`}
-                class="flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="flex w-[76px] shrink-0 snap-start flex-col items-center gap-1 rounded-2xl py-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[360px]:max-desk:w-auto min-[360px]:max-desk:min-w-0 min-[360px]:max-desk:flex-1 min-[360px]:max-desk:shrink"
               >
-                <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[var(--ingles-inset-hairline),0_1px_2px_rgb(17_18_21_/_0.06)]">
+                <span class="flex h-14 w-14 items-end justify-center gap-[3px] rounded-[13px] bg-gradient-to-b from-card to-muted pb-3 shadow-[var(--ingles-inset-hairline),0_1px_2px_rgb(17_18_21_/_0.06)] min-[360px]:max-desk:h-10 min-[360px]:max-desk:w-10 min-[360px]:max-desk:gap-[2px] min-[360px]:max-desk:pb-2">
                   {BAR_HEIGHTS.map((height, barIndex) => (
                     <i
                       class:list={[

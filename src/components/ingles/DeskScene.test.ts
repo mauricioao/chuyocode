@@ -183,4 +183,59 @@ describe('DeskScene.astro — mobile layout (visual bugs pass)', () => {
     expect(dockMatch?.[1]).toContain('overflow-x-auto');
     expect(dockMatch?.[1]).toContain('max-w-full');
   });
+
+  // Mobile-layout polish round (owner report: "Frase del día" squeezed into
+  // a half-width column, title/quote wrapping word by word). Full width on
+  // phones like the weather widget, restored to its original single
+  // (320px) desktop column.
+  it('gives the player widget the full row width on phones, like weather — clock/calendar stay the 2-column pair', async () => {
+    const html = await render();
+
+    const playerMatch = html.match(/<div data-desk-widget="player" class="([^"]*)"/);
+    expect(playerMatch).not.toBeNull();
+    const playerTokens = playerMatch![1].split(/\s+/);
+    expect(playerTokens).toContain('col-span-2');
+    expect(playerTokens).toContain('desk:col-span-1');
+    expect(playerTokens).toContain('desk:w-[320px]');
+
+    const weatherMatch = html.match(/<div id="desk-weather"[^>]*class="([^"]*)"/);
+    expect(weatherMatch).not.toBeNull();
+    expect(weatherMatch![1].split(/\s+/)).toContain('col-span-2');
+  });
+
+  // Mobile-layout polish round (owner report: B2 cut mid-item at the right
+  // edge, C1/C2 fully hidden, no affordance). 360-1099px: six equal-width
+  // tiles fill one row, no scroll. Below 360px: the original fixed-width
+  // scroller, now with scroll-snap and a right-edge fade affordance.
+  // `desk:` (1100px+) is untouched either way.
+  it('fits all six level tiles in one row at >=360px (equal width, no scroll), keeps the original fixed-width scroller with a fade below 360px, desktop untouched', async () => {
+    const html = await render();
+
+    const dockMatch = html.match(/<div[^>]*data-desk-dock[^>]*class="([^"]*)"/);
+    const dockTokens = dockMatch![1].split(/\s+/);
+    expect(dockTokens).toContain('snap-x');
+    expect(dockTokens).toContain('snap-mandatory');
+    expect(dockTokens).toContain('[mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)]');
+    expect(dockTokens).toContain('min-[360px]:max-desk:overflow-visible');
+    expect(dockTokens).toContain('min-[360px]:max-desk:[mask-image:none]');
+    expect(dockTokens).toContain('desk:[mask-image:none]'); // desktop never shows the fade
+
+    const navMatch = html.match(/<nav aria-label="Ir directo a tu nivel" class="([^"]*)"/);
+    const navTokens = navMatch![1].split(/\s+/);
+    expect(navTokens).toContain('min-[360px]:max-desk:flex-1');
+    expect(navTokens).toContain('min-[360px]:max-desk:w-full');
+
+    // `href="/es/ingles/actividades?nivel=…"` is unique to the six level
+    // tiles — `data-desk-window-open="community"` alone would ALSO match
+    // the (unrelated) community folder link above.
+    const itemMatches = [...html.matchAll(/<a href="\/es\/ingles\/actividades\?nivel=[^"]*"[^>]*class="([^"]*)"/g)];
+    expect(itemMatches.length).toBe(6); // the six CEFR levels
+    for (const match of itemMatches) {
+      const tokens = match[1].split(/\s+/);
+      expect(tokens).toContain('w-[76px]'); // below 360px: original fixed width, unchanged
+      expect(tokens).toContain('snap-start');
+      expect(tokens).toContain('min-[360px]:max-desk:flex-1'); // 360-1099px: equal width, fills the row
+      expect(tokens).toContain('min-[360px]:max-desk:w-auto');
+    }
+  });
 });
