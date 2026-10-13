@@ -971,6 +971,11 @@ export const UI_LABELS = {
         reviewWrong: 'Repasar las que fallé',
         guestInvite: '¿Te gustó? Crea tu cuenta gratis para guardar tus favoritas y crear las tuyas.',
         guestSignUp: 'Crear cuenta',
+        // Worksheet result overlay (owner bug report: "con todos los
+        // indicadores de cuanto tiempo tardaste") — the elapsed-time line,
+        // "Tiempo: 1 min 23 s". Optional: a host with no `elapsedMs` never
+        // renders this line at all.
+        time: 'Tiempo',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -987,6 +992,21 @@ export const UI_LABELS = {
         present: 'Presentar',
         check: 'Comprobar',
         retry: 'Reintentar',
+        // Worksheet result overlay (owner bug report: the old bottom-right
+        // "Reintentar" capsule overlapped the floating Comprobar area and
+        // the per-zone feedback, with no score/time shown at all). Once
+        // graded, the floating slot shows this pill instead — it reopens
+        // the centred result dialog; "Reintentar" itself now lives only
+        // inside that dialog (`GameResult`'s own "Jugar de nuevo"/"Otra
+        // actividad").
+        viewResult: 'Ver resultado',
+        // The dialog's own secondary action: closes it so the marked zones
+        // underneath are visible again, without resetting anything.
+        reviewAnswers: 'Revisar respuestas',
+        // Visually-hidden `DialogTitle` for the result dialog — `GameResult`'s
+        // own headline already carries the real copy, this is here only so
+        // the dialog has an accessible name.
+        resultTitle: 'Resultado',
         score: 'Puntaje',
         viewedFirstTime: 'Primera vez',
         viewedBefore: 'Ya lo viste',
@@ -2440,6 +2460,7 @@ export const UI_LABELS = {
         reviewWrong: 'Review what I missed',
         guestInvite: 'Liked it? Create a free account to save your favorites and make your own.',
         guestSignUp: 'Create account',
+        time: 'Time',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',
@@ -2449,6 +2470,9 @@ export const UI_LABELS = {
         present: 'Present',
         check: 'Check',
         retry: 'Try again',
+        viewResult: 'View result',
+        reviewAnswers: 'Review answers',
+        resultTitle: 'Result',
         score: 'Score',
         viewedFirstTime: 'First time',
         viewedBefore: "You've seen this",

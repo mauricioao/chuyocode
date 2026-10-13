@@ -51,12 +51,24 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  container,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /**
+   * Portal target override, forwarded straight to the underlying
+   * `DialogPortal`/Radix `Portal` (same prop). Omitted defaults to
+   * `document.body`, unchanged for every existing caller. A host needs this
+   * only when the dialog must paint above a SIBLING with its own stacking
+   * context the dialog would otherwise lose to purely by DOM position/
+   * z-index — e.g. `ActivityPracticeIsland`'s own full-screen "modo
+   * enfoque" overlay, whose real Fullscreen API element never paints a
+   * `document.body`-level sibling at all, regardless of z-index.
+   */
+  container?: React.ComponentProps<typeof DialogPrimitive.Portal>["container"]
 }) {
   return (
-    <DialogPortal>
+    <DialogPortal container={container}>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"

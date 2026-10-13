@@ -50,6 +50,80 @@ describe('GameResult', () => {
     });
   });
 
+  describe('time line (worksheet result overlay)', () => {
+    it('renders no time line when `elapsedMs` is omitted', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      expect(screen.queryByTestId('game-result-time')).toBeNull();
+    });
+
+    it('renders the formatted elapsed time when given', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} elapsedMs={83_000} />);
+      expect(screen.getByTestId('game-result-time').textContent).toBe('Tiempo: 1 min 23 s');
+    });
+
+    it('renders the English label for lang="en"', () => {
+      render(<GameResult lang="en" correct={3} total={3} onPlayAgain={() => {}} elapsedMs={45_000} />);
+      expect(screen.getByTestId('game-result-time').textContent).toBe('Time: 45 s');
+    });
+  });
+
+  describe('secondaryAction (generic extra action — e.g. the worksheet overlay\'s own "Revisar respuestas")', () => {
+    it('renders no secondary row at all when omitted, and no `nextHref`/`onReviewWrong` either', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      expect(screen.queryByTestId('game-result-secondary-action')).toBeNull();
+    });
+
+    it('renders it, alone, in the secondary row when the primary is already "Jugar de nuevo"', () => {
+      const onClick = vi.fn();
+      render(
+        <GameResult
+          lang="es"
+          correct={3}
+          total={3}
+          onPlayAgain={() => {}}
+          secondaryAction={{ label: 'Revisar respuestas', onClick }}
+        />,
+      );
+      const button = screen.getByTestId('game-result-secondary-action');
+      expect(button.textContent).toBe('Revisar respuestas');
+      fireEvent.click(button);
+      expect(onClick).toHaveBeenCalledOnce();
+    });
+
+    it('renders after "Jugar de nuevo" when `nextHref` is also given', () => {
+      render(
+        <GameResult
+          lang="es"
+          correct={3}
+          total={3}
+          nextHref="/es/ingles/actividades?nivel=a1"
+          onPlayAgain={() => {}}
+          secondaryAction={{ label: 'Revisar respuestas', onClick: () => {} }}
+        />,
+      );
+      const playAgain = screen.getByTestId('game-result-play-again');
+      const secondary = screen.getByTestId('game-result-secondary-action');
+      // Same row, in DOM order — "Jugar de nuevo" before "Revisar respuestas".
+      expect(playAgain.compareDocumentPosition(secondary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('renders before the guest invite line (actions first, guest line last)', () => {
+      render(
+        <GameResult
+          lang="es"
+          correct={3}
+          total={3}
+          onPlayAgain={() => {}}
+          secondaryAction={{ label: 'Revisar respuestas', onClick: () => {} }}
+          guest={{ signUpHref: '/es/auth/entrar?mode=signup&next=%2Fes%2Fx' }}
+        />,
+      );
+      const secondary = screen.getByTestId('game-result-secondary-action');
+      const guestBanner = screen.getByTestId('game-result-guest-banner');
+      expect(secondary.compareDocumentPosition(guestBanner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
   describe('actions — no `nextHref` (editor preview, any host with no next activity)', () => {
     it('makes "Jugar de nuevo" the PRIMARY action and calls `onPlayAgain`', () => {
       const onPlayAgain = vi.fn();
