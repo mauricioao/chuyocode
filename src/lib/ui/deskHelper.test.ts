@@ -25,6 +25,9 @@ function setDom(tipId: string, { folded = false }: { folded?: boolean } = {}): v
           <img data-desk-helper-img src="" alt="" />
         </picture>
       </button>
+      <button id="desk-helper-fold-label" data-desk-helper-fold-label class="${folded ? '' : 'hidden'}" aria-expanded="${!folded}">
+        <span>Un tip de Vanina</span>
+      </button>
       <div id="desk-helper-bubble" ${folded ? 'hidden' : ''}>
         <b data-desk-helper-name></b>
         <span data-desk-helper-tip></span>
@@ -467,6 +470,12 @@ describe('initDeskHelper — dock collision (fold or lift)', () => {
 // mobile content (folders, the dock) happened to sit under it. Same root
 // cause class, and same fix shape, as `deskDrag.test.ts`'s own "stale
 // absolute positioning across a resize" coverage.
+//
+// Mobile-layout polish round narrowed WHERE the auto-fold applies: below
+// `desk:` (1100px) the helper is now the IN-FLOW mobile card, which
+// defaults OPEN and never collides with anything — only the DESKTOP range
+// between 1100 and 1440px (the dock-collision band) still auto-folds a
+// width-defaulted-open bubble on resize.
 describe('initDeskHelper — resize fold (stale open state across a resize)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -483,18 +492,34 @@ describe('initDeskHelper — resize fold (stale open state across a resize)', ()
     );
   }
 
-  it('folds an open bubble on resize once the viewport drops below the open-by-default width, when never explicitly opened', () => {
+  it('folds an open bubble on resize into the 1100-1440px dock-collision range, when never explicitly opened', () => {
     setDom('tip-a', { folded: false }); // open by the width default, not a click
     stubWidth(1440);
     initDeskHelper(document, fakeFetch(), fakeStorage());
     const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
     expect(bubble.hidden).toBe(false);
 
-    stubWidth(390); // resized down, no reload
+    stubWidth(1200); // resized down into the tablet range, no reload
     window.dispatchEvent(new Event('resize'));
 
     expect(bubble.hidden).toBe(true);
     expect(document.getElementById('desk-helper-avatar')!.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // The in-flow mobile card has nothing to collide with — it defaults open
+  // (owner spec), so a resize all the way down to a phone width must NEVER
+  // auto-fold it, unlike the old (pre-polish-round) behaviour.
+  it('never auto-folds on a resize into the mobile range (<1100px) — the in-flow card defaults open there', () => {
+    setDom('tip-a', { folded: false });
+    stubWidth(1440);
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    expect(bubble.hidden).toBe(false);
+
+    stubWidth(390); // resized all the way down to a phone, no reload
+    window.dispatchEvent(new Event('resize'));
+
+    expect(bubble.hidden).toBe(false);
   });
 
   it('never persists a resize-driven fold as the visitor’s own choice (free to reopen next time)', () => {
@@ -503,7 +528,7 @@ describe('initDeskHelper — resize fold (stale open state across a resize)', ()
     const storage = fakeStorage();
     initDeskHelper(document, fakeFetch(), storage);
 
-    stubWidth(390);
+    stubWidth(1200);
     window.dispatchEvent(new Event('resize'));
 
     expect(storage.getItem(DESK_HELPER_FOLDED_STORAGE_KEY)).toBeNull();
@@ -518,7 +543,7 @@ describe('initDeskHelper — resize fold (stale open state across a resize)', ()
     const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
     expect(bubble.hidden).toBe(false);
 
-    stubWidth(390);
+    stubWidth(1200);
     window.dispatchEvent(new Event('resize'));
 
     expect(bubble.hidden).toBe(false);
@@ -529,7 +554,7 @@ describe('initDeskHelper — resize fold (stale open state across a resize)', ()
     stubWidth(1440);
     initDeskHelper(document, fakeFetch(), fakeStorage());
 
-    stubWidth(390);
+    stubWidth(1200);
     expect(() => window.dispatchEvent(new Event('resize'))).not.toThrow();
     expect((document.getElementById('desk-helper-bubble') as HTMLElement).hidden).toBe(true);
   });
@@ -543,5 +568,72 @@ describe('initDeskHelper — resize fold (stale open state across a resize)', ()
     window.dispatchEvent(new Event('resize'));
 
     expect((document.getElementById('desk-helper-bubble') as HTMLElement).hidden).toBe(false);
+  });
+});
+
+// Mobile-layout polish round: folding must never leave a bare avatar circle
+// below `desk:` — a one-line `foldedLabel` ("Un tip de Vanina") takes the
+// bubble's place instead, and both the avatar AND this label open the
+// helper.
+describe('initDeskHelper — mobile fold label (never a bare circle)', () => {
+  it('shows the fold label when the avatar is clicked while open (folding)', () => {
+    setDom('tip-a', { folded: false });
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+
+    const avatar = document.getElementById('desk-helper-avatar') as HTMLElement;
+    const foldLabel = document.getElementById('desk-helper-fold-label') as HTMLElement;
+    expect(foldLabel.classList.contains('hidden')).toBe(true); // starts open -> label hidden
+
+    avatar.click();
+
+    expect(foldLabel.classList.contains('hidden')).toBe(false);
+    expect(foldLabel.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('hides the fold label again once reopened', () => {
+    setDom('tip-a', { folded: true });
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+
+    const avatar = document.getElementById('desk-helper-avatar') as HTMLElement;
+    const foldLabel = document.getElementById('desk-helper-fold-label') as HTMLElement;
+    expect(foldLabel.classList.contains('hidden')).toBe(false); // starts folded -> label shown
+
+    avatar.click();
+
+    expect(foldLabel.classList.contains('hidden')).toBe(true);
+    expect(foldLabel.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('clicking the fold label itself reopens the helper, same as the avatar', () => {
+    setDom('tip-a', { folded: true });
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    const foldLabel = document.getElementById('desk-helper-fold-label') as HTMLElement;
+    expect(bubble.hidden).toBe(true);
+
+    foldLabel.click();
+
+    expect(bubble.hidden).toBe(false);
+    expect(foldLabel.classList.contains('hidden')).toBe(true);
+  });
+
+  it('marks a reopen via the fold label as explicit too (for the dock-collision decision)', () => {
+    setDom('tip-a', { folded: true });
+    const storage = fakeStorage();
+    initDeskHelper(document, fakeFetch(), storage);
+
+    (document.getElementById('desk-helper-fold-label') as HTMLElement).click();
+
+    expect(storage.getItem(DESK_HELPER_EXPLICIT_OPEN_STORAGE_KEY)).toBe('true');
+  });
+
+  it('never throws when the fold label element is missing (older cached page / fixture)', () => {
+    setDom('tip-a', { folded: false });
+    document.getElementById('desk-helper-fold-label')?.remove();
+    expect(() => initDeskHelper(document, fakeFetch(), fakeStorage())).not.toThrow();
+
+    const avatar = document.getElementById('desk-helper-avatar') as HTMLElement;
+    expect(() => avatar.click()).not.toThrow();
   });
 });

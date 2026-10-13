@@ -33,6 +33,17 @@ export const DESK_HELPER_FOLDED_STORAGE_KEY = 'ingles-desk-helper-folded';
 export const DESK_HELPER_OPEN_MIN_WIDTH = 1440;
 
 /**
+ * The SAME `desk:` breakpoint `@lib/ui/deskDrag.ts`/`DeskScene.astro` use
+ * (`--breakpoint-desk` in `global.css`) — duplicated as a literal here (that
+ * module exports nothing to import) for the width-fold logic below. Mobile-
+ * layout polish round: below this width the helper is the IN-FLOW mobile
+ * card (never fixed, never collides with anything), so it defaults OPEN —
+ * only the DESKTOP range between this and {@link DESK_HELPER_OPEN_MIN_WIDTH}
+ * ever auto-folds.
+ */
+const DESK_BREAKPOINT_WIDTH = 1100;
+
+/**
  * Session-scoped "the visitor clicked the avatar to OPEN it" flag (dock-
  * collision pass, owner report `dock-three-chips.png`) — set only by a real
  * click that opens the bubble FROM folded, never by the anti-flash script's
@@ -107,10 +118,30 @@ function render(
   if (avatar) avatar.setAttribute('aria-label', avatarLabelTemplate.replace('{name}', DESK_HELPER_NAME));
 }
 
-function setFolded(root: HTMLElement, bubble: HTMLElement, avatar: HTMLElement, folded: boolean): void {
+/**
+ * `foldLabel` (mobile-layout polish round) is the ONLY element that needs a
+ * Tailwind-class toggle rather than the native `hidden` attribute: it
+ * carries its OWN always-on `flex` class (the folded-row layout), and a
+ * `hidden` ATTRIBUTE cannot win against an unconditional `flex` CLASS at the
+ * same specificity — exactly the "hidden flex" idiom `Header.astro`'s own
+ * mobile nav panel already relies on (`classList.toggle`, never
+ * `.hidden = …`). `null` (an older cached page, or a test fixture that never
+ * added it) is a silent no-op — the rest of the fold still works.
+ */
+function setFolded(
+  root: HTMLElement,
+  bubble: HTMLElement,
+  avatar: HTMLElement,
+  foldLabel: HTMLElement | null,
+  folded: boolean,
+): void {
   bubble.hidden = folded;
   avatar.setAttribute('aria-expanded', String(!folded));
   root.setAttribute('data-folded', String(folded));
+  if (foldLabel) {
+    foldLabel.classList.toggle('hidden', !folded);
+    foldLabel.setAttribute('aria-expanded', String(!folded));
+  }
 }
 
 function isLang(value: string | undefined): value is Lang {
@@ -133,6 +164,10 @@ export function initDeskHelper(
   const avatar = doc.getElementById('desk-helper-avatar');
   const nextButton = doc.getElementById('desk-helper-next');
   const closeButton = doc.getElementById('desk-helper-close');
+  // Mobile-layout polish round: optional on purpose — an older cached page
+  // or a test fixture built before this element existed still wires
+  // everything else fine; `setFolded` already no-ops a `null` foldLabel.
+  const foldLabel = doc.getElementById('desk-helper-fold-label');
   if (!root || !bubble || !avatar || !nextButton || !closeButton) return;
 
   // Narrowed into fresh, explicitly-typed bindings: TypeScript's
@@ -143,6 +178,7 @@ export function initDeskHelper(
   const helperRoot: HTMLElement = root;
   const helperBubble: HTMLElement = bubble;
   const helperAvatar: HTMLElement = avatar;
+  const helperFoldLabel: HTMLElement | null = foldLabel;
 
   const langAttr = helperRoot.getAttribute('data-lang') ?? undefined;
   if (!isLang(langAttr)) return;
@@ -226,44 +262,51 @@ export function initDeskHelper(
       const overlap = rootBox.bottom - dockBox.top;
       helperRoot.style.setProperty('--desk-helper-dock-lift', `${Math.max(0, Math.ceil(overlap + DOCK_LIFT_GAP_PX))}px`);
     } else {
-      setFolded(helperRoot, helperBubble, helperAvatar, true);
+      setFolded(helperRoot, helperBubble, helperAvatar, helperFoldLabel, true);
     }
   }
 
   function toggle(folded: boolean): void {
-    setFolded(helperRoot, helperBubble, helperAvatar, folded);
+    setFolded(helperRoot, helperBubble, helperAvatar, helperFoldLabel, folded);
     writeStoredFold(folded);
+  }
+
+  /** Shared by the avatar AND (mobile-layout polish round) the new fold-label button — both open the helper the same way. */
+  function openOrToggle(): void {
+    const wasFolded = helperBubble.hidden;
+    toggle(!helperBubble.hidden);
+    if (wasFolded) writeExplicitOpen(storage);
+    recheckDockCollision();
   }
 
   /**
    * STALE OPEN STATE ACROSS A RESIZE (owner report, same root cause as
    * `@lib/ui/deskDrag.ts`'s own "pantalla rota" fix): `DeskHelper.astro`'s
    * anti-flash script decides the fold state exactly ONCE, before first
-   * paint, from the viewport width AT THAT MOMENT — open by default only
-   * at/above `DESK_HELPER_OPEN_MIN_WIDTH` (1440px). A visitor who loaded at
-   * that width (bubble open by the WIDTH DEFAULT, never an explicit click)
-   * and then resized the SAME page down into the phone range with no
-   * reload kept that open bubble, now covering whatever mobile content sits
-   * under it (folders, the dock) — nothing ever re-ran that decision. Mirrors
-   * `recheckDockCollision` below: a resize-driven fold is never persisted
-   * (`toggle`'s `writeStoredFold` is NOT called here) and never overrides an
-   * EXPLICIT open (`readExplicitOpen`) — only the same width-based default
-   * the anti-flash script itself would have chosen on a fresh load at this
-   * width.
+   * paint, from the viewport width AT THAT MOMENT. Mobile-layout polish
+   * round narrowed WHERE this auto-fold applies: below `desk:`
+   * (`DESK_BREAKPOINT_WIDTH`) the helper is the in-flow mobile card, which
+   * defaults OPEN and never collides with anything — only the DESKTOP range
+   * between `DESK_BREAKPOINT_WIDTH` and `DESK_HELPER_OPEN_MIN_WIDTH` (the
+   * dock-collision-prone 1100-1440px band) still auto-folds a
+   * width-defaulted-open bubble on resize. Mirrors `recheckDockCollision`
+   * below: a resize-driven fold is never persisted (`toggle`'s
+   * `writeStoredFold` is NOT called here) and never overrides an EXPLICIT
+   * open (`readExplicitOpen`) — only the same width-based default the
+   * anti-flash script itself would have chosen on a fresh load at this width.
    */
   function recheckWidthFold(): void {
     if (helperBubble.hidden || readExplicitOpen(storage)) return;
-    const stillWideEnough =
-      typeof matchMedia === 'function' && matchMedia(`(min-width: ${DESK_HELPER_OPEN_MIN_WIDTH}px)`).matches;
-    if (!stillWideEnough) setFolded(helperRoot, helperBubble, helperAvatar, true);
+    if (typeof matchMedia !== 'function') return;
+    const isDesktopRange = matchMedia(`(min-width: ${DESK_BREAKPOINT_WIDTH}px)`).matches;
+    const isWideEnough = matchMedia(`(min-width: ${DESK_HELPER_OPEN_MIN_WIDTH}px)`).matches;
+    if (isDesktopRange && !isWideEnough) {
+      setFolded(helperRoot, helperBubble, helperAvatar, helperFoldLabel, true);
+    }
   }
 
-  helperAvatar.addEventListener('click', () => {
-    const wasFolded = helperBubble.hidden;
-    toggle(!helperBubble.hidden);
-    if (wasFolded) writeExplicitOpen(storage);
-    recheckDockCollision();
-  });
+  helperAvatar.addEventListener('click', openOrToggle);
+  helperFoldLabel?.addEventListener('click', openOrToggle);
   closeButton.addEventListener('click', () => {
     toggle(true);
     recheckDockCollision();

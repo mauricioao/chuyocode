@@ -1626,6 +1626,10 @@ export const UI_LABELS = {
         helperAvatarLabel: 'Ayuda de {name}',
         helperOtherTip: 'Otro tip',
         helperClose: 'Cerrar ayuda',
+        // Mobile-layout polish round (owner report): below `desk:`, folding
+        // the helper must never leave a bare avatar circle with nothing next
+        // to it — this one-line label replaces the tip card instead.
+        helperFoldedLabel: 'Un tip de Vanina',
         // N4 (owner spec, resolves UX-INGLES.md's F3/F5): the "Mis
         // actividades" folder, right before "+ Crear actividad" — its own
         // meta line and the "needs action" badge for rejected activities.
@@ -2888,6 +2892,7 @@ export const UI_LABELS = {
         helperAvatarLabel: 'Help from {name}',
         helperOtherTip: 'Another tip',
         helperClose: 'Close help',
+        helperFoldedLabel: 'A tip from Vanina',
         myActivitiesTitle: 'My activities',
         myActivitiesEmptyMeta: 'No activities yet',
         myActivitiesBadgeOne: '{n} activity needs changes',
