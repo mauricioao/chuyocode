@@ -114,6 +114,12 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
     <picture class="block h-full w-full overflow-hidden rounded-full">
       <source data-desk-helper-avif type="image/avif" srcset={characterPoseSrcSet('vanina/avatar', 'avif')} />
       <source data-desk-helper-webp type="image/webp" srcset={characterPoseSrcSet('vanina/avatar', 'webp')} />
+      {/* UI round 2 (owner feedback, 2026-10-12): character images are
+          NEVER shrunk to fit ("contain") — they keep their natural aspect
+          ratio and CROP instead (`object-cover`), filling the circle
+          edge-to-edge. `object-[50%_25%]` keeps the bust's face/shoulders
+          centred slightly above the image's own middle, same rule every
+          other character image below follows. */}
       <img
         data-desk-helper-img
         src={characterPoseFallbackSrc('vanina/avatar')}
@@ -121,7 +127,7 @@ const defaultAvatarLabel = avatarLabelTemplate.replace('{name}', DESK_HELPER_NAM
         width="124"
         height="124"
         decoding="async"
-        class="-ml-1 mt-0.5 block h-[72px] w-[72px] desk:h-28 desk:w-28"
+        class="block h-full w-full object-cover object-[50%_25%]"
       />
     </picture>
   </button>

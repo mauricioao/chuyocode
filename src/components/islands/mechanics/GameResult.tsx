@@ -84,11 +84,17 @@ function outcomeFor(correct: number, total: number): GameResultOutcome {
   return correct / total >= 0.7 ? 'good' : 'retry';
 }
 
-/** Vanina's own reaction pose per outcome tier — see this file's own header. */
+/**
+ * Vanina's own reaction pose per outcome tier — must match each outcome's
+ * OWN headline, not just its score tier (owner feedback, UI round 2: "casi"
+ * — hand on head, oops face — showed for "good"/"¡Muy bien!", contradicting
+ * the text). `perfect` -> `celebra`; `good` ("¡Muy bien!") -> `pulgar-
+ * arriba`; `retry` ("¡Casi! Sigue practicando") -> `casi`.
+ */
 const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
   perfect: 'vanina/celebra',
-  good: 'vanina/casi',
-  retry: 'vanina/animo',
+  good: 'vanina/pulgar-arriba',
+  retry: 'vanina/casi',
 };
 
 export default function GameResult({
@@ -117,12 +123,20 @@ export default function GameResult({
       aria-live="polite"
       className={cn('flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center', className)}
     >
-      {/* Vanina's reaction, 120-160px tall (`h-40` = 160px CSS, the tallest
-          display height `scripts/characters/export-web.mjs` exported this
-          pose at) — `w-auto` keeps the master's own aspect ratio, never
-          stretched. Decorative only: the outcome is already in the headline
-          text below and in `data-outcome` above. */}
-      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-40 w-auto">
+      {/* Vanina's reaction — a fixed HEIGHT per breakpoint, `width: auto`
+          (owner feedback, UI round 2: an `object-cover` box cropped the
+          full-body "celebra" pose's own hands/feet, which read as a
+          mistake — the "never shrink to fit" rule means keeping the WHOLE
+          silhouette, at a consistent height, never letterboxing OR
+          cropping). `object-cover` stays reserved for a fixed-SHAPE frame
+          that is part of the design, like `DeskHelper.astro`'s own circular
+          avatar — this is a free-standing figure, not a portrait crop.
+          176px desktop/laptop, 144px on phones <=400px wide (both exported
+          at 176 @1x/2x — `scripts/characters/export-web.mjs` — so the phone
+          size is only ever downscaled, never upscaled). Decorative only:
+          the outcome is already in the headline text below and in
+          `data-outcome` above. */}
+      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-44 w-auto max-[400px]:h-36">
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
         <img
@@ -130,66 +144,72 @@ export default function GameResult({
           alt=""
           aria-hidden="true"
           width={characterPoseWidth(pose)}
-          height={160}
+          height={176}
           decoding="async"
-          className="h-40 w-auto"
+          className="block h-44 w-auto max-[400px]:h-36"
         />
       </picture>
-      <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
-      <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
-        {correct} {t.of} {total} {word}
-      </p>
-      <div className="flex flex-col items-center gap-2">
-        {nextHref ? (
-          <Button asChild className="min-h-11">
-            <a href={nextHref} data-testid="game-result-next">
-              {t.nextActivity}
+      {/* Comfortable reading measure for the headline/score/buttons (owner
+          feedback, UI round 2: the success state read a bit narrow) —
+          independent of the character box above, which keeps its own
+          fixed size. */}
+      <div className="flex w-full max-w-[30rem] flex-col items-center gap-4">
+        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
+        <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
+          {correct} {t.of} {total} {word}
+        </p>
+        <div className="flex flex-col items-center gap-2">
+          {nextHref ? (
+            <Button asChild className="min-h-11">
+              <a href={nextHref} data-testid="game-result-next">
+                {t.nextActivity}
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
+              {t.playAgain}
+            </Button>
+          )}
+          {(showReview || nextHref) && (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              {showReview && (
+                <Button
+                  type="button"
+                  variant="link"
+                  data-testid="game-result-review"
+                  className="min-h-11 px-2"
+                  onClick={onReviewWrong}
+                >
+                  {t.reviewWrong}
+                </Button>
+              )}
+              {nextHref && (
+                <Button
+                  type="button"
+                  variant="link"
+                  data-testid="game-result-play-again"
+                  className="min-h-11 px-2"
+                  onClick={onPlayAgain}
+                >
+                  {t.playAgain}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+        {guest && (
+          <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
+            {t.guestInvite}{' '}
+            <a
+              href={guest.signUpHref}
+              data-testid="game-result-guest-sign-up-link"
+              className="font-medium text-accent-ink hover:underline"
+            >
+              {t.guestSignUp}
             </a>
-          </Button>
-        ) : (
-          <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
-            {t.playAgain}
-          </Button>
-        )}
-        {(showReview || nextHref) && (
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            {showReview && (
-              <Button
-                type="button"
-                variant="link"
-                data-testid="game-result-review"
-                className="min-h-11 px-2"
-                onClick={onReviewWrong}
-              >
-                {t.reviewWrong}
-              </Button>
-            )}
-            {nextHref && (
-              <Button
-                type="button"
-                variant="link"
-                data-testid="game-result-play-again"
-                className="min-h-11 px-2"
-                onClick={onPlayAgain}
-              >
-                {t.playAgain}
-              </Button>
-            )}
-          </div>
+          </p>
         )}
       </div>
-      {guest && (
-        <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
-          {t.guestInvite}{' '}
-          <a
-            href={guest.signUpHref}
-            data-testid="game-result-guest-sign-up-link"
-            className="font-medium text-accent-ink hover:underline"
-          >
-            {t.guestSignUp}
-          </a>
-        </p>
-      )}
     </div>
   );
 }

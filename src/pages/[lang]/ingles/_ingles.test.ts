@@ -157,16 +157,16 @@ describe('ingles/index.astro (hub)', () => {
     expect(html).toMatch(/data-desk-widget="player"[^>]*>\s*<astro-island/);
   });
 
-  // Visual-polish pass, DIRECCION-VISUAL.md §4.3 "romper la caja": Paco sits
-  // on the clock widget's own top edge, desktop only.
-  it('renders Paco on the desk, decorative and desktop-only, never on the mobile grid', async () => {
+  // UI round 2 (owner feedback, 2026-10-12): Paco sitting on the clock
+  // widget read as floating over the "Inglés" logo with no reason to be
+  // there on the real desk — removed. Placements will be redesigned from
+  // visual references first; see `DeskScene.astro`'s own history for the
+  // removed markup (`957fc59`).
+  it('never renders Paco on the desk (removed, UI round 2)', async () => {
     const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
     const html = await res.text();
 
-    expect(html).toContain('data-testid="desk-scene-paco"');
-    expect(html).toMatch(/data-testid="desk-scene-paco"[^>]*aria-hidden="true"/);
-    expect(html).toMatch(/data-testid="desk-scene-paco"[^>]*class="[^"]*\bhidden\b[^"]*\bdesk:block\b/);
-    expect(html).toContain('/images/characters/paco/sentado-borde-71.webp');
+    expect(html).not.toContain('desk-scene-paco');
   });
 
   describe('greeting', () => {
@@ -353,6 +353,18 @@ describe('ingles/index.astro (hub)', () => {
       // approved cast split) — the avatar no longer varies per tip.
       expect(html).toContain('/images/characters/vanina/avatar-114.webp');
       expect(html).toMatch(/<img[^>]+data-desk-helper-img[^>]+alt=""/);
+    });
+
+    // UI round 2 (owner feedback, 2026-10-12): character images are NEVER
+    // shrunk to fit ("contain") — they crop instead (`object-cover`),
+    // filling their box edge-to-edge.
+    it("crops Vanina's avatar to fill its circle (object-cover, never object-contain)", async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' });
+      const html = await res.text();
+
+      const img = html.match(/<img[^>]+data-desk-helper-img[^>]*>/)?.[0] ?? '';
+      expect(img).toMatch(/class="[^"]*\bobject-cover\b/);
+      expect(img).not.toMatch(/\bobject-contain\b/);
     });
 
     it('renders the server-picked tip bubble, in Spanish, naming Vanina as the helper, keyed by its id', async () => {

@@ -73,21 +73,21 @@ export const CHARACTER_POSES = {
   'vanina/celebra': {
     character: 'vanina',
     slug: 'celebra',
-    widths: [90, 180],
+    widths: [99, 198],
     flushEdge: null,
-  }, // GameResult: all correct
+  }, // GameResult: perfect
+  'vanina/pulgar-arriba': {
+    character: 'vanina',
+    slug: 'pulgar-arriba',
+    widths: [126, 251],
+    flushEdge: null,
+  }, // GameResult: good ("¡Muy bien!")
   'vanina/casi': {
     character: 'vanina',
     slug: 'casi',
-    widths: [119, 239],
+    widths: [131, 263],
     flushEdge: null,
-  }, // GameResult: some wrong
-  'vanina/animo': {
-    character: 'vanina',
-    slug: 'animo',
-    widths: [112, 224],
-    flushEdge: null,
-  }, // GameResult: mostly wrong / first attempt failed
+  }, // GameResult: retry ("¡Casi! Sigue practicando")
   'vanina/asoma-izquierda': {
     character: 'vanina',
     slug: 'asoma-izquierda',

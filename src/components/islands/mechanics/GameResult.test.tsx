@@ -128,16 +128,19 @@ describe('GameResult', () => {
       expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/celebra');
     });
 
-    it('shows "casi" for "good"', () => {
+    // UI round 2 (owner feedback, 2026-10-12): the pose must match the
+    // outcome's OWN headline, not just its score tier — "casi" (hand on
+    // head, oops face) under "¡Muy bien!" contradicted the text.
+    it('shows "pulgar-arriba" for "good" ("¡Muy bien!")', () => {
       render(<GameResult lang="es" correct={7} total={10} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
-      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/casi');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/pulgar-arriba');
     });
 
-    it('shows "animo" for "retry" — never a celebratory pose', () => {
+    it('shows "casi" for "retry" ("¡Casi! Sigue practicando") — never a celebratory pose', () => {
       render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
-      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/animo');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/casi');
     });
 
     it('is decorative only (empty alt, aria-hidden) — the outcome already carries in the headline and data-outcome', () => {
@@ -145,6 +148,24 @@ describe('GameResult', () => {
       const img = screen.getByTestId('game-result-icon').querySelector('img')!;
       expect(img.getAttribute('alt')).toBe('');
       expect(img.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    // UI round 2 (owner feedback, 2026-10-12): an `object-cover` box cropped
+    // the full-body "celebra" pose's own hands/feet, which read as a
+    // mistake. Character images are never shrunk/cropped to fit a box here
+    // — a fixed HEIGHT per breakpoint with `width: auto` keeps the whole
+    // silhouette at the master's own aspect ratio (`object-cover` stays
+    // reserved for a fixed-shape frame that is part of the design, like
+    // `DeskHelper.astro`'s own circular avatar — not this free-standing
+    // figure).
+    it('keeps its natural aspect ratio (fixed height, width auto, never cropped/letterboxed)', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const img = screen.getByTestId('game-result-icon').querySelector('img')!;
+      expect(img.className).toMatch(/\bh-44\b/);
+      expect(img.className).toMatch(/\bw-auto\b/);
+      expect(img.className).toMatch(/max-\[400px\]:h-36/);
+      expect(img.className).not.toMatch(/\bobject-cover\b/);
+      expect(img.className).not.toMatch(/\bobject-contain\b/);
     });
   });
 

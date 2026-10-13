@@ -62,6 +62,22 @@ describe('Toaster', () => {
     expect(region?.getAttribute('data-y-position')).toBe('bottom');
   });
 
+  it('clears the floating Comprobar bar / minimized-windows tray on BOTH desktop and phone (UI round 2: offset + mobileOffset)', async () => {
+    render(<Toaster />);
+    act(() => {
+      toast('hola');
+    });
+    await screen.findByText('hola');
+    const region = document.querySelector('[data-sonner-toaster]') as HTMLElement | null;
+    expect(region).not.toBeNull();
+    // Sonner uses a SEPARATE `--mobile-offset-*` set below its own 600px
+    // breakpoint — setting only `offset` left a phone-width toast
+    // overlapping the floating Comprobar bar (verified against a real
+    // 390x844 viewport).
+    expect(region?.style.getPropertyValue('--offset-bottom')).toBe('88px');
+    expect(region?.style.getPropertyValue('--mobile-offset-bottom')).toBe('88px');
+  });
+
   it('switches to bottom-center on a narrow (phone) viewport', async () => {
     stubMatchMedia(true);
     render(<Toaster />);

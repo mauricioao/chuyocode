@@ -32,7 +32,6 @@ import DeskPlayerWidget from '@components/ingles/DeskPlayerWidget';
 import { LEVELS, type Level } from '@lib/exerciseTaxonomy';
 import { levelBand, type Lang } from '@lib/i18n';
 import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSceneData';
-import { characterPoseFallbackSrc, characterPoseSrcSet, characterPoseWidth } from '@/content/characterPoses';
 
 interface Props {
   lang: Lang;
@@ -220,55 +219,7 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
     aria-label={t.widgetsLabel}
     class="order-3 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
   >
-    {/* PACO, breaking the box (visual-polish pass, DIRECCION-VISUAL.md
-        §4.3): a plain sibling wrapper, `relative`, around the clock widget
-        ONLY — not the whole widgets grid — so Paco anchors to THAT widget's
-        own box regardless of where the grid places it. Desktop only
-        (`desk:` and up), hidden on mobile: there is no room for a
-        decorative character once the widgets drop to a 2-column phone
-        grid. `aria-hidden` + `alt=""`: purely decorative, never announced,
-        never focusable, never covering the clock's own hands (the clock
-        itself is already `aria-hidden`/non-interactive, so overlapping its
-        box is safe).
-
-        NO EXTRA MARKUP NEEDED FOR THE "GLASS OCCLUSION" EFFECT: Paco is
-        BEFORE `DeskClockWidget` in source order and both are plain (non-
-        `isolate`d) boxes in the same stacking context, so the widget — an
-        `.ingles-glass` surface, `backdrop-filter: blur(24px) saturate(170%)`
-        — already paints OVER him by default. His own image is cropped so
-        his seat sits at ~63px down from the TOP of his own 140px-tall
-        export (~45% of it — `scripts/characters/export-web.mjs`'s own
-        `sentado-borde` row); `top-0 -translate-y-[63px]` lifts the whole
-        image by exactly that amount so the seam lands right at the clock's
-        own top edge (`top-0` on this `relative` wrapper) — everything above
-        it (head, shoulders) rises OUTSIDE the widget's box and reads crisp;
-        everything below (his seated legs) falls INSIDE the box's footprint
-        and reads frosted through the glass. */}
-    <div class="relative">
-      {/* `hidden desk:block` on PACO ONLY — the clock widget itself (the
-          sibling below) must keep rendering at every width; only the
-          decorative character is desktop-only. */}
-      <picture
-        data-testid="desk-scene-paco"
-        aria-hidden="true"
-        class="pointer-events-none absolute top-0 left-1/2 z-0 hidden h-[140px] w-auto -translate-x-1/2 -translate-y-[63px] desk:block"
-      >
-        <source type="image/avif" srcset={characterPoseSrcSet('paco/sentado-borde', 'avif')} />
-        <source type="image/webp" srcset={characterPoseSrcSet('paco/sentado-borde', 'webp')} />
-        <img
-          src={characterPoseFallbackSrc('paco/sentado-borde')}
-          alt=""
-          width={characterPoseWidth('paco/sentado-borde')}
-          height="140"
-          decoding="async"
-          loading="lazy"
-          class="block h-[140px] w-auto"
-        />
-      </picture>
-      <div class="relative z-10">
-        <DeskClockWidget />
-      </div>
-    </div>
+    <DeskClockWidget />
     <DeskCalendarWidget />
     {/* The drag identity lives on this Astro wrapper, never on the React island's own root: `deskDrag` edits its widget's attributes and inline styles, and doing that to React-owned markup before hydration made React report a hydration mismatch. */}
     <div data-desk-widget="player" class="w-full max-w-[320px] desk:w-[320px]">
