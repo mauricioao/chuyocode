@@ -1529,6 +1529,24 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
+/* Same defensive second line for the desk's own widgets (owner report,
+ * "pantalla rota... la distribución"): `@lib/ui/deskDrag`'s `resize`
+ * listener clears a widget's inline `position: absolute` placement the
+ * instant the viewport drops below `desk:`, so the mobile 2-column flow
+ * grid takes back over — but an inline style always wins over a class, so
+ * this CSS-only override is the belt to that JS's suspenders: if the
+ * listener somehow never ran (JS disabled/failed, or the one tick between
+ * the `resize` event firing and its handler executing), the widgets still
+ * never render stacked/overlapping below this breakpoint. */
+@media (max-width: 1099.98px) {
+  [data-desk-widget] {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+  }
+}
+
 /* Minimize (yellow light), a REAL minimize (owner feedback 2026-10-06,
  * replacing the old behaviour where it just navigated to the hub exactly
  * like the red light): a short "shrink toward the bottom-right tray"

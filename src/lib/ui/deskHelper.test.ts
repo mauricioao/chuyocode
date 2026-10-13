@@ -459,3 +459,89 @@ describe('initDeskHelper — dock collision (fold or lift)', () => {
     expect(() => initDeskHelper(document, fakeFetch(), fakeStorage())).not.toThrow();
   });
 });
+
+// Owner report ("version móvil del inglés pantalla rota"): the open bubble
+// — default-open above DESK_HELPER_OPEN_MIN_WIDTH (1440px), never an
+// explicit click — used to stay open forever once a visitor resized the
+// SAME page down into the phone range with no reload, covering whatever
+// mobile content (folders, the dock) happened to sit under it. Same root
+// cause class, and same fix shape, as `deskDrag.test.ts`'s own "stale
+// absolute positioning across a resize" coverage.
+describe('initDeskHelper — resize fold (stale open state across a resize)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubWidth(px: number): void {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => {
+        const match = /min-width:\s*(\d+)px/.exec(query);
+        const threshold = match ? Number(match[1]) : 0;
+        return { matches: px >= threshold, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      }),
+    );
+  }
+
+  it('folds an open bubble on resize once the viewport drops below the open-by-default width, when never explicitly opened', () => {
+    setDom('tip-a', { folded: false }); // open by the width default, not a click
+    stubWidth(1440);
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    expect(bubble.hidden).toBe(false);
+
+    stubWidth(390); // resized down, no reload
+    window.dispatchEvent(new Event('resize'));
+
+    expect(bubble.hidden).toBe(true);
+    expect(document.getElementById('desk-helper-avatar')!.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('never persists a resize-driven fold as the visitor’s own choice (free to reopen next time)', () => {
+    setDom('tip-a', { folded: false });
+    stubWidth(1440);
+    const storage = fakeStorage();
+    initDeskHelper(document, fakeFetch(), storage);
+
+    stubWidth(390);
+    window.dispatchEvent(new Event('resize'));
+
+    expect(storage.getItem(DESK_HELPER_FOLDED_STORAGE_KEY)).toBeNull();
+  });
+
+  it('leaves an EXPLICITLY opened bubble open across the same resize', () => {
+    setDom('tip-a', { folded: true });
+    stubWidth(1440);
+    const storage = fakeStorage();
+    initDeskHelper(document, fakeFetch(), storage);
+    document.getElementById('desk-helper-avatar')!.dispatchEvent(new MouseEvent('click'));
+    const bubble = document.getElementById('desk-helper-bubble') as HTMLElement;
+    expect(bubble.hidden).toBe(false);
+
+    stubWidth(390);
+    window.dispatchEvent(new Event('resize'));
+
+    expect(bubble.hidden).toBe(false);
+  });
+
+  it('does nothing on resize while already folded', () => {
+    setDom('tip-a', { folded: true });
+    stubWidth(1440);
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+
+    stubWidth(390);
+    expect(() => window.dispatchEvent(new Event('resize'))).not.toThrow();
+    expect((document.getElementById('desk-helper-bubble') as HTMLElement).hidden).toBe(true);
+  });
+
+  it('stays open across a resize that never drops below the open-by-default width', () => {
+    setDom('tip-a', { folded: false });
+    stubWidth(1440);
+    initDeskHelper(document, fakeFetch(), fakeStorage());
+
+    stubWidth(1600); // still well above 1440
+    window.dispatchEvent(new Event('resize'));
+
+    expect((document.getElementById('desk-helper-bubble') as HTMLElement).hidden).toBe(false);
+  });
+});

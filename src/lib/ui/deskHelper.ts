@@ -235,6 +235,29 @@ export function initDeskHelper(
     writeStoredFold(folded);
   }
 
+  /**
+   * STALE OPEN STATE ACROSS A RESIZE (owner report, same root cause as
+   * `@lib/ui/deskDrag.ts`'s own "pantalla rota" fix): `DeskHelper.astro`'s
+   * anti-flash script decides the fold state exactly ONCE, before first
+   * paint, from the viewport width AT THAT MOMENT — open by default only
+   * at/above `DESK_HELPER_OPEN_MIN_WIDTH` (1440px). A visitor who loaded at
+   * that width (bubble open by the WIDTH DEFAULT, never an explicit click)
+   * and then resized the SAME page down into the phone range with no
+   * reload kept that open bubble, now covering whatever mobile content sits
+   * under it (folders, the dock) — nothing ever re-ran that decision. Mirrors
+   * `recheckDockCollision` below: a resize-driven fold is never persisted
+   * (`toggle`'s `writeStoredFold` is NOT called here) and never overrides an
+   * EXPLICIT open (`readExplicitOpen`) — only the same width-based default
+   * the anti-flash script itself would have chosen on a fresh load at this
+   * width.
+   */
+  function recheckWidthFold(): void {
+    if (helperBubble.hidden || readExplicitOpen(storage)) return;
+    const stillWideEnough =
+      typeof matchMedia === 'function' && matchMedia(`(min-width: ${DESK_HELPER_OPEN_MIN_WIDTH}px)`).matches;
+    if (!stillWideEnough) setFolded(helperRoot, helperBubble, helperAvatar, true);
+  }
+
   helperAvatar.addEventListener('click', () => {
     const wasFolded = helperBubble.hidden;
     toggle(!helperBubble.hidden);
@@ -245,6 +268,8 @@ export function initDeskHelper(
     toggle(true);
     recheckDockCollision();
   });
+
+  window.addEventListener('resize', recheckWidthFold);
 
   const dockEl = doc.querySelector<HTMLElement>('[data-desk-dock]');
   if (dockEl) {
