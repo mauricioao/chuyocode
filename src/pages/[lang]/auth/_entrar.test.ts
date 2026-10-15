@@ -276,6 +276,69 @@ describe('GET /[lang]/auth/entrar — markers', () => {
   });
 });
 
+describe('GET /[lang]/auth/entrar — why the visitor was sent here', () => {
+  // Walkthrough finding (`RECORRIDO-2026-10-15.md`, Media): a guest who taps
+  // "Imprimir" lands here with no explanation. `@lib/signInReason` maps the
+  // already-validated `next` to a short context line shown above the form.
+  it('explains an imprimir next', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?next=%2Fes%2Fingles%2Factividades%2Ff3fe0031-92f7-46b7-86b5-17d955742343%2Fimprimir',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="auth-reason"');
+    expect(html).toContain('Crea tu cuenta gratis para imprimir esta actividad.');
+  });
+
+  it('shows no reason line for a generic next', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?next=%2Fes%2Flibros',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+
+    expect(html).not.toContain('data-testid="auth-reason"');
+  });
+
+  it('shows no reason line when no next was given', async () => {
+    const res = await render('https://chuyocode.test/es/auth/entrar', {
+      params: { lang: 'es' },
+    });
+    const html = await res.text();
+
+    expect(html).not.toContain('data-testid="auth-reason"');
+  });
+
+  it('keeps the reason line when ?mode=signup is also present', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?mode=signup&next=%2Fes%2Fcrear',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="auth-reason"');
+    expect(html).toContain('Crea tu cuenta gratis para crear tus propias actividades.');
+  });
+
+  it('never renders the raw next value inside the reason line', async () => {
+    const res = await render(
+      'https://chuyocode.test/es/auth/entrar?next=%2Fes%2Fmis-actividades%2Fsecreta',
+      { params: { lang: 'es' } },
+    );
+    const html = await res.text();
+    // `next` legitimately rides through elsewhere on this page (the Google
+    // form's hidden input, the AuthPanel island's props) so the whole page
+    // is not checked — only the fixed sentence the reason line renders.
+    const reasonLine = html.match(
+      /data-testid="auth-reason"[^>]*>([^<]*)</,
+    )?.[1];
+
+    expect(reasonLine).toBe('Inicia sesión para ver tus actividades.');
+    expect(reasonLine).not.toContain('/es/mis-actividades/secreta');
+  });
+});
+
 describe('entrar.astro — ?mode=signup (header create-account button hint)', () => {
   it('reads ?mode=signup and forwards it to AuthPanel as initialMode', () => {
     const source = readFileSync(

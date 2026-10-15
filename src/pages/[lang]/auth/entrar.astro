@@ -71,6 +71,7 @@ import {
   safeNextPath,
   withAuthSuccess,
 } from '@lib/authRedirect';
+import { signInReason } from '@lib/signInReason';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -176,11 +177,28 @@ const initialMode: 'signin' | 'signup' | undefined =
   Astro.url.searchParams.get('mode') === 'signup' ? 'signup' : undefined;
 
 const t = UI_LABELS[lang].auth;
+
+// Walkthrough finding (`RECORRIDO-2026-10-15.md`, Media): a guest who taps
+// "Imprimir" used to land here with no explanation, unlike the catalog
+// (`practice.guestBanner`/`guestInvite`), which always says what an account
+// gives them. `next` is already `safeNextPath`-validated above; the raw
+// value is never rendered — only this fixed, localized sentence is. Kept
+// whether or not `?mode=signup` is also present (same line either way).
+const reasonKey = next ? signInReason(next, lang) : null;
+const reasonText = reasonKey ? t.reasons[reasonKey] : null;
 ---
 
 <BaseLayout lang={lang} title={t.title} description={t.description}>
   <section class="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-12 sm:py-16">
     <PageTitle lang={lang} backHref={`/${lang}`}>{t.title}</PageTitle>
+
+    {
+      reasonText && (
+        <p data-testid="auth-reason" class="text-sm text-muted-foreground">
+          {reasonText}
+        </p>
+      )
+    }
 
     {
       linkInvalid && (
