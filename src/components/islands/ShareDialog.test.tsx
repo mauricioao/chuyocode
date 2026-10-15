@@ -412,3 +412,36 @@ describe('ShareDialog — blockedMessage (author preview, owner decision 2026-10
     expect(screen.queryByTestId('exercise-qr')).toBeNull();
   });
 });
+
+// Editor title-bar reuse ("editor primary by status"): the primary control
+// that opens this dialog lives OUTSIDE it — the title bar's own ONE yellow
+// action — so no default trigger of this dialog's own may render at all,
+// and the caller drives `open` entirely.
+describe('ShareDialog — externally controlled open (editor title-bar reuse)', () => {
+  it('renders no default trigger of its own while `open` is set', () => {
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} open={false} onOpenChange={() => {}} />);
+    expect(screen.queryByTestId('exercise-share')).toBeNull();
+    expect(screen.queryByTestId('exercise-share-menu')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows the dialog content once the caller flips `open` to true, with no click on this component at all', () => {
+    const { rerender } = render(
+      <ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} open={false} onOpenChange={() => {}} />,
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    rerender(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} open onOpenChange={() => {}} />);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByTestId('exercise-qr')).toBeTruthy();
+  });
+
+  it('reports back through `onOpenChange` when the dialog closes itself (Esc)', () => {
+    const onOpenChange = vi.fn();
+    render(<ShareDialog url={URL_UNDER_TEST} qr={QR} labels={labels} open onOpenChange={onOpenChange} />);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});

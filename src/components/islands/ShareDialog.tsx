@@ -133,6 +133,21 @@ export interface ShareDialogProps {
    * other caller) keeps today's behaviour unchanged.
    */
   blockedMessage?: string;
+  /**
+   * Externally controlled open state (editor title-bar reuse, "editor
+   * primary by status"): the primary control that opens this dialog lives
+   * OUTSIDE it there (the title bar's own ONE yellow action, which must
+   * match that bar's primary style, not this dialog's usual outline/ghost
+   * trigger) — so while this is set, no default trigger of this dialog's
+   * own renders at all; the caller drives `open` entirely and must pass
+   * {@link onOpenChange} alongside it (e.g. the dialog's own "Esc"/overlay
+   * close still needs to flow back out). Omitted (every other caller)
+   * keeps today's fully self-contained `DialogTrigger` behaviour unchanged
+   * — `Dialog`'s own `open`/`onOpenChange` are `undefined` either way, its
+   * ordinary uncontrolled-component posture.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -172,6 +187,8 @@ export default function ShareDialog({
   iconOnly = false,
   asMenuItem = false,
   blockedMessage,
+  open,
+  onOpenChange,
 }: ShareDialogProps) {
   const tooltipId = useId();
   const [copied, setCopied] = useState(false);
@@ -301,7 +318,8 @@ export default function ShareDialog({
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open === undefined && (
       <DialogTrigger asChild>
         {asMenuItem ? (
           <Button
@@ -349,6 +367,7 @@ export default function ShareDialog({
           </Button>
         )}
       </DialogTrigger>
+      )}
 
       <DialogContent>
         <DialogHeader>

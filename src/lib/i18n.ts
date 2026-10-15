@@ -629,6 +629,21 @@ export const UI_LABELS = {
         mobileMenuLabel: 'Más opciones',
         // Submit-for-review dialog.
         submitForReview: 'Enviar a revisión',
+        // One primary action per state (UX doc 6.1/6.4, `editorPrimaryAction`):
+        // the title bar's own yellow button follows the activity's state
+        // instead of always reading "Enviar a revisión". This one covers a
+        // LIVE activity with saved edits not yet sent — same submit dialog
+        // as `submitForReview` above, just a copy that says what is really
+        // being sent (an edit, not the first publication).
+        submitChangesForReview: 'Enviar cambios a revisión',
+        // Same submit dialog again, after a moderator's rejection.
+        resubmitForReview: 'Enviar de nuevo a revisión',
+        // Opens the author's OWN presentation of a not-yet-published
+        // activity while its first submission awaits a moderator
+        // (`/presentar`'s own AUTHOR PREVIEW, R1) — nothing to share or
+        // publish yet, but something real to open and use in front of a
+        // class already.
+        useInClass: 'Usar en clase',
         submitDialogTitle: 'Enviar esta actividad a revisión',
         submitDialogNote: 'La actividad va a ser revisada por un moderador antes de publicarse.',
         // Non-blocking projection warnings (sprint week 3): shown above the
@@ -2241,6 +2256,9 @@ export const UI_LABELS = {
         // Mobile title-bar "⋯" menu — see the Spanish locale's own header.
         mobileMenuLabel: 'More options',
         submitForReview: 'Submit for review',
+        submitChangesForReview: 'Submit changes for review',
+        resubmitForReview: 'Submit for review again',
+        useInClass: 'Use in class',
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',
         projectionWarningsHeading: 'Before you project',
