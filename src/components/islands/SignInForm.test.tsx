@@ -290,7 +290,12 @@ describe('SignInForm — Turnstile, site key configured', () => {
     // the neutral success message — `remove`, not `reset`, is what cleans
     // this widget instance up; there is no continuing instance to reset.
     await waitFor(() => expect(screen.getByTestId('signin-success')).toBeTruthy());
-    expect(removeMock).toHaveBeenCalledWith('widget-1');
+    // `remove()` fires from TurnstileWidget's unmount cleanup, a PASSIVE
+    // effect — scheduled after commit, not part of the DOM mutation the
+    // `waitFor` above resolved on. Asserting on it synchronously races that
+    // effect flush (a MutationObserver microtask vs. React's macrotask-
+    // scheduled passive effects), so it needs its own `waitFor` too.
+    await waitFor(() => expect(removeMock).toHaveBeenCalledWith('widget-1'));
   });
 
   it('resets the widget after a failed (non-captcha) submit, so the form can be retried', async () => {
@@ -312,7 +317,11 @@ describe('SignInForm — Turnstile, site key configured', () => {
     // The form stays (a genuine failure is retryable), and the now-consumed
     // token's widget is reset so a retry cannot resend it.
     expect(screen.getByTestId('signin-form')).toBeTruthy();
-    expect(resetMock).toHaveBeenCalledWith('widget-1');
+    // `reset()` fires from TurnstileWidget's own PASSIVE effect (keyed on
+    // `resetSignal`), scheduled after this commit rather than synchronous
+    // with it — a plain `expect` right after the `waitFor` above would race
+    // that effect flush under load. Give it its own `waitFor` too.
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith('widget-1'));
     expect(submitButton().hasAttribute('disabled')).toBe(true);
   });
 
@@ -355,7 +364,9 @@ describe('SignInForm — Turnstile, site key configured', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.error));
     expect(screen.getByTestId('signin-form')).toBeTruthy();
-    expect(resetMock).toHaveBeenCalledWith('widget-1');
+    // Same race as the test above: `reset()` is a passive-effect side
+    // effect, not part of the commit the `waitFor` resolved on.
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith('widget-1'));
     expect(submitButton().hasAttribute('disabled')).toBe(true);
 
     act(() => {
