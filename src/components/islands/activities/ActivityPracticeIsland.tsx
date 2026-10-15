@@ -765,7 +765,7 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
               data-testid="practice-focus-mode-exit"
               aria-label={t.focusModeExit}
               onClick={exitFocusMode}
-              className="absolute right-3 top-3 z-10 inline-flex size-9 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="absolute right-3 top-3 z-10 inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <XIcon aria-hidden="true" size={18} />
             </button>
