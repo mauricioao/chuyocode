@@ -1089,6 +1089,22 @@ export default function ActivityEditorIsland({
   // "Usar en clase": the author's OWN presentation of this not-yet-published
   // activity (`presentar.astro`'s own AUTHOR PREVIEW, R1 — already allows
   // any non-removed status, this editor's own `getActivityForEdit` included).
+  //
+  // BUGFIX (owner report: a black, frozen presentation, then a whole desk
+  // nested inside this very editor window after closing it): `presentar` is
+  // a full top-level PAGE, never a window the manager opens
+  // (`classifyWindowRoute` returns `null` for it on purpose — see that
+  // function's own header, "presentation/print links stay target=\"_top\"").
+  // This editor is ITSELF often embedded in a window; `data-desk-window-open`
+  // (removed below) is read only by the HOST document's own click-capture
+  // listener (`deskWindowManager.ts`), a DIFFERENT document when embedded —
+  // so it never actually did anything here, and the click just navigated
+  // THIS editor's own iframe to `/presentar` in place: a full-screen
+  // presentation trapped in a small window (no fullscreen permission, focus
+  // still on the parent — "black, nothing moves"), and closing it then
+  // nested the hub inside that same iframe. `target="_top"` escapes to the
+  // real top-level tab instead, exactly like `[id].astro`'s own "Presentar"/
+  // "Imprimir" links already do.
   const presentarHref = `/${lang}/ingles/actividades/${activityId}/presentar`;
   const openShareDialog = useCallback(() => setShareDialogOpen(true), []);
   // `!` (UI-kit refactor): see the submit button's own comment below — same
@@ -1097,15 +1113,12 @@ export default function ActivityEditorIsland({
   const PRIMARY_BUTTON_CLASS = '!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80';
   const primaryActionControl =
     primaryActionKind === 'useInClass' ? (
-      // `data-desk-window-open`: while this editor is itself embedded in a
-      // desk window, `initDeskOpenWindowLinks` (`@lib/ui/deskWindow.ts`,
-      // already wired by `DeskWindow.astro` on every mount) intercepts this
-      // click and asks the HOST to open the presentation as its OWN new
-      // window instead of navigating this one away. Outside embedded mode
-      // (a direct, top-level visit) it is a no-op — plain same-tab
-      // navigation, exactly what a bare `<a href>` already does.
+      // `target="_top"` (see `presentarHref`'s own comment above): escapes
+      // to the real top-level tab whether this editor is embedded in a
+      // window or not — a no-op outside embedded mode (a direct, top-level
+      // visit already IS the top frame).
       <Button size="sm" asChild className={PRIMARY_BUTTON_CLASS}>
-        <a href={presentarHref} data-testid="use-in-class-button" data-desk-window-open={activityId}>
+        <a href={presentarHref} data-testid="use-in-class-button" target="_top">
           {primaryActionLabel}
         </a>
       </Button>

@@ -1211,17 +1211,20 @@ describe('ActivityEditorIsland — one primary action per state', () => {
     expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
   });
 
-  it('in review, first publication: "Usar en clase" links to the author\'s own presentation', () => {
+  it('in review, first publication: "Usar en clase" links to the author\'s own presentation, full screen', () => {
     renderEditor({ initialStatus: 'pending_review', initialRevisionStatus: 'pending_review' });
     const link = screen.getByTestId('use-in-class-button');
     expect(link.textContent).toBe('Usar en clase');
     expect(link.getAttribute('href')).toBe('/es/ingles/actividades/act-1/presentar');
-    // Lets the desk's own `initDeskOpenWindowLinks` open it as a window
-    // while this editor is embedded, and fall through to a plain same-tab
-    // navigation otherwise (`deskWindow.ts`'s own header) — no `target`
-    // override either way.
-    expect(link.getAttribute('data-desk-window-open')).toBe('act-1');
-    expect(link.hasAttribute('target')).toBe(false);
+    // BUGFIX: `presentar` is a full top-level page, never a window the desk
+    // manager opens — `target="_top"` escapes to the real tab whether this
+    // editor is itself embedded in a window or not, instead of navigating
+    // this editor's own iframe to a trapped, frozen presentation. No
+    // `data-desk-window-open` either: that attribute is read only by the
+    // HOST document's own click listener, a different document when this
+    // editor is embedded, so it never did anything useful here.
+    expect(link.getAttribute('target')).toBe('_top');
+    expect(link.hasAttribute('data-desk-window-open')).toBe(false);
     expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
   });
 

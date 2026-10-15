@@ -56,6 +56,9 @@ import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
+import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
+import { markPrivate } from '@lib/httpCache';
+import { deskHostBounceResponse } from '@lib/deskHostBounce';
 
 // Prefer the middleware-validated lang; fall back to the route param and 404
 // if neither is supported (defensive — middleware normally sets it).
@@ -68,6 +71,35 @@ if (!lang) {
 }
 
 const t = UI_LABELS[lang].english.hub;
+
+/**
+ * ROOT-CLASS GUARD (bugfix: "Usar en clase" left a whole desk nested inside
+ * the editor window) — the desk host must NEVER render a second desk/window
+ * manager inside one of its own windows. `isEmbeddedWindowRequest` is the
+ * SAME detection every window route already uses (`?ventana=1` or
+ * `Sec-Fetch-Dest: iframe`, `@lib/ui/embeddedWindow`'s own header); this is
+ * the one page that must always answer "no" to it being asked for AS a
+ * window's content, because it is the host every OTHER window route's host
+ * mode already renders — there is no "embedded hub" to build. See
+ * `@lib/deskHostBounce`'s own header for the full reasoning and the exact
+ * two outcomes (ask the host to close this window, or escape to the real
+ * hub). Mirrors `entrar.astro`'s own chrome-less-frame bounce exactly.
+ */
+const requestedAsWindow = isEmbeddedWindowRequest(Astro.url, Astro.request.headers);
+if (requestedAsWindow) {
+  Astro.response.headers.append('Vary', 'Sec-Fetch-Dest');
+  markPrivate(Astro.response.headers);
+  Astro.response.headers.set('content-type', 'text/html; charset=utf-8');
+}
+// Built outside the `if` on purpose: `astro check` reports a false `ts(6133)`
+// for an import whose only use is a value returned from an `if` block
+// (`entrar.astro`'s own identical note).
+const deskHostGuard = requestedAsWindow
+  ? deskHostBounceResponse(lang, { title: t.title, continueLabel: t.windowGuardContinue }, Astro.response.headers)
+  : null;
+if (deskHostGuard) {
+  return deskHostGuard;
+}
 
 const desk = await loadDeskSceneData({
   lang,
