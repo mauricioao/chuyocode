@@ -22,6 +22,20 @@ export interface Rect {
 /** The smallest a zone's `w`/`h` may ever be, as a fraction of the image. */
 export const MIN_ZONE_SIZE = 0.02;
 
+// NOTE: an earlier version of this fix added a flat `{ w: 0.1, h: 0.08 }`
+// "projection minimum" floor here, enforced on every drawn/created/resized
+// zone. Rejected on review: 0.08 of the page height is roughly DOUBLE an
+// ordinary one-line fill-in-the-blank (~0.025-0.04), so it made the editor
+// unable to draw a normal blank without covering the lines above/below it
+// on the sheet — breaking the worksheet to silence a warning. The
+// legibility floor that replaces it is PAGE-SIZE-AWARE (a fixed fraction
+// cannot be, since legibility depends on the page's own native pixel
+// density) and lives in `presentationCamera.ts`'s
+// `minLegibleZoneHeightFraction`/`ensureLegibleZoneHeight` — see that
+// module's own header for the calibration. This module stays exactly what
+// its own header already promises: zero I/O, zero DOM, zero presentation-
+// specific concepts.
+
 function clampUnit(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(1, Math.max(0, value));

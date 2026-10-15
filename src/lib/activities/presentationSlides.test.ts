@@ -8,6 +8,7 @@ import {
   buildPresentationSlides,
   revealableSlides,
   listProjectionWarnings,
+  summarizeProjectionWarnings,
   promptFontSize,
   PROMPT_FONT_MAX_PX,
   PROMPT_FONT_MIN_PX,
@@ -404,10 +405,12 @@ describe('revealableSlides', () => {
 
 describe('listProjectionWarnings', () => {
   it('is empty for a short quiz prompt and a comfortably sized worksheet zone', () => {
-    // A generously sized zone relative to its page (20% of each side on a
-    // 1000x1000 image) — comfortably under `MAX_ZONE_CAMERA_ZOOM` once
-    // framed with padding, unlike the much smaller/thinner zones the other
-    // cases below deliberately use.
+    // A generously sized zone (20% of the page's height) — comfortably
+    // legible even at the camera's zoom ceiling (`presentationCamera.ts`'s
+    // `isZoneTooSmallToProject`), unlike the much smaller/thinner zones the
+    // other cases below deliberately use. See `presentationCamera.test.ts`
+    // for the dedicated legibility-calibration tests (representative
+    // ordinary-blank sizes that must NOT be flagged).
     const comfortableWorksheet: Block = {
       id: 'w1',
       type: 'worksheet',
@@ -432,7 +435,9 @@ describe('listProjectionWarnings', () => {
     ]);
   });
 
-  it('warns on a worksheet zone small enough to exceed the camera helper\'s max zoom', () => {
+  it('warns on a worksheet zone that would stay illegible even at the camera\'s zoom ceiling', () => {
+    // 1% of a 2000x2000 page's own height — far below the legibility floor
+    // (~0.013 on any portrait-ish page, see `presentationCamera.test.ts`).
     const tinyZoneWorksheet: Block = {
       id: 'w1',
       type: 'worksheet',
@@ -443,6 +448,30 @@ describe('listProjectionWarnings', () => {
     expect(listProjectionWarnings([tinyZoneWorksheet])).toEqual([
       { blockId: 'w1', zoneId: 'tiny', reason: 'worksheet_zone_too_small' },
     ]);
+  });
+
+  it('a normal fill-in-the-blank sheet with several ordinary blanks gets ZERO warnings (the owner\'s original screenshot repro)', () => {
+    // The owner's screenshot: the SAME warning line repeated once per zone
+    // on an ordinary worksheet. Reproduced here with 10 ordinary one-line
+    // blanks (h=0.03, varying width) on a representative 1700x2200 page —
+    // none of them should ever have tripped the warning in the first
+    // place; the recalibrated legibility check confirms that.
+    const normalFillInTheBlankSheet: Block = {
+      id: 'w1',
+      type: 'worksheet',
+      rotation: 0,
+      image: { path: 'activity-images/abc/img-1.webp', width: 1700, height: 2200 },
+      zones: Array.from({ length: 10 }, (_, i) => ({
+        id: `blank-${i}`,
+        x: 0.1,
+        y: 0.05 + i * 0.09,
+        w: 0.3,
+        h: 0.03,
+        kind: 'text' as const,
+        answers: ['x'],
+      })),
+    };
+    expect(listProjectionWarnings([normalFillInTheBlankSheet])).toEqual([]);
   });
 
   it('collects every warning across several blocks, in authored order', () => {
@@ -462,6 +491,43 @@ describe('listProjectionWarnings', () => {
     expect(warnings).toEqual([
       { blockId: 'q1', slotId: 's1', reason: 'quiz_prompt_too_long' },
       { blockId: 'w1', zoneId: 'tiny', reason: 'worksheet_zone_too_small' },
+    ]);
+  });
+});
+
+describe('summarizeProjectionWarnings', () => {
+  it('returns an empty list for no warnings', () => {
+    expect(summarizeProjectionWarnings([])).toEqual([]);
+  });
+
+  it('groups repeated zone-too-small warnings into one summary with a count — the owner report\'s exact repro (10 identical lines)', () => {
+    const warnings = Array.from({ length: 10 }, (_, i) => ({
+      blockId: 'w1',
+      zoneId: `zone-${i}`,
+      reason: 'worksheet_zone_too_small' as const,
+    }));
+    const summaries = summarizeProjectionWarnings(warnings);
+    expect(summaries).toEqual([{ reason: 'worksheet_zone_too_small', count: 10, first: warnings[0] }]);
+  });
+
+  it('keeps each reason as its own summary, in first-seen order, even when interleaved', () => {
+    const warnings = [
+      { blockId: 'w1', zoneId: 'z1', reason: 'worksheet_zone_too_small' as const },
+      { blockId: 'q1', slotId: 's1', reason: 'quiz_prompt_too_long' as const },
+      { blockId: 'w1', zoneId: 'z2', reason: 'worksheet_zone_too_small' as const },
+      { blockId: 'q2', slotId: 's2', reason: 'quiz_prompt_too_long' as const },
+    ];
+    const summaries = summarizeProjectionWarnings(warnings);
+    expect(summaries).toEqual([
+      { reason: 'worksheet_zone_too_small', count: 2, first: warnings[0] },
+      { reason: 'quiz_prompt_too_long', count: 2, first: warnings[1] },
+    ]);
+  });
+
+  it('a single warning still gets a count of 1', () => {
+    const warning = { blockId: 'w1', zoneId: 'z1', reason: 'worksheet_zone_too_small' as const };
+    expect(summarizeProjectionWarnings([warning])).toEqual([
+      { reason: 'worksheet_zone_too_small', count: 1, first: warning },
     ]);
   });
 });

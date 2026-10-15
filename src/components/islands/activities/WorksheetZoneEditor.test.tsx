@@ -110,13 +110,21 @@ class MockResizeObserver {
 }
 
 /** Stateful wrapper so onZonesChange/onSelectZone actually drive re-renders, like the real editor. */
-function Harness({ initialZones = [] as Zone[], initialSelected = null as string | null }) {
+function Harness({
+  initialZones = [] as Zone[],
+  initialSelected = null as string | null,
+  image = IMAGE,
+}: {
+  initialZones?: Zone[];
+  initialSelected?: string | null;
+  image?: typeof IMAGE;
+}) {
   const [zones, setZones] = useState<Zone[]>(initialZones);
   const [selected, setSelected] = useState<string | null>(initialSelected);
   return (
     <WorksheetZoneEditor
       lang="es"
-      image={IMAGE}
+      image={image}
       imageUrl="/img.webp"
       zones={zones}
       selectedZoneId={selected}
@@ -190,6 +198,33 @@ describe('WorksheetZoneEditor — rendering', () => {
     cleanup();
     render(<Harness initialZones={[zone]} />);
     expect(screen.queryByTestId('worksheet-canvas-hint')).toBeNull();
+  });
+});
+
+describe('WorksheetZoneEditor — on-canvas "too small to project" marker (owner review, real legibility check)', () => {
+  // IMAGE is 800x400 — `minLegibleZoneHeightFraction` on it is ~0.0146 (see
+  // `presentationCamera.test.ts`'s own calibration tests), so `h: 0.005` is
+  // comfortably below it and `h: 0.2`/`0.03` (an ordinary one-line blank)
+  // comfortably above.
+  it('shows the marker on a zone below the legibility floor', () => {
+    const tiny: Zone = { id: 'tiny', x: 0.1, y: 0.1, w: 0.1, h: 0.005, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[tiny]} />);
+    const marker = screen.getByTestId('zone-too-small-tiny');
+    expect(marker.getAttribute('title')).toBe('Chica para proyectar');
+  });
+
+  it('shows no marker on an ordinary one-line blank', () => {
+    const fine: Zone = { id: 'fine', x: 0.1, y: 0.1, w: 0.2, h: 0.03, kind: 'text', answers: ['x'] };
+    render(<Harness initialZones={[fine]} />);
+    expect(screen.queryByTestId('zone-too-small-fine')).toBeNull();
+  });
+
+  it('shows a marker only on the small zone when both a small and an ordinary zone exist', () => {
+    const tiny: Zone = { id: 'tiny', x: 0.1, y: 0.1, w: 0.1, h: 0.005, kind: 'text', answers: ['x'] };
+    const fine: Zone = { id: 'fine', x: 0.5, y: 0.5, w: 0.2, h: 0.03, kind: 'text', answers: ['y'] };
+    render(<Harness initialZones={[tiny, fine]} />);
+    expect(screen.getByTestId('zone-too-small-tiny')).toBeTruthy();
+    expect(screen.queryByTestId('zone-too-small-fine')).toBeNull();
   });
 });
 
@@ -553,15 +588,53 @@ describe('WorksheetZoneEditor — pointer draw (mocked layout)', () => {
     render(<Harness />);
     const canvas = screen.getByTestId('zone-canvas');
 
+    // A generous drag, comfortably above any legibility floor — see the
+    // dedicated legibility-floor tests further below for cases where the
+    // floor actually binds.
     firePointer(canvas, 'pointerdown', 20, 10);
-    firePointer(canvas, 'pointerup', 60, 50);
+    firePointer(canvas, 'pointerup', 180, 90);
 
     const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
     expect(zones).toHaveLength(1);
     expect(zones[0].style.left).toBe('2.5%'); // 20 / 800
     expect(zones[0].style.top).toBe('2.5%'); // 10 / 400
-    expect(zones[0].style.width).toBe('5%'); // (60 - 20) / 800
-    expect(zones[0].style.height).toBe('10%'); // (50 - 10) / 400
+    expect(zones[0].style.width).toBe('20%'); // (180 - 20) / 800
+    expect(zones[0].style.height).toBe('20%'); // (90 - 10) / 400
+  });
+
+  it('enforces the real, page-aware legibility minimum on a drawn zone (owner review) — a page where it actually binds', () => {
+    // A very wide (landscape) page, same shape `presentationCamera.test.ts`'s
+    // own `WIDE_PAGE` uses: its legibility floor (~2.7% of the page's own
+    // height) sits ABOVE `zoneGeometry.ts`'s bare tap-target floor
+    // (`MIN_ZONE_SIZE`, 2%), so this is where the NEW floor actually does
+    // something beyond what `rectFromDrag` already enforced on its own.
+    const widePage = { path: IMAGE.path, width: 3000, height: 800 };
+    render(<Harness image={widePage} />);
+    const canvas = screen.getByTestId('zone-canvas');
+
+    // 10% wide (generous) x 1% tall (far below legibility on this page).
+    firePointer(canvas, 'pointerdown', 100, 100);
+    firePointer(canvas, 'pointerup', 400, 108);
+
+    const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
+    expect(zones).toHaveLength(1);
+    expect(parseFloat(zones[0].style.width)).toBeCloseTo(10); // width untouched — legibility is a height-only concern
+    expect(parseFloat(zones[0].style.height)).toBeCloseTo(2.7344, 2); // grown to minLegibleZoneHeightFraction(widePage)
+  });
+
+  it('does NOT grow an ordinary small blank on an ordinary (portrait-ish) page — the owner\'s own rejection case', () => {
+    render(<Harness />); // IMAGE is 800x400 (width-limited but legibility floor still well under MIN_ZONE_SIZE here)
+    const canvas = screen.getByTestId('zone-canvas');
+
+    // 12.5% wide x 1% tall, same as the bare `MIN_ZONE_SIZE` tap-target
+    // floor would already produce on its own — the legibility floor must
+    // NEVER grow it any further than that on an ordinary page.
+    firePointer(canvas, 'pointerdown', 20, 10);
+    firePointer(canvas, 'pointerup', 120, 14);
+
+    const zones = screen.getAllByTestId(/^zone-(?!canvas|properties|viewport|draft)/);
+    expect(zones).toHaveLength(1);
+    expect(parseFloat(zones[0].style.height)).toBeCloseTo(2); // MIN_ZONE_SIZE (2%) — not grown any further
   });
 
   it('renders a live dashed rubber-band rectangle from pointerdown to pointerup, then removes it', () => {
@@ -1204,7 +1277,7 @@ describe('WorksheetZoneEditor — keyboard zone creation (accessibility)', () =>
     expect(zones[0].style.left).toBe('40%'); // 0.5 - 0.2/2
     expect(zones[0].style.top).toBe('47%'); // 0.5 - 0.06/2
     expect(zones[0].style.width).toBe('20%');
-    expect(zones[0].style.height).toBe('6%');
+    expect(zones[0].style.height).toBe('6%'); // KEYBOARD_ZONE_SIZE.h — comfortably above the (tiny) legibility floor on this page
   });
 
   it('also creates a zone on the N shortcut', () => {

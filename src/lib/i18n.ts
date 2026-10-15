@@ -611,12 +611,24 @@ export const UI_LABELS = {
         submitDialogNote: 'La actividad va a ser revisada por un moderador antes de publicarse.',
         // Non-blocking projection warnings (sprint week 3): shown above the
         // rights checkbox in the SAME submit dialog, never disabling
-        // "Enviar" — `listProjectionWarnings` (`presentationSlides.ts`).
+        // "Enviar" — `summarizeProjectionWarnings`/`listProjectionWarnings`
+        // (`presentationSlides.ts`). GROUPED (owner report): one line per
+        // warning KIND with its count, never the same line repeated once
+        // per zone/prompt.
         projectionWarningsHeading: 'Antes de proyectar',
-        projectionWarningQuizPromptTooLong:
-          'Esta pregunta es muy larga para proyectarse bien; intenta acortarla.',
-        projectionWarningWorksheetZoneTooSmall:
-          'Esta zona es muy pequeña para proyectarse bien; hazla más grande.',
+        projectionWarningQuizPromptTooLongGrouped: (count: number) =>
+          count === 1
+            ? '1 pregunta es muy larga para proyectarse bien.'
+            : `${count} preguntas son muy largas para proyectarse bien.`,
+        projectionWarningWorksheetZoneTooSmallGrouped: (count: number) =>
+          count === 1
+            ? '1 zona es chica para verse bien en un proyector.'
+            : `${count} zonas son chicas para verse bien en un proyector.`,
+        // The two "Agrandar"/"Ver cuáles" actions only ever apply to the
+        // worksheet-zone-too-small kind (growing/jumping to a zone), never
+        // to a long quiz prompt.
+        projectionWarningGrowSmallZones: 'Agrandar las zonas chicas',
+        projectionWarningSeeWhich: 'Ver cuáles',
         submitRightsLabel: 'Confirmo que tengo el derecho de usar este material.',
         submitConfirm: 'Enviar',
         submitCancel: 'Cancelar',
@@ -736,6 +748,11 @@ export const UI_LABELS = {
         zoneDelete: 'Eliminar zona',
         zoneMinOptions: 'Se necesitan al menos 2 opciones.',
         zoneAnswerNotInOptions: 'Cada respuesta debe estar entre las opciones.',
+        // On-canvas marker (owner report, "Antes de proyectar"): a quiet
+        // badge on a zone below the calibrated projection minimum
+        // (`zoneGeometry.ts`'s `isZoneTooSmallToProject`) — shown where the
+        // problem actually is, not just in the submit dialog.
+        zoneTooSmallForProjectionTitle: 'Chica para proyectar',
         noZonesYet: 'Todavía no hay zonas dibujadas sobre esta imagen.',
         panelEmpty: 'Dibuja un recuadro sobre la hoja o selecciona uno para editarlo.',
         panelEmptyHint:
@@ -2210,8 +2227,16 @@ export const UI_LABELS = {
         submitDialogTitle: 'Submit this activity for review',
         submitDialogNote: 'A moderator will review your activity before it is published.',
         projectionWarningsHeading: 'Before you project',
-        projectionWarningQuizPromptTooLong: 'This question is too long to project well; try shortening it.',
-        projectionWarningWorksheetZoneTooSmall: 'This zone is too small to project well; make it bigger.',
+        projectionWarningQuizPromptTooLongGrouped: (count: number) =>
+          count === 1
+            ? '1 question is too long to project well.'
+            : `${count} questions are too long to project well.`,
+        projectionWarningWorksheetZoneTooSmallGrouped: (count: number) =>
+          count === 1
+            ? '1 zone is too small to look good on a projector.'
+            : `${count} zones are too small to look good on a projector.`,
+        projectionWarningGrowSmallZones: 'Enlarge the small zones',
+        projectionWarningSeeWhich: 'See which ones',
         submitRightsLabel: 'I confirm I have the right to use this material.',
         submitConfirm: 'Submit',
         submitCancel: 'Cancel',
@@ -2295,6 +2320,7 @@ export const UI_LABELS = {
         zoneDelete: 'Delete zone',
         zoneMinOptions: 'At least 2 options are needed.',
         zoneAnswerNotInOptions: 'Every answer must also be one of the options.',
+        zoneTooSmallForProjectionTitle: 'Too small to project',
         noZonesYet: 'No zones drawn on this image yet.',
         panelEmpty: 'Draw a box on the sheet or select one to edit it.',
         panelEmptyHint:
