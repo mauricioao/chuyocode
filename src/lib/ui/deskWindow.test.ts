@@ -180,6 +180,49 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
     expect(win.location.href).toBe('/es/ingles');
   });
 
+  // Walkthrough 2026-10-15 (Alta): with the practice page's "Más" menu open,
+  // Escape closed the whole activity instead of just the menu.
+  it('Escape with the "Más" menu open closes the menu, not the window', () => {
+    const el = buildWindowEl();
+    el.insertAdjacentHTML(
+      'beforeend',
+      '<div data-desk-window-more><input type="checkbox" id="more-toggle" checked /></div>',
+    );
+    const win = fakeWin();
+    initDeskWindow(el, '/es/ingles', null, true, document, win);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+
+    expect(win.location.href).toBe('');
+    expect((el.querySelector('#more-toggle') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('Escape while a Radix dialog is open leaves the window open (the dialog owns that Escape)', () => {
+    const el = buildWindowEl();
+    el.setAttribute('role', 'dialog'); // the real window is a dialog too
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('data-state', 'open'); // Radix marks open dialogs this way, without aria-modal
+    document.body.appendChild(dialog);
+    const win = fakeWin();
+    initDeskWindow(el, '/es/ingles', null, true, document, win);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+
+    expect(win.location.href).toBe('');
+  });
+
+  it('a bare window that is itself role="dialog" still closes on Escape', () => {
+    const el = buildWindowEl();
+    el.setAttribute('role', 'dialog');
+    const win = fakeWin();
+    initDeskWindow(el, '/es/ingles', null, true, document, win);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+
+    expect(win.location.href).toBe('/es/ingles');
+  });
+
   it('close(): a dirty editor guard that resolves "cancelled" blocks the navigation', async () => {
     const el = buildWindowEl();
     const win = fakeWin();

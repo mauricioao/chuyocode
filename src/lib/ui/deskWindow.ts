@@ -441,7 +441,27 @@ export function initDeskWindow(
   // and keeps today's behaviour unchanged.
   if (closeOnEscape) {
     doc.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) void close();
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // Escape belongs to the innermost open layer first: an open "Más"
+      // menu closes itself, and an open modal dialog (e.g. the result
+      // overlay) handles its own Escape. Only a bare window closes.
+      const openMenuToggle = windowEl.querySelector<HTMLInputElement>(
+        '[data-desk-window-more] input[type="checkbox"]:checked',
+      );
+      if (openMenuToggle) {
+        openMenuToggle.checked = false;
+        return;
+      }
+      // The window itself is `role="dialog"`, so only count another layer:
+      // Radix marks its open dialogs `data-state="open"` (no `aria-modal`).
+      const otherOpenDialog = Array.from(doc.querySelectorAll('[role="dialog"], [role="alertdialog"]')).some(
+        (dialog) =>
+          dialog !== windowEl &&
+          !dialog.contains(windowEl) &&
+          (dialog.getAttribute('data-state') === 'open' || dialog.getAttribute('aria-modal') === 'true'),
+      );
+      if (otherOpenDialog) return;
+      void close();
     });
   }
 
