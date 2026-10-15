@@ -535,6 +535,14 @@ export const UI_LABELS = {
         sheetNext: 'Hoja siguiente',
         sheetPosition: (current: number, total: number) => `${current} de ${total}`,
         sheetMoreActions: 'Más acciones',
+        // "Más" menu on the active sheet bar (legacy multi-sheet activities
+        // only, 2+ blocks): delete/reorder for an activity saved before the
+        // one-sheet redesign — see `BlockList.tsx`'s own header and
+        // `sheetOrder.ts`.
+        sheetMoveLeft: 'Mover a la izquierda',
+        sheetMoveRight: 'Mover a la derecha',
+        deleteSheet: 'Eliminar esta hoja',
+        sheetDeleted: 'Hoja eliminada · Ctrl+Z para deshacer',
         undo: 'Deshacer',
         redo: 'Rehacer',
         shortcutsHelp: 'Atajos de teclado',
@@ -2164,6 +2172,10 @@ export const UI_LABELS = {
         sheetNext: 'Next sheet',
         sheetPosition: (current: number, total: number) => `${current} of ${total}`,
         sheetMoreActions: 'More actions',
+        sheetMoveLeft: 'Move left',
+        sheetMoveRight: 'Move right',
+        deleteSheet: 'Delete this sheet',
+        sheetDeleted: 'Sheet deleted · Ctrl+Z to undo',
         undo: 'Undo',
         redo: 'Redo',
         shortcutsHelp: 'Keyboard shortcuts',

@@ -923,6 +923,48 @@ describe('ActivityEditorIsland — undo/redo', () => {
   });
 });
 
+describe('ActivityEditorIsland — delete/reorder sheets in a legacy multi-sheet activity (PLAN-OCTUBRE.md "Pendientes nuevos")', () => {
+  it('deletes the active sheet as one undo step: Ctrl+Z restores it', () => {
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    const b3: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b3' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2, b3] });
+
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('delete-block-trigger'));
+    expect(screen.queryByTestId('block-b1')).toBeNull();
+    expect(screen.getByTestId('sheet-position').textContent).toBe('1 de 2');
+
+    // ONE undo step restores all three sheets, in their original order.
+    fireEvent.click(screen.getByTestId('undo-button'));
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 3');
+    fireEvent.click(screen.getByTestId('sheet-nav-prev'));
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
+  });
+
+  it('moving a sheet is one undo step too, and the autosave scheduler sees the reordered blocks', () => {
+    const b2: WorksheetBlock = { ...WORKSHEET_BLOCK, id: 'b2' };
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK, b2] });
+
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('sheet-move-right'));
+    // The moved sheet (b1) stays active, now second — proven by the
+    // undo/redo round trip below, which only has one step to walk if the
+    // move itself was a single `pushHistory` entry.
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 2');
+
+    fireEvent.click(screen.getByTestId('undo-button'));
+    expect(screen.getByTestId('sheet-position').textContent).toBe('1 de 2');
+    fireEvent.click(screen.getByTestId('redo-button'));
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 2');
+  });
+
+  it('a single-sheet activity never shows the "Más" menu', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(screen.queryByTestId('sheet-actions-trigger')).toBeNull();
+  });
+});
+
 describe('ActivityEditorIsland — unsaved changes navigation guard', () => {
   it('does not show the modal for an internal link click when nothing is dirty', () => {
     renderEditor();

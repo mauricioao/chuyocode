@@ -158,11 +158,15 @@ describe('BlockList — backward compatibility: a legacy multi-block activity ke
     expect(screen.getByTestId('sheet-position').textContent).toBe('1 de 2');
   });
 
-  it('the minimal switcher has no name field, reorder menu, or delete button either — still no way to add more', () => {
+  // Updated for "delete and reorder for legacy multi-block activities"
+  // (PLAN-OCTUBRE.md "Pendientes nuevos"): the minimal switcher still has no
+  // name field or way to ADD another block, but it now offers the active
+  // sheet's own "Más" menu — see the dedicated describe block below for
+  // reorder/delete coverage.
+  it('the minimal switcher still has no name field or way to add another block', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
     expect(screen.queryByLabelText('Nombre del bloque')).toBeNull();
-    expect(screen.queryByTestId('sheet-actions-trigger')).toBeNull();
-    expect(screen.queryByTestId('delete-block-trigger')).toBeNull();
+    expect(screen.queryByTestId('add-block-trigger')).toBeNull();
   });
 
   it('moves to the next block, disabled at the last one', () => {
@@ -185,6 +189,87 @@ describe('BlockList — backward compatibility: a legacy multi-block activity ke
   it('shows the "n de N" position for a third block', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]} initialActiveId="b2" />);
     expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 3');
+  });
+});
+
+describe('BlockList — "Más" menu on the active sheet (legacy multi-sheet activities, 2+ blocks)', () => {
+  it('shows the trigger for 2+ blocks', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
+    expect(screen.getByTestId('sheet-actions-trigger')).toBeTruthy();
+  });
+
+  it('for the first of three sheets, disables "mover a la izquierda" and enables "mover a la derecha"', () => {
+    render(
+      <Harness
+        initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]}
+        initialActiveId="b1"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    expect((screen.getByTestId('sheet-move-left') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sheet-move-right') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('delete-block-trigger')).toBeTruthy();
+  });
+
+  it('for the last of three sheets, disables "mover a la derecha" and enables "mover a la izquierda"', () => {
+    render(
+      <Harness
+        initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]}
+        initialActiveId="b3"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    expect((screen.getByTestId('sheet-move-right') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sheet-move-left') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('moving right reorders the blocks and keeps the moved sheet active', () => {
+    render(
+      <Harness
+        initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]}
+        initialActiveId="b1"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('sheet-move-right'));
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 3');
+    expect(screen.getByTestId('block-b1')).toBeTruthy();
+  });
+
+  it('moving left reorders the blocks and keeps the moved sheet active', () => {
+    render(
+      <Harness
+        initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]}
+        initialActiveId="b2"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('sheet-move-left'));
+    expect(screen.getByTestId('sheet-position').textContent).toBe('1 de 3');
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
+  });
+
+  it('deleting the active sheet removes it, activates a neighbor, and shows the undo status line', () => {
+    render(
+      <Harness
+        initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2'), worksheetBlock('b3')]}
+        initialActiveId="b2"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('delete-block-trigger'));
+    expect(screen.queryByTestId('block-b2')).toBeNull();
+    expect(screen.getByTestId('sheet-position').textContent).toBe('2 de 2');
+    expect(screen.getByTestId('sheet-status').textContent).toBe('Hoja eliminada · Ctrl+Z para deshacer');
+  });
+
+  it('deleting down to one sheet removes the whole bar, but keeps the undo status line visible', () => {
+    render(<Harness initialBlocks={[worksheetBlock('b1'), worksheetBlock('b2')]} initialActiveId="b1" />);
+    fireEvent.click(screen.getByTestId('sheet-actions-trigger'));
+    fireEvent.click(screen.getByTestId('delete-block-trigger'));
+    expect(screen.queryByTestId('active-sheet-bar')).toBeNull();
+    expect(screen.getByTestId('block-b2')).toBeTruthy();
+    expect(screen.getByTestId('sheet-status').textContent).toBe('Hoja eliminada · Ctrl+Z para deshacer');
   });
 });
 
