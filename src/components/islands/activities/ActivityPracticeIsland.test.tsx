@@ -831,6 +831,13 @@ describe('ActivityPracticeIsland — "Modo enfoque" (full-screen exercise mode, 
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('the exit control has a 44px hit area', () => {
+    const toggle = mountToggleButton();
+    renderIsland([WORKSHEET]);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('practice-focus-mode-exit').className).toMatch(/\bsize-11\b/);
+  });
+
   it('the exit control closes it', () => {
     const toggle = mountToggleButton();
     renderIsland([WORKSHEET]);

@@ -266,3 +266,99 @@ describe('initDeskDrag — stale absolute positioning across a resize', () => {
     expect(() => window.dispatchEvent(new Event('resize'))).not.toThrow();
   });
 });
+
+// Owner report ("el reloj se coloca encima del logo... y el reloj se coloca
+// encima del logo" — the clock overlapping `DeskChrome`'s own logo card,
+// plus a stray grey pill half hidden behind the weather widget): unlike
+// every test above, `DeskScene.astro`'s own `[data-desk]` carries
+// `transition:persist`, so a real re-init after a window-route visit and
+// back runs `initDeskDrag` again on the EXACT SAME widget nodes — never a
+// fresh `setDom()` shell. These tests never call `setDom()` between the two
+// `initDeskDrag` calls, on purpose, to model that persisted re-init.
+describe('initDeskDrag — re-init on a persisted desk (same DOM nodes, no fresh shell)', () => {
+  it('wires each widget once: a single arrow-key press still nudges by exactly one step after a second init', () => {
+    initDeskDrag(document);
+    initDeskDrag(document); // re-init on the SAME, already-wired nodes
+
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+    const startLeft = parseFloat(clock.style.left);
+
+    clock.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+
+    // A doubled-up listener would move it 32px (two stacked handlers each
+    // reading the already-updated position); exactly one survives.
+    expect(parseFloat(clock.style.left)).toBe(startLeft + 16);
+  });
+
+  it('wires each widget once: a single drag release announces visibility exactly once', () => {
+    initDeskDrag(document);
+    initDeskDrag(document);
+
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+    const seen: boolean[] = [];
+    document.addEventListener(DESK_ARRANGE_VISIBILITY_EVENT, (e) =>
+      seen.push((e as CustomEvent<{ visible: boolean }>).detail.visible),
+    );
+
+    clock.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100 }));
+    clock.dispatchEvent(new MouseEvent('pointermove', { clientX: 140, clientY: 130 }));
+    clock.dispatchEvent(new MouseEvent('pointerup', { clientX: 140, clientY: 130 }));
+
+    // A doubled-up listener would push `true` twice for this single release.
+    expect(seen.filter((v) => v === true)).toHaveLength(1);
+  });
+
+  it('a widget wired on the FIRST call still persists through a LATER re-init, not an abandoned first-call state', () => {
+    initDeskDrag(document);
+    initDeskDrag(document);
+    initDeskDrag(document); // a third call, still the same nodes
+
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+    clock.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+
+    const stored = JSON.parse(localStorage.getItem(DESK_DRAG_STORAGE_KEY) ?? '{}');
+    expect(stored.clock).toEqual({ x: parseFloat(clock.style.left), y: parseFloat(clock.style.top) });
+  });
+
+  it('recomputes a never-dragged widget’s default placement from its TRUE current grid-flow box, not a stale earlier absolute one', () => {
+    // A layout-aware stub, unlike the module-level `rectFor`: an
+    // already-`position: absolute` widget is measured from its OWN inline
+    // left/top/width (as a real browser would), a plain grid-flow widget
+    // from the fixed default below — modelling an earlier call's output
+    // going stale (e.g. a narrower in-between window route) without
+    // pretending jsdom has a real layout engine.
+    const GRID_DEFAULT = { left: 20, top: 10, width: 160, height: 160 };
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.hasAttribute('data-desk')) {
+        return { left: 0, top: 0, width: 1200, height: 800, right: 1200, bottom: 800, x: 0, y: 0, toJSON() {} } as DOMRect;
+      }
+      if (this.getAttribute('data-desk-widget') === 'clock') {
+        const el = this as HTMLElement;
+        if (el.style.position === 'absolute') {
+          const left = parseFloat(el.style.left || '0');
+          const top = parseFloat(el.style.top || '0');
+          const width = parseFloat(el.style.width || `${GRID_DEFAULT.width}`);
+          return { left, top, width, height: GRID_DEFAULT.height, right: left + width, bottom: top + GRID_DEFAULT.height, x: left, y: top, toJSON() {} } as DOMRect;
+        }
+        return { ...GRID_DEFAULT, right: GRID_DEFAULT.left + GRID_DEFAULT.width, bottom: GRID_DEFAULT.top + GRID_DEFAULT.height, x: GRID_DEFAULT.left, y: GRID_DEFAULT.top, toJSON() {} } as DOMRect;
+      }
+      return { left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON() {} } as DOMRect;
+    };
+
+    initDeskDrag(document);
+    const clock = document.querySelector('[data-desk-widget="clock"]') as HTMLElement;
+    expect(clock.style.left).toBe('20px');
+    expect(clock.style.top).toBe('10px');
+
+    // Simulate an in-between navigation leaving the SAME persisted node
+    // absolutely placed somewhere else entirely — never dragged by the
+    // visitor, just a stale earlier call's own output.
+    clock.style.left = '4px';
+    clock.style.top = '400px';
+
+    initDeskDrag(document); // re-init on the SAME, already-absolute node
+
+    expect(clock.style.left).toBe('20px');
+    expect(clock.style.top).toBe('10px');
+  });
+});

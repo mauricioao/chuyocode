@@ -48,6 +48,45 @@
  * call overwrites, so a reset after a re-init still resets the widgets
  * actually on screen.
  *
+ * RE-INIT ON A *PERSISTED* DESK (owner report, "el reloj se coloca encima
+ * del logo" — a widget landing too high, overlapping `DeskChrome`, after a
+ * window-route visit and back): `DeskScene.astro`'s own `[data-desk]`
+ * carries `transition:persist`, so unlike a plain client-rendered page the
+ * WIDGETS THEMSELVES are the exact same DOM nodes across a hub -> window
+ * (-> hub) navigation, not freshly server-rendered ones. Two re-init bugs
+ * follow from that, both only visible on a persisted re-init, never on a
+ * fresh load:
+ *
+ *  1. {@link wireWidget} used to run its full `addEventListener` set again
+ *     on every `initDeskDrag` call — on a FRESH widget that is a no-op
+ *     survived-by-construction, but on this SAME persisted node it stacked
+ *     one more pointerdown/keydown listener per call, forever (the exact
+ *     listener-leak class of bug the reset listener above already guards
+ *     against, just one level down — per WIDGET instead of per `doc`). A
+ *     widget wired twice nudges twice as far per arrow-key press and
+ *     double-persists on every drag release. Guarded below by
+ *     {@link wiredWidgets}, same `WeakSet` idiom as {@link wiredDocs}; the
+ *     listeners themselves call `persist`, which looks up {@link stateByDoc}
+ *     AT EVENT TIME rather than closing over one call's own `state` object,
+ *     so wiring a widget only once stays correct across every LATER re-init
+ *     too (identical reasoning to the reset listener's own "{@link
+ *     stateByDoc} is always read at event time, never captured" comment
+ *     above).
+ *  2. `defaults` (the grid-flow box used to decide a NEVER-dragged widget's
+ *     own position) used to be measured from `getBoundingClientRect`
+ *     straight off the DOM — correct on a first-ever load (the widget is
+ *     still a plain grid item then), but WRONG on any later re-init: the
+ *     widget already carries the PREVIOUS call's `position: absolute` with
+ *     its own `left`/`top`, so the "default" measured was really just that
+ *     earlier call's own output, stale the moment anything about the
+ *     desk's layout differed between the two calls (a narrower viewport
+ *     mid-navigation from `:root:has([data-desk-window])`'s own
+ *     `scrollbar-gutter` switch, `DeskChrome`'s measured
+ *     `--desk-chrome-offset` not yet settled, …). `clearPlacement` runs on
+ *     every already-absolute widget BEFORE `defaults` is measured below, so
+ *     the snapshot always reads the widget's REAL current grid-flow box —
+ *     exactly like a first-ever load — regardless of which call this is.
+ *
  * STALE ABSOLUTE POSITIONING ACROSS A RESIZE (owner report, "pantalla rota"
  * — widgets piled up on top of each other and the greeting on a phone):
  * this module only ever checked `matchMedia` ONCE, at init. A visitor who
@@ -141,11 +180,12 @@ function clearPlacement(widget: HTMLElement): void {
  * The current call's own widgets, live persisted positions and how to reset
  * them — see this file's own header ("RE-INIT ACROSS NAVIGATIONS"). A fresh
  * object is created and OVERWRITTEN into {@link stateByDoc} on every
- * `initDeskDrag` call for a given `doc`; `placeAbsolute`/`persist` close
- * over this exact object (mutating `positions` in place, never reassigning
- * a separate local variable), so the one shared reset listener — looked up
- * at reset time, never captured in its own closure — mutates the SAME
- * `positions` the current call's drag/keyboard handlers already read from.
+ * `initDeskDrag` call for a given `doc`; `placeAbsolute` closes over this
+ * exact object (mutating `positions` in place, never reassigning a separate
+ * local variable), and `persist` looks it up through {@link stateByDoc}
+ * instead (see "RE-INIT ON A PERSISTED DESK" below) — both end up mutating
+ * the SAME `positions` object the reset listener and a later re-init's own
+ * handlers already read from.
  */
 interface DragState {
   widgets: HTMLElement[];
@@ -155,6 +195,8 @@ interface DragState {
 
 const stateByDoc = new WeakMap<Document, DragState>();
 const wiredDocs = new WeakSet<Document>();
+/** Widgets whose pointerdown/keydown listeners are already wired — see this file's own header, "RE-INIT ON A PERSISTED DESK", point 1. Keyed by the widget ELEMENT (not `doc`): a persisted widget survives across many `initDeskDrag` calls on the same `doc`, and must be wired only once across all of them. */
+const wiredWidgets = new WeakSet<HTMLElement>();
 
 /** Wires drag + keyboard for every `[data-desk-widget]` inside the first `[data-desk]` ancestor, if any — a no-op below the `desk:` breakpoint, on a page with no desk, or with no widgets. Safe to call more than once (re-reads the DOM fresh each time); the hub page's own script calls it once per load/navigation, same as `initDeskWidgets`. */
 export function initDeskDrag(doc: Document = document): void {
@@ -165,6 +207,15 @@ export function initDeskDrag(doc: Document = document): void {
   if (!desk || widgets.length === 0) return;
 
   if (!desk.style.position) desk.style.position = 'relative';
+
+  // RE-INIT ON A PERSISTED DESK, point 2 (this file's own header): drop any
+  // leftover absolute placement from an EARLIER call on these exact
+  // (persisted) nodes before `defaults` is measured just below, so that
+  // measurement always reads the widget's real, current grid-flow box
+  // instead of replaying a possibly-stale earlier call's own output.
+  for (const widget of widgets) {
+    if (widget.style.position === 'absolute') clearPlacement(widget);
+  }
 
   // This call's own mutable state — see {@link DragState}'s own header for
   // why `placeAbsolute`/`persist` below read and write `state.positions`
@@ -220,9 +271,18 @@ export function initDeskDrag(doc: Document = document): void {
   }
   state.placeAbsolute = placeAbsolute;
 
+  // {@link wireWidget}'s own listeners call this, never a plain closure over
+  // THIS call's own `state` — see this file's own header, "RE-INIT ON A
+  // PERSISTED DESK", point 1: a widget is wired only ONCE across every
+  // `initDeskDrag` call on this `doc`, so its listeners must always resolve
+  // the LATEST call's own state through {@link stateByDoc} at event time, the
+  // same "always read at event time, never captured" idiom the reset
+  // listener below already uses.
   function persist(id: string, pos: Position): void {
-    state.positions = { ...state.positions, [id]: pos };
-    safeSet(DESK_DRAG_STORAGE_KEY, serializePositions(state.positions));
+    const latest = stateByDoc.get(doc);
+    if (!latest) return;
+    latest.positions = { ...latest.positions, [id]: pos };
+    safeSet(DESK_DRAG_STORAGE_KEY, serializePositions(latest.positions));
     dispatchArrangeVisibility(true, doc);
   }
 
@@ -299,7 +359,14 @@ export function initDeskDrag(doc: Document = document): void {
     const id = widget.getAttribute('data-desk-widget');
     if (!id) continue;
     placeAbsolute(widget, id);
-    wireWidget(widget);
+    // RE-INIT ON A PERSISTED DESK, point 1 (this file's own header): wired
+    // at most once per WIDGET, across every call on this `doc` — `persist`
+    // above always resolves the latest call's own state at event time, so a
+    // widget wired on an earlier call stays correct on every later one too.
+    if (!wiredWidgets.has(widget)) {
+      wiredWidgets.add(widget);
+      wireWidget(widget);
+    }
   }
 
   dispatchArrangeVisibility(Object.keys(state.positions).length > 0, doc);
