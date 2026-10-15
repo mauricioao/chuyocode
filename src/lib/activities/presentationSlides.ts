@@ -28,8 +28,7 @@ import type { Block, ImageRef, Rotation, Zone, AudioMarker } from './blocks';
 import type { Payload, Slot } from '../exercisePayload';
 import { orderZonesForReading } from './zoneGeometry';
 import { rotatedSize } from './canvasViewport';
-import { zoneExceedsMaxZoom, type Size } from './presentationCamera';
-import { STAGE_SAFE_WIDTH, STAGE_SAFE_HEIGHT } from './fitStage';
+import { isZoneTooSmallToProject } from './presentationCamera';
 import {
   deriveGameItems,
   deriveGroupSortGroups,
@@ -354,13 +353,18 @@ export function revealableSlides(slides: readonly PresentationSlide[]): boolean[
 }
 
 /**
- * One thing on this activity that would NOT project well — the "Listo para
- * enviar" checklist's own non-blocking warning (owner spec, sprint week 3):
- * a quiz prompt long enough that {@link promptFontSize} has already floored
- * it at {@link PROMPT_FONT_MIN_PX}, or a worksheet zone small enough that
- * framing it ({@link zoneExceedsMaxZoom}, `presentationCamera.ts`) would
- * need more than a sane max zoom. Never blocks a submit — see
- * `SubmitForReviewDialog.tsx`'s own render of this list.
+ * One thing on this activity that would NOT project well — the "Antes de
+ * proyectar" checklist's own non-blocking warning (owner spec, sprint week
+ * 3): a quiz prompt long enough that {@link promptFontSize} has already
+ * floored it at {@link PROMPT_FONT_MIN_PX}, or a worksheet zone that would
+ * stay illegible even at the per-zone camera's zoom ceiling ({@link
+ * isZoneTooSmallToProject}, `presentationCamera.ts` — see that module's own
+ * header for the legibility calibration and why this is a REAL-PIXEL
+ * legibility check, not a "needs more zoom to fill the stage" ratio).
+ * Never blocks a submit — see `SubmitForReviewDialog.tsx`'s own render of
+ * this list, GROUPED by {@link summarizeProjectionWarnings} rather than one
+ * line per zone (owner report: the dialog used to repeat the exact same
+ * line once per small zone, which taught nothing and gave no way out).
  */
 export interface ProjectionWarning {
   blockId: string;
@@ -371,15 +375,13 @@ export interface ProjectionWarning {
   reason: 'quiz_prompt_too_long' | 'worksheet_zone_too_small';
 }
 
-/** The stage a worksheet zone actually gets at presentation time — the safe area inside the 1920x1080 stage (`fitStage.ts`), same box `PresentationIsland.tsx`'s own camera fits a zone into. */
-const PROJECTION_STAGE: Size = { width: STAGE_SAFE_WIDTH, height: STAGE_SAFE_HEIGHT };
-
 /**
  * Every {@link ProjectionWarning} this activity's content would trigger, in
  * authored block order (quiz prompts scanned via {@link
  * collectPresentationQuestions}, worksheet zones via {@link
  * collectPresentationWorksheets}) — a flat list, since a block can trigger
- * more than one.
+ * more than one. See {@link summarizeProjectionWarnings} for the GROUPED
+ * view the submit dialog actually renders.
  */
 export function listProjectionWarnings(blocks: readonly Block[]): ProjectionWarning[] {
   const warnings: ProjectionWarning[] = [];
@@ -393,11 +395,44 @@ export function listProjectionWarnings(blocks: readonly Block[]): ProjectionWarn
   for (const page of collectPresentationWorksheets(blocks)) {
     const pageSize = rotatedSize(page.image, page.rotation);
     for (const zone of page.zones) {
-      if (zoneExceedsMaxZoom(zone, pageSize, PROJECTION_STAGE)) {
+      if (isZoneTooSmallToProject(zone.h, pageSize)) {
         warnings.push({ blockId: page.blockId, zoneId: zone.id, reason: 'worksheet_zone_too_small' });
       }
     }
   }
 
   return warnings;
+}
+
+/** One {@link ProjectionWarning} reason, grouped with how many times it fired and the FIRST occurrence (used by the submit dialog's "Ver cuáles" action to jump straight to it). */
+export interface ProjectionWarningSummary {
+  reason: ProjectionWarning['reason'];
+  count: number;
+  first: ProjectionWarning;
+}
+
+/**
+ * {@link listProjectionWarnings}'s flat, one-per-zone/prompt list, GROUPED
+ * by `reason` — one summary per kind, in the order its reason first
+ * appeared, each carrying its own count and first occurrence. This is what
+ * `SubmitForReviewDialog.tsx` actually renders: one line per kind ("N zonas
+ * son chicas para verse bien en un proyector.") instead of the same line
+ * repeated once per zone (owner report, sprint week 3 "worksheet zoom
+ * tour") — the author gets ONE message per thing, with a count, rather than
+ * ten identical lines she has no idea what to do about.
+ */
+export function summarizeProjectionWarnings(warnings: readonly ProjectionWarning[]): ProjectionWarningSummary[] {
+  const summaries: ProjectionWarningSummary[] = [];
+  const byReason = new Map<ProjectionWarning['reason'], ProjectionWarningSummary>();
+  for (const warning of warnings) {
+    const existing = byReason.get(warning.reason);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    const summary: ProjectionWarningSummary = { reason: warning.reason, count: 1, first: warning };
+    byReason.set(warning.reason, summary);
+    summaries.push(summary);
+  }
+  return summaries;
 }

@@ -47,6 +47,8 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
 import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
+import { growSmallZonesToLegibleHeight } from '@/lib/activities/presentationCamera';
+import { rotatedSize } from '@/lib/activities/canvasViewport';
 import {
   initHistory,
   pushHistory,
@@ -720,6 +722,38 @@ export default function ActivityEditorIsland({
   const closeSubmitDialog = useCallback(() => {
     setSubmitDialog((s) => (s.submitting ? s : { open: false, submitting: false, error: null }));
   }, []);
+
+  // "Agrandar las zonas chicas" (submit dialog's projection-warning action,
+  // owner review "Antes de proyectar"): grow every zone below the real,
+  // PAGE-AWARE legibility minimum (`presentationCamera.ts`'s
+  // `growSmallZonesToLegibleHeight` — each worksheet block's own rotated
+  // page size, not a flat fraction), across every worksheet block, to that
+  // minimum at once — ONE `changeBlocks` call, so it is a single undo step.
+  // A block with no image yet (nothing to measure a page against) is left
+  // untouched. The dialog itself holds no copy of this: it recomputes its
+  // own warnings straight from the (now-grown) `blocks` prop on the next
+  // render, so the line disappears/updates on its own.
+  const handleEnlargeSmallZones = useCallback(() => {
+    changeBlocks(
+      blocks.map((block) =>
+        block.type === 'worksheet' && block.image
+          ? { ...block, zones: growSmallZonesToLegibleHeight(block.zones, rotatedSize(block.image, block.rotation)) }
+          : block,
+      ),
+    );
+  }, [blocks, changeBlocks]);
+
+  // "Ver cuáles" (same action): close the dialog and point the author
+  // straight at the first small zone — the exact same "close dialog,
+  // activate the block, select the zone" pattern `handleConfirmSubmit`'s
+  // own `incomplete` submit-error handling already uses below.
+  const handleViewSmallZone = useCallback(
+    (blockId: string, zoneId: string) => {
+      setActiveBlockId(blockId);
+      setSelectedZoneId(zoneId);
+    },
+    [setActiveBlockId],
+  );
 
   // "Ver como presentación" (worksheet zoom tour, sprint week 3): a
   // full-screen overlay presenting the editor's own CURRENT document —
@@ -1486,6 +1520,8 @@ export default function ActivityEditorIsland({
         blocks={blocks}
         onConfirm={() => void handleConfirmSubmit()}
         onCancel={closeSubmitDialog}
+        onEnlargeSmallZones={handleEnlargeSmallZones}
+        onViewSmallZone={handleViewSmallZone}
       />
 
       {/* "Compartir" (one primary action per state): the SAME `ShareDialog`

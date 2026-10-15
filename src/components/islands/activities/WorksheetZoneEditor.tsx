@@ -103,6 +103,7 @@ import { FrameCornersIcon } from '@phosphor-icons/react/dist/ssr/FrameCorners';
 import { HandIcon } from '@phosphor-icons/react/dist/ssr/Hand';
 import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { SpeakerHighIcon } from '@phosphor-icons/react/dist/ssr/SpeakerHigh';
+import { WarningIcon } from '@phosphor-icons/react/dist/ssr/Warning';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import {
   MAX_ZONE_SPEAK_LENGTH,
@@ -124,6 +125,7 @@ import {
   type Direction,
   type Rect,
 } from '@/lib/activities/zoneGeometry';
+import { ensureLegibleZoneHeight, isZoneTooSmallToProject } from '@/lib/activities/presentationCamera';
 import {
   clampZoomInput,
   parseZoomPercentInput,
@@ -655,7 +657,12 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
   // active and the canvas focused creates a new zone centered in the
   // currently VISIBLE part of the image — `visibleImageRect` (camera-aware,
   // works at any pan/zoom) feeds `centeredZoneRect`'s own default ~20%x6%
-  // size, already clamped inside the image. One history entry, same shape as
+  // size, already clamped inside the image. `ensureLegibleZoneHeight`
+  // (`presentationCamera.ts`) then applies the real, PAGE-AWARE legibility
+  // floor against this page's own `displaySize` — tiny in practice (owner
+  // review: ~1.3% of an ordinary portrait page's height, nowhere near the
+  // keyboard default), so it only ever grows a zone on a highly unusual
+  // page geometry, never an ordinary one. One history entry, same shape as
   // a pointer-drawn zone (`handlePointerUp`'s own draw branch): a single
   // `onZonesChange` call (default `commit: true`) plus `onSelectZone`.
   // `pendingFocusZoneIdRef` hands the new zone's id to the focus effect
@@ -665,7 +672,7 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
   const handleCreateZoneAtCenter = useCallback(() => {
     const vp = viewportSize();
     const visible = visibleImageRect(cameraRef.current, displaySize, vp);
-    const rect = centeredZoneRect(visible);
+    const rect = ensureLegibleZoneHeight(centeredZoneRect(visible), displaySize);
     const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
     pendingFocusZoneIdRef.current = zone.id;
     clearAudioSelection();
@@ -1180,7 +1187,18 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
       const rawH = Math.abs(end.y - drag.start.y) / displaySize.height;
       if (rawW < MIN_ZONE_SIZE && rawH < MIN_ZONE_SIZE) return;
 
-      const rect = rectFromDrag(drag.start, end, displaySize);
+      // A real drag — even a small, deliberate one — never COMMITS below
+      // the real, PAGE-AWARE legibility floor (owner review, "Antes de
+      // proyectar"): `ensureLegibleZoneHeight` (`presentationCamera.ts`)
+      // grows it around its own vertical center against this page's own
+      // `displaySize`, same floor `handleCreateZoneAtCenter`'s keyboard
+      // shortcut applies. Tiny in practice on an ordinary page (~1.3% of
+      // its height) — this only ever catches a genuinely illegible zone,
+      // never an ordinary small blank. The live draft rectangle above
+      // stays the RAW drag size on purpose — snapping the preview bigger
+      // than the cursor mid-drag would read as the rectangle jumping on its
+      // own; only the final, committed zone is floored.
+      const rect = ensureLegibleZoneHeight(rectFromDrag(drag.start, end, displaySize), displaySize);
       const zone: Zone = { id: crypto.randomUUID(), ...rect, kind: 'text', answers: [''] };
       onZonesChange([...zones, zone]);
       onSelectZone(zone.id);
@@ -1923,6 +1941,26 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
                   } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
                   style={style}
                 >
+                  {/* Quiet on-canvas marker (owner review, "Antes de
+                      proyectar"): shown where the problem actually is, not
+                      just as a line in the submit dialog — driven by the
+                      SAME real, page-aware legibility check
+                      (`presentationCamera.ts`'s `isZoneTooSmallToProject`,
+                      against this page's own `displaySize`) the dialog and
+                      the creation-time floor already share. Reuses the
+                      same amber warning tone as that dialog's own banner —
+                      `title` gives the quick "Chica para proyectar" tooltip
+                      the owner asked for; the UI pass still to come may
+                      polish the exact visual. */}
+                  {isZoneTooSmallToProject(zone.h, displaySize) && (
+                    <span
+                      data-testid={`zone-too-small-${zone.id}`}
+                      title={t.zoneTooSmallForProjectionTitle}
+                      className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white shadow-elevation-1"
+                    >
+                      <WarningIcon aria-hidden="true" weight="fill" className="size-2.5" />
+                    </span>
+                  )}
                   {selected &&
                     HANDLES.map((handle) => (
                       <div

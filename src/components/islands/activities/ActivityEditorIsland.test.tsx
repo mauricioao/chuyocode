@@ -130,6 +130,19 @@ const WORKSHEET_BLOCK_WITH_ZONE: WorksheetBlock = {
   zones: [{ id: 'z1', x: 0.1, y: 0.1, w: 0.2, h: 0.1, kind: 'text', answers: ['x'] }],
 };
 
+// A wide (landscape) page — its legibility floor (~2.73%, see
+// `presentationCamera.test.ts`'s own `WIDE_PAGE` calibration tests) sits
+// ABOVE `zoneGeometry.ts`'s bare tap-target floor (`MIN_ZONE_SIZE`, 2%), so
+// "Agrandar" below demonstrably grows to the REAL legibility minimum
+// rather than just re-hitting the unrelated tap-target floor an ordinary
+// portrait page would. The submit dialog's "Antes de proyectar" warning
+// (owner review) and its "Agrandar las zonas chicas"/"Ver cuáles" actions.
+const WORKSHEET_BLOCK_WITH_TINY_ZONE: WorksheetBlock = {
+  ...WORKSHEET_BLOCK,
+  image: { path: 'activity-uploads/u1/b1.webp', width: 3000, height: 800 },
+  zones: [{ id: 'tiny', x: 0.5, y: 0.5, w: 0.1, h: 0.005, kind: 'text', answers: ['x'] }],
+};
+
 /** A DOMRect-shaped mock — same helper as `WorksheetZoneEditor.test.tsx`'s own. */
 function mockRect(el: Element, box: { left?: number; top?: number; width: number; height: number }) {
   const left = box.left ?? 0;
@@ -1442,6 +1455,41 @@ describe('ActivityEditorIsland — submit for review', () => {
 
     expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('"Agrandar las zonas chicas" grows the small zone to the real legibility minimum, as ONE undo step, and the warning updates on its own', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_TINY_ZONE] });
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    expect(screen.getByTestId('submit-projection-warnings').textContent).toContain(
+      '1 zona es chica para verse bien en un proyector.',
+    );
+
+    fireEvent.click(screen.getByTestId('submit-projection-grow-zones'));
+
+    // The dialog recomputes its own warnings from the (now grown) `blocks`
+    // prop — no local copy, no second click needed.
+    expect(screen.queryByTestId('submit-projection-warnings')).toBeNull();
+    const zone = screen.getByTestId('zone-tiny');
+    expect(parseFloat(zone.style.width)).toBeCloseTo(10); // untouched — legibility is a height-only concern
+    expect(parseFloat(zone.style.height)).toBeCloseTo(2.7344, 2); // minLegibleZoneHeightFraction for this 3000x800 page
+
+    fireEvent.click(screen.getByTestId('submit-dialog-cancel'));
+    // ONE undo step reverts the whole grow — not one step per zone.
+    fireEvent.click(screen.getByTestId('undo-button'));
+    const reverted = screen.getByTestId('zone-tiny');
+    expect(parseFloat(reverted.style.width)).toBeCloseTo(10);
+    expect(parseFloat(reverted.style.height)).toBeCloseTo(0.5);
+  });
+
+  it('"Ver cuáles" closes the dialog and selects the first small zone', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_TINY_ZONE] });
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-projection-view-zones'));
+
+    expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
+    expect(screen.getByTestId('zone-tiny').getAttribute('aria-pressed')).toBe('true');
   });
 });
 
