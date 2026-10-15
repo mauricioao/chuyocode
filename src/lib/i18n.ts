@@ -844,6 +844,13 @@ export const UI_LABELS = {
         matchRemovePrefix: 'Quitar ficha',
         matchEmptySlot: 'Casilla vacía',
         matchTrayLabel: 'Fichas disponibles',
+        // UX audit finding 3 (RECORRIDO-2026-10-15.md #3): "Comprobar" used
+        // to grade and end the round even with empty slots, counting them
+        // as wrong — now it refuses to grade and announces this instead,
+        // keeping the round going (`QuizMatching.tsx`'s own `handleCheck`).
+        // Singular "falta" (one slot) vs. plural "faltan" (more than one).
+        matchMissingSlots: (count: number) =>
+          count === 1 ? 'Te falta 1 por ubicar.' : `Te faltan ${count} por ubicar.`,
         matchSoundMute: 'Silenciar sonido',
         matchSoundUnmute: 'Activar sonido',
         // Reordenar (Wordwall "Reordenar palabras"): one sentence at a time,
@@ -2372,6 +2379,7 @@ export const UI_LABELS = {
         matchRemovePrefix: 'Remove tile',
         matchEmptySlot: 'Empty slot',
         matchTrayLabel: 'Available tiles',
+        matchMissingSlots: (count: number) => (count === 1 ? '1 left to place.' : `You still have ${count} to place.`),
         matchSoundMute: 'Mute sound',
         matchSoundUnmute: 'Unmute sound',
         reorderCheck: 'Check',

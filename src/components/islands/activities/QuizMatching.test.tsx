@@ -121,6 +121,7 @@ describe('QuizMatching', () => {
     it('bounces a wrong placement back to the tray and scores it as incorrect', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's2'); // wrong: s1's answer in s2's slot
+      place('s2', 's1'); // wrong: s2's answer in s1's slot (every slot filled — UX audit finding 3)
       place('s3', 's3'); // correct
 
       fireEvent.click(screen.getByTestId('matching-check'));
@@ -131,17 +132,6 @@ describe('QuizMatching', () => {
 
       expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 3 correctas');
       expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
-    });
-
-    it('counts an unplaced prompt as incorrect', () => {
-      render(<QuizMatching lang="es" items={items} seed="block-1" />);
-      place('s1', 's1');
-      // s2 and s3 left unplaced.
-
-      fireEvent.click(screen.getByTestId('matching-check'));
-      act(() => vi.advanceTimersByTime(1000));
-
-      expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 3 correctas');
     });
 
     describe('✓/✕ marks (UX audit F10: correct/wrong must not rely on colour alone)', () => {
@@ -171,6 +161,7 @@ describe('QuizMatching', () => {
       it('marks a wrong slot with a ✕ badge and "incorrecta" in its accessible name during the brief settle window', () => {
         render(<QuizMatching lang="es" items={items} seed="block-1" />);
         place('s1', 's2'); // wrong: s1's answer in s2's slot
+        place('s2', 's1'); // wrong: s2's answer in s1's slot (every slot filled — UX audit finding 3)
         place('s3', 's3'); // correct
 
         fireEvent.click(screen.getByTestId('matching-check'));
@@ -178,7 +169,7 @@ describe('QuizMatching', () => {
         const wrongSlot = screen.getByTestId('matching-slot-s2');
         expect(within(wrongSlot).getByTestId('grade-mark-wrong')).toBeTruthy();
         expect(screen.getByTestId('matching-tile-s1').getAttribute('aria-label')).toContain('incorrecta');
-        expect(screen.getByTestId('matching-live-region').textContent).toBe('1 correcta, 1 incorrecta');
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('1 correcta, 2 incorrectas');
 
         // Gone once the wrong tile settles back into the tray.
         act(() => vi.advanceTimersByTime(1000));
@@ -188,6 +179,8 @@ describe('QuizMatching', () => {
       it('clears every mark and the announcement on "Jugar de nuevo"', () => {
         render(<QuizMatching lang="es" items={items} seed="block-1" />);
         place('s1', 's1');
+        place('s2', 's2');
+        place('s3', 's3');
         fireEvent.click(screen.getByTestId('matching-check'));
         act(() => vi.advanceTimersByTime(1000));
         expect(screen.getByTestId('matching-live-region').textContent).not.toBe('');
@@ -202,6 +195,8 @@ describe('QuizMatching', () => {
     it('offers "Jugar de nuevo" on the result screen, which starts a fresh round', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's1');
+      place('s2', 's2');
+      place('s3', 's3');
       fireEvent.click(screen.getByTestId('matching-check'));
       act(() => vi.advanceTimersByTime(1000));
 
@@ -217,6 +212,7 @@ describe('QuizMatching', () => {
     it('offers "Repasar las que fallé" only when there were mistakes, keeping the correct pair placed and sending only the wrong one back', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's2'); // wrong: s1's answer in s2's slot
+      place('s2', 's1'); // wrong: s2's answer in s1's slot (every slot filled — UX audit finding 3)
       place('s3', 's3'); // correct
       fireEvent.click(screen.getByTestId('matching-check'));
       act(() => vi.advanceTimersByTime(1000));
@@ -232,9 +228,8 @@ describe('QuizMatching', () => {
       expect(screen.getByTestId('matching-slot-s2').getAttribute('data-filled')).toBeFalsy();
       expect(tray().getByTestId('matching-tile-s1')).toBeTruthy();
 
-      // s1's slot was also left empty (never placed) by the first check —
-      // placing both tiles correctly and checking again reaches a perfect
-      // score.
+      // Both s1 and s2 were wrong (swapped) on the first check — placing
+      // both tiles correctly and checking again reaches a perfect score.
       place('s1', 's1');
       place('s2', 's2');
       fireEvent.click(screen.getByTestId('matching-check'));
@@ -296,12 +291,133 @@ describe('QuizMatching', () => {
     it('disables Comprobar and the board while settling', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's1');
+      place('s2', 's2');
+      place('s3', 's3');
       fireEvent.click(screen.getByTestId('matching-check'));
 
       expect((screen.getByTestId('matching-check') as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByTestId('matching-tile-s2') as HTMLButtonElement).disabled).toBe(true);
 
       act(() => vi.advanceTimersByTime(1000));
+    });
+
+    describe('requires every slot filled before grading (UX audit finding 3, RECORRIDO-2026-10-15.md #3)', () => {
+      it('does not grade and announces how many are left when slots are still empty', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's1');
+        // s2 and s3 left unplaced.
+
+        fireEvent.click(screen.getByTestId('matching-check'));
+
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('Te faltan 2 por ubicar.');
+        // The round keeps going — no grading, no result screen.
+        expect(screen.queryByTestId('game-result')).toBeNull();
+        expect(screen.queryByTestId('grade-mark-correct')).toBeNull();
+        expect(screen.queryByTestId('grade-mark-wrong')).toBeNull();
+        expect((screen.getByTestId('matching-check') as HTMLButtonElement).disabled).toBe(false);
+      });
+
+      it('uses the singular copy when exactly one slot is left', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's1');
+        place('s2', 's2');
+        // s3 left unplaced.
+
+        fireEvent.click(screen.getByTestId('matching-check'));
+
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('Te falta 1 por ubicar.');
+      });
+
+      it('clears the missing-slots notice once another tile is placed', () => {
+        render(<QuizMatching lang="es" items={items} seed="block-1" />);
+        place('s1', 's1');
+        fireEvent.click(screen.getByTestId('matching-check'));
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('Te faltan 2 por ubicar.');
+
+        place('s2', 's2');
+
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('');
+      });
+
+      it('grades normally once every slot is filled, in English too', () => {
+        render(<QuizMatching lang="en" items={items} seed="block-1" />);
+        place('s1', 's1');
+
+        fireEvent.click(screen.getByTestId('matching-check'));
+        expect(screen.getByTestId('matching-live-region').textContent).toBe('You still have 2 to place.');
+
+        place('s2', 's2');
+        place('s3', 's3');
+        fireEvent.click(screen.getByTestId('matching-check'));
+        act(() => vi.advanceTimersByTime(1000));
+
+        expect(screen.getByTestId('game-result-score').textContent).toBe('3 of 3 correct');
+      });
+
+      // Coordinator review of ac75119: the sr-only announcement alone left a
+      // sighted student with nothing visible after tapping "Comprobar" —
+      // the notice must also show as real, visible DOM content, and the
+      // still-empty slot(s) should draw the eye to where to place next.
+      describe('a VISIBLE notice next to "Comprobar" (coordinator follow-up)', () => {
+        it('shows the notice as real, visible DOM content — not only inside the sr-only live region', () => {
+          render(<QuizMatching lang="es" items={items} seed="block-1" />);
+          place('s1', 's1');
+
+          fireEvent.click(screen.getByTestId('matching-check'));
+
+          const notice = screen.getByTestId('matching-missing-notice');
+          expect(notice.textContent).toBe('Te faltan 2 por ubicar.');
+          // Not the sr-only region, and not visually hidden itself.
+          expect(screen.getByTestId('matching-live-region').contains(notice)).toBe(false);
+          expect(notice.className).not.toContain('sr-only');
+        });
+
+        it('shows no notice before "Comprobar" is pressed, or once the board is complete', () => {
+          render(<QuizMatching lang="es" items={items} seed="block-1" />);
+          place('s1', 's1');
+          expect(screen.queryByTestId('matching-missing-notice')).toBeNull();
+
+          place('s2', 's2');
+          place('s3', 's3');
+          fireEvent.click(screen.getByTestId('matching-check'));
+          expect(screen.queryByTestId('matching-missing-notice')).toBeNull();
+        });
+
+        it('hides the visible notice once another tile is placed, same as the sr-only announcement', () => {
+          render(<QuizMatching lang="es" items={items} seed="block-1" />);
+          place('s1', 's1');
+          fireEvent.click(screen.getByTestId('matching-check'));
+          expect(screen.getByTestId('matching-missing-notice')).toBeTruthy();
+
+          place('s2', 's2');
+
+          expect(screen.queryByTestId('matching-missing-notice')).toBeNull();
+        });
+
+        it('pulses the still-empty slot(s) so the student sees where to place, respecting reduced motion', () => {
+          render(<QuizMatching lang="es" items={items} seed="block-1" />);
+          place('s1', 's1');
+
+          fireEvent.click(screen.getByTestId('matching-check'));
+
+          expect(screen.getByTestId('matching-slot-s2').className).toContain('animate-pulse');
+          expect(screen.getByTestId('matching-slot-s2').className).toContain('motion-reduce:animate-none');
+          expect(screen.getByTestId('matching-slot-s3').className).toContain('animate-pulse');
+          // The filled slot is not highlighted — only the empty ones are.
+          expect(screen.getByTestId('matching-slot-s1').className).not.toContain('animate-pulse');
+        });
+
+        it('stops pulsing once the notice clears (next placement)', () => {
+          render(<QuizMatching lang="es" items={items} seed="block-1" />);
+          place('s1', 's1');
+          fireEvent.click(screen.getByTestId('matching-check'));
+          expect(screen.getByTestId('matching-slot-s2').className).toContain('animate-pulse');
+
+          place('s2', 's2');
+
+          expect(screen.getByTestId('matching-slot-s3').className).not.toContain('animate-pulse');
+        });
+      });
     });
   });
 

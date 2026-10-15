@@ -212,6 +212,8 @@ interface MatchSlotProps {
   tile: GameItem | null;
   locked: boolean;
   wrong: boolean;
+  /** Coordinator follow-up to UX audit finding 3: true while `matching-missing-notice` is showing AND this slot is one of the still-empty ones — briefly draws the eye to where to place next, same `animate-pulse`/`motion-reduce` idiom {@link wrong} already uses. */
+  highlightEmpty: boolean;
   disabled: boolean;
   canPlacePicked: boolean;
   onPlacePicked: () => void;
@@ -229,6 +231,7 @@ function MatchSlot({
   tile,
   locked,
   wrong,
+  highlightEmpty,
   disabled,
   canPlacePicked,
   onPlacePicked,
@@ -259,6 +262,7 @@ function MatchSlot({
         !tile && canPlacePicked && 'border-ring bg-accent/20',
         locked && 'border-success-strong bg-success-strong/10',
         wrong && 'animate-pulse border-destructive bg-destructive/10 motion-reduce:animate-none',
+        highlightEmpty && 'animate-pulse border-ring ring-2 ring-ring/40 motion-reduce:animate-none',
       )}
     >
       {tile ? (
@@ -323,6 +327,13 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
   // UX audit F10: the one polite live-region sentence after "Comprobar" —
   // see `CheckMark.tsx`'s own `gradeSummary` header for the exact wording.
   const [announcement, setAnnouncement] = useState('');
+  // Coordinator review of ac75119 (UX audit finding 3 follow-up): the
+  // sr-only `announcement` above said "Te faltan N por ubicar." but a
+  // SIGHTED student taps "Comprobar" and sees nothing happen — this is the
+  // SAME message, kept as real visible DOM content next to the floating
+  // "Comprobar" button, so the empty-slots notice is actually readable, not
+  // only exposed to a screen reader.
+  const [missingNotice, setMissingNotice] = useState('');
   const settleTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trayRef = useRef<HTMLUListElement | null>(null);
 
@@ -338,6 +349,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
     setWrongFlash(new Set());
     setFinalScore(0);
     setAnnouncement('');
+    setMissingNotice('');
   }
 
   // A different block (or its own item list changed) — start a fresh round.
@@ -373,6 +385,11 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
       next[targetPromptId] = tileId;
       return next;
     });
+    // UX audit finding 3: a placement always clears the "Te faltan..."
+    // notice below — the one thing that could make it stale. Both the
+    // sr-only announcement and its visible twin clear together.
+    setAnnouncement('');
+    setMissingNotice('');
   }
 
   function removePlacementOf(tileId: string) {
@@ -473,6 +490,19 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
 
   function handleCheck() {
     if (!playing) return;
+    // UX audit finding 3 (RECORRIDO-2026-10-15.md #3): "Comprobar" used to
+    // grade (and silently end) the round even with slots still empty,
+    // counting each one as wrong. Refuse to grade instead, announce how
+    // many are left, and keep playing — same posture Reorder/Cloze/
+    // GroupSort already have via their own disabled "Comprobar" button.
+    const missing = total - Object.keys(placements).length;
+    if (missing > 0) {
+      const message = t.matchMissingSlots(missing);
+      setAnnouncement(message);
+      setMissingNotice(message);
+      return;
+    }
+    setMissingNotice('');
     const correctIds = new Set(
       Object.entries(placements)
         .filter(([promptId, tileId]) => promptId === tileId)
@@ -563,6 +593,26 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
           data-testid="matching-actions"
           className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
         >
+          {/* Coordinator follow-up to UX audit finding 3: `missingNotice`
+              used to reach ONLY the sr-only `matching-live-region` — a
+              sighted student tapping "Comprobar" saw nothing happen. Real
+              visible content next to the button itself, `flex-wrap`'s own
+              row (wraps above the button on a narrow stage, same as "just
+              above or to the left"). Ink text on the card surface (never
+              the yellow `--primary` the button itself uses) so it reads at
+              a glance. */}
+          {missingNotice && (
+            // `aria-hidden`: purely the VISIBLE twin — the sr-only
+            // `matching-live-region` above already announces this exact
+            // sentence once; a screen reader must not hear it twice.
+            <span
+              data-testid="matching-missing-notice"
+              aria-hidden="true"
+              className="rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-elevation-1"
+            >
+              {missingNotice}
+            </span>
+          )}
           <Button type="button" data-testid="matching-check" className="min-h-11" onClick={handleCheck} disabled={!playing}>
             {t.matchCheck}
           </Button>
@@ -663,6 +713,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                       tile={tile}
                       locked={locked}
                       wrong={wrong}
+                      highlightEmpty={Boolean(missingNotice) && !tile}
                       disabled={!playing}
                       canPlacePicked={pickedId !== null}
                       onPlacePicked={() => handleSlotPlace(item.id)}
