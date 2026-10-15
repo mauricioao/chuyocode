@@ -23,6 +23,34 @@ function cityFromTimeZone(timeZone: string): string {
   return afterSlash.replace(/_/g, ' ');
 }
 
+/**
+ * Clears a persisted clock widget's own stale `:hover`/`:focus-within` match
+ * (owner report, bundled with "el reloj se coloca encima del logo": a grey
+ * pill — the clock's own `It's quarter to seven.` tooltip,
+ * `DeskClockWidget.astro`'s own `[data-clock-say]`, `group-hover:opacity-100`
+ * — left visible, half hidden behind the weather widget, after a window-route
+ * visit and back). `DeskScene.astro`'s own `[data-desk]` carries
+ * `transition:persist`, so `#desk-clock` is the SAME DOM node across that
+ * navigation, not a fresh one — a real browser can still consider it
+ * "hovered" from BEFORE the navigation (no new pointer event has fired
+ * since to say otherwise), so its tooltip stays visible and lands wherever
+ * `@lib/ui/deskDrag` next places the widget, not necessarily under the
+ * visitor's actual cursor.
+ *
+ * Toggling `pointer-events` off the widget and back drops it out of
+ * hit-testing for one synchronous beat, forcing the browser to re-evaluate
+ * hover against whatever is ACTUALLY under the pointer right now — the same
+ * technique SPA routers use for this exact "stuck `:hover` after a
+ * client-side navigation" class of bug. The `offsetHeight` read in between
+ * forces that beat to actually flush rather than being coalesced away.
+ */
+function resetStaleHover(clock: HTMLElement): void {
+  const previous = clock.style.pointerEvents;
+  clock.style.pointerEvents = 'none';
+  void clock.offsetHeight;
+  clock.style.pointerEvents = previous;
+}
+
 function tickClock(clock: Element): void {
   const now = new Date();
   const hours = now.getHours();
@@ -135,6 +163,8 @@ export function initDeskWidgets(doc: Document = document): void {
   const clock = doc.getElementById('desk-clock');
   const calendar = doc.getElementById('desk-calendar');
   if (!clock && !calendar) return;
+
+  if (clock) resetStaleHover(clock);
 
   function tick(): void {
     const now = new Date();

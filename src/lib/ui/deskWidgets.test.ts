@@ -103,6 +103,38 @@ describe('initDeskWidgets — calendar survives a navigation back to an empty sh
   });
 });
 
+// Owner report, bundled with the clock-overlaps-the-logo bug: a grey pill —
+// the clock's own hover tooltip (`[data-clock-say]`, CSS `group-hover`) —
+// left visible, half hidden behind the weather widget, after a window-route
+// visit and back. `#desk-clock` is the SAME DOM node across that navigation
+// (`DeskScene.astro`'s own `transition:persist`), so a real browser can
+// still consider it "hovered" from before the navigation.
+describe('initDeskWidgets — stale hover reset on re-init', () => {
+  it('drops any stale :hover match on the clock by toggling pointer-events for one synchronous beat', () => {
+    const clock = document.getElementById('desk-clock') as HTMLElement;
+    const pointerEventsValues: string[] = [];
+    Object.defineProperty(clock.style, 'pointerEvents', {
+      configurable: true,
+      get: () => pointerEventsValues.at(-1) ?? '',
+      set: (value: string) => {
+        pointerEventsValues.push(value);
+      },
+    });
+    const offsetHeightSpy = vi.spyOn(clock, 'offsetHeight', 'get').mockReturnValue(0);
+
+    initDeskWidgets(document);
+
+    // 'none' (dropping hit-testing), then restored to whatever it was
+    // before ('') — in that order, with the forced layout read in between.
+    expect(pointerEventsValues).toEqual(['none', '']);
+    expect(offsetHeightSpy).toHaveBeenCalled();
+  });
+
+  it('is safe to call on a page whose clock has no inline pointer-events override yet', () => {
+    expect(() => initDeskWidgets(document)).not.toThrow();
+  });
+});
+
 describe('initDeskWidgets — one tick interval only', () => {
   it('re-initializing does not stack additional setInterval ticks', async () => {
     vi.useFakeTimers();
