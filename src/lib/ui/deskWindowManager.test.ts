@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { initDeskWindowManager, DESK_WINDOW_OPEN_ATTR, type DeskWindowManagerHandle } from './deskWindowManager';
+import {
+  initDeskWindowManager,
+  mountDeskWindowManager,
+  DESK_WINDOW_OPEN_ATTR,
+  type DeskWindowManagerHandle,
+} from './deskWindowManager';
 import { DESK_WINDOWS_STORAGE_KEY, serializePersistedDeskWindows } from './deskWindowsPersistence';
 import type { DeskWindowsState } from '../deskWindowsState';
 
@@ -63,16 +68,25 @@ function fakeWin(opts: { desktop?: boolean; reducedMotion?: boolean; realTimers?
     clearTimeout: (opts.realTimers
       ? ((id: number) => globalThis.clearTimeout(id))
       : (() => {})) as unknown as Window['clearTimeout'],
-    addEventListener: (type: string, fn: (event: unknown) => void) => {
+    addEventListener: (type: string, fn: (event: unknown) => void, options?: { signal?: AbortSignal }) => {
       (listeners[type] ??= []).push(fn);
+      options?.signal?.addEventListener('abort', () => {
+        listeners[type] = (listeners[type] ?? []).filter((listener) => listener !== fn);
+      });
     },
     removeEventListener: () => {},
   };
   return Object.assign(win, {
+    dispatch(type: string, event: unknown = {}) {
+      listeners[type]?.forEach((fn) => fn(event));
+    },
     dispatchMessage(data: unknown, source: unknown) {
       listeners.message?.forEach((fn) => fn({ origin: 'https://example.test', data, source }));
     },
-  }) as unknown as Window & { dispatchMessage: (data: unknown, source: unknown) => void };
+  }) as unknown as Window & {
+    dispatch: (type: string, event?: unknown) => void;
+    dispatchMessage: (data: unknown, source: unknown) => void;
+  };
 }
 
 async function flushMicrotasks() {
@@ -178,6 +192,95 @@ describe('initDeskWindowManager — click interception', () => {
 
     expect(event.defaultPrevented).toBe(false);
     expect(container.children).toHaveLength(0);
+  });
+});
+
+describe('mountDeskWindowManager — navigation cleanup (owner report: "cambia la ruta pero no carga la ventana")', () => {
+  it('a never-destroyed previous instance on the SAME document intercepts the click first, updating ITS OWN history while appending the frame into its own detached container', () => {
+    // Reproduces the real astro-level bug directly: two `initDeskWindowManager`
+    // instances mounted on the SAME `document` (exactly what a real top-level
+    // navigation between desk-host pages does — `DeskScene`'s own folders
+    // survive via `transition:persist`, but this manager's own container does
+    // not), with the FIRST one never destroyed — i.e. what happened before
+    // `DeskWindowManager.astro` called `mountDeskWindowManager`.
+    const win1 = fakeWin();
+    const container1 = document.createElement('div');
+    document.body.appendChild(container1);
+    const handle1 = initDeskWindowManager(container1, null, 'Quitar', null, document, win1);
+
+    // The navigation: the old container is gone, a fresh one takes its place
+    // — but nothing ever told `handle1` to tear itself down.
+    container1.remove();
+    const win2 = fakeWin();
+    const container2 = document.createElement('div');
+    document.body.appendChild(container2);
+    const handle2 = initDeskWindowManager(container2, null, 'Quitar', null, document, win2);
+
+    const anchor = document.createElement('a');
+    anchor.href = '/es/ingles/actividades/f28c79ec-eb5a-4277-a741-1e89fed929c8';
+    anchor.setAttribute(DESK_WINDOW_OPEN_ATTR, 'today');
+    anchor.textContent = 'Para ti hoy';
+    document.body.appendChild(anchor);
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+
+    try {
+      // The URL genuinely changes (the stale instance's own `history`) …
+      expect(win1.history.replaceState).toHaveBeenCalled();
+      // … but the window itself lands in the detached, invisible container,
+      // never the one actually on screen.
+      expect(container1.children).toHaveLength(1);
+      expect(container2.children).toHaveLength(0);
+    } finally {
+      // Both instances' own `document`-level click listeners must be gone
+      // before the next test runs, or they leak into it exactly like the bug
+      // itself (`handle1`'s own listener was never destroyed BY DESIGN here —
+      // that is the whole point of this test — so this `finally` is the only
+      // thing standing between it and every later test in this file).
+      handle1.destroy();
+      handle2.destroy();
+    }
+  });
+
+  it('destroy() also drops its window-level listeners, so a stale instance never rewrites the saved windows on a resize', () => {
+    const win = fakeWin();
+    const staleContainer = document.createElement('div');
+    document.body.appendChild(staleContainer);
+    const stale = initDeskWindowManager(staleContainer, null, 'Quitar', null, document, win);
+    stale.openWindow('/es/ingles/actividades', 'Comunidad');
+    stale.destroy();
+    staleContainer.remove();
+
+    // The live instance owns the saved state now; a resize must not let the
+    // destroyed one write its own outdated window list back.
+    win.sessionStorage.clear();
+    win.dispatch('resize');
+
+    expect(win.sessionStorage.length).toBe(0);
+  });
+
+  it('destroys the previous live instance for the same document before mounting a fresh one, so the window opens where it is actually visible', () => {
+    const win1 = fakeWin();
+    const container1 = document.createElement('div');
+    document.body.appendChild(container1);
+    mountDeskWindowManager(container1, null, 'Quitar', null, document, win1);
+
+    container1.remove();
+    const win2 = fakeWin();
+    const container2 = document.createElement('div');
+    document.body.appendChild(container2);
+    handle = mountDeskWindowManager(container2, null, 'Quitar', null, document, win2);
+
+    const anchor = document.createElement('a');
+    anchor.href = '/es/ingles/actividades/f28c79ec-eb5a-4277-a741-1e89fed929c8';
+    anchor.setAttribute(DESK_WINDOW_OPEN_ATTR, 'today');
+    anchor.textContent = 'Para ti hoy';
+    document.body.appendChild(anchor);
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+
+    expect(win1.history.replaceState).not.toHaveBeenCalled();
+    expect(win2.history.replaceState).toHaveBeenCalled();
+    expect(container1.children).toHaveLength(0);
+    expect(container2.children).toHaveLength(1);
   });
 });
 
