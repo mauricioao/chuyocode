@@ -316,6 +316,20 @@ export const UI_LABELS = {
       // its no-JS fallback / the instant before that script runs.
       windowRedirecting: 'Tu sesión expiró. Te llevamos a la pantalla de acceso…',
       windowRedirectingContinue: 'Continuar',
+      // One short context line shown ABOVE the form, only when the
+      // already-validated `next` (see `@lib/authRedirect`'s `safeNextPath`)
+      // tells us why the visitor landed here — `@lib/signInReason` maps
+      // `next` to one of these keys. Walkthrough finding
+      // (`RECORRIDO-2026-10-15.md`, Media): a guest tapping "Imprimir" used
+      // to land on this page with no explanation, unlike the catalog
+      // (`practice.guestBanner`/`guestInvite` above), which always says
+      // what an account gives them.
+      reasons: {
+        imprimir: 'Crea tu cuenta gratis para imprimir esta actividad.',
+        crear: 'Crea tu cuenta gratis para crear tus propias actividades.',
+        misActividades: 'Inicia sesión para ver tus actividades.',
+        desk: 'Crea tu cuenta gratis para tener tu escritorio.',
+      },
       nuevaClave: {
         title: 'Nueva contraseña',
         description: 'Elegir una nueva contraseña para la cuenta.',
@@ -2007,6 +2021,14 @@ export const UI_LABELS = {
       // string's own comment.
       windowRedirecting: 'Your session expired. Taking you to sign in…',
       windowRedirectingContinue: 'Continue',
+      // See the Spanish string's own comment: `@lib/signInReason` picks one
+      // of these keys from the already-validated `next`.
+      reasons: {
+        imprimir: 'Create a free account to print this activity.',
+        crear: 'Create a free account to make your own activities.',
+        misActividades: 'Sign in to see your activities.',
+        desk: 'Create a free account to get your own desk.',
+      },
       nuevaClave: {
         title: 'New password',
         description: 'Choose a new password for the account.',
