@@ -11,11 +11,17 @@
  * block's own editor fills everything, edge to edge.
  *
  * BACKWARD COMPATIBILITY (an existing activity already saved with 2+
- * blocks): every block still opens and is still fully editable — but the
- * only chrome left above the body is a MINIMAL ‹ n/N › switcher (prev/next +
- * position), still with no way to add another block, rename, reorder, or
- * delete one. `isLegacyMultiBlock` below is the one switch between these two
- * shapes; both share the exact same full-bleed body.
+ * blocks): every block still opens and is still fully editable, and the
+ * chrome above the body is a MINIMAL ‹ n/N › switcher (prev/next + position)
+ * — still no way to add another block or rename one, but the active sheet's
+ * own "Más" menu (owner report, PLAN-OCTUBRE.md "Pendientes nuevos") DOES
+ * offer "Mover a la izquierda"/"Mover a la derecha" (disabled at the ends)
+ * and "Eliminar esta hoja" — delete is reversible (one undo step, a status
+ * line instead of a confirm dialog — see `sheetFeedback`/`sheetOrder.ts`),
+ * never offered down to zero sheets (it simply stops existing once only one
+ * is left, since `isLegacyMultiBlock` itself goes false). `isLegacyMultiBlock`
+ * below is the one switch between the two top-level shapes; both share the
+ * exact same full-bleed body.
  *
  * `worksheet` blocks render {@link WorksheetZoneEditor}; `quiz` blocks render
  * {@link QuizBlockEditor}.
@@ -33,17 +39,19 @@
  * editor; `WorksheetZoneEditor`'s OWN tool toggle has its own matching
  * inline fallback, so the two never need to coordinate.
  */
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
 import { CaretRightIcon } from '@phosphor-icons/react/dist/ssr/CaretRight';
 import { ArrowCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowCounterClockwise';
 import { ArrowClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowClockwise';
 import { ImageIcon } from '@phosphor-icons/react/dist/ssr/Image';
+import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { Block, QuizBlock, WorksheetBlock, Zone, AudioMarker } from '@/lib/activities/blocks';
 import type { Payload } from '@/lib/exercisePayload';
 import { rotateRects, turnRotation, type TurnDirection } from '@/lib/activities/zoneGeometry';
+import { moveBlockLeft, moveBlockRight, removeBlock } from '@/lib/activities/sheetOrder';
 import { Button } from '@/components/ui/button';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
 import { cn } from '@/lib/utils';
@@ -51,6 +59,7 @@ import { useHydrated } from '@/hooks/useHydrated';
 import WorksheetZoneEditor from './WorksheetZoneEditor';
 import QuizBlockEditor from './QuizBlockEditor';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
+import { usePasteFeedback, StatusNote } from './TemplateEditorKit';
 
 export interface BlocksChangeOptions {
   /**
@@ -215,6 +224,22 @@ export default function BlockList({
   // time.
   const [replacingBlockId, setReplacingBlockId] = useState<string | null>(null);
 
+  // "Más" menu's own transient feedback (legacy multi-sheet activities):
+  // "Hoja eliminada · Ctrl+Z para deshacer" after a delete — same
+  // `usePasteFeedback` mechanism `QuizBlockEditor.tsx`'s own "Cambiar de
+  // molde" uses, which reverts on the very next change to `blocks` (a
+  // further move/delete, or any other edit) EXCEPT the one delete itself
+  // just caused. Called unconditionally, alongside every other hook here,
+  // so the zero-block early return right below never changes this
+  // component's hook call order between renders.
+  const sheetFeedback = usePasteFeedback(blocks);
+  // Unique per mounted instance (`ActivityEditorIsland` renders at most ONE
+  // `BlockList` at a time — see this file's own header — but `useId()`
+  // costs nothing and matches `QuizBlockEditor.tsx`'s own reasoning for its
+  // `dndId`, should that ever change).
+  const sheetActionsToggleId = useId();
+  const sheetActionsCheckboxRef = useRef<HTMLInputElement | null>(null);
+
   const updateZones = (blockId: string, zones: Zone[], opts?: BlocksChangeOptions) => {
     onBlocksChange(
       blocks.map((b) => (b.id === blockId && isWorksheet(b) ? { ...b, zones } : b)),
@@ -300,6 +325,50 @@ export default function BlockList({
   const worksheet = isWorksheet(activeBlock) ? activeBlock : null;
   const quiz = isQuiz(activeBlock) ? activeBlock : null;
   const isReplacingImage = worksheet !== null && replacingBlockId === activeBlock.id;
+
+  // "Más" menu (legacy multi-sheet activities only — see this file's own
+  // header): closes the CSS-only checkbox/label disclosure (same pattern
+  // `ActivityEditorIsland.tsx`'s own mobile title-bar "⋯" menu uses) by
+  // imperatively unchecking it, since there is no React state driving it
+  // open/closed to begin with.
+  function closeSheetActionsMenu() {
+    if (sheetActionsCheckboxRef.current) sheetActionsCheckboxRef.current.checked = false;
+  }
+
+  // Moving keeps the SAME block active: `activeBlockId` names a block by
+  // `id`, never by position, so reordering `blocks` alone is enough — no
+  // separate `onSetActiveBlock` call needed (unlike delete, below).
+  function handleMoveSheetLeft() {
+    const next = moveBlockLeft(blocks, activeBlock.id);
+    if (next !== blocks) onBlocksChange(next);
+    closeSheetActionsMenu();
+  }
+
+  function handleMoveSheetRight() {
+    const next = moveBlockRight(blocks, activeBlock.id);
+    if (next !== blocks) onBlocksChange(next);
+    closeSheetActionsMenu();
+  }
+
+  // Delete is reversible, not confirmed (owner UX rule: undo over confirm):
+  // ONE `onBlocksChange` call is one `pushHistory` step upstream, and the
+  // status line below names the shortcut instead of a confirm dialog. The
+  // deleted sheet's neighbour — whichever block slides into its old index,
+  // or the new last block if it was already last — becomes active, since
+  // `activeBlockId` would otherwise point at a block that no longer exists.
+  function handleDeleteSheet() {
+    const deletedIndex = activeIndex;
+    const next = removeBlock(blocks, activeBlock.id);
+    if (next === blocks) {
+      closeSheetActionsMenu();
+      return;
+    }
+    const neighbor = next[Math.min(deletedIndex, next.length - 1)];
+    onBlocksChange(next);
+    if (neighbor) onSetActiveBlock(neighbor.id);
+    closeSheetActionsMenu();
+    sheetFeedback.show(t.sheetDeleted);
+  }
 
   // The rotate/"Cambiar imagen" cluster — portaled into the side toolbar's
   // own slot when given (where `WorksheetZoneEditor`'s own Zona/Mano toggle
@@ -387,7 +456,72 @@ export default function BlockList({
           >
             <CaretRightIcon aria-hidden="true" />
           </Button>
+
+          {/* "Más" menu for the active sheet (owner report, PLAN-OCTUBRE.md
+              "Pendientes nuevos") — a CSS-only checkbox/label disclosure,
+              same pattern as `ActivityEditorIsland.tsx`'s own mobile
+              title-bar "⋯" menu; `closeSheetActionsMenu()` closes it
+              imperatively after an action since nothing else drives it. */}
+          <div className="relative shrink-0">
+            <input
+              ref={sheetActionsCheckboxRef}
+              type="checkbox"
+              id={sheetActionsToggleId}
+              className="peer sr-only"
+              aria-label={t.sheetMoreActions}
+            />
+            <label
+              htmlFor={sheetActionsToggleId}
+              data-testid="sheet-actions-trigger"
+              title={t.sheetMoreActions}
+              className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground peer-focus-visible:outline-none peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50"
+            >
+              <DotsThreeIcon aria-hidden="true" size={18} weight="bold" />
+            </label>
+            <div
+              data-testid="sheet-actions-menu"
+              className="hidden absolute right-0 top-full z-30 mt-2 w-52 max-w-[calc(100vw-2rem)] flex-col items-stretch gap-1 rounded-lg border border-border bg-background p-1 shadow-elevation-2 peer-checked:flex"
+            >
+              <button
+                type="button"
+                data-testid="sheet-move-left"
+                disabled={activeIndex === 0}
+                onClick={handleMoveSheetLeft}
+                className="flex min-h-11 items-center rounded-md px-3 text-left text-sm text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              >
+                {t.sheetMoveLeft}
+              </button>
+              <button
+                type="button"
+                data-testid="sheet-move-right"
+                disabled={activeIndex === blocks.length - 1}
+                onClick={handleMoveSheetRight}
+                className="flex min-h-11 items-center rounded-md px-3 text-left text-sm text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              >
+                {t.sheetMoveRight}
+              </button>
+              <button
+                type="button"
+                data-testid="delete-block-trigger"
+                onClick={handleDeleteSheet}
+                className="flex min-h-11 items-center rounded-md px-3 text-left text-sm text-destructive hover:bg-destructive/10"
+              >
+                {t.deleteSheet}
+              </button>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* "Hoja eliminada · Ctrl+Z para deshacer" — a sibling of the bar
+          above, NOT nested inside `isLegacyMultiBlock`, so it still shows
+          after a delete takes the activity down to its last sheet (the bar
+          itself then stops existing, since `isLegacyMultiBlock` goes
+          false). */}
+      {sheetFeedback.message && (
+        <StatusNote tone="ready" testId="sheet-status">
+          {sheetFeedback.message}
+        </StatusNote>
       )}
 
       {/* Full-bleed body — the active block's own editor fills everything
