@@ -79,6 +79,7 @@ async function renderPage(
   params: Record<string, string>,
   locals?: Record<string, unknown>,
   url = 'https://chuyocode.test/',
+  headers?: Record<string, string>,
 ) {
   const container = await createContainer();
   return container.renderToResponse(Component, {
@@ -86,7 +87,7 @@ async function renderPage(
     // stated: these renders are anonymous visitors. A caller may override it.
     locals: { user: null, ...locals },
     params,
-    request: new Request(url),
+    request: new Request(url, { headers }),
   });
 }
 
@@ -434,6 +435,75 @@ describe('ingles/index.astro (hub)', () => {
 
       expect(html).not.toMatch(/(?<!admin)\/cursos(?!\w)/);
       expect(html).not.toContain('/aventura');
+    });
+  });
+
+  // ROOT-CLASS GUARD (bugfix: "Usar en clase" left a whole desk nested
+  // inside the editor window). The hub is the one page every OTHER window
+  // route's own "host mode" already renders (the desk + the window
+  // manager) — it must never also render ITSELF a second time as a
+  // window's content. `@lib/deskHostBounce`'s own module has the detailed
+  // script tests; this only proves the ROUTE wires that module in instead
+  // of the ordinary desk for either embedded signal.
+  describe('requested as a window (bugfix: never nests a desk inside a window)', () => {
+    it('never renders the desk when requested with ?ventana=1', async () => {
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?ventana=1',
+      );
+      const html = await res.text();
+
+      expect(res.status).toBe(200);
+      expect(html).not.toContain('data-desk-window');
+      expect(html).not.toContain('astro-island');
+      expect(html).toContain('<html lang="es">');
+    });
+
+    it('never renders the desk when requested with Sec-Fetch-Dest: iframe', async () => {
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles',
+        { 'sec-fetch-dest': 'iframe' },
+      );
+      const html = await res.text();
+
+      expect(res.status).toBe(200);
+      expect(html).not.toContain('data-desk-window');
+    });
+
+    it('is never publicly cacheable and varies on Sec-Fetch-Dest', async () => {
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?ventana=1',
+      );
+
+      expect(res.headers.get('cache-control')).toBe('private, no-store');
+      expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
+    });
+
+    it('carries the no-JS fallback link to the plain hub, target="_top"', async () => {
+      const res = await renderPage(
+        EntryPage,
+        { lang: 'es' },
+        { lang: 'es' },
+        'https://chuyocode.test/es/ingles?ventana=1',
+      );
+      const html = await res.text();
+
+      expect(html).toMatch(/<a[^>]+href="\/es\/ingles"[^>]+target="_top"[^>]*>/);
+    });
+
+    it('renders the ordinary desk for a plain top-level request', async () => {
+      const res = await renderPage(EntryPage, { lang: 'es' }, { lang: 'es' }, 'https://chuyocode.test/es/ingles');
+      const html = await res.text();
+
+      expect(html).toContain('data-desk-folders');
     });
   });
 });
