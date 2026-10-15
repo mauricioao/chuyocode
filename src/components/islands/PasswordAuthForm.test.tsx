@@ -489,7 +489,13 @@ describe('PasswordAuthForm — Turnstile, site key configured', () => {
     fireEvent.click(submitButton());
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(COPY.es.signInError));
-    expect(resetMock).toHaveBeenCalledWith('widget-1');
+    // `reset()` fires from TurnstileWidget's own passive effect (keyed on
+    // `resetSignal`), scheduled after this commit rather than synchronous
+    // with it — a plain `expect` right after the `waitFor` above would race
+    // that effect flush under load (see the `resets after submit` test's
+    // own `await waitFor(() => expect(resetMock)...)` a few lines up for
+    // the non-flaky version of this same assertion).
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith('widget-1'));
     expect(submitButton().hasAttribute('disabled')).toBe(true);
 
     act(() => {
