@@ -48,7 +48,7 @@ const maxWindowsNoticeLabel = UI_LABELS[lang].english.hub.maxWindowsNotice;
 </div>
 
 <script>
-  import { initDeskWindowManager } from '@lib/ui/deskWindowManager';
+  import { mountDeskWindowManager } from '@lib/ui/deskWindowManager';
 
   const run = () => {
     const container = document.querySelector<HTMLElement>('[data-desk-window-manager]');
@@ -65,7 +65,13 @@ const maxWindowsNoticeLabel = UI_LABELS[lang].english.hub.maxWindowsNotice;
     const initialTitle = container.getAttribute('data-initial-title') ?? '';
     const maxWindowsNoticeLabel = container.getAttribute('data-max-windows-notice-label') ?? '';
 
-    initDeskWindowManager(
+    // `mountDeskWindowManager` (not the raw `initDeskWindowManager`): this
+    // container is a FRESH one on every real top-level navigation between
+    // desk-host pages (never `transition:persist`-ed, unlike `DeskScene`'s
+    // own folders/openers) — see that function's own header for the bug this
+    // prevents (a stale, never-destroyed previous instance's `document`-level
+    // click listener silently swallowing every later window-open click).
+    mountDeskWindowManager(
       container,
       tray,
       removeLabel,

@@ -1109,7 +1109,11 @@ export function initDeskWindowManager(
     openerElements.set(match.id, opener);
     openWindow(href, title, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
   }
-  doc.addEventListener('click', onClickCapture, true);
+  // One signal for every listener this instance adds to `doc`/`win`, so
+  // `destroy()` drops them all: a stale instance left listening would still
+  // react to clicks, messages and resizes (and rewrite the saved windows).
+  const listeners = new AbortController();
+  doc.addEventListener('click', onClickCapture, { capture: true, signal: listeners.signal });
 
   function managedWindowBySource(source: MessageEventSource | null): { id: string; managed: ManagedWindow } | null {
     if (!source) return null;
@@ -1246,12 +1250,12 @@ export function initDeskWindowManager(
         return;
     }
   }
-  win.addEventListener('message', (event) => void onMessage(event));
+  win.addEventListener('message', (event) => void onMessage(event), { signal: listeners.signal });
   // Independent-blocks stacking (owner spec 2026-10-07, round 2): how many
   // minimized windows fit without covering the folders column depends on
   // the CURRENT viewport height — a resize needs the same re-measure a
   // fresh `render()` already does on every dispatch.
-  win.addEventListener('resize', () => render());
+  win.addEventListener('resize', () => render(), { signal: listeners.signal });
   // Safety net for `draggingWindowId`: the handle's own `pointerup` already
   // clears it on a completed drag, but a pointerdown that never actually
   // started one (e.g. the window turned out to be maximized) leaves it set
@@ -1260,8 +1264,8 @@ export function initDeskWindowManager(
   // story. Clearing it here unconditionally, on ANY pointerup/pointercancel
   // anywhere, costs nothing on the normal path (the handle already cleared
   // it by the time this runs) and guarantees it never gets stuck forever.
-  doc.addEventListener('pointerup', () => (draggingWindowId = null));
-  doc.addEventListener('pointercancel', () => (draggingWindowId = null));
+  doc.addEventListener('pointerup', () => (draggingWindowId = null), { signal: listeners.signal });
+  doc.addEventListener('pointercancel', () => (draggingWindowId = null), { signal: listeners.signal });
 
   // Restore-after-reload: materialize every restored window's own frame
   // BEFORE `initialWindow` (this request's own route) is opened, so that
@@ -1278,7 +1282,7 @@ export function initDeskWindowManager(
   return {
     openWindow,
     destroy(): void {
-      doc.removeEventListener('click', onClickCapture, true);
+      listeners.abort();
       for (const managed of frames.values()) {
         managed.titlebarObserver?.disconnect();
         managed.wrapper.remove();
@@ -1286,4 +1290,60 @@ export function initDeskWindowManager(
       frames.clear();
     },
   };
+}
+
+/** The live {@link initDeskWindowManager} instance for a given `doc` — see {@link mountDeskWindowManager}'s own header. */
+const activeManagerByDoc = new WeakMap<Document, DeskWindowManagerHandle>();
+
+/**
+ * `DeskWindowManager.astro`'s own caller (BUGFIX, owner report: "cambia la
+ * ruta arriba pero no me carga la ventana" after closing a window and
+ * opening another folder from the hub): a real top-level navigation between
+ * two desk-host pages (hub <-> `/crear`, hub <-> an activity window, …) fires
+ * `astro:page-load` again, and `DeskWindowManager.astro`'s own container is
+ * NOT `transition:persist`-ed — the astro component gets a brand new one on
+ * every such navigation, and re-mounts a brand new {@link initDeskWindowManager}
+ * instance for it. `DeskScene`'s own folders/openers (`transition:persist="desk-scene"`)
+ * ARE kept across that same navigation, so the two instances' identical
+ * `doc.addEventListener('click', …, true)` listeners both stay attached to
+ * the SAME, never-replaced `document` — same-target/same-phase listeners run
+ * in REGISTRATION order, so the OLDER (never destroyed) instance's own
+ * listener runs first on every later `[data-desk-window-open]` click: it
+ * calls `preventDefault()` (so the current instance's own identical listener
+ * then no-ops) and happily updates ITS OWN `history.replaceState` (so the
+ * visible URL genuinely changes), but appends the freshly "opened" window's
+ * iframe into ITS OWN container — which this navigation already detached
+ * from the document — so nothing ever becomes visible. A hard reload has no
+ * such stale instance at all, which is why it "fixes" it.
+ *
+ * Destroying whatever instance is already live for THIS `doc` before
+ * mounting a fresh one keeps exactly one instance's listeners attached at a
+ * time, same posture `deskDrag.ts`/`deskWidgets.ts`/`deskHelper.ts` already
+ * use for their own document-level listeners (see each one's own "RE-INIT
+ * ACROSS NAVIGATIONS" header) — `initDeskWindowManager` itself stays a plain,
+ * reusable constructor with no idea how many times it might be called; this
+ * wrapper is the one place that enforces "at most one live instance per
+ * document".
+ */
+export function mountDeskWindowManager(
+  container: HTMLElement,
+  trayContainer: HTMLElement | null,
+  trayRemoveLabel: string,
+  initialWindow: { href: string; title: string } | null,
+  doc: Document = document,
+  win: Window = window,
+  maxWindowsNoticeLabel: string = '',
+): DeskWindowManagerHandle {
+  activeManagerByDoc.get(doc)?.destroy();
+  const handle = initDeskWindowManager(
+    container,
+    trayContainer,
+    trayRemoveLabel,
+    initialWindow,
+    doc,
+    win,
+    maxWindowsNoticeLabel,
+  );
+  activeManagerByDoc.set(doc, handle);
+  return handle;
 }
