@@ -57,6 +57,7 @@ import { getActivityForEdit } from '@lib/activities/activities';
 import { loadDeskSceneData } from '@lib/ingles/deskSceneData';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { isEmbeddedWindowRequest } from '@lib/ui/embeddedWindow';
+import { qrSvg, shareUrl } from '@lib/qr';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -116,6 +117,8 @@ if (hostMode) {
 let activity: Awaited<ReturnType<typeof getActivityForEdit>> = null;
 let sourceActivity: { title: string; href: string | null } | null = null;
 let windowTitle: string = t.titleFallback;
+let shareLink = '';
+let shareQr: string | null = null;
 
 /**
  * The window's red/yellow lights (PART 6b polish, owner report: "el botón
@@ -155,6 +158,20 @@ if (!hostMode) {
    * `ActivityEditorIsland` keeps this in sync afterwards as the author
    * types (see that component's own header on `DESK_WINDOW_TITLE_ID`). */
   windowTitle = activity.title.trim() || t.titleFallback;
+
+  /**
+   * "Compartir" (one primary action per state, `editorPrimaryAction`): the
+   * activity's own PRACTICE page is what gets shared, not this editor
+   * route — same target `presentar.astro` already builds for the SAME
+   * activity (`practiceUrl`, that file's own header), QR generated here
+   * exactly like the practice page's own ShareDialog (`[id].astro` under
+   * `ingles/actividades`'s header). Computed unconditionally (pure, no
+   * I/O) — only ever actually opened while the primary action is
+   * `'share'` (a LIVE activity), but cheap either way.
+   */
+  const practiceUrl = `/${lang}/ingles/actividades/${activity.id}`;
+  shareLink = shareUrl(new URL(practiceUrl, Astro.url));
+  shareQr = qrSvg(shareLink);
 }
 ---
 
@@ -233,6 +250,9 @@ if (!hostMode) {
         initialBlocks={activity.blocks}
         initialStatus={activity.status}
         initialReviewNote={activity.reviewNote}
+        initialRevisionStatus={activity.revisionStatus}
+        shareUrl={shareLink}
+        shareQr={shareQr}
         sourceActivity={sourceActivity}
       />
     </section>

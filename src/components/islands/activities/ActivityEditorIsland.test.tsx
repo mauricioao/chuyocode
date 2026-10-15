@@ -1140,6 +1140,115 @@ describe('ActivityEditorIsland — review-state badge', () => {
   });
 });
 
+// One primary action per state (UX doc 6.1/6.4, "one primary button per
+// screen"): the title bar's own yellow button used to read "Enviar a
+// revisión" regardless of state — see `editorPrimaryAction`
+// (`@lib/activities/editorPrimaryAction`) for the pure derivation this
+// mirrors at the component level (label + what clicking it does).
+const SHARE_QR = '<svg data-testid="qr-svg" viewBox="0 0 45 45"><path d="M4,4h1v1h-1z"/></svg>';
+
+describe('ActivityEditorIsland — one primary action per state', () => {
+  it('draft, never sent: "Enviar a revisión" opens the submit dialog', () => {
+    renderEditor();
+    const button = screen.getByTestId('submit-for-review-button');
+    expect(button.textContent).toBe('Enviar a revisión');
+    fireEvent.click(button);
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+
+  it('in review, first publication: "Usar en clase" links to the author\'s own presentation', () => {
+    renderEditor({ initialStatus: 'pending_review', initialRevisionStatus: 'pending_review' });
+    const link = screen.getByTestId('use-in-class-button');
+    expect(link.textContent).toBe('Usar en clase');
+    expect(link.getAttribute('href')).toBe('/es/ingles/actividades/act-1/presentar');
+    // Lets the desk's own `initDeskOpenWindowLinks` open it as a window
+    // while this editor is embedded, and fall through to a plain same-tab
+    // navigation otherwise (`deskWindow.ts`'s own header) — no `target`
+    // override either way.
+    expect(link.getAttribute('data-desk-window-open')).toBe('act-1');
+    expect(link.hasAttribute('target')).toBe(false);
+    expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+  });
+
+  it('published, no unsent edits: "Compartir" opens the share dialog', () => {
+    renderEditor({
+      initialStatus: 'live',
+      initialRevisionStatus: 'approved',
+      shareUrl: 'https://chuyocode.com/es/ingles/actividades/act-1',
+      shareQr: SHARE_QR,
+    });
+    const button = screen.getByTestId('activity-share-button');
+    expect(button.textContent).toBe('Compartir');
+    expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+    expect(screen.queryByTestId('use-in-class-button')).toBeNull();
+
+    fireEvent.click(button);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByTestId('exercise-qr')).toBeTruthy();
+    expect(screen.getByText('https://chuyocode.com/es/ingles/actividades/act-1')).toBeTruthy();
+  });
+
+  it('published, with saved edits not yet sent: "Enviar cambios a revisión" opens the submit dialog', () => {
+    renderEditor({ initialStatus: 'live', initialRevisionStatus: 'draft' });
+    const button = screen.getByTestId('submit-for-review-button');
+    expect(button.textContent).toBe('Enviar cambios a revisión');
+    fireEvent.click(button);
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+
+  it('edits of a live activity already in review: "Compartir" stays the primary action (the published version keeps serving)', () => {
+    renderEditor({
+      initialStatus: 'live',
+      initialRevisionStatus: 'pending_review',
+      shareUrl: 'https://chuyocode.com/es/ingles/actividades/act-1',
+      shareQr: SHARE_QR,
+    });
+    const button = screen.getByTestId('activity-share-button');
+    expect(button.textContent).toBe('Compartir');
+    // The badge itself still just reads "Publicada" — this editor has no
+    // data path today that distinguishes "live, no pending edit" from
+    // "live, with an edit already awaiting review" at the BADGE (only the
+    // primary action above reflects it); flagged as a known gap rather than
+    // invented.
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada');
+  });
+
+  it('rejected: "Enviar de nuevo a revisión" opens the submit dialog, reviewer note still visible', () => {
+    renderEditor({ initialStatus: 'rejected', initialRevisionStatus: 'rejected', initialReviewNote: 'Falta una zona.' });
+    const button = screen.getByTestId('submit-for-review-button');
+    expect(button.textContent).toBe('Enviar de nuevo a revisión');
+    expect(screen.getByTestId('activity-review-note').textContent).toContain('Falta una zona.');
+    fireEvent.click(button);
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+
+  it('rejected, then edited again (a fresh draft revision, `guardar.ts`): still "Enviar de nuevo a revisión"', () => {
+    renderEditor({ initialStatus: 'rejected', initialRevisionStatus: 'draft' });
+    expect(screen.getByTestId('submit-for-review-button').textContent).toBe('Enviar de nuevo a revisión');
+  });
+
+  // Edge case: a dirty/unsaved draft must never disable the submit-kind
+  // primary action — it never did before this change either (the button
+  // only ever opens a dialog; the save itself is flushed from inside
+  // `handleConfirmSubmit`, not gated here). `saving`/`error` go through the
+  // exact same unconditional `onClick={openSubmitDialog}`, same posture.
+  it('a dirty, unsaved draft never disables the submit-kind primary action', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    fireEvent.click(screen.getByTestId('rotate-right-b1'));
+    expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
+
+    const button = screen.getByTestId('submit-for-review-button');
+    expect(button.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(button);
+    expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
+  });
+
+  it('localizes "Usar en clase" and "Compartir" to English', () => {
+    renderEditor({ lang: 'en', initialStatus: 'pending_review', initialRevisionStatus: 'pending_review' });
+    expect(screen.getByTestId('use-in-class-button').textContent).toBe('Use in class');
+  });
+});
+
 describe('ActivityEditorIsland — "Duplicar y adaptar" credit line (D7)', () => {
   it('shows nothing when the activity has no source', () => {
     renderEditor();

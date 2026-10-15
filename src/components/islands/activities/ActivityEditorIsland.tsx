@@ -71,6 +71,8 @@ import EditorSideToolbar from './EditorSideToolbar';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
+import ShareDialog from '@/components/islands/ShareDialog';
+import { editorPrimaryAction } from '@/lib/activities/editorPrimaryAction';
 import { DESK_WINDOW_ATTR, EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
@@ -125,6 +127,27 @@ export interface ActivityEditorIslandProps {
   initialStatus?: string;
   /** `activities.review_note` — shown alongside the badge when `initialStatus === 'rejected'`. */
   initialReviewNote?: string | null;
+  /**
+   * The activity's LATEST `activity_revisions.status` (`activities.ts`'s own
+   * `EditableActivity.revisionStatus`) — the OTHER half of
+   * `editorPrimaryAction`'s input, alongside `initialStatus` above. Defaults
+   * to `'draft'`, same as `initialStatus`, for a brand-new activity (its
+   * first revision is a draft by construction — `createActivity`).
+   */
+  initialRevisionStatus?: string;
+  /**
+   * "Compartir" (one primary action per state): the activity's own public
+   * practice-page URL and its server-rendered QR markup, built exactly like
+   * the practice page's own ShareDialog (`[id].astro`'s own header under
+   * `ingles/actividades`) — only ever actually opened while the primary
+   * action is `'share'` (a LIVE activity), but cheap and pure to compute
+   * either way, so `[id].astro` (this editor's own route) always passes
+   * them. `shareQr` is `null` only in the QR encoder's own documented
+   * failure case (`@lib/qr`'s `qrSvg`) — the share action still opens in
+   * that case, just with nothing to show.
+   */
+  shareUrl?: string;
+  shareQr?: string | null;
   /**
    * "Duplicar y adaptar" credit line (D7): the activity THIS one was
    * duplicated from, or `null`/`undefined` for an ordinary activity.
@@ -195,11 +218,15 @@ export default function ActivityEditorIsland({
   initialBlocks,
   initialStatus = 'draft',
   initialReviewNote = null,
+  initialRevisionStatus = 'draft',
+  shareUrl = '',
+  shareQr = null,
   sourceActivity = null,
 }: ActivityEditorIslandProps) {
   const t = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
   const tCommon = UI_LABELS[lang].common;
+  const tPractice = UI_LABELS[lang].activities.practice;
 
   const [history, setHistory] = useState<HistoryState<ActivityDoc>>(() =>
     initHistory({ title: initialTitle, level: initialLevel, blocks: initialBlocks }),
@@ -213,6 +240,17 @@ export default function ActivityEditorIsland({
   // what `enviar.ts` itself computes server-side (draft/rejected ->
   // pending_review; live stays live).
   const [status, setStatus] = useState(initialStatus);
+  // The OTHER half of `editorPrimaryAction`'s input (one primary action per
+  // state) — same optimistic-update posture as `status` above: `enviar.ts`
+  // moves the latest revision to `pending_review` in the SAME request that
+  // may or may not also move `status`, so both update together on success.
+  const [revisionStatus, setRevisionStatus] = useState(initialRevisionStatus);
+  // "Compartir" (one primary action per state): this dialog's own open
+  // state lives here, not inside `ShareDialog` itself — its primary-button
+  // trigger is the title bar's ONE yellow action, not `ShareDialog`'s usual
+  // self-contained trigger (see that component's own `open`/`onOpenChange`
+  // doc).
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [submitDialog, setSubmitDialog] = useState<{
     open: boolean;
     submitting: boolean;
@@ -759,6 +797,11 @@ export default function ActivityEditorIsland({
       }
 
       setStatus((prev) => (prev === 'live' ? 'live' : 'pending_review'));
+      // Mirrors `enviar.ts`'s own `activity_revisions` update — the revision
+      // itself always moves to `pending_review` on a successful submit,
+      // whatever `status` does (one primary action per state needs this to
+      // tell "live, no unsent edits" apart from "live, already resubmitted").
+      setRevisionStatus('pending_review');
       setSubmitDialog({ open: false, submitting: false, error: null });
       toast.success(tCommon.toast.submittedForReview);
     } catch (err) {
@@ -990,9 +1033,77 @@ export default function ActivityEditorIsland({
     </div>
   );
 
-  // "Ver como presentación" + "Enviar a revisión", exactly as they render on
-  // desktop today — ghost icon button + tooltip, yellow primary button —
-  // portaled into the title bar's own far-right `actions` slot.
+  // ONE PRIMARY ACTION PER STATE (UX doc 6.1/6.4; `editorPrimaryAction`,
+  // `@lib/activities/editorPrimaryAction`): the title bar's own yellow
+  // button used to read "Enviar a revisión" regardless of the activity's
+  // own state — the author never knew what to do next once it was sent,
+  // published or rejected. `primaryActionKind` is derived from exactly the
+  // two status columns the editor already has; `status`/`revisionStatus`
+  // both update OPTIMISTICALLY on a successful submit (see
+  // `handleConfirmSubmit`), so this follows along live, no reload needed.
+  const primaryActionKind = editorPrimaryAction({ status, revisionStatus });
+  const primaryActionLabel =
+    primaryActionKind === 'submitChangesForReview'
+      ? t.submitChangesForReview
+      : primaryActionKind === 'resubmitForReview'
+        ? t.resubmitForReview
+        : primaryActionKind === 'useInClass'
+          ? t.useInClass
+          : primaryActionKind === 'share'
+            ? tPractice.share
+            : t.submitForReview;
+  // "Usar en clase": the author's OWN presentation of this not-yet-published
+  // activity (`presentar.astro`'s own AUTHOR PREVIEW, R1 — already allows
+  // any non-removed status, this editor's own `getActivityForEdit` included).
+  const presentarHref = `/${lang}/ingles/actividades/${activityId}/presentar`;
+  const openShareDialog = useCallback(() => setShareDialogOpen(true), []);
+  // `!` (UI-kit refactor): see the submit button's own comment below — same
+  // deliberate yellow override, shared by every primary-action variant so
+  // none of them drift from the others' visual weight.
+  const PRIMARY_BUTTON_CLASS = '!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80';
+  const primaryActionControl =
+    primaryActionKind === 'useInClass' ? (
+      // `data-desk-window-open`: while this editor is itself embedded in a
+      // desk window, `initDeskOpenWindowLinks` (`@lib/ui/deskWindow.ts`,
+      // already wired by `DeskWindow.astro` on every mount) intercepts this
+      // click and asks the HOST to open the presentation as its OWN new
+      // window instead of navigating this one away. Outside embedded mode
+      // (a direct, top-level visit) it is a no-op — plain same-tab
+      // navigation, exactly what a bare `<a href>` already does.
+      <Button size="sm" asChild className={PRIMARY_BUTTON_CLASS}>
+        <a href={presentarHref} data-testid="use-in-class-button" data-desk-window-open={activityId}>
+          {primaryActionLabel}
+        </a>
+      </Button>
+    ) : primaryActionKind === 'share' ? (
+      <Button
+        type="button"
+        size="sm"
+        data-testid="activity-share-button"
+        className={PRIMARY_BUTTON_CLASS}
+        onClick={openShareDialog}
+      >
+        {primaryActionLabel}
+      </Button>
+    ) : (
+      // `submitForReview` / `submitChangesForReview` / `resubmitForReview` —
+      // three different states, the SAME submit dialog (with its own
+      // incomplete-content handling) and the SAME stable testid; only the
+      // label changes with the state.
+      <Button
+        type="button"
+        size="sm"
+        data-testid="submit-for-review-button"
+        className={PRIMARY_BUTTON_CLASS}
+        onClick={openSubmitDialog}
+      >
+        {primaryActionLabel}
+      </Button>
+    );
+
+  // "Ver como presentación" + the one primary action above, exactly as they
+  // render on desktop today — ghost icon button + tooltip, yellow primary
+  // button — portaled into the title bar's own far-right `actions` slot.
   const desktopActions = (
     <>
       <button
@@ -1008,19 +1119,7 @@ export default function ActivityEditorIsland({
           {t.viewAsPresentation}
         </span>
       </button>
-      <Button
-        type="button"
-        size="sm"
-        data-testid="submit-for-review-button"
-        // `!` (UI-kit refactor): the Inglés button kit (global.css) gives the
-        // shared default/primary variant a sky-deep fill via a CSS attribute
-        // selector, which otherwise outranks these plain utilities — `!`
-        // forces this one call site's deliberate yellow back on top.
-        className="!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80"
-        onClick={openSubmitDialog}
-      >
-        {t.submitForReview}
-      </Button>
+      {primaryActionControl}
     </>
   );
 
@@ -1117,15 +1216,7 @@ export default function ActivityEditorIsland({
           <PresentationIcon aria-hidden="true" size={16} />
           {t.viewAsPresentation}
         </button>
-        <Button
-          type="button"
-          size="sm"
-          data-testid="submit-for-review-button"
-          className="!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80"
-          onClick={openSubmitDialog}
-        >
-          {t.submitForReview}
-        </Button>
+        {primaryActionControl}
       </div>
     </div>
   );
@@ -1396,6 +1487,39 @@ export default function ActivityEditorIsland({
         onConfirm={() => void handleConfirmSubmit()}
         onCancel={closeSubmitDialog}
       />
+
+      {/* "Compartir" (one primary action per state): the SAME `ShareDialog`
+          the practice page uses, externally controlled — its trigger is
+          the title bar's own yellow primary button above
+          (`primaryActionControl`), not this dialog's usual self-contained
+          one. `shareQr` is `null` only in the QR encoder's own documented
+          failure case (`@lib/qr`'s `qrSvg`) — skipped entirely then, same
+          "hide the share control instead" posture that module's own header
+          describes; `shareDialogOpen` simply never shows anything in that
+          case. */}
+      {shareQr && (
+        <ShareDialog
+          url={shareUrl}
+          qr={shareQr}
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          whatsappHref={`https://wa.me/?text=${encodeURIComponent(`${title.trim() || t.titleFallback} ${shareUrl}`)}`}
+          downloadFileName={`${activityId}.svg`}
+          labels={{
+            trigger: tPractice.share,
+            title: tPractice.shareTitle,
+            hint: tPractice.shareHint,
+            link: tPractice.shareLink,
+            copy: tPractice.shareCopy,
+            copied: tPractice.shareCopied,
+            linkCopiedToast: tCommon.toast.linkCopied,
+            qrAlt: tPractice.shareQrAlt,
+            whatsapp: tPractice.shareWhatsapp,
+            downloadQr: tPractice.shareDownloadQr,
+            native: tPractice.shareNative,
+          }}
+        />
+      )}
 
       {/* "Ver como presentación" (worksheet zoom tour, sprint week 3): the
           SAME island `presentar.astro` mounts, reused here against the
