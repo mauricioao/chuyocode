@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import WorksheetPlayer from './WorksheetPlayer';
 import type { Zone } from '@/lib/activities/blocks';
 
@@ -673,5 +673,108 @@ describe('WorksheetPlayer — audio markers ("colocar un audio propio")', () => 
       fireEvent.click(screen.getByTestId('player-audio-m1'));
     });
     expect(screen.getByTestId('player-audio-m1').getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+/**
+ * UX audit finding 2 (RECORRIDO-2026-10-15.md #2): a graded worksheet zone
+ * was only red/green, with no ✓/✕ icon — unlike the drag templates'
+ * `GradeMark` (`CheckMark.tsx`). Same badge, reused as-is, on every graded
+ * zone, in both the desktop inline and mobile tap-target renderings.
+ */
+describe('WorksheetPlayer — GradeMark badge (UX audit finding 2)', () => {
+  it('shows no badge before grading', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: {}, onChange: () => {} }}
+      />,
+    );
+    const zone = within(screen.getByTestId('player-zone-z1'));
+    expect(zone.queryByTestId('grade-mark-correct')).toBeNull();
+    expect(zone.queryByTestId('grade-mark-wrong')).toBeNull();
+  });
+
+  it('marks a correct zone with a ✓ GradeMark badge and "correcta" in the field\'s accessible name', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } }}
+      />,
+    );
+    const zone = within(screen.getByTestId('player-zone-z1'));
+    expect(zone.getByTestId('grade-mark-correct')).toBeTruthy();
+    const input = zone.getByRole('textbox');
+    expect(input.getAttribute('aria-label')).toContain('correcta');
+    // The existing "Correcto" sr-only label stays exactly as before.
+    expect(zone.getByTestId('player-zone-result-z1').textContent).toBe('Correcto');
+  });
+
+  it('marks an incorrect zone with a ✕ GradeMark badge and "incorrecta" in the field\'s accessible name', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    const zone = within(screen.getByTestId('player-zone-z1'));
+    expect(zone.getByTestId('grade-mark-wrong')).toBeTruthy();
+    const input = zone.getByRole('textbox');
+    expect(input.getAttribute('aria-label')).toContain('incorrecta');
+    expect(zone.getByTestId('player-zone-result-z1').textContent).toBe('Incorrecto');
+  });
+
+  it('marks a graded choice zone with the badge too', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[CHOICE_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z2: 'a' }, onChange: () => {}, results: { z2: false } }}
+      />,
+    );
+    const zone = within(screen.getByTestId('player-zone-z2'));
+    expect(zone.getByTestId('grade-mark-wrong')).toBeTruthy();
+    expect(zone.getByRole('combobox').getAttribute('aria-label')).toContain('incorrecta');
+  });
+
+  it('marks the mobile tap-target zone with the badge and suffix too', () => {
+    render(
+      <WorksheetPlayer
+        lang="es"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'sat' }, onChange: () => {}, results: { z1: true } }}
+        onZoneTap={() => {}}
+      />,
+    );
+    const zone = within(screen.getByTestId('player-zone-z1'));
+    expect(zone.getByTestId('grade-mark-correct')).toBeTruthy();
+    expect(screen.getByTestId('player-zone-tap-z1').getAttribute('aria-label')).toContain('correcta');
+  });
+
+  it('uses the English suffix for English', () => {
+    render(
+      <WorksheetPlayer
+        lang="en"
+        image={IMAGE}
+        zones={[TEXT_ZONE]}
+        imageUrl="/img.webp"
+        practice={{ values: { z1: 'dog' }, onChange: () => {}, results: { z1: false } }}
+      />,
+    );
+    const input = within(screen.getByTestId('player-zone-z1')).getByRole('textbox');
+    expect(input.getAttribute('aria-label')).toContain('incorrect');
   });
 });

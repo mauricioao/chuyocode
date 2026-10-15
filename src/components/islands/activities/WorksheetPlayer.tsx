@@ -48,6 +48,7 @@ import {
 } from '@/lib/activities/zoneAnswerDisplay';
 import { useAudioMarkerPlayback } from '@/lib/activities/useAudioMarkerPlayback';
 import AudioMarkerButton from './AudioMarkerButton';
+import { GradeMark, gradeAriaSuffix, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import { cn } from '@/lib/utils';
 
 /** PR D, "Activities practice" — turns the creator preview into a gradable, controlled player. See file header. */
@@ -231,6 +232,15 @@ export default function WorksheetPlayer({
               : 'border-destructive ring-2 ring-destructive/50'
             : 'border-border';
           const statusLabel = isGraded ? (isCorrect ? t.correct : t.incorrect) : undefined;
+          // UX audit finding 2 (RECORRIDO-2026-10-15.md #2, "no depende solo
+          // del color" already true for the drag templates via `GradeMark`
+          // — a worksheet zone was the one place left relying on colour
+          // alone). Same shared badge, same accessible suffix convention
+          // (`gradeAriaSuffix`) every other graded template already uses —
+          // this never replaces `statusLabel`/`t.correct`/`t.incorrect`
+          // above, which stay exactly as before (own sr-only span, own
+          // wording), only adds on top of them.
+          const grade: GradeState | undefined = isGraded ? (isCorrect ? 'correct' : 'wrong') : undefined;
 
           // Clean zones (practice player redesign): the zone's own rendered
           // pixel box (from the container's measured size — see the file
@@ -264,7 +274,8 @@ export default function WorksheetPlayer({
             const displayText = value;
             const isActive = activeZoneId === zone.id;
             const kindLabel = zone.kind === 'text' ? t.textPlaceholder : t.choicePlaceholder;
-            const accessibleLabel = [kindLabel, value || t.zoneEmpty, statusLabel].filter(Boolean).join(' — ');
+            const accessibleLabel =
+              [kindLabel, value || t.zoneEmpty, statusLabel].filter(Boolean).join(' — ') + gradeAriaSuffix(lang, grade);
 
             return (
               <div key={zone.id} data-testid={`player-zone-${zone.id}`} className="absolute" style={style}>
@@ -296,6 +307,7 @@ export default function WorksheetPlayer({
                     {statusLabel}
                   </span>
                 )}
+                {grade && <GradeMark state={grade} />}
               </div>
             );
           }
@@ -313,7 +325,10 @@ export default function WorksheetPlayer({
               {zone.kind === 'text' ? (
                 <input
                   type="text"
-                  aria-label={statusLabel ? `${t.textPlaceholder} — ${statusLabel}` : t.textPlaceholder}
+                  aria-label={
+                    (statusLabel ? `${t.textPlaceholder} — ${statusLabel}` : t.textPlaceholder) +
+                    gradeAriaSuffix(lang, grade)
+                  }
                   placeholder={showPlaceholder ? t.textPlaceholder : undefined}
                   className={fieldClassName}
                   style={{ fontSize: `${inputFontSize}px` }}
@@ -328,7 +343,10 @@ export default function WorksheetPlayer({
                 />
               ) : (
                 <select
-                  aria-label={statusLabel ? `${t.choicePlaceholder} — ${statusLabel}` : t.choicePlaceholder}
+                  aria-label={
+                    (statusLabel ? `${t.choicePlaceholder} — ${statusLabel}` : t.choicePlaceholder) +
+                    gradeAriaSuffix(lang, grade)
+                  }
                   className={fieldClassName}
                   style={{ fontSize: `${inputFontSize}px` }}
                   {...(practice
@@ -355,6 +373,11 @@ export default function WorksheetPlayer({
                   {statusLabel}
                 </span>
               )}
+              {/* UX audit finding 2: the same corner badge the drag
+                  templates already use — see `CheckMark.tsx`'s own header
+                  for why this is purely additive on top of the zone's
+                  existing green/red ring, never a layout or size change. */}
+              {grade && <GradeMark state={grade} />}
               {/* D4 "Escuchar/Listen": a small speaker affordance for a zone
                   the author gave text to — a worksheet is an uploaded image
                   with no machine-readable text otherwise. Same in the
@@ -366,11 +389,16 @@ export default function WorksheetPlayer({
                   area (`h-8 w-8`), hidden by default and shown only on
                   hover/focus of the zone (`group-hover`/`group-focus-within`
                   — the wrapper above carries `group`), rather than always-on
-                  clutter over the artwork. */}
+                  clutter over the artwork. Shifted further right once this
+                  zone is ALSO graded (`grade` truthy) so it never lands on
+                  top of the always-visible `GradeMark` corner badge above. */}
               {zone.speak && (
                 <div
                   data-testid={`player-zone-speak-${zone.id}`}
-                  className="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                  className={cn(
+                    'absolute -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+                    grade ? '-right-12' : '-right-3',
+                  )}
                 >
                   <SpeakButton text={zone.speak} lang={lang} compact />
                 </div>
