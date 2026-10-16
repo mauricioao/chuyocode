@@ -385,6 +385,53 @@ describe('approveRevision', () => {
     copySpy.mockRestore();
   });
 
+  it("approves: a context image SHARED by two slots (a duplicated question, never a fresh upload) is copied ONCE and re-points BOTH slots to the same new path", async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            payload: {
+              pools: {},
+              slots: [
+                { id: 's1', label: 'x', input: 'text', answer: ['cat'] },
+                { id: 's2', label: 'x (copia)', input: 'text', answer: ['cat'] },
+              ],
+            },
+            promptImages: {
+              s1: { path: `${UPLOADS_BUCKET}/${AUTHOR}/question-${IMAGE_ID}.webp`, width: 400, height: 300 },
+              s2: { path: `${UPLOADS_BUCKET}/${AUTHOR}/question-${IMAGE_ID}.webp`, width: 400, height: 300 },
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const copySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    // ONE copy, even though two slots reference the same original path.
+    expect(copySpy).toHaveBeenCalledTimes(1);
+    expect(copySpy).toHaveBeenCalledWith(
+      `${UPLOADS_BUCKET}/${AUTHOR}/question-${IMAGE_ID}.webp`,
+      `activity-images/${ACTIVITY}/question-${IMAGE_ID}.webp`,
+    );
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    const blocks = args.p_blocks as Array<{ promptImages?: Record<string, { path: string }> }>;
+    expect(blocks[0].promptImages?.s1.path).toBe(`activity-images/${ACTIVITY}/question-${IMAGE_ID}.webp`);
+    expect(blocks[0].promptImages?.s2.path).toBe(`activity-images/${ACTIVITY}/question-${IMAGE_ID}.webp`);
+
+    copySpy.mockRestore();
+  });
+
   it('approves a mixed worksheet+quiz activity: copies only the worksheet image, leaves the quiz\'s allow-listed media URL untouched, and reports both block types', async () => {
     push('activity_revisions', {
       data: {

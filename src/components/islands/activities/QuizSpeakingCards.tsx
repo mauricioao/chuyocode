@@ -24,12 +24,16 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizSpeakingCardsProps {
   lang: Lang;
   items: readonly GameItem[];
   /** Stable per-block seed (the block id) — `shuffleWithSeed`'s own input for the deck order and reshuffles. */
   seed: string;
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `undefined` = no question images authored, the common case. Display-only; see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 function freshOrder(items: readonly GameItem[], seed: string, round: number): string[] {
@@ -39,7 +43,7 @@ function freshOrder(items: readonly GameItem[], seed: string, round: number): st
   );
 }
 
-export default function QuizSpeakingCards({ lang, items, seed }: QuizSpeakingCardsProps) {
+export default function QuizSpeakingCards({ lang, items, seed, promptImages }: QuizSpeakingCardsProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
 
@@ -114,6 +118,7 @@ export default function QuizSpeakingCards({ lang, items, seed }: QuizSpeakingCar
         data-testid="speaking-card"
         className="flex min-h-56 w-full max-w-md flex-col items-center justify-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center transition-all duration-[350ms] ease-out starting:-translate-x-10 starting:rotate-6 starting:opacity-0 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:starting:translate-x-0 motion-reduce:starting:rotate-0"
       >
+        <PromptImage image={promptImages?.[current.id]} />
         <p className="text-lg font-semibold text-foreground sm:text-xl">{current.prompt}</p>
         <SpeakButton text={current.prompt} lang={lang} />
 

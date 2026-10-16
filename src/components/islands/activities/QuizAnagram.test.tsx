@@ -25,6 +25,20 @@ function clickInOrder(count: number) {
   }
 }
 
+describe('QuizAnagram — question image (owner decision 2026-10-16 follow-up)', () => {
+  const promptImages = { s1: { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 } };
+
+  it("shows the current word's own prompt image above the puzzle when its slot has one", () => {
+    render(<QuizAnagram lang="es" items={items} seed="block-1" promptImages={promptImages} />);
+    expect(screen.getByTestId('prompt-image')).toBeTruthy();
+  });
+
+  it('renders nothing when the block has no promptImages at all', () => {
+    render(<QuizAnagram lang="es" items={items} seed="block-1" />);
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+});
+
 describe('QuizAnagram', () => {
   it('shows the first word\'s clue, counter, and one tray tile per letter', () => {
     render(<QuizAnagram lang="es" items={items} seed="block-1" />);

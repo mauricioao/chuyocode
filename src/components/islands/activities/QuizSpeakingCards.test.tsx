@@ -11,6 +11,25 @@ const items: GameItem[] = [
   { id: 's2', prompt: 'Where do you live?', answer: 'a house', explanation: 'Any home works.' },
 ];
 
+describe('QuizSpeakingCards — question image (owner decision 2026-10-16 follow-up)', () => {
+  // A single item sidesteps the deck's own shuffle — the dealt card is
+  // always this one, so which `data-testid` it carries stays deterministic.
+  const singleItem: GameItem[] = [{ id: 's1', prompt: 'What is your favorite color?', answer: 'blue' }];
+  const promptImages = { s1: { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 } };
+
+  it("shows the dealt card's own prompt image when its slot has one", () => {
+    render(<QuizSpeakingCards lang="es" items={singleItem} seed="block-1" promptImages={promptImages} />);
+    fireEvent.click(screen.getByTestId('speaking-deal'));
+    expect(screen.getByTestId('prompt-image')).toBeTruthy();
+  });
+
+  it('renders nothing when the block has no promptImages at all', () => {
+    render(<QuizSpeakingCards lang="es" items={singleItem} seed="block-1" />);
+    fireEvent.click(screen.getByTestId('speaking-deal'));
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+});
+
 describe('QuizSpeakingCards', () => {
   it('shows the deck and "Repartir", with nothing dealt yet', () => {
     render(<QuizSpeakingCards lang="es" items={items} seed="block-1" />);

@@ -24,11 +24,15 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { formatElapsed, tick, TICK_MS } from '@/lib/exerciseStopwatch';
 import type { TrueFalseItem } from '@/lib/activities/gameModes';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizTrueFalseProps {
   lang: Lang;
   /** Already derived through `deriveTrueFalseItems` by the caller. */
   items: readonly TrueFalseItem[];
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `TrueFalseItem.id` IS the slot id, same as every other `GameItem`-derived mode. `undefined` = no question images authored, the common case. Display-only; see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 /** How long the tapped/correct feedback stays up before auto-advancing (ms). */
@@ -36,7 +40,7 @@ const ADVANCE_MS = 900;
 
 type Feedback = 'idle' | 'correct' | 'wrong';
 
-export default function QuizTrueFalse({ lang, items }: QuizTrueFalseProps) {
+export default function QuizTrueFalse({ lang, items, promptImages }: QuizTrueFalseProps) {
   const t = UI_LABELS[lang].activities.gameModes;
 
   const [index, setIndex] = useState(0);
@@ -136,12 +140,12 @@ export default function QuizTrueFalse({ lang, items }: QuizTrueFalseProps) {
         </span>
       </div>
 
-      <p
-        data-testid="truefalse-statement"
-        className="w-full max-w-md rounded-lg border-2 border-border bg-surface-soft p-6 text-center text-lg font-semibold text-foreground"
-      >
-        {current.statement}
-      </p>
+      <div className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center">
+        <PromptImage image={promptImages?.[current.id]} />
+        <p data-testid="truefalse-statement" className="text-lg font-semibold text-foreground">
+          {current.statement}
+        </p>
+      </div>
 
       <div className="flex w-full max-w-md items-center justify-center gap-3">
         <Button

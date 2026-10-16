@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GameItem } from '@/lib/activities/gameModes';
 import QuizWheel, { wheelSlicePath, pickLandingIndex } from './QuizWheel';
 
@@ -71,6 +71,34 @@ describe('pickLandingIndex', () => {
       expect(index).toBeGreaterThanOrEqual(0);
       expect(index).toBeLessThan(4);
     }
+  });
+});
+
+describe('QuizWheel — question image (owner decision 2026-10-16 follow-up)', () => {
+  // Every item gets an image so the assertion holds regardless of which
+  // slice the seeded spin actually lands on.
+  const promptImages = {
+    s1: { path: 'activity-images/act-1/question-s1.webp', width: 400, height: 300 },
+    s2: { path: 'activity-images/act-1/question-s2.webp', width: 400, height: 300 },
+    s3: { path: 'activity-images/act-1/question-s3.webp', width: 400, height: 300 },
+  };
+
+  it("shows the landed item's own prompt image once the spin settles", () => {
+    vi.useFakeTimers();
+    render(<QuizWheel lang="es" items={items} seed="block-1" promptImages={promptImages} />);
+    fireEvent.click(screen.getByTestId('wheel-spin'));
+    act(() => vi.advanceTimersByTime(3000));
+    expect(within(screen.getByTestId('wheel-landed')).getByTestId('prompt-image')).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('renders nothing once settled when the block has no promptImages at all', () => {
+    vi.useFakeTimers();
+    render(<QuizWheel lang="es" items={items} seed="block-1" />);
+    fireEvent.click(screen.getByTestId('wheel-spin'));
+    act(() => vi.advanceTimersByTime(3000));
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+    vi.useRealTimers();
   });
 });
 

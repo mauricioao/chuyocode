@@ -23,12 +23,16 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizFlashcardsProps {
   lang: Lang;
   items: readonly GameItem[];
   /** Stable per-block seed (the block id) — `shuffleWithSeed`'s own input for "Barajar". */
   seed: string;
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `undefined` = no question images authored, the common case. Display-only; see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 /** Order a deck by item id, from the current item list — the authored order until "Barajar" runs once. */
@@ -36,7 +40,7 @@ function authoredOrder(items: readonly GameItem[]): string[] {
   return items.map((item) => item.id);
 }
 
-export default function QuizFlashcards({ lang, items, seed }: QuizFlashcardsProps) {
+export default function QuizFlashcards({ lang, items, seed, promptImages }: QuizFlashcardsProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
 
@@ -174,6 +178,7 @@ export default function QuizFlashcards({ lang, items, seed }: QuizFlashcardsProp
             aria-hidden={flipped}
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center [backface-visibility:hidden]"
           >
+            <PromptImage image={promptImages?.[current.id]} />
             <p className="text-lg font-semibold text-foreground sm:text-xl">{current.prompt}</p>
           </div>
           <div

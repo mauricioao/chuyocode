@@ -11,6 +11,20 @@ const items: GameItem[] = [
   { id: 's2', prompt: 'A yellow fruit?', answer: 'banana' },
 ];
 
+describe('QuizHangman — question image (owner decision 2026-10-16 follow-up)', () => {
+  const promptImages = { s1: { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 } };
+
+  it("shows the current word's own prompt image above the puzzle when its slot has one", () => {
+    render(<QuizHangman lang="es" items={items} promptImages={promptImages} />);
+    expect(screen.getByTestId('prompt-image')).toBeTruthy();
+  });
+
+  it('renders nothing when the block has no promptImages at all', () => {
+    render(<QuizHangman lang="es" items={items} />);
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+});
+
 describe('QuizHangman', () => {
   it('shows the clue, counter, six full lives, and masked letters', () => {
     render(<QuizHangman lang="es" items={items} />);

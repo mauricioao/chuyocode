@@ -96,6 +96,22 @@ function quizBlockWithPromptImage(path: string) {
   };
 }
 
+/** Two question slots sharing the SAME context image path — the "duplicate a question" case (owner decision 2026-10-16 follow-up): the duplicate never gets a fresh upload, so both slots legitimately point at the exact same allowed path. */
+function quizBlockWithTwoSlotsSharingPromptImage(path: string) {
+  return {
+    id: 'block-quiz-1',
+    type: 'quiz',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'x', input: 'text', answer: ['cat'] },
+        { id: 's2', label: 'x (copia)', input: 'text', answer: ['cat'] },
+      ],
+    },
+    promptImages: { s1: { path, width: 400, height: 300 }, s2: { path, width: 400, height: 300 } },
+  };
+}
+
 function worksheetBlockWithAudio(imagePath: string, audioPath: string) {
   return {
     id: 'block-1',
@@ -375,6 +391,13 @@ describe('POST /api/actividades/[id]/guardar — quiz question image (promptImag
     );
     expect(res.status).toBe(422);
     expect((await res.json()).error).toBe('invalid_blocks');
+  });
+
+  it('accepts two slots pointing at the SAME allowed path — a duplicated question, never a fresh upload', async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithTwoSlotsSharingPromptImage(OWN_QUESTION_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(200);
   });
 });
 

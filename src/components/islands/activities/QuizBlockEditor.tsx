@@ -620,6 +620,16 @@ export default function QuizBlockEditor({
     blocks.splice(rowIndex === -1 ? blocks.length : rowIndex + 1, 0, newRow);
 
     commit({ ...draft, slots: [...draft.slots, newSlot], blocks, pools });
+    // This question's own context image (owner decision 2026-10-16
+    // follow-up, "duplicate keeps the image") travels to the new slot —
+    // the SAME stored path, never a fresh upload. `setPromptImage`'s own
+    // commit is already separate from `commit` above (`promptImages` lives
+    // beside `payload`, not inside it, same reasoning as that function's
+    // own header) — duplicating a question is therefore ONE `onPayloadChange`
+    // call plus, only when there was an image to carry over, one
+    // `onPromptImagesChange` call.
+    const duplicatedImage = promptImages?.[slotId];
+    if (duplicatedImage) setPromptImage(newSlotId, duplicatedImage);
     onSelectSlot(newSlotId);
   }
 

@@ -29,11 +29,15 @@ import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizWheelProps {
   lang: Lang;
   items: readonly GameItem[];
   seed: string;
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `undefined` = no question images authored, the common case. Display-only; see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 /** Alternating brand-palette fills for the slices — same theme tokens `bg-*` utilities already draw from (global.css `@theme`). */
@@ -80,7 +84,7 @@ function freshIds(items: readonly GameItem[]): string[] {
   return items.map((item) => item.id);
 }
 
-export default function QuizWheel({ lang, items, seed }: QuizWheelProps) {
+export default function QuizWheel({ lang, items, seed, promptImages }: QuizWheelProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
@@ -212,6 +216,7 @@ export default function QuizWheel({ lang, items, seed }: QuizWheelProps) {
           data-testid="wheel-landed"
           className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center"
         >
+          <PromptImage image={promptImages?.[landedItem.id]} />
           <p className="text-lg font-semibold text-foreground sm:text-xl">{landedItem.prompt}</p>
           <SpeakButton text={landedItem.prompt} lang={lang} />
           {revealed ? (

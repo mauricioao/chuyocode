@@ -23,11 +23,15 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { GameItem } from '@/lib/activities/gameModes';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizHangmanProps {
   lang: Lang;
   /** Already filtered through `hangmanEligible` by the caller. */
   items: readonly GameItem[];
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `undefined` = no question images authored, the common case. Shown as a hint above the puzzle; display-only, see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 /** Lives — six balloons, matching the design brief's own count. */
@@ -35,7 +39,7 @@ const MAX_LIVES = 6;
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-export default function QuizHangman({ lang, items }: QuizHangmanProps) {
+export default function QuizHangman({ lang, items, promptImages }: QuizHangmanProps) {
   const t = UI_LABELS[lang].activities.gameModes;
 
   const [wordIndex, setWordIndex] = useState(0);
@@ -129,6 +133,8 @@ export default function QuizHangman({ lang, items }: QuizHangmanProps) {
           />
         ))}
       </div>
+
+      <PromptImage image={promptImages?.[current.id]} />
 
       <p className="flex items-center gap-2 text-center text-base text-foreground">
         {current.prompt}

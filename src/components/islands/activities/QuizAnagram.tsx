@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizAnagramProps {
   lang: Lang;
@@ -31,6 +33,8 @@ export interface QuizAnagramProps {
   items: readonly GameItem[];
   /** Stable per-block seed (the block id) — each word's own tile scramble. */
   seed: string;
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `undefined` = no question images authored, the common case. Shown as a hint above the puzzle; display-only, see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 /** How long a wrong completion stays flagged before the slots auto-clear (ms) — same value `QuizMatching` uses for its own wrong-pair flash. */
@@ -47,7 +51,7 @@ function tilesFor(word: string, seed: string, wordIndex: number): Tile[] {
   return shuffleWithSeed(letters, seedFromString(`${seed}:anagram:${wordIndex}`));
 }
 
-export default function QuizAnagram({ lang, items, seed }: QuizAnagramProps) {
+export default function QuizAnagram({ lang, items, seed, promptImages }: QuizAnagramProps) {
   const t = UI_LABELS[lang].activities.gameModes;
 
   const [wordIndex, setWordIndex] = useState(0);
@@ -151,6 +155,8 @@ export default function QuizAnagram({ lang, items, seed }: QuizAnagramProps) {
       <span data-testid="anagram-counter" className="text-sm text-muted-foreground tabular-nums">
         {t.anagramCounterPrefix} {wordIndex + 1} {t.anagramCounterOf} {items.length}
       </span>
+
+      <PromptImage image={promptImages?.[current.id]} />
 
       <p className="flex items-center gap-2 text-center text-base text-foreground">
         {current.prompt}
