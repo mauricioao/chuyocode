@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { toast } from 'sonner';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { Block } from '@/lib/activities/blocks';
@@ -22,8 +22,18 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // The sound toggle persists its mute flag to `localStorage`
+  // (`gameSounds.ts`'s own `GAME_SOUND_MUTE_KEY`) — clear it so one test's
+  // toggle click never leaks into the next test's "sound starts unmuted"
+  // assumption.
+  localStorage.clear();
 });
 
+// P1 live-quiz rhythm: s1 is MULTIPLE-CHOICE (input "choice", pool order
+// a=Cat (correct) then b=Dog) — tile 1 is always "a", tile 2 is always "b"
+// (`getSlotItems` returns the pool array verbatim, `exercisePayload.ts`).
+// s2 stays a typed-answer question, so the file still covers BOTH the new
+// tile mechanic and the unchanged reveal-then-advance path in the same deck.
 const QUIZ_BLOCKS: Block[] = [
   {
     id: 'q1',
@@ -81,12 +91,13 @@ function prev() {
   fireEvent.click(screen.getByTestId('presentation-prev'));
 }
 
-/** The control bar's own QR toggle — scoped (not a bare `getByRole`) because
- * the overlay's own close button can carry the SAME accessible name
- * ("Ocultar QR" text content) once the overlay is open (N7: open by
- * default on mount), which would otherwise match twice. */
-function qrToggle() {
-  return within(screen.getByTestId('presentation-controls')).getByTestId('presentation-qr-toggle');
+/** `presentation-tile-<n>`, 1-based — same number the "1-9" keyboard map and the tile's own `.key` badge use. */
+function tile(n: number): HTMLElement {
+  return screen.getByTestId(`presentation-tile-${n}`);
+}
+
+function tapTile(n: number) {
+  fireEvent.click(tile(n));
 }
 
 /** No `@testing-library/jest-dom` matchers configured in this repo (no global
@@ -166,8 +177,6 @@ describe('PresentationIsland — QR overlay (N7: open by default on the FIRST sl
     const overlay = screen.getByTestId('presentation-qr-overlay');
     expect(overlay.textContent).toContain('Escanea para jugar en tu celular');
     expect(screen.getByTestId('presentation-qr-overlay-image')).toBeTruthy();
-    // The toggle itself already reads "closed" (Ocultar QR = currently shown).
-    expect(attr(qrToggle(), 'aria-label')).toBe('Ocultar QR');
   });
 
   it('hides automatically once the presenter advances with "Siguiente"', () => {
@@ -183,24 +192,22 @@ describe('PresentationIsland — QR overlay (N7: open by default on the FIRST sl
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
   });
 
-  it('the toggle/"Q" key keep working afterwards — reopens and recloses on demand', () => {
+  it('the "Q" key keeps working afterwards — reopens and recloses on demand (no bar button anymore, see the control-bar restructure)', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     // Closed here via the "Q" key itself (not "Siguiente" — that auto-hide
     // path is covered by the two tests above), so this stays on slide 1,
-    // unrevealed, to isolate "does the toggle ever reveal/advance" below.
+    // unanswered, to isolate "does the toggle ever answer/advance" below.
     fireEvent.keyDown(window, { key: 'q' });
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
 
-    fireEvent.click(qrToggle());
-    expect(screen.getByTestId('presentation-qr-overlay')).toBeTruthy();
-    // Never a side effect on the deck itself (owner spec: "keep every other
-    // presentation behaviour" — the Q key/button must not also reveal/advance).
-    expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
-
-    fireEvent.keyDown(window, { key: 'q' });
-    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
     fireEvent.keyDown(window, { key: 'Q' });
     expect(screen.getByTestId('presentation-qr-overlay')).toBeTruthy();
+    // Never a side effect on the deck itself (owner spec: "keep every other
+    // presentation behaviour" — the Q key must not also answer/advance).
+    expect(attr(tile(1), 'data-mark')).toBeNull();
+
+    fireEvent.keyDown(window, { key: 'q' });
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
   });
 
   it('closes via its own close button, and via Escape (without exiting the presentation)', () => {
@@ -211,15 +218,22 @@ describe('PresentationIsland — QR overlay (N7: open by default on the FIRST sl
     fireEvent.click(screen.getByTestId('presentation-qr-overlay-close'));
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mostrar QR' }));
+    fireEvent.keyDown(window, { key: 'q' });
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
     expect(assign).not.toHaveBeenCalled();
   });
 
-  it('offers no control and no overlay when there is no QR to show (the editor preview)', () => {
+  it('never reopens on its own once closed — only the FIRST slide auto-opens it, not the summary (owner review: it must not cover the score/time)', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    next(); // closes QR, advances q1 (non-revealable, choice) -> q2
+    next(); // reveals q2
+    next(); // -> summary
+    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
+  });
+
+  it('offers no overlay at all when there is no QR to show (the editor preview)', () => {
     render(<PresentationIsland {...BASE_PROPS} practiceUrl={undefined} qrSvg={null} onExit={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Mostrar QR' })).toBeNull();
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
     fireEvent.keyDown(window, { key: 'q' });
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
@@ -228,27 +242,18 @@ describe('PresentationIsland — QR overlay (N7: open by default on the FIRST sl
 
 // Author preview (R1, owner decision 2026-10-12): the activity is not
 // published yet — the join QR would 404 for a student, so it must never
-// open, by default or on demand. The toggle/"Q" shortcut stays reachable;
-// it shows the owner's own message via toast instead.
+// open, by default or on demand. The "Q" shortcut stays reachable; it shows
+// the owner's own message via toast instead.
 describe('PresentationIsland — qrBlockedMessage (author preview, owner decision 2026-10-12)', () => {
   const BLOCKED =
     'No se puede compartir la actividad porque está en revisión, por el momento solo está disponible para ti 😘';
 
-  it('does not open the overlay on mount, even though the toggle is still offered', () => {
+  it('does not open the overlay on mount', () => {
     render(<PresentationIsland {...BASE_PROPS} qrSvg={null} qrBlockedMessage={BLOCKED} />);
-    expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
-    expect(qrToggle()).toBeTruthy();
-  });
-
-  it('shows the message via toast instead of opening the overlay, on a toggle click', () => {
-    vi.mocked(toast).mockClear();
-    render(<PresentationIsland {...BASE_PROPS} qrSvg={null} qrBlockedMessage={BLOCKED} />);
-    fireEvent.click(qrToggle());
-    expect(toast).toHaveBeenCalledWith(BLOCKED);
     expect(screen.queryByTestId('presentation-qr-overlay')).toBeNull();
   });
 
-  it('shows the message via toast on the "Q" key too, never opening the overlay', () => {
+  it('shows the message via toast on the "Q" key, never opening the overlay', () => {
     vi.mocked(toast).mockClear();
     render(<PresentationIsland {...BASE_PROPS} qrSvg={null} qrBlockedMessage={BLOCKED} />);
     fireEvent.keyDown(window, { key: 'q' });
@@ -257,28 +262,230 @@ describe('PresentationIsland — qrBlockedMessage (author preview, owner decisio
   });
 });
 
+describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', () => {
+  it('mounts idle: 2 tiles, numbered 1 and 2, no mark, not locked', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    const tiles = screen.getByTestId('presentation-tiles');
+    expect(attr(tiles, 'data-count')).toBe('2');
+    expect(attr(tiles, 'data-answered')).toBeNull();
+    expect(attr(tile(1), 'data-index')).toBe('1');
+    expect(attr(tile(1), 'data-mark')).toBeNull();
+    expect((tile(1) as HTMLButtonElement).disabled).toBe(false);
+    expect(tile(1).textContent).toContain('Cat');
+    expect(tile(2).textContent).toContain('Dog');
+  });
+
+  it('tapping the CORRECT tile marks it "correct", plays the cue, counts the score, and locks every tile', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(1); // "a" = Cat = correct
+    expect(attr(tile(1), 'data-mark')).toBe('correct');
+    expect(screen.getByTestId('presentation-tile-mark')).toBeTruthy();
+    expect(attr(tile(2), 'data-mark')).toBeNull();
+    expect(attr(screen.getByTestId('presentation-tiles'), 'data-answered')).toBe('');
+    expect((tile(1) as HTMLButtonElement).disabled).toBe(true);
+    expect((tile(2) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('presentation-score').textContent).toContain('1');
+  });
+
+  it('tapping a WRONG tile marks IT "wrong" and reveals the correct one as "reveal" — never increments the score', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(2); // "b" = Dog = wrong
+    expect(attr(tile(2), 'data-mark')).toBe('wrong');
+    expect(attr(tile(1), 'data-mark')).toBe('reveal');
+    expect(screen.getByTestId('presentation-score').textContent).toContain('0');
+  });
+
+  it('one answer per question — a second tap on a different tile, after the first, changes nothing', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(2); // wrong
+    tapTile(1); // too late — already locked
+    expect(attr(tile(2), 'data-mark')).toBe('wrong');
+    expect(attr(tile(1), 'data-mark')).toBe('reveal');
+    expect(screen.getByTestId('presentation-score').textContent).toContain('0');
+  });
+
+  it('pressing the matching number key (1-9) answers the tile the same way a click would', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.keyDown(window, { key: '1' });
+    expect(attr(tile(1), 'data-mark')).toBe('correct');
+  });
+
+  it('auto-advances to the next slide ~1.2s after the mark appears', () => {
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(1);
+    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(1200));
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+  });
+
+  it('does not auto-advance before the delay elapses', () => {
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(1);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+  });
+
+  it('auto-advances instantly (no delay) under prefers-reduced-motion — the owner spec only drops the animation, never the advance itself', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(1);
+    act(() => vi.advanceTimersByTime(0));
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+  });
+
+  it('a bare "next" press on an UNANSWERED choice question advances straight away — no reveal step for multiple choice', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    next();
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+  });
+
+  it('the content row carries no `data-has-media` yet (per-question media is a structural slot, not wired to real data)', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(attr(screen.getByTestId('presentation-content-row'), 'data-has-media')).toBeNull();
+  });
+});
+
+describe('PresentationIsland — the top bar (timer + score)', () => {
+  it('starts at 0:00 and ✓0, ticks once a second, pauses while the menu is open, and resumes once closed', () => {
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByTestId('presentation-timer').textContent).toContain('0:00');
+    expect(screen.getByTestId('presentation-score').textContent).toContain('0');
+
+    act(() => vi.advanceTimersByTime(3000));
+    expect(screen.getByTestId('presentation-timer').textContent).toContain('0:03');
+
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.getByTestId('presentation-timer').textContent).toContain('0:03');
+
+    fireEvent.click(screen.getByTestId('presentation-menu-close'));
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByTestId('presentation-timer').textContent).toContain('0:05');
+  });
+
+  it('shows the score and time again on the final slide', () => {
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(1); // correct, +1
+    act(() => vi.advanceTimersByTime(1200)); // auto-advance to q2
+    next(); // reveal q2
+    next(); // -> summary
+    const stats = screen.getByTestId('presentation-summary-stats');
+    expect(stats.textContent).toContain('1');
+  });
+
+  it('the counter reads "N de M" (es) / "N of M" (en), not a bare "/" — owner reference', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByTestId('presentation-count').textContent).toBe('1 de 2');
+  });
+});
+
+describe('PresentationIsland — the score is hidden when the deck has no multiple-choice question (owner review: "✓ 0" forever is noise)', () => {
+  it('omits the top-bar score pill for a reorder-only deck (no multiple-choice question)', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={REORDER_BLOCKS} />);
+    expect(screen.getByTestId('presentation-timer')).toBeTruthy();
+    expect(screen.queryByTestId('presentation-score')).toBeNull();
+  });
+
+  it('drops the score from the final slide\'s stats line, keeping only the time', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={REORDER_BLOCKS} />);
+    next(); // reveals the one reorder slide
+    next(); // -> summary
+    expect(screen.queryByTestId('presentation-score')).toBeNull();
+    const stats = screen.getByTestId('presentation-summary-stats');
+    expect(stats.textContent).not.toContain('Aciertos');
+    expect(stats.textContent).toContain('Tiempo');
+  });
+
+  it('still shows the score when at least one multiple-choice question is in the deck', () => {
+    render(<PresentationIsland {...BASE_PROPS} />); // QUIZ_BLOCKS has a choice question (s1)
+    expect(screen.getByTestId('presentation-score')).toBeTruthy();
+  });
+});
+
+describe('PresentationIsland — the question-list menu', () => {
+  it('opens the menu, lists every content slide, marks an already-answered question, and jumps on click', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    tapTile(1); // q1 answered correctly
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    const panel = screen.getByTestId('presentation-menu-panel');
+    expect(panel).toBeTruthy();
+    expect(attr(screen.getByTestId('presentation-menu-item-1'), 'data-state')).toBe('correct');
+    expect(attr(screen.getByTestId('presentation-menu-item-2'), 'data-state')).toBe('unanswered');
+
+    fireEvent.click(screen.getByTestId('presentation-menu-item-2'));
+    expect(screen.queryByTestId('presentation-menu-panel')).toBeNull();
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+  });
+
+  it('closes on its own close button', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    fireEvent.click(screen.getByTestId('presentation-menu-close'));
+    expect(screen.queryByTestId('presentation-menu-panel')).toBeNull();
+  });
+
+  it('Escape closes the menu first, without exiting the presentation', () => {
+    const assign = stubLocationAssign();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('presentation-menu-panel')).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('swallows navigation/answer keys while open', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByTestId('presentation-menu-panel')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('presentation-menu-close'));
+    expect(attr(tile(1), 'data-mark')).toBeNull();
+    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+  });
+});
+
+describe('PresentationIsland — the sound toggle', () => {
+  it('toggles aria-pressed on click', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    const soundButton = screen.getByTestId('presentation-sound');
+    expect(attr(soundButton, 'aria-pressed')).toBe('false');
+    fireEvent.click(soundButton);
+    expect(attr(soundButton, 'aria-pressed')).toBe('true');
+  });
+
+  it('answering a question never throws even without a real WebAudio context (jsdom)', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(() => tapTile(1)).not.toThrow();
+  });
+});
+
 describe('PresentationIsland — the full flow (quiz-only deck)', () => {
-  it('walks q1 (unrevealed, straight on mount) -> q1 (revealed) -> q2 (unrevealed) -> q2 (revealed) -> summary -> restart', () => {
+  it('walks q1 (choice, tap to answer+auto-advance) -> q2 (unrevealed) -> q2 (revealed) -> summary -> restart', () => {
+    vi.useFakeTimers();
     render(<PresentationIsland {...BASE_PROPS} />);
 
-    // Mounts straight on question 1, nothing revealed yet (owner feedback 2026-10-06 — no cover step first).
+    // Mounts straight on question 1, nothing answered yet (owner feedback 2026-10-06 — no cover step first).
     expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
-    expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
-    expect(screen.queryByTestId('presentation-explanation')).toBeNull();
-    expect(screen.getByTestId('presentation-option-a').getAttribute('data-correct')).toBeNull();
+    expect(attr(tile(1), 'data-mark')).toBeNull();
 
-    // next reveals q1 instead of advancing: correct option marked (icon + text), explanation shown.
-    next();
-    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
-    expect(attr(screen.getByTestId('presentation-option-a'), 'data-correct')).toBe('true');
-    expect(screen.getByTestId('presentation-option-correct-a').textContent).toContain('Correcta');
-    expect(screen.getByTestId('presentation-option-b').getAttribute('data-correct')).toBeNull();
-    expect(screen.getByTestId('presentation-explanation').textContent).toContain(
-      'Cats say meow, dogs say woof.',
-    );
-
-    // next NOW advances to question 2, unrevealed.
-    next();
+    // Tapping the correct tile marks it and auto-advances.
+    tapTile(1);
+    expect(attr(tile(1), 'data-mark')).toBe('correct');
+    act(() => vi.advanceTimersByTime(1200));
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
     expect(screen.queryByTestId('presentation-answer-reveal')).toBeNull();
 
@@ -295,35 +502,29 @@ describe('PresentationIsland — the full flow (quiz-only deck)', () => {
     const emojiImg = screen.getByTestId('presentation-summary-emoji').querySelector('img') as HTMLImageElement;
     expect(emojiImg.getAttribute('src')).toContain('trophy');
 
-    // Restart returns to the FIRST CONTENT slide, not the cover (owner feedback 2026-10-06).
+    // Restart returns to the FIRST CONTENT slide, unanswered, score/timer reset.
     fireEvent.click(screen.getByTestId('presentation-restart'));
     expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
-    expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
+    expect(attr(tile(1), 'data-mark')).toBeNull();
+    expect(screen.getByTestId('presentation-score').textContent).toContain('0');
+    expect(screen.getByTestId('presentation-timer').textContent).toContain('0:00');
   });
 
-  it('dims the wrong option without removing it, once revealed', () => {
+  it('previous steps back to q1, still showing its earlier mark gone (fresh slide instance) — q1 was never answered here', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
-    next(); // q1 revealed (mounts unrevealed already)
-    const wrong = screen.getByTestId('presentation-option-b');
-    expect(wrong.textContent).toContain('Dog');
-    expect(wrong.className).toContain('opacity-40');
-  });
-
-  it('previous steps back and hides the answer again', () => {
-    render(<PresentationIsland {...BASE_PROPS} />);
-    next(); // q1 revealed
-    next(); // q2 unrevealed
-    fireEvent.click(screen.getByTestId('presentation-prev'));
+    next(); // -> q2 (q1 never answered, so it just advances)
+    prev();
     expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
-    expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
+    expect(attr(tile(1), 'data-mark')).toBeNull();
   });
 });
 
 describe('PresentationIsland — "Otra actividad" at the end (N7, next step)', () => {
   function walkToSummary() {
-    next(); // q1 revealed
-    next(); // q2 unrevealed
-    next(); // q2 revealed
+    vi.useFakeTimers();
+    tapTile(1); // q1 answered, auto-advances
+    act(() => vi.advanceTimersByTime(1200));
+    next(); // reveal q2
     next(); // -> summary
   }
 
@@ -376,13 +577,11 @@ describe('PresentationIsland — the worksheet zoom tour (worksheet-only deck)',
     expect(screen.getByTestId('presentation-overview-zone-z2')).toBeTruthy();
     expect(screen.getByLabelText('Zona 1')).toBeTruthy();
     expect(screen.getByLabelText('Zona 2')).toBeTruthy();
-    expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(true);
 
     // A single "next" advances straight past the overview (never revealable).
     next();
     expect(screen.getByTestId('presentation-zone-blank-z1')).toBeTruthy();
     expect(screen.queryByTestId('presentation-zone-answer-z1')).toBeNull();
-    expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(false);
 
     // next reveals zone 1's answer + explanation instead of advancing.
     next();
@@ -449,11 +648,11 @@ describe('PresentationIsland — interleaved worksheet + quiz order', () => {
   it('visits every slide in exactly the authored block order', () => {
     render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK, ...QUIZ_BLOCKS]} />);
 
-    const progressLabel = () => attr(screen.getByTestId('presentation-progress'), 'aria-label');
+    const countLabel = () => attr(screen.getByTestId('presentation-count'), 'aria-label');
 
     // Mounts straight on the overview (slide 1/5), no cover step first.
     expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
-    expect(progressLabel()).toBe('Diapositiva 1 de 5');
+    expect(countLabel()).toBe('Diapositiva 1 de 5');
 
     next(); // -> zone 1 blank (slide 2/5)
     expect(screen.getByTestId('presentation-zone-blank-z1')).toBeTruthy();
@@ -464,14 +663,13 @@ describe('PresentationIsland — interleaved worksheet + quiz order', () => {
     expect(screen.getByTestId('presentation-zone-blank-z2')).toBeTruthy();
     next(); // reveal zone 2
 
-    next(); // -> q1 (slide 4/5), unrevealed
+    next(); // -> q1 (slide 4/5), a multiple-choice question — unanswered
     expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
-    expect(progressLabel()).toBe('Diapositiva 4 de 5');
-    next(); // reveal q1
+    expect(countLabel()).toBe('Diapositiva 4 de 5');
+    next(); // choice question is non-revealable: "next" advances straight away
 
-    next(); // -> q2 (slide 5/5)
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
-    expect(progressLabel()).toBe('Diapositiva 5 de 5');
+    expect(countLabel()).toBe('Diapositiva 5 de 5');
     next(); // reveal q2
 
     next(); // -> summary
@@ -503,28 +701,33 @@ describe('PresentationIsland — worksheet camera transitions and prefers-reduce
 });
 
 describe('PresentationIsland — keyboard map', () => {
-  it.each([['ArrowRight'], [' '], ['PageDown'], ['Enter']])('"%s" reveals/advances like the next button', (key) => {
-    render(<PresentationIsland {...BASE_PROPS} />);
-    // Mounted unrevealed on q1 already — one press of any of these keys
-    // must REVEAL it, same as clicking "Siguiente" would (the two-step
-    // reveal-then-advance, unchanged by the "opens on the first slide" feedback).
-    fireEvent.keyDown(window, { key });
-    expect(screen.getByTestId('presentation-option-correct-a')).toBeTruthy();
-  });
+  it.each([['ArrowRight'], [' '], ['PageDown'], ['Enter']])(
+    '"%s" reveals/advances like the next button, on a non-choice slide',
+    (key) => {
+      render(<PresentationIsland {...BASE_PROPS} />);
+      next(); // -> q2 (choice q1 is non-revealable, this just advances)
+      // q2 is typed-answer: one press of any of these keys must REVEAL it,
+      // same as clicking "Siguiente" would (the two-step reveal-then-advance,
+      // unchanged for non-choice questions).
+      fireEvent.keyDown(window, { key });
+      expect(screen.getByTestId('presentation-answer-reveal')).toBeTruthy();
+    },
+  );
 
   it.each([['ArrowLeft'], ['PageUp']])('"%s" steps back like the previous button', (key) => {
     render(<PresentationIsland {...BASE_PROPS} />);
     next();
     next();
     fireEvent.keyDown(window, { key });
-    expect(screen.queryByTestId('presentation-option-correct-a')).toBeNull();
+    expect(screen.queryByTestId('presentation-answer-reveal')).toBeNull();
   });
 
-  it.each([['r'], ['R']])('"%s" reveals without advancing', (key) => {
-    render(<PresentationIsland {...BASE_PROPS} />); // mounts on q1, unrevealed
+  it.each([['r'], ['R']])('"%s" reveals without advancing, on a non-choice slide', (key) => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    next(); // -> q2 (typed-answer)
     fireEvent.keyDown(window, { key });
-    expect(screen.getByTestId('presentation-option-correct-a')).toBeTruthy();
-    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+    expect(screen.getByTestId('presentation-answer-reveal')).toBeTruthy();
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
   });
 
   it('"f" toggles fullscreen without throwing (jsdom has no real Fullscreen API)', () => {
@@ -556,15 +759,15 @@ describe('PresentationIsland — keyboard map', () => {
       screen.getByTestId('presentation-next').focus();
     });
     fireEvent.keyDown(screen.getByTestId('presentation-next'), { key: 'Enter' });
-    // The native click (fired by the button's own onClick, simulated via a
-    // real click below) is what advances — the global listener must not
-    // ALSO advance on the same keydown, or this would land on question 2.
+    // The native click (fired below) is what advances — the global listener
+    // must not ALSO advance on the same keydown, or two "next" dispatches
+    // would overshoot straight past q2 to the summary.
     fireEvent.click(screen.getByTestId('presentation-next'));
-    expect(screen.getByTestId('presentation-question-s1')).toBeTruthy();
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
   });
 });
 
-describe('PresentationIsland — the exit control (link, not just Esc)', () => {
+describe('PresentationIsland — the exit control (kept: no automatic replacement, unlike reveal/QR)', () => {
   it('is a real link to the practice page, labeled "Salir"', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     const exit = screen.getByRole('link', { name: 'Salir' });
@@ -595,42 +798,38 @@ describe('PresentationIsland — the editor overlay (onExit, no real practice UR
 describe('PresentationIsland — control bar accessible names', () => {
   it('gives every control a real, labeled button or link', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByRole('button', { name: 'Preguntas' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Mostrar respuesta' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeTruthy();
-    // Open by default on mount (N7) — the toggle itself reads "Ocultar QR".
-    expect(attr(qrToggle(), 'aria-label')).toBe('Ocultar QR');
+    expect(screen.getByRole('button', { name: 'Silenciar sonido' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Salir' })).toBeTruthy();
   });
 
-  it('disables "reveal" off a content slide (cover/summary) and enables it on one', () => {
-    render(<PresentationIsland {...BASE_PROPS} />);
-    // Mounted ON a content slide already (owner feedback 2026-10-06) — reveal starts enabled.
-    expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(false);
-    prev(); // -> the cover, still reachable
-    expect((screen.getByTestId('presentation-reveal') as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it('names the progress readout for assistive tech, generalized to "Diapositiva" (not just quiz questions)', () => {
+  it('names the count readout for assistive tech, generalized to "Diapositiva" (not just quiz questions)', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     // Mounted on slide 1 already — no more "0 de 2" first.
-    expect(attr(screen.getByTestId('presentation-progress'), 'aria-label')).toBe('Diapositiva 1 de 2');
+    expect(attr(screen.getByTestId('presentation-count'), 'aria-label')).toBe('Diapositiva 1 de 2');
     prev();
-    expect(attr(screen.getByTestId('presentation-progress'), 'aria-label')).toBe('Diapositiva 0 de 2');
+    expect(attr(screen.getByTestId('presentation-count'), 'aria-label')).toBe('Diapositiva 0 de 2');
   });
 });
 
 describe('PresentationIsland — the polite live region', () => {
-  it('announces the first slide at mount, its reveal state, the cover (still reachable), and the summary', () => {
+  it('announces the first slide at mount, the cover (still reachable), and the summary', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     const region = () => screen.getByTestId('presentation-live-region');
     // No more "Portada" announcement first — mounts straight on slide 1.
     expect(region().textContent).toBe('Diapositiva 1 de 2');
-    next();
-    expect(region().textContent).toContain('revelada');
     prev();
     expect(region().textContent).toBe('Portada');
+  });
+
+  it('announces a revealed non-choice question', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    next(); // -> q2
+    next(); // reveal q2
+    expect(screen.getByTestId('presentation-live-region').textContent).toContain('revelada');
   });
 
   it('names a worksheet overview slide explicitly (it can never be "revealed")', () => {
@@ -701,7 +900,7 @@ describe('PresentationIsland — "Reordenar" (one slide per sentence)', () => {
     expect(slide.textContent).toContain('sleep');
     expect(screen.queryByTestId('presentation-reorder-answer')).toBeNull();
 
-    next(); // reveals, same "next reveals then advances" rule every other slide follows
+    next(); // reveals, same "next reveals then advances" rule every other non-choice slide follows
     expect(screen.getByTestId('presentation-reorder-answer').textContent).toBe('Cats sleep');
   });
 });
@@ -715,7 +914,7 @@ describe('PresentationIsland — "Ordenar por grupos" (one combined slide for th
     expect(slide.textContent).not.toContain('dog');
     expect(screen.queryByTestId('presentation-groupsort-item-g1-0')).toBeNull();
 
-    next(); // reveals, same "next reveals then advances" rule every other slide follows
+    next(); // reveals, same "next reveals then advances" rule every other non-choice slide follows
     expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('dog');
     expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('cat');
     expect(screen.getByTestId('presentation-groupsort-group-g2').textContent).toContain('bread');

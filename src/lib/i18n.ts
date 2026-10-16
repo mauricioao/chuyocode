@@ -1427,10 +1427,23 @@ export const UI_LABELS = {
         progressPrefix: 'Diapositiva',
         ofLabel: 'de',
         correctBadge: 'Correcta',
+        // P1, live-quiz rhythm (owner spec 2026-10-16): the wrong twin of
+        // `correctBadge` — the sr-only text on a tile marked ✕.
+        wrongBadge: 'Incorrecta',
         answerLabel: 'Respuesta',
         explanationLabel: 'Por qué',
         // The worksheet zoom tour's own zone badges/labels (sprint week 3).
         zoneLabel: 'Zona',
+        // P1, live-quiz rhythm: the top bar's own timer/score pills, the
+        // question-list menu, its "close" action, the final slide's own
+        // stats line, and the bottom bar's new sound toggle.
+        timerLabel: 'Tiempo',
+        scoreLabel: 'Aciertos',
+        timeLabel: 'Tiempo',
+        menuLabel: 'Preguntas',
+        menuClose: 'Cerrar',
+        soundMute: 'Silenciar sonido',
+        soundUnmute: 'Activar sonido',
         liveCover: 'Portada',
         liveSummary: 'Resumen',
         liveRevealed: 'Respuesta revelada',
@@ -2812,9 +2825,17 @@ export const UI_LABELS = {
         progressPrefix: 'Slide',
         ofLabel: 'of',
         correctBadge: 'Correct',
+        wrongBadge: 'Incorrect',
         answerLabel: 'Answer',
         explanationLabel: 'Why',
         zoneLabel: 'Zone',
+        timerLabel: 'Time',
+        scoreLabel: 'Correct answers',
+        timeLabel: 'Time',
+        menuLabel: 'Questions',
+        menuClose: 'Close',
+        soundMute: 'Mute sound',
+        soundUnmute: 'Unmute sound',
         liveCover: 'Cover',
         liveSummary: 'Summary',
         liveRevealed: 'Answer revealed',

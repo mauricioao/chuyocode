@@ -162,6 +162,40 @@ describe('presentationReducer — reveal (the explicit "R" shortcut)', () => {
   });
 });
 
+describe('presentationReducer — jumpTo (the live-quiz menu)', () => {
+  it('jumps straight to the given content slide, unrevealed', () => {
+    const q1Revealed = state({ index: 1, revealed: true });
+    expect(presentationReducer(q1Revealed, { type: 'jumpTo', index: 3 })).toEqual(state({ index: 3, revealed: false }));
+  });
+
+  it('can jump backwards too', () => {
+    const q3 = state({ index: 3 });
+    expect(presentationReducer(q3, { type: 'jumpTo', index: 1 })).toEqual(state({ index: 1, revealed: false }));
+  });
+
+  it('clamps below 0 to the cover', () => {
+    const q2 = state({ index: 2 });
+    expect(presentationReducer(q2, { type: 'jumpTo', index: -5 })).toEqual(state({ index: 0, revealed: false }));
+  });
+
+  it('clamps above the summary to the summary', () => {
+    const q2 = state({ index: 2 });
+    expect(presentationReducer(q2, { type: 'jumpTo', index: 99 })).toEqual(
+      state({ index: SLIDE_COUNT + 1, revealed: false }),
+    );
+  });
+
+  it('is a no-op (same values) jumping to the slide already showing, unrevealed', () => {
+    const q2 = state({ index: 2, revealed: false });
+    expect(presentationReducer(q2, { type: 'jumpTo', index: 2 })).toEqual(q2);
+  });
+
+  it('still clears `revealed` jumping to the CURRENT slide if it was revealed', () => {
+    const q2Revealed = state({ index: 2, revealed: true });
+    expect(presentationReducer(q2Revealed, { type: 'jumpTo', index: 2 })).toEqual(state({ index: 2, revealed: false }));
+  });
+});
+
 describe('slide predicates', () => {
   it('classify the cover, each content slide, and the summary', () => {
     const cover = createPresentationState(SLIDE_COUNT);

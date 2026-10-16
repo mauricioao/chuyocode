@@ -26,6 +26,7 @@
  */
 import type { Block, ImageRef, Rotation, Zone, AudioMarker } from './blocks';
 import type { Payload, Slot } from '../exercisePayload';
+import { segmentForInput } from '../quizQuestionType';
 import { orderZonesForReading } from './zoneGeometry';
 import { rotatedSize } from './canvasViewport';
 import { isZoneTooSmallToProject } from './presentationCamera';
@@ -342,14 +343,24 @@ export function buildPresentationSlides(blocks: readonly Block[]): PresentationS
 }
 
 /**
- * Which of `slides`' own entries support "reveal" at all — parallel array,
- * same order/length. A `'question'` or `'worksheet-zone'` slide does; a
- * `'worksheet-overview'` slide (a plain glance at the whole page) never
- * does, so `presentationReducer.ts`'s own `next`/`reveal` skip straight to
- * advancing on one instead of waiting for a reveal that can never happen.
+ * Which of `slides`' own entries support the shared `revealed` two-step at
+ * all — parallel array, same order/length. A `'worksheet-overview'` slide (a
+ * plain glance at the whole page) never does, same as before. A
+ * MULTIPLE-CHOICE `'question'` slide (P1, live-quiz rhythm, UX-INGLES.md
+ * section 13) ALSO never does, as of the rewrite: tapping a tile (or
+ * pressing its number) answers, marks, and auto-advances it on its own
+ * (`presentationQuiz.ts`), so it has nothing left for the generic
+ * `presentationReducer.ts` reveal step to do — letting it stay "revealable"
+ * would just make a bare `next` press reveal-without-marking first,
+ * contradicting the live-quiz rhythm. Every other `'question'` (typed/gap
+ * answer) and every other slide kind keeps today's reveal-then-advance.
  */
 export function revealableSlides(slides: readonly PresentationSlide[]): boolean[] {
-  return slides.map((slide) => slide.kind !== 'worksheet-overview');
+  return slides.map((slide) => {
+    if (slide.kind === 'worksheet-overview') return false;
+    if (slide.kind === 'question' && segmentForInput(slide.slot.input) === 'choice') return false;
+    return true;
+  });
 }
 
 /**

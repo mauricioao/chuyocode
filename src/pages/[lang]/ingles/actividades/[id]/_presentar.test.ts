@@ -166,13 +166,13 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     expect(html).toContain('A2');
   });
 
-  it('offers "Mostrar/Ocultar QR" in the controls, never a QR baked into the cover slide itself (owner feedback 2026-10-06)', async () => {
+  it('shows the QR overlay (auto-open on the first slide, P1), never a QR baked into the cover slide itself (owner feedback 2026-10-06)', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="presentation-qr-toggle"');
+    expect(html).toContain('data-testid="presentation-qr-overlay"');
     expect(html).not.toContain('data-testid="presentation-cover-qr"');
   });
 
@@ -190,8 +190,9 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — rendering', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="presentation-qr-overlay"');
     expect(html).toContain('Escanea para jugar en tu celular');
-    // The toggle itself already reads "closed" (Ocultar QR = currently shown).
-    expect(html).toContain('aria-label="Ocultar QR"');
+    // The overlay's own close button — no separate bar toggle anymore (P1
+    // control-bar restructure), the overlay itself is the "it's open" signal.
+    expect(html).toContain('data-testid="presentation-qr-overlay-close"');
   });
 
   // N7 (next step at the end): "Otra actividad" — same URL logic as the
@@ -282,14 +283,14 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar — guest play (anonymou
     expect(res.status).toBe(404);
   });
 
-  it('still offers "Mostrar QR" (pointing at the now-public practice page) for an anonymous visitor', async () => {
+  it('still shows the join QR overlay (pointing at the now-public practice page) for an anonymous visitor', async () => {
     activityResult.value = QUIZ_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: null },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="presentation-qr-toggle"');
+    expect(html).toContain('data-testid="presentation-qr-overlay"');
     expect(html).toContain('/es/ingles/actividades/abc');
   });
 });
@@ -354,7 +355,7 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar -- author preview of an 
     expect(html).not.toContain('data-testid="presentation-qr-overlay"');
   });
 
-  it('still offers the QR toggle control, never a real QR code in the markup', async () => {
+  it('still ships the blocked message to the client (the "Q" shortcut stays reachable), never a real QR code in the markup', async () => {
     activityResult.value = null;
     editActivityResult.value = DRAFT_EDIT;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
@@ -362,7 +363,10 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar -- author preview of an 
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="presentation-qr-toggle"');
+    // No bar button to assert on anymore (P1 control-bar restructure, QR is
+    // keyboard-only via "Q") — the client-side gate is the serialized
+    // `qrBlockedMessage` prop itself, present either way.
+    expect(html).toContain('No se puede compartir la actividad');
     expect(html).not.toContain('data-testid="presentation-qr-overlay-image"');
   });
 
