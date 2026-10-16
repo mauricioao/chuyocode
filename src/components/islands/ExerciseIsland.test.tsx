@@ -11,7 +11,7 @@
  *  - copy differs between es and en.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CHEVRON_PATH } from '@/lib/arrowControl';
 import type { GradeResult } from '@/lib/exerciseGrading';
 import type { Payload } from '@/lib/exercisePayload';
@@ -946,6 +946,21 @@ describe('ExerciseIsland — locale reaches the mechanics', () => {
    * label, so `placeholder` could not carry it and the island had to pass `lang`.
    * Untested, a Spanish page would narrate its drag-and-drop in English and no
    * automated check would notice.
+   *
+   * THE RACE THIS GUARDS AGAINST. The instructions text is not part of
+   * `DropRenderer`'s own markup — it comes from dnd-kit's `Accessibility`
+   * component (`@dnd-kit/core`'s `core.esm.js`), which renders `null` on its
+   * first pass and only mounts the hidden text once its own
+   * `useEffect(() => setMounted(true), [])` fires. `findByTestId` above
+   * resolves the instant the pool list (rendered by `DropRenderer` itself,
+   * synchronously once the lazy chunk and Suspense settle) appears in the
+   * DOM — a tick BEFORE that passive effect is guaranteed to have flushed.
+   * Asserting on `document.body.textContent` immediately after is therefore
+   * asserting on a sibling's effect via this one's DOM change, not on the
+   * thing the test actually claims: that the instructions themselves are
+   * there. Under contention (a shuffled, oversubscribed run) the two ticks
+   * can land far enough apart for the assertion to run first. `waitFor`
+   * polls for the real condition instead of assuming it rode along for free.
    */
   it('narrates a Spanish exercise in Spanish', async () => {
     render(<ExerciseIsland lang="es" payload={twoDropsOnePool} />);
@@ -953,14 +968,18 @@ describe('ExerciseIsland — locale reaches the mechanics', () => {
     // Waits past the lazy `DropRenderer` chunk's Suspense fallback — see
     // `tilesIn`'s own header above.
     await screen.findByTestId('drop-pool-olives');
-    expect(document.body.textContent).toContain(DROP_COPY.es.instructions);
+    await waitFor(() => {
+      expect(document.body.textContent).toContain(DROP_COPY.es.instructions);
+    });
   });
 
   it('narrates an English exercise in English', async () => {
     render(<ExerciseIsland lang="en" payload={twoDropsOnePool} />);
 
     await screen.findByTestId('drop-pool-olives');
-    expect(document.body.textContent).toContain(DROP_COPY.en.instructions);
+    await waitFor(() => {
+      expect(document.body.textContent).toContain(DROP_COPY.en.instructions);
+    });
   });
 });
 
