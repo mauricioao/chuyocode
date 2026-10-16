@@ -48,7 +48,7 @@ import { ArrowClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowClockwis
 import { ImageIcon } from '@phosphor-icons/react/dist/ssr/Image';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block, QuizBlock, WorksheetBlock, Zone, AudioMarker } from '@/lib/activities/blocks';
+import type { Block, QuizBlock, WorksheetBlock, Zone, AudioMarker, PromptImageRef } from '@/lib/activities/blocks';
 import type { Payload } from '@/lib/exercisePayload';
 import { rotateRects, turnRotation, type TurnDirection } from '@/lib/activities/zoneGeometry';
 import { moveBlockLeft, moveBlockRight, removeBlock } from '@/lib/activities/sheetOrder';
@@ -256,6 +256,20 @@ export default function BlockList({
 
   const updateQuizPayload = (blockId: string, payload: Payload) => {
     onBlocksChange(blocks.map((b) => (b.id === blockId && isQuiz(b) ? { ...b, payload } : b)));
+  };
+
+  /** "Agregar imagen"/"Quitar imagen" on one question (owner decision 2026-10-16) — one commit, same posture as every other block mutation here. `undefined` clears the field entirely (never stored as an empty `{}`), mirroring `updateQuizTemplate`'s own convention for an absent `template`. */
+  const updateQuizPromptImages = (blockId: string, promptImages: Record<string, PromptImageRef> | undefined) => {
+    onBlocksChange(
+      blocks.map((b) => {
+        if (b.id !== blockId || !isQuiz(b)) return b;
+        if (!promptImages) {
+          const { promptImages: _dropped, ...rest } = b;
+          return rest;
+        }
+        return { ...b, promptImages };
+      }),
+    );
   };
 
   // "Cambiar de molde" (R2): ONE commit replaces both the block's content
@@ -588,6 +602,8 @@ export default function BlockList({
             onConvert={(payload, template) => updateQuizTemplate(activeBlock.id, payload, template)}
             incompleteSlotId={activeBlock.id === incompleteBlockId ? incompleteZoneId : undefined}
             incompleteMessage={activeBlock.id === incompleteBlockId ? incompleteMessage : null}
+            promptImages={quiz.promptImages}
+            onPromptImagesChange={(images) => updateQuizPromptImages(activeBlock.id, images)}
           />
         )}
       </div>

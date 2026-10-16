@@ -21,11 +21,18 @@
  * (`onPasteIntoRow`, bulk paste N5): this row only decides WHICH UI renders
  * for a slot, never a second way to mutate it.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CheckIcon } from '@phosphor-icons/react/dist/ssr/Check';
+import { ImageIcon } from '@phosphor-icons/react/dist/ssr/Image';
+import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { needsAdvancedEditor, segmentForInput } from '@/lib/quizQuestionType';
 import { cn } from '@/lib/utils';
 import { CHIP_INLINE } from '@/components/islands/mechanics/chip';
+import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { imagePreviewUrl } from '@/lib/activities/paths';
+import { convertImageToWebp } from '@/lib/activities/imagePipeline';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import { FadeImage } from '@/components/ui/fade-image';
 import QuestionCard, { type QuestionCardProps } from './QuestionCard';
 import { RowRemoveButton, TemplateField, TemplateRow } from './TemplateEditorKit';
 
@@ -71,6 +78,132 @@ function copyFor(lang: string): Copy {
 export interface VariosJuegosRowProps extends QuestionCardProps {
   /** A paste landed in this row's question or answer field — bulk-paste (N5), handled by the caller just like `MatchPairsEditor`'s own `onPastePairs`. `undefined` while escaped to {@link QuestionCard} (no bulk paste there, same as the old editor). */
   onPasteIntoRow?: (event: React.ClipboardEvent<HTMLInputElement>) => void;
+  /**
+   * This question's own DISPLAY-ONLY context image (owner decision
+   * 2026-10-16) — `undefined` = none, the common case. Never a worksheet
+   * image; see `blocks.ts`'s own `PromptImageRef` header.
+   */
+  promptImage?: PromptImageRef;
+  /** The author added/removed/replaced this question's own image — one undo step per call, same posture as every other row mutation. `undefined` while escaped to {@link QuestionCard} (no image affordance there). */
+  onPromptImageChange?: (image: PromptImageRef | undefined) => void;
+}
+
+/** `?purpose=question`'s own accepted source types — images only, never a PDF (no stitching/rotation for a question's context image, owner spec). */
+const ACCEPTED_IMAGE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+type QuestionImageStatus = { kind: 'idle' } | { kind: 'uploading' } | { kind: 'error'; message: string };
+
+/**
+ * Per-question "Agregar imagen" / thumbnail+"Quitar imagen" (owner decision
+ * 2026-10-16) — a small, self-contained uploader, deliberately NOT
+ * `uploadTask.ts`'s multi-page state machine (`WorksheetUploader.tsx`'s
+ * own): there is at most one image, no PDF, no stitching, so a single
+ * idle/uploading/error state is the whole story. Reuses
+ * `imagePipeline.ts`'s own `convertImageToWebp` (resize + strip EXIF +
+ * encode) and the SAME `/api/actividades/imagen` endpoint, with
+ * `?purpose=question` so the server stores it under the distinct
+ * `question-` prefix (`@lib/activities/paths`'s own "KIND PREFIX" header) —
+ * never a worksheet image anywhere downstream.
+ */
+function QuestionImageField({
+  lang,
+  slotId,
+  image,
+  onChange,
+}: {
+  lang: string;
+  slotId: string;
+  image: PromptImageRef | undefined;
+  onChange: (image: PromptImageRef | undefined) => void;
+}) {
+  const localeKey: Lang = lang === 'en' ? 'en' : 'es';
+  const t = UI_LABELS[localeKey].activities.questionImage;
+  const errors = UI_LABELS[localeKey].activities.worksheet.errors as Record<string, string>;
+  const [status, setStatus] = useState<QuestionImageStatus>({ kind: 'idle' });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+      setStatus({ kind: 'error', message: errors.unsupported_media_type ?? errors.upload_failed });
+      return;
+    }
+    setStatus({ kind: 'uploading' });
+    try {
+      const blob = await convertImageToWebp(file);
+      const res = await fetch('/api/actividades/imagen?purpose=question', {
+        method: 'POST',
+        headers: { 'content-type': 'image/webp' },
+        body: blob,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        path?: string;
+        width?: number;
+        height?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.path || !data.width || !data.height) {
+        setStatus({ kind: 'error', message: errors[data.error ?? ''] ?? errors.upload_failed });
+        return;
+      }
+      setStatus({ kind: 'idle' });
+      onChange({ path: data.path, width: data.width, height: data.height });
+    } catch {
+      setStatus({ kind: 'error', message: errors.upload_failed });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5" data-testid={`varios-question-image-${slotId}`}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        data-testid={`varios-question-image-input-${slotId}`}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void handleFile(file);
+        }}
+      />
+      {image ? (
+        <div className="flex items-center gap-2">
+          <FadeImage
+            src={imagePreviewUrl(image.path)}
+            alt=""
+            data-testid={`varios-question-image-thumb-${slotId}`}
+            className="h-14 w-14 rounded-md border border-border object-cover"
+            placeholderClassName="h-14 w-14 rounded-md border border-border"
+          />
+          <button
+            type="button"
+            data-testid={`varios-question-image-remove-${slotId}`}
+            onClick={() => onChange(undefined)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
+          >
+            <XIcon aria-hidden="true" size={14} />
+            {t.remove}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          data-testid={`varios-question-image-add-${slotId}`}
+          disabled={status.kind === 'uploading'}
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-accent-ink hover:underline disabled:opacity-50"
+        >
+          <ImageIcon aria-hidden="true" size={14} />
+          {status.kind === 'uploading' ? t.uploading : t.add}
+        </button>
+      )}
+      {status.kind === 'error' && (
+        <p data-testid={`varios-question-image-error-${slotId}`} className="text-xs text-destructive">
+          {status.message}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** Pregunta | divider | Respuesta-or-opciones | "×" — same column shape `MatchPairsEditor.tsx`'s own `PAIR_GRID` uses. Exported so `QuizBlockEditor.tsx`'s own column headers line up with these rows. */
@@ -94,6 +227,8 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
     onAnswerChange,
     onDelete,
     onPasteIntoRow,
+    promptImage,
+    onPromptImageChange,
   } = props;
   const t = copyFor(lang);
   const [manualAdvanced, setManualAdvanced] = useState(false);
@@ -135,6 +270,9 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
             onChange={(event) => onLabelChange(event.target.value)}
             onPaste={onPasteIntoRow}
           />
+          {onPromptImageChange && (
+            <QuestionImageField lang={lang} slotId={slot.id} image={promptImage} onChange={onPromptImageChange} />
+          )}
         </div>
         <span aria-hidden="true" className="h-7 w-px bg-foreground/[0.08]" />
         <div className="flex min-w-0 flex-col gap-2 py-2">

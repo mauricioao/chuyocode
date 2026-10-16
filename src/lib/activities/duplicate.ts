@@ -52,7 +52,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
 import { getPublishedActivity, createActivity } from './activities';
-import type { Block, WorksheetBlock } from './blocks';
+import type { Block, WorksheetBlock, QuizBlock, PromptImageRef } from './blocks';
 import {
   parseImagePath,
   uploadPath,
@@ -121,6 +121,31 @@ function uniqueWorksheetImagePaths(blocks: Block[]): string[] {
   return paths;
 }
 
+/**
+ * Every unique quiz question's own context image path in `blocks`, in
+ * first-seen order — the question-image counterpart of
+ * {@link uniqueWorksheetImagePaths}. Re-homed on duplicate exactly like a
+ * worksheet image (file header): the original's own `promptImages` point at
+ * `activity-images/<originalId>/question-…`, public but owned by the
+ * ORIGINAL activity's approval, never a path this caller's own fresh draft
+ * may reference directly — same invariant `guardar.ts`/`index.ts` enforce on
+ * every save, now extended to question images (see those files' own
+ * `everyPromptImageAllowed`/`everyPromptImageOwnedByCaller`).
+ */
+function uniqueQuizPromptImagePaths(blocks: Block[]): string[] {
+  const seen = new Set<string>();
+  const paths: string[] = [];
+  for (const block of blocks) {
+    if (block.type !== 'quiz' || !block.promptImages) continue;
+    for (const image of Object.values(block.promptImages)) {
+      if (seen.has(image.path)) continue;
+      seen.add(image.path);
+      paths.push(image.path);
+    }
+  }
+  return paths;
+}
+
 /** Every unique worksheet audio marker path in `blocks`, in first-seen order — the audio counterpart of {@link uniqueWorksheetImagePaths}. */
 function uniqueWorksheetAudioPaths(blocks: Block[]): string[] {
   const seen = new Set<string>();
@@ -149,7 +174,20 @@ function rebuildBlocksForDuplicate(
   return blocks.map((block): Block => {
     const id = crypto.randomUUID();
     if (block.type !== 'worksheet') {
-      return { ...block, id };
+      const quiz = block as QuizBlock;
+      // Quiz slot/pool ids are left untouched (file header) — only the
+      // block's own id is fresh, plus every promptImage path re-homed
+      // through `pathMapping`, same rewrite `rewriteImagePaths`
+      // (`moderation.ts`) applies on approve. The map's KEYS (slot ids)
+      // never change here.
+      if (!quiz.promptImages) {
+        return { ...quiz, id };
+      }
+      const promptImages: Record<string, PromptImageRef> = {};
+      for (const [slotId, image] of Object.entries(quiz.promptImages)) {
+        promptImages[slotId] = { ...image, path: pathMapping.get(image.path) ?? image.path };
+      }
+      return { ...quiz, id, promptImages };
     }
     const worksheet = block as WorksheetBlock;
     const zones = worksheet.zones.map((zone) => ({ ...zone, id: crypto.randomUUID() }));
@@ -220,7 +258,7 @@ export async function duplicateActivity(originalId: string, callerId: string): P
     return { ok: false, error: 'daily_limit' };
   }
 
-  const imagePaths = uniqueWorksheetImagePaths(original.blocks);
+  const imagePaths = [...uniqueWorksheetImagePaths(original.blocks), ...uniqueQuizPromptImagePaths(original.blocks)];
   const audioPaths = uniqueWorksheetAudioPaths(original.blocks);
 
   // FAILS CLOSED: an unreadable count is treated as "at the cap", same
@@ -244,7 +282,7 @@ export async function duplicateActivity(originalId: string, callerId: string): P
     if (!parsed) return { ok: false, error: 'create_failed' };
 
     const newObjectId = crypto.randomUUID();
-    const toPath = uploadPath(callerId, newObjectId);
+    const toPath = uploadPath(callerId, newObjectId, parsed.kind);
     const copied = await copyToUploadsBucket(path, toPath);
     if (!copied) return { ok: false, error: 'copy_failed' };
     pathMapping.set(path, toPath);

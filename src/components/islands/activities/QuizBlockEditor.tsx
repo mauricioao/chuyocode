@@ -89,7 +89,7 @@ import {
 import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionType';
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
 import type { Payload } from '@/lib/exercisePayload';
-import type { QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
+import type { QuizBlock, QuizTemplate, PromptImageRef } from '@/lib/activities/blocks';
 import { convertBlock, type DroppedItem } from '@/lib/activities/templateConversion';
 import { variosJuegosStatus } from '@/lib/activities/variosJuegosStatus';
 import type { GameMode } from '@/lib/activities/gameModes';
@@ -240,6 +240,10 @@ export interface QuizBlockEditorProps {
   /** The exact question `findIncompleteBlock` pointed back to on a rejected submit — `null`/absent otherwise. */
   incompleteSlotId?: string | null;
   incompleteMessage?: string | null;
+  /** This block's own question context images (owner decision 2026-10-16), keyed by slot id — `undefined` = none. Only "Varios juegos" (no `template`) ever shows the "Agregar imagen" affordance (`VariosJuegosRow.tsx`). */
+  promptImages?: Record<string, PromptImageRef>;
+  /** The author added/removed/replaced a question's own image — ONE commit, same posture as `onPayloadChange`. Optional only so every existing render site keeps compiling unchanged; the real mount (`BlockList.tsx`) always wires it. */
+  onPromptImagesChange?: (images: Record<string, PromptImageRef> | undefined) => void;
 }
 
 /** `UI_LABELS[lang].activities.start`'s own title for a mold — the SAME name `BlockTypePicker.tsx`'s gallery and `ChangeMoldDialog.tsx` use (rule 6, §6.1: "a mold's name means the same thing everywhere"). */
@@ -264,6 +268,11 @@ const DROPPED_NOUNS: Record<DroppedItem['kind'], { es: [string, string]; en: [st
   questions: { es: ['pregunta', 'preguntas'], en: ['question', 'questions'] },
   sentences: { es: ['oración', 'oraciones'], en: ['sentence', 'sentences'] },
   groups: { es: ['grupo', 'grupos'], en: ['group', 'groups'] },
+  // "Cambiar de molde" losing a question's own context image (owner
+  // decision 2026-10-16): only "Varios juegos" shows one, so converting
+  // away from it (or regenerating slot ids) drops it — see
+  // `templateConversion.ts`'s own `preservePromptImages`.
+  images: { es: ['imagen de pregunta', 'imágenes de pregunta'], en: ['question image', 'question images'] },
 };
 
 /** "a, b y c" (es) / "a, b and c" (en) — every part but the last joined by a comma, the last by the conjunction. */
@@ -464,6 +473,8 @@ export default function QuizBlockEditor({
   onConvert = () => {},
   incompleteSlotId = null,
   incompleteMessage = null,
+  promptImages,
+  onPromptImagesChange,
 }: QuizBlockEditorProps) {
   const t = copyFor(lang);
   const isMatch = template === 'match';
@@ -547,6 +558,26 @@ export default function QuizBlockEditor({
 
   function commit(nextDraft: Draft) {
     onPayloadChange(draftToPayload(nextDraft));
+    // Prune any promptImages key naming a slot id this edit just removed —
+    // `blocks.ts`'s own `parsePromptImages` rejects the WHOLE block on a
+    // dangling key, so a question's deletion must never leave one behind
+    // for the next autosave to choke on.
+    if (promptImages && onPromptImagesChange) {
+      const validSlotIds = new Set(nextDraft.slots.map((slot) => slot.id));
+      const entries = Object.entries(promptImages).filter(([slotId]) => validSlotIds.has(slotId));
+      if (entries.length !== Object.keys(promptImages).length) {
+        onPromptImagesChange(entries.length > 0 ? Object.fromEntries(entries) : undefined);
+      }
+    }
+  }
+
+  /** One question's own "Agregar imagen"/"Quitar imagen" commit — a sibling to `commit` above, since `promptImages` lives beside `payload`, not inside it (`blocks.ts`'s own `QuizBlock.promptImages`). */
+  function setPromptImage(slotId: string, image: PromptImageRef | undefined) {
+    if (!onPromptImagesChange) return;
+    const next = { ...promptImages };
+    if (image) next[slotId] = image;
+    else delete next[slotId];
+    onPromptImagesChange(Object.keys(next).length > 0 ? next : undefined);
   }
 
   function addQuestion() {
@@ -1097,6 +1128,10 @@ export default function QuizBlockEditor({
                           onExplanationChange={(explanation) => commit(setSlotExplanation(draft, slot.id, explanation))}
                           onDuplicate={() => duplicateQuestion(question.id, slot.id)}
                           onDelete={() => removeQuestion(question.id, slot.id)}
+                          promptImage={promptImages?.[slot.id]}
+                          onPromptImageChange={
+                            onPromptImagesChange ? (image) => setPromptImage(slot.id, image) : undefined
+                          }
                         />
                       )}
                     </SortableQuestionCard>

@@ -8,6 +8,7 @@ import {
   parseImagePath,
   isOwnUploadPath,
   isPublicImagePath,
+  isQuestionImagePath,
   AUDIO_UPLOADS_BUCKET,
   AUDIO_BUCKET,
   uploadAudioPath,
@@ -63,6 +64,8 @@ describe('parseImagePath', () => {
       bucket: UPLOADS_BUCKET,
       ownerId: USER,
       objectId: OBJECT,
+      kind: 'worksheet',
+      fileName: `${OBJECT}.webp`,
       objectPath: `${USER}/${OBJECT}.webp`,
     });
   });
@@ -72,6 +75,8 @@ describe('parseImagePath', () => {
       bucket: IMAGES_BUCKET,
       ownerId: ACTIVITY,
       objectId: OBJECT,
+      kind: 'worksheet',
+      fileName: `${OBJECT}.webp`,
       objectPath: `${ACTIVITY}/${OBJECT}.webp`,
     });
   });
@@ -82,7 +87,31 @@ describe('parseImagePath', () => {
       bucket: UPLOADS_BUCKET,
       ownerId: USER,
       objectId: OBJECT,
+      kind: 'worksheet',
+      fileName: `${OBJECT}.webp`,
       objectPath: `${USER}/${OBJECT}.webp`,
+    });
+  });
+
+  it('parses a well-formed question-kind uploads path', () => {
+    expect(parseImagePath(uploadPath(USER, OBJECT, 'question'))).toEqual({
+      bucket: UPLOADS_BUCKET,
+      ownerId: USER,
+      objectId: OBJECT,
+      kind: 'question',
+      fileName: `question-${OBJECT}.webp`,
+      objectPath: `${USER}/question-${OBJECT}.webp`,
+    });
+  });
+
+  it('parses a well-formed question-kind images path', () => {
+    expect(parseImagePath(approvedImagePath(ACTIVITY, OBJECT, 'question'))).toEqual({
+      bucket: IMAGES_BUCKET,
+      ownerId: ACTIVITY,
+      objectId: OBJECT,
+      kind: 'question',
+      fileName: `question-${OBJECT}.webp`,
+      objectPath: `${ACTIVITY}/question-${OBJECT}.webp`,
     });
   });
 
@@ -101,6 +130,24 @@ describe('parseImagePath', () => {
     ['empty string', ''],
   ])('rejects %s', (_label, path) => {
     expect(parseImagePath(path)).toBeNull();
+  });
+});
+
+describe('isQuestionImagePath', () => {
+  it('accepts a question-kind uploads path', () => {
+    expect(isQuestionImagePath(uploadPath(USER, OBJECT, 'question'))).toBe(true);
+  });
+
+  it('accepts a question-kind images path', () => {
+    expect(isQuestionImagePath(approvedImagePath(ACTIVITY, OBJECT, 'question'))).toBe(true);
+  });
+
+  it('rejects a worksheet-kind (unprefixed) path', () => {
+    expect(isQuestionImagePath(uploadPath(USER, OBJECT))).toBe(false);
+  });
+
+  it('rejects garbage', () => {
+    expect(isQuestionImagePath('../../etc/passwd')).toBe(false);
   });
 });
 
@@ -123,6 +170,10 @@ describe('isOwnUploadPath', () => {
 
   it('rejects a traversal attempt regardless of caller id', () => {
     expect(isOwnUploadPath(`${UPLOADS_BUCKET}/../${OBJECT}.webp`, USER)).toBe(false);
+  });
+
+  it('accepts the caller\'s own question-kind upload path too (kind-agnostic)', () => {
+    expect(isOwnUploadPath(uploadPath(USER, OBJECT, 'question'), USER)).toBe(true);
   });
 });
 

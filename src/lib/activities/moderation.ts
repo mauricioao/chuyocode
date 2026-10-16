@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
-import { parseBlocks, type Block } from './blocks';
+import { parseBlocks, type Block, type PromptImageRef } from './blocks';
 import {
   approvedImagePath,
   parseImagePath,
@@ -379,16 +379,32 @@ function worksheetImagePaths(blocks: Block[]): string[] {
   return blocks.flatMap((block) => (block.type === 'worksheet' && block.image ? [block.image.path] : []));
 }
 
+/** Every quiz question's own context image path in `blocks`, in order — the question-image counterpart of {@link worksheetImagePaths}. Never a worksheet image (`PromptImageRef`'s own header, `blocks.ts`). */
+function quizPromptImagePaths(blocks: Block[]): string[] {
+  return blocks.flatMap((block) =>
+    block.type === 'quiz' && block.promptImages ? Object.values(block.promptImages).map((img) => img.path) : [],
+  );
+}
+
 /**
- * Rewrite every worksheet image's path via `mapping`, rebuilding each block
- * field by field — never spread — same posture as `blocks.ts`'s own parse
- * functions: an unknown key cannot survive this boundary either.
+ * Rewrite every worksheet image's path AND every quiz question's own
+ * context image path via `mapping`, rebuilding each block field by field —
+ * never spread — same posture as `blocks.ts`'s own parse functions: an
+ * unknown key cannot survive this boundary either.
  */
 function rewriteImagePaths(blocks: Block[], mapping: ReadonlyMap<string, string>): Block[] {
   return blocks.map((block) => {
-    if (block.type !== 'worksheet' || !block.image) return block;
-    const newPath = mapping.get(block.image.path) ?? block.image.path;
-    return { ...block, image: { ...block.image, path: newPath } };
+    if (block.type === 'worksheet') {
+      if (!block.image) return block;
+      const newPath = mapping.get(block.image.path) ?? block.image.path;
+      return { ...block, image: { ...block.image, path: newPath } };
+    }
+    if (!block.promptImages) return block;
+    const rewritten: Record<string, PromptImageRef> = {};
+    for (const [slotId, image] of Object.entries(block.promptImages)) {
+      rewritten[slotId] = { ...image, path: mapping.get(image.path) ?? image.path };
+    }
+    return { ...block, promptImages: rewritten };
   });
 }
 
@@ -456,12 +472,16 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
     const blocks = parseBlocks(row.blocks, 'submit');
     if (!blocks) return { ok: false, error: 'invalid_blocks' };
 
-    // Every worksheet image must be either already-public (a prior
-    // approval's own copy, reused unchanged by this edit) or an upload
-    // owned by THIS revision's own author — never a path guessed into
-    // another user's private uploads folder. See file header, mandatory
-    // security test.
-    const imagePaths = worksheetImagePaths(blocks);
+    // Every worksheet image AND every quiz question's own context image
+    // must be either already-public (a prior approval's own copy, reused
+    // unchanged by this edit) or an upload owned by THIS revision's own
+    // author — never a path guessed into another user's private uploads
+    // folder. See file header, mandatory security test. The target path's
+    // own KIND follows the source path's kind (`approvedImagePath`'s own
+    // `kind` param) — a question image is re-pointed into the public bucket
+    // under the SAME `question-` prefix, never silently reshaped into a
+    // worksheet-looking path.
+    const imagePaths = [...worksheetImagePaths(blocks), ...quizPromptImagePaths(blocks)];
     const pathMapping = new Map<string, string>();
     for (const path of imagePaths) {
       const parsed = parseImagePath(path);
@@ -469,7 +489,7 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
       if (parsed.bucket !== UPLOADS_BUCKET) continue; // already public, left as-is
       if (parsed.ownerId !== authorId.toLowerCase()) return { ok: false, error: 'foreign_upload' };
       if (!pathMapping.has(path)) {
-        pathMapping.set(path, approvedImagePath(activityId, parsed.objectId));
+        pathMapping.set(path, approvedImagePath(activityId, parsed.objectId, parsed.kind));
       }
     }
 

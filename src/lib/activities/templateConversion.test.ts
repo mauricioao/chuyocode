@@ -7,6 +7,7 @@ import { payloadToDraft } from '../authoringDraft';
 import { applyClozeSentenceText, applyDistractorsText, deriveClozeSentences } from './clozeSentences';
 import { deriveGroupSortRows } from './groupSort';
 import { createEmptyDraft, draftToPayload, type Draft } from '../authoringDraft';
+import { uploadPath } from './paths';
 
 function counter(prefix: string) {
   let n = 0;
@@ -272,6 +273,68 @@ describe('convertBlock — match -> Varios juegos', () => {
       ['cat', 'gato'],
       ['bird', 'pájaro'],
     ]);
+  });
+});
+
+describe('convertBlock — promptImages (question context images, owner decision 2026-10-16)', () => {
+  const USER = 'a1a1a1a1-0000-4000-8000-000000000001';
+  const QUESTION_PATH = uploadPath(USER, 'b2b2b2b2-0000-4000-8000-000000000002', 'question');
+
+  it('a no-op (same mold) carries promptImages over unchanged, nothing dropped', () => {
+    const block: QuizBlock = {
+      ...quizBlock('match', MATCH_NO_REPEATS_PAYLOAD),
+      promptImages: { s1: { path: QUESTION_PATH, width: 400, height: 300 } },
+    };
+    const result = convertBlock(block, 'match');
+    expect(result.block).toBe(block);
+    expect(result.block.promptImages).toEqual({ s1: { path: QUESTION_PATH, width: 400, height: 300 } });
+    expect(result.dropped).toEqual([]);
+  });
+
+  it('match -> Varios juegos preserves promptImages keyed by a slot id that survives the reshape (ids are reused verbatim, never minted)', () => {
+    const block: QuizBlock = {
+      ...quizBlock('match', MATCH_NO_REPEATS_PAYLOAD),
+      promptImages: { s1: { path: QUESTION_PATH, width: 400, height: 300 } },
+    };
+    const { block: result, dropped } = convertBlock(block, undefined);
+    expect(result.promptImages).toEqual({ s1: { path: QUESTION_PATH, width: 400, height: 300 } });
+    expect(dropped).toEqual([]);
+  });
+
+  it('match -> Varios juegos drops (and reports) a promptImages key naming a slot id that no longer exists', () => {
+    const block: QuizBlock = {
+      ...quizBlock('match', MATCH_NO_REPEATS_PAYLOAD),
+      promptImages: { 'stale-slot': { path: QUESTION_PATH, width: 400, height: 300 } },
+    };
+    const { block: result, dropped } = convertBlock(block, undefined);
+    expect(result.promptImages).toBeUndefined();
+    expect(dropped).toEqual([{ kind: 'images', count: 1 }]);
+  });
+
+  it('Varios juegos -> match drops promptImages (ids are minted fresh; match has no "Agregar imagen" affordance anyway), reported losslessly', () => {
+    const block: QuizBlock = {
+      ...quizBlock(undefined, BASIC_TEXT_PAYLOAD),
+      promptImages: { s1: { path: QUESTION_PATH, width: 400, height: 300 } },
+    };
+    const { block: result, dropped } = convertBlock(block, 'match');
+    expect(result.promptImages).toBeUndefined();
+    expect(dropped).toContainEqual({ kind: 'images', count: 1 });
+  });
+
+  it('Varios juegos -> cloze (no real mapping, dropAllFallback) also drops promptImages, reported alongside the questions it drops', () => {
+    const block: QuizBlock = {
+      ...quizBlock(undefined, BASIC_TEXT_PAYLOAD),
+      promptImages: { s1: { path: QUESTION_PATH, width: 400, height: 300 }, s2: { path: QUESTION_PATH, width: 400, height: 300 } },
+    };
+    const { block: result, dropped } = convertBlock(block, 'cloze');
+    expect(result.promptImages).toBeUndefined();
+    expect(dropped).toContainEqual({ kind: 'images', count: 2 });
+  });
+
+  it('a block with no promptImages at all is unaffected (absent stays absent, nothing reported)', () => {
+    const { block, dropped } = convertBlock(quizBlock(undefined, BASIC_TEXT_PAYLOAD), 'match');
+    expect(block.promptImages).toBeUndefined();
+    expect(dropped.some((d) => d.kind === 'images')).toBe(false);
   });
 });
 

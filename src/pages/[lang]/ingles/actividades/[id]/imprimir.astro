@@ -381,16 +381,33 @@ function questionText(slot: Slot): string {
               <ol class="flex flex-col gap-3 text-black">
                 {block.payload.slots.map((slot, i) => {
                   const items = getSlotItems(block.payload, slot);
+                  const promptImage = block.promptImages?.[slot.id];
                   return (
                     <li data-testid={`print-question-${slot.id}`}>
-                      <p>{i + 1}. {questionText(slot)}</p>
-                      {items.length > 0 && (
-                        <p class="ml-5 text-sm">
-                          {items
-                            .map((item, j) => `${LETTERS[j] ?? j}) ${item.text ?? item.media ?? item.id}`)
-                            .join('   ')}
-                        </p>
-                      )}
+                      <div class="flex items-start gap-3">
+                        {/* This question's own DISPLAY-ONLY context image
+                            (owner decision 2026-10-16) — small, next to the
+                            question, never through the worksheet image
+                            layer above. */}
+                        {promptImage && (
+                          <img
+                            src={imagePreviewUrl(promptImage.path)}
+                            alt=""
+                            data-testid={`print-question-image-${slot.id}`}
+                            class="h-16 w-16 flex-none rounded border border-black/20 object-cover"
+                          />
+                        )}
+                        <div>
+                          <p>{i + 1}. {questionText(slot)}</p>
+                          {items.length > 0 && (
+                            <p class="ml-5 text-sm">
+                              {items
+                                .map((item, j) => `${LETTERS[j] ?? j}) ${item.text ?? item.media ?? item.id}`)
+                                .join('   ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </li>
                   );
                 })}

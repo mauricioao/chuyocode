@@ -18,12 +18,25 @@ const NEW_ID = '22222222-2222-2222-2222-222222222222';
 const OWN_IMAGE_PATH = `activity-uploads/${USER.id}/33333333-3333-3333-3333-333333333333.webp`;
 const OTHER_IMAGE_PATH = 'activity-uploads/44444444-4444-4444-4444-444444444444/33333333-3333-3333-3333-333333333333.webp';
 
+const OWN_QUESTION_PATH = `activity-uploads/${USER.id}/question-33333333-3333-3333-3333-333333333333.webp`;
+const OTHER_QUESTION_PATH =
+  'activity-uploads/44444444-4444-4444-4444-444444444444/question-33333333-3333-3333-3333-333333333333.webp';
+
 function worksheetBlock(path: string) {
   return {
     id: 'block-1',
     type: 'worksheet',
     image: { path, width: 800, height: 600 },
     zones: [],
+  };
+}
+
+function quizBlockWithPromptImage(path: string) {
+  return {
+    id: 'block-quiz-1',
+    type: 'quiz',
+    payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+    promptImages: { s1: { path, width: 400, height: 300 } },
   };
 }
 
@@ -148,6 +161,25 @@ describe('POST /api/actividades — image ownership', () => {
   it("accepts the caller's own upload path", async () => {
     const res = await POST(
       ctx({ body: { lang: 'es', blocks: [worksheetBlock(OWN_IMAGE_PATH)] } }),
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/actividades — quiz question image (promptImages) ownership, owner decision 2026-10-16', () => {
+  it("422s when a promptImage is not the caller's own upload (no activity id exists yet, so there is no second allowed shape)", async () => {
+    const res = await POST(
+      ctx({ body: { lang: 'es', blocks: [quizBlockWithPromptImage(OTHER_QUESTION_PATH)] } }),
+    );
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error).toBe('invalid_image_path');
+    expect(createActivityMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts the caller's own question-kind upload path", async () => {
+    const res = await POST(
+      ctx({ body: { lang: 'es', blocks: [quizBlockWithPromptImage(OWN_QUESTION_PATH)] } }),
     );
     expect(res.status).toBe(200);
   });

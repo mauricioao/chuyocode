@@ -39,6 +39,7 @@ import type { QuizBlock } from '@/lib/activities/blocks';
 import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { blocksForStep } from '@/lib/exerciseBlocks';
+import { imagePreviewUrl } from '@/lib/activities/paths';
 import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exercisePayload';
 import {
   deriveGameItems,
@@ -262,6 +263,21 @@ export default function QuizBlockPractice({
               }
               return null;
             })}
+
+            {/* This question's own DISPLAY-ONLY context image (owner
+                decision 2026-10-16, `blocks.ts`'s `QuizBlock.promptImages`)
+                — shown above the prompt, not interactive, never through the
+                worksheet camera/zoom/stage layer. `undefined` = none, the
+                common case. */}
+            {block.promptImages?.[slot.id] && (
+              <FadeImage
+                data-testid={`quiz-slot-prompt-image-${slot.id}`}
+                src={imagePreviewUrl(block.promptImages[slot.id]!.path)}
+                alt=""
+                className="max-h-48 w-full rounded-md object-contain"
+                placeholderClassName="h-32 w-full rounded-md"
+              />
+            )}
 
             {/* D4 "Escuchar/Listen": one SpeakButton per question, same
                 placement rule as `ExerciseIsland`'s own per-step one. */}

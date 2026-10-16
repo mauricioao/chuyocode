@@ -15,17 +15,41 @@
  * Both the owner segment (a user id or an activity id) and the object name
  * are themselves uuids, which doubles as the traversal guard: neither `.`
  * nor `/` is a legal uuid character, so `../../x` can never match.
+ *
+ * KIND PREFIX (question context images, `activities/blocks.ts`'s own
+ * `QuizBlock.promptImages`): a DISPLAY-ONLY image attached to a "Varios
+ * juegos" question is never a worksheet image, and every consumer must be
+ * able to tell the two apart from the path alone — so its filename carries
+ * a `question-` prefix the worksheet shape never has:
+ *
+ *   `activity-uploads/<userId>/question-<uuid>.webp`
+ *   `activity-images/<activityId>/question-<uuid>.webp`
+ *
+ * A flat FILENAME prefix, not a subfolder: Supabase Storage's own `.list()`
+ * is non-recursive, and `countUserUploads`/`removeAllUserUploads`
+ * (`storage.ts`) both list a user's folder ONE level deep — a subfolder
+ * would hide every question image from the per-user upload cap and from
+ * account-deletion cleanup. A filename prefix keeps both working unchanged:
+ * a question image counts against the SAME per-user cap as a worksheet one
+ * (same bucket, same owner folder) and is still listed/removed by the
+ * existing whole-folder sweep.
  */
 
 export const UPLOADS_BUCKET = 'activity-uploads';
 export const IMAGES_BUCKET = 'activity-images';
+
+/** Which shape of image a path names — see this file's own "KIND PREFIX" header. `'worksheet'` is the original, unprefixed shape; every path stored before this kind existed is one. */
+export type ImageKind = 'worksheet' | 'question';
+
+/** The filename prefix for a `'question'`-kind object — absent entirely for `'worksheet'`. */
+const QUESTION_PREFIX = 'question-';
 
 /** Canonical 8-4-4-4-12 hex form — what `gen_random_uuid()`/`crypto.randomUUID()` produce. */
 const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const UUID_RE = new RegExp(`^${UUID_SOURCE}$`, 'i');
 
 const FULL_PATH_RE = new RegExp(
-  `^(${UPLOADS_BUCKET}|${IMAGES_BUCKET})/(${UUID_SOURCE})/(${UUID_SOURCE})\\.webp$`,
+  `^(${UPLOADS_BUCKET}|${IMAGES_BUCKET})/(${UUID_SOURCE})/(?:(${QUESTION_PREFIX}))?(${UUID_SOURCE})\\.webp$`,
   'i',
 );
 
@@ -34,14 +58,19 @@ export function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
 
-/** The uploads-bucket path for one user's fresh upload. */
-export function uploadPath(userId: string, id: string): string {
-  return `${UPLOADS_BUCKET}/${userId}/${id}.webp`;
+/** This kind's own filename, given its object id (no owner/bucket prefix). */
+function imageFileName(id: string, kind: ImageKind): string {
+  return kind === 'question' ? `${QUESTION_PREFIX}${id}.webp` : `${id}.webp`;
 }
 
-/** The images-bucket path for one activity's moderator-approved copy. */
-export function approvedImagePath(activityId: string, id: string): string {
-  return `${IMAGES_BUCKET}/${activityId}/${id}.webp`;
+/** The uploads-bucket path for one user's fresh upload. `kind` defaults to `'worksheet'` — every call site written before question images existed keeps producing exactly the same path. */
+export function uploadPath(userId: string, id: string, kind: ImageKind = 'worksheet'): string {
+  return `${UPLOADS_BUCKET}/${userId}/${imageFileName(id, kind)}`;
+}
+
+/** The images-bucket path for one activity's moderator-approved copy. `kind` defaults to `'worksheet'`, same reasoning as {@link uploadPath}. */
+export function approvedImagePath(activityId: string, id: string, kind: ImageKind = 'worksheet'): string {
+  return `${IMAGES_BUCKET}/${activityId}/${imageFileName(id, kind)}`;
 }
 
 export interface ParsedImagePath {
@@ -49,6 +78,10 @@ export interface ParsedImagePath {
   /** The user id (uploads) or activity id (images) that owns this object. */
   ownerId: string;
   objectId: string;
+  /** See {@link ImageKind}. */
+  kind: ImageKind;
+  /** This object's own filename (owner segment not included) — `{objectId}.webp`, or `question-{objectId}.webp` for a `'question'`-kind path. */
+  fileName: string;
   /** Path relative to the bucket, as the storage API (`.from(bucket)`) expects it. */
   objectPath: string;
 }
@@ -61,13 +94,24 @@ export interface ParsedImagePath {
 export function parseImagePath(path: string): ParsedImagePath | null {
   const match = FULL_PATH_RE.exec(path);
   if (!match) return null;
-  const [, bucket, ownerId, objectId] = match;
+  const [, bucket, ownerId, questionPrefix, objectId] = match;
+  const kind: ImageKind = questionPrefix ? 'question' : 'worksheet';
+  const lowerOwnerId = ownerId.toLowerCase();
+  const lowerObjectId = objectId.toLowerCase();
+  const fileName = imageFileName(lowerObjectId, kind);
   return {
     bucket: bucket.toLowerCase() as typeof UPLOADS_BUCKET | typeof IMAGES_BUCKET,
-    ownerId: ownerId.toLowerCase(),
-    objectId: objectId.toLowerCase(),
-    objectPath: `${ownerId.toLowerCase()}/${objectId.toLowerCase()}.webp`,
+    ownerId: lowerOwnerId,
+    objectId: lowerObjectId,
+    kind,
+    fileName,
+    objectPath: `${lowerOwnerId}/${fileName}`,
   };
+}
+
+/** Is `path` a well-formed, already-approved `'question'`-kind path (either bucket)? Mirrors {@link isPublicImagePath}'s own shape but keyed on kind rather than bucket — used where a caller must tell a question image apart from a worksheet one regardless of moderation stage. */
+export function isQuestionImagePath(path: string): boolean {
+  return parseImagePath(path)?.kind === 'question';
 }
 
 /** Is `path` a well-formed upload path, owned by `userId`? */

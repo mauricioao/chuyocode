@@ -24,6 +24,8 @@ import {
   parseImagePath,
   isOwnUploadPath,
   isPublicImagePath,
+  isQuestionImagePath,
+  type ImageKind,
   isUuid,
   AUDIO_UPLOADS_BUCKET,
   AUDIO_BUCKET,
@@ -43,6 +45,8 @@ export {
   parseImagePath,
   isOwnUploadPath,
   isPublicImagePath,
+  isQuestionImagePath,
+  type ImageKind,
   AUDIO_UPLOADS_BUCKET,
   AUDIO_BUCKET,
   AUDIO_EXTENSIONS,
@@ -150,12 +154,13 @@ export async function uploadToUploadsBucket(
   userId: string,
   id: string,
   bytes: Uint8Array,
+  kind: ImageKind = 'worksheet',
 ): Promise<string | null> {
   if (!isUuid(userId) || !isUuid(id)) return null;
   const client = getClient();
   if (!client) return null;
 
-  const path = uploadPath(userId, id);
+  const path = uploadPath(userId, id, kind);
   const parsed = parseImagePath(path);
   if (!parsed) return null;
 
@@ -322,7 +327,7 @@ export async function copyToImagesBucket(fromPath: string, toPath: string): Prom
   if (!client) return false;
 
   try {
-    const objectName = `${toParsed.objectId}.webp`;
+    const objectName = toParsed.fileName;
     const { data: existing, error: listError } = await client.storage
       .from(IMAGES_BUCKET)
       .list(toParsed.ownerId, { search: objectName });

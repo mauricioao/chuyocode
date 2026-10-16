@@ -82,6 +82,20 @@ function worksheetBlock(path: string) {
   };
 }
 
+const OWN_QUESTION_UPLOAD_PATH = `activity-uploads/${AUTHOR.id}/question-33333333-3333-3333-3333-333333333333.webp`;
+const OTHER_QUESTION_UPLOAD_PATH =
+  'activity-uploads/44444444-4444-4444-4444-444444444444/question-33333333-3333-3333-3333-333333333333.webp';
+const THIS_ACTIVITY_QUESTION_IMAGE_PATH = `activity-images/${ACTIVITY_ID}/question-33333333-3333-3333-3333-333333333333.webp`;
+
+function quizBlockWithPromptImage(path: string) {
+  return {
+    id: 'block-quiz-1',
+    type: 'quiz',
+    payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+    promptImages: { s1: { path, width: 400, height: 300 } },
+  };
+}
+
 function worksheetBlockWithAudio(imagePath: string, audioPath: string) {
   return {
     id: 'block-1',
@@ -329,6 +343,38 @@ describe('POST /api/actividades/[id]/guardar — image ownership', () => {
       ctx({ body: saveInput({ blocks: [worksheetBlock(THIS_ACTIVITY_IMAGE_PATH)] }) }),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/actividades/[id]/guardar — quiz question image (promptImages) ownership, owner decision 2026-10-16', () => {
+  it("422s a promptImage that is neither the caller's own upload nor this activity's own images path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithPromptImage(OTHER_QUESTION_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_image_path');
+  });
+
+  it("accepts the caller's own question-kind upload path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithPromptImage(OWN_QUESTION_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts THIS activity's own question-kind activity-images path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithPromptImage(THIS_ACTIVITY_QUESTION_IMAGE_PATH)] }) }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("422s a worksheet-kind path reused as a promptImage (never interchangeable)", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithPromptImage(OWN_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_blocks');
   });
 });
 

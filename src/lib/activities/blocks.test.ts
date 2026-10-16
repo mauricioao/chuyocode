@@ -854,3 +854,73 @@ describe('parseBlocks — worksheet rotation (creator polish round 2)', () => {
     expect(parseBlocks([worksheetBlock({ rotation: '90' })])).toBeNull();
   });
 });
+
+describe('parseBlocks — quiz promptImages (question context images, owner decision 2026-10-16)', () => {
+  const QUESTION_OBJECT = 'b2c3d4e5-0000-4000-8000-0000000000bb';
+  const QUESTION_PATH = uploadPath(USER, QUESTION_OBJECT, 'question');
+
+  it('absent entirely is fine — the common case, every quiz block saved before this field existed', () => {
+    const result = parseBlocks([quizBlock()]);
+    expect(result).toEqual([{ id: 'b1', type: 'quiz', payload: expect.any(Object) }]);
+  });
+
+  it('accepts a promptImage keyed by a real slot id', () => {
+    const result = parseBlocks([
+      quizBlock({ promptImages: { s1: { path: QUESTION_PATH, width: 400, height: 300 } } }),
+    ]);
+    expect(result).toEqual([
+      {
+        id: 'b1',
+        type: 'quiz',
+        payload: expect.any(Object),
+        promptImages: { s1: { path: QUESTION_PATH, width: 400, height: 300 } },
+      },
+    ]);
+  });
+
+  it('rejects a key naming a slot id that does not exist on this block', () => {
+    expect(
+      parseBlocks([quizBlock({ promptImages: { nope: { path: QUESTION_PATH, width: 400, height: 300 } } })]),
+    ).toBeNull();
+  });
+
+  it('rejects a WORKSHEET-kind path (never interchangeable with a question image)', () => {
+    expect(
+      parseBlocks([quizBlock({ promptImages: { s1: { path: uploadPath(USER, QUESTION_OBJECT), width: 400, height: 300 } } })]),
+    ).toBeNull();
+  });
+
+  it('rejects a non-object promptImages value', () => {
+    expect(parseBlocks([quizBlock({ promptImages: 'nope' })])).toBeNull();
+    expect(parseBlocks([quizBlock({ promptImages: [] })])).toBeNull();
+  });
+
+  it('rejects a promptImage missing width/height', () => {
+    expect(parseBlocks([quizBlock({ promptImages: { s1: { path: QUESTION_PATH } } })])).toBeNull();
+  });
+
+  it('rejects an unparseable path', () => {
+    expect(
+      parseBlocks([quizBlock({ promptImages: { s1: { path: 'not-a-path', width: 400, height: 300 } } })]),
+    ).toBeNull();
+  });
+
+  it('a worksheet block never carries promptImages at all (type-level: the field only exists on QuizBlock)', () => {
+    const result = parseBlocks([worksheetBlock()]);
+    expect(result).toEqual([expect.objectContaining({ type: 'worksheet' })]);
+    expect((result as Block[])[0]).not.toHaveProperty('promptImages');
+  });
+
+  it('a worksheet image.path is rejected if it is actually a question-kind path', () => {
+    expect(parseBlocks([worksheetBlock({ image: { path: QUESTION_PATH, width: 800, height: 600 } })])).toBeNull();
+  });
+
+  it('applies in draft mode too, same validation', () => {
+    expect(
+      parseBlocks(
+        [quizBlock({ promptImages: { nope: { path: QUESTION_PATH, width: 400, height: 300 } } })],
+        'draft',
+      ),
+    ).toBeNull();
+  });
+});

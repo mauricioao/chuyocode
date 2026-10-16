@@ -841,6 +841,16 @@ export const UI_LABELS = {
         audioUnsupported: 'Este navegador no puede grabar audio.',
         audioRecordError: 'Ocurrió un error al grabar. Inténtalo de nuevo.',
       },
+      // "Varios juegos"' own question context image (owner decision
+      // 2026-10-16): per-question "Agregar imagen"/"Quitar imagen" in
+      // `VariosJuegosRow.tsx`. Errors reuse `worksheet.errors` above — the
+      // same codes `/api/actividades/imagen` returns regardless of
+      // `?purpose=`.
+      questionImage: {
+        add: 'Agregar imagen',
+        remove: 'Quitar imagen',
+        uploading: 'Subiendo…',
+      },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
         textPlaceholder: 'Escribir la respuesta',
@@ -1313,6 +1323,10 @@ export const UI_LABELS = {
         quizAnswerLabel: 'Respuesta correcta',
         clozeDistractorsLabel: 'Distractores',
         explanationLabel: 'Explicación',
+        // "Varios juegos"' own question context image (owner decision
+        // 2026-10-16) — shown to the moderator with this explicit label so
+        // it is reviewed as display-only context, never as a worksheet.
+        questionImageLabel: 'Imagen de la pregunta',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
@@ -2444,6 +2458,11 @@ export const UI_LABELS = {
         audioUnsupported: 'This browser cannot record audio.',
         audioRecordError: 'Something went wrong while recording. Try again.',
       },
+      questionImage: {
+        add: 'Add image',
+        remove: 'Remove image',
+        uploading: 'Uploading…',
+      },
       player: {
         notGraded: 'Preview: this view does not grade answers.',
         textPlaceholder: 'Type the answer',
@@ -2749,6 +2768,7 @@ export const UI_LABELS = {
         quizAnswerLabel: 'Correct answer',
         clozeDistractorsLabel: 'Distractors',
         explanationLabel: 'Explanation',
+        questionImageLabel: 'Question image',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
         approveConfirmBody: 'It will be published immediately.',

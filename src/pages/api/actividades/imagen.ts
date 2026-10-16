@@ -14,10 +14,21 @@
  * 4. body > 2 MB (mirrors the bucket's own cap) -> 413
  * 5. not really WebP (bad magic bytes/header)   -> 422
  * 6. width/height outside [200, 2400] px        -> 422
- * 7. caller already has >= 100 uploads          -> 429
- * 8. storage write fails                        -> 500
- * 9. success                                    -> 200 { path, width, height }
+ * 7. ?purpose= is present but neither           -> 400 { error: 'bad_request' }
+ *    'worksheet' nor 'question'
+ * 8. caller already has >= 100 uploads          -> 429
+ * 9. storage write fails                        -> 500
+ * 10. success                                   -> 200 { path, width, height }
  * ```
+ *
+ * `?purpose=question` (owner decision 2026-10-16, "Varios juegos" question
+ * context images): same endpoint, same validation above, UNCHANGED —
+ * only the STORED PATH differs, under a distinct `question-` filename
+ * prefix (`@lib/activities/paths`'s own "KIND PREFIX" header) so every
+ * consumer can tell a question's own context image apart from a worksheet
+ * one. `?purpose=worksheet`, or no `?purpose=` at all, is the original
+ * worksheet shape — every call site written before question images existed
+ * keeps producing exactly the same path it always did.
  *
  * `GET /api/actividades/imagen?path=…` — preview/read-back for a stored
  * path. A well-formed `activity-images/…` path is PUBLIC already (a
@@ -54,6 +65,7 @@ import {
   uploadToUploadsBucket,
   countUserUploads,
   MAX_UPLOADS_PER_USER,
+  type ImageKind,
 } from '@lib/activities/storage';
 import { hasWebpMagic, readWebpDimensions } from '@lib/activities/webp';
 
@@ -68,11 +80,20 @@ function redirect(location: string): Response {
   return new Response(null, { status: 302, headers });
 }
 
+/** `?purpose=` values this endpoint accepts — anything else is a 400 (see this file's own header). */
+const PURPOSE_KINDS: ReadonlySet<string> = new Set(['worksheet', 'question']);
+
 export const POST: APIRoute = async ({ request, locals }) => {
   // Checked before anything else, same rule as every identity-gated write in
   // this codebase (`guardar.ts`, `reacciones/[exerciseId].ts`).
   const user = locals.user;
   if (!user) return requireUser();
+
+  const purposeParam = new URL(request.url).searchParams.get('purpose');
+  if (purposeParam !== null && !PURPOSE_KINDS.has(purposeParam)) {
+    return jsonResponse({ error: 'bad_request' }, 400);
+  }
+  const kind: ImageKind = purposeParam === 'question' ? 'question' : 'worksheet';
 
   const contentType = (request.headers.get('content-type') ?? '').toLowerCase();
   if (!contentType.startsWith('image/webp')) {
@@ -115,7 +136,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const id = crypto.randomUUID();
-  const path = await uploadToUploadsBucket(user.id, id, bytes);
+  const path = await uploadToUploadsBucket(user.id, id, bytes, kind);
   if (!path) {
     return jsonResponse({ error: 'upload_failed' }, 500);
   }

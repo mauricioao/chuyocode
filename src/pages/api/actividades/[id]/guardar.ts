@@ -21,9 +21,10 @@
  *    checks — ids, types, coordinates, the block/zone limits, image paths,
  *    name length, rotation — still apply exactly as before; see
  *    `blocks.ts`'s own `BlocksParseMode` doc.)
- * 8. a worksheet image.path is neither the      -> 422 { error: 'invalid_image_path' }
- *    caller's own upload path NOR an
- *    `activity-images/<thisId>/…` path
+ * 8. a worksheet image.path, OR a quiz          -> 422 { error: 'invalid_image_path' }
+ *    question's own promptImages path, is
+ *    neither the caller's own upload path NOR
+ *    an `activity-images/<thisId>/…` path
  * 8b. a worksheet audio marker's path is        -> 422 { error: 'invalid_audio_path' }
  *    neither the caller's own audio upload
  *    path NOR an `activity-audio/<thisId>/…`
@@ -75,7 +76,7 @@ function isSaveInput(value: unknown): value is SaveInput {
   return 'title' in value && 'level' in value && 'blocks' in value;
 }
 
-/** Is `path` a worksheet image this activity's save may legally reference? */
+/** Is `path` a worksheet image (or a quiz question's own context image — same rule, kind-agnostic) this activity's save may legally reference? */
 function isAllowedImagePath(path: string, userId: string, activityId: string): boolean {
   if (isOwnUploadPath(path, userId)) return true;
   const parsed = parseImagePath(path);
@@ -89,6 +90,20 @@ function everyImageAllowed(blocks: Block[], userId: string, activityId: string):
     // to check.
     if (block.type !== 'worksheet' || !block.image) return true;
     return isAllowedImagePath(block.image.path, userId, activityId);
+  });
+}
+
+/**
+ * Same ownership rule as {@link everyImageAllowed}, over a quiz block's own
+ * `promptImages` (question context images, owner decision 2026-10-16) —
+ * never a worksheet image, but the SAME "caller's own upload, or this
+ * activity's own approved copy" rule applies: a draft may never reference a
+ * path it has no business pointing at, worksheet or question image alike.
+ */
+function everyPromptImageAllowed(blocks: Block[], userId: string, activityId: string): boolean {
+  return blocks.every((block) => {
+    if (block.type !== 'quiz' || !block.promptImages) return true;
+    return Object.values(block.promptImages).every((image) => isAllowedImagePath(image.path, userId, activityId));
   });
 }
 
@@ -181,7 +196,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
 
-  if (!everyImageAllowed(blocks, user.id, id)) {
+  if (!everyImageAllowed(blocks, user.id, id) || !everyPromptImageAllowed(blocks, user.id, id)) {
     return jsonResponse({ error: 'invalid_image_path' }, 422);
   }
 

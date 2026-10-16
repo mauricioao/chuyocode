@@ -207,6 +207,34 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — rendering', () => {
     expect(html).toContain('b) sits');
   });
 
+  it("prints a question's own context image (promptImages, owner decision 2026-10-16) small, next to the question", async () => {
+    activityResult.value = {
+      ...WORKSHEET_ACTIVITY,
+      blocks: [
+        ...WORKSHEET_ACTIVITY.blocks.filter((b) => b.type !== 'quiz'),
+        {
+          ...WORKSHEET_ACTIVITY.blocks.find((b) => b.type === 'quiz'),
+          promptImages: { s1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+        },
+      ],
+    };
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="print-question-image-s1"');
+    expect(html).toContain(encodeURIComponent('activity-images/abc/question-img-1.webp'));
+  });
+
+  it('prints no question image when the block has none', async () => {
+    activityResult.value = WORKSHEET_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="print-question-image-s1"');
+  });
+
   it('has no site header/footer/nav chrome (bare print layout)', async () => {
     activityResult.value = WORKSHEET_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {

@@ -42,7 +42,7 @@
  * nothing to lose, so every target is offered and converts into an empty
  * block of that mold with nothing dropped.
  */
-import type { QuizBlock, QuizTemplate } from './blocks';
+import type { QuizBlock, QuizTemplate, PromptImageRef } from './blocks';
 import { createEmptyDraft, draftToPayload, payloadToDraft, type Draft } from '../authoringDraft';
 import type { PoolItem } from '../exercisePayload';
 import {
@@ -74,7 +74,7 @@ export interface ConversionOption {
 
 /** One kind of content a conversion could not carry over, plus how many — `dropped: []` means nothing was lost. */
 export interface DroppedItem {
-  kind: 'options' | 'answers' | 'pairs' | 'words' | 'questions' | 'sentences' | 'groups';
+  kind: 'options' | 'answers' | 'pairs' | 'words' | 'questions' | 'sentences' | 'groups' | 'images';
   count: number;
 }
 
@@ -218,10 +218,22 @@ function mintFactory(blockId: string, to: Mold): (prefix: string) => string {
   };
 }
 
+/**
+ * Rebuild `block` for mold `to` from `draft` — never carries over the
+ * ORIGINAL's own `promptImages` (question context images, owner decision
+ * 2026-10-16) directly: every branch above either keeps the same slot ids
+ * (a no-op, handled before this is ever called) or mints FRESH ones
+ * (`mintFactory`), which would silently orphan a `promptImages` key keyed
+ * by an id that no longer exists. {@link convertBlock}'s own
+ * {@link preservePromptImages} step decides, AFTER this returns, whether
+ * any of the original's images still apply and reports the rest as
+ * `dropped` — never silently.
+ */
 function buildBlock(block: QuizBlock, to: Mold, draft: Draft): QuizBlock {
   const next: QuizBlock = { ...block, payload: draftToPayload(draft) };
   if (to) next.template = to;
   else delete next.template;
+  delete next.promptImages;
   return next;
 }
 
@@ -411,11 +423,55 @@ function dropAllFallback(block: QuizBlock, draft: Draft, to: Mold, from: Mold): 
 }
 
 /**
+ * Decide what happens to `original`'s own `promptImages` (question context
+ * images) across a conversion to `to` — called AFTER every branch above has
+ * already produced its own `result` (whose `block.promptImages` is always
+ * absent, per {@link buildBlock}'s own header).
+ *
+ * Only `'undefined'` ("Varios juegos") actually SHOWS a promptImage
+ * anywhere (the editor's own `VariosJuegosRow`, presentation, practice,
+ * print, moderation) — every other mold's own authoring surface has no
+ * such affordance — and only when the ORIGINAL's own slot ids survive the
+ * conversion UNCHANGED can an old `promptImages` key still mean anything.
+ * The one branch where BOTH hold is `match -> undefined`
+ * ({@link basicFromMatch}, which reuses the original `draft`/ids verbatim,
+ * never minting fresh ones) — every other `to === undefined` path
+ * (`isEmptySource`'s own fallback, or a hypothetical future mapping) mints
+ * fresh ids via `mintFactory` and so cannot preserve a prior key either.
+ * Anything not carried over is reported in `dropped` (kind `'images'`),
+ * never silently lost.
+ */
+function preservePromptImages(original: QuizBlock, result: ConversionResult, to: Mold, from: Mold): ConversionResult {
+  const images = original.promptImages;
+  if (!images) return result;
+  const keys = Object.keys(images);
+  if (keys.length === 0) return result;
+
+  const idsPreserved = from === 'match' && to === undefined;
+  if (to === undefined && idsPreserved) {
+    const validSlotIds = new Set(result.block.payload.slots.map((slot) => slot.id));
+    const kept: Record<string, PromptImageRef> = {};
+    let lost = 0;
+    for (const [slotId, image] of Object.entries(images)) {
+      if (validSlotIds.has(slotId)) kept[slotId] = image;
+      else lost += 1;
+    }
+    const block = Object.keys(kept).length > 0 ? { ...result.block, promptImages: kept } : result.block;
+    const dropped = lost > 0 ? [...result.dropped, { kind: 'images' as const, count: lost }] : result.dropped;
+    return { block, dropped };
+  }
+
+  return { block: result.block, dropped: [...result.dropped, { kind: 'images' as const, count: keys.length }] };
+}
+
+/**
  * Convert `block` to mold `to`, carrying over everything representable and
  * reporting everything else in `dropped` — never silently losing text. A
  * no-op (same mold) returns `block` unchanged. See this file's own header
  * for which pairs have a real mapping; every other pair falls back to
- * {@link dropAllFallback}.
+ * {@link dropAllFallback}. Any `promptImages` (question context images,
+ * owner decision 2026-10-16) the original carried are handled separately,
+ * AFTER the mold-specific reshape — see {@link preservePromptImages}.
  */
 export function convertBlock(block: QuizBlock, to: Mold): ConversionResult {
   const from: Mold = block.template;
@@ -424,16 +480,24 @@ export function convertBlock(block: QuizBlock, to: Mold): ConversionResult {
   const draft = payloadToDraft(block.payload);
   const mint = mintFactory(block.id, to);
 
+  let result: ConversionResult;
   if (isEmptySource(draft, from, block.id)) {
-    return { block: buildBlock(block, to, createEmptyDraft()), dropped: [] };
+    result = { block: buildBlock(block, to, createEmptyDraft()), dropped: [] };
+  } else if (from === undefined && to === 'match') {
+    result = matchFromBasic(block, draft, mint);
+  } else if (from === 'match' && to === undefined) {
+    result = basicFromMatch(block, draft);
+  } else if (from === 'groupsort' && to === 'match') {
+    result = matchFromGroupsort(block, draft, mint);
+  } else if (from === 'match' && to === 'groupsort') {
+    result = groupsortFromMatch(block, draft, mint);
+  } else if (from === 'reorder' && to === 'cloze') {
+    result = clozeFromReorder(block, draft, mint);
+  } else if (from === 'cloze' && to === 'reorder') {
+    result = reorderFromCloze(block, draft, mint);
+  } else {
+    result = dropAllFallback(block, draft, to, from);
   }
 
-  if (from === undefined && to === 'match') return matchFromBasic(block, draft, mint);
-  if (from === 'match' && to === undefined) return basicFromMatch(block, draft);
-  if (from === 'groupsort' && to === 'match') return matchFromGroupsort(block, draft, mint);
-  if (from === 'match' && to === 'groupsort') return groupsortFromMatch(block, draft, mint);
-  if (from === 'reorder' && to === 'cloze') return clozeFromReorder(block, draft, mint);
-  if (from === 'cloze' && to === 'reorder') return reorderFromCloze(block, draft, mint);
-
-  return dropAllFallback(block, draft, to, from);
+  return preservePromptImages(block, result, to, from);
 }

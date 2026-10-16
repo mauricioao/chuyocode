@@ -310,6 +310,61 @@ describe('duplicateActivity', () => {
     });
   });
 
+  describe('quiz question context images (promptImages, owner decision 2026-10-16)', () => {
+    const QUESTION_PATH = `activity-images/${ORIGINAL_ID}/question-f1f1f1f1-0000-4000-8000-0000000000f1.webp`;
+
+    function quizWithPromptImage() {
+      return originalActivity({
+        blocks: [
+          {
+            id: 'quiz-1',
+            type: 'quiz',
+            payload: { slots: [{ id: 'slot-1', input: 'text', label: 'x', answer: ['y'] }], pools: {} },
+            promptImages: { 'slot-1': { path: QUESTION_PATH, width: 400, height: 300 } },
+          },
+        ],
+      });
+    }
+
+    it("copies the question image into the caller's own uploads folder, keeping its question- prefix", async () => {
+      getPublishedActivityMock.mockResolvedValue(quizWithPromptImage());
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(copyToUploadsBucketMock).toHaveBeenCalledTimes(1);
+      const [fromPath, toPath] = copyToUploadsBucketMock.mock.calls[0] as [string, string];
+      expect(fromPath).toBe(QUESTION_PATH);
+      expect(toPath.startsWith(`activity-uploads/${CALLER_ID}/question-`)).toBe(true);
+    });
+
+    it('rewrites the promptImages path in the new blocks, keyed by the SAME (untouched) slot id', async () => {
+      getPublishedActivityMock.mockResolvedValue(quizWithPromptImage());
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      const newBlocks = createActivityMock.mock.calls[0][1].blocks as Block[];
+      const quiz = newBlocks[0] as Extract<Block, { type: 'quiz' }>;
+      expect(quiz.payload.slots[0].id).toBe('slot-1');
+      expect(quiz.promptImages?.['slot-1']?.path.startsWith(`activity-uploads/${CALLER_ID}/question-`)).toBe(true);
+    });
+
+    it('returns upload_limit when copying the question image would exceed the per-user cap (shares the SAME cap as worksheet images)', async () => {
+      getPublishedActivityMock.mockResolvedValue(quizWithPromptImage());
+      countUserUploadsMock.mockResolvedValue(MAX_UPLOADS_PER_USER);
+      const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(result).toEqual({ ok: false, error: 'upload_limit' });
+      expect(copyToUploadsBucketMock).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the uploads bucket at all for a quiz block with no promptImages', async () => {
+      getPublishedActivityMock.mockResolvedValue(
+        originalActivity({
+          blocks: [
+            { id: 'quiz-1', type: 'quiz', payload: { slots: [{ id: 'slot-1', input: 'text', label: 'x', answer: ['y'] }], pools: {} } },
+          ],
+        }),
+      );
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(copyToUploadsBucketMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('returns not_found without touching storage/create when the service client is unavailable', async () => {
     countState.available = false;
     const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
