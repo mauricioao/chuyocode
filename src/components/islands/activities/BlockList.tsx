@@ -285,20 +285,28 @@ export default function BlockList({
     );
   };
 
-  // "Cambiar de molde" (R2): ONE commit replaces both the block's content
-  // AND its own mold, so the whole conversion lands as ONE undo step
-  // upstream — same posture every other discrete edit here already has.
-  // `template` omitted entirely (never stored as an explicit `undefined`)
-  // mirrors `parseQuizBlock`'s own convention for "Varios juegos".
-  const updateQuizTemplate = (blockId: string, payload: Payload, template: QuizBlock['template']) => {
+  // "Cambiar de molde" (R2): ONE commit replaces the block's content, its
+  // own mold, AND its own `promptImages` together, so the whole conversion
+  // — including whatever `preservePromptImages` decided to keep or drop
+  // (owner decision 2026-10-16 follow-up) — lands as ONE undo step
+  // upstream, same posture every other discrete edit here already has.
+  // `template`/`promptImages` each omitted entirely when absent (never
+  // stored as an explicit `undefined`), mirroring `parseQuizBlock`'s own
+  // convention for "Varios juegos"/no images.
+  const updateQuizTemplate = (
+    blockId: string,
+    payload: Payload,
+    template: QuizBlock['template'],
+    promptImages: Record<string, PromptImageRef> | undefined,
+  ) => {
     onBlocksChange(
       blocks.map((b) => {
         if (b.id !== blockId || !isQuiz(b)) return b;
-        if (!template) {
-          const { template: _dropped, ...rest } = b;
-          return { ...rest, payload };
-        }
-        return { ...b, payload, template };
+        const { template: _droppedTemplate, promptImages: _droppedImages, ...rest } = b;
+        const next: QuizBlock = { ...rest, payload };
+        if (template) next.template = template;
+        if (promptImages) next.promptImages = promptImages;
+        return next;
       }),
     );
   };
@@ -612,7 +620,9 @@ export default function BlockList({
             selectedSlotId={selectedZoneId}
             onSelectSlot={onSelectZone}
             onPayloadChange={(payload, promptImages) => updateQuiz(activeBlock.id, payload, promptImages)}
-            onConvert={(payload, template) => updateQuizTemplate(activeBlock.id, payload, template)}
+            onConvert={(payload, template, promptImages) =>
+              updateQuizTemplate(activeBlock.id, payload, template, promptImages)
+            }
             incompleteSlotId={activeBlock.id === incompleteBlockId ? incompleteZoneId : undefined}
             incompleteMessage={activeBlock.id === incompleteBlockId ? incompleteMessage : null}
             promptImages={quiz.promptImages}

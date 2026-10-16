@@ -251,19 +251,23 @@ export interface QuizBlockEditorProps {
   /**
    * "Cambiar de molde" (R2): the author chose a different mold — `payload`
    * is the converted content, `template` the block's own new mold
-   * (`undefined` for "Varios juegos"). The caller (`BlockList.tsx`) commits
-   * both in ONE step, so the whole conversion is one undo step upstream.
-   * Optional only so every existing render site keeps compiling unchanged;
-   * every real mount wires it (`BlockList.tsx`).
-   *
-   * NOTE (found during the lost-update audit above, not fixed here): this
-   * callback does not carry `promptImages`, and `handleChooseMold` below
-   * builds `convertBlock`'s own input block without `promptImages` either —
-   * so a mold conversion ("Cambiar de molde") silently drops every question
-   * image today, independently of the lost-update bug this file's own
-   * `onPayloadChange` header describes. Flagged for a separate follow-up.
+   * (`undefined` for "Varios juegos"), and `promptImages` whatever
+   * `preservePromptImages` (`templateConversion.ts`) decided survives the
+   * conversion — `undefined` when none did (owner decision 2026-10-16
+   * follow-up: a mold conversion used to silently drop every question
+   * image, because `handleChooseMold` never passed the block's own
+   * `promptImages` into `convertBlock` to begin with, so there was nothing
+   * for `preservePromptImages` to even look at). The caller (`BlockList.tsx`)
+   * commits all three in ONE step, so the whole conversion — content, mold
+   * AND images — is one undo step upstream. Optional only so every existing
+   * render site keeps compiling unchanged; every real mount wires it
+   * (`BlockList.tsx`).
    */
-  onConvert?: (payload: Payload, template: QuizTemplate | undefined) => void;
+  onConvert?: (
+    payload: Payload,
+    template: QuizTemplate | undefined,
+    promptImages?: Record<string, PromptImageRef>,
+  ) => void;
   /** The exact question `findIncompleteBlock` pointed back to on a rejected submit — `null`/absent otherwise. */
   incompleteSlotId?: string | null;
   incompleteMessage?: string | null;
@@ -544,12 +548,25 @@ export default function QuizBlockEditor({
   const [moldDialogOpen, setMoldDialogOpen] = useState(false);
   const moldFeedback = usePasteFeedback(payload);
 
+  /**
+   * This block exactly as `convertBlock`/`ChangeMoldDialog` need to see it —
+   * `template` and `promptImages` included only when present (never stored
+   * as an explicit `undefined`, same convention `parseQuizBlock` itself
+   * uses). Building this WITHOUT `promptImages` is exactly what used to
+   * make every mold conversion silently drop a question's own image: with
+   * no images on the input, `preservePromptImages` (`templateConversion.ts`)
+   * had nothing to preserve OR report as dropped.
+   */
+  function currentQuizBlock(): QuizBlock {
+    const block: QuizBlock = { id: blockId, type: 'quiz', payload };
+    if (template) block.template = template;
+    if (promptImages) block.promptImages = promptImages;
+    return block;
+  }
+
   function handleChooseMold(to: QuizTemplate | undefined) {
-    const current: QuizBlock = template
-      ? { id: blockId, type: 'quiz', payload, template }
-      : { id: blockId, type: 'quiz', payload };
-    const { block: nextBlock, dropped } = convertBlock(current, to);
-    onConvert(nextBlock.payload, nextBlock.template);
+    const { block: nextBlock, dropped } = convertBlock(currentQuizBlock(), to);
+    onConvert(nextBlock.payload, nextBlock.template, nextBlock.promptImages);
     setMoldDialogOpen(false);
     const parts = [t.moldChanged(moldTitle(lang, to))];
     if (dropped.length > 0) parts.push(droppedPhrase(lang, dropped));
@@ -579,7 +596,7 @@ export default function QuizBlockEditor({
     <ChangeMoldDialog
       lang={lang}
       open={moldDialogOpen}
-      block={template ? { id: blockId, type: 'quiz', payload, template } : { id: blockId, type: 'quiz', payload }}
+      block={currentQuizBlock()}
       onOpenChange={setMoldDialogOpen}
       onChoose={handleChooseMold}
     />
