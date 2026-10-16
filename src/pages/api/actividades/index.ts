@@ -56,6 +56,21 @@ function everyImageOwnedByCaller(blocks: Block[], userId: string): boolean {
   });
 }
 
+/**
+ * Same rule as {@link everyImageOwnedByCaller}, over a quiz block's own
+ * `promptImages` (question context images, owner decision 2026-10-16) — no
+ * activity id exists yet at creation time, so (unlike `guardar.ts`'s own
+ * `everyPromptImageAllowed`) there is no `activity-images/…` copy a brand
+ * new draft could legally reference either; every promptImage path must be
+ * the caller's own upload.
+ */
+function everyPromptImageOwnedByCaller(blocks: Block[], userId: string): boolean {
+  return blocks.every((block) => {
+    if (block.type !== 'quiz' || !block.promptImages) return true;
+    return Object.values(block.promptImages).every((image) => isOwnUploadPath(image.path, userId));
+  });
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
   if (!user) return requireUser();
@@ -85,7 +100,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
 
-  if (!everyImageOwnedByCaller(blocks, user.id)) {
+  if (!everyImageOwnedByCaller(blocks, user.id) || !everyPromptImageOwnedByCaller(blocks, user.id)) {
     return jsonResponse({ error: 'invalid_image_path' }, 422);
   }
 

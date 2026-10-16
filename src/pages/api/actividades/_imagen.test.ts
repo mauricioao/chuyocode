@@ -68,18 +68,20 @@ const VALID_WEBP = buildLossyWebp(800, 600);
 const TOO_SMALL_WEBP = buildLossyWebp(100, 100);
 const TOO_LARGE_WEBP = buildLossyWebp(3000, 3000);
 
-function uploadRequest(body: Uint8Array | undefined, contentType = 'image/webp'): Request {
-  return new Request('https://chuyo.test/api/actividades/imagen', {
+function uploadRequest(body: Uint8Array | undefined, contentType = 'image/webp', purpose?: string): Request {
+  const url = new URL('https://chuyo.test/api/actividades/imagen');
+  if (purpose !== undefined) url.searchParams.set('purpose', purpose);
+  return new Request(url, {
     method: 'POST',
     headers: contentType ? { 'content-type': contentType } : {},
     body: body as BodyInit | undefined,
   });
 }
 
-function postCtx(args: { user?: User | null; body?: Uint8Array; contentType?: string }) {
-  const { user = USER, body = VALID_WEBP, contentType = 'image/webp' } = args;
+function postCtx(args: { user?: User | null; body?: Uint8Array; contentType?: string; purpose?: string }) {
+  const { user = USER, body = VALID_WEBP, contentType = 'image/webp', purpose } = args;
   return {
-    request: uploadRequest(body, contentType),
+    request: uploadRequest(body, contentType, purpose),
     locals: { user },
   } as unknown as Parameters<typeof POST>[0];
 }
@@ -211,6 +213,7 @@ describe('POST /api/actividades/imagen — success', () => {
       USER.id,
       expect.any(String),
       expect.any(Uint8Array),
+      'worksheet',
     );
     expect(await res.json()).toEqual({ path: OWN_PATH, width: 800, height: 600 });
   });
@@ -218,6 +221,52 @@ describe('POST /api/actividades/imagen — success', () => {
   it('marks the response private/no-store', async () => {
     const res = await POST(postCtx({}));
     expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+describe('POST /api/actividades/imagen — ?purpose= (question context images, owner decision 2026-10-16)', () => {
+  it('defaults to the worksheet kind when ?purpose= is absent', async () => {
+    await POST(postCtx({}));
+    expect(storageMocks.uploadToUploadsBucket).toHaveBeenCalledWith(
+      USER.id,
+      expect.any(String),
+      expect.any(Uint8Array),
+      'worksheet',
+    );
+  });
+
+  it('accepts ?purpose=worksheet explicitly, same as the default', async () => {
+    const res = await POST(postCtx({ purpose: 'worksheet' }));
+    expect(res.status).toBe(200);
+    expect(storageMocks.uploadToUploadsBucket).toHaveBeenCalledWith(
+      USER.id,
+      expect.any(String),
+      expect.any(Uint8Array),
+      'worksheet',
+    );
+  });
+
+  it('accepts ?purpose=question and uploads with the question kind', async () => {
+    const res = await POST(postCtx({ purpose: 'question' }));
+    expect(res.status).toBe(200);
+    expect(storageMocks.uploadToUploadsBucket).toHaveBeenCalledWith(
+      USER.id,
+      expect.any(String),
+      expect.any(Uint8Array),
+      'question',
+    );
+  });
+
+  it('400s an unrecognized ?purpose= value, and nothing is uploaded', async () => {
+    const res = await POST(postCtx({ purpose: 'worksheet-nope' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'bad_request' });
+    expect(storageMocks.uploadToUploadsBucket).not.toHaveBeenCalled();
+  });
+
+  it('checks ?purpose= before the content-type/body checks run (a bad request stays a bad request)', async () => {
+    const res = await POST(postCtx({ purpose: 'nope', contentType: 'image/png' }));
+    expect(res.status).toBe(400);
   });
 });
 

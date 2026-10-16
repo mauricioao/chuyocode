@@ -328,6 +328,63 @@ describe('approveRevision', () => {
     copySpy.mockRestore();
   });
 
+  it("refuses a quiz question's context image referencing another user's uploads folder", async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+            promptImages: { s1: { path: `${UPLOADS_BUCKET}/${OTHER_USER}/question-${IMAGE_ID}.webp`, width: 400, height: 300 } },
+          },
+        ],
+      },
+      error: null,
+    });
+    const result = await approveRevision(REVISION, REVIEWER);
+    expect(result).toEqual({ ok: false, error: 'foreign_upload' });
+  });
+
+  it("approves: copies the own-uploaded quiz question's context image, keeping its question- prefix in the public path", async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+            promptImages: { s1: { path: `${UPLOADS_BUCKET}/${AUTHOR}/question-${IMAGE_ID}.webp`, width: 400, height: 300 } },
+          },
+        ],
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const copySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    expect(copySpy).toHaveBeenCalledWith(
+      `${UPLOADS_BUCKET}/${AUTHOR}/question-${IMAGE_ID}.webp`,
+      `activity-images/${ACTIVITY}/question-${IMAGE_ID}.webp`,
+    );
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    const blocks = args.p_blocks as Array<{ promptImages?: Record<string, { path: string }> }>;
+    expect(blocks[0].promptImages?.s1.path).toBe(`activity-images/${ACTIVITY}/question-${IMAGE_ID}.webp`);
+
+    copySpy.mockRestore();
+  });
+
   it('approves a mixed worksheet+quiz activity: copies only the worksheet image, leaves the quiz\'s allow-listed media URL untouched, and reports both block types', async () => {
     push('activity_revisions', {
       data: {

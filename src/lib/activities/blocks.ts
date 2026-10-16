@@ -32,6 +32,26 @@ export interface ImageRef {
   height: number;
 }
 
+/**
+ * A DISPLAY-ONLY context image attached to one "Varios juegos" question
+ * (owner decision 2026-10-16: an image on the left, answer tiles on the
+ * right, like the teacher's own reference). Same shape as {@link ImageRef}
+ * but a DIFFERENT, DISTINCT type on purpose — this is never a worksheet
+ * image and must never be treated as one anywhere (never fed to the
+ * worksheet camera/zoom/stage layer, `sheetStitcher.ts`, rotation, zone
+ * editing, grading, or projection-legibility warnings): it carries no
+ * answer geometry, nothing to grade, nothing to project-check — only
+ * context for the question's own prompt. `path` is validated by
+ * {@link parseImagePath} requiring the `'question'` kind specifically (see
+ * `./paths`'s own "KIND PREFIX" header) — a worksheet's `image.path` can
+ * never be mistaken for one of these, and vice versa.
+ */
+export interface PromptImageRef {
+  path: string;
+  width: number;
+  height: number;
+}
+
 /** One graded region drawn over a worksheet image, in fractional coordinates. */
 export interface Zone {
   id: string;
@@ -138,6 +158,16 @@ export interface QuizBlock {
   payload: Payload;
   /** See {@link QuizTemplate}. `undefined` = "Básico" (the default before this field existed). */
   template?: QuizTemplate;
+  /**
+   * Per-question DISPLAY-ONLY context images (owner decision 2026-10-16),
+   * keyed by the {@link Slot.id} they belong to — never a worksheet image,
+   * see {@link PromptImageRef}'s own header. `undefined`/absent = no
+   * question images on this block, the common case and every quiz block
+   * saved before this field existed. A key naming a slot id that no longer
+   * exists in `payload.slots` can never survive {@link parseQuizBlock}'s
+   * own validation below.
+   */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
 export type Block = WorksheetBlock | QuizBlock;
@@ -213,14 +243,19 @@ function parseTrimmedStrings(value: unknown): string[] {
 /**
  * Parse one worksheet image reference, or `null` if it is unusable.
  *
- * `path` must match the storage layout exactly ({@link parseImagePath}):
- * reject anything else, including a full URL or a path containing `..` —
- * neither can ever be produced by the upload/approval flow, so an activity
- * carrying one could only be a forged payload.
+ * `path` must match the storage layout exactly ({@link parseImagePath}) AND
+ * be the `'worksheet'` kind specifically — reject anything else, including
+ * a full URL, a path containing `..`, or a question-context image's own
+ * `question-` prefixed path (never interchangeable, see
+ * {@link PromptImageRef}'s own header). None of these can ever be produced
+ * by the upload/approval flow for a worksheet, so an activity carrying one
+ * could only be a forged payload.
  */
 function parseImageRef(value: unknown): ImageRef | null {
   if (!isRecord(value)) return null;
-  if (typeof value.path !== 'string' || !parseImagePath(value.path)) return null;
+  if (typeof value.path !== 'string') return null;
+  const parsed = parseImagePath(value.path);
+  if (!parsed || parsed.kind !== 'worksheet') return null;
   if (typeof value.width !== 'number' || !Number.isFinite(value.width) || value.width <= 0) {
     return null;
   }
@@ -228,6 +263,56 @@ function parseImageRef(value: unknown): ImageRef | null {
     return null;
   }
   return { path: value.path, width: value.width, height: value.height };
+}
+
+/**
+ * Parse one question context image reference, or `null` if it is unusable
+ * — the {@link PromptImageRef} counterpart of {@link parseImageRef}: same
+ * shape, but `path` must be the `'question'` kind specifically, so a
+ * worksheet's own `image.path` can never be reused here.
+ */
+function parsePromptImageRef(value: unknown): PromptImageRef | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.path !== 'string') return null;
+  const parsed = parseImagePath(value.path);
+  if (!parsed || parsed.kind !== 'question') return null;
+  if (typeof value.width !== 'number' || !Number.isFinite(value.width) || value.width <= 0) {
+    return null;
+  }
+  if (typeof value.height !== 'number' || !Number.isFinite(value.height) || value.height <= 0) {
+    return null;
+  }
+  return { path: value.path, width: value.width, height: value.height };
+}
+
+/**
+ * Parse a quiz block's optional `promptImages` map, or `null` if it is
+ * present but unusable (same all-or-nothing posture as every other field in
+ * this module) — `undefined` for "absent entirely", the common case.
+ *
+ * Every key must name a REAL slot id in `slotIds` (this block's own
+ * `payload.slots`) — a dangling reference (a stale key left over from a
+ * deleted question, or a forged one) fails the whole block rather than
+ * being silently dropped, same reasoning {@link parseBlocks}' own
+ * ALL-OR-NOTHING header gives for a block's other fields: a quiz question is
+ * re-authored and re-saved as one unit, so there is no "half-good" map to
+ * preserve.
+ */
+function parsePromptImages(
+  value: unknown,
+  slotIds: ReadonlySet<string>,
+): Record<string, PromptImageRef> | null | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return null;
+
+  const result: Record<string, PromptImageRef> = {};
+  for (const [slotId, raw] of Object.entries(value)) {
+    if (!slotIds.has(slotId)) return null;
+    const ref = parsePromptImageRef(raw);
+    if (!ref) return null;
+    result[slotId] = ref;
+  }
+  return result;
 }
 
 /**
@@ -481,8 +566,13 @@ function parseQuizBlock(
     }
   }
 
+  const slotIds = new Set(payload.slots.map((slot) => slot.id));
+  const promptImages = parsePromptImages(value.promptImages, slotIds);
+  if (promptImages === null) return null;
+
   const block: QuizBlock = { id, type: 'quiz', name, payload };
   if (template) block.template = template;
+  if (promptImages) block.promptImages = promptImages;
   return block;
 }
 
