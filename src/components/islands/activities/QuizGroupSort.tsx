@@ -53,7 +53,7 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { BLANK_EMPTY, BLANK_FILLED, stageChipColorClass } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
@@ -124,9 +124,15 @@ const GROUPSORT_COPY: Record<'es' | 'en', GroupSortCopy> = {
   },
 };
 
-/** Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe (`mechanics/chip.ts`). */
-const TILE_BASE = CHIP_STAGE;
-
+/**
+ * Shared colour-filled capsule tile, `mechanics/chip.ts`'s own
+ * `stageChipColorClass` — coloured from the shared tile palette by the
+ * item's own stable position in its shuffled tray order (see
+ * `colorIndexById`'s own comment below), same recipe `QuizMatching.tsx`
+ * uses. A tray tile and an already-placed one share the SAME colour (owner
+ * spec: a tile keeps its own colour once placed) — `placed` no longer
+ * swaps in a white `CHIP_PLACED` fill, see below.
+ */
 interface ItemTileProps {
   id: string;
   label: string;
@@ -134,16 +140,18 @@ interface ItemTileProps {
   draggable: boolean;
   dragging: boolean;
   picked: boolean;
-  /** Already sitting in a group box — white/raised, same "placed" look every sibling mechanic's tile gets once it lands (`mechanics/chip.ts`'s {@link CHIP_PLACED}). A tray tile stays the grey glass rest state. */
+  /** Already sitting in a group box — kept for the one thing it still changes below (no own border/shape difference any more; colour and shape are identical in the tray and in a group box). */
   placed: boolean;
   locked: boolean;
   wrong: boolean;
   reducedMotion: boolean;
   onClick: () => void;
   ariaLabel?: string;
+  /** This tile's own stable position in the shuffled tray order — see `colorIndexById`'s own comment below for why colour belongs to the item, never the group it happens to sit in. */
+  colorIndex: number;
 }
 
-function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, locked, wrong, reducedMotion, onClick, ariaLabel }: ItemTileProps) {
+function ItemTile({ id, label, disabled, draggable, dragging, picked, locked, wrong, reducedMotion, onClick, ariaLabel, colorIndex }: ItemTileProps) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled: disabled || !draggable });
   // UX audit F10 ("Al comprobar"): drives the ✓/✕ badge on top of this
   // tile's own `locked`/`wrong` colour — never a new colour, see
@@ -164,13 +172,20 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, placed, lo
       aria-label={ariaLabel}
       className={cn(
         'relative',
-        TILE_BASE,
-        placed && CHIP_PLACED,
+        stageChipColorClass(colorIndex),
         draggable && 'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
-        locked && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
-        wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
+        // Picked (tap-selected, not yet placed): a ring only — never a
+        // white `CHIP_PLACED` fill, which would hide the chip's own colour.
+        picked && !dragging && 'ring-2 ring-inset ring-ring',
+        // Locked correct / wrong: a ring, not a background tint or a text
+        // colour swap — a saturated fill plus a semi-transparent
+        // success/destructive tint read muddy, and `text-success-strong-
+        // foreground`/`text-destructive` are tuned for the grey/white rest
+        // material, not for white-on-colour. The ✓/✕ `GradeMark` badge
+        // below stays the one semantic signal either way (UX audit F10).
+        locked && 'ring-2 ring-inset ring-success-strong',
+        wrong && 'animate-pulse ring-2 ring-inset ring-destructive motion-reduce:animate-none',
         gameTileTransitionClassName(reducedMotion),
       )}
     >
@@ -195,6 +210,8 @@ interface GroupBoxProps {
   emptyLabel: string;
   removeLabel: string;
   lang: Lang;
+  /** Resolves an item's own stable colour index — see `colorIndexById`'s own comment in the main component. */
+  colorIndexFor: (itemId: string) => number;
 }
 
 /** One group's own big labelled box — a drop target that holds EVERY tile currently placed in it, not just one. */
@@ -213,6 +230,7 @@ function GroupBox({
   emptyLabel,
   removeLabel,
   lang,
+  colorIndexFor,
 }: GroupBoxProps) {
   const { isOver, setNodeRef } = useDroppable({ id: groupDropId(groupId), disabled });
 
@@ -265,6 +283,7 @@ function GroupBox({
               reducedMotion={reducedMotion}
               onClick={locked ? () => {} : canPlacePicked ? onPlacePicked : () => onRemoveItem(item.id)}
               ariaLabel={`${removeLabel} ${label2}${gradeAriaSuffix(lang, locked ? 'correct' : wrong ? 'wrong' : undefined)}`}
+              colorIndex={colorIndexFor(item.id)}
             />
           );
         })}
@@ -357,6 +376,19 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
     () => shuffleWithSeed(poolItems.map((item) => item.id), seedFromString(`${seed}:groupsort:${round}`)),
     [poolItems, seed, round],
   );
+
+  /**
+   * Each item's own stable colour — its fixed index in `trayOrder` (owner
+   * spec: "siempre variadas"), same recipe `QuizMatching.tsx` uses, and for
+   * the same reason: a group box holds a LOCKED item forever once correct
+   * (`handleCheck`'s own comment), so this must stay keyed off `trayOrder`
+   * (unaffected by where an item currently sits), never off a per-group
+   * index that would reassign colours the moment items move between boxes.
+   */
+  const colorIndexById = useMemo(() => new Map(trayOrder.map((id, index) => [id, index])), [trayOrder]);
+  function colorIndexFor(id: string): number {
+    return colorIndexById.get(id) ?? 0;
+  }
 
   if (total === 0 || groups.length === 0) return null;
 
@@ -603,6 +635,46 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
               STAGE_SAFE_INSET_CLASS,
             )}
           >
+          {/* THE TRAY, ABOVE THE BOARD (UI pass, owner spec: "mover las
+              opciones arriba" — same DOM-order move `QuizMatching.tsx`
+              documents for "Une las parejas", applied here too for
+              consistency: this template shares the exact same tray-below-
+              board structure). Same `STAGE_CONTENT_MEASURE` cap as the board
+              below, so the tray is centred over the SAME board width. */}
+          <ul
+            ref={trayRef}
+            data-testid="groupsort-tray"
+            aria-label={t.groupSortTrayLabel}
+            // Always `flex-wrap`, never a horizontal scroller below `sm` —
+            // same mobile-tray-clipping bug `QuizMatching.tsx`'s own tray
+            // documents.
+            className={cn('flex list-none flex-wrap gap-3 p-0 pb-2', STAGE_CONTENT_MEASURE)}
+          >
+            {trayIds.map((id) => {
+              const item = itemById.get(id);
+              if (!item) return null;
+              const label = item.text ?? item.id;
+              return (
+                <li key={id} className="shrink-0">
+                  <ItemTile
+                    id={id}
+                    label={label}
+                    disabled={settling}
+                    draggable
+                    dragging={activeId === id}
+                    picked={pickedId === id}
+                    placed={false}
+                    locked={false}
+                    wrong={false}
+                    reducedMotion={reducedMotion}
+                    onClick={() => handleTrayTileClick(id)}
+                    colorIndex={colorIndexFor(id)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+
           <div
             data-testid="groupsort-board"
             className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap', STAGE_CONTENT_MEASURE)}
@@ -634,49 +706,25 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
                   emptyLabel={t.groupSortEmptyGroup}
                   removeLabel={t.groupSortRemovePrefix}
                   lang={lang}
+                  colorIndexFor={colorIndexFor}
                 />
               );
             })}
           </div>
-
-          <ul
-            ref={trayRef}
-            data-testid="groupsort-tray"
-            aria-label={t.groupSortTrayLabel}
-            // Always `flex-wrap`, never a horizontal scroller below `sm` —
-            // same mobile-tray-clipping bug `QuizMatching.tsx`'s own tray
-            // documents.
-            className="flex list-none flex-wrap gap-3 p-0 pb-2"
-          >
-            {trayIds.map((id) => {
-              const item = itemById.get(id);
-              if (!item) return null;
-              const label = item.text ?? item.id;
-              return (
-                <li key={id} className="shrink-0">
-                  <ItemTile
-                    id={id}
-                    label={label}
-                    disabled={settling}
-                    draggable
-                    dragging={activeId === id}
-                    picked={pickedId === id}
-                    placed={false}
-                    locked={false}
-                    wrong={false}
-                    reducedMotion={reducedMotion}
-                    onClick={() => handleTrayTileClick(id)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
           </div>
         </div>
 
         <DragOverlay dropAnimation={gameDropAnimation(reducedMotion)}>
-          {activeLabel ? (
-            <div className={cn(TILE_BASE, 'pointer-events-none', liftedTileClassName(reducedMotion))}>{activeLabel}</div>
+          {activeLabel && activeId ? (
+            <div
+              className={cn(
+                stageChipColorClass(colorIndexFor(activeId)),
+                'pointer-events-none',
+                liftedTileClassName(reducedMotion),
+              )}
+            >
+              {activeLabel}
+            </div>
           ) : null}
         </DragOverlay>
       </DndContext>

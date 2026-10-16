@@ -57,7 +57,7 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { BLANK_EMPTY, BLANK_FILLED, stageChipColorClass } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
@@ -147,17 +147,17 @@ function shuffledTray(items: readonly GameItem[], seed: string, round: number): 
 }
 
 /**
- * Shared grey-glass-capsule tile, every sibling drag mechanic's own recipe
- * (`mechanics/chip.ts`) — a tray tile sits at rest, hugging its own label;
- * `className` below layers {@link CHIP_PLACED} on once it is placed or
- * tap-picked, and `MatchSlot` adds `w-full` ITSELF only for the tile that
- * has actually landed in a slot (so the chip fills the target it was
- * dropped into, same as `DropRenderer`'s own filled box) — never here,
- * where it would force every tray tile to one shared fixed width again
- * (owner bug: "agua" clipped off a 390px tray because every chip, short or
- * long, was stretched to the same ~245px box).
+ * Shared colour-filled capsule tile, `mechanics/chip.ts`'s own
+ * `stageChipColorClass` — a tray tile sits at rest, hugging its own label,
+ * filled from the shared tile palette by its own stable tray-order position
+ * (owner spec: coloured, always varied, kept on placement — see
+ * `colorIndexById`'s own comment below). `MatchSlot` adds `w-full` ITSELF
+ * only for the tile that has actually landed in a slot (so the chip fills
+ * the target it was dropped into, same as `DropRenderer`'s own filled box)
+ * — never here, where it would force every tray tile to one shared fixed
+ * width again (owner bug: "agua" clipped off a 390px tray because every
+ * chip, short or long, was stretched to the same ~245px box).
  */
-const TILE_BASE = CHIP_STAGE;
 
 interface MatchTileProps {
   id: string;
@@ -169,10 +169,12 @@ interface MatchTileProps {
   onClick: () => void;
   ariaLabel?: string;
   className?: string;
+  /** This tile's own stable position in the shuffled tray order — see `colorIndexById`'s own comment below for why colour belongs to the item, never the slot. */
+  colorIndex: number;
 }
 
 /** A draggable tile — a real `<button>`, usable by drag, tap-to-place and the keyboard alike. */
-function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onClick, ariaLabel, className }: MatchTileProps) {
+function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onClick, ariaLabel, className, colorIndex }: MatchTileProps) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id, disabled });
 
   return (
@@ -194,10 +196,14 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
       aria-pressed={picked || dragging}
       aria-label={ariaLabel}
       className={cn(
-        TILE_BASE,
+        stageChipColorClass(colorIndex),
         'touch-none',
         dragging && 'opacity-40',
-        picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
+        // Picked (tap-selected, not yet placed): a ring only — never
+        // `CHIP_PLACED`'s white fill, which would hide the chip's own
+        // colour the moment it is tapped (owner spec: a chip keeps its
+        // colour, the ring is enough to say "this one is picked").
+        picked && !dragging && 'ring-2 ring-inset ring-ring',
         gameTileTransitionClassName(reducedMotion),
         className,
       )}
@@ -210,6 +216,8 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
 interface MatchSlotProps {
   promptId: string;
   tile: GameItem | null;
+  /** The placed tile's own stable colour index (see `colorIndexById`'s own comment) — `0` when `tile` is `null` (unused). */
+  tileColorIndex: number;
   locked: boolean;
   wrong: boolean;
   /** Coordinator follow-up to UX audit finding 3: true while `matching-missing-notice` is showing AND this slot is one of the still-empty ones — briefly draws the eye to where to place next, same `animate-pulse`/`motion-reduce` idiom {@link wrong} already uses. */
@@ -229,6 +237,7 @@ interface MatchSlotProps {
 function MatchSlot({
   promptId,
   tile,
+  tileColorIndex,
   locked,
   wrong,
   highlightEmpty,
@@ -275,11 +284,14 @@ function MatchSlot({
           reducedMotion={reducedMotion}
           onClick={onRemove}
           ariaLabel={`${removeLabel} ${tile.answer}${gradeAriaSuffix(lang, grade)}`}
+          colorIndex={tileColorIndex}
           // `w-full`: the ONE place a chip is stretched — a tile that has
           // landed in its slot fills that target completely, same as
-          // `DropRenderer`'s own filled box (`TILE_BASE` itself never
-          // forces a width, see that token's own header).
-          className={cn('border-0 w-full', CHIP_PLACED, locked && 'text-success-strong-foreground')}
+          // `DropRenderer`'s own filled box (`stageChipColorClass` itself
+          // never forces a width, see `chip.ts`'s own header). A placed tile
+          // keeps its own colour (owner spec) — `locked` adds a ring, never
+          // a white `CHIP_PLACED` fill that would hide it.
+          className={cn('border-0 w-full', locked && 'ring-2 ring-inset ring-success-strong')}
         />
       ) : (
         <button
@@ -368,6 +380,20 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
   const placedIds = useMemo(() => new Set(Object.values(placements)), [placements]);
   const trayIds = trayOrder.filter((id) => !placedIds.has(id));
   useFlip(trayRef, trayIds.join(','), reducedMotion);
+
+  /**
+   * Each item's own stable colour — its fixed index in `trayOrder` (owner
+   * spec: "siempre variadas" — cycling through `palette.ts`'s own six-colour
+   * set, never repeating between the three/however-many items actually in
+   * play) rather than the item's position in `trayIds` (which shrinks/
+   * reindexes every time a tile is placed) — so a chip keeps the SAME
+   * colour once it lands in its slot, exactly the way the owner asked a
+   * student to be able to track a tile by colour.
+   */
+  const colorIndexById = useMemo(() => new Map(trayOrder.map((id, index) => [id, index])), [trayOrder]);
+  function colorIndexFor(id: string): number {
+    return colorIndexById.get(id) ?? 0;
+  }
 
   const sensors = useGameDndSensors();
   const playing = phase === 'playing';
@@ -665,6 +691,48 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                 STAGE_SAFE_INSET_CLASS,
               )}
             >
+              {/* THE TRAY, ABOVE THE PAIRS (UI pass, owner spec: "mover las
+                  opciones arriba" — the owner's own screenshot drew it moved
+                  into the empty space above the board). A DOM-order move,
+                  not just visual: this `ul` now renders FIRST in this
+                  `flex-col` stage, before `matching-prompts` below, so
+                  keyboard/tab order and the visual stack agree. Same
+                  `STAGE_CONTENT_MEASURE` cap as the prompts column below, so
+                  the tray is centred over the SAME board width, never wider. */}
+              <ul
+                ref={trayRef}
+                data-testid="matching-tray"
+                aria-label={t.matchTrayLabel}
+                // Always `flex-wrap`, never a horizontal scroller (owner
+                // bug: below `sm` this used to be `overflow-x-auto` with
+                // wrapping opt-in only from `sm` up, which is what clipped
+                // "agua" off the edge of a 390px tray with no visible
+                // scrollbar to hint it was there). Wrapping is correct at
+                // every width down to 320px once each tile hugs its own
+                // label instead of sharing one fixed basis — see
+                // `stageChipColorClass`'s own header (`chip.ts`).
+                className={cn('flex list-none flex-wrap gap-3 p-0 pb-2', STAGE_CONTENT_MEASURE)}
+              >
+                {trayIds.map((id) => {
+                  const item = byId.get(id);
+                  if (!item) return null;
+                  return (
+                    <li key={id} className="shrink-0">
+                      <MatchTile
+                        id={id}
+                        label={item.answer}
+                        disabled={!playing}
+                        picked={pickedId === id}
+                        dragging={activeId === id}
+                        reducedMotion={reducedMotion}
+                        onClick={() => handleTrayTileClick(id)}
+                        colorIndex={colorIndexFor(id)}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+
               <div
                 data-testid="matching-prompts"
                 className={cn(
@@ -711,6 +779,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                     <MatchSlot
                       promptId={item.id}
                       tile={tile}
+                      tileColorIndex={tileId ? colorIndexFor(tileId) : 0}
                       locked={locked}
                       wrong={wrong}
                       highlightEmpty={Boolean(missingNotice) && !tile}
@@ -728,44 +797,18 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                 );
               })}
               </div>
-
-              <ul
-                ref={trayRef}
-                data-testid="matching-tray"
-                aria-label={t.matchTrayLabel}
-                // Always `flex-wrap`, never a horizontal scroller (owner
-                // bug: below `sm` this used to be `overflow-x-auto` with
-                // wrapping opt-in only from `sm` up, which is what clipped
-                // "agua" off the edge of a 390px tray with no visible
-                // scrollbar to hint it was there). Wrapping is correct at
-                // every width down to 320px once each tile hugs its own
-                // label instead of sharing one fixed basis — see `TILE_BASE`.
-                className="flex list-none flex-wrap gap-3 p-0 pb-2"
-              >
-                {trayIds.map((id) => {
-                  const item = byId.get(id);
-                  if (!item) return null;
-                  return (
-                    <li key={id} className="shrink-0">
-                      <MatchTile
-                        id={id}
-                        label={item.answer}
-                        disabled={!playing}
-                        picked={pickedId === id}
-                        dragging={activeId === id}
-                        reducedMotion={reducedMotion}
-                        onClick={() => handleTrayTileClick(id)}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
             </div>
           </div>
 
           <DragOverlay dropAnimation={gameDropAnimation(reducedMotion)}>
             {activeItem ? (
-              <div className={cn(TILE_BASE, 'pointer-events-none', liftedTileClassName(reducedMotion))}>
+              <div
+                className={cn(
+                  stageChipColorClass(colorIndexFor(activeItem.id)),
+                  'pointer-events-none',
+                  liftedTileClassName(reducedMotion),
+                )}
+              >
                 {activeItem.answer}
               </div>
             ) : null}
