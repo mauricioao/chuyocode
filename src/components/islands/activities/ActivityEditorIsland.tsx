@@ -74,7 +74,7 @@ import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
 import ShareDialog from '@/components/islands/ShareDialog';
-import { editorPrimaryAction } from '@/lib/activities/editorPrimaryAction';
+import { editorPrimaryAction, editorStatusPillKey } from '@/lib/activities/editorPrimaryAction';
 import { DESK_WINDOW_ATTR, EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
@@ -198,19 +198,6 @@ function readInitialActiveBlockId(activityId: string, blocks: Block[]): string |
   }
   return blocks[0].id;
 }
-
-/**
- * `activities.status` -> the `t.status*` key that names it (PR D, "Activities
- * practice"). `removed` is deliberately absent — it never reaches the editor
- * (excluded from the author's own edit surface, `getActivityForEdit`'s
- * header) — so an unrecognized status falls back to `statusDraft` below.
- */
-const STATUS_LABEL_KEYS = {
-  draft: 'statusDraft',
-  pending_review: 'statusPendingReview',
-  live: 'statusLive',
-  rejected: 'statusRejected',
-} as const;
 
 export default function ActivityEditorIsland({
   lang,
@@ -1016,11 +1003,29 @@ export default function ActivityEditorIsland({
     </label>
   );
 
-  /** One coloured dot per `activities.status` (build item 3's own floating pill) — same `bg-pop-*` tokens the window's own traffic lights use, so a glance at the corner reads consistently with the rest of the chrome. `draft` (and any unrecognized status) gets a neutral muted dot. */
+  /**
+   * One coloured dot per status PILL key (`editorStatusPillKey`, not the raw
+   * `activities.status` column any more — see that function's own header
+   * for why: once `status` is `live`, the pill's wording already depends on
+   * the latest revision too, and the dot follows the same derived key so it
+   * never drifts from the text beside it) — same `bg-pop-*` tokens the
+   * window's own traffic lights use, so a glance at the corner reads
+   * consistently with the rest of the chrome. `statusDraft` (and any
+   * unrecognized key) gets a neutral muted dot.
+   *
+   * The two new "live, but..." states reuse an EXISTING tone rather than
+   * inventing one (copy section, "no new visual styles"): resubmitted edits
+   * awaiting review get the same calm yellow as `statusPendingReview` (it
+   * IS a review wait, just a published activity's); saved-not-sent edits
+   * keep the published green — nothing is actually at risk, just a
+   * reminder.
+   */
   const STATUS_DOT_CLASS: Record<string, string> = {
-    pending_review: 'bg-pop-yellow',
-    live: 'bg-pop-green',
-    rejected: 'bg-pop-red',
+    statusPendingReview: 'bg-pop-yellow',
+    statusLive: 'bg-pop-green',
+    statusRejected: 'bg-pop-red',
+    statusLivePendingChanges: 'bg-pop-yellow',
+    statusLiveUnsentChanges: 'bg-pop-green',
   };
 
   /**
@@ -1044,6 +1049,14 @@ export default function ActivityEditorIsland({
   const activeBlock = blocks.find((b) => b.id === activeBlockId) ?? blocks[0];
   const onTemplateCanvas = !preview && !showAddFlow && activeBlock?.type === 'quiz' && Boolean(activeBlock.template);
 
+  // The pill's own derivation (gap fix: a published activity's edits used
+  // to leave it stuck on "Publicada" forever, since `status` alone never
+  // moves off `live` — see `editorStatusPillKey`'s own header). Same two
+  // inputs as `primaryActionKind` below, recomputed together with it on
+  // every optimistic `status`/`revisionStatus` update (`handleConfirmSubmit`),
+  // so the pill updates immediately after sending changes, no reload needed.
+  const statusPillKey = editorStatusPillKey({ status, revisionStatus });
+
   const statusPill = (
     <div
       data-testid="activity-status-badge"
@@ -1052,13 +1065,9 @@ export default function ActivityEditorIsland({
     >
       <span
         aria-hidden="true"
-        className={`h-2 w-2 flex-none rounded-full ${STATUS_DOT_CLASS[status] ?? 'bg-muted-foreground'}`}
+        className={`h-2 w-2 flex-none rounded-full ${STATUS_DOT_CLASS[statusPillKey] ?? 'bg-muted-foreground'}`}
       />
-      <span className="truncate">
-        {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-          ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-          : t.statusDraft}
-      </span>
+      <span className="truncate">{t[statusPillKey]}</span>
       {status === 'rejected' && initialReviewNote && (
         <span data-testid="activity-review-note" className="truncate text-muted-foreground">
           {t.reviewNoteLabel}: {initialReviewNote}
@@ -1244,9 +1253,7 @@ export default function ActivityEditorIsland({
         </label>
         <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
           <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-            {STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]
-              ? t[STATUS_LABEL_KEYS[status as keyof typeof STATUS_LABEL_KEYS]]
-              : t.statusDraft}
+            {t[statusPillKey]}
           </span>
           {status === 'rejected' && initialReviewNote && (
             <span data-testid="activity-review-note" className="text-xs text-muted-foreground">

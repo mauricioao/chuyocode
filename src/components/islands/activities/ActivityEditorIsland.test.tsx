@@ -1178,9 +1178,19 @@ describe('ActivityEditorIsland — review-state badge', () => {
     expect(screen.getByTestId('activity-status-badge').textContent).toContain('En revisión');
   });
 
-  it('shows "Publicada" for a live activity', () => {
-    renderEditor({ initialStatus: 'live' });
+  it('shows "Publicada" for a live activity with no unsent edits', () => {
+    renderEditor({ initialStatus: 'live', initialRevisionStatus: 'approved' });
     expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada');
+  });
+
+  it('shows "Publicada · cambios sin enviar" for a live activity with a saved, unsent draft revision', () => {
+    renderEditor({ initialStatus: 'live', initialRevisionStatus: 'draft' });
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada · cambios sin enviar');
+  });
+
+  it('shows "Cambios en revisión" for a live activity whose edits are already resubmitted', () => {
+    renderEditor({ initialStatus: 'live', initialRevisionStatus: 'pending_review' });
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Cambios en revisión');
   });
 
   it('shows "Rechazada" plus the reviewer note for a rejected activity', () => {
@@ -1263,12 +1273,10 @@ describe('ActivityEditorIsland — one primary action per state', () => {
     });
     const button = screen.getByTestId('activity-share-button');
     expect(button.textContent).toBe('Compartir');
-    // The badge itself still just reads "Publicada" — this editor has no
-    // data path today that distinguishes "live, no pending edit" from
-    // "live, with an edit already awaiting review" at the BADGE (only the
-    // primary action above reflects it); flagged as a known gap rather than
-    // invented.
-    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada');
+    // Gap fix: the badge now tells "live, no pending edit" apart from
+    // "live, with an edit already awaiting review" too, not just the
+    // primary action above (`editorStatusPillKey`).
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Cambios en revisión');
   });
 
   it('rejected: "Enviar de nuevo a revisión" opens the submit dialog, reviewer note still visible', () => {
@@ -1363,10 +1371,12 @@ describe('ActivityEditorIsland — submit for review', () => {
     expect(screen.getByTestId('activity-status-badge').textContent).toContain('En revisión');
   });
 
-  it('keeps the badge on "Publicada" when a live activity is submitted', async () => {
+  it('updates the badge to "Cambios en revisión" when a live activity\'s edits are submitted', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
-    renderEditor({ initialStatus: 'live' });
+    renderEditor({ initialStatus: 'live', initialRevisionStatus: 'draft' });
+
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada · cambios sin enviar');
 
     fireEvent.click(screen.getByTestId('submit-for-review-button'));
     fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
@@ -1374,7 +1384,10 @@ describe('ActivityEditorIsland — submit for review', () => {
       fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
     });
 
-    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Publicada');
+    // `status` itself stays "live" (`enviar.ts`'s own "live stays live"),
+    // but the revision moves to `pending_review` on a successful submit —
+    // the pill updates to reflect it immediately, no reload needed.
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('Cambios en revisión');
   });
 
   it('shows an inline error and keeps the dialog open when the submit endpoint rejects it', async () => {

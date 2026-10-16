@@ -57,3 +57,43 @@ export function editorPrimaryAction({ status, revisionStatus }: EditorPrimaryAct
   if (status === 'rejected') return 'resubmitForReview';
   return 'submitForReview';
 }
+
+/**
+ * The editor's status pill (bottom-left) — same two inputs as
+ * `editorPrimaryAction` above, but answering a DIFFERENT question: not "what
+ * should the button do" but "what does the pill say". The gap this closes:
+ * once a PUBLISHED activity's edits are saved or resubmitted, `status` itself
+ * never moves off `live` (`enviar.ts`'s own "`live` stays live" comment,
+ * also quoted above) — only the latest revision's status does — so the pill
+ * kept reading "Publicada" forever and the author had no way to tell their
+ * changes were saved or already awaiting review.
+ *
+ * `status` outside `live` is unchanged: `draft`/`pending_review`/`rejected`
+ * (and any unrecognized value, defensively) map to their own existing key,
+ * exactly like the editor's old `STATUS_LABEL_KEYS` map did — the revision
+ * status plays no part there, same posture as `editorPrimaryAction`'s own
+ * `live`-first check.
+ */
+export type EditorStatusPillKey =
+  | 'statusDraft'
+  | 'statusPendingReview'
+  | 'statusLive'
+  | 'statusRejected'
+  | 'statusLivePendingChanges'
+  | 'statusLiveUnsentChanges';
+
+const STATUS_PILL_KEYS: Record<string, EditorStatusPillKey> = {
+  draft: 'statusDraft',
+  pending_review: 'statusPendingReview',
+  live: 'statusLive',
+  rejected: 'statusRejected',
+};
+
+export function editorStatusPillKey({ status, revisionStatus }: EditorPrimaryActionInput): EditorStatusPillKey {
+  if (status === 'live') {
+    if (revisionStatus === 'pending_review') return 'statusLivePendingChanges';
+    if (revisionStatus === 'draft') return 'statusLiveUnsentChanges';
+    return 'statusLive';
+  }
+  return STATUS_PILL_KEYS[status] ?? 'statusDraft';
+}
