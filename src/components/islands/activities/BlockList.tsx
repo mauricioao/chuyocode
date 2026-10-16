@@ -254,20 +254,33 @@ export default function BlockList({
     );
   };
 
-  const updateQuizPayload = (blockId: string, payload: Payload) => {
-    onBlocksChange(blocks.map((b) => (b.id === blockId && isQuiz(b) ? { ...b, payload } : b)));
-  };
-
-  /** "Agregar imagen"/"Quitar imagen" on one question (owner decision 2026-10-16) — one commit, same posture as every other block mutation here. `undefined` clears the field entirely (never stored as an empty `{}`), mirroring `updateQuizTemplate`'s own convention for an absent `template`. */
-  const updateQuizPromptImages = (blockId: string, promptImages: Record<string, PromptImageRef> | undefined) => {
+  /**
+   * ONE combined commit for a quiz block's `payload` AND `promptImages`
+   * together (owner decision 2026-10-16 follow-up, lost-update fix).
+   * `QuizBlockEditor`'s own `onPayloadChange` now ALWAYS reports both in
+   * one call, specifically so this function's `.map()` over `blocks` never
+   * runs twice from the SAME stale closure for one user action — duplicating
+   * or removing a question used to fire two separate `onBlocksChange`
+   * calls (one via a since-removed `updateQuizPromptImages`), each built
+   * from the SAME pre-update `blocks`, so the second silently overwrote the
+   * first: a real lost update, not just a style preference. `undefined`
+   * clears `promptImages` entirely (never stored as an empty `{}`),
+   * mirroring `updateQuizTemplate`'s own convention for an absent
+   * `template`.
+   */
+  const updateQuiz = (
+    blockId: string,
+    payload: Payload,
+    promptImages: Record<string, PromptImageRef> | undefined,
+  ) => {
     onBlocksChange(
       blocks.map((b) => {
         if (b.id !== blockId || !isQuiz(b)) return b;
         if (!promptImages) {
           const { promptImages: _dropped, ...rest } = b;
-          return rest;
+          return { ...rest, payload };
         }
-        return { ...b, promptImages };
+        return { ...b, payload, promptImages };
       }),
     );
   };
@@ -598,12 +611,12 @@ export default function BlockList({
             template={quiz.template}
             selectedSlotId={selectedZoneId}
             onSelectSlot={onSelectZone}
-            onPayloadChange={(payload) => updateQuizPayload(activeBlock.id, payload)}
+            onPayloadChange={(payload, promptImages) => updateQuiz(activeBlock.id, payload, promptImages)}
             onConvert={(payload, template) => updateQuizTemplate(activeBlock.id, payload, template)}
             incompleteSlotId={activeBlock.id === incompleteBlockId ? incompleteZoneId : undefined}
             incompleteMessage={activeBlock.id === incompleteBlockId ? incompleteMessage : null}
             promptImages={quiz.promptImages}
-            onPromptImagesChange={(images) => updateQuizPromptImages(activeBlock.id, images)}
+            imagesEnabled
           />
         )}
       </div>

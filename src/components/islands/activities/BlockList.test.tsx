@@ -298,6 +298,107 @@ describe('BlockList — quiz blocks', () => {
   });
 });
 
+describe('BlockList — quiz question image stays consistent across structural edits (owner decision 2026-10-16 follow-up)', () => {
+  // `BlockList.onBlocksChange` is normally just `setBlocks` (see `Harness`
+  // above) — real `blocks` state, re-derived from the SAME shared array on
+  // every call. A lost update only shows up against THAT shape, never
+  // against two independent `useState` calls, which is exactly why a
+  // `QuizBlockEditor`-only unit test cannot catch it.
+  function HarnessCapturingBlocks({
+    initialBlocks,
+    onBlocks,
+  }: {
+    initialBlocks: Block[];
+    onBlocks: (blocks: Block[]) => void;
+  }) {
+    const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
+    const [activeBlockId, setActiveBlockId] = useState<string | null>(initialBlocks[0]?.id ?? null);
+    const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+    return (
+      <BlockList
+        lang="es"
+        blocks={blocks}
+        activeBlockId={activeBlockId}
+        selectedZoneId={selectedZoneId}
+        resolveImageUrl={(path) => `/preview?path=${path}`}
+        onSetActiveBlock={setActiveBlockId}
+        onSelectZone={setSelectedZoneId}
+        onBlocksChange={(next) => {
+          setBlocks(next);
+          onBlocks(next);
+        }}
+      />
+    );
+  }
+
+  const image = { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 };
+
+  function quizBlockWithImage(id: string): QuizBlock {
+    return quizBlock(id, {
+      payload: {
+        pools: {},
+        slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+        blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+      },
+      promptImages: { s1: image },
+    });
+  }
+
+  it('duplicating a question keeps the new row/slot AND the copied image in the SAME update', () => {
+    let latest: Block[] = [];
+    render(
+      <HarnessCapturingBlocks
+        initialBlocks={[quizBlockWithImage('b1')]}
+        onBlocks={(blocks) => {
+          latest = blocks;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('varios-advanced-toggle-s1'));
+    fireEvent.click(screen.getByTestId('question-duplicate-s1'));
+
+    const block = latest.find((b) => b.id === 'b1') as QuizBlock;
+    expect(block.payload.slots).toHaveLength(2);
+    const newSlotId = block.payload.slots.map((s) => s.id).find((id) => id !== 's1');
+    expect(newSlotId).toBeTruthy();
+    expect(block.promptImages?.s1).toEqual(image);
+    expect(block.promptImages?.[newSlotId!]).toEqual(image);
+  });
+
+  it('removing a question with an image drops BOTH the row/slot AND its image entry in the SAME update', () => {
+    const twoQuestions = quizBlock('b1', {
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'Imaged question', input: 'text', answer: ['a'] },
+          { id: 's2', label: 'Plain question', input: 'text', answer: ['b'] },
+        ],
+        blocks: [
+          { kind: 'row', id: 'row-s1', slotId: 's1' },
+          { kind: 'row', id: 'row-s2', slotId: 's2' },
+        ],
+      },
+      promptImages: { s1: image },
+    });
+    let latest: Block[] = [];
+    render(
+      <HarnessCapturingBlocks
+        initialBlocks={[twoQuestions]}
+        onBlocks={(blocks) => {
+          latest = blocks;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('varios-remove-s1'));
+
+    const block = latest.find((b) => b.id === 'b1') as QuizBlock;
+    expect(block.payload.slots.map((s) => s.id)).toEqual(['s2']);
+    expect(block.promptImages?.s1).toBeUndefined();
+  });
+});
+
 describe('BlockList — empty worksheet block (creator polish round 4, owner feedback #2)', () => {
   it('shows the upload drop zone instead of the canvas when the active worksheet block has no image yet', () => {
     render(<Harness initialBlocks={[worksheetBlock('b1', { image: undefined, zones: [] })]} />);

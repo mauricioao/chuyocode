@@ -46,7 +46,7 @@ function Harness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
-/** Same harness, but also wiring `promptImages`/`onPromptImagesChange` — the question-image-carrying half of `BlockList.tsx`'s own real mount, needed only by tests that touch a question's own context image (owner decision 2026-10-16 follow-up). */
+/** Same harness, but also wiring `promptImages`/`imagesEnabled` — the question-image-carrying half of `BlockList.tsx`'s own real mount, needed only by tests that touch a question's own context image (owner decision 2026-10-16 follow-up). `onPayloadChange` now always reports payload AND promptImages together (lost-update fix) — see that prop's own header in `QuizBlockEditor.tsx`. */
 function PromptImagesHarness({
   initialPayload,
   initialPromptImages,
@@ -66,9 +66,12 @@ function PromptImagesHarness({
       payload={payload}
       selectedSlotId={selectedSlotId}
       onSelectSlot={setSelectedSlotId}
-      onPayloadChange={setPayload}
+      onPayloadChange={(nextPayload, nextPromptImages) => {
+        setPayload(nextPayload);
+        setPromptImages(nextPromptImages);
+      }}
       promptImages={promptImages}
-      onPromptImagesChange={setPromptImages}
+      imagesEnabled
     />
   );
 }

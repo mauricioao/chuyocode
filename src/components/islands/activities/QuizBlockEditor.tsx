@@ -227,7 +227,27 @@ export interface QuizBlockEditorProps {
   template?: QuizTemplate;
   selectedSlotId: string | null;
   onSelectSlot: (slotId: string | null) => void;
-  onPayloadChange: (payload: Payload) => void;
+  /**
+   * The author changed this block's own payload — AND, since a question's
+   * own context image lives beside `payload` rather than inside it
+   * (`blocks.ts`'s own `QuizBlock.promptImages`), this block's own
+   * up-to-date `promptImages` map too, EVERY time this fires (never
+   * omitted; explicit `undefined` = no images, same meaning as
+   * `QuizBlock.promptImages` itself).
+   *
+   * Owner decision 2026-10-16 follow-up (lost-update fix): a single user
+   * action that touches both — duplicating or removing a question, adding/
+   * removing a question's own image — used to fire TWO separate calls, one
+   * through this prop and a second through a since-removed
+   * `onPromptImagesChange`. A caller building its own `onBlocksChange` from
+   * one shared `blocks` array (`BlockList.tsx`'s own `updateQuiz`) computes
+   * each call from the SAME pre-update `blocks`, so the second call always
+   * overwrote the first's structural change — the duplicated/removed row
+   * was silently lost while the image map kept pointing at a slot that no
+   * longer (or didn't yet) exist. Reporting both in ONE call removes the
+   * race entirely: there is only ever one `.map()` over `blocks` per action.
+   */
+  onPayloadChange: (payload: Payload, promptImages?: Record<string, PromptImageRef>) => void;
   /**
    * "Cambiar de molde" (R2): the author chose a different mold — `payload`
    * is the converted content, `template` the block's own new mold
@@ -235,6 +255,13 @@ export interface QuizBlockEditorProps {
    * both in ONE step, so the whole conversion is one undo step upstream.
    * Optional only so every existing render site keeps compiling unchanged;
    * every real mount wires it (`BlockList.tsx`).
+   *
+   * NOTE (found during the lost-update audit above, not fixed here): this
+   * callback does not carry `promptImages`, and `handleChooseMold` below
+   * builds `convertBlock`'s own input block without `promptImages` either —
+   * so a mold conversion ("Cambiar de molde") silently drops every question
+   * image today, independently of the lost-update bug this file's own
+   * `onPayloadChange` header describes. Flagged for a separate follow-up.
    */
   onConvert?: (payload: Payload, template: QuizTemplate | undefined) => void;
   /** The exact question `findIncompleteBlock` pointed back to on a rejected submit — `null`/absent otherwise. */
@@ -242,8 +269,16 @@ export interface QuizBlockEditorProps {
   incompleteMessage?: string | null;
   /** This block's own question context images (owner decision 2026-10-16), keyed by slot id — `undefined` = none. Only "Varios juegos" (no `template`) ever shows the "Agregar imagen" affordance (`VariosJuegosRow.tsx`). */
   promptImages?: Record<string, PromptImageRef>;
-  /** The author added/removed/replaced a question's own image — ONE commit, same posture as `onPayloadChange`. Optional only so every existing render site keeps compiling unchanged; the real mount (`BlockList.tsx`) always wires it. */
-  onPromptImagesChange?: (images: Record<string, PromptImageRef> | undefined) => void;
+  /**
+   * Whether the caller supports question context images at all (owner
+   * decision 2026-10-16 follow-up) — gates the "Agregar imagen" affordance.
+   * There is no separate write channel to wire here any more: every
+   * payload+image change folds into `onPayloadChange`'s own second
+   * argument (see that prop's own header). Optional only so every existing
+   * render site keeps compiling unchanged; the real mount (`BlockList.tsx`)
+   * always sets it.
+   */
+  imagesEnabled?: boolean;
 }
 
 /** `UI_LABELS[lang].activities.start`'s own title for a mold — the SAME name `BlockTypePicker.tsx`'s gallery and `ChangeMoldDialog.tsx` use (rule 6, §6.1: "a mold's name means the same thing everywhere"). */
@@ -474,7 +509,7 @@ export default function QuizBlockEditor({
   incompleteSlotId = null,
   incompleteMessage = null,
   promptImages,
-  onPromptImagesChange,
+  imagesEnabled = false,
 }: QuizBlockEditorProps) {
   const t = copyFor(lang);
   const isMatch = template === 'match';
@@ -556,28 +591,44 @@ export default function QuizBlockEditor({
     return `${blockId}-${prefix}-${counterRef.current}-${Date.now().toString(36)}`;
   }
 
-  function commit(nextDraft: Draft) {
-    onPayloadChange(draftToPayload(nextDraft));
-    // Prune any promptImages key naming a slot id this edit just removed —
-    // `blocks.ts`'s own `parsePromptImages` rejects the WHOLE block on a
-    // dangling key, so a question's deletion must never leave one behind
-    // for the next autosave to choke on.
-    if (promptImages && onPromptImagesChange) {
-      const validSlotIds = new Set(nextDraft.slots.map((slot) => slot.id));
-      const entries = Object.entries(promptImages).filter(([slotId]) => validSlotIds.has(slotId));
-      if (entries.length !== Object.keys(promptImages).length) {
-        onPromptImagesChange(entries.length > 0 ? Object.fromEntries(entries) : undefined);
-      }
-    }
+  /**
+   * Drops any `promptImages` key naming a slot id `nextDraft` no longer
+   * has — `blocks.ts`'s own `parsePromptImages` rejects the WHOLE block on
+   * a dangling key, so a question's deletion must never leave one behind
+   * for the next autosave/approval to choke on. Returns `images` by the
+   * SAME reference when nothing needed dropping (cheap no-op check).
+   */
+  function pruneImages(
+    images: Record<string, PromptImageRef> | undefined,
+    nextDraft: Draft,
+  ): Record<string, PromptImageRef> | undefined {
+    if (!images) return undefined;
+    const validSlotIds = new Set(nextDraft.slots.map((slot) => slot.id));
+    const entries = Object.entries(images).filter(([slotId]) => validSlotIds.has(slotId));
+    if (entries.length === Object.keys(images).length) return images;
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   }
 
-  /** One question's own "Agregar imagen"/"Quitar imagen" commit — a sibling to `commit` above, since `promptImages` lives beside `payload`, not inside it (`blocks.ts`'s own `QuizBlock.promptImages`). */
+  /**
+   * ONE `onPayloadChange` call per commit, carrying BOTH the new payload
+   * AND the (pruned) `promptImages` map — see that prop's own header for
+   * why this must never split into two calls. `imagesOverride` lets a
+   * caller (`duplicateQuestion`) supply a DIFFERENT starting map (e.g. with
+   * a freshly copied image already added) instead of the current
+   * `promptImages` prop; omitted, it defaults to that prop, pruned against
+   * `nextDraft` exactly as before.
+   */
+  function commit(nextDraft: Draft, imagesOverride?: Record<string, PromptImageRef>) {
+    const images = pruneImages(imagesOverride !== undefined ? imagesOverride : promptImages, nextDraft);
+    onPayloadChange(draftToPayload(nextDraft), images);
+  }
+
+  /** One question's own "Agregar imagen"/"Quitar imagen" — folds straight into `onPayloadChange`'s own combined call (that prop's own header): `payload` is passed through UNCHANGED, so this action still lands as exactly ONE parent update. */
   function setPromptImage(slotId: string, image: PromptImageRef | undefined) {
-    if (!onPromptImagesChange) return;
     const next = { ...promptImages };
     if (image) next[slotId] = image;
     else delete next[slotId];
-    onPromptImagesChange(Object.keys(next).length > 0 ? next : undefined);
+    onPayloadChange(payload, Object.keys(next).length > 0 ? next : undefined);
   }
 
   function addQuestion() {
@@ -619,17 +670,18 @@ export default function QuizBlockEditor({
     const blocks = [...draft.blocks];
     blocks.splice(rowIndex === -1 ? blocks.length : rowIndex + 1, 0, newRow);
 
-    commit({ ...draft, slots: [...draft.slots, newSlot], blocks, pools });
     // This question's own context image (owner decision 2026-10-16
     // follow-up, "duplicate keeps the image") travels to the new slot —
-    // the SAME stored path, never a fresh upload. `setPromptImage`'s own
-    // commit is already separate from `commit` above (`promptImages` lives
-    // beside `payload`, not inside it, same reasoning as that function's
-    // own header) — duplicating a question is therefore ONE `onPayloadChange`
-    // call plus, only when there was an image to carry over, one
-    // `onPromptImagesChange` call.
+    // the SAME stored path, never a fresh upload. Folded into the SAME
+    // `commit` call as the new row/slot via `imagesOverride`, rather than
+    // a second call after it: two separate `onPayloadChange` calls here
+    // used to be exactly the lost-update bug `onPayloadChange`'s own
+    // header describes (a caller building `onBlocksChange` from one shared
+    // `blocks` array loses the first call's structural change to the
+    // second call's stale-closure overwrite).
     const duplicatedImage = promptImages?.[slotId];
-    if (duplicatedImage) setPromptImage(newSlotId, duplicatedImage);
+    const imagesWithDuplicate = duplicatedImage ? { ...promptImages, [newSlotId]: duplicatedImage } : promptImages;
+    commit({ ...draft, slots: [...draft.slots, newSlot], blocks, pools }, imagesWithDuplicate);
     onSelectSlot(newSlotId);
   }
 
@@ -1139,9 +1191,7 @@ export default function QuizBlockEditor({
                           onDuplicate={() => duplicateQuestion(question.id, slot.id)}
                           onDelete={() => removeQuestion(question.id, slot.id)}
                           promptImage={promptImages?.[slot.id]}
-                          onPromptImageChange={
-                            onPromptImagesChange ? (image) => setPromptImage(slot.id, image) : undefined
-                          }
+                          onPromptImageChange={imagesEnabled ? (image) => setPromptImage(slot.id, image) : undefined}
                         />
                       )}
                     </SortableQuestionCard>
