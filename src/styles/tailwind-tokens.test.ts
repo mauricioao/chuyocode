@@ -110,6 +110,27 @@ describe('tailwind theme tokens (CSS-first @theme)', () => {
     expect(token('--color-traffic-yellow')?.toLowerCase()).toBe('#febb38');
     expect(token('--color-traffic-green')?.toLowerCase()).toBe('#1ec754');
   });
+
+  // Tile accent set (UI pass: "las cápsulas que sean de colores de nuestra
+  // paleta y siempre variadas") — shared by the presentation stage's option
+  // tiles and the big-stage drag chips' colour-filled variant
+  // (`mechanics/palette.ts`'s own `TILE_COLOR_CLASSES`). Replaces the old
+  // `--color-game-*` four-colour set (two of whose six entries used to fall
+  // back to raw, un-tokenised `teal-700`/`sky-800` Tailwind utilities).
+  it('exposes the six-colour tile accent set at the spec values', () => {
+    expect(token('--color-tile-1')?.toLowerCase()).toBe('#2456d3');
+    expect(token('--color-tile-2')?.toLowerCase()).toBe('#b8268f');
+    expect(token('--color-tile-3')?.toLowerCase()).toBe('#c2410c');
+    expect(token('--color-tile-4')?.toLowerCase()).toBe('#0a766e');
+    expect(token('--color-tile-5')?.toLowerCase()).toBe('#7140d6');
+    expect(token('--color-tile-6')?.toLowerCase()).toBe('#0b76bc');
+  });
+
+  it('no longer defines the replaced --color-game-* placeholder set', () => {
+    for (const name of ['game-blue', 'game-violet', 'game-orange', 'game-pink']) {
+      expect(token(`--color-${name}`)).toBeUndefined();
+    }
+  });
 });
 
 // Regression guard for a real production bug: an input/select/textarea

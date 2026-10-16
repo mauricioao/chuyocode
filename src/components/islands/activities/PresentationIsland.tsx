@@ -64,6 +64,7 @@ import { zoneAnswerSummary, quizSlotAnswerSummary } from '@/lib/activities/moder
 import { getSlotItems, type Payload, type Slot, type PoolItem } from '@/lib/exercisePayload';
 import { segmentForInput } from '@/lib/quizQuestionType';
 import { useGameSound } from '@/lib/activities/gameSounds';
+import { optionColorClass } from '@/components/islands/mechanics/palette';
 import {
   createPresentationQuizState,
   presentationQuizReducer,
@@ -163,26 +164,13 @@ const AUTO_ADVANCE_MS = 1200;
 /**
  * One color PER TILE POSITION, never per correctness (UI mockup,
  * `propuestas/presentacion/index.html`: "Colour goes by tile POSITION...
- * never by correctness; red and green are reserved for the marks") — a
- * single small helper so the UI pass can swap this whole palette in one
- * place. Placeholder kit classes for now: the first four reuse the existing
- * `global.css` game-accent set; the fifth/sixth (a design the mockup calls
- * for but the kit has no token for yet) fall back to plain Tailwind
- * utilities until the UI pass adds real `--tile-*` tokens.
+ * never by correctness; red and green are reserved for the marks") — now the
+ * SHARED palette (`mechanics/palette.ts`'s own `optionColorClass`/
+ * `TILE_COLOR_CLASSES`), the same six `--color-tile-*` kit tokens the
+ * big-stage drag chips' own colour-filled variant uses
+ * (`mechanics/chip.ts`'s `stageChipColorClass`) — one palette, not a second
+ * copy that could drift.
  */
-const TILE_COLOR_CLASSES = [
-  'bg-game-blue', // 1 — cobalt
-  'bg-game-pink', // 2 — magenta
-  'bg-game-orange', // 3 — orange
-  'bg-teal-700', // 4 — teal (placeholder, no kit token yet)
-  'bg-game-violet', // 5 — violet
-  'bg-sky-800', // 6 — sky-deep (placeholder, no kit token yet)
-] as const;
-
-/** `index` is 0-based (same loop index the tiles map over) — see {@link TILE_COLOR_CLASSES}'s own doc. */
-function optionColorClass(index: number): string {
-  return TILE_COLOR_CLASSES[index % TILE_COLOR_CLASSES.length]!;
-}
 
 const CONTROL_BUTTON_CLASS =
   'flex h-11 w-11 flex-none items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30';
