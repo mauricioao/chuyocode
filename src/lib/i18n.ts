@@ -1316,6 +1316,10 @@ export const UI_LABELS = {
         quizAnswerLabel: 'Respuesta correcta',
         clozeDistractorsLabel: 'Distractores',
         explanationLabel: 'Explicación',
+        // "Varios juegos"' own question context image (owner decision
+        // 2026-10-16) — shown to the moderator with this explicit label so
+        // it is reviewed as display-only context, never as a worksheet.
+        questionImageLabel: 'Imagen de la pregunta',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
@@ -2755,6 +2759,7 @@ export const UI_LABELS = {
         quizAnswerLabel: 'Correct answer',
         clozeDistractorsLabel: 'Distractors',
         explanationLabel: 'Explanation',
+        questionImageLabel: 'Question image',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
         approveConfirmBody: 'It will be published immediately.',

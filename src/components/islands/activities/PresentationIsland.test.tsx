@@ -350,9 +350,40 @@ describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', 
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
   });
 
-  it('the content row carries no `data-has-media` yet (per-question media is a structural slot, not wired to real data)', () => {
+  it('the content row carries no `data-has-media` when the question has no promptImage', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     expect(attr(screen.getByTestId('presentation-content-row'), 'data-has-media')).toBeNull();
+    expect(screen.queryByTestId('presentation-question-media')).toBeNull();
+  });
+
+  it("renders the question's own context image (owner decision 2026-10-16) in the presentation-question-media slot, decorative (alt=\"\"), never through the worksheet layer", () => {
+    const blocksWithPromptImage: Block[] = [
+      {
+        ...(QUIZ_BLOCKS[0] as Extract<Block, { type: 'quiz' }>),
+        promptImages: { s1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+      },
+      QUIZ_BLOCKS[1]!,
+    ];
+    render(<PresentationIsland {...BASE_PROPS} blocks={blocksWithPromptImage} />);
+    expect(attr(screen.getByTestId('presentation-content-row'), 'data-has-media')).toBe('');
+    const img = screen.getByTestId('presentation-question-media').querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute('src')).toBe('/api/actividades/imagen?path=activity-images%2Fabc%2Fquestion-img-1.webp');
+    expect(img?.getAttribute('alt')).toBe('');
+  });
+
+  it('a non-choice question never shows a promptImage even if one is set (the media slot only exists on the choice content row)', () => {
+    const blocksWithPromptImage: Block[] = [
+      QUIZ_BLOCKS[0]!,
+      {
+        ...(QUIZ_BLOCKS[1] as Extract<Block, { type: 'quiz' }>),
+        promptImages: { s2: { path: 'activity-images/abc/question-img-2.webp', width: 400, height: 300 } },
+      },
+    ];
+    render(<PresentationIsland {...BASE_PROPS} blocks={blocksWithPromptImage} />);
+    next();
+    expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+    expect(screen.queryByTestId('presentation-question-media')).toBeNull();
   });
 });
 

@@ -35,6 +35,42 @@ describe('QuizBlockPractice — rendering', () => {
   });
 });
 
+describe("QuizBlockPractice — question context image (promptImages, owner decision 2026-10-16)", () => {
+  it('shows no image when the block has no promptImages', () => {
+    render(<QuizBlockPractice lang="es" block={TEXT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.queryByTestId('quiz-slot-prompt-image-s1')).toBeNull();
+  });
+
+  it("renders the slot's own context image, display-only (alt=\"\"), via the resolved preview URL", () => {
+    const block: QuizBlock = {
+      ...TEXT_BLOCK,
+      promptImages: { s1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+    };
+    render(<QuizBlockPractice lang="es" block={block} response={{}} onChange={vi.fn()} disabled={false} />);
+    const img = screen.getByTestId('quiz-slot-prompt-image-s1');
+    expect(img.getAttribute('src')).toBe('/api/actividades/imagen?path=activity-images%2Fabc%2Fquestion-img-1.webp');
+    expect(img.getAttribute('alt')).toBe('');
+  });
+
+  it('a different slot with no promptImage entry shows no image, even when the block has one for another slot', () => {
+    const block: QuizBlock = {
+      id: 'q2',
+      type: 'quiz',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'x', input: 'text', answer: ['y'] },
+          { id: 's2', label: 'z', input: 'text', answer: ['w'] },
+        ],
+      },
+      promptImages: { s1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+    };
+    render(<QuizBlockPractice lang="es" block={block} response={{}} onChange={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('quiz-slot-prompt-image-s1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-prompt-image-s2')).toBeNull();
+  });
+});
+
 describe('QuizBlockPractice — answering', () => {
   it('reports a typed answer through onChange, keyed by slot id', () => {
     const onChange = vi.fn();

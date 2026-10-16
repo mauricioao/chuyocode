@@ -157,6 +157,36 @@ describe('ModerationBlockPreview — quiz', () => {
   });
 });
 
+describe('ModerationBlockPreview — question context image (promptImages, owner decision 2026-10-16)', () => {
+  const QUIZ_WITH_PROMPT_IMAGE: Block = {
+    ...(QUIZ as Extract<Block, { type: 'quiz' }>),
+    promptImages: { s1: { path: 'activity-images/q1/question-img-1.webp', width: 400, height: 300 } },
+  };
+
+  it('shows nothing when the block has no promptImages', () => {
+    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.queryByTestId('moderation-question-image-s1')).toBeNull();
+  });
+
+  it('renders the image via resolveImageUrl, explicitly labelled "Imagen de la pregunta" so a moderator never mistakes it for a worksheet', () => {
+    render(<ModerationBlockPreview lang="es" block={QUIZ_WITH_PROMPT_IMAGE} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    const img = screen.getByTestId('moderation-question-image-s1') as HTMLImageElement;
+    expect(img.src).toContain(encodeURIComponent('activity-images/q1/question-img-1.webp'));
+    expect(img.alt).toBe('');
+    expect(screen.getByTestId('moderation-slot-s1').textContent).toContain('Imagen de la pregunta');
+  });
+
+  it('shows the image regardless of showAnswers (it is content, not a hidden answer)', () => {
+    render(<ModerationBlockPreview lang="es" block={QUIZ_WITH_PROMPT_IMAGE} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-question-image-s1')).toBeTruthy();
+  });
+
+  it('uses the English label under lang="en"', () => {
+    render(<ModerationBlockPreview lang="en" block={QUIZ_WITH_PROMPT_IMAGE} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-slot-s1').textContent).toContain('Question image');
+  });
+});
+
 describe('ModerationBlockPreview — "Une las parejas" (build item 5, match)', () => {
   const MATCH: Block = {
     id: 'q2',

@@ -217,23 +217,41 @@ export default function ModerationBlockPreview({
   return (
     <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
       <ul className="flex flex-col gap-2">
-        {block.payload.slots.map((slot) => (
-          <li key={slot.id} data-testid={`moderation-slot-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
-            <span className="font-medium text-foreground">{slot.label}</span>
-            {showAnswers && (
-              <div className="mt-1 text-muted-foreground">
-                <p>
-                  {t.quizAnswerLabel}: {quizSlotAnswerSummary(block.payload, slot)}
-                </p>
-                {slot.explanation && (
+        {block.payload.slots.map((slot) => {
+          const promptImage = block.promptImages?.[slot.id];
+          return (
+            <li key={slot.id} data-testid={`moderation-slot-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
+              <span className="font-medium text-foreground">{slot.label}</span>
+              {/* This question's own DISPLAY-ONLY context image (owner
+                  decision 2026-10-16) — explicitly labelled so the
+                  moderator reviews it as context, never as a worksheet. */}
+              {promptImage && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">{t.questionImageLabel}</span>
+                  <FadeImage
+                    data-testid={`moderation-question-image-${slot.id}`}
+                    src={resolveImageUrl(promptImage.path)}
+                    alt=""
+                    className="max-h-48 w-full max-w-xs rounded-md object-contain"
+                    placeholderClassName="h-32 w-full max-w-xs rounded-md"
+                  />
+                </div>
+              )}
+              {showAnswers && (
+                <div className="mt-1 text-muted-foreground">
                   <p>
-                    {t.explanationLabel}: {slot.explanation}
+                    {t.quizAnswerLabel}: {quizSlotAnswerSummary(block.payload, slot)}
                   </p>
-                )}
-              </div>
-            )}
-          </li>
-        ))}
+                  {slot.explanation && (
+                    <p>
+                      {t.explanationLabel}: {slot.explanation}
+                    </p>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

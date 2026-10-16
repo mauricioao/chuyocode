@@ -207,6 +207,7 @@ export default function PresentationIsland({
   const t = UI_LABELS[lang].activities.present;
   const levelLabels = UI_LABELS[lang].english.levels;
 
+  const blockById = useMemo(() => new Map(blocks.map((block) => [block.id, block] as const)), [blocks]);
   const questions = useMemo(() => collectPresentationQuestions(blocks), [blocks]);
   const worksheetPages = useMemo(() => collectPresentationWorksheets(blocks), [blocks]);
   const slides = useMemo(() => buildPresentationSlides(blocks), [blocks]);
@@ -232,6 +233,18 @@ export default function PresentationIsland({
       presentationReducer(createPresentationState(slideCount, revealable, true), { type: 'start' }),
   );
   const currentSlide: PresentationSlide | undefined = isContentSlide(state) ? slides[state.index - 1] : undefined;
+  // The current question's own context image (owner decision 2026-10-16,
+  // `blocks.ts`'s `QuizBlock.promptImages`) — DISPLAY-ONLY, resolved through
+  // the SAME preview endpoint a worksheet image uses, but never through the
+  // worksheet camera/zoom/stage layer: `QuestionSlide`'s own `media` prop
+  // already renders it in the structural `presentation-question-media` slot
+  // (`d0fb3ad`) that was left unwired until this field existed.
+  const currentQuestionMedia = useMemo(() => {
+    if (!currentSlide || currentSlide.kind !== 'question') return undefined;
+    const block = blockById.get(currentSlide.blockId);
+    const image = block?.type === 'quiz' ? block.promptImages?.[currentSlide.slot.id] : undefined;
+    return image ? imagePreviewUrl(image.path) : undefined;
+  }, [currentSlide, blockById]);
   // 0-based index into `quizState.answers`/`presentationQuiz.ts` — content
   // slide `state.index` (1-based) is `answers[state.index - 1]`. `-1` off a
   // content slide (the cover/summary), same sentinel `getSlotItems` et al.
@@ -658,6 +671,7 @@ export default function PresentationIsland({
               revealed={state.revealed}
               answer={contentSlideIndex >= 0 ? quizState.answers[contentSlideIndex] : undefined}
               onAnswer={answerCurrentQuestion}
+              media={currentQuestionMedia}
               t={t}
             />
           )}
@@ -887,12 +901,13 @@ function QuestionSlide({
   /** Taps (or presses the 1-based number key for) tile `optionIndex` (0-based) — a no-op the caller itself guards once locked. */
   onAnswer: (optionIndex: number) => void;
   /**
-   * The question's OWN context image (owner spec section 13: "una imagen
-   * opcional"), as opposed to a per-OPTION image (`PoolItem.media`, already
-   * wired below) — NOT derived from any real data yet (no such field exists
-   * on `Slot`/`Payload` today), left as a plain optional prop so a later
-   * pass can wire it without touching this component's own structure. See
-   * this file's own report on the exact hook names.
+   * The question's OWN context image (owner decision 2026-10-16,
+   * `blocks.ts`'s `QuizBlock.promptImages` — the section 13 "una imagen
+   * opcional" this prop was originally stubbed for), as opposed to a
+   * per-OPTION image (`PoolItem.media`, already wired below). DISPLAY-ONLY:
+   * `alt=""` below is deliberate, the prompt text carries the meaning.
+   * Resolved by the caller (`currentQuestionMedia`) from `block.promptImages`,
+   * never through the worksheet camera/zoom/stage layer.
    */
   media?: string;
   t: PresentCopy;
