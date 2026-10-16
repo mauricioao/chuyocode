@@ -609,6 +609,13 @@ export const UI_LABELS = {
         statusPendingReview: 'En revisión',
         statusLive: 'Publicada',
         statusRejected: 'Rechazada',
+        // Gap fix: a published activity whose edits are already resubmitted
+        // (or just saved, not yet sent) used to keep reading "Publicada"
+        // forever — the author had no way to tell from the pill itself.
+        // `statusLivePendingChanges` reuses `myActivities.pendingChangesNote`'s
+        // own wording (same calm in-review tone as `statusPendingReview`).
+        statusLivePendingChanges: 'Cambios en revisión',
+        statusLiveUnsentChanges: 'Publicada · cambios sin enviar',
         reviewNoteLabel: 'Nota del revisor',
         // "Duplicar y adaptar" credit line (D7): shown in the editor header
         // when this activity was created from another one, composed at the
@@ -2277,6 +2284,8 @@ export const UI_LABELS = {
         statusPendingReview: 'In review',
         statusLive: 'Published',
         statusRejected: 'Rejected',
+        statusLivePendingChanges: 'Changes in review',
+        statusLiveUnsentChanges: 'Published · changes not sent',
         reviewNoteLabel: "Reviewer's note",
         basedOnPrefix: 'Based on "',
         basedOnSuffix: '" from the community',

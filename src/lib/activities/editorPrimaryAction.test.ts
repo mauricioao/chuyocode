@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editorPrimaryAction } from './editorPrimaryAction';
+import { editorPrimaryAction, editorStatusPillKey } from './editorPrimaryAction';
 
 describe('editorPrimaryAction', () => {
   it('draft, never sent — "Enviar a revisión"', () => {
@@ -52,5 +52,50 @@ describe('editorPrimaryAction', () => {
 
   it('defensive: an unrecognized revision status while live falls back to "Compartir"', () => {
     expect(editorPrimaryAction({ status: 'live', revisionStatus: 'superseded' })).toBe('share');
+  });
+});
+
+// The status PILL's own derivation (gap fix: a published activity's edits
+// used to leave the pill stuck on "Publicada" forever, since `status` itself
+// never moves off `live`). Every (status, revisionStatus) combination this
+// editor can show, same table shape as `editorPrimaryAction`'s own tests
+// above.
+describe('editorStatusPillKey', () => {
+  it('draft status, draft revision — "Borrador"', () => {
+    expect(editorStatusPillKey({ status: 'draft', revisionStatus: 'draft' })).toBe('statusDraft');
+  });
+
+  it('pending_review status — "En revisión", whatever the revision status', () => {
+    expect(editorStatusPillKey({ status: 'pending_review', revisionStatus: 'pending_review' })).toBe(
+      'statusPendingReview',
+    );
+  });
+
+  it('rejected status — "Rechazada", whatever the revision status', () => {
+    expect(editorStatusPillKey({ status: 'rejected', revisionStatus: 'rejected' })).toBe('statusRejected');
+    expect(editorStatusPillKey({ status: 'rejected', revisionStatus: 'draft' })).toBe('statusRejected');
+    expect(editorStatusPillKey({ status: 'rejected', revisionStatus: 'pending_review' })).toBe('statusRejected');
+  });
+
+  it('live, no unsent edits (approved revision) — "Publicada"', () => {
+    expect(editorStatusPillKey({ status: 'live', revisionStatus: 'approved' })).toBe('statusLive');
+  });
+
+  it('live, saved edits not sent yet (draft revision) — "Publicada · cambios sin enviar"', () => {
+    expect(editorStatusPillKey({ status: 'live', revisionStatus: 'draft' })).toBe('statusLiveUnsentChanges');
+  });
+
+  it('THE GAP: live, edits already resubmitted (pending_review revision) — "Cambios en revisión"', () => {
+    expect(editorStatusPillKey({ status: 'live', revisionStatus: 'pending_review' })).toBe(
+      'statusLivePendingChanges',
+    );
+  });
+
+  it('defensive: an unrecognized revision status while live falls back to "Publicada"', () => {
+    expect(editorStatusPillKey({ status: 'live', revisionStatus: 'superseded' })).toBe('statusLive');
+  });
+
+  it('defensive: an unrecognized status outside live falls back to "Borrador"', () => {
+    expect(editorStatusPillKey({ status: 'unknown', revisionStatus: 'draft' })).toBe('statusDraft');
   });
 });
