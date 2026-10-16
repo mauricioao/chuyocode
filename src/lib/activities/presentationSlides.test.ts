@@ -401,6 +401,24 @@ describe('revealableSlides', () => {
       revealableSlides([{ kind: 'reorder', blockId: 'q1', slotId: 's1', sentence: 'a b', words: ['b', 'a'] }]),
     ).toEqual([true]);
   });
+
+  it('a multiple-choice "question" slide (input "choice") is NOT revealable — the live-quiz rhythm answers it on its own', () => {
+    const block: QuizBlock = {
+      id: 'q1',
+      type: 'quiz',
+      payload: {
+        pools: { p1: [{ id: 'a', text: 'a' }] },
+        slots: [{ id: 's1', label: 'pick one', input: 'choice', pool: 'p1', answer: ['a'] }],
+      },
+    };
+    const slides = buildPresentationSlides([block]);
+    expect(revealableSlides(slides)).toEqual([false]);
+  });
+
+  it('a typed-answer "question" slide (input "text") stays revealable, unchanged', () => {
+    const slides = buildPresentationSlides([quizBlock('q1', ['s1'])]);
+    expect(revealableSlides(slides)).toEqual([true]);
+  });
 });
 
 describe('listProjectionWarnings', () => {

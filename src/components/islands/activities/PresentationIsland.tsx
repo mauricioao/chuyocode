@@ -43,12 +43,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { toast } from 'sonner';
 import { CaretLeftIcon } from '@phosphor-icons/react/dist/ssr/CaretLeft';
 import { CaretRightIcon } from '@phosphor-icons/react/dist/ssr/CaretRight';
-import { EyeIcon } from '@phosphor-icons/react/dist/ssr/Eye';
-import { QrCodeIcon } from '@phosphor-icons/react/dist/ssr/QrCode';
 import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
+import { ListIcon } from '@phosphor-icons/react/dist/ssr/List';
+import { ClockIcon } from '@phosphor-icons/react/dist/ssr/Clock';
+import { SpeakerHighIcon } from '@phosphor-icons/react/dist/ssr/SpeakerHigh';
+import { SpeakerSlashIcon } from '@phosphor-icons/react/dist/ssr/SpeakerSlash';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { Emoji } from '@/components/ui/Emoji';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
@@ -59,8 +61,16 @@ import { useAudioMarkerPlayback } from '@/lib/activities/useAudioMarkerPlayback'
 import AudioMarkerButton from './AudioMarkerButton';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
-import { getSlotItems, type Payload, type Slot } from '@/lib/exercisePayload';
+import { getSlotItems, type Payload, type Slot, type PoolItem } from '@/lib/exercisePayload';
 import { segmentForInput } from '@/lib/quizQuestionType';
+import { useGameSound } from '@/lib/activities/gameSounds';
+import {
+  createPresentationQuizState,
+  presentationQuizReducer,
+  isAnswerLocked,
+  formatElapsed,
+  type QuizAnswerState,
+} from '@/lib/activities/presentationQuiz';
 import {
   collectPresentationQuestions,
   collectPresentationWorksheets,
@@ -86,7 +96,6 @@ import {
   isCoverSlide,
   isContentSlide,
   isSummarySlide,
-  isRevealable,
   slideNumber,
   slideProgress,
   type PresentationAction,
@@ -127,8 +136,8 @@ export interface PresentationIslandProps {
   nextActivityHref?: string;
   /**
    * Author preview (R1, owner decision 2026-10-12): the activity is not
-   * published yet, so its join QR would 404 for a student — the toggle/"Q"
-   * shortcut stays reachable (`qrAvailable` below), it just shows THIS
+   * published yet, so its join QR would 404 for a student — the `"Q"`
+   * shortcut stays reachable (`toggleQrOverlay` below), it just shows THIS
    * message via toast instead of ever opening the overlay. Callers pass
    * `qrSvg={null}` alongside this — belt-and-suspenders, since the real code
    * must never even reach this component on that path. Omitted (every other
@@ -142,11 +151,38 @@ type PresentCopy = (typeof UI_LABELS)[Lang]['activities']['present'];
 /** How long the control bar stays up after the last pointer move/focus, before fading out (section 6: "hides after ~2s"). */
 const IDLE_HIDE_MS = 2000;
 
-/** A/B/C/D — uppercase, per the owner spec's own "large A/B/C/D cards". */
-const OPTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+/**
+ * ~1.2s after a multiple-choice tile is marked, before the deck auto-advances
+ * (owner spec, P1 "live quiz rhythm" — UX-INGLES.md section 13). Instant
+ * (`0`) under `prefers-reduced-motion`: the owner spec only asks to skip the
+ * ANIMATION, the advance itself still happens — see `goNext`'s own caller
+ * below.
+ */
+const AUTO_ADVANCE_MS = 1200;
 
-/** The game-mechanic accent set (`global.css`), cycled across one question's options. */
-const OPTION_COLOR_CLASSES = ['bg-game-blue', 'bg-game-violet', 'bg-game-orange', 'bg-game-pink'] as const;
+/**
+ * One color PER TILE POSITION, never per correctness (UI mockup,
+ * `propuestas/presentacion/index.html`: "Colour goes by tile POSITION...
+ * never by correctness; red and green are reserved for the marks") — a
+ * single small helper so the UI pass can swap this whole palette in one
+ * place. Placeholder kit classes for now: the first four reuse the existing
+ * `global.css` game-accent set; the fifth/sixth (a design the mockup calls
+ * for but the kit has no token for yet) fall back to plain Tailwind
+ * utilities until the UI pass adds real `--tile-*` tokens.
+ */
+const TILE_COLOR_CLASSES = [
+  'bg-game-blue', // 1 — cobalt
+  'bg-game-pink', // 2 — magenta
+  'bg-game-orange', // 3 — orange
+  'bg-teal-700', // 4 — teal (placeholder, no kit token yet)
+  'bg-game-violet', // 5 — violet
+  'bg-sky-800', // 6 — sky-deep (placeholder, no kit token yet)
+] as const;
+
+/** `index` is 0-based (same loop index the tiles map over) — see {@link TILE_COLOR_CLASSES}'s own doc. */
+function optionColorClass(index: number): string {
+  return TILE_COLOR_CLASSES[index % TILE_COLOR_CLASSES.length]!;
+}
 
 const CONTROL_BUTTON_CLASS =
   'flex h-11 w-11 flex-none items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30';
@@ -175,6 +211,14 @@ export default function PresentationIsland({
   const worksheetPages = useMemo(() => collectPresentationWorksheets(blocks), [blocks]);
   const slides = useMemo(() => buildPresentationSlides(blocks), [blocks]);
   const revealable = useMemo(() => revealableSlides(slides), [slides]);
+  // The score only means something once the deck actually HAS a
+  // multiple-choice question to score (owner review: a match/worksheet/
+  // typed-only deck showing "✓ 0" forever is noise, not information) — gates
+  // both the top-bar pill and the final slide's own stats line below.
+  const hasChoiceQuestions = useMemo(
+    () => slides.some((slide) => slide.kind === 'question' && segmentForInput(slide.slot.input) === 'choice'),
+    [slides],
+  );
 
   // Opens directly on the first content slide (owner feedback 2026-10-06,
   // replacing the old "always the cover/QR screen") — the cover's title/
@@ -188,6 +232,18 @@ export default function PresentationIsland({
       presentationReducer(createPresentationState(slideCount, revealable, true), { type: 'start' }),
   );
   const currentSlide: PresentationSlide | undefined = isContentSlide(state) ? slides[state.index - 1] : undefined;
+  // 0-based index into `quizState.answers`/`presentationQuiz.ts` — content
+  // slide `state.index` (1-based) is `answers[state.index - 1]`. `-1` off a
+  // content slide (the cover/summary), same sentinel `getSlotItems` et al.
+  // treat as "nothing to look up".
+  const contentSlideIndex = isContentSlide(state) ? state.index - 1 : -1;
+
+  // ---- Live-quiz rhythm (P1, owner spec 2026-10-16): per-tile answer
+  // status, score, elapsed timer, and the question-list menu —
+  // `presentationQuiz.ts`'s own header on why this stays a SEPARATE reducer
+  // from `presentationReducer` (navigation) rather than folding into it. ----
+  const [quizState, quizDispatch] = useReducer(presentationQuizReducer, slides.length, createPresentationQuizState);
+  const sound = useGameSound();
 
   // ---- Virtual stage fit (resize) — see this file's own header. ----
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -339,6 +395,83 @@ export default function PresentationIsland({
     dispatch({ type: 'next' });
   }, [closeQrOnAdvance]);
 
+  // ---- "Volver a empezar" (owner spec): resets navigation AND the live-quiz
+  // state (every answer, the score, the timer) together — see
+  // `presentationQuiz.ts`'s own `restart` case. ----
+  const restart = useCallback(() => {
+    dispatch({ type: 'restart' });
+    quizDispatch({ type: 'restart' });
+  }, []);
+
+  // ---- The question-list menu (bottom-left "☰", owner spec): opening it
+  // pauses the timer (the ticking effect below reads `quizState.menuOpen`);
+  // jumping closes it and hands navigation straight to
+  // `presentationReducer`'s own `jumpTo`. ----
+  const openMenu = useCallback(() => quizDispatch({ type: 'openMenu' }), []);
+  const closeMenu = useCallback(() => quizDispatch({ type: 'closeMenu' }), []);
+  const jumpToSlide = useCallback((index: number) => {
+    dispatch({ type: 'jumpTo', index });
+    quizDispatch({ type: 'closeMenu' });
+  }, []);
+
+  // ---- Elapsed timer (owner spec: "un cronómetro arriba a la izquierda"):
+  // ticks once a second while ON a content slide (frozen on the cover/
+  // summary — "counting up from the first question") AND the menu is
+  // closed ("pausa el cronómetro mientras el menú está abierto"). The
+  // reducer itself knows nothing about pausing — see `presentationQuiz.ts`'s
+  // own header — this effect simply never dispatches `tick` while either
+  // condition fails, and restarting the interval on every toggle never
+  // resets `elapsedMs` (only the `'restart'` action does). ----
+  const timerRunning = isContentSlide(state) && !quizState.menuOpen;
+  useEffect(() => {
+    if (!timerRunning) return undefined;
+    const interval = setInterval(() => {
+      quizDispatch({ type: 'tick', deltaMs: 1000 });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning]);
+
+  // ---- Answering a multiple-choice tile (P1, "live quiz rhythm"): marks
+  // the tapped tile, plays the correct/wrong cue, and (via the auto-advance
+  // effect right below, which watches the resulting answer status) moves on
+  // after `AUTO_ADVANCE_MS`. A no-op off a choice question slide, or once
+  // that slide is already locked (one answer per question) — both the tile
+  // buttons themselves (`disabled`) and the keyboard digit map guard this
+  // too; this is the one place that actually decides "correct", so it stays
+  // the single source of truth regardless of which guard let a stray call
+  // through. ----
+  const answerCurrentQuestion = useCallback(
+    (optionIndex: number) => {
+      if (contentSlideIndex < 0 || !currentSlide || currentSlide.kind !== 'question') return;
+      const { payload, slot } = currentSlide;
+      if (segmentForInput(slot.input) !== 'choice') return;
+      if (isAnswerLocked(quizState, contentSlideIndex)) return;
+      const item = getSlotItems(payload, slot)[optionIndex];
+      if (!item) return;
+      const correct = slot.answer.includes(item.id);
+      quizDispatch({ type: 'answer', slideIndex: contentSlideIndex, optionIndex, correct });
+      sound.play(correct ? 'correct' : 'wrong');
+    },
+    [contentSlideIndex, currentSlide, quizState, sound],
+  );
+
+  // ---- Auto-advance (owner spec: "~1.2s... no auto-advance under
+  // prefers-reduced-motion? — still advance, just without animation" — so
+  // the DELAY drops to 0, the advance itself never skips). Keyed on the
+  // CURRENT content slide's own answer status: the moment it flips away
+  // from 'unanswered', this schedules exactly one `goNext()`; if the
+  // presenter manually navigates away before it fires (`state.index`
+  // changing, which also changes `currentAnswerStatus`'s own identity),
+  // the cleanup clears it — never a stray double-advance. ----
+  const currentAnswerStatus: QuizAnswerState['status'] | undefined =
+    contentSlideIndex >= 0 ? quizState.answers[contentSlideIndex]?.status : undefined;
+  useEffect(() => {
+    if (currentAnswerStatus !== 'correct' && currentAnswerStatus !== 'wrong') return undefined;
+    const delay = reducedMotion ? 0 : AUTO_ADVANCE_MS;
+    const timer = setTimeout(goNext, delay);
+    return () => clearTimeout(timer);
+  }, [currentAnswerStatus, contentSlideIndex, reducedMotion, goNext]);
+
   // ---- Keyboard map (section 6) — global: a presenter's clicker sends
   // PageDown/PageUp with focus wherever it happens to land, so this listens
   // on the window rather than a specific element. ----
@@ -353,6 +486,27 @@ export default function PresentationIsland({
       // native activation to collide with.
       const tag = (event.target as HTMLElement | null)?.tagName;
       if ((event.key === 'Enter' && (tag === 'BUTTON' || tag === 'A')) || (event.key === ' ' && tag === 'BUTTON')) {
+        return;
+      }
+
+      // The question-list menu is a lightweight overlay, not a slide of its
+      // own (same posture as the QR overlay) — while it is open, every key
+      // except Escape (closes it) is swallowed, so arrows/digits/clicker
+      // presses never navigate or answer a question hidden behind it.
+      if (quizState.menuOpen) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeMenu();
+        }
+        return;
+      }
+
+      // 1-9 picks that multiple-choice tile (P1, "live quiz rhythm") — a
+      // no-op off a choice question slide, or once it is already answered
+      // (`answerCurrentQuestion`'s own guard).
+      if (/^[1-9]$/.test(event.key)) {
+        event.preventDefault();
+        answerCurrentQuestion(Number(event.key) - 1);
         return;
       }
 
@@ -403,7 +557,17 @@ export default function PresentationIsland({
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [toggleFullscreen, toggleQrOverlay, qrOverlayOpen, exit, showControls, closeQrOnAdvance]);
+  }, [
+    toggleFullscreen,
+    toggleQrOverlay,
+    qrOverlayOpen,
+    exit,
+    showControls,
+    closeQrOnAdvance,
+    quizState.menuOpen,
+    closeMenu,
+    answerCurrentQuestion,
+  ]);
 
   // ---- Accessibility: a polite live region announces every slide change
   // (section 7; generalized from "Pregunta" to "Diapositiva" once a slide
@@ -453,13 +617,49 @@ export default function PresentationIsland({
           transformOrigin: '0 0',
         }}
       >
+        {/* Top bar (owner spec: "un cronómetro arriba a la izquierda y los
+            aciertos arriba a la derecha") — an informational layer over
+            every slide, not a control, so it is never idle-hidden and never
+            captures pointer events of its own. */}
+        <div
+          className="pointer-events-none absolute left-0 top-0 flex items-center justify-between"
+          style={{ width: STAGE_WIDTH, padding: `${STAGE_SAFE_AREA_Y}px ${STAGE_SAFE_AREA_X}px` }}
+        >
+          <span
+            data-testid="presentation-timer"
+            aria-label={`${t.timerLabel} ${formatElapsed(quizState.elapsedMs)}`}
+            style={{ fontSize: 28 }}
+            className="flex items-center gap-2 rounded-pill bg-surface-soft px-5 py-2 font-bold tabular-nums text-foreground"
+          >
+            <ClockIcon aria-hidden="true" size={22} />
+            {formatElapsed(quizState.elapsedMs)}
+          </span>
+          {hasChoiceQuestions && (
+            <span
+              data-testid="presentation-score"
+              aria-label={`${t.scoreLabel} ${quizState.score}`}
+              style={{ fontSize: 28 }}
+              className="flex items-center gap-2 rounded-pill bg-primary px-5 py-2 font-bold tabular-nums text-primary-foreground"
+            >
+              <CheckCircleIcon aria-hidden="true" weight="fill" size={22} />
+              {quizState.score}
+            </span>
+          )}
+        </div>
+
         <div
           className="flex h-full w-full flex-col items-center justify-center overflow-hidden"
           style={{ padding: `${STAGE_SAFE_AREA_Y}px ${STAGE_SAFE_AREA_X}px` }}
         >
           {isCoverSlide(state) && <CoverSlide title={title} levelLabel={levelLabel} countLabel={countLabel} />}
           {currentSlide?.kind === 'question' && (
-            <QuestionSlide question={currentSlide} revealed={state.revealed} t={t} />
+            <QuestionSlide
+              question={currentSlide}
+              revealed={state.revealed}
+              answer={contentSlideIndex >= 0 ? quizState.answers[contentSlideIndex] : undefined}
+              onAnswer={answerCurrentQuestion}
+              t={t}
+            />
           )}
           {currentSlide?.kind === 'match' && <MatchSlide slide={currentSlide} revealed={state.revealed} t={t} />}
           {currentSlide?.kind === 'reorder' && <ReorderSlide slide={currentSlide} revealed={state.revealed} t={t} />}
@@ -470,8 +670,10 @@ export default function PresentationIsland({
           {isSummarySlide(state) && (
             <SummarySlide
               countLabel={countLabel}
+              score={hasChoiceQuestions ? quizState.score : undefined}
+              elapsedMs={quizState.elapsedMs}
               t={t}
-              onRestart={() => dispatch({ type: 'restart' })}
+              onRestart={restart}
               nextActivityHref={nextActivityHref}
             />
           )}
@@ -527,25 +729,82 @@ export default function PresentationIsland({
             </button>
           </div>
         )}
+
+        {/* The question-list menu (owner spec, bottom-left "☰") — same
+            on-demand-layer posture as the QR overlay above, not a slide of
+            its own. Lists every CONTENT slide (1-based, same numbering the
+            bottom bar's own "N de M" uses); a multiple-choice question
+            already answered shows its ✓/✕, every other slide (still
+            unanswered, or a non-choice kind this reducer never touches)
+            shows neither. */}
+        {quizState.menuOpen && (
+          <div
+            data-testid="presentation-menu-panel"
+            role="dialog"
+            aria-label={t.menuLabel}
+            className="absolute left-0 top-0 flex flex-col items-center gap-8 overflow-y-auto bg-black/85 py-16"
+            style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
+          >
+            <h2 style={{ fontSize: 36 }} className="font-display font-bold text-white">
+              {t.menuLabel}
+            </h2>
+            <ol className="grid w-full max-w-4xl grid-cols-2 gap-4 px-10 sm:grid-cols-4">
+              {Array.from({ length: slides.length }, (_, i) => i + 1).map((slideIndex) => {
+                const answer = quizState.answers[slideIndex - 1];
+                return (
+                  <li key={slideIndex}>
+                    <button
+                      type="button"
+                      data-testid={`presentation-menu-item-${slideIndex}`}
+                      data-state={answer?.status ?? 'unanswered'}
+                      onClick={() => jumpToSlide(slideIndex)}
+                      aria-label={`${t.progressPrefix} ${slideIndex} ${
+                        answer?.status === 'correct' ? `— ${t.correctBadge}` : answer?.status === 'wrong' ? `— ${t.wrongBadge}` : ''
+                      }`}
+                      style={{ fontSize: 24 }}
+                      className={cn(
+                        'flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-4 font-bold text-white transition-colors hover:bg-white/20',
+                        answer?.status === 'correct' && 'bg-accent-ink/80',
+                        answer?.status === 'wrong' && 'bg-destructive/80',
+                      )}
+                    >
+                      {slideIndex}
+                      {answer?.status === 'correct' && <CheckCircleIcon aria-hidden="true" weight="fill" />}
+                      {answer?.status === 'wrong' && <XIcon aria-hidden="true" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <button
+              type="button"
+              data-testid="presentation-menu-close"
+              onClick={closeMenu}
+              style={{ fontSize: 24 }}
+              className="rounded-full bg-white/10 px-8 py-3 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t.menuClose}
+            </button>
+          </div>
+        )}
       </div>
 
       <ControlBar
         visible={controlsVisible}
         onFocus={handleControlsFocus}
         onBlur={handleControlsBlur}
+        menuOpen={quizState.menuOpen}
+        onToggleMenu={quizState.menuOpen ? closeMenu : openMenu}
         onPrev={() => dispatch({ type: 'prev' })}
         onNext={goNext}
-        onReveal={() => dispatch({ type: 'reveal' })}
-        revealDisabled={!isRevealable(state)}
+        muted={sound.muted}
+        onToggleSound={sound.toggleMuted}
         onFullscreen={toggleFullscreen}
         isFullscreen={isFullscreen}
-        qrAvailable={Boolean(qrSvg) || Boolean(qrBlockedMessage)}
-        qrOverlayOpen={qrOverlayOpen}
-        onToggleQr={toggleQrOverlay}
-        exitHref={practiceUrl}
-        onExit={onExit}
         progress={slideProgress(state)}
         total={slides.length}
+        exitHref={practiceUrl}
+        onExit={onExit}
         t={t}
       />
     </div>
@@ -597,13 +856,45 @@ function resolvedAnswerImage(payload: Payload, slot: Slot): string | undefined {
   return pool.find((item) => item.id === firstAnswerId)?.media;
 }
 
+/**
+ * One multiple-choice tile's own `data-mark` (UI mockup,
+ * `propuestas/presentacion/index.html`): `'correct'`/`'wrong'` on the TILE
+ * THE PLAYER ACTUALLY TAPPED, `'reveal'` on the right one when the tap was
+ * wrong (owner spec: "si está mal, también se marca ✓ la correcta"), and
+ * `undefined` on the plain locked ones. `undefined` (idle) while the
+ * question is not answered at all yet.
+ */
+function tileMark(item: PoolItem, index: number, slot: Slot, answer: QuizAnswerState | undefined) {
+  if (!answer || answer.status === 'unanswered') return undefined;
+  const isCorrectItem = slot.answer.includes(item.id);
+  if (index === answer.selectedIndex) return answer.status === 'correct' ? 'correct' : 'wrong';
+  if (isCorrectItem) return 'reveal';
+  return undefined;
+}
+
 function QuestionSlide({
   question,
   revealed,
+  answer,
+  onAnswer,
+  media,
   t,
 }: {
   question: { blockId: string; payload: Payload; slot: Slot };
   revealed: boolean;
+  /** This content slide's own live-quiz answer state (`presentationQuiz.ts`) — `undefined`/`'unanswered'` off a choice question, or a choice question not yet tapped. */
+  answer?: QuizAnswerState;
+  /** Taps (or presses the 1-based number key for) tile `optionIndex` (0-based) — a no-op the caller itself guards once locked. */
+  onAnswer: (optionIndex: number) => void;
+  /**
+   * The question's OWN context image (owner spec section 13: "una imagen
+   * opcional"), as opposed to a per-OPTION image (`PoolItem.media`, already
+   * wired below) — NOT derived from any real data yet (no such field exists
+   * on `Slot`/`Payload` today), left as a plain optional prop so a later
+   * pass can wire it without touching this component's own structure. See
+   * this file's own report on the exact hook names.
+   */
+  media?: string;
   t: PresentCopy;
 }) {
   const { payload, slot } = question;
@@ -612,6 +903,8 @@ function QuestionSlide({
   const items = isChoice ? getSlotItems(payload, slot) : [];
   const answerText = !isChoice ? quizSlotAnswerSummary(payload, slot) : '';
   const answerImage = !isChoice ? resolvedAnswerImage(payload, slot) : undefined;
+  const locked = isChoice && answer != null && answer.status !== 'unanswered';
+  const hasMedia = Boolean(media);
 
   return (
     <div
@@ -628,49 +921,69 @@ function QuestionSlide({
 
       {isChoice && (
         <div
-          role="list"
-          aria-label={slot.label}
-          className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2"
+          data-testid="presentation-content-row"
+          data-has-media={hasMedia ? '' : undefined}
+          className={cn('grid w-full gap-8', hasMedia ? 'sm:grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1')}
         >
-          {items.map((item, index) => {
-            const correct = slot.answer.includes(item.id);
-            const highlight = revealed && correct;
-            const dim = revealed && !correct;
-            return (
-              <div
-                key={item.id}
-                role="listitem"
-                data-testid={`presentation-option-${item.id}`}
-                data-correct={highlight ? 'true' : undefined}
-                style={{ fontSize: 40 }}
-                className={cn(
-                  'flex items-center gap-4 rounded-2xl p-6 font-semibold text-white transition-opacity duration-300',
-                  OPTION_COLOR_CLASSES[index % OPTION_COLOR_CLASSES.length],
-                  dim && 'opacity-40',
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-white/25 text-[28px]"
+          {media && (
+            <div data-testid="presentation-question-media" className="overflow-hidden rounded-2xl shadow-elevation-2">
+              <img src={media} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <div
+            role="list"
+            aria-label={slot.label}
+            data-testid="presentation-tiles"
+            data-count={items.length}
+            data-answered={locked ? '' : undefined}
+            className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2"
+          >
+            {items.map((item, index) => {
+              const idx = index + 1; // 1-based — same number the keyboard "1-9" map and `.key` badge use.
+              const mark = tileMark(item, index, slot, answer);
+              return (
+                <button
+                  type="button"
+                  key={item.id}
+                  role="listitem"
+                  data-testid={`presentation-tile-${idx}`}
+                  data-index={idx}
+                  data-mark={mark}
+                  disabled={locked}
+                  aria-label={item.text ?? item.id}
+                  onClick={() => onAnswer(index)}
+                  style={{ fontSize: 40 }}
+                  className={cn(
+                    'relative flex items-center gap-4 rounded-2xl p-6 font-semibold text-white transition-opacity duration-300 disabled:cursor-default',
+                    optionColorClass(index),
+                    locked && !mark && 'opacity-40',
+                  )}
                 >
-                  {OPTION_LETTERS[index] ?? index + 1}
-                </span>
-                {item.media && (
-                  <img src={item.media} alt="" className="h-20 w-20 flex-none object-contain" />
-                )}
-                <span className="flex-1 text-left">{item.text ?? item.id}</span>
-                {highlight && (
                   <span
-                    data-testid={`presentation-option-correct-${item.id}`}
-                    className="flex flex-none items-center gap-1.5 text-[28px]"
+                    aria-hidden="true"
+                    className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-white/25 text-[28px]"
                   >
-                    <CheckCircleIcon aria-hidden="true" weight="fill" />
-                    {t.correctBadge}
+                    {idx}
                   </span>
-                )}
-              </div>
-            );
-          })}
+                  {item.media && <img src={item.media} alt="" className="h-20 w-20 flex-none object-contain" />}
+                  <span className="flex-1 text-left">{item.text ?? item.id}</span>
+                  {mark && (
+                    <span
+                      data-testid="presentation-tile-mark"
+                      className="flex flex-none items-center gap-1.5 text-[28px]"
+                    >
+                      {mark === 'wrong' ? (
+                        <XIcon aria-hidden="true" weight="bold" />
+                      ) : (
+                        <CheckCircleIcon aria-hidden="true" weight="fill" />
+                      )}
+                      <span className="sr-only">{mark === 'wrong' ? t.wrongBadge : t.correctBadge}</span>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1116,11 +1429,22 @@ function WorksheetZoneHighlight({
  */
 function SummarySlide({
   countLabel,
+  score,
+  elapsedMs,
   t,
   onRestart,
   nextActivityHref,
 }: {
   countLabel: string;
+  /**
+   * Correct multiple-choice answers (owner spec P1: "la diapositiva final
+   * también muestra los aciertos y el tiempo") — `undefined` when the deck
+   * has no multiple-choice question at all (owner review: "✓ 0" forever is
+   * noise, not information), which drops the score from this line entirely
+   * and keeps only the time.
+   */
+  score?: number;
+  elapsedMs: number;
   t: PresentCopy;
   onRestart: () => void;
   nextActivityHref?: string;
@@ -1136,6 +1460,14 @@ function SummarySlide({
       <h2 style={{ fontSize: 80 }} className="font-display font-bold text-foreground">
         {t.summaryTitle} {countLabel}
       </h2>
+      <p
+        data-testid="presentation-summary-stats"
+        style={{ fontSize: 28 }}
+        className="font-semibold text-muted-foreground"
+      >
+        {score != null && `${t.scoreLabel} ${score} · `}
+        {t.timeLabel} {formatElapsed(elapsedMs)}
+      </p>
       <div className="flex flex-col items-center gap-3">
         {nextActivityHref ? (
           <a
@@ -1173,44 +1505,64 @@ function SummarySlide({
   );
 }
 
+/**
+ * The bottom bar — restructured for the live-quiz rhythm (P1, owner spec,
+ * matching the UI mockup `propuestas/presentacion/index.html`'s own
+ * `.bottombar`): menu (bottom-left) · ◁ prev / count / next ▷ (centred) ·
+ * sound + fullscreen + exit (bottom-right). The old standalone "reveal"/
+ * QR-toggle buttons are gone from here — reveal-then-advance already
+ * happens on a bare "next" press (no separate button needed), and the join
+ * QR still opens itself automatically on the FIRST slide only (unchanged —
+ * see this file's own `qrOverlayOpen` initial state) — both keep working
+ * exactly as before (plus the `R`/`Q` shortcuts), only their OWN bar button
+ * is gone.
+ * Exit stays, unlike those two: it has no automatic replacement, so a
+ * mouse/touch-only presenter still needs it (owner invariant, "no más ni
+ * menos" — never REMOVE reachable behaviour, even where the UI mockup's own
+ * icon set stops at six).
+ */
 function ControlBar({
   visible,
   onFocus,
   onBlur,
+  menuOpen,
+  onToggleMenu,
   onPrev,
   onNext,
-  onReveal,
-  revealDisabled,
+  muted,
+  onToggleSound,
   onFullscreen,
   isFullscreen,
-  qrAvailable,
-  qrOverlayOpen,
-  onToggleQr,
-  exitHref,
-  onExit,
   progress,
   total,
+  exitHref,
+  onExit,
   t,
 }: {
   visible: boolean;
   onFocus: () => void;
   onBlur: (event: React.FocusEvent<HTMLDivElement>) => void;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
   onPrev: () => void;
   onNext: () => void;
-  onReveal: () => void;
-  revealDisabled: boolean;
+  muted: boolean;
+  onToggleSound: () => void;
   onFullscreen: () => void;
   isFullscreen: boolean;
-  /** Whether there is a QR to show at all (`qrSvg`, absent for the editor's in-editor preview) — the button itself is omitted, not just disabled, when there is none. */
-  qrAvailable: boolean;
-  qrOverlayOpen: boolean;
-  onToggleQr: () => void;
-  /** The real practice page to exit to, when there is one — see `PresentationIslandProps.practiceUrl`. */
+  progress: number;
+  total: number;
+  /**
+   * Exit (owner invariant, "no más ni menos" — existing scope, kept):
+   * unlike the old "reveal"/QR-toggle buttons, THIS has no automatic
+   * replacement (reveal already happens on a bare "next", the QR now opens
+   * itself) — a mouse/touch-only presenter still needs a click to leave,
+   * so it stays in the bar even though the UI mockup's own icon set omits
+   * it. The real practice page to exit to, when there is one.
+   */
   exitHref?: string;
   /** The editor overlay's own close callback — takes priority over `exitHref` when given. See `PresentationIslandProps.onExit`. */
   onExit?: () => void;
-  progress: number;
-  total: number;
   t: PresentCopy;
 }) {
   return (
@@ -1223,41 +1575,39 @@ function ControlBar({
         visible ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
     >
+      <button
+        type="button"
+        aria-label={t.menuLabel}
+        aria-pressed={menuOpen}
+        data-testid="presentation-menu"
+        onClick={onToggleMenu}
+        className={cn(CONTROL_BUTTON_CLASS, menuOpen && 'bg-foreground/15')}
+      >
+        <ListIcon aria-hidden="true" size={22} />
+      </button>
       <button type="button" aria-label={t.prev} data-testid="presentation-prev" onClick={onPrev} className={CONTROL_BUTTON_CLASS}>
         <CaretLeftIcon aria-hidden="true" size={22} />
       </button>
-      <button
-        type="button"
-        aria-label={t.reveal}
-        data-testid="presentation-reveal"
-        onClick={onReveal}
-        disabled={revealDisabled}
-        className={CONTROL_BUTTON_CLASS}
-      >
-        <EyeIcon aria-hidden="true" size={22} />
-      </button>
-      <button type="button" aria-label={t.next} data-testid="presentation-next" onClick={onNext} className={CONTROL_BUTTON_CLASS}>
-        <CaretRightIcon aria-hidden="true" size={22} />
-      </button>
-      {qrAvailable && (
-        <button
-          type="button"
-          aria-label={qrOverlayOpen ? t.hideQr : t.showQr}
-          aria-pressed={qrOverlayOpen}
-          data-testid="presentation-qr-toggle"
-          onClick={onToggleQr}
-          className={cn(CONTROL_BUTTON_CLASS, qrOverlayOpen && 'bg-foreground/15')}
-        >
-          <QrCodeIcon aria-hidden="true" size={22} />
-        </button>
-      )}
       <span
-        data-testid="presentation-progress"
+        data-testid="presentation-count"
         aria-label={`${t.progressPrefix} ${progress} ${t.ofLabel} ${total}`}
         className="min-w-16 px-2 text-center text-sm font-medium tabular-nums text-foreground"
       >
-        {progress} / {total}
+        {progress} {t.ofLabel} {total}
       </span>
+      <button type="button" aria-label={t.next} data-testid="presentation-next" onClick={onNext} className={CONTROL_BUTTON_CLASS}>
+        <CaretRightIcon aria-hidden="true" size={22} />
+      </button>
+      <button
+        type="button"
+        aria-label={muted ? t.soundUnmute : t.soundMute}
+        aria-pressed={muted}
+        data-testid="presentation-sound"
+        onClick={onToggleSound}
+        className={CONTROL_BUTTON_CLASS}
+      >
+        {muted ? <SpeakerSlashIcon aria-hidden="true" size={22} /> : <SpeakerHighIcon aria-hidden="true" size={22} />}
+      </button>
       <button
         type="button"
         aria-label={isFullscreen ? t.fullscreenExit : t.fullscreenEnter}

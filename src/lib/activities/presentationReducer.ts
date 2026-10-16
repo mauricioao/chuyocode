@@ -65,7 +65,16 @@ export type PresentationAction =
   | { type: 'next' }
   | { type: 'prev' }
   | { type: 'reveal' }
-  | { type: 'restart' };
+  | { type: 'restart' }
+  /**
+   * The live-quiz rhythm's own question-list menu (P1, UX-INGLES.md
+   * section 13, "Presentación nueva"): jump straight to any content slide
+   * by its 1-based number, same index space `slideNumber`/`isContentSlide`
+   * already use. Clamped to `[0, slideCount + 1]` (the cover and summary
+   * are reachable too, same as `prev`/`next` can land on them) and always
+   * drops `revealed`, same as `prev`/`next`.
+   */
+  | { type: 'jumpTo'; index: number };
 
 /**
  * The initial state: nothing revealed, sitting on {@link PresentationState.startIndex}
@@ -154,6 +163,12 @@ export function presentationReducer(
       const summaryIndex = state.slideCount + 1;
       if (state.index >= summaryIndex) return state;
       return { ...state, index: state.index + 1, revealed: false };
+    }
+
+    case 'jumpTo': {
+      const clamped = Math.min(Math.max(action.index, 0), state.slideCount + 1);
+      if (clamped === state.index && !state.revealed) return state;
+      return { ...state, index: clamped, revealed: false };
     }
 
     default:
