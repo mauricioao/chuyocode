@@ -650,7 +650,10 @@ export default function PresentationIsland({
 
       <div
         data-testid="presentation-stage"
-        className="absolute left-0 top-0 bg-card text-foreground"
+        // `font-display` (Inter inside Inglés) on the WHOLE stage, not just
+        // the prompt: the UI mockup sets tiles, pills and the counter in the
+        // same face, and the body's system-ui stack read as a second font.
+        className="absolute left-0 top-0 bg-card font-display text-foreground"
         style={{
           width: STAGE_WIDTH,
           height: STAGE_HEIGHT,

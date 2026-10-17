@@ -1041,4 +1041,9 @@ describe('PresentationIsland — stage frame (UI mockup, propuestas/presentacion
     render(<PresentationIsland {...BASE_PROPS} />);
     expect(attr(screen.getByTestId('presentation-viewport'), 'data-presentation-viewport')).toBe('');
   });
+
+  it('sets the whole stage in the Inglés display face (mockup: Inter on tiles, pills and counter, not just the prompt)', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByTestId('presentation-stage').className).toContain('font-display');
+  });
 });
