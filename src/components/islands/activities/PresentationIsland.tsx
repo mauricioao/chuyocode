@@ -214,6 +214,24 @@ function tileGridClass(count: number, hasMedia: boolean): string {
 /** `.tiles` own fixed height when there is no context image (UI mockup: `calc(46 * var(--u))`) — see {@link tileGridClass}'s own doc on the stage's fixed "1vh". */
 const TILES_NO_MEDIA_HEIGHT_PX = 497;
 
+/**
+ * The content row's own height cap WITH a context image: the mockup's media
+ * box at its 4:3 placeholder in the `0.82fr` column (`209..583` at 1280x720,
+ * i.e. 52vh) — the row fills the space left under the prompt up to this,
+ * and the image itself crops (`object-cover`) to whatever box it gets.
+ */
+const CONTENT_ROW_WITH_MEDIA_MAX_HEIGHT_PX = 562;
+
+/**
+ * Space a multiple-choice slide keeps clear above/below its own content for
+ * the top bar's pills (60) and the bottom bar's buttons (69), plus the
+ * mockup's own `.stage` row gap (`2.2 * var(--u)` = 24 stage px) — both bars
+ * are absolutely positioned layers in the same safe-area padding box.
+ */
+const STAGE_ROW_GAP_PX = 24;
+const TOP_BAR_CLEARANCE_PX = 60 + STAGE_ROW_GAP_PX;
+const BOTTOM_BAR_CLEARANCE_PX = 69 + STAGE_ROW_GAP_PX;
+
 /** The worksheet camera's own stage — the safe area inside the 1920x1080 stage, same box every other slide already keeps clear on every edge (`fitStage.ts`'s own header). */
 const WORKSHEET_STAGE: Size = { width: STAGE_SAFE_WIDTH, height: STAGE_SAFE_HEIGHT };
 
@@ -995,12 +1013,23 @@ function QuestionSlide({
   return (
     <div
       data-testid={`presentation-question-${slot.id}`}
-      className="flex w-full max-w-5xl flex-1 flex-col items-center justify-center gap-10"
+      // A multiple-choice slide follows the mockup's `.stage` rows: prompt
+      // right under the top bar, tiles in the remaining row. A typed-answer
+      // slide (no tiles) keeps its prompt/answer centred on the stage.
+      className={cn(
+        'flex w-full flex-1 flex-col items-center',
+        isChoice ? 'self-stretch' : 'justify-center gap-10',
+      )}
+      style={
+        isChoice
+          ? { paddingTop: TOP_BAR_CLEARANCE_PX, paddingBottom: BOTTOM_BAR_CLEARANCE_PX, gap: STAGE_ROW_GAP_PX }
+          : undefined
+      }
     >
       <p
         data-testid="presentation-question-prompt"
         style={{ fontSize: promptFontSize(slot.label) }}
-        className={cn('text-center', PROMPT_TEXT_CLASS)}
+        className={cn('max-w-[92%] text-center', PROMPT_TEXT_CLASS)}
       >
         <PromptLabel label={slot.label} />
       </p>
@@ -1009,7 +1038,11 @@ function QuestionSlide({
         <div
           data-testid="presentation-content-row"
           data-has-media={hasMedia ? '' : undefined}
-          className={cn('grid w-full gap-6', hasMedia ? 'sm:grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1')}
+          className={cn(
+            'grid min-h-0 w-full flex-1 gap-6',
+            hasMedia ? 'my-auto sm:grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1 content-center',
+          )}
+          style={hasMedia ? { maxHeight: CONTENT_ROW_WITH_MEDIA_MAX_HEIGHT_PX } : undefined}
         >
           {media && (
             <div

@@ -1046,4 +1046,29 @@ describe('PresentationIsland — stage frame (UI mockup, propuestas/presentacion
     render(<PresentationIsland {...BASE_PROPS} />);
     expect(screen.getByTestId('presentation-stage').className).toContain('font-display');
   });
+
+  // Mockup `.stage` grid (auto / auto / 1fr / auto): the prompt sits right
+  // under the top bar and the tiles take the remaining row — not a column
+  // squeezed into a 1024px box in the middle of a 1920px stage.
+  it('lays a multiple-choice slide out like the mockup: full stage width, bars cleared, prompt capped at 92%, tiles in the remaining row', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    const slide = screen.getByTestId('presentation-question-s1');
+    expect(slide.className).not.toContain('max-w-5xl');
+    expect(slide.className).toContain('w-full');
+    expect(slide.style.paddingTop).toBe('84px');
+    expect(slide.style.paddingBottom).toBe('93px');
+    expect(screen.getByTestId('presentation-question-prompt').className).toContain('max-w-[92%]');
+    expect(screen.getByTestId('presentation-content-row').className).toContain('flex-1');
+  });
+
+  it('caps the content row at the mockup media height when the question has a context image', () => {
+    const blocks: Block[] = [
+      {
+        ...(QUIZ_BLOCKS[0] as Extract<Block, { type: 'quiz' }>),
+        promptImages: { s1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+      },
+    ];
+    render(<PresentationIsland {...BASE_PROPS} blocks={blocks} />);
+    expect(screen.getByTestId('presentation-content-row').style.maxHeight).toBe('562px');
+  });
 });
