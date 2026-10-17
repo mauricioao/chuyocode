@@ -618,6 +618,15 @@
     scrollbar-gutter: auto;
   }
 
+  /* Same fix for presentation mode (`PresentationIsland.tsx`'s own
+   * `fixed inset-0` viewport, `[data-presentation-viewport]`): the page
+   * never scrolls under it (BaseLayout `bare fullHeight`), and the gutter
+   * otherwise narrows the viewport the stage fit measures, letterboxing a
+   * true 16:9 window with a light strip on both sides. */
+  :root:has([data-presentation-viewport]) {
+    scrollbar-gutter: auto;
+  }
+
   input,
   select,
   textarea {

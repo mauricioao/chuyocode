@@ -242,6 +242,14 @@ describe('scrollbar (creator polish round 3 — no layout jump)', () => {
     expect(css).toMatch(/:root:has\(\[data-desk-window\]\)\s*{[^}]*scrollbar-gutter:\s*auto;/);
   });
 
+  // Same class of bug on presentation mode: the stage's own `fixed inset-0`
+  // viewport (`PresentationIsland.tsx`, `data-presentation-viewport`) was
+  // narrowed by the reserved gutter, so a 16:9 window letterboxed the stage
+  // with a light strip on both sides and a black band top and bottom.
+  it('turns the gutter reservation off while the presentation viewport is mounted, so the stage fits edge to edge', () => {
+    expect(css).toMatch(/:root:has\(\[data-presentation-viewport\]\)\s*{[^}]*scrollbar-gutter:\s*auto;/);
+  });
+
   it('declares a thin, dark-theme scrollbar for Firefox (scrollbar-width/scrollbar-color)', () => {
     expect(css).toMatch(/scrollbar-width:\s*thin;/);
     expect(css).toMatch(/scrollbar-color:\s*var\(--muted\)\s+transparent;/);

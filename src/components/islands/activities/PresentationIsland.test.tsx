@@ -1035,3 +1035,10 @@ describe('PresentationIsland — SSR/hydration', () => {
     expect(recoverableErrors).toEqual([]);
   });
 });
+
+describe('PresentationIsland — stage frame (UI mockup, propuestas/presentacion)', () => {
+  it('marks its fixed viewport with data-presentation-viewport, the hook global.css uses to drop the page scrollbar gutter', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(attr(screen.getByTestId('presentation-viewport'), 'data-presentation-viewport')).toBe('');
+  });
+});

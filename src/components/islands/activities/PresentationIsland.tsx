@@ -640,6 +640,7 @@ export default function PresentationIsland({
     <div
       ref={viewportRef}
       data-testid="presentation-viewport"
+      data-presentation-viewport=""
       className="fixed inset-0 z-[60] overflow-hidden bg-black"
       onPointerMove={showControls}
     >
