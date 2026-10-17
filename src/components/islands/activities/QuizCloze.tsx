@@ -214,7 +214,9 @@ function ClozeBlankBox({
       // ({@link BLANK_FILLED} + {@link CHIP_PLACED}) — the shared blank,
       // never a hand-rolled bordered box.
       className={cn(
-        'relative mx-1 inline-flex min-w-24 items-center justify-center align-middle font-medium',
+        // `my-1`: the blank is as tall as the line, so without it two
+        // wrapped lines' blanks touched on a phone.
+        'relative mx-1 my-1 inline-flex min-w-24 items-center justify-center align-middle font-medium',
         TILE_MIN_HEIGHT_SCALE,
         TILE_PADDING_X_SCALE,
         TILE_PADDING_Y_SCALE,

@@ -62,6 +62,14 @@ const TWO_BLANK_PAYLOAD: Payload = {
 describe('QuizCloze', () => {
   // Mobile review 2026-10-17: on a wide stage the word tray hugged the left
   // edge while the sentence sat centred at the reading measure.
+  // Mobile review 2026-10-17: when a sentence wraps (phones), the dashed
+  // blanks of two consecutive lines touched — the blank is as tall as the
+  // line itself. A vertical margin keeps a gap between wrapped lines.
+  it('keeps a vertical gap around each blank so wrapped lines never touch', () => {
+    render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+    expect(screen.getByTestId('cloze-blank-slot-s0b0').className.split(' ')).toContain('my-1');
+  });
+
   it('caps the word tray at the same centred measure as the sentence', () => {
     render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
     const trayClasses = screen.getByTestId('cloze-tray').className.split(' ');
