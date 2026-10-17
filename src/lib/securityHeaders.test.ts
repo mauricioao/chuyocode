@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { applySecurityHeaders, withSecurityHeaders } from './securityHeaders';
+import { applySecurityHeaders, isCspEnforced, withSecurityHeaders } from './securityHeaders';
+import { mergeEnvSources } from './env';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -203,6 +204,67 @@ describe('CSP_ENFORCE (enforce mode toggle)', () => {
     const headers = new Headers({ 'content-security-policy': "default-src 'none'" });
     applySecurityHeaders(headers);
     expect(headers.get('content-security-policy')).toBe("default-src 'none'");
+  });
+});
+
+/**
+ * Netlify UI-configured env vars arrive at runtime through `process.env`,
+ * never `import.meta.env` (only what Vite statically inlined at BUILD time
+ * survives there) — same posture as `src/lib/env.ts`'s own merge, same
+ * header.
+ *
+ * These resolution-order cases pass an explicit `EnvSource` into
+ * {@link isCspEnforced} rather than mutating the ambient `import.meta.env`/
+ * `process.env` globals (the way `src/lib/env.test.ts` does for
+ * `defaultEnvSource`), because Vitest's own `import.meta.env`, in this
+ * project's "node" test environment, transparently falls through to a LIVE
+ * `process.env` read for any key Vite did not statically define — so an
+ * ambient `process.env.CSP_ENFORCE` mutation reads back through
+ * `import.meta.env.CSP_ENFORCE` too regardless of which source the
+ * implementation actually consults, which would make a naive ambient test
+ * pass even against the pre-fix, `import.meta.env`-only implementation (a
+ * false RED-less green, found while writing this — see the fix's own
+ * commit). An explicit `EnvSource` sidesteps that quirk and gives a
+ * deterministic RED against the pre-fix code, same reason `loadEnv`
+ * (`src/lib/env.ts`) takes one too.
+ */
+describe('CSP_ENFORCE resolution order (build-time vs runtime)', () => {
+  it('enforces when CSP_ENFORCE is usable ONLY on the runtime (process.env) side', () => {
+    const source = mergeEnvSources({}, { CSP_ENFORCE: 'true' });
+    expect(isCspEnforced(source)).toBe(true);
+  });
+
+  it('stays off when CSP_ENFORCE is usable on neither side', () => {
+    const source = mergeEnvSources({}, {});
+    expect(isCspEnforced(source)).toBe(false);
+  });
+
+  it('prefers a usable build-time (import.meta.env) value over the runtime one', () => {
+    const source = mergeEnvSources({ CSP_ENFORCE: 'false' }, { CSP_ENFORCE: 'true' });
+    expect(isCspEnforced(source)).toBe(false);
+  });
+
+  it('falls back to the runtime value when the build-time one is blank', () => {
+    const source = mergeEnvSources({ CSP_ENFORCE: '  ' }, { CSP_ENFORCE: 'true' });
+    expect(isCspEnforced(source)).toBe(true);
+  });
+});
+
+/**
+ * End-to-end confirmation that `applySecurityHeaders`'s AMBIENT default
+ * (no explicit source — `defaultEnvSource()`, reading real
+ * `import.meta.env`/`process.env`) still resolves correctly when nothing is
+ * configured at all. This is the one ambient case that genuinely needs no
+ * source override to be meaningful: "neither side set" behaves identically
+ * regardless of the quirk described above.
+ */
+describe('CSP_ENFORCE resolved from the runtime environment (Netlify Function)', () => {
+  it('stays report-only by default (neither import.meta.env nor process.env set it)', () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+
+    expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+    expect(headers.has('content-security-policy-report-only')).toBe(true);
   });
 });
 

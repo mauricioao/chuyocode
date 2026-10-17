@@ -17,12 +17,21 @@ const { createSessionClient } = vi.hoisted(() => ({
 
 // `@lib/supabaseSession` reads the Supabase URL / anon key at module init, and
 // only `createSessionClient` is stubbed, so the module really loads.
-vi.mock('@lib/env', () => ({
-  loadEnv: () => ({
-    SUPABASE_URL: 'https://x.supabase.co',
-    SUPABASE_ANON_KEY: 'anon-key',
-  }),
-}));
+// `...actual` keeps every other real export (`defaultEnvSource`,
+// `mergeEnvSources`, …) intact — `src/lib/securityHeaders.ts`'s
+// `isCspEnforced` calls `defaultEnvSource()` on every `withSecurityHeaders`,
+// which every response in this file goes through, and a full replacement
+// mock here would leave it `undefined`.
+vi.mock('@lib/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@lib/env')>();
+  return {
+    ...actual,
+    loadEnv: () => ({
+      SUPABASE_URL: 'https://x.supabase.co',
+      SUPABASE_ANON_KEY: 'anon-key',
+    }),
+  };
+});
 
 vi.mock('@lib/supabaseSession', async (importActual) => {
   // 🔴 `flushSessionHeaders` IS DELIBERATELY NOT MOCKED. Whether a rotated

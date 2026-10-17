@@ -20,27 +20,49 @@
  * clean (LANZAMIENTO.md §2: needs a few days of real `[csp-report]` log
  * lines first). Enforcing it at launch needs NO code change: set the
  * server-side env var `CSP_ENFORCE=true` in Netlify's site settings (Site
- * configuration → Environment variables) and redeploy (or trigger a new
- * build) — see {@link isCspEnforced}. Unset/anything else keeps today's
- * report-only behaviour byte for byte.
+ * configuration → Environment variables) and **redeploy** — see
+ * {@link isCspEnforced}. A redeploy is required regardless of whether it
+ * rebuilds from source: Netlify only injects current env vars into a
+ * Function's `process.env` on a new deploy, never into an already-running
+ * instance. Unset/anything else keeps today's report-only behaviour byte
+ * for byte.
  */
+import { defaultEnvSource, type EnvSource } from './env';
 
 /**
  * Whether the full CSP should be ENFORCED (`content-security-policy`, no
  * `-report-only` header) instead of the default report-only posture.
  *
- * Read at request time (not cached at module init) so a test can flip it
- * per-case with `vi.stubEnv`, same pattern as `src/lib/turnstile.ts` and
- * `src/lib/webAnalytics.ts`. Deliberately NOT `PUBLIC_`-prefixed: this must
- * stay a server-side-only decision, never inlined into the client bundle.
+ * Reads the SAME merged `import.meta.env` + `process.env` view
+ * `src/lib/env.ts#defaultEnvSource` uses, for the SAME reason (that
+ * module's own header): this SSR app is deployed as a Netlify Function, and
+ * only variables Vite statically inlined at BUILD time survive in
+ * `import.meta.env` — a var configured in Netlify's UI after that build
+ * arrives at runtime through `process.env` instead, which a single
+ * `import.meta.env` read would never see. Reading `import.meta.env` alone
+ * would let flipping `CSP_ENFORCE` in Netlify's dashboard silently do
+ * nothing until the next build happens to run with it already set.
+ *
+ * Read at request time (not cached at module init), from the default merged
+ * source unless an explicit `source` is passed. The explicit-`source`
+ * overload exists purely for deterministic unit tests of the resolution
+ * order: Vitest's own `import.meta.env`, in this project's "node" test
+ * environment, transparently falls through to a LIVE `process.env` read for
+ * any key Vite did not statically define — so mutating the two ambient
+ * globals in a test cannot actually reproduce "frozen at build time vs set
+ * later at runtime" the way the real, deployed Netlify Function can (see
+ * `src/lib/securityHeaders.test.ts`'s own note on this). An explicit
+ * `EnvSource` sidesteps that quirk entirely, same reason `src/lib/env.ts`'s
+ * `loadEnv` takes one. Deliberately NOT `PUBLIC_`-prefixed: this must stay a
+ * server-side-only decision, never inlined into the client bundle.
  *
  * Only the exact string `"true"` or `"1"` enables it — anything else
  * (unset, `"false"`, `"yes"`, a stray space) is treated as OFF, so a typo in
  * Netlify's env var UI fails safe into report-only rather than silently
  * enforcing an unverified policy.
  */
-export function isCspEnforced(): boolean {
-  const raw = import.meta.env.CSP_ENFORCE;
+export function isCspEnforced(source: EnvSource = defaultEnvSource()): boolean {
+  const raw = source.CSP_ENFORCE;
   return raw === 'true' || raw === '1';
 }
 
