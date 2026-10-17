@@ -405,8 +405,17 @@ export default function EditorSideToolbar({
       observer.observe(windowEl, { attributes: true, attributeFilter: ['style'] });
     }
     window.addEventListener('resize', resync);
+    // The rail's OWN size changes too: the worksheet tool cluster portals
+    // in after this first sync, growing the rail by ~200px — without a
+    // resync it kept the top computed for the short rail and its last
+    // buttons (Guardar) ended below the window at 1280×800 (mobile review
+    // 2026-10-17).
+    const railObserver =
+      typeof ResizeObserver !== 'undefined' && railRef.current ? new ResizeObserver(resync) : null;
+    if (railObserver && railRef.current) railObserver.observe(railRef.current);
     return () => {
       observer?.disconnect();
+      railObserver?.disconnect();
       window.removeEventListener('resize', resync);
     };
   }, [docked]);
