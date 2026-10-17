@@ -234,12 +234,12 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
       bottom-centre. */}
   <section
     aria-label={t.widgetsLabel}
-    class="order-5 grid grid-cols-2 gap-3 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
+    class="order-5 grid grid-cols-2 gap-3 sm:max-desk:grid-cols-4 desk:order-none desk:col-start-1 desk:row-start-1 desk:grid-cols-[160px_160px_320px] desk:grid-rows-[auto_auto] desk:gap-5"
   >
     <DeskClockWidget />
     <DeskCalendarWidget />
     {/* The drag identity lives on this Astro wrapper, never on the React island's own root: `deskDrag` edits its widget's attributes and inline styles, and doing that to React-owned markup before hydration made React report a hydration mismatch. */}
-    <div data-desk-widget="player" class="col-span-2 w-full desk:col-span-1 desk:w-[320px]">
+    <div data-desk-widget="player" class="col-span-2 flex w-full desk:col-span-1 desk:block desk:w-[320px]">
       <DeskPlayerWidget labels={playerLabels} client:load />
     </div>
     <DeskWeatherWidget

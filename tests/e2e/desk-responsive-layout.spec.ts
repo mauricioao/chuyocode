@@ -66,5 +66,61 @@ for (const viewport of [
         }
       }
     });
+
+    test('the widgets keep the mockup grid (160/160/320 columns, 20px gaps)', async ({ page }) => {
+      const signedIn = await gotoHubOrSkip(page);
+      test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+      await page.waitForLoadState('networkidle');
+
+      const clock = await box(page.locator('#desk-clock'));
+      const calendar = await box(page.locator('#desk-calendar'));
+      const player = await box(page.locator('#desk-player'));
+      expect(Math.round(clock.width)).toBe(160);
+      expect(Math.round(calendar.width)).toBe(160);
+      expect(Math.round(player.width)).toBe(320);
+      expect(Math.round(calendar.x - (clock.x + clock.width))).toBe(20);
+      expect(Math.round(player.x - (calendar.x + calendar.width))).toBe(20);
+    });
+  });
+}
+
+// Phone and tablet flow: the widgets form one even block, like the approved
+// phone mockup (`propuestas/ingles-escritorio/celular-390-completo.png`) —
+// clock and calendar as an equal pair, the player and the weather spanning
+// the full row. They used to keep their fixed desktop caps (160px/320px),
+// leaving ragged right edges at 375 and half-empty rows at 768.
+for (const viewport of [
+  { width: 375, height: 812 },
+  { width: 768, height: 1024 },
+]) {
+  test.describe(`desk hub widgets at ${viewport.width}px (flow layout)`, () => {
+    test.use({ viewport });
+
+    test('the widgets share one left and one right edge, and clock/calendar are an equal pair', async ({ page }) => {
+      const signedIn = await gotoHubOrSkip(page);
+      test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+      await page.waitForLoadState('networkidle');
+
+      const clock = await box(page.locator('#desk-clock'));
+      const calendar = await box(page.locator('#desk-calendar'));
+      const player = await box(page.locator('#desk-player'));
+      const weather = await box(page.locator('#desk-weather'));
+      const right = (b: Box) => b.x + b.width;
+
+      expect(Math.abs(clock.width - calendar.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(clock.height - calendar.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(clock.x - weather.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(right(player) - right(weather))).toBeLessThanOrEqual(1);
+      // On a phone the pair fills its own row too (on a tablet the player
+      // shares the pair's row instead).
+      if (viewport.width < 640) expect(Math.abs(right(calendar) - right(weather))).toBeLessThanOrEqual(1);
+    });
+
+    test('the hub does not scroll sideways', async ({ page }) => {
+      const signedIn = await gotoHubOrSkip(page);
+      test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(viewport.width);
+    });
   });
 }
