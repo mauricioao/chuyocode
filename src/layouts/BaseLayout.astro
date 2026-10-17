@@ -91,6 +91,7 @@ import {
 } from '@lib/seo';
 import { isInglesHubPath } from '@lib/backNavigation';
 import { getWebAnalyticsBeaconPayload } from '@lib/webAnalytics';
+import { getPosthogConfig } from '@lib/posthog';
 
 interface Props {
   /** Active locale for the `<html lang>` attribute. */
@@ -273,6 +274,13 @@ const noindex = isNoindexPath(Astro.url.pathname);
 // header. No script element renders, and no Cloudflare origin appears in
 // the page at all, until it is set at build time.
 const webAnalyticsBeacon = getWebAnalyticsBeaconPayload();
+
+// PostHog product analytics + feature flags: `null` while
+// PUBLIC_POSTHOG_KEY is unset, same inert-by-construction posture as the
+// Cloudflare beacon right above — see `@lib/posthog`'s own header. No
+// script element renders, no network call happens, until it is set at
+// build time.
+const posthogEnabled = getPosthogConfig() !== null;
 
 /** `og:locale` per language (Facebook's `xx_YY` format). `es_PE`/`en_US`
  * mirror the locale strings this codebase already formats dates with
@@ -513,6 +521,17 @@ const faviconSvg =
         src="https://static.cloudflareinsights.com/beacon.min.js"
         data-cf-beacon={webAnalyticsBeacon}
       ></script>
+    )}
+    {/* PostHog (`posthogEnabled`, see above): a normal Astro module script,
+        not `is:inline` — bundled via Vite like any client island, so it is
+        only ever fetched on a page that actually renders this tag. Same
+        EMBEDDED exception as the Cloudflare beacon: an iframe loading a
+        window's own content is not a visit in its own right. */}
+    {!embedded && posthogEnabled && (
+      <script>
+        import { initPosthog } from '@lib/posthogClient';
+        initPosthog();
+      </script>
     )}
   </head>
   <body
