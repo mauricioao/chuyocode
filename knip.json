@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/pages/**/*.{astro,ts}",
+    "!src/pages/**/_*",
+    "!src/pages/**/_*/**",
+    "scripts/**/*.mjs",
+    "schemas/**/*.{ts,tsx}"
+  ],
+  "project": ["src/**/*.{ts,tsx,astro}", "scripts/**/*.mjs", "schemas/**/*.{ts,tsx}"],
+  "ignoreDependencies": [
+    "@fontsource-variable/inter",
+    "@fontsource-variable/raleway"
+  ]
+}
