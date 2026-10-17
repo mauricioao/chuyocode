@@ -337,8 +337,15 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
   // zone coordinate math, which stays driven by the `image` prop alone.
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageBroken, setImageBroken] = useState(false);
+  // An image that already finished decoding before React attached `onLoad`
+  // (server-rendered markup, a cached sheet) never fires that event again —
+  // it stayed at opacity 0 below `lg` (mobile review 2026-10-17). Read the
+  // element's own `complete` state instead of waiting for an event that
+  // already happened.
+  const canvasImageRef = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
-    setImageLoaded(false);
+    const img = canvasImageRef.current;
+    setImageLoaded(Boolean(img?.complete && img.naturalWidth > 0));
     setImageBroken(false);
   }, [imageUrl]);
 
@@ -1876,6 +1883,7 @@ const WorksheetZoneEditor = forwardRef<WorksheetZoneEditorHandle, WorksheetZoneE
               </div>
             ) : (
               <img
+                ref={canvasImageRef}
                 src={imageUrl}
                 alt=""
                 draggable={false}
