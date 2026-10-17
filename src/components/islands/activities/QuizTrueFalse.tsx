@@ -26,6 +26,9 @@ import { formatElapsed, tick, TICK_MS } from '@/lib/exerciseStopwatch';
 import type { TrueFalseItem } from '@/lib/activities/gameModes';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import { stageChipColorClass } from '@/components/islands/mechanics/chip';
+import { GradeMark, type GradeState } from '@/components/islands/mechanics/CheckMark';
+import { SINGLE_CARD, SINGLE_CARD_META, SINGLE_CARD_PROMPT } from '@/components/islands/mechanics/singleCard';
 
 export interface QuizTrueFalseProps {
   lang: Lang;
@@ -102,7 +105,7 @@ export default function QuizTrueFalse({ lang, items, promptImages }: QuizTrueFal
   if (completed) {
     return (
       <div data-testid="truefalse-done" className="flex flex-col items-center gap-3 py-8 text-center">
-        <p data-testid="truefalse-score" className="text-lg font-medium text-foreground">
+        <p data-testid="truefalse-score" className="text-xl font-semibold text-foreground tabular-nums">
           {t.tfScorePrefix}: {score} / {total} — {formatElapsed(elapsed)}
         </p>
         <Button type="button" data-testid="truefalse-play-again" onClick={handlePlayAgain}>
@@ -114,15 +117,37 @@ export default function QuizTrueFalse({ lang, items, promptImages }: QuizTrueFal
 
   if (!current) return null;
 
+  /** Which ✓/✕ badge (if any) a button shows — the same `GradeMark` the drag games use. */
+  function buttonGrade(isTrueButton: boolean): GradeState | undefined {
+    if (feedback === 'idle' || given === undefined) return undefined;
+    if (isTrueButton === current!.isTrue) return 'correct';
+    if (isTrueButton === given) return 'wrong';
+    return undefined;
+  }
+
+  // The two answers are the drag games' own colour capsules
+  // (`chip.ts`'s `stageChipColorClass`, by position: "Verdadero" first,
+  // "Falso" second — never green/red for true/false, those stay reserved
+  // for the ✓/✕ feedback below). Feedback swaps the fill for the
+  // semantic tint plus the shared ✓/✕ badge; `disabled:opacity-100` keeps
+  // a graded button fully legible while both are disabled for the read
+  // pause, and only the uninvolved one fades.
   function buttonClass(isTrueButton: boolean): string {
+    const base = cn(stageChipColorClass(isTrueButton ? 0 : 1), 'relative min-w-36 disabled:cursor-default sm:min-w-44');
+    const grade = buttonGrade(isTrueButton);
     if (feedback === 'idle' || given === undefined) {
-      return 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60';
+      return cn(base, 'transition-[translate] hover:-translate-y-0.5 motion-reduce:transition-none');
     }
-    const isCorrectAnswer = isTrueButton === current!.isTrue;
-    const isTappedButton = isTrueButton === given;
-    if (isCorrectAnswer) return 'border-success-strong bg-success-strong/10 text-success-strong-foreground';
-    if (isTappedButton) return 'border-destructive bg-destructive/10 text-destructive';
-    return 'border-border bg-surface-soft text-foreground opacity-60';
+    if (grade === 'correct') {
+      return cn(
+        base,
+        'border-2 border-success-strong bg-success-strong/10 text-success-strong-foreground shadow-none disabled:opacity-100',
+      );
+    }
+    if (grade === 'wrong') {
+      return cn(base, 'border-2 border-destructive bg-destructive/10 text-destructive shadow-none disabled:opacity-100');
+    }
+    return cn(base, 'disabled:opacity-40');
   }
 
   return (
@@ -131,43 +156,47 @@ export default function QuizTrueFalse({ lang, items, promptImages }: QuizTrueFal
         {feedback === 'correct' ? t.tfCorrect : feedback === 'wrong' ? t.tfWrong : ''}
       </div>
 
-      <div className="flex w-full max-w-md items-center justify-between text-sm text-muted-foreground">
-        <span data-testid="truefalse-counter" className="tabular-nums">
+      <div className="flex w-full max-w-xl items-center justify-between">
+        <span data-testid="truefalse-counter" className={SINGLE_CARD_META}>
           {t.tfCounterPrefix} {index + 1} {t.tfCounterOf} {total}
         </span>
-        <span data-testid="truefalse-timer" className="tabular-nums">
+        <span data-testid="truefalse-timer" className={SINGLE_CARD_META}>
           {formatElapsed(elapsed)}
         </span>
       </div>
 
-      <div className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center">
+      <div className={cn(SINGLE_CARD, 'min-h-48')}>
         <PromptImage image={promptImages?.[current.id]} />
-        <p data-testid="truefalse-statement" className="text-lg font-semibold text-foreground">
+        <p data-testid="truefalse-statement" className={SINGLE_CARD_PROMPT}>
           {current.statement}
         </p>
       </div>
 
-      <div className="flex w-full max-w-md items-center justify-center gap-3">
-        <Button
+      {/* Plain `<button>`s, not the shared `Button`: the Inglés button kit
+          (`global.css`) pins every `data-slot="button"` to a 34px action
+          capsule, and these two are answer CHIPS, sized like the drag
+          games' own (`chip.ts`). */}
+      <div className="flex w-full max-w-xl flex-wrap items-center justify-center gap-4">
+        <button
           type="button"
-          variant="outline"
           data-testid="truefalse-true"
           disabled={feedback !== 'idle'}
           onClick={() => handleAnswer(true)}
-          className={cn('h-11 flex-1 border-2 sm:h-8', buttonClass(true))}
+          className={buttonClass(true)}
         >
           {t.tfTrue}
-        </Button>
-        <Button
+          {buttonGrade(true) && <GradeMark state={buttonGrade(true)!} />}
+        </button>
+        <button
           type="button"
-          variant="outline"
           data-testid="truefalse-false"
           disabled={feedback !== 'idle'}
           onClick={() => handleAnswer(false)}
-          className={cn('h-11 flex-1 border-2 sm:h-8', buttonClass(false))}
+          className={buttonClass(false)}
         >
           {t.tfFalse}
-        </Button>
+          {buttonGrade(false) && <GradeMark state={buttonGrade(false)!} />}
+        </button>
       </div>
     </div>
   );
