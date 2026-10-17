@@ -639,7 +639,7 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
             ref={trayRef}
             data-testid="cloze-tray"
             aria-label={t.clozeTrayLabel}
-            className="flex list-none flex-wrap gap-3 p-0 pb-2"
+            className={cn('flex list-none flex-wrap gap-3 p-0 pb-2', STAGE_CONTENT_MEASURE)}
           >
             {trayIds.map((id) => {
               const item = itemById.get(id);
