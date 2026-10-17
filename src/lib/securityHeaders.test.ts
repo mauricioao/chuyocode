@@ -220,6 +220,18 @@ describe('CSP_ENFORCE (enforce mode toggle)', () => {
     expect(headers.get('reporting-endpoints')).toBe('csp-endpoint="/api/csp-report"');
   });
 
+  it('allows the configured PostHog host in the ENFORCED policy too, not just report-only', () => {
+    vi.stubEnv('CSP_ENFORCE', 'true');
+    vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+    vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://us.i.posthog.com');
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+
+    const csp = headers.get('content-security-policy') as string;
+    expect(csp).toMatch(/script-src[^;]*https:\/\/us\.i\.posthog\.com/);
+    expect(csp).toMatch(/connect-src[^;]*https:\/\/us\.i\.posthog\.com/);
+  });
+
   it('never overwrites a content-security-policy header a route already set, enforced or not', () => {
     vi.stubEnv('CSP_ENFORCE', 'true');
     const headers = new Headers({ 'content-security-policy': "default-src 'none'" });
