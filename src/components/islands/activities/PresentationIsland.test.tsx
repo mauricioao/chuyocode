@@ -531,6 +531,12 @@ describe('PresentationIsland — the question-list menu', () => {
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
   });
 
+  it('each question number fills its own grid cell (a full-width pill, not a 1-character chip pinned left)', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    expect(screen.getByTestId('presentation-menu-item-1').className).toContain('w-full');
+  });
+
   it('closes on its own close button', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     fireEvent.click(screen.getByTestId('presentation-menu'));

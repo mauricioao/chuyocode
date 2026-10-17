@@ -833,7 +833,7 @@ export default function PresentationIsland({
                         }`}
                         style={{ fontSize: 24 }}
                         className={cn(
-                          'flex items-center justify-center gap-2 rounded-pill bg-background px-4 py-4 font-bold text-foreground transition-colors hover:bg-border/40',
+                          'flex w-full items-center justify-center gap-2 rounded-pill bg-background px-4 py-4 font-bold text-foreground transition-colors hover:bg-border/40',
                           answer?.status === 'correct' && 'bg-pop-mint-deep text-white hover:bg-pop-mint-deep',
                           answer?.status === 'wrong' && 'bg-pop-red-deep text-white hover:bg-pop-red-deep',
                         )}
