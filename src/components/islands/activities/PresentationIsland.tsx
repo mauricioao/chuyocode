@@ -49,7 +49,7 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import { CheckIcon } from '@phosphor-icons/react/dist/ssr/Check';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import { ListIcon } from '@phosphor-icons/react/dist/ssr/List';
-import { ClockIcon } from '@phosphor-icons/react/dist/ssr/Clock';
+import { TimerIcon } from '@phosphor-icons/react/dist/ssr/Timer';
 import { SpeakerHighIcon } from '@phosphor-icons/react/dist/ssr/SpeakerHigh';
 import { SpeakerSlashIcon } from '@phosphor-icons/react/dist/ssr/SpeakerSlash';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
@@ -693,7 +693,7 @@ export default function PresentationIsland({
             style={{ height: 60, padding: '0 22px', fontSize: 30, gap: 11 }}
             className="flex items-center rounded-pill bg-background font-bold tabular-nums text-foreground"
           >
-            <ClockIcon aria-hidden="true" size={28} />
+            <TimerIcon aria-hidden="true" weight="bold" size={28} />
             {formatElapsed(quizState.elapsedMs)}
           </span>
           {hasChoiceQuestions && (
@@ -703,7 +703,7 @@ export default function PresentationIsland({
               style={{ height: 60, padding: '0 22px', fontSize: 30, gap: 11 }}
               className="flex items-center rounded-pill bg-pop-mint-deep font-bold tabular-nums text-white shadow-elevation-1"
             >
-              <CheckCircleIcon aria-hidden="true" weight="fill" size={28} />
+              <CheckIcon aria-hidden="true" weight="bold" size={28} />
               {quizState.score}
             </span>
           )}
@@ -1720,7 +1720,7 @@ function ControlBar({
         <p
           data-testid="presentation-count"
           aria-label={`${t.progressPrefix} ${progress} ${t.ofLabel} ${total}`}
-          style={{ fontSize: 30 }}
+          style={{ fontSize: 32 }}
           className="flex items-center gap-1.5 font-bold tabular-nums text-foreground"
         >
           <span>{progress}</span> <span className="font-semibold text-foreground/60">{t.ofLabel}</span> <span>{total}</span>

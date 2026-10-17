@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import type { Block } from '@/lib/activities/blocks';
 import PresentationIsland from './PresentationIsland';
+import { TimerIcon } from '@phosphor-icons/react/dist/ssr/Timer';
+import { CheckIcon } from '@phosphor-icons/react/dist/ssr/Check';
 
 // `sonner`'s named ESM export is non-configurable, so `vi.spyOn` on the
 // module namespace itself throws "Cannot redefine property" — same issue
@@ -485,6 +487,25 @@ describe('PresentationIsland — the top bar (timer + score)', () => {
     next(); // -> summary
     const stats = screen.getByTestId('presentation-summary-stats');
     expect(stats.textContent).toContain('1');
+  });
+
+  // UI mockup `.timer`/`.score`: a stopwatch glyph and a plain stroked
+  // check (not a clock face, not a filled check-circle), and a 32px counter
+  // (`3 * var(--u)` on the 1080 stage).
+  it('draws the mockup glyphs — stopwatch on the timer, plain bold check on the score — and a 32px counter', () => {
+    const { container: glyphs } = render(
+      <>
+        <TimerIcon data-glyph="timer" weight="bold" size={28} />
+        <CheckIcon data-glyph="check" weight="bold" size={28} />
+      </>,
+    );
+    const timerPaths = glyphs.querySelector('[data-glyph="timer"]')!.innerHTML;
+    const checkPaths = glyphs.querySelector('[data-glyph="check"]')!.innerHTML;
+    cleanup();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByTestId('presentation-timer').querySelector('svg')!.innerHTML).toBe(timerPaths);
+    expect(screen.getByTestId('presentation-score').querySelector('svg')!.innerHTML).toBe(checkPaths);
+    expect(screen.getByTestId('presentation-count').style.fontSize).toBe('32px');
   });
 
   it('the counter reads "N de M" (es) / "N of M" (en), not a bare "/" — owner reference', () => {
