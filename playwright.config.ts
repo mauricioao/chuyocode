@@ -16,6 +16,17 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: '**/visual.spec.ts',
+    },
+    // Visual regression (toHaveScreenshot) — deliberately excluded from the
+    // `chromium` project above and from `pnpm test:e2e`. Baselines are
+    // OS-specific (see tests/e2e/visual.spec.ts header), so this only runs
+    // on request via `pnpm test:visual`, never in CI (CI runs typecheck,
+    // test, build only — see .github/workflows/ci.yml).
+    {
+      name: 'visual',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/visual.spec.ts',
     },
   ],
   webServer: {
