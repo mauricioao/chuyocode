@@ -46,6 +46,7 @@ import { CaretRightIcon } from '@phosphor-icons/react/dist/ssr/CaretRight';
 import { ArrowsOutIcon } from '@phosphor-icons/react/dist/ssr/ArrowsOut';
 import { ArrowsInIcon } from '@phosphor-icons/react/dist/ssr/ArrowsIn';
 import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
+import { CheckIcon } from '@phosphor-icons/react/dist/ssr/Check';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import { ListIcon } from '@phosphor-icons/react/dist/ssr/List';
 import { ClockIcon } from '@phosphor-icons/react/dist/ssr/Clock';
@@ -61,7 +62,7 @@ import { useAudioMarkerPlayback } from '@/lib/activities/useAudioMarkerPlayback'
 import AudioMarkerButton from './AudioMarkerButton';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
 import { zoneAnswerSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
-import { getSlotItems, type Payload, type Slot, type PoolItem } from '@/lib/exercisePayload';
+import { getSlotItems, splitLabelAtBlank, type Payload, type Slot, type PoolItem } from '@/lib/exercisePayload';
 import { segmentForInput } from '@/lib/quizQuestionType';
 import { useGameSound } from '@/lib/activities/gameSounds';
 import { optionColorClass } from '@/components/islands/mechanics/palette';
@@ -172,8 +173,46 @@ const AUTO_ADVANCE_MS = 1200;
  * copy that could drift.
  */
 
+/**
+ * The bottom bar's own icon buttons (UI mockup, `propuestas/presentacion/
+ * index.html`'s `.icon-btn`): a plain white circle, a hairline separator
+ * border, `--shadow-elevation-1` ("L1") — never the dark glass pill the bar
+ * used before this pass. `69` is the mockup's own `6.4 * var(--u))` at this
+ * stage's fixed 1920x1080 ("1vh" == 10.8 stage px here — see this file's own
+ * header on the virtual stage).
+ */
 const CONTROL_BUTTON_CLASS =
-  'flex h-11 w-11 flex-none items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30';
+  'flex h-[69px] w-[69px] flex-none items-center justify-center rounded-full border border-border bg-card text-foreground shadow-elevation-1 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30';
+
+/**
+ * Prompt/heading typography shared by EVERY slide kind (owner spec, UI
+ * mockup `.prompt`: "so the deck reads as one system") — `leading-[1.14]`/
+ * `tracking-[-0.02em]`/`text-balance` are the three rules the mockup's own
+ * `.prompt` class adds on top of plain `font-bold`, none of which a bare
+ * Tailwind step (`leading-tight` etc.) reproduces exactly.
+ */
+const PROMPT_TEXT_CLASS = 'font-display font-bold leading-[1.14] tracking-[-0.02em] text-balance text-foreground';
+
+/**
+ * One multiple-choice tile's own grid column/row count (UI mockup
+ * `.tiles.n2/.n3/.n4`): 2 and 3 options always run in a single row; 4 runs
+ * 2x2 when a context image shares the row with the tiles (`hasMedia`,
+ * keeping each tile roomy next to the image) or a single row of 4 when the
+ * tiles have the full stage width to themselves. A count outside 2-4 (the
+ * palette supports up to six, `mechanics/palette.ts`) falls back to a 3-wide
+ * wrap — never specified by the mockup, but the same "never fewer columns
+ * than rows" spirit.
+ */
+function tileGridClass(count: number, hasMedia: boolean): string {
+  if (count <= 1) return 'grid-cols-1';
+  if (count === 2) return 'grid-cols-2';
+  if (count === 3) return 'grid-cols-3';
+  if (count === 4) return hasMedia ? 'grid-cols-2 grid-rows-2' : 'grid-cols-4';
+  return 'grid-cols-3';
+}
+
+/** `.tiles` own fixed height when there is no context image (UI mockup: `calc(46 * var(--u))`) — see {@link tileGridClass}'s own doc on the stage's fixed "1vh". */
+const TILES_NO_MEDIA_HEIGHT_PX = 497;
 
 /** The worksheet camera's own stage — the safe area inside the 1920x1080 stage, same box every other slide already keeps clear on every edge (`fitStage.ts`'s own header). */
 const WORKSHEET_STAGE: Size = { width: STAGE_SAFE_WIDTH, height: STAGE_SAFE_HEIGHT };
@@ -610,7 +649,7 @@ export default function PresentationIsland({
 
       <div
         data-testid="presentation-stage"
-        className="absolute left-0 top-0 bg-background text-foreground"
+        className="absolute left-0 top-0 bg-card text-foreground"
         style={{
           width: STAGE_WIDTH,
           height: STAGE_HEIGHT,
@@ -629,20 +668,20 @@ export default function PresentationIsland({
           <span
             data-testid="presentation-timer"
             aria-label={`${t.timerLabel} ${formatElapsed(quizState.elapsedMs)}`}
-            style={{ fontSize: 28 }}
-            className="flex items-center gap-2 rounded-pill bg-surface-soft px-5 py-2 font-bold tabular-nums text-foreground"
+            style={{ height: 60, padding: '0 22px', fontSize: 30, gap: 11 }}
+            className="flex items-center rounded-pill bg-background font-bold tabular-nums text-foreground"
           >
-            <ClockIcon aria-hidden="true" size={22} />
+            <ClockIcon aria-hidden="true" size={28} />
             {formatElapsed(quizState.elapsedMs)}
           </span>
           {hasChoiceQuestions && (
             <span
               data-testid="presentation-score"
               aria-label={`${t.scoreLabel} ${quizState.score}`}
-              style={{ fontSize: 28 }}
-              className="flex items-center gap-2 rounded-pill bg-primary px-5 py-2 font-bold tabular-nums text-primary-foreground"
+              style={{ height: 60, padding: '0 22px', fontSize: 30, gap: 11 }}
+              className="flex items-center rounded-pill bg-pop-mint-deep font-bold tabular-nums text-white shadow-elevation-1"
             >
-              <CheckCircleIcon aria-hidden="true" weight="fill" size={22} />
+              <CheckCircleIcon aria-hidden="true" weight="fill" size={28} />
               {quizState.score}
             </span>
           )}
@@ -741,74 +780,92 @@ export default function PresentationIsland({
             shows neither. */}
         {quizState.menuOpen && (
           <div
-            data-testid="presentation-menu-panel"
-            role="dialog"
-            aria-label={t.menuLabel}
-            className="absolute left-0 top-0 flex flex-col items-center gap-8 overflow-y-auto bg-black/85 py-16"
+            className="absolute left-0 top-0 flex items-center justify-center bg-foreground/40 p-16"
             style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
           >
-            <h2 style={{ fontSize: 36 }} className="font-display font-bold text-white">
-              {t.menuLabel}
-            </h2>
-            <ol className="grid w-full max-w-4xl grid-cols-2 gap-4 px-10 sm:grid-cols-4">
-              {Array.from({ length: slides.length }, (_, i) => i + 1).map((slideIndex) => {
-                const answer = quizState.answers[slideIndex - 1];
-                return (
-                  <li key={slideIndex}>
-                    <button
-                      type="button"
-                      data-testid={`presentation-menu-item-${slideIndex}`}
-                      data-state={answer?.status ?? 'unanswered'}
-                      onClick={() => jumpToSlide(slideIndex)}
-                      aria-label={`${t.progressPrefix} ${slideIndex} ${
-                        answer?.status === 'correct' ? `— ${t.correctBadge}` : answer?.status === 'wrong' ? `— ${t.wrongBadge}` : ''
-                      }`}
-                      style={{ fontSize: 24 }}
-                      className={cn(
-                        'flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-4 font-bold text-white transition-colors hover:bg-white/20',
-                        answer?.status === 'correct' && 'bg-accent-ink/80',
-                        answer?.status === 'wrong' && 'bg-destructive/80',
-                      )}
-                    >
-                      {slideIndex}
-                      {answer?.status === 'correct' && <CheckCircleIcon aria-hidden="true" weight="fill" />}
-                      {answer?.status === 'wrong' && <XIcon aria-hidden="true" />}
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-            <button
-              type="button"
-              data-testid="presentation-menu-close"
-              onClick={closeMenu}
-              style={{ fontSize: 24 }}
-              className="rounded-full bg-white/10 px-8 py-3 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            {/* Kit surface (owner spec: "white surface, radius 26, L3, pills",
+                same recipe the final summary slide's own card uses below) —
+                replaces the old full-bleed dark scrim with a centred white
+                card over a translucent ink backdrop. */}
+            <div
+              data-testid="presentation-menu-panel"
+              role="dialog"
+              aria-label={t.menuLabel}
+              className="flex max-h-full w-full max-w-4xl flex-col items-center gap-8 overflow-y-auto rounded-[26px] bg-card p-12 shadow-elevation-3"
             >
-              {t.menuClose}
-            </button>
+              <h2 style={{ fontSize: 36 }} className="font-display font-bold text-foreground">
+                {t.menuLabel}
+              </h2>
+              <ol className="grid w-full grid-cols-2 gap-4 sm:grid-cols-4">
+                {Array.from({ length: slides.length }, (_, i) => i + 1).map((slideIndex) => {
+                  const answer = quizState.answers[slideIndex - 1];
+                  return (
+                    <li key={slideIndex}>
+                      <button
+                        type="button"
+                        data-testid={`presentation-menu-item-${slideIndex}`}
+                        data-state={answer?.status ?? 'unanswered'}
+                        onClick={() => jumpToSlide(slideIndex)}
+                        aria-label={`${t.progressPrefix} ${slideIndex} ${
+                          answer?.status === 'correct' ? `— ${t.correctBadge}` : answer?.status === 'wrong' ? `— ${t.wrongBadge}` : ''
+                        }`}
+                        style={{ fontSize: 24 }}
+                        className={cn(
+                          'flex items-center justify-center gap-2 rounded-pill bg-background px-4 py-4 font-bold text-foreground transition-colors hover:bg-border/40',
+                          answer?.status === 'correct' && 'bg-pop-mint-deep text-white hover:bg-pop-mint-deep',
+                          answer?.status === 'wrong' && 'bg-pop-red-deep text-white hover:bg-pop-red-deep',
+                        )}
+                      >
+                        {slideIndex}
+                        {answer?.status === 'correct' && <CheckCircleIcon aria-hidden="true" weight="fill" />}
+                        {answer?.status === 'wrong' && <XIcon aria-hidden="true" />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              <button
+                type="button"
+                data-testid="presentation-menu-close"
+                onClick={closeMenu}
+                style={{ fontSize: 24 }}
+                className="rounded-pill bg-primary px-8 py-3 font-semibold text-primary-foreground shadow-elevation-2 transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {t.menuClose}
+              </button>
+            </div>
           </div>
         )}
-      </div>
 
-      <ControlBar
-        visible={controlsVisible}
-        onFocus={handleControlsFocus}
-        onBlur={handleControlsBlur}
-        menuOpen={quizState.menuOpen}
-        onToggleMenu={quizState.menuOpen ? closeMenu : openMenu}
-        onPrev={() => dispatch({ type: 'prev' })}
-        onNext={goNext}
-        muted={sound.muted}
-        onToggleSound={sound.toggleMuted}
-        onFullscreen={toggleFullscreen}
-        isFullscreen={isFullscreen}
-        progress={slideProgress(state)}
-        total={slides.length}
-        exitHref={practiceUrl}
-        onExit={onExit}
-        t={t}
-      />
+        {/* The bottom bar lives INSIDE the scaled stage, as the LAST child
+            (owner spec, UI mockup `.bottombar`: "everything scales from
+            viewport height, so 1280x720 and 1920x1080 are the same
+            composition") — unlike before this pass, when it was a separate
+            `fixed`, real-pixel-sized layer siblings of the stage itself (so
+            it never scaled with the projector fit). Being the LAST child
+            here, not a sibling after `</div>` below, is what keeps it
+            stacked ON TOP of the QR/menu overlays above (plain DOM order,
+            no z-index needed) while still inheriting the stage's own
+            `transform: scale(...)`. */}
+        <ControlBar
+          visible={controlsVisible}
+          onFocus={handleControlsFocus}
+          onBlur={handleControlsBlur}
+          menuOpen={quizState.menuOpen}
+          onToggleMenu={quizState.menuOpen ? closeMenu : openMenu}
+          onPrev={() => dispatch({ type: 'prev' })}
+          onNext={goNext}
+          muted={sound.muted}
+          onToggleSound={sound.toggleMuted}
+          onFullscreen={toggleFullscreen}
+          isFullscreen={isFullscreen}
+          progress={slideProgress(state)}
+          total={slides.length}
+          exitHref={practiceUrl}
+          onExit={onExit}
+          t={t}
+        />
+      </div>
     </div>
   );
 }
@@ -836,10 +893,7 @@ function CoverSlide({
       className="flex w-full max-w-5xl flex-1 flex-col items-center justify-center gap-12 text-center"
     >
       <div className="flex flex-col gap-4">
-        <h1
-          style={{ fontSize: promptFontSize(title) }}
-          className="font-display font-bold leading-tight text-foreground"
-        >
+        <h1 style={{ fontSize: promptFontSize(title) }} className={PROMPT_TEXT_CLASS}>
           {title}
         </h1>
         <p style={{ fontSize: 32 }} className="text-muted-foreground">
@@ -856,6 +910,31 @@ function resolvedAnswerImage(payload: Payload, slot: Slot): string | undefined {
   const pool = payload.pools[slot.pool] ?? [];
   const firstAnswerId = slot.answer[0];
   return pool.find((item) => item.id === firstAnswerId)?.media;
+}
+
+/**
+ * A question prompt's own blank, drawn as an underline (UI mockup,
+ * `propuestas/presentacion/index.html`'s `.blank`) instead of the raw
+ * `_____` markers the slot's own `label` carries — `splitLabelAtBlank`
+ * (`exercisePayload.ts`) is the SAME one-blank parser the authoring editor
+ * (`RowBlockEditor.tsx`) and the practice-mode `TextRenderer.tsx` already use,
+ * so this never re-derives its own idea of what counts as a blank. A label
+ * with no blank marker (most prompts: "What did she say?") renders
+ * unchanged, plain text.
+ */
+function PromptLabel({ label }: { label: string }) {
+  const parts = splitLabelAtBlank(label);
+  if (!parts) return <>{label}</>;
+  return (
+    <>
+      {parts.before}
+      <span
+        aria-hidden="true"
+        className="mx-[0.15em] inline-block h-[0.9em] min-w-[4.2ch] translate-y-[0.12em] border-b-[0.09em] border-foreground align-baseline"
+      />
+      {parts.after}
+    </>
+  );
 }
 
 /**
@@ -917,19 +996,22 @@ function QuestionSlide({
       <p
         data-testid="presentation-question-prompt"
         style={{ fontSize: promptFontSize(slot.label) }}
-        className="text-center font-display font-bold leading-tight text-foreground"
+        className={cn('text-center', PROMPT_TEXT_CLASS)}
       >
-        {slot.label}
+        <PromptLabel label={slot.label} />
       </p>
 
       {isChoice && (
         <div
           data-testid="presentation-content-row"
           data-has-media={hasMedia ? '' : undefined}
-          className={cn('grid w-full gap-8', hasMedia ? 'sm:grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1')}
+          className={cn('grid w-full gap-6', hasMedia ? 'sm:grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1')}
         >
           {media && (
-            <div data-testid="presentation-question-media" className="overflow-hidden rounded-2xl shadow-elevation-2">
+            <div
+              data-testid="presentation-question-media"
+              className="h-full self-stretch overflow-hidden rounded-[26px] shadow-elevation-2"
+            >
               <img src={media} alt="" className="h-full w-full object-cover" />
             </div>
           )}
@@ -939,11 +1021,13 @@ function QuestionSlide({
             data-testid="presentation-tiles"
             data-count={items.length}
             data-answered={locked ? '' : undefined}
-            className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2"
+            className={cn('grid w-full gap-5', tileGridClass(items.length, hasMedia))}
+            style={hasMedia ? undefined : { height: TILES_NO_MEDIA_HEIGHT_PX }}
           >
             {items.map((item, index) => {
               const idx = index + 1; // 1-based — same number the keyboard "1-9" map and `.key` badge use.
               const mark = tileMark(item, index, slot, answer);
+              const markSmall = mark === 'reveal';
               return (
                 <button
                   type="button"
@@ -955,30 +1039,37 @@ function QuestionSlide({
                   disabled={locked}
                   aria-label={item.text ?? item.id}
                   onClick={() => onAnswer(index)}
-                  style={{ fontSize: 40 }}
+                  style={{
+                    fontSize: 58,
+                    boxShadow: mark
+                      ? 'inset 0 0 0 8px rgb(255 255 255 / 0.9), inset 0 -9px 0 rgb(0 0 0 / 0.18), var(--shadow-elevation-2)'
+                      : 'inset 0 -9px 0 rgb(0 0 0 / 0.18), var(--shadow-elevation-1)',
+                  }}
                   className={cn(
-                    'relative flex items-center gap-4 rounded-2xl p-6 font-semibold text-white transition-opacity duration-300 disabled:cursor-default',
+                    'relative flex flex-col items-center justify-center gap-3 rounded-[26px] px-[26px] py-8 text-center font-bold text-white transition-[opacity,filter] duration-300 active:translate-y-[2px] disabled:cursor-default',
+                    'outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground',
                     optionColorClass(index),
-                    locked && !mark && 'opacity-40',
+                    locked && !mark && 'opacity-[0.32] saturate-[0.6]',
                   )}
                 >
                   <span
                     aria-hidden="true"
-                    className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-white/25 text-[28px]"
+                    className="absolute left-[17px] top-[17px] flex h-12 w-12 items-center justify-center rounded-[13px] bg-white/20 text-[26px] font-extrabold"
                   >
                     {idx}
                   </span>
                   {item.media && <img src={item.media} alt="" className="h-20 w-20 flex-none object-contain" />}
-                  <span className="flex-1 text-left">{item.text ?? item.id}</span>
+                  <span className="text-balance leading-[1.15]">{item.text ?? item.id}</span>
                   {mark && (
                     <span
                       data-testid="presentation-tile-mark"
-                      className="flex flex-none items-center gap-1.5 text-[28px]"
+                      style={{ width: markSmall ? 76 : 97, height: markSmall ? 76 : 97 }}
+                      className="presentation-tile-mark absolute right-[17px] top-[17px] flex items-center justify-center rounded-full bg-white shadow-elevation-2"
                     >
                       {mark === 'wrong' ? (
-                        <XIcon aria-hidden="true" weight="bold" />
+                        <XIcon aria-hidden="true" weight="bold" size={markSmall ? 36 : 44} className="text-pop-red-deep" />
                       ) : (
-                        <CheckCircleIcon aria-hidden="true" weight="fill" />
+                        <CheckIcon aria-hidden="true" weight="bold" size={markSmall ? 36 : 44} className="text-pop-mint-deep" />
                       )}
                       <span className="sr-only">{mark === 'wrong' ? t.wrongBadge : t.correctBadge}</span>
                     </span>
@@ -1048,10 +1139,7 @@ function MatchSlide({
       data-testid={`presentation-match-${slide.blockId}`}
       className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 overflow-y-auto py-6"
     >
-      <p
-        style={{ fontSize: 64 }}
-        className="text-center font-display font-bold leading-tight text-foreground"
-      >
+      <p style={{ fontSize: 64 }} className={cn('text-center', PROMPT_TEXT_CLASS)}>
         {t.matchTitle}
       </p>
       <ul className="flex w-full flex-col gap-4">
@@ -1104,10 +1192,7 @@ function ReorderSlide({
       data-testid={`presentation-reorder-${slide.slotId}`}
       className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-10 overflow-y-auto py-6"
     >
-      <p
-        style={{ fontSize: 64 }}
-        className="text-center font-display font-bold leading-tight text-foreground"
-      >
+      <p style={{ fontSize: 64 }} className={cn('text-center', PROMPT_TEXT_CLASS)}>
         {t.reorderTitle}
       </p>
       {revealed ? (
@@ -1155,7 +1240,7 @@ function ClozeSlide({
       data-testid={`presentation-cloze-${slide.blockId}-${slide.seq}`}
       className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-10 overflow-y-auto py-6"
     >
-      <p style={{ fontSize: 64 }} className="text-center font-display font-bold leading-tight text-foreground">
+      <p style={{ fontSize: 64 }} className={cn('text-center', PROMPT_TEXT_CLASS)}>
         {t.clozeTitle}
       </p>
       <p style={{ fontSize: 44 }} className="max-w-5xl text-center font-semibold leading-relaxed text-foreground">
@@ -1201,7 +1286,7 @@ function GroupSortSlide({
       data-testid={`presentation-groupsort-${slide.blockId}`}
       className="flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 overflow-y-auto py-6"
     >
-      <p style={{ fontSize: 64 }} className="text-center font-display font-bold leading-tight text-foreground">
+      <p style={{ fontSize: 64 }} className={cn('text-center', PROMPT_TEXT_CLASS)}>
         {t.groupSortTitle}
       </p>
       <div className="flex w-full flex-col gap-6 sm:flex-row sm:flex-wrap sm:justify-center">
@@ -1455,12 +1540,12 @@ function SummarySlide({
   return (
     <div
       data-testid="presentation-slide-summary"
-      className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-10 text-center"
+      className="flex w-full max-w-3xl flex-col items-center gap-10 rounded-[26px] bg-card p-16 text-center shadow-elevation-3"
     >
       {/* Emoji sticker accent (visual-identity decision, 2026-10-04) — purely
           decorative, next to the already-accessible "¡Listo!" heading below. */}
       <Emoji data-testid="presentation-summary-emoji" name="trophy" size={64} />
-      <h2 style={{ fontSize: 80 }} className="font-display font-bold text-foreground">
+      <h2 style={{ fontSize: 80 }} className={PROMPT_TEXT_CLASS}>
         {t.summaryTitle} {countLabel}
       </h2>
       <p
@@ -1574,67 +1659,75 @@ function ControlBar({
       onFocus={onFocus}
       onBlur={onBlur}
       className={cn(
-        'glass-floating fixed bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-pill px-3 py-2 shadow-floating transition-opacity duration-300',
+        'pointer-events-auto absolute left-0 bottom-0 grid grid-cols-[1fr_auto_1fr] items-center transition-opacity duration-300',
         visible ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
+      style={{ width: STAGE_WIDTH, padding: `${STAGE_SAFE_AREA_Y}px ${STAGE_SAFE_AREA_X}px` }}
     >
-      <button
-        type="button"
-        aria-label={t.menuLabel}
-        aria-pressed={menuOpen}
-        data-testid="presentation-menu"
-        onClick={onToggleMenu}
-        className={cn(CONTROL_BUTTON_CLASS, menuOpen && 'bg-foreground/15')}
-      >
-        <ListIcon aria-hidden="true" size={22} />
-      </button>
-      <button type="button" aria-label={t.prev} data-testid="presentation-prev" onClick={onPrev} className={CONTROL_BUTTON_CLASS}>
-        <CaretLeftIcon aria-hidden="true" size={22} />
-      </button>
-      <span
-        data-testid="presentation-count"
-        aria-label={`${t.progressPrefix} ${progress} ${t.ofLabel} ${total}`}
-        className="min-w-16 px-2 text-center text-sm font-medium tabular-nums text-foreground"
-      >
-        {progress} {t.ofLabel} {total}
-      </span>
-      <button type="button" aria-label={t.next} data-testid="presentation-next" onClick={onNext} className={CONTROL_BUTTON_CLASS}>
-        <CaretRightIcon aria-hidden="true" size={22} />
-      </button>
-      <button
-        type="button"
-        aria-label={muted ? t.soundUnmute : t.soundMute}
-        aria-pressed={muted}
-        data-testid="presentation-sound"
-        onClick={onToggleSound}
-        className={CONTROL_BUTTON_CLASS}
-      >
-        {muted ? <SpeakerSlashIcon aria-hidden="true" size={22} /> : <SpeakerHighIcon aria-hidden="true" size={22} />}
-      </button>
-      <button
-        type="button"
-        aria-label={isFullscreen ? t.fullscreenExit : t.fullscreenEnter}
-        data-testid="presentation-fullscreen"
-        onClick={onFullscreen}
-        className={CONTROL_BUTTON_CLASS}
-      >
-        {isFullscreen ? <ArrowsInIcon aria-hidden="true" size={22} /> : <ArrowsOutIcon aria-hidden="true" size={22} />}
-      </button>
-      {onExit ? (
+      <div className="flex items-center gap-3">
         <button
           type="button"
-          aria-label={t.exit}
-          data-testid="presentation-exit"
-          onClick={onExit}
+          aria-label={t.menuLabel}
+          aria-pressed={menuOpen}
+          data-testid="presentation-menu"
+          onClick={onToggleMenu}
+          className={cn(CONTROL_BUTTON_CLASS, menuOpen && 'bg-background')}
+        >
+          <ListIcon aria-hidden="true" size={28} />
+        </button>
+      </div>
+      <div className="flex items-center gap-5">
+        <button type="button" aria-label={t.prev} data-testid="presentation-prev" onClick={onPrev} className={CONTROL_BUTTON_CLASS}>
+          <CaretLeftIcon aria-hidden="true" size={28} />
+        </button>
+        <p
+          data-testid="presentation-count"
+          aria-label={`${t.progressPrefix} ${progress} ${t.ofLabel} ${total}`}
+          style={{ fontSize: 30 }}
+          className="flex items-center gap-1.5 font-bold tabular-nums text-foreground"
+        >
+          <span>{progress}</span> <span className="font-semibold text-foreground/60">{t.ofLabel}</span> <span>{total}</span>
+        </p>
+        <button type="button" aria-label={t.next} data-testid="presentation-next" onClick={onNext} className={CONTROL_BUTTON_CLASS}>
+          <CaretRightIcon aria-hidden="true" size={28} />
+        </button>
+      </div>
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="button"
+          aria-label={muted ? t.soundUnmute : t.soundMute}
+          aria-pressed={muted}
+          data-testid="presentation-sound"
+          onClick={onToggleSound}
           className={CONTROL_BUTTON_CLASS}
         >
-          <XIcon aria-hidden="true" size={22} />
+          {muted ? <SpeakerSlashIcon aria-hidden="true" size={28} /> : <SpeakerHighIcon aria-hidden="true" size={28} />}
         </button>
-      ) : (
-        <a href={exitHref} aria-label={t.exit} data-testid="presentation-exit" className={CONTROL_BUTTON_CLASS}>
-          <XIcon aria-hidden="true" size={22} />
-        </a>
-      )}
+        <button
+          type="button"
+          aria-label={isFullscreen ? t.fullscreenExit : t.fullscreenEnter}
+          data-testid="presentation-fullscreen"
+          onClick={onFullscreen}
+          className={CONTROL_BUTTON_CLASS}
+        >
+          {isFullscreen ? <ArrowsInIcon aria-hidden="true" size={28} /> : <ArrowsOutIcon aria-hidden="true" size={28} />}
+        </button>
+        {onExit ? (
+          <button
+            type="button"
+            aria-label={t.exit}
+            data-testid="presentation-exit"
+            onClick={onExit}
+            className={CONTROL_BUTTON_CLASS}
+          >
+            <XIcon aria-hidden="true" size={28} />
+          </button>
+        ) : (
+          <a href={exitHref} aria-label={t.exit} data-testid="presentation-exit" className={CONTROL_BUTTON_CLASS}>
+            <XIcon aria-hidden="true" size={28} />
+          </a>
+        )}
+      </div>
     </div>
   );
 }

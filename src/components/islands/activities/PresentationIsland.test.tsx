@@ -275,16 +275,50 @@ describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', 
     expect(tile(2).textContent).toContain('Dog');
   });
 
+  // UI kit pass (`propuestas/presentacion/index.html`): each tile carries its
+  // own PALETTE fill class by POSITION (`mechanics/palette.ts`'s
+  // `optionColorClass` — tile 1 is always `bg-tile-1`, regardless of which
+  // pool item ended up there) and a numbered key badge, never a per-
+  // correctness colour.
+  it('each tile carries its own position-indexed palette class and numbered key badge', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(tile(1).className).toContain('bg-tile-1');
+    expect(tile(2).className).toContain('bg-tile-2');
+    expect(tile(1).textContent).toContain('1');
+    expect(tile(2).textContent).toContain('2');
+  });
+
+  // Without a context image, the content row's own `presentation-tiles`
+  // grid runs full width; with one, it switches to a narrower column next
+  // to the media box — both read off the SAME `data-count` the mockup keys
+  // its `.tiles.nN` rule off.
+  it('the tiles grid switches column layout with the question count (no media here: s1 has 2 options)', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    const tiles = screen.getByTestId('presentation-tiles');
+    expect(attr(tiles, 'data-count')).toBe('2');
+    expect(tiles.className).toContain('grid-cols-2');
+  });
+
   it('tapping the CORRECT tile marks it "correct", plays the cue, counts the score, and locks every tile', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     tapTile(1); // "a" = Cat = correct
     expect(attr(tile(1), 'data-mark')).toBe('correct');
-    expect(screen.getByTestId('presentation-tile-mark')).toBeTruthy();
+    const mark = screen.getByTestId('presentation-tile-mark');
+    expect(mark).toBeTruthy();
+    // UI kit pass: the mark is a free-floating circle pinned to the tile's
+    // OWN top-right corner (mockup `.mark`), not an inline badge in the flow.
+    expect(mark.className).toContain('absolute');
+    expect(mark.className).toContain('right-[17px]');
+    expect(mark.className).toContain('top-[17px]');
     expect(attr(tile(2), 'data-mark')).toBeNull();
     expect(attr(screen.getByTestId('presentation-tiles'), 'data-answered')).toBe('');
     expect((tile(1) as HTMLButtonElement).disabled).toBe(true);
     expect((tile(2) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId('presentation-score').textContent).toContain('1');
+    // The unmarked tile steps back (mockup: "opacity .32, saturate .6");
+    // the marked one stays fully readable.
+    expect(tile(2).className).toContain('opacity-[0.32]');
+    expect(tile(1).className).not.toContain('opacity-[0.32]');
   });
 
   it('tapping a WRONG tile marks IT "wrong" and reveals the correct one as "reveal" — never increments the score', () => {
@@ -365,8 +399,15 @@ describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', 
       QUIZ_BLOCKS[1]!,
     ];
     render(<PresentationIsland {...BASE_PROPS} blocks={blocksWithPromptImage} />);
-    expect(attr(screen.getByTestId('presentation-content-row'), 'data-has-media')).toBe('');
-    const img = screen.getByTestId('presentation-question-media').querySelector('img');
+    const row = screen.getByTestId('presentation-content-row');
+    expect(attr(row, 'data-has-media')).toBe('');
+    // UI kit pass (mockup `.content.with-image`): the media column runs
+    // narrower than the tiles column, both scaled by the SAME 0.82fr/1.18fr
+    // split, and the media box itself picks up the kit's own 26px radius.
+    expect(row.className).toContain('sm:grid-cols-[0.82fr_1.18fr]');
+    const mediaBox = screen.getByTestId('presentation-question-media');
+    expect(mediaBox.className).toContain('rounded-[26px]');
+    const img = mediaBox.querySelector('img');
     expect(img).toBeTruthy();
     expect(img?.getAttribute('src')).toBe('/api/actividades/imagen?path=activity-images%2Fabc%2Fquestion-img-1.webp');
     expect(img?.getAttribute('alt')).toBe('');
@@ -384,6 +425,35 @@ describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', 
     next();
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
     expect(screen.queryByTestId('presentation-question-media')).toBeNull();
+  });
+});
+
+// UI kit pass (mockup `.prompt .blank`): a slot's own gap renders as a drawn
+// underline, never the raw `_____` the authored `label` carries — same
+// one-blank parser (`splitLabelAtBlank`, `exercisePayload.ts`) the authoring
+// editor and the practice-mode renderer already use.
+describe('PresentationIsland — the prompt\'s own blank (gap-fill questions)', () => {
+  const GAP_BLOCKS: Block[] = [
+    {
+      id: 'q1',
+      type: 'quiz',
+      payload: {
+        pools: { opts1: [{ id: 'a', text: 'go' }, { id: 'b', text: 'goes' }] },
+        slots: [{ id: 's1', label: 'She _____ to school every day.', input: 'choice', pool: 'opts1', answer: ['b'] }],
+      },
+    },
+  ];
+
+  it('draws the blank as an underline, never the literal underscores', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={GAP_BLOCKS} />);
+    const prompt = screen.getByTestId('presentation-question-prompt');
+    expect(prompt.textContent).toBe('She  to school every day.');
+    expect(prompt.querySelector('span[aria-hidden="true"]')).toBeTruthy();
+  });
+
+  it('a label with no blank renders unchanged, plain text', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    expect(screen.getByTestId('presentation-question-prompt').textContent).toBe('Which animal says meow?');
   });
 });
 

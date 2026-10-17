@@ -1286,6 +1286,25 @@ h3 {
   }
 }
 
+/* Presentation mode's own multiple-choice tile mark (`PresentationIsland.tsx`'s
+ * `presentation-tile-mark`, UI mockup `propuestas/presentacion/index.html`'s
+ * `.mark`): the ✓/✕ badge pops in once a tile is answered. Same
+ * `prefers-reduced-motion` posture as `.template-enter` et al above — the
+ * MARK ITSELF (not the animation) still appears either way, this only skips
+ * the pop. */
+@media (prefers-reduced-motion: no-preference) {
+  .presentation-tile-mark {
+    animation: presentation-mark-pop 260ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  }
+}
+
+@keyframes presentation-mark-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
 /* The floating Comprobar (`scale.ts`'s `FLOATING_CHECK_BAR_CLASS`) sits 16px
  * inside the stage card's own bottom-right corner rather than on its edge:
  * the card stops 16px above the window's bottom and 70px before its right
