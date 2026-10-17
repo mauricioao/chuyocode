@@ -160,7 +160,9 @@ function questionText(slot: Slot): string {
 ---
 
 <!doctype html>
-<html lang={lang}>
+{/* White on the ROOT element too, not only <body>: the site's dark root
+    background otherwise fills the viewport below a short sheet (phones). */}
+<html lang={lang} class="bg-white">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

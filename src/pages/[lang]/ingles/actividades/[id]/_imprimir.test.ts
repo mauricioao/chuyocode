@@ -174,6 +174,19 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — rendering', () => {
     expect(res.status).toBe(200);
   });
 
+  // Mobile review 2026-10-17: only <body> was white, so on a phone (a short
+  // activity) the site's dark root background filled everything below the
+  // sheet. The root element itself carries the white page now.
+  it('paints the whole page white, not just the sheet', async () => {
+    activityResult.value = WORKSHEET_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    const html = await res.text();
+    const htmlTag = html.match(/<html[^>]*>/)?.[0] ?? '';
+    expect(htmlTag).toMatch(/class="[^"]*\bbg-white\b/);
+  });
+
   it('renders the title and level', async () => {
     activityResult.value = WORKSHEET_ACTIVITY;
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc/imprimir', {
