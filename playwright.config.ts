@@ -33,6 +33,8 @@ export default defineConfig({
     command: 'pnpm dev',
     url: 'http://localhost:4321',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    // A fresh worktree's first `astro dev` re-optimizes dependencies and
+    // took 137 s on this machine, past the old 120 s limit.
+    timeout: 300_000,
   },
 });
