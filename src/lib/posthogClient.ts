@@ -11,11 +11,13 @@
  *    this codebase yet) would create one.
  *  - `disable_session_recording: true` — no session replay, at all, by
  *    default. The owner decides separately, later, whether to turn it on.
- *  - `mask_all_inputs: true` + `autocapture: { element_allowlist: [...] }`
- *    kept at its default (capture clicks on normal interactive elements)
- *    EXCEPT every `<input>`/`<textarea>`/`<select>` value, which is masked —
- *    satisfies "no autocapture of form inputs" without disabling click/
- *    pageview analytics entirely.
+ *    `session_recording: { maskAllInputs: true }` is set anyway, defensively
+ *    (it is also posthog-js's own default): if the owner ever flips
+ *    `disable_session_recording` to `false` later without re-reading this
+ *    file, every input value still replays masked rather than live, by
+ *    construction — satisfies "mask all inputs" without relying on
+ *    autocapture to do it (autocapture click/pageview events never carry an
+ *    input's value at all; only session replay could).
  *  - Do Not Track: `navigator.doNotTrack === '1'` (the one DNT signal every
  *    browser that implements it actually sets) skips `posthog.init`
  *    entirely — posthog-js has no built-in DNT switch, so this is checked
@@ -57,7 +59,7 @@ export function initPosthog(): void {
     api_host: config.host,
     person_profiles: 'identified_only',
     disable_session_recording: true,
-    mask_all_inputs: true,
+    session_recording: { maskAllInputs: true },
     capture_pageview: true,
   });
 }

@@ -54,7 +54,7 @@ describe('initPosthog', () => {
       api_host: 'https://us.i.posthog.com',
       person_profiles: 'identified_only',
       disable_session_recording: true,
-      mask_all_inputs: true,
+      session_recording: { maskAllInputs: true },
       capture_pageview: true,
     });
   });
