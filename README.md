@@ -7,7 +7,7 @@
 _Books, tech news and a growing English playground, made for Spanish speakers across Latin America._
 
 [![Status](https://img.shields.io/badge/status-in_development-orange)]()
-[![Stack](https://img.shields.io/badge/Astro_5-SSR-FACC15)]()
+[![Stack](https://img.shields.io/badge/Astro_7-SSR-FACC15)]()
 [![Tests](https://img.shields.io/badge/tests-4000%2B-16a34a)]()
 [![Languages](https://img.shields.io/badge/routes-ES_·_EN-b45309)]()
 
@@ -64,7 +64,7 @@ Every technical choice here exists to give the learner something. The technology
 
 | What you get | How we get there |
 | :-- | :-- |
-| **Pages that open instantly, even on mobile data** | [Astro 5](https://astro.build) renders on the server and ships ready-to-paint HTML, cached at the edge by the [Netlify](https://netlify.com) CDN. JavaScript loads only where something is interactive ([React 19](https://react.dev) islands). |
+| **Pages that open instantly, even on mobile data** | [Astro 7](https://astro.build) renders on the server and ships ready-to-paint HTML, cached at the edge by the [Netlify](https://netlify.com) CDN. JavaScript loads only where something is interactive ([React 19](https://react.dev) islands). |
 | **Smooth navigation, no flicker** | View transitions keep the header in place between pages; your account shows up immediately instead of blinking. |
 | **A consistent, premium feel** | One design system — [Tailwind 4](https://tailwindcss.com) tokens and [shadcn/ui](https://ui.shadcn.com)-style components, [Phosphor](https://phosphoricons.com) icons — so every field, button and card behaves the same everywhere. |
 | **Works great on phones** | Mobile-first layouts, pinch-to-zoom worksheets, and bottom sheets sized for thumbs. |
@@ -90,7 +90,7 @@ Deeper reading: [`docs/exercise-model.md`](docs/exercise-model.md) · [`docs/exe
 
 ## 🚀 Run it locally
 
-**Requirements:** Node.js 20+ (22 recommended) · pnpm 9+ via Corepack
+**Requirements:** Node.js 22.12+ · pnpm 9+ via Corepack
 
 ```bash
 git clone git@github.com:mauricioao/chuyocode.git
