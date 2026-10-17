@@ -537,4 +537,66 @@ describe('QuizMatching', () => {
       vi.useRealTimers();
     });
   });
+
+  // UI pass (owner spec screenshot: "mover las opciones arriba, las
+  // cápsulas que sean de colores de nuestra paleta y siempre variadas,
+  // aumentar un poco el tamaño y centrar dentro de las cápsulas el texto").
+  describe('the tray, moved above the board and coloured (UI pass)', () => {
+    it('renders the tray of options above the pairs list, in DOM order', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const scroll = screen.getByTestId('matching-stage-scroll');
+      const tray = screen.getByTestId('matching-tray');
+      const prompts = screen.getByTestId('matching-prompts');
+      const children = Array.from(scroll.children);
+
+      expect(children.indexOf(tray)).toBeGreaterThanOrEqual(0);
+      expect(children.indexOf(tray)).toBeLessThan(children.indexOf(prompts));
+    });
+
+    it('centres the tray over the same board width as the pairs list', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('matching-tray').className).toContain('max-w-[760px]');
+      expect(screen.getByTestId('matching-tray').className).toContain('mx-auto');
+    });
+
+    it('colours every tray chip from the shared tile palette', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      for (const item of items) {
+        expect(screen.getByTestId(`matching-tile-${item.id}`).className).toMatch(/\bbg-tile-[1-6]\b/);
+      }
+    });
+
+    it('gives neighbouring tray chips different colours', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const colours = items.map((item) => screen.getByTestId(`matching-tile-${item.id}`).className.match(/bg-tile-[1-6]/)![0]);
+      expect(new Set(colours).size).toBe(colours.length);
+    });
+
+    it('keeps a chip\'s own colour once it is placed into a slot', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const before = screen.getByTestId('matching-tile-s1').className.match(/bg-tile-[1-6]/)![0];
+
+      place('s1', 's1');
+
+      const after = screen.getByTestId('matching-tile-s1').className.match(/bg-tile-[1-6]/)![0];
+      expect(after).toBe(before);
+    });
+
+    it('centres the chip\'s own text, both horizontally and vertically', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const cls = screen.getByTestId('matching-tile-s1').className;
+      expect(cls).toContain('text-center');
+      expect(cls).toContain('items-center');
+      expect(cls).toContain('justify-center');
+    });
+
+    it('sizes the chip at the bigger kit scale (48px tall, 18px semibold text, ~20px side padding)', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const cls = screen.getByTestId('matching-tile-s1').className;
+      expect(cls).toContain('min-h-[clamp(3rem,');
+      expect(cls).toContain('text-[clamp(1.125rem,');
+      expect(cls).toContain('font-semibold');
+      expect(cls).toContain('px-[clamp(1.25rem,');
+    });
+  });
 });

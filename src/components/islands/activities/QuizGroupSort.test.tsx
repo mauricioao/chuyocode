@@ -127,9 +127,12 @@ describe('QuizGroupSort', () => {
       fireEvent.click(screen.getByTestId('groupsort-check'));
 
       expect(screen.queryByTestId('game-result')).toBeNull();
-      expect(screen.getByTestId('groupsort-tile-dog').className).toContain('border-destructive');
+      // UI pass: correct/wrong now settle as a RING on the chip's own
+      // colour-filled fill, never a border/background tint — see
+      // `QuizGroupSort.tsx`'s own `ItemTile` header on why.
+      expect(screen.getByTestId('groupsort-tile-dog').className).toContain('ring-destructive');
       // Correct ones from the same check already settled green.
-      expect(screen.getByTestId('groupsort-tile-cat').className).toContain('border-success-strong');
+      expect(screen.getByTestId('groupsort-tile-cat').className).toContain('ring-success-strong');
 
       // Fixable: tap it back to the tray and place it correctly.
       fireEvent.click(group('g2').getByTestId('groupsort-tile-dog'));
@@ -284,6 +287,70 @@ describe('QuizGroupSort', () => {
       const board = screen.getByTestId('groupsort-board').className;
       expect(board).toContain('max-w-[760px]');
       expect(board).toContain('mx-auto');
+    });
+  });
+
+  // UI pass (owner spec screenshot, applied here too for the same
+  // tray-below-board structure "Une las parejas" shares — `QuizMatching.
+  // test.tsx`'s own header on the same describe block).
+  describe('the tray, moved above the board and coloured (UI pass, consistency with QuizMatching)', () => {
+    it('renders the tray of options above the group board, in DOM order', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const stage = screen.getByTestId('groupsort-stage');
+      const trayEl = screen.getByTestId('groupsort-tray');
+      const board = screen.getByTestId('groupsort-board');
+      const children = Array.from(stage.children);
+
+      expect(children.indexOf(trayEl)).toBeGreaterThanOrEqual(0);
+      expect(children.indexOf(trayEl)).toBeLessThan(children.indexOf(board));
+    });
+
+    it('centres the tray over the same board width as the group board', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-tray').className).toContain('max-w-[760px]');
+      expect(screen.getByTestId('groupsort-tray').className).toContain('mx-auto');
+    });
+
+    it('colours every tray chip from the shared tile palette', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      for (const id of ['dog', 'cat', 'bread', 'rice']) {
+        expect(screen.getByTestId(`groupsort-tile-${id}`).className).toMatch(/\bbg-tile-[1-6]\b/);
+      }
+    });
+
+    it('gives neighbouring tray chips different colours', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const colours = ['dog', 'cat', 'bread', 'rice'].map(
+        (id) => screen.getByTestId(`groupsort-tile-${id}`).className.match(/bg-tile-[1-6]/)![0],
+      );
+      expect(new Set(colours).size).toBe(colours.length);
+    });
+
+    it('keeps a chip\'s own colour once it is placed into a group', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const before = screen.getByTestId('groupsort-tile-dog').className.match(/bg-tile-[1-6]/)![0];
+
+      place('dog', 'g1');
+
+      const after = group('g1').getByTestId('groupsort-tile-dog').className.match(/bg-tile-[1-6]/)![0];
+      expect(after).toBe(before);
+    });
+
+    it('centres the chip\'s own text, both horizontally and vertically', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const cls = screen.getByTestId('groupsort-tile-dog').className;
+      expect(cls).toContain('text-center');
+      expect(cls).toContain('items-center');
+      expect(cls).toContain('justify-center');
+    });
+
+    it('sizes the chip at the bigger kit scale (48px tall, 18px semibold text, ~20px side padding)', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const cls = screen.getByTestId('groupsort-tile-dog').className;
+      expect(cls).toContain('min-h-[clamp(3rem,');
+      expect(cls).toContain('text-[clamp(1.125rem,');
+      expect(cls).toContain('font-semibold');
+      expect(cls).toContain('px-[clamp(1.25rem,');
     });
   });
 });

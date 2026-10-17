@@ -14,27 +14,39 @@
  * the rest material, never a new palette. Correct/incorrect stay each
  * caller's OWN `success`/`destructive` tokens, applied as a ring or a tint
  * over this shape — never restated here, so this module never grows a
- * second colour system next to the semantic one.
+ * second colour system next to the semantic one. The one exception is
+ * {@link stageChipColorClass} below: a caller that opts in gets a chip
+ * filled from the shared position-based tile palette (`palette.ts`) instead
+ * of the grey rest material — still never red/green, the ✓/✕ mark stays the
+ * only correctness signal.
  *
  * Each mechanic still supplies its own SIZE: `drop`'s inline control sits at
  * `1em` beside a sentence ({@link CHIP_INLINE}); the four big-stage games
- * (`QuizMatching`/`QuizReorder`/`QuizCloze`/`QuizGroupSort`) share the
- * `cqw`/`cqh` "readable from the back of the room" ramp from `scale.ts`
- * ({@link CHIP_STAGE}). Only the shape and the rest/placed material live
- * here.
+ * (`QuizMatching`/`QuizReorder`/`QuizCloze`/`QuizGroupSort`) share ONE fixed
+ * size ({@link CHIP_STAGE}'s own header). Only the shape and the rest/placed
+ * material live here.
  */
 import { cn } from '@/lib/utils';
-import {
-  CONTROL_SCALE,
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-} from './scale';
+import { CONTROL_SCALE } from './scale';
+import { optionColorClass } from './palette';
 
 /**
- * The material + shape every tile shares, before either scale below is
- * layered on top.
+ * The bare SHAPE every tile shares — flex/radius/border-width/backdrop/
+ * disabled state, deliberately with NO fill, shadow or focus-ring colour of
+ * its own. {@link CHIP_MATERIAL} below layers the grey-glass REST look on
+ * top for the default chip; {@link stageChipColorClass} layers its own
+ * colour-filled look on top of this SAME shape instead — composed straight
+ * from here, never from {@link CHIP_MATERIAL}, so a colour-filled chip can
+ * never inherit a grey-glass `shadow-elevation-1`/focus ring that
+ * `tailwind-merge` would not know how to override (it has no built-in
+ * notion that `shadow-elevation-1`, a project theme token, conflicts with an
+ * arbitrary-value `shadow-[...]` utility).
+ */
+const CHIP_SHAPE =
+  'inline-flex items-center justify-center gap-2 rounded-full border border-transparent backdrop-blur-sm outline-none disabled:cursor-not-allowed disabled:opacity-50';
+
+/**
+ * The REST material on top of {@link CHIP_SHAPE} — a grey glass capsule.
  *
  * `focus-visible:ring-inset` (visual-polish pass, safe-inset system — see
  * `scale.ts`'s own `STAGE_SAFE_INSET_CLASS` header): a plain `ring-*` is a
@@ -43,34 +55,69 @@ import {
  * ring inside the box instead, same fix every other correct/incorrect/
  * selected ring in the big-stage games now uses.
  */
-const CHIP_MATERIAL =
-  'inline-flex items-center justify-center gap-2 rounded-full border border-transparent bg-[#d1d2d6]/80 backdrop-blur-sm shadow-elevation-1 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+const CHIP_MATERIAL = cn(
+  CHIP_SHAPE,
+  'bg-[#d1d2d6]/80 shadow-elevation-1 text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50',
+);
+
+/** The four big-stage games' shared chip SIZE, layered on either {@link CHIP_MATERIAL} ({@link CHIP_STAGE}) or straight onto {@link CHIP_SHAPE} ({@link stageChipColorClass}) — see {@link CHIP_STAGE}'s own header for the exact values. */
+const CHIP_STAGE_SIZE =
+  'text-center font-semibold min-w-11 py-2 min-h-[clamp(3rem,2.75rem+min(2cqw,1.1cqh),5.5rem)] px-[clamp(1.25rem,1rem+min(1.6cqw,0.9cqh),1.75rem)] text-[clamp(1.125rem,0.9rem+min(2.5cqw,1.4cqh),2.75rem)]';
 
 /** `drop`'s own inline scale — a control spliced into a sentence at `1em` (see `scale.ts`'s `CONTROL_SCALE` header). */
 export const CHIP_INLINE = cn(CHIP_MATERIAL, 'min-h-14 px-4 py-3', CONTROL_SCALE);
 
 /**
- * The four big-stage games' shared "readable from the back of the room" scale.
+ * The four big-stage games' shared chip size (UI pass, owner spec: "aumentar
+ * un poco el tamaño y centrar dentro de las cápsulas el texto"): the same
+ * `cqw`/`cqh` ramp as `scale.ts`'s tile tokens, with a raised FLOOR — 48px
+ * tall, 18px semibold text, ~20px horizontal padding on a normal stage —
+ * still growing to the owner's "readable from the back of the room" ~44px
+ * text on a full-screen or projected one (a fixed size would shrink it there).
  *
  * `min-w-11` (44px) is a FLOOR only, for a very short label ("sí", "ok") —
  * this chip otherwise hugs its own text via `CHIP_MATERIAL`'s `inline-flex`
- * plus the padding/height clamps, never a fixed width (owner bug: a tray of
+ * plus its own padding/height, never a fixed width (owner bug: a tray of
  * answer chips used to share one wide fixed box regardless of how short or
  * long each word was, which is also what let a narrow phone's tray overflow
  * instead of wrapping — see each caller's own tray `<li>`, which must stay
- * unsized too for this to hug correctly).
+ * unsized too for this to hug correctly). `items-center justify-center`
+ * (from {@link CHIP_MATERIAL}) centres the label both ways inside the
+ * capsule.
  */
-export const CHIP_STAGE = cn(
-  CHIP_MATERIAL,
-  'text-center font-medium min-w-11',
-  TILE_MIN_HEIGHT_SCALE,
-  TILE_PADDING_X_SCALE,
-  TILE_PADDING_Y_SCALE,
-  TILE_TEXT_SCALE,
-);
+export const CHIP_STAGE = cn(CHIP_MATERIAL, CHIP_STAGE_SIZE);
 
 /** White, raised — a tile placed in a box/blank/group, or picked/tap-selected in its own tray. Never a new palette: just the rest material's own more-raised sibling. */
 export const CHIP_PLACED = 'bg-card shadow-elevation-2';
+
+/**
+ * The colour-filled variant of {@link CHIP_STAGE} — "Une las parejas" and
+ * "Ordenar por grupos" own answer chips (owner spec: "las cápsulas que sean
+ * de colores de nuestra paleta y siempre variadas"). `index` is the ITEM's
+ * own stable position in its shuffled tray order (`palette.ts`'s own
+ * header): colour belongs to the item, not the slot/group it happens to sit
+ * in, so a chip keeps its own colour once placed — the student can still
+ * track it by colour.
+ *
+ * Composed from {@link CHIP_SHAPE} directly (never {@link CHIP_STAGE}/
+ * {@link CHIP_MATERIAL} — see {@link CHIP_SHAPE}'s own header for why): white
+ * text (never the rest material's own ink `text-foreground`), a matte
+ * "pressed-key" lip shadow instead of the grey-glass `shadow-elevation-1`,
+ * and a visible ink `outline` for focus instead of the usual sky `ring-*`
+ * (which all but vanishes against a saturated fill). Never red/green — see
+ * `palette.ts`'s own header; the ✓/✕ mark stays the one semantic signal for
+ * correctness, never this fill.
+ */
+export function stageChipColorClass(index: number): string {
+  return cn(
+    CHIP_SHAPE,
+    CHIP_STAGE_SIZE,
+    'text-white',
+    optionColorClass(index),
+    'shadow-[inset_0_-3px_0_rgb(0_0_0/0.18)]',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground',
+  );
+}
 
 /**
  * An empty drop target: a dashed capsule outline at ~50% ink, no box — the
