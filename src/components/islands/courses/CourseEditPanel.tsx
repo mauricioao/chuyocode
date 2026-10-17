@@ -64,8 +64,10 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
   const [description, setDescription] = useState(initialCourse.description ?? '');
   const [level, setLevel] = useState(initialCourse.level ?? '');
   const [includedInPremium, setIncludedInPremium] = useState(initialCourse.included_in_premium);
-  const [priceCents, setPriceCents] = useState(
-    initialCourse.price_cents != null ? String(initialCourse.price_cents) : '',
+  // The field is labelled "(USD)" and edited in dollars; the column stores
+  // integer cents (`courses.price_cents`). Typing "19" used to save 19 cents.
+  const [priceUsd, setPriceUsd] = useState(
+    initialCourse.price_cents != null ? String(initialCourse.price_cents / 100) : '',
   );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
           description: description.trim() || null,
           level: level || null,
           included_in_premium: includedInPremium,
-          price_cents: priceCents.trim() === '' ? null : Number(priceCents),
+          price_cents: priceUsd.trim() === '' ? null : Math.round(Number(priceUsd) * 100),
         }),
       });
       const body: { ok?: boolean; error?: string } = await res.json().catch(() => ({}));
@@ -259,9 +261,10 @@ export default function CourseEditPanel({ lang, initialCourse, initialOwners, in
               id={id}
               type="number"
               min={0}
+              step={0.01}
               data-testid="course-field-price"
-              value={priceCents}
-              onChange={(e) => setPriceCents(e.target.value)}
+              value={priceUsd}
+              onChange={(e) => setPriceUsd(e.target.value)}
             />
           )}
         </Field>
