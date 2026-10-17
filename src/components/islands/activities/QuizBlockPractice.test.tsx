@@ -296,6 +296,22 @@ describe('QuizBlockPractice — game modes (D1)', () => {
     expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
+  it('centres a single-card game in the stage height left under the switcher (safe auto margins, never clipped when taller)', () => {
+    render(
+      <QuizBlockPractice
+        lang="es"
+        block={THREE_SLOT_BLOCK}
+        response={{}}
+        onChange={vi.fn()}
+        disabled={false}
+        mode="cards"
+        onModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('quiz-practice-q1').className).toContain('flex-1');
+    expect(screen.getByTestId('quiz-flashcards').parentElement!.className).toContain('my-auto');
+  });
+
   it('renders Parejas when mode="match"', () => {
     render(
       <QuizBlockPractice

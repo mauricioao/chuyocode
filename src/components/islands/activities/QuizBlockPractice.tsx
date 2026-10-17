@@ -152,6 +152,14 @@ export default function QuizBlockPractice({
     // content and leaving the rest of the stage empty; every other game
     // mode here (Tarjetas/Ruleta/Anagrama/…) keeps its original shrink-to-
     // fit sizing, unaffected by this pass.
+    //
+    // Single-card kit pass: those single-card games still size to their own
+    // content, but now sit CENTRED in the stage height left under the
+    // switcher, like the big games do — the wrapper grows (`flex-1`, never
+    // `min-h-0`: it may still grow past the stage, so the stage's own
+    // scroll keeps working) and the game takes `my-auto`, which centres
+    // without ever pushing a taller game's top out of reach (unlike
+    // `justify-center`, auto margins collapse to 0 on overflow).
     const isBigStageGame =
       effectiveMode === 'match' ||
       effectiveMode === 'reorder' ||
@@ -160,13 +168,44 @@ export default function QuizBlockPractice({
     return (
       <div
         data-testid={`quiz-practice-${block.id}`}
-        className={cn('flex flex-col gap-3', isBigStageGame && 'min-h-0 flex-1')}
+        className={cn('flex flex-1 flex-col gap-3', isBigStageGame && 'min-h-0')}
       >
         {modes.length > 1 && (
           <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
         )}
-        {effectiveMode === 'cards' && (
-          <QuizFlashcards lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+        {!isBigStageGame && (
+          <div className="my-auto flex flex-col">
+            {effectiveMode === 'cards' && (
+              <QuizFlashcards lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+            )}
+            {effectiveMode === 'speak' && (
+              <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+            )}
+            {effectiveMode === 'wheel' && (
+              <QuizWheel lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+            )}
+            {effectiveMode === 'anagram' && (
+              <QuizAnagram
+                lang={lang}
+                items={anagramEligible(gameItems)}
+                seed={block.id}
+                promptImages={block.promptImages}
+              />
+            )}
+            {effectiveMode === 'hangman' && (
+              <QuizHangman lang={lang} items={hangmanEligible(gameItems)} promptImages={block.promptImages} />
+            )}
+            {effectiveMode === 'truefalse' && (
+              <QuizTrueFalse
+                lang={lang}
+                items={deriveTrueFalseItems(payload, seedFromString(block.id))}
+                promptImages={block.promptImages}
+              />
+            )}
+            {effectiveMode === 'openbox' && (
+              <QuizOpenBox lang={lang} items={gameItems} promptImages={block.promptImages} />
+            )}
+          </div>
         )}
         {/* `match`/`reorder`/`cloze`/`groupsort` are built from PAIRS,
             SENTENCES or GROUPS rather than one question at a time — there is
@@ -194,33 +233,6 @@ export default function QuizBlockPractice({
             nextHref={nextHref}
             guest={guest}
           />
-        )}
-        {effectiveMode === 'speak' && (
-          <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
-        )}
-        {effectiveMode === 'wheel' && (
-          <QuizWheel lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
-        )}
-        {effectiveMode === 'anagram' && (
-          <QuizAnagram
-            lang={lang}
-            items={anagramEligible(gameItems)}
-            seed={block.id}
-            promptImages={block.promptImages}
-          />
-        )}
-        {effectiveMode === 'hangman' && (
-          <QuizHangman lang={lang} items={hangmanEligible(gameItems)} promptImages={block.promptImages} />
-        )}
-        {effectiveMode === 'truefalse' && (
-          <QuizTrueFalse
-            lang={lang}
-            items={deriveTrueFalseItems(payload, seedFromString(block.id))}
-            promptImages={block.promptImages}
-          />
-        )}
-        {effectiveMode === 'openbox' && (
-          <QuizOpenBox lang={lang} items={gameItems} promptImages={block.promptImages} />
         )}
         {effectiveMode === 'cloze' && (
           <QuizCloze
