@@ -25,6 +25,8 @@ import SpeakButton from '@/lib/speech/SpeakButton';
 import type { GameItem } from '@/lib/activities/gameModes';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import { CHIP_MATERIAL } from '@/components/islands/mechanics/chip';
+import { SINGLE_CARD, SINGLE_CARD_META } from '@/components/islands/mechanics/singleCard';
 
 export interface QuizHangmanProps {
   lang: Lang;
@@ -93,7 +95,7 @@ export default function QuizHangman({ lang, items, promptImages }: QuizHangmanPr
   if (!current) {
     return (
       <div data-testid="hangman-done" className="flex flex-col items-center gap-4 py-8 text-center">
-        <p className="text-lg font-medium text-foreground">{t.hangmanDone}</p>
+        <p className="text-xl font-semibold text-foreground">{t.hangmanDone}</p>
         <Button type="button" data-testid="hangman-play-again" onClick={handlePlayAgain}>
           {t.hangmanPlayAgain}
         </Button>
@@ -108,13 +110,13 @@ export default function QuizHangman({ lang, items, promptImages }: QuizHangmanPr
       data-testid="quiz-hangman"
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      className="flex flex-col items-center gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="flex flex-col items-center gap-5 rounded-[26px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <div aria-live="polite" role="status" className="sr-only" data-testid="hangman-live-region">
         {status === 'won' ? t.hangmanWon : status === 'lost' ? t.hangmanLost : ''}
       </div>
 
-      <span data-testid="hangman-counter" className="text-sm text-muted-foreground tabular-nums">
+      <span data-testid="hangman-counter" className={SINGLE_CARD_META}>
         {t.hangmanCounterPrefix} {wordIndex + 1} {t.hangmanCounterOf} {items.length}
       </span>
 
@@ -129,26 +131,30 @@ export default function QuizHangman({ lang, items, promptImages }: QuizHangmanPr
             key={i}
             weight="fill"
             aria-hidden="true"
-            className={cn('size-6', i < livesLeft ? 'text-accent-ink' : 'text-muted opacity-30')}
+            className={cn('size-7', i < livesLeft ? 'text-pop-sky-deep' : 'text-foreground/15')}
           />
         ))}
       </div>
 
-      <PromptImage image={promptImages?.[current.id]} />
+      {/* The clue (image above, prompt below — same order as before) on
+          the shared stage card, same as "Anagrama". */}
+      <div className={SINGLE_CARD}>
+        <PromptImage image={promptImages?.[current.id]} />
 
-      <p className="flex items-center gap-2 text-center text-base text-foreground">
-        {current.prompt}
-        <SpeakButton text={current.prompt} lang={lang} compact />
-      </p>
+        <p className="flex items-center gap-2 text-center text-lg font-semibold text-foreground sm:text-xl">
+          {current.prompt}
+          <SpeakButton text={current.prompt} lang={lang} compact />
+        </p>
+      </div>
 
-      <div data-testid="hangman-word" className="flex flex-wrap justify-center gap-2 text-2xl font-bold tracking-widest tabular-nums">
+      <div data-testid="hangman-word" className="flex flex-wrap justify-center gap-2 text-3xl font-bold tracking-widest tabular-nums">
         {word.split('').map((letter, index) => (
           <span
             key={index}
             data-testid={`hangman-letter-${index}`}
             className={cn(
-              'flex size-9 items-center justify-center border-b-2',
-              guessed.has(letter) || revealed ? 'border-accent-ink text-foreground' : 'border-border text-transparent',
+              'flex size-10 items-center justify-center border-b-[3px]',
+              guessed.has(letter) || revealed ? 'border-foreground text-foreground' : 'border-foreground/30 text-transparent',
             )}
           >
             {guessed.has(letter) || revealed ? letter : '_'}
@@ -159,7 +165,7 @@ export default function QuizHangman({ lang, items, promptImages }: QuizHangmanPr
       {status === 'won' && <p className="text-lg font-medium text-success-strong-foreground">{t.hangmanWon}</p>}
       {status === 'lost' && <p className="text-lg font-medium text-destructive">{t.hangmanLost}</p>}
 
-      <div data-testid="hangman-keyboard" className="flex flex-wrap justify-center gap-1">
+      <div data-testid="hangman-keyboard" className="flex max-w-xl flex-wrap justify-center gap-1 sm:gap-1.5">
         {ALPHABET.map((letter) => {
           const isGuessed = guessed.has(letter);
           const isHit = isGuessed && letters.has(letter);
@@ -171,11 +177,16 @@ export default function QuizHangman({ lang, items, promptImages }: QuizHangmanPr
               data-testid={`hangman-key-${letter}`}
               disabled={isGuessed || status !== 'playing'}
               onClick={() => handleGuess(letter)}
+              // The drag games' own grey glass chip (`chip.ts`), one letter
+              // wide. A guessed key keeps its hit/miss tint (the only
+              // red/green here) at full strength: `disabled:opacity-100`
+              // beats the chip's own `disabled:opacity-50`.
               className={cn(
-                'flex size-9 items-center justify-center rounded-md border-2 text-sm font-bold uppercase',
-                isHit && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
-                isMiss && 'border-destructive bg-destructive/10 text-destructive',
-                !isGuessed && 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60',
+                CHIP_MATERIAL,
+                'size-9 text-base font-bold uppercase sm:size-10',
+                isHit && 'border-2 border-success-strong bg-success-strong/10 text-success-strong-foreground shadow-none disabled:opacity-100',
+                isMiss && 'border-2 border-destructive bg-destructive/10 text-destructive shadow-none disabled:opacity-100',
+                !isGuessed && 'transition-[translate] hover:-translate-y-0.5 motion-reduce:transition-none',
               )}
             >
               {letter}
