@@ -119,16 +119,23 @@ function bandOf(level: Level): 'A' | 'B' | 'C' {
   {/* Greeting — the one big type moment, centred on desktop, left-aligned
       and FIRST on phones. `pointer-events-none` on desktop only: it
       overlays the widgets/folders columns, and must never steal a click
-      meant for them. */}
+      meant for them.
+      DESKTOP SIZE (mobile review 2026-10-17): the question line never
+      wraps on desktop, so at 1280×800 the plain 4.3vw size ran its "¿"
+      under the weather widget (the left column ends ~374px in). The
+      second `min()` term caps the size so the centred line always clears
+      that column: the line is ~11× its font size wide, so its half-width
+      stays under 50vw − ~380px. At 1440 it is ≈ the old 4.3vw size. The
+      subtitle wraps inside the same 100vw − 780px band. */}
   <div
     class="order-1 text-left desk:order-none desk:pointer-events-none desk:absolute desk:top-[46%] desk:left-1/2 desk:w-[min(980px,calc(100%-440px))] desk:-translate-x-1/2 desk:-translate-y-1/2 desk:text-center"
   >
-    <h1 class="text-[clamp(40px,4.3vw,68px)] leading-[1.04] font-extrabold tracking-[-0.03em] text-foreground">
+    <h1 class="text-[clamp(40px,4.3vw,68px)] leading-[1.04] font-extrabold tracking-[-0.03em] text-foreground desk:text-[clamp(28px,min(4.3vw,9vw_-_68px),68px)]">
       {greetingLine1}
       <br />
       <span class="desk:whitespace-nowrap">{t.greetingQuestion}</span>
     </h1>
-    <p class="mx-auto mt-4 max-w-[54ch] text-base text-muted-foreground desk:mt-[18px] desk:text-lg">
+    <p class="mx-auto mt-4 max-w-[54ch] text-base text-muted-foreground desk:mt-[18px] desk:max-w-[min(54ch,100vw_-_780px)] desk:text-lg">
       {t.greetingSubtitle}
     </p>
   </div>
