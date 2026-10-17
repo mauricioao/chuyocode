@@ -13,20 +13,43 @@
  * `applySecurityHeaders` never overwrites a header a route already set for
  * itself (`.has()` guard), so a route's own, presumably more specific,
  * choice always wins over this blanket default.
+ *
+ * ## Flipping CSP from report-only to enforced at launch
+ *
+ * The full policy below ships `Report-Only` until production is verified
+ * clean (LANZAMIENTO.md §2: needs a few days of real `[csp-report]` log
+ * lines first). Enforcing it at launch needs NO code change: set the
+ * server-side env var `CSP_ENFORCE=true` in Netlify's site settings (Site
+ * configuration → Environment variables) and redeploy (or trigger a new
+ * build) — see {@link isCspEnforced}. Unset/anything else keeps today's
+ * report-only behaviour byte for byte.
  */
 
 /**
- * The target Content-Security-Policy, shipped `Report-Only` for now so
- * nothing breaks before it is verified clean in production. Violations are
- * collected at `POST /api/csp-report` (`src/pages/api/csp-report.ts`,
- * `report-uri`/`report-to` below) instead of only showing up in a visitor's
- * own console, so the full policy can be enforced once production is
- * verified clean.
+ * Whether the full CSP should be ENFORCED (`content-security-policy`, no
+ * `-report-only` header) instead of the default report-only posture.
  *
- * Every non-`'self'`/non-generic source is listed because something in
- * `src/` actually uses it; see the reason beside each one.
+ * Read at request time (not cached at module init) so a test can flip it
+ * per-case with `vi.stubEnv`, same pattern as `src/lib/turnstile.ts` and
+ * `src/lib/webAnalytics.ts`. Deliberately NOT `PUBLIC_`-prefixed: this must
+ * stay a server-side-only decision, never inlined into the client bundle.
+ *
+ * Only the exact string `"true"` or `"1"` enables it — anything else
+ * (unset, `"false"`, `"yes"`, a stray space) is treated as OFF, so a typo in
+ * Netlify's env var UI fails safe into report-only rather than silently
+ * enforcing an unverified policy.
  */
-const REPORT_ONLY_CSP = [
+export function isCspEnforced(): boolean {
+  const raw = import.meta.env.CSP_ENFORCE;
+  return raw === 'true' || raw === '1';
+}
+
+/**
+ * The CSP source list shared by both the report-only and the enforced
+ * policy. Every non-`'self'`/non-generic source is listed because something
+ * in `src/` actually uses it; see the reason beside each one.
+ */
+const CSP_SOURCE_DIRECTIVES = [
   "default-src 'self'",
   // Astro's inline per-island hydration bootstrap scripts have no nonce/hash
   // yet (that's a follow-up); 'unsafe-inline' keeps them working meanwhile.
@@ -70,18 +93,43 @@ const REPORT_ONLY_CSP = [
   // Supabase's own /auth/v1/authorize, which 303s on to accounts.google.com.
   "form-action 'self' https://*.supabase.co https://accounts.google.com",
   "frame-ancestors 'self'",
-  // NOT `upgrade-insecure-requests` here: CSP3 §6.2 (and MDN) say browsers
-  // ignore that directive entirely in a Report-Only policy and log a
-  // console error about it on every single page load. It belongs in the
-  // ENFORCED policy (`applySecurityHeaders`'s `content-security-policy`
-  // header, below) once this one is enforced instead of report-only.
-  // Both travel together, pointed at the SAME endpoint: `report-to` is the
-  // modern Reporting API directive (Chromium only), `report-uri` is the
-  // legacy one every browser still honors (Firefox/Safari never shipped
-  // report-to). The `report-to` value names the `Reporting-Endpoints` entry
-  // set below, not a URL directly.
-  'report-to csp-endpoint',
-  'report-uri /api/csp-report',
+];
+
+/**
+ * Both reporting directives, pointed at the SAME endpoint: `report-to` is
+ * the modern Reporting API directive (Chromium only), `report-uri` is the
+ * legacy one every browser still honors (Firefox/Safari never shipped
+ * report-to). The `report-to` value names the `Reporting-Endpoints` entry
+ * set below, not a URL directly. Kept in BOTH the report-only and the
+ * enforced policy — violations stay collected at `POST /api/csp-report`
+ * (`src/pages/api/csp-report.ts`) either way.
+ */
+const CSP_REPORTING_DIRECTIVES = ['report-to csp-endpoint', 'report-uri /api/csp-report'];
+
+/**
+ * The target Content-Security-Policy, shipped `Report-Only` while
+ * {@link isCspEnforced} is off (today's default) so nothing breaks before it
+ * is verified clean in production. Violations are collected at
+ * `POST /api/csp-report` instead of only showing up in a visitor's own
+ * console.
+ *
+ * NOT `upgrade-insecure-requests` here: CSP3 §6.2 (and MDN) say browsers
+ * ignore that directive entirely in a Report-Only policy and log a console
+ * error about it on every single page load. It belongs only in
+ * {@link ENFORCED_CSP}.
+ */
+const REPORT_ONLY_CSP = [...CSP_SOURCE_DIRECTIVES, ...CSP_REPORTING_DIRECTIVES].join('; ');
+
+/**
+ * The same policy, ENFORCED: adds `upgrade-insecure-requests` (meaningless,
+ * and noisy in the console, under report-only — see {@link REPORT_ONLY_CSP}).
+ * Reporting directives are kept so violations are still collected once
+ * enforced, not just silently blocked.
+ */
+const ENFORCED_CSP = [
+  ...CSP_SOURCE_DIRECTIVES,
+  'upgrade-insecure-requests',
+  ...CSP_REPORTING_DIRECTIVES,
 ].join('; ');
 
 /**
@@ -109,12 +157,14 @@ export function applySecurityHeaders(headers: Headers): void {
   if (!headers.has('x-content-type-options')) {
     headers.set('x-content-type-options', 'nosniff');
   }
+  const enforced = isCspEnforced();
   if (!headers.has('content-security-policy')) {
-    // Enforced today: clickjacking only. The rest of the policy ships
-    // report-only below until it is verified clean.
-    headers.set('content-security-policy', "frame-ancestors 'self'");
+    // Default (unset/anything but exactly "true"/"1"): clickjacking only.
+    // The rest of the policy ships report-only below until it is verified
+    // clean. Once CSP_ENFORCE flips on, the full policy goes here instead.
+    headers.set('content-security-policy', enforced ? ENFORCED_CSP : "frame-ancestors 'self'");
   }
-  if (!headers.has('content-security-policy-report-only')) {
+  if (!enforced && !headers.has('content-security-policy-report-only')) {
     headers.set('content-security-policy-report-only', REPORT_ONLY_CSP);
   }
   if (!headers.has('reporting-endpoints')) {

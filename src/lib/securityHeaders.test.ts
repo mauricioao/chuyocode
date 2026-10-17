@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { applySecurityHeaders, withSecurityHeaders } from './securityHeaders';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('applySecurityHeaders', () => {
   it('sets every security header on a fresh Headers instance', () => {
@@ -139,6 +143,66 @@ describe('applySecurityHeaders', () => {
     const headers = new Headers({ 'reporting-endpoints': 'other-endpoint="/elsewhere"' });
     applySecurityHeaders(headers);
     expect(headers.get('reporting-endpoints')).toBe('other-endpoint="/elsewhere"');
+  });
+});
+
+describe('CSP_ENFORCE (enforce mode toggle)', () => {
+  it('report-only (default/unset) behaviour is unchanged — byte for byte', () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+    expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+    expect(headers.get('content-security-policy-report-only')).not.toBeNull();
+  });
+
+  it.each(['false', 'FALSE', 'enabled', 'yes', '  true  ', ''])(
+    'stays report-only for any value other than exactly "true"/"1" (got %j)',
+    (value) => {
+      vi.stubEnv('CSP_ENFORCE', value);
+      const headers = new Headers();
+      applySecurityHeaders(headers);
+      expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+      expect(headers.has('content-security-policy-report-only')).toBe(true);
+    },
+  );
+
+  it.each(['true', '1'])(
+    'enforces the full policy on content-security-policy and sends no report-only header (CSP_ENFORCE=%s)',
+    (value) => {
+      vi.stubEnv('CSP_ENFORCE', value);
+      const headers = new Headers();
+      applySecurityHeaders(headers);
+
+      const csp = headers.get('content-security-policy') as string;
+      // Same source list as the report-only policy today...
+      expect(csp).toMatch(/img-src[^;]*https:\/\/\*\.supabase\.co/);
+      expect(csp).toMatch(/img-src[^;]*https:\/\/cdn\.sanity\.io/);
+      expect(csp).toContain('https://*.supabase.co');
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).toContain("base-uri 'self'");
+      expect(csp).toContain("frame-ancestors 'self'");
+      // ...plus upgrade-insecure-requests, which only belongs in the
+      // enforced policy (see securityHeaders.ts header).
+      expect(csp).toContain('upgrade-insecure-requests');
+      // Violations are still collected while enforced.
+      expect(csp).toContain('report-to csp-endpoint');
+      expect(csp).toContain('report-uri /api/csp-report');
+
+      expect(headers.has('content-security-policy-report-only')).toBe(false);
+    },
+  );
+
+  it('still sets Reporting-Endpoints while enforced', () => {
+    vi.stubEnv('CSP_ENFORCE', 'true');
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+    expect(headers.get('reporting-endpoints')).toBe('csp-endpoint="/api/csp-report"');
+  });
+
+  it('never overwrites a content-security-policy header a route already set, enforced or not', () => {
+    vi.stubEnv('CSP_ENFORCE', 'true');
+    const headers = new Headers({ 'content-security-policy': "default-src 'none'" });
+    applySecurityHeaders(headers);
+    expect(headers.get('content-security-policy')).toBe("default-src 'none'");
   });
 });
 
