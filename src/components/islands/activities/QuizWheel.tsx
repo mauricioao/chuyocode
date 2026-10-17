@@ -203,7 +203,7 @@ export default function QuizWheel({ lang, items, seed, promptImages }: QuizWheel
               data-testid="wheel-svg"
               viewBox={`0 0 ${WHEEL_VIEWBOX} ${WHEEL_VIEWBOX}`}
               aria-hidden="true"
-              className="size-64 rounded-full shadow-elevation-2 transition-transform ease-out motion-reduce:transition-none sm:size-72"
+              className="size-64 rounded-full shadow-(--shadow-elevation-2) transition-transform ease-out motion-reduce:transition-none sm:size-72"
               style={{ transform: `rotate(${rotation}deg)`, transitionDuration: `${spinMs}ms` }}
             >
               <circle cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={WHEEL_VIEWBOX / 2} className="fill-card" />

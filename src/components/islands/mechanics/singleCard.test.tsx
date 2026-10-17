@@ -27,7 +27,10 @@ describe('singleCard (shared single-card stage look)', () => {
 
   it('the stage card is a soft-shadowed rounded rectangle, never the old hard 2px border box', () => {
     expect(SINGLE_CARD).toContain('rounded-[26px]');
-    expect(SINGLE_CARD).toContain('shadow-elevation-2');
+    // The runtime var form — the bare `shadow-elevation-2` utility inlines
+    // the brand's pure-black value (see `singleCard.tsx`'s own header).
+    expect(SINGLE_CARD).toContain('shadow-(--shadow-elevation-2)');
+    expect(SINGLE_CARD).not.toMatch(/(^|\s)shadow-elevation-/);
     expect(SINGLE_CARD).not.toContain('border-2');
   });
 });

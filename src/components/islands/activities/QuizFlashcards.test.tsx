@@ -153,7 +153,7 @@ describe('QuizFlashcards — single-card kit look', () => {
   it('the front face is the shared soft white stage card, not the old hard-bordered box', () => {
     render(<QuizFlashcards lang="es" items={items} seed="block-1" />);
     const front = screen.getByTestId('flashcard-front').className;
-    expect(front).toContain('shadow-elevation-2');
+    expect(front).toContain('shadow-(--shadow-elevation-2)');
     expect(front).not.toContain('border-2');
   });
 });

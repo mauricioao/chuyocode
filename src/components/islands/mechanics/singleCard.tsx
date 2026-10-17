@@ -10,9 +10,16 @@
  * Kit rules this follows (DIRECCION-VISUAL.md §3.2/§3.3): a card is a
  * rounded rectangle on the radius ladder (26px for a ~240px card, ~22% of a
  * typical card's height is far above the ladder's top step, so the ladder's
- * own large step wins), a soft ink-tinted shadow (`shadow-elevation-2`,
- * never pure black) plus a hairline ring instead of a hard 2px border, and
- * no halo glow behind it. The revealed answer sits in a pale sky well — the
+ * own large step wins), a soft ink-tinted shadow plus a hairline ring
+ * instead of a hard 2px border, and
+ * no halo glow behind it.
+ *
+ * SHADOWS ARE WRITTEN `shadow-(--shadow-elevation-N)`, NEVER the bare
+ * `shadow-elevation-N` utility: Tailwind 4 inlines a `@theme` shadow's
+ * value into the utility (so it can recolour it), which bakes in the
+ * BRAND scope's pure-black `rgb(0 0 0 / 0.5)` and ignores the Inglés
+ * scope's own ink-tinted override (`global.css`, `[data-theme='ingles']`).
+ * The var form resolves at runtime, inside whichever scope renders it. The revealed answer sits in a pale sky well — the
  * kit's light tones are for "selección, burbujas y fondos con texto
  * oscuro", and red/green stay reserved for the ✓/✕ marks, so a NEUTRAL
  * reveal never borrows either.
@@ -22,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 /** The white stage card a single-card game shows its one question on. Callers add only their own extras (`min-h-*`, an entrance animation). */
 export const SINGLE_CARD =
-  'flex w-full max-w-xl flex-col items-center justify-center gap-4 rounded-[26px] bg-card p-6 text-center shadow-elevation-2 ring-1 ring-foreground/5 sm:p-8';
+  'flex w-full max-w-xl flex-col items-center justify-center gap-4 rounded-[26px] bg-card p-6 text-center shadow-(--shadow-elevation-2) ring-1 ring-foreground/5 sm:p-8';
 
 /** The question/statement text on {@link SINGLE_CARD} — semibold ink, sentence case, one step up on wider screens. */
 export const SINGLE_CARD_PROMPT = 'text-xl font-semibold text-foreground sm:text-2xl';

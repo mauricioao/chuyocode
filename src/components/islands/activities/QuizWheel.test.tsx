@@ -264,5 +264,6 @@ describe('QuizWheel — single-card kit look', () => {
     expect(screen.getByTestId('wheel-segment-s2').getAttribute('class')).toContain('fill-tile-2');
     expect(screen.getByTestId('wheel-segment-s3').getAttribute('class')).toContain('fill-tile-3');
     expect(screen.getByTestId('wheel-svg').innerHTML).not.toMatch(/fill-(accent|primary|secondary|muted)/);
+    expect(screen.getByTestId('wheel-svg').getAttribute('class')).toContain('shadow-(--shadow-elevation-2)');
   });
 });
