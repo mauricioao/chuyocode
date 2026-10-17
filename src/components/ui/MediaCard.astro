@@ -10,8 +10,9 @@
  * "Libro", news → "Noticia"); it is only rendered when `kind` is provided.
  *
  * A single `<a>` wrapper is the only focus target (`focus-visible:ring`), so
- * keyboard users get one clean tab stop. Screen readers derive the accessible
- * name from the anchor's `aria-label` (the title), matching the visual title.
+ * keyboard users get one clean tab stop. Screen readers take the accessible
+ * name from the visible text (type tag, title, author); the cover is
+ * decorative (`alt=""`) because the caption already carries the title.
  *
  * The cover is delivered through {@link buildImage} (PR1): responsive
  * `srcset`/`sizes` plus an LQIP blur-up placeholder, so no raw full-resolution
@@ -118,9 +119,11 @@ const lqipStyle = image.lqip
   : undefined;
 ---
 
+{/* No aria-label: the link is named by its visible text (tag, title, author).
+    An aria-label of the title alone hid the tag and author from screen readers
+    (axe label-content-name-mismatch). */}
 <a
   href={href}
-  aria-label={title}
   data-variant={variant}
   class="mediacard group relative block outline-none focus-visible:ring-2 focus-visible:ring-accent"
 >
@@ -145,7 +148,7 @@ const lqipStyle = image.lqip
             src={image.src}
             srcset={image.srcset}
             sizes={image.sizes}
-            alt={title}
+            alt=""
             loading="lazy"
             decoding="async"
             class="mediacard-img h-full w-full object-cover"
