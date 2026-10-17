@@ -34,3 +34,23 @@ export const TILE_COLOR_CLASSES = [
 export function optionColorClass(index: number): string {
   return TILE_COLOR_CLASSES[index % TILE_COLOR_CLASSES.length]!;
 }
+
+/**
+ * The SAME six tokens as SVG `fill-*` utilities — for a caller that paints
+ * shapes rather than boxes ("Ruleta"'s own wheel slices, `QuizWheel.tsx`).
+ * Spelled out literally (never built from {@link TILE_COLOR_CLASSES} with a
+ * string replace) so Tailwind's source scanner sees every class name.
+ */
+export const TILE_FILL_CLASSES = [
+  'fill-tile-1',
+  'fill-tile-2',
+  'fill-tile-3',
+  'fill-tile-4',
+  'fill-tile-5',
+  'fill-tile-6',
+] as const;
+
+/** {@link optionColorClass}'s SVG twin — same 0-based index, same colour. */
+export function optionFillClass(index: number): string {
+  return TILE_FILL_CLASSES[index % TILE_FILL_CLASSES.length]!;
+}

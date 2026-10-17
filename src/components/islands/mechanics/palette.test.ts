@@ -6,7 +6,7 @@
  * for why this module exists at all.
  */
 import { describe, expect, it } from 'vitest';
-import { TILE_COLOR_CLASSES, optionColorClass } from './palette';
+import { TILE_COLOR_CLASSES, TILE_FILL_CLASSES, optionColorClass, optionFillClass } from './palette';
 
 describe('palette (shared tile colour set)', () => {
   it('exposes exactly the six `bg-tile-*` kit token classes, in order', () => {
@@ -30,5 +30,14 @@ describe('palette (shared tile colour set)', () => {
     expect(new Set(run).size).toBe(6);
     expect(optionColorClass(6)).toBe(optionColorClass(0));
     expect(optionColorClass(7)).toBe(optionColorClass(1));
+  });
+
+  it('offers the SAME six tokens as SVG `fill-*` classes, for a caller that paints shapes instead of boxes (the wheel)', () => {
+    expect(TILE_FILL_CLASSES).toEqual(['fill-tile-1', 'fill-tile-2', 'fill-tile-3', 'fill-tile-4', 'fill-tile-5', 'fill-tile-6']);
+    expect(optionFillClass(0)).toBe('fill-tile-1');
+    expect(optionFillClass(6)).toBe('fill-tile-1');
+    for (let i = 0; i < 12; i += 1) {
+      expect(optionFillClass(i).replace('fill-', '')).toBe(optionColorClass(i).replace('bg-', ''));
+    }
   });
 });

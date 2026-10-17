@@ -22,7 +22,6 @@
  * MOTION is what tells the learner which slice won.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -31,6 +30,8 @@ import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import { optionFillClass } from '@/components/islands/mechanics/palette';
+import { AnswerReveal, SINGLE_CARD, SINGLE_CARD_PROMPT } from '@/components/islands/mechanics/singleCard';
 
 export interface QuizWheelProps {
   lang: Lang;
@@ -40,8 +41,18 @@ export interface QuizWheelProps {
   promptImages?: Record<string, PromptImageRef>;
 }
 
-/** Alternating brand-palette fills for the slices — same theme tokens `bg-*` utilities already draw from (global.css `@theme`). */
-const SEGMENT_FILLS = ['fill-accent', 'fill-primary', 'fill-secondary', 'fill-muted'] as const;
+/**
+ * Which shared-palette colour (`palette.ts`, by position) slice `index` of
+ * `total` gets. Plain position, EXCEPT the one case where cycling the six
+ * colours would paint the last slice the same as the first one it touches
+ * around the circle (`total` = 7, 13, …) — two same-coloured neighbours
+ * would read as one big slice, so that last slice takes a colour neither
+ * neighbour uses instead.
+ */
+export function wheelSegmentColorIndex(index: number, total: number): number {
+  if (total % 6 === 1 && index === total - 1) return 2;
+  return index;
+}
 
 const WHEEL_VIEWBOX = 200;
 const WHEEL_CENTER = 100;
@@ -163,36 +174,53 @@ export default function QuizWheel({ lang, items, seed, promptImages }: QuizWheel
         {announcement}
       </div>
 
-      <label className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground sm:min-h-0">
+      <label className="flex min-h-11 items-center gap-2 text-sm font-medium text-muted-foreground sm:min-h-0">
         <input
           type="checkbox"
           data-testid="wheel-remove-on-exit"
           checked={removeOnExit}
           onChange={(e) => setRemoveOnExit(e.target.checked)}
-          className="size-4"
+          className="size-4 accent-pop-sky-deep"
         />
         {t.wheelRemoveOnExit}
       </label>
 
       {total >= 2 ? (
         <>
-          <svg
-            data-testid="wheel-svg"
-            viewBox={`0 0 ${WHEEL_VIEWBOX} ${WHEEL_VIEWBOX}`}
-            aria-hidden="true"
-            className="h-56 w-56 transition-transform ease-out motion-reduce:transition-none"
-            style={{ transform: `rotate(${rotation}deg)`, transitionDuration: `${spinMs}ms` }}
-          >
-            {activeItems.map((item, index) => (
-              <path
-                key={item.id}
-                data-testid={`wheel-segment-${item.id}`}
-                d={wheelSlicePath(WHEEL_CENTER, WHEEL_CENTER, WHEEL_RADIUS, index, total)}
-                className={cn('stroke-surface', SEGMENT_FILLS[index % SEGMENT_FILLS.length])}
-                strokeWidth={1}
-              />
-            ))}
-          </svg>
+          {/* The wheel sits on a soft kit shadow (a round card, never a
+              halo glow); the fixed ink pointer at 12 o'clock is drawn
+              OUTSIDE the rotating SVG so it never turns with it — it marks
+              the slice `handleSpin`'s own geometry lands under the top. */}
+          <div className="relative">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 18"
+              className="absolute -top-2 left-1/2 z-10 h-[18px] w-5 -translate-x-1/2 fill-foreground"
+            >
+              <path d="M2 1 H18 Q19.5 1 18.6 2.3 L10.9 16.6 Q10 18 9.1 16.6 L1.4 2.3 Q0.5 1 2 1 Z" />
+            </svg>
+            <svg
+              data-testid="wheel-svg"
+              viewBox={`0 0 ${WHEEL_VIEWBOX} ${WHEEL_VIEWBOX}`}
+              aria-hidden="true"
+              className="size-64 rounded-full shadow-elevation-2 transition-transform ease-out motion-reduce:transition-none sm:size-72"
+              style={{ transform: `rotate(${rotation}deg)`, transitionDuration: `${spinMs}ms` }}
+            >
+              <circle cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={WHEEL_VIEWBOX / 2} className="fill-card" />
+              {activeItems.map((item, index) => (
+                <path
+                  key={item.id}
+                  data-testid={`wheel-segment-${item.id}`}
+                  d={wheelSlicePath(WHEEL_CENTER, WHEEL_CENTER, WHEEL_RADIUS, index, total)}
+                  className={cn('stroke-card', optionFillClass(wheelSegmentColorIndex(index, total)))}
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                />
+              ))}
+              <circle cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={13} className="fill-card" />
+              <circle cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={4} className="fill-foreground" />
+            </svg>
+          </div>
 
           <Button
             type="button"
@@ -206,32 +234,18 @@ export default function QuizWheel({ lang, items, seed, promptImages }: QuizWheel
           </Button>
         </>
       ) : (
-        <p data-testid="wheel-exhausted" className="text-sm text-muted-foreground">
+        <p data-testid="wheel-exhausted" className="text-sm font-medium text-muted-foreground">
           {t.wheelExhausted}
         </p>
       )}
 
       {landedItem && !spinning && (
-        <div
-          data-testid="wheel-landed"
-          className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center"
-        >
+        <div data-testid="wheel-landed" className={SINGLE_CARD}>
           <PromptImage image={promptImages?.[landedItem.id]} />
-          <p className="text-lg font-semibold text-foreground sm:text-xl">{landedItem.prompt}</p>
+          <p className={SINGLE_CARD_PROMPT}>{landedItem.prompt}</p>
           <SpeakButton text={landedItem.prompt} lang={lang} />
           {revealed ? (
-            <div
-              data-testid="wheel-answer"
-              className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3"
-            >
-              <p className="text-lg font-semibold text-foreground">{landedItem.answer}</p>
-              {landedItem.explanation && (
-                <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                  <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
-                  <p>{landedItem.explanation}</p>
-                </div>
-              )}
-            </div>
+            <AnswerReveal data-testid="wheel-answer" answer={landedItem.answer} explanation={landedItem.explanation} />
           ) : (
             <Button type="button" variant="outline" data-testid="wheel-reveal" onClick={handleReveal} className="h-11 sm:h-8">
               {t.wheelReveal}
