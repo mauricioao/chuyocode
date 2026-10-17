@@ -101,3 +101,21 @@ describe('QuizSpeakingCards', () => {
     expect(screen.getByTestId('speaking-deck')).toBeTruthy();
   });
 });
+
+describe('QuizSpeakingCards — single-card kit look', () => {
+  it('deals onto the shared stage card and reveals into the shared answer well', () => {
+    render(<QuizSpeakingCards lang="es" items={items} seed="block-1" />);
+    fireEvent.click(screen.getByTestId('speaking-deal'));
+    const card = screen.getByTestId('speaking-card').className;
+    expect(card).toContain('rounded-[26px]');
+    expect(card).toContain('shadow-(--shadow-elevation-2)');
+    expect(card).not.toContain('border-2');
+    fireEvent.click(screen.getByTestId('speaking-reveal'));
+    expect(screen.getByTestId('speaking-answer').className).toContain('bg-pop-sky/15');
+  });
+
+  it('the face-down deck is matte kit cards, never the old yellow accent wash', () => {
+    render(<QuizSpeakingCards lang="es" items={items} seed="block-1" />);
+    expect(screen.getByTestId('speaking-deck').innerHTML).not.toMatch(/bg-accent|border-accent-ink/);
+  });
+});
