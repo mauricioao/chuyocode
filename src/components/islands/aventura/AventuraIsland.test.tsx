@@ -184,6 +184,32 @@ describe('AventuraIsland', () => {
     expect(screen.queryByTestId('speak-button')).toBeNull();
   });
 
+  // The 4:3 frames must be able to GROW past their aspect ratio on a phone:
+  // `overflow: hidden` makes an aspect-ratio box a scroll container, which
+  // drops its content-based minimum height, so at 375px the dialog line, the
+  // progress chip and most of the end summary were cut off (2026-10-17
+  // walkthrough, 51-aventura-375-*.png). `overflow: clip` still rounds the
+  // backdrop's corners without that side effect. jsdom has no layout, so this
+  // pins the class contract; the screenshots are the visual check.
+  it('lets the game screen and the end screen grow to fit their content (clip, not hidden)', () => {
+    render(<AventuraIsland scene={scene} lang="es" />);
+    const screenEl = screen.getByTestId('aventura-screen');
+    expect(screenEl.classList.contains('overflow-hidden')).toBe(false);
+    expect(screenEl.classList.contains('overflow-clip')).toBe(true);
+
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    const endEl = screen.getByTestId('aventura-end-screen');
+    expect(endEl.classList.contains('overflow-hidden')).toBe(false);
+    expect(endEl.classList.contains('overflow-clip')).toBe(true);
+  });
+
   it('uses neutral Spanish copy (no voseo)', () => {
     expect(findVoseo(COPY.es)).toEqual([]);
   });
