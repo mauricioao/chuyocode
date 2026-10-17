@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GameItem } from '@/lib/activities/gameModes';
 import QuizAnagram from './QuizAnagram';
+import { BLANK_EMPTY, CHIP_MATERIAL, CHIP_PLACED } from '@/components/islands/mechanics/chip';
 
 afterEach(() => {
   cleanup();
@@ -155,5 +156,28 @@ describe('QuizAnagram', () => {
     const nextItems: GameItem[] = [{ id: 's9', prompt: 'A cold drink?', answer: 'soda' }];
     rerender(<QuizAnagram lang="es" items={nextItems} seed="block-1" />);
     expect(screen.getByTestId('anagram-counter').textContent).toBe('Palabra 1 de 1');
+  });
+});
+
+describe('QuizAnagram — single-card kit look', () => {
+  const hasAll = (className: string, recipe: string) => recipe.split(' ').every((cls) => className.split(' ').includes(cls));
+
+  it("letter tiles are the drag games' own grey glass chip (`chip.ts`)", () => {
+    render(<QuizAnagram lang="es" items={items} seed="block-1" />);
+    expect(hasAll(screen.getByTestId('anagram-tile-0').className, CHIP_MATERIAL)).toBe(true);
+  });
+
+  it('an empty slot is the shared dashed blank; a filled one holds a white, raised placed chip', () => {
+    render(<QuizAnagram lang="es" items={items} seed="block-1" />);
+    expect(hasAll(screen.getByTestId('anagram-slot-0').className, BLANK_EMPTY)).toBe(true);
+    fireEvent.click(screen.getByTestId('anagram-tile-0'));
+    expect(hasAll(screen.getByTestId('anagram-slot-0').className, CHIP_PLACED)).toBe(true);
+    expect(screen.getByTestId('anagram-slot-0').className).not.toContain('border-dashed');
+  });
+
+  it('a used tile disappears from the tray (stays fully transparent even though it is disabled)', () => {
+    render(<QuizAnagram lang="es" items={items} seed="block-1" />);
+    fireEvent.click(screen.getByTestId('anagram-tile-0'));
+    expect(screen.getByTestId('anagram-tile-0').className).toContain('disabled:opacity-0');
   });
 });

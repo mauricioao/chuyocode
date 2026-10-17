@@ -26,6 +26,8 @@ import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import { BLANK_EMPTY, BLANK_FILLED, CHIP_MATERIAL, CHIP_PLACED } from '@/components/islands/mechanics/chip';
+import { SINGLE_CARD, SINGLE_CARD_META } from '@/components/islands/mechanics/singleCard';
 
 export interface QuizAnagramProps {
   lang: Lang;
@@ -133,7 +135,7 @@ export default function QuizAnagram({ lang, items, seed, promptImages }: QuizAna
   if (!current) {
     return (
       <div data-testid="anagram-done" className="flex flex-col items-center gap-4 py-8 text-center">
-        <p className="text-lg font-medium text-foreground">{t.anagramDone}</p>
+        <p className="text-xl font-semibold text-foreground">{t.anagramDone}</p>
         <Button type="button" data-testid="anagram-play-again" onClick={handlePlayAgain}>
           {t.anagramPlayAgain}
         </Button>
@@ -146,24 +148,32 @@ export default function QuizAnagram({ lang, items, seed, promptImages }: QuizAna
       data-testid="quiz-anagram"
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      className="flex flex-col items-center gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="flex flex-col items-center gap-5 rounded-[26px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <div aria-live="polite" role="status" className="sr-only" data-testid="anagram-live-region">
         {status === 'correct' ? t.anagramCorrectMessage : status === 'wrong' ? t.anagramWrongMessage : ''}
       </div>
 
-      <span data-testid="anagram-counter" className="text-sm text-muted-foreground tabular-nums">
+      <span data-testid="anagram-counter" className={SINGLE_CARD_META}>
         {t.anagramCounterPrefix} {wordIndex + 1} {t.anagramCounterOf} {items.length}
       </span>
 
-      <PromptImage image={promptImages?.[current.id]} />
+      {/* The clue (image above, prompt below — same order as before) on
+          the shared stage card; the puzzle itself sits under it on the
+          bare stage, like the drag games' own boards. */}
+      <div className={SINGLE_CARD}>
+        <PromptImage image={promptImages?.[current.id]} />
 
-      <p className="flex items-center gap-2 text-center text-base text-foreground">
-        {current.prompt}
-        <SpeakButton text={current.prompt} lang={lang} compact />
-      </p>
+        <p className="flex items-center gap-2 text-center text-lg font-semibold text-foreground sm:text-xl">
+          {current.prompt}
+          <SpeakButton text={current.prompt} lang={lang} compact />
+        </p>
+      </div>
 
-      <div data-testid="anagram-slots" className="flex flex-wrap justify-center gap-2">
+      {/* Slots: the shared dashed blank while empty, a white raised
+          placed chip once filled (`chip.ts`) — correct/wrong keep their
+          own semantic tints, the only red/green on this stage. */}
+      <div data-testid="anagram-slots" className="flex flex-wrap justify-center gap-2 sm:gap-3">
         {tiles.map((_, slotIndex) => {
           const tileId = placed[slotIndex];
           const tile = tileId ? tilesById.get(tileId) : undefined;
@@ -172,10 +182,10 @@ export default function QuizAnagram({ lang, items, seed, promptImages }: QuizAna
               key={slotIndex}
               data-testid={`anagram-slot-${slotIndex}`}
               className={cn(
-                'flex size-11 items-center justify-center rounded-md border-2 text-lg font-bold uppercase',
-                status === 'correct' && 'border-success-strong bg-success-strong/10 text-success-strong-foreground',
-                status === 'wrong' && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
-                status === 'playing' && 'border-border bg-surface-soft text-foreground',
+                'flex size-12 items-center justify-center text-xl font-bold uppercase text-foreground',
+                tile ? cn(BLANK_FILLED, CHIP_PLACED) : BLANK_EMPTY,
+                status === 'correct' && 'border-success-strong bg-success-strong/10 text-success-strong-foreground shadow-none',
+                status === 'wrong' && 'animate-pulse border-destructive bg-destructive/10 text-destructive shadow-none motion-reduce:animate-none',
               )}
             >
               {tile?.letter ?? ''}
@@ -184,7 +194,7 @@ export default function QuizAnagram({ lang, items, seed, promptImages }: QuizAna
         })}
       </div>
 
-      <div data-testid="anagram-tray" className="flex flex-wrap justify-center gap-2">
+      <div data-testid="anagram-tray" className="flex flex-wrap justify-center gap-2 sm:gap-3">
         {tiles.map((tile) => {
           const used = placed.includes(tile.id);
           return (
@@ -194,9 +204,15 @@ export default function QuizAnagram({ lang, items, seed, promptImages }: QuizAna
               data-testid={`anagram-tile-${tile.id}`}
               disabled={used || status !== 'playing'}
               onClick={() => placeTile(tile.id)}
+              // The drag games' own grey glass chip (`chip.ts`'s
+              // `CHIP_MATERIAL`), one letter wide. A used tile keeps its
+              // place in the tray but vanishes — `disabled:opacity-0` too,
+              // since the chip's own `disabled:opacity-50` would otherwise
+              // win over a plain `opacity-0` on a disabled button.
               className={cn(
-                'flex size-11 items-center justify-center rounded-md border-2 border-border bg-surface-soft text-lg font-bold uppercase text-foreground transition-opacity hover:border-accent-ink/60',
-                used && 'opacity-0',
+                CHIP_MATERIAL,
+                'size-12 text-xl font-bold uppercase transition-[opacity,translate] hover:-translate-y-0.5 motion-reduce:transition-none',
+                used && 'opacity-0 disabled:opacity-0',
               )}
             >
               {tile.letter}
