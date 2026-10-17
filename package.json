@@ -16,7 +16,8 @@
     "astro": "astro",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium",
+    "test:visual": "playwright test --project=visual",
     "typecheck": "astro check",
     "knip": "knip",
     "sanity:deploy": "sanity deploy",
@@ -58,6 +59,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.56.0",
     "@sanity/vision": "^6.5.0",
     "@testing-library/dom": "10",
