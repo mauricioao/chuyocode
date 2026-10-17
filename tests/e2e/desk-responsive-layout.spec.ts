@@ -116,6 +116,15 @@ for (const viewport of [
       if (viewport.width < 640) expect(Math.abs(right(calendar) - right(weather))).toBeLessThanOrEqual(1);
     });
 
+    test('the greeting subtitle starts on the same left edge as the title', async ({ page }) => {
+      const signedIn = await gotoHubOrSkip(page);
+      test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
+
+      const [title] = await textLines(page.locator('[data-desk] h1'));
+      const [subtitle] = await textLines(page.locator('[data-desk] h1 + p'));
+      expect(Math.abs(subtitle.x - title.x)).toBeLessThanOrEqual(4);
+    });
+
     test('the hub does not scroll sideways', async ({ page }) => {
       const signedIn = await gotoHubOrSkip(page);
       test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
