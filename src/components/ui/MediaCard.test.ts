@@ -115,9 +115,16 @@ describe('MediaCard.astro — always-visible caption', () => {
     expect(html).not.toContain('Una sinopsis editorial de ejemplo.');
   });
 
-  it('exposes the title as the anchor accessible name', async () => {
-    const html = await render({ ...baseProps, variant: 'poster' });
-    expect(html).toContain('aria-label="El Libro"');
+  it('names the link from its visible text, not an aria-label that hides the tag and author', async () => {
+    // axe `label-content-name-mismatch`: an aria-label of the title alone drops
+    // the visible "Libro" tag and the author from what a screen reader hears.
+    const html = await render({ ...baseProps, variant: 'poster', kind: 'book' });
+    const anchor = html.slice(html.indexOf('<a'), html.indexOf('>', html.indexOf('<a')) + 1);
+    expect(anchor).not.toContain('aria-label');
+    // The cover is decorative here: the caption already carries the title, so
+    // an alt of the title would make the name read it twice.
+    expect(html).toContain('alt=""');
+    expect(html).not.toContain('alt="El Libro"');
   });
 });
 
