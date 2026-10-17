@@ -25,8 +25,12 @@ Two products share one codebase:
 - **Languages:** Spanish (`es`, primary) + English (`en`). Routes are always
   locale-prefixed (`/es/…`, `/en/…`). `/` 302-redirects to `/es/`.
 - **Identity:** Sanity content and the brand shell (home, libros, noticias)
-  keep the frozen dark/amber identity. Inglés has its own lighter,
-  paper-and-ink visual language — see "Owner's UI direction" below.
+  keep the frozen dark/amber identity. Inglés has its own lighter identity: a
+  "glass desk with ink" UI kit (white/grey surfaces, glass windows and
+  widgets, a desktop metaphor, B&W ink-drawn characters). Full direction:
+  `ChuyoCode_others/docs/DIRECCION-VISUAL.md` (owner's private doc). Applying
+  it: the `glass-desk-ui` project skill (`.claude/skills/glass-desk-ui`,
+  landing on branch `chore/claude-setup`).
 
 ---
 
