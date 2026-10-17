@@ -4,6 +4,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { DESKTOP_QUERY } from '@/hooks/useIsDesktop';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import ActivityPracticeIsland from './ActivityPracticeIsland';
+import { FLOATING_CHECK_BAR_RESERVE_END } from '@/components/islands/mechanics/scale';
 import type { Block, WorksheetBlock, QuizBlock } from '@/lib/activities/blocks';
 
 afterEach(() => cleanup());
@@ -244,6 +245,17 @@ describe('ActivityPracticeIsland — footer (zoom/score) and the floating Compro
     expect(actions.className).toContain('right-4');
     expect(actions.contains(screen.getByTestId('practice-check-button'))).toBe(true);
     expect(screen.getByTestId('practice-footer').contains(screen.getByTestId('practice-check-button'))).toBe(false);
+  });
+
+  // Mobile review 2026-10-17: the footer's right-aligned hint/score used to
+  // run UNDER the floating Comprobar (cut on both sides at 375px), since the
+  // button floats over the bottom-right corner of this very row.
+  it('reserves the floating Comprobar corner at the footer row end, so its hint/score never runs under the button', () => {
+    renderIsland([QUIZ]);
+    const footer = screen.getByTestId('practice-footer');
+    for (const token of FLOATING_CHECK_BAR_RESERVE_END.split(' ')) {
+      expect(footer.className.split(' ')).toContain(token);
+    }
   });
 
   it('keeps the zoom controls inside the plain footer row, for a single worksheet block', () => {
