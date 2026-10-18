@@ -71,11 +71,15 @@ describe('ROW_PADDING_X', () => {
   // "Desktop" redesign PART 6a (owner spec 2026-10-06): the practice page's
   // own static header row moved into the shared window shell's title bar
   // (`DeskWindow.astro`, every practice-window-opening page's own titlebar,
-  // not just this one page) — the token moved with it.
+  // not just this one page) — the token moved with it. Activity window
+  // chrome pass (2026-10-17): the bar's own vertical padding shrank from
+  // `py-3` to `py-2` (owner mockup `visor-actividad-franjas-2026-10-17.jpg`,
+  // "gain space for the canvas") — only the vertical value changed, the
+  // shared HORIZONTAL token is untouched.
   it("the practice window's title bar uses the same token", () => {
     const src = sourceOf('components/ingles/DeskWindow.astro');
     expect(src).toContain("import { ROW_PADDING_X } from '@lib/ui/layout'");
-    expect(src).toContain('${ROW_PADDING_X} py-3');
+    expect(src).toContain('${ROW_PADDING_X} py-2');
     expect(src).not.toContain('border-border p-3 lg:rounded-none');
   });
 });

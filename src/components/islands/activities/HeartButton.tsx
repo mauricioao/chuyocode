@@ -89,7 +89,10 @@ export default function HeartButton({ lang, activityId, heartCount: initialCount
       data-testid="activity-heart-button"
       className={cn(hearted && 'border-destructive/40 text-destructive')}
     >
-      <HeartIcon aria-hidden="true" weight={hearted ? 'fill' : 'regular'} />
+      {/* size 20 (activity window chrome pass, owner mockup
+          `visor-actividad-franjas-2026-10-17.jpg`: icons slightly bigger),
+          matching the read-only/guest heart spans in `[id].astro`. */}
+      <HeartIcon aria-hidden="true" size={20} weight={hearted ? 'fill' : 'regular'} />
       <span className="sr-only">{hearted ? t.heartRemove : t.heartAdd}</span>
       <span className="tabular-nums">{count}</span>
     </Button>

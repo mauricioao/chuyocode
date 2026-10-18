@@ -289,7 +289,10 @@ export default function ShareDialog({
           className={ICON_TOOLTIP_TRIGGER_CLASS}
           onClick={onClick}
         >
-          <ShareNetworkIcon aria-hidden="true" size={16} />
+          {/* size 20 (was 16) — activity window chrome pass, matching the
+              rest of the title bar's icon-only actions (`[id].astro`'s own
+              comment on its "Presentar" icon). */}
+          <ShareNetworkIcon aria-hidden="true" size={20} />
           <span role="tooltip" id={tooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
             {labels.trigger}
           </span>
@@ -342,7 +345,9 @@ export default function ShareDialog({
             aria-describedby={tooltipId}
             className={ICON_TOOLTIP_TRIGGER_CLASS}
           >
-            <ShareNetworkIcon aria-hidden="true" size={16} />
+            {/* size 20 (was 16) — activity window chrome pass, see the
+                blocked-dialog trigger's own comment above. */}
+            <ShareNetworkIcon aria-hidden="true" size={20} />
             <span role="tooltip" id={tooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
               {labels.trigger}
             </span>

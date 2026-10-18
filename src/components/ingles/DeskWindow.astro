@@ -227,20 +227,32 @@ const {
     ],
   ]}
 >
-  {/* PART 6b (owner report: the editor's two TEXT action buttons — "Ver
-      como presentación"/"Enviar a revisión" — squeezed the title down to
-      zero width on a narrow phone, unlike the practice window's compact
-      ICON-only actions, which always fit one row): `flex-wrap` below
-      `desk:`, same breakpoint the window itself switches to a full-screen
-      sheet at, lets the actions drop to their own second row (still
-      right-aligned via `ml-auto`, which applies per flex LINE) instead of
-      collapsing the title. A no-op for every row that already fits one
-      line (the practice window, every width) — `flex-wrap` only ever
-      activates when content overflows. */}
+  {/* ACTIVITY WINDOW CHROME PASS (owner mockup
+      `visor-actividad-franjas-2026-10-17.jpg`, 2026-10-17): the titlebar is
+      now a 3-column CSS GRID (`grid-cols-[1fr_auto_1fr]`) instead of a flex
+      row — the old flex layout only ever centered the title in the
+      LEFTOVER space between the lights and the actions, which drifted
+      off-centre whenever those two groups were different widths (lights
+      ~84px vs. a wide actions row). The two outer `1fr` columns share the
+      bar's free space EQUALLY once the middle `auto` column claims what its
+      own content needs, so the title sits on the bar's real centre line
+      regardless of how wide either side is — `min-w-0` on the title column
+      (below) still lets it shrink/truncate rather than force the grid
+      wider. Also shorter now (`py-2`, was `py-3`) — the owner's "gain space
+      for the canvas" note on the mockup.
+
+      The editor's own old PART 6b problem (its two TEXT actions — "Ver
+      como presentación"/"Enviar a revisión" — squeezing the title to zero
+      width on a narrow phone) no longer needs a row-level `flex-wrap` fix:
+      below `lg:` those actions move entirely into the title column's own
+      "⋯" menu (`ActivityEditorIsland.tsx`'s own `mobileMenu`), which
+      already wraps INTERNALLY via its own `flex-wrap` — the grid row
+      simply grows to fit that column's height, no special-case needed
+      here. */}
   <div
     data-testid="desk-window-titlebar"
     data-desk-window-titlebar
-    class={`flex flex-none flex-wrap items-center gap-4 border-b border-border bg-chrome desk:flex-nowrap desk:cursor-grab ${ROW_PADDING_X} py-3`}
+    class={`grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-border bg-chrome desk:cursor-grab ${ROW_PADDING_X} py-2`}
   >
     {/* TRAFFIC LIGHTS HIT AREA (owner spec: "mejora el área donde se puede
         hacer click en los botones para cerrar, minimizar y maximizar, se
@@ -331,12 +343,16 @@ const {
         identical for it. */}
     <div
       class={titleEditable
-        ? 'flex min-w-0 flex-1 flex-wrap items-center gap-2.5'
-        /* Centered bold title (UI-kit refactor, macOS-style chrome) — only
-           the plain-text branch: the editable title above has its own
-           documented left-alignment/wrap needs (narrow-phone overlap fix,
-           see this prop's own doc) that a centered flex would fight. */
-        : 'flex min-w-0 flex-1 items-baseline justify-center gap-2.5'}>
+        ? 'flex min-w-0 flex-wrap items-center gap-2.5'
+        /* Centered bold title (UI-kit refactor, macOS-style chrome; activity
+           window chrome pass) — only the plain-text branch: the titlebar
+           itself is the 3-column grid that centers THIS WHOLE COLUMN in the
+           bar now (see the titlebar's own comment above), `justify-center`
+           here only centers this column's own children (title/chip/badge)
+           relative to each other. The editable branch keeps its own
+           left-alignment/wrap needs (narrow-phone overlap fix, see this
+           prop's own doc) that a centered flex row would fight. */
+        : 'flex min-w-0 items-baseline justify-center gap-2.5'}>
       {titleEditable ? (
         <>
           {/* SSR/no-JS + `aria-labelledby` fallback only — visually hidden,
@@ -402,7 +418,11 @@ const {
         </span>
       )}
     </div>
-    <div class="ml-auto flex flex-none items-center gap-3" id="desk-window-actions">
+    {/* `justify-self-end` (activity window chrome pass) — pins this column's
+        own content to the grid column's right edge, replacing the old
+        `ml-auto` flex push now that this is its own grid column rather than
+        a trailing flex item. */}
+    <div class="flex flex-none items-center justify-self-end gap-3" id="desk-window-actions">
       <slot name="actions" />
     </div>
   </div>
