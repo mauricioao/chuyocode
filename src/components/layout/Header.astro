@@ -384,48 +384,12 @@ const navLinks = [
 
 <script>
   // "Ordenar escritorio"/"Arrange desktop" icon wiring ("desktop" redesign
-  // PART 4) — a regular bundled module (not `is:inline`) because it needs
-  // `@lib/deskDragMath`/`@lib/ui/deskArrange`'s real imports; see this
-  // file's own header for why the button itself is hub-only and starts
-  // `hidden`, and `@lib/ui/deskArrange`'s header for the event contract
-  // this script shares with `@lib/ui/deskDrag` (the hub page's own script).
-  import { DESK_DRAG_STORAGE_KEY, parseStoredPositions } from '@lib/deskDragMath';
-  import { DESK_ARRANGE_VISIBILITY_EVENT, dispatchArrangeReset } from '@lib/ui/deskArrange';
+  // PART 4). The logic lives in `@lib/ui/deskArrangeButton`, shared with
+  // `DeskChrome.astro` (the desk host pages' own header row), which renders
+  // the same button.
+  import { initDeskArrangeButton } from '@lib/ui/deskArrangeButton';
 
-  function isDesktop(): boolean {
-    return typeof matchMedia === 'function' && matchMedia('(min-width: 1100px)').matches;
-  }
-
-  function hasStoredPositions(): boolean {
-    let raw: string | null = null;
-    try {
-      raw = localStorage.getItem(DESK_DRAG_STORAGE_KEY);
-    } catch {
-      return false;
-    }
-    return Object.keys(parseStoredPositions(raw)).length > 0;
-  }
-
-  function run(): void {
-    const button = document.getElementById('desk-arrange-button');
-    // No button on this page (not the hub), or already wired by an earlier
-    // run against this exact (persisted) node — `transition:persist` can
-    // keep the SAME button element across a hub-to-hub navigation.
-    if (!button || button.dataset.wired === 'true') return;
-    button.dataset.wired = 'true';
-
-    button.hidden = !(isDesktop() && hasStoredPositions());
-
-    document.addEventListener(DESK_ARRANGE_VISIBILITY_EVENT, (event) => {
-      const visible = (event as CustomEvent<{ visible: boolean }>).detail.visible;
-      button.hidden = !(isDesktop() && visible);
-    });
-
-    button.addEventListener('click', () => {
-      dispatchArrangeReset(document);
-      button.hidden = true;
-    });
-  }
+  const run = (): void => initDeskArrangeButton(document);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', run, { once: true });
