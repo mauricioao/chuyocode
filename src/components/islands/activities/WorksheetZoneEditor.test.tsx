@@ -168,6 +168,23 @@ describe('WorksheetZoneEditor — rendering', () => {
     expect(img.className).toContain('opacity-100');
   });
 
+  // Mobile review 2026-10-17: below `lg` the sheet stayed invisible
+  // (opacity 0 with a fully decoded image) — the image had finished loading
+  // before React attached `onLoad` (server-rendered markup, cached image),
+  // so the load event this fade waits for never reached it.
+  it('shows the canvas image when it already finished loading before the editor mounted', () => {
+    const complete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+    const naturalWidth = vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(595);
+    try {
+      render(<Harness />);
+      const img = screen.getByTestId('zone-canvas').querySelector('img') as HTMLImageElement;
+      expect(img.className).toContain('opacity-100');
+    } finally {
+      complete.mockRestore();
+      naturalWidth.mockRestore();
+    }
+  });
+
   it('shows a neutral broken-image placeholder instead of the browser glyph on error', () => {
     render(<Harness />);
     const img = screen.getByTestId('zone-canvas').querySelector('img') as HTMLImageElement;

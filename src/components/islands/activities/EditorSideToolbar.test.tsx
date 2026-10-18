@@ -295,6 +295,37 @@ describe('EditorSideToolbar — docked-inside-the-window vs. floating-the-full-v
   });
 });
 
+// Mobile review 2026-10-17 (1280×800): the worksheet tool cluster portals
+// into the rail AFTER the dock position was first computed, so the rail grew
+// from ~322px to ~514px tall while keeping the top it was given for the
+// short version — its last buttons (Guardar) ended below the window's
+// bottom edge. A docked rail re-centres whenever its own size changes.
+describe('EditorSideToolbar — docked rail re-centres when it grows', () => {
+  it('recomputes the docked position from the new rail size, not the size it had at mount', () => {
+    const observed: Array<() => void> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          observed.push(cb);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    // The rail grows (tools portaled in): 56x500 now.
+    mockRect(rail, { left: 900, top: 0, width: 56, height: 500 });
+    act(() => {
+      for (const cb of observed) cb();
+    });
+    const target = dockTargetPosition({ width: 56, height: 500 }, { left: 0, right: 1000, top: 0, bottom: 700 });
+    expect(rail.style.top).toBe(`${target.y}px`);
+    expect(rail.style.left).toBe(`${target.x}px`);
+  });
+});
+
 describe('EditorSideToolbar — dock/float toggle (the "clip")', () => {
   it('is pressed (pinned) by default, docked', () => {
     renderToolbar();

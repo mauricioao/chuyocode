@@ -136,7 +136,7 @@ export default function DeskPlayerWidget({ labels }: DeskPlayerWidgetProps) {
       id="desk-player"
       aria-label={labels.title}
       aria-busy={index === null}
-      className="ingles-glass grid w-full max-w-[320px] grid-cols-[72px_1fr] items-center gap-x-3.5 gap-y-2 p-4 desk:w-[320px]"
+      className="ingles-glass grid w-full grid-cols-[72px_1fr] content-center items-center gap-x-3.5 gap-y-2 p-4 desk:w-[320px]"
     >
       <div className="grid h-[72px] w-[72px] place-items-center rounded-[18px] bg-gradient-to-br from-[#f0664c] to-[#e24a32] shadow-[0_1px_2px_rgb(28_28_30_/_0.12),0_4px_10px_-2px_rgb(226_74_50_/_0.35)]">
         <Emoji name="headphone" size={42} />

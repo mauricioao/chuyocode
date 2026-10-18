@@ -16,6 +16,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import type { GameItem } from '@/lib/activities/gameModes';
 import { GAME_SOUND_MUTE_KEY } from '@/lib/activities/gameSounds';
 import QuizReorder from './QuizReorder';
+import { STAGE_CONTENT_MEASURE } from '@/components/islands/mechanics/scale';
 
 afterEach(cleanup);
 
@@ -37,6 +38,14 @@ beforeEach(() => {
 });
 
 describe('QuizReorder', () => {
+  // Mobile review 2026-10-17: on a wide stage the word tray hugged the left
+  // edge while the sentence line sat centred at the reading measure.
+  it('caps the word tray at the same centred measure as the sentence line', () => {
+    render(<QuizReorder lang="es" items={items} seed="block-1" />);
+    const trayClasses = screen.getByTestId('reorder-tray').className.split(' ');
+    for (const token of STAGE_CONTENT_MEASURE.split(' ')) expect(trayClasses).toContain(token);
+  });
+
   it('renders nothing for an empty item list', () => {
     const { container } = render(<QuizReorder lang="es" items={[]} seed="block-1" />);
     expect(container.firstChild).toBeNull();

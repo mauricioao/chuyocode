@@ -15,6 +15,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import type { Payload } from '@/lib/exercisePayload';
 import { GAME_SOUND_MUTE_KEY } from '@/lib/activities/gameSounds';
 import QuizCloze from './QuizCloze';
+import { STAGE_CONTENT_MEASURE } from '@/components/islands/mechanics/scale';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -59,6 +60,22 @@ const TWO_BLANK_PAYLOAD: Payload = {
 };
 
 describe('QuizCloze', () => {
+  // Mobile review 2026-10-17: on a wide stage the word tray hugged the left
+  // edge while the sentence sat centred at the reading measure.
+  // Mobile review 2026-10-17: when a sentence wraps (phones), the dashed
+  // blanks of two consecutive lines touched — the blank is as tall as the
+  // line itself. A vertical margin keeps a gap between wrapped lines.
+  it('keeps a vertical gap around each blank so wrapped lines never touch', () => {
+    render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+    expect(screen.getByTestId('cloze-blank-slot-s0b0').className.split(' ')).toContain('my-1');
+  });
+
+  it('caps the word tray at the same centred measure as the sentence', () => {
+    render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+    const trayClasses = screen.getByTestId('cloze-tray').className.split(' ');
+    for (const token of STAGE_CONTENT_MEASURE.split(' ')) expect(trayClasses).toContain(token);
+  });
+
   it('renders nothing when the payload has no playable sentence', () => {
     const { container } = render(<QuizCloze lang="es" payload={{ pools: {}, slots: [] }} seed="block-1" />);
     expect(container.firstChild).toBeNull();

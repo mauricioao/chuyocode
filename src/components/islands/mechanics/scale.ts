@@ -209,6 +209,16 @@ export const FLOATING_CHECK_BAR_EDITOR_OFFSET = 'lg:right-20';
 export const STAGE_BOTTOM_RESERVE_CLASS = 'pb-20';
 
 /**
+ * End padding reserved on an in-flow row that shares the bottom edge with
+ * {@link FLOATING_CHECK_BAR_CLASS} (the practice footer): the bar floats over
+ * that row's bottom-right corner, so without this the row's right-aligned
+ * hint/score ran under the Comprobar capsule (mobile review 2026-10-17, cut
+ * on both sides at 375px). 11rem = the bar's own 1rem inset + the widest
+ * capsule it shows ("Ver resultado") + a gap.
+ */
+export const FLOATING_CHECK_BAR_RESERVE_END = 'pr-44';
+
+/**
  * SAFE INSET (visual-polish pass, owner bug: "el borde de cada ejercicio se
  * corta" — a correct row's own ring and its corner `GradeMark` were clipped
  * by the scroll container they sit in, because that container's edge sat

@@ -85,6 +85,7 @@ import { cn } from '@/lib/utils';
 import { ROW_PADDING_X } from '@/lib/ui/layout';
 import {
   FLOATING_CHECK_BAR_CLASS,
+  FLOATING_CHECK_BAR_RESERVE_END,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTAINER_SIZE,
 } from '@/components/islands/mechanics/scale';
@@ -694,7 +695,13 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
       {showCombinedFooter && (
         <div
           data-testid="practice-footer"
-          className={cn('flex flex-none flex-wrap items-center gap-3 border-t border-border py-3', ROW_PADDING_X)}
+          className={cn(
+            'flex flex-none flex-wrap items-center gap-3 border-t border-border py-3',
+            ROW_PADDING_X,
+            // The floating Comprobar sits over this row's bottom-right
+            // corner: keep the right-aligned hint/score clear of it.
+            FLOATING_CHECK_BAR_RESERVE_END,
+          )}
         >
           {/* Zoom, left — only for worksheet tabs, but mounted for the whole
               activity's lifetime (see this file's own header) so toggling
