@@ -187,7 +187,15 @@ test.describe('focus behaviour on open (PART 6a bugfix)', () => {
 });
 
 test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
-  test('the worksheet canvas fills the space between the title bar and the bottom bar (no empty gap)', async ({
+  // ACTIVITY WINDOW CHROME PASS (owner mockup
+  // `visor-actividad-franjas-2026-10-17.jpg`, 2026-10-17): the old rule —
+  // the canvas reaches the FOOTER's own top edge, which reserved its own
+  // row height below the canvas — is gone. The footer is now a borderless
+  // `absolute` overlay (`ActivityPracticeIsland.tsx`'s own header) that
+  // floats OVER the canvas instead of pushing it up, so the canvas now
+  // reaches the WINDOW's own bottom edge, and the floating controls simply
+  // sit on top of it.
+  test('the worksheet canvas fills the space down to the window\'s own bottom edge (the floating footer overlays it, reserves no row)', async ({
     page,
   }) => {
     const path = await findInglesActivityPath(page);
@@ -203,16 +211,39 @@ test.describe('phone layout (PART 6a bugfix, < the `desk:` breakpoint)', () => {
     );
 
     const canvasBox = await viewport.boundingBox();
-    const footerBox = await page.locator('[data-testid="practice-footer"]').boundingBox();
+    const dialogBox = await page.locator('[data-desk-window]').boundingBox();
+    expect(canvasBox).not.toBeNull();
+    expect(dialogBox).not.toBeNull();
+    if (!canvasBox || !dialogBox) return;
+
+    // The canvas must reach all the way down to (within a few px of) the
+    // WINDOW's own bottom edge — on a phone the window is the full-screen
+    // sheet itself (inset 0), so this is effectively the viewport's bottom.
+    const gap = dialogBox.y + dialogBox.height - (canvasBox.y + canvasBox.height);
+    expect(gap).toBeLessThan(8);
+  });
+
+  test('the floating footer overlays the canvas instead of sitting below it (no reserved row)', async ({ page }) => {
+    const path = await findInglesActivityPath(page);
+    test.skip(path === null, 'Need at least one published activity for a real guest-play id');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(path!);
+
+    const viewport = page.locator('[data-testid="practice-mobile-viewport"]');
+    const footer = page.locator('[data-testid="practice-footer"]');
+    test.skip((await viewport.count()) === 0 || (await footer.count()) === 0, 'Nothing to measure here');
+
+    const canvasBox = await viewport.boundingBox();
+    const footerBox = await footer.boundingBox();
     expect(canvasBox).not.toBeNull();
     expect(footerBox).not.toBeNull();
     if (!canvasBox || !footerBox) return;
 
-    // The canvas must reach all the way down to (within a few px of) the
-    // footer's own top edge — the old `aspectRatio`-sized box left a large
-    // empty gap here instead.
-    const gap = footerBox.y - (canvasBox.y + canvasBox.height);
-    expect(gap).toBeLessThan(8);
+    // The footer's own top edge must land INSIDE the canvas's vertical
+    // range (it overlays it), not below the canvas's bottom edge (which is
+    // what an in-flow, space-reserving row would do).
+    expect(footerBox.y).toBeLessThan(canvasBox.y + canvasBox.height);
   });
 
   // N6 (fewer equal-weight buttons while playing, 2026-10-06) + N6 FOLLOW-UP

@@ -203,6 +203,20 @@ function DesktopWorksheetCamera({
   // (Bug 2, "free panning in the practice player"), same reasoning as every
   // other re-clamp below: only `fitCamera`/"Ajustar" itself stays on the
   // strict bound, since it is the one action that deliberately re-centers.
+  //
+  // FLOATING FOOTER (activity window chrome pass): this viewport now fills
+  // the FULL tab body (the old bordered footer row no longer reserves its
+  // own flex-column height — `ActivityPracticeIsland.tsx`'s own header) —
+  // "Ajustar" fits the whole image into that full height on purpose,
+  // DELIBERATELY not subtracting room for the floating zoom cluster at the
+  // bottom-left: free panning is already unconditional here (the LOOSE
+  // bound above, Bug 2), so if the cluster ever sits over a zone the
+  // learner needs, a small drag reveals it — the same gesture already
+  // needed to see past any screen edge at a tight zoom. Reserving a
+  // permanent blank margin under "Ajustar" for a cluster that is usually
+  // clear of the sheet (it floats over dotted canvas, not the image, at
+  // most zoom levels) would shrink the "worksheet looks bigger on entry"
+  // win the floating footer exists for.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
@@ -426,7 +440,16 @@ function DesktopWorksheetCamera({
 
       {toolbarSlot &&
         createPortal(
-          <div className="flex items-center gap-1" role="group" aria-label={t.zoomLevel}>
+          // GLASS CAPSULE (activity window chrome pass): the ONE shared
+          // floating-glass recipe (`global.css`'s own `.glass-floating`,
+          // reused byte-identical from `WorksheetZoneEditor.tsx`'s own
+          // canvas zoom cluster) — never a second, invented glass look, per
+          // the owner's "misma transparencia que la franja de abajo" note.
+          <div
+            className="glass-floating flex h-8 items-center gap-1 rounded-(--radius-pill) px-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)"
+            role="group"
+            aria-label={t.zoomLevel}
+          >
             <Button
               type="button"
               variant="ghost"

@@ -240,11 +240,15 @@ export default function WorksheetPracticePlayerMobile({
           // fit WIDTH, whatever height that left), which is why it left a
           // large empty gap below it inside the window's now fixed-height
           // body. `min-h-0 flex-1` above fills the actual space between the
-          // title bar and the footer instead — the exact same approach the
-          // DESKTOP camera viewport (`WorksheetPracticePlayer.tsx`'s own
-          // `practice-camera-viewport`) already uses. `fitCamera`'s own
-          // `ResizeObserver` (below) already recomputes the image's scale
-          // from whatever box size this ends up with, so nothing else here
+          // title bar and the window's own bottom edge instead — the exact
+          // same approach the DESKTOP camera viewport
+          // (`WorksheetPracticePlayer.tsx`'s own `practice-camera-viewport`)
+          // already uses. Since the activity window chrome pass (2026-10-17)
+          // the footer is a floating overlay rather than an in-flow sibling,
+          // so this box now fills the FULL tab body down to the window's own
+          // bottom edge. `fitCamera`'s own `ResizeObserver` (below) already
+          // recomputes the image's scale from whatever box size this ends
+          // up with, so nothing else here
           // needs to change for the sheet to still fit correctly.
           // See the file header's "Gesture ownership": at fit scale, a
           // single finger is left to the browser's own vertical scroll;
