@@ -425,13 +425,16 @@ const faviconSvg =
             var ariaLabel = (opener.getAttribute('aria-label') || '').trim();
             var text = (opener.textContent || '').trim();
             var title = ariaLabel || text;
+            // "Otra actividad" bugfix (owner report): same `closeSelf`
+            // logic as `@lib/ui/deskWindow.ts#initDeskOpenWindowLinks` —
+            // `data-desk-open-window="replace"` additionally asks the host
+            // to close THIS window right after it opens/focuses `href`.
+            var message = { source: 'desk-window', type: 'open-window', href: href, title: title || null };
+            if (opener.getAttribute('data-desk-open-window') === 'replace') message.closeSelf = true;
             try {
               var parent = window.parent;
               if (!parent || parent === window) return;
-              parent.postMessage(
-                { source: 'desk-window', type: 'open-window', href: href, title: title || null },
-                window.location.origin,
-              );
+              parent.postMessage(message, window.location.origin);
             } catch (e) {
               // Best-effort — a sandboxed or otherwise unusual embedding
               // context just loses this one message, same posture as

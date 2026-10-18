@@ -192,7 +192,20 @@ export default function GameResult({
         <div className="flex flex-col items-center gap-2">
           {nextHref ? (
             <Button asChild className="min-h-11">
-              <a href={nextHref} data-testid="game-result-next">
+              {/* "Otra actividad" bugfix (owner report): inside a desk
+                  window, this used to be a plain in-iframe navigation —
+                  the host's own click-race defensive net
+                  (`deskWindowManager.ts`) then opened the community route
+                  as a SEPARATE window and bounced this frame back onto its
+                  own href, leaving the finished activity window open,
+                  reloading, behind it. `data-desk-open-window="replace"`
+                  is the embedded-side opener's own marker
+                  (`@lib/ui/deskWindow.ts#initDeskOpenWindowLinks`): it asks
+                  the host to open/focus the community window AND close
+                  THIS one. Outside a desk window (standalone page, mobile,
+                  guest) the attribute is inert — it stays the exact plain
+                  link it always was. */}
+              <a href={nextHref} data-testid="game-result-next" data-desk-open-window="replace">
                 {t.nextActivity}
               </a>
             </Button>

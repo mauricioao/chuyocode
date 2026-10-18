@@ -149,6 +149,21 @@ describe('GameResult', () => {
       fireEvent.click(screen.getByTestId('game-result-play-again'));
       expect(onPlayAgain).toHaveBeenCalledOnce();
     });
+
+    // Bugfix (owner report): inside a desk window, clicking "Otra actividad"
+    // left the finished activity window open behind the newly-opened
+    // community window. `data-desk-open-window="replace"` is the embedded
+    // opener's own marker (`deskWindow.ts#initDeskOpenWindowLinks`) — it asks
+    // the host to open/focus the community window AND close this one.
+    // Outside a desk window the attribute is inert (`initDeskOpenWindowLinks`
+    // only ever acts in embedded mode), so this stays a plain link there.
+    it('marks "Otra actividad" with data-desk-open-window="replace" so the host also closes this window', () => {
+      render(
+        <GameResult lang="es" correct={3} total={3} nextHref="/es/ingles/actividades?nivel=a1" onPlayAgain={() => {}} />,
+      );
+      const next = screen.getByTestId('game-result-next');
+      expect(next.getAttribute('data-desk-open-window')).toBe('replace');
+    });
   });
 
   describe('"Repasar las que fallé"', () => {
