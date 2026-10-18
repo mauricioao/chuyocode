@@ -82,14 +82,25 @@ function upstreamUnavailable(): Response {
   return new Response(JSON.stringify({ error: 'weather_unavailable' }), { status: 502, headers });
 }
 
-/** `User-Agent` MET's terms require: app name/version + a contact (site owner's own public support address, falling back to the site URL when that env var is unset). */
-function userAgent(): string {
-  const contact =
-    import.meta.env.LEGAL_OWNER_EMAIL || process.env.LEGAL_OWNER_EMAIL || 'https://chuyocode.netlify.app';
-  return `ChuyoCode/1.0 (+https://chuyocode.netlify.app; ${contact})`;
+/**
+ * `User-Agent` MET's terms require: app name/version + a contact (site
+ * owner's own public support address, falling back to the identifying site
+ * URL when that env var is unset).
+ *
+ * Domain-switch safety (prelaunch SEO audit): the identifying URL follows
+ * `site` (`Astro.site`/the API context's own `site`, derived from Netlify's
+ * `URL` build env var — see `astro.config.mjs`), never a literal
+ * `chuyocode.netlify.app` hardcode — same `site ?? FALLBACK` pattern as
+ * `sitemap.xml.ts`/`robots.txt.ts`. The literal fallback only covers a local
+ * run or test with no `site` configured.
+ */
+function userAgent(site: URL | undefined): string {
+  const origin = (site ?? new URL('https://chuyocode.netlify.app/')).href;
+  const contact = import.meta.env.LEGAL_OWNER_EMAIL || process.env.LEGAL_OWNER_EMAIL || origin;
+  return `ChuyoCode/1.0 (+${origin}; ${contact})`;
 }
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, site }) => {
   const lat = parseCoordinate(url.searchParams.get('lat'), -90, 90);
   const lon = parseCoordinate(url.searchParams.get('lon'), -180, 180);
   const city = sanitizeCity(url.searchParams.get('city'));
@@ -102,7 +113,7 @@ export const GET: APIRoute = async ({ url }) => {
 
   let body: unknown;
   try {
-    const response = await fetch(upstreamUrl, { headers: { 'user-agent': userAgent() } });
+    const response = await fetch(upstreamUrl, { headers: { 'user-agent': userAgent(site) } });
     if (!response.ok) return upstreamUnavailable();
     body = await response.json();
   } catch {

@@ -7,10 +7,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GET, ALL } from './clima';
 
-function ctx(query: Record<string, string>) {
+function ctx(query: Record<string, string>, site?: string) {
   const url = new URL('https://chuyocode.test/api/clima');
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
-  return { url } as unknown as Parameters<typeof GET>[0];
+  return { url, site: site ? new URL(site) : undefined } as unknown as Parameters<typeof GET>[0];
 }
 
 function metResponse(timeseries: unknown[]) {
@@ -89,6 +89,26 @@ describe('GET /api/clima — success', () => {
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
     const [, init] = fetchMock.mock.calls[0];
     expect(init.headers['user-agent']).toContain('ChuyoCode');
+  });
+
+  // Domain-switch safety (prelaunch SEO audit): the identifying URL in the
+  // User-Agent must follow the real production domain (`Astro.site`, set
+  // from Netlify's `URL` build env var), never a literal `netlify.app`
+  // hardcode — same reasoning as `sitemap.xml.ts`/`robots.txt.ts`'s own
+  // `site ?? FALLBACK` pattern.
+  it("identifies itself with the site's real domain when `site` is set", async () => {
+    await GET(ctx(VALID_QUERY, 'https://chuyocode.com/'));
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['user-agent']).toContain('chuyocode.com');
+    expect(init.headers['user-agent']).not.toContain('netlify.app');
+  });
+
+  it('falls back to the literal Netlify domain when `site` is undefined', async () => {
+    await GET(ctx(VALID_QUERY));
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['user-agent']).toContain('chuyocode.netlify.app');
   });
 
   it('calls only the fixed MET host, never interpolating city into the URL', async () => {
