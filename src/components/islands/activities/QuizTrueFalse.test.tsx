@@ -14,6 +14,20 @@ const items: TrueFalseItem[] = [
   { id: 's2', statement: 'The sky is green.', isTrue: false },
 ];
 
+describe('QuizTrueFalse — question image (owner decision 2026-10-16 follow-up)', () => {
+  const promptImages = { s1: { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 } };
+
+  it("shows the current statement's own prompt image when its slot has one — TrueFalseItem.id IS the slot id", () => {
+    render(<QuizTrueFalse lang="es" items={items} promptImages={promptImages} />);
+    expect(screen.getByTestId('prompt-image')).toBeTruthy();
+  });
+
+  it('renders nothing when the block has no promptImages at all', () => {
+    render(<QuizTrueFalse lang="es" items={items} />);
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+});
+
 describe('QuizTrueFalse', () => {
   it('shows the first statement, counter, and timer at 00:00', () => {
     render(<QuizTrueFalse lang="es" items={items} />);

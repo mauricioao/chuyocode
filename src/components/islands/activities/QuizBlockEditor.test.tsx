@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
 import type { Payload } from '@/lib/exercisePayload';
-import type { QuizTemplate } from '@/lib/activities/blocks';
+import type { QuizTemplate, PromptImageRef } from '@/lib/activities/blocks';
 
 afterEach(() => {
   cleanup();
@@ -42,6 +42,36 @@ function Harness({ initialPayload }: { initialPayload: Payload }) {
       selectedSlotId={selectedSlotId}
       onSelectSlot={setSelectedSlotId}
       onPayloadChange={setPayload}
+    />
+  );
+}
+
+/** Same harness, but also wiring `promptImages`/`imagesEnabled` — the question-image-carrying half of `BlockList.tsx`'s own real mount, needed only by tests that touch a question's own context image (owner decision 2026-10-16 follow-up). `onPayloadChange` now always reports payload AND promptImages together (lost-update fix) — see that prop's own header in `QuizBlockEditor.tsx`. */
+function PromptImagesHarness({
+  initialPayload,
+  initialPromptImages,
+}: {
+  initialPayload: Payload;
+  initialPromptImages?: Record<string, PromptImageRef>;
+}) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [promptImages, setPromptImages] = useState<Record<string, PromptImageRef> | undefined>(
+    initialPromptImages,
+  );
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={(nextPayload, nextPromptImages) => {
+        setPayload(nextPayload);
+        setPromptImages(nextPromptImages);
+      }}
+      promptImages={promptImages}
+      imagesEnabled
     />
   );
 }
@@ -393,6 +423,27 @@ describe('QuizBlockEditor — Varios juegos: duplicating a question (advanced ed
     // The original (still manually advanced) is the only `QuestionCard` — the
     // duplicate is `choice` too, which the simple row shows directly.
     expect(screen.getAllByTestId(/^question-card-/)).toHaveLength(1);
+  });
+
+  it("carries the original question's own context image to the duplicate — same stored path, no new upload (owner decision 2026-10-16 follow-up)", () => {
+    const image: PromptImageRef = { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 };
+    render(<PromptImagesHarness initialPayload={ONE_QUESTION_PAYLOAD} initialPromptImages={{ s1: image }} />);
+
+    fireEvent.click(screen.getByTestId('varios-advanced-toggle-s1'));
+    fireEvent.click(screen.getByTestId('question-duplicate-s1'));
+
+    const rows = screen.getAllByTestId(/^varios-row-/);
+    expect(rows).toHaveLength(2);
+    const newSlotId = rows
+      .map((row) => row.getAttribute('data-testid')!.replace('varios-row-', ''))
+      .find((id) => id !== 's1')!;
+    expect(newSlotId).toBeTruthy();
+
+    // The duplicate stays a plain row (no advanced editor forced on it), so
+    // its own `QuestionImageField` thumbnail is reachable directly — same
+    // `path` as the original, never a freshly uploaded one.
+    const thumb = screen.getByTestId(`varios-question-image-thumb-${newSlotId}`);
+    expect(thumb.getAttribute('src')).toContain(encodeURIComponent(image.path));
   });
 });
 

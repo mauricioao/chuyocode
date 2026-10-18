@@ -39,7 +39,6 @@ import type { QuizBlock } from '@/lib/activities/blocks';
 import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
 import { blocksForStep } from '@/lib/exerciseBlocks';
-import { imagePreviewUrl } from '@/lib/activities/paths';
 import { getSlotItems, poolPlacement, type ExerciseResponse } from '@/lib/exercisePayload';
 import {
   deriveGameItems,
@@ -55,6 +54,7 @@ import {
 import { rendererFor } from '@/components/islands/mechanics/registry';
 import UnavailableRenderer from '@/components/islands/mechanics/UnavailableRenderer';
 import SlotExplanation from '@/components/islands/mechanics/SlotExplanation';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 import QuizGameModeSwitcher from './QuizGameModeSwitcher';
 import QuizFlashcards from './QuizFlashcards';
 import QuizMatching from './QuizMatching';
@@ -165,7 +165,16 @@ export default function QuizBlockPractice({
         {modes.length > 1 && (
           <QuizGameModeSwitcher lang={lang} modes={modes} active={effectiveMode} onChange={onModeChange} />
         )}
-        {effectiveMode === 'cards' && <QuizFlashcards lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'cards' && (
+          <QuizFlashcards lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+        )}
+        {/* `match`/`reorder`/`cloze`/`groupsort` are built from PAIRS,
+            SENTENCES or GROUPS rather than one question at a time — there is
+            no single "prompt" card to show this question's own context
+            image against, so these four intentionally never render it
+            (owner decision 2026-10-16 follow-up, "Varios juegos" image
+            scope). `PromptImage`'s own header repeats this for anyone
+            landing there first. */}
         {effectiveMode === 'match' && (
           <QuizMatching
             lang={lang}
@@ -186,16 +195,33 @@ export default function QuizBlockPractice({
             guest={guest}
           />
         )}
-        {effectiveMode === 'speak' && <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} />}
-        {effectiveMode === 'wheel' && <QuizWheel lang={lang} items={gameItems} seed={block.id} />}
+        {effectiveMode === 'speak' && (
+          <QuizSpeakingCards lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+        )}
+        {effectiveMode === 'wheel' && (
+          <QuizWheel lang={lang} items={gameItems} seed={block.id} promptImages={block.promptImages} />
+        )}
         {effectiveMode === 'anagram' && (
-          <QuizAnagram lang={lang} items={anagramEligible(gameItems)} seed={block.id} />
+          <QuizAnagram
+            lang={lang}
+            items={anagramEligible(gameItems)}
+            seed={block.id}
+            promptImages={block.promptImages}
+          />
         )}
-        {effectiveMode === 'hangman' && <QuizHangman lang={lang} items={hangmanEligible(gameItems)} />}
+        {effectiveMode === 'hangman' && (
+          <QuizHangman lang={lang} items={hangmanEligible(gameItems)} promptImages={block.promptImages} />
+        )}
         {effectiveMode === 'truefalse' && (
-          <QuizTrueFalse lang={lang} items={deriveTrueFalseItems(payload, seedFromString(block.id))} />
+          <QuizTrueFalse
+            lang={lang}
+            items={deriveTrueFalseItems(payload, seedFromString(block.id))}
+            promptImages={block.promptImages}
+          />
         )}
-        {effectiveMode === 'openbox' && <QuizOpenBox lang={lang} items={gameItems} />}
+        {effectiveMode === 'openbox' && (
+          <QuizOpenBox lang={lang} items={gameItems} promptImages={block.promptImages} />
+        )}
         {effectiveMode === 'cloze' && (
           <QuizCloze
             lang={lang}
@@ -268,16 +294,10 @@ export default function QuizBlockPractice({
                 decision 2026-10-16, `blocks.ts`'s `QuizBlock.promptImages`)
                 — shown above the prompt, not interactive, never through the
                 worksheet camera/zoom/stage layer. `undefined` = none, the
-                common case. */}
-            {block.promptImages?.[slot.id] && (
-              <FadeImage
-                data-testid={`quiz-slot-prompt-image-${slot.id}`}
-                src={imagePreviewUrl(block.promptImages[slot.id]!.path)}
-                alt=""
-                className="max-h-48 w-full rounded-md object-contain"
-                placeholderClassName="h-32 w-full rounded-md"
-              />
-            )}
+                common case. Shared `PromptImage` (`mechanics/PromptImage.tsx`)
+                — every slot is visible at once in THIS mode, so it keeps its
+                own per-slot `data-testid` rather than the shared default. */}
+            <PromptImage image={block.promptImages?.[slot.id]} data-testid={`quiz-slot-prompt-image-${slot.id}`} />
 
             {/* D4 "Escuchar/Listen": one SpeakButton per question, same
                 placement rule as `ExerciseIsland`'s own per-step one. */}

@@ -20,13 +20,17 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import type { GameItem } from '@/lib/activities/gameModes';
+import type { PromptImageRef } from '@/lib/activities/blocks';
+import PromptImage from '@/components/islands/mechanics/PromptImage';
 
 export interface QuizOpenBoxProps {
   lang: Lang;
   items: readonly GameItem[];
+  /** This block's own `promptImages` map (owner decision 2026-10-16 follow-up), keyed by slot id — `undefined` = no question images authored, the common case. Display-only; see `PromptImage`'s own header. */
+  promptImages?: Record<string, PromptImageRef>;
 }
 
-export default function QuizOpenBox({ lang, items }: QuizOpenBoxProps) {
+export default function QuizOpenBox({ lang, items, promptImages }: QuizOpenBoxProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
 
@@ -95,6 +99,7 @@ export default function QuizOpenBox({ lang, items }: QuizOpenBoxProps) {
           data-testid="openbox-card"
           className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center"
         >
+          <PromptImage image={promptImages?.[active.id]} />
           <p className="text-lg font-semibold text-foreground sm:text-xl">{active.prompt}</p>
           <SpeakButton text={active.prompt} lang={lang} />
 

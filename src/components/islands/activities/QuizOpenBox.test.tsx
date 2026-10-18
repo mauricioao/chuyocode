@@ -12,6 +12,22 @@ const items: GameItem[] = [
   { id: 's3', prompt: 'What time is it?', answer: 'noon' },
 ];
 
+describe('QuizOpenBox — question image (owner decision 2026-10-16 follow-up)', () => {
+  const promptImages = { s2: { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 } };
+
+  it("shows the opened box's own prompt image when its slot has one", () => {
+    render(<QuizOpenBox lang="es" items={items} promptImages={promptImages} />);
+    fireEvent.click(screen.getByTestId('openbox-box-s2'));
+    expect(screen.getByTestId('prompt-image')).toBeTruthy();
+  });
+
+  it('renders nothing when the opened box has no prompt image', () => {
+    render(<QuizOpenBox lang="es" items={items} promptImages={promptImages} />);
+    fireEvent.click(screen.getByTestId('openbox-box-s1'));
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+});
+
 describe('QuizOpenBox', () => {
   it('renders one numbered box per item, none opened yet', () => {
     render(<QuizOpenBox lang="es" items={items} />);

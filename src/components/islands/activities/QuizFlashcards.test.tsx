@@ -12,6 +12,26 @@ const items: GameItem[] = [
   { id: 's3', prompt: 'How many days in a week?', answer: 'seven' },
 ];
 
+describe('QuizFlashcards — question image (owner decision 2026-10-16 follow-up)', () => {
+  const promptImages = { s1: { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 } };
+
+  it("shows the current card's own prompt image on the front face when its slot has one", () => {
+    render(<QuizFlashcards lang="es" items={items} seed="block-1" promptImages={promptImages} />);
+    expect(within(screen.getByTestId('flashcard-front')).getByTestId('prompt-image')).toBeTruthy();
+  });
+
+  it('renders nothing once a card with no prompt image is current', () => {
+    render(<QuizFlashcards lang="es" items={items} seed="block-1" promptImages={promptImages} />);
+    fireEvent.click(screen.getByTestId('flashcards-next')); // -> s2, no image
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+
+  it('renders nothing when the block has no promptImages at all (every block before this field existed)', () => {
+    render(<QuizFlashcards lang="es" items={items} seed="block-1" />);
+    expect(screen.queryByTestId('prompt-image')).toBeNull();
+  });
+});
+
 describe('QuizFlashcards', () => {
   it('shows the first card front-side, with the answer face hidden from assistive tech', () => {
     render(<QuizFlashcards lang="es" items={items} seed="block-1" />);
