@@ -14,6 +14,7 @@
  * itself (`.has()` guard), so a route's own, presumably more specific,
  * choice always wins over this blanket default.
  */
+import { getPosthogHost } from './posthog';
 
 /**
  * The target Content-Security-Policy, shipped `Report-Only` for now so
@@ -25,64 +26,80 @@
  *
  * Every non-`'self'`/non-generic source is listed because something in
  * `src/` actually uses it; see the reason beside each one.
+ *
+ * UNLIKE every other third-party origin below (all allowed unconditionally,
+ * since they cost nothing while unused), PostHog's host is added ONLY while
+ * `getPosthogHost()` returns one — i.e. only once `PUBLIC_POSTHOG_KEY` is
+ * actually set (owner decision: PostHog reaches a different kind of data —
+ * product analytics on a minors-used site — than the others, so its CSP
+ * footprint stays zero rather than merely unused until configured).
  */
-const REPORT_ONLY_CSP = [
-  "default-src 'self'",
-  // Astro's inline per-island hydration bootstrap scripts have no nonce/hash
-  // yet (that's a follow-up); 'unsafe-inline' keeps them working meanwhile.
-  // Cloudflare Turnstile needs its widget script allowed ahead of time.
-  // Cloudflare Web Analytics' beacon script (`BaseLayout.astro`) is allowed
-  // unconditionally too, same posture as every other directive here — it is
-  // simply unused while PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset.
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
-  // Astro/Tailwind emit inline <style> for component-scoped CSS; Google Fonts
-  // is loaded as a <link> stylesheet.
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  // Sanity-hosted images (course/activity/book covers via @sanity/image-url),
-  // Supabase Storage media (`src/lib/exerciseMedia.ts` allow-lists the
-  // project's storage host alongside Sanity's CDN for the SAME media, so
-  // img-src must allow both, not just Sanity), Google account avatars
-  // (`lh3.googleusercontent.com`), and data:/blob: for inline-encoded and
-  // client-generated images.
-  "img-src 'self' data: blob: https://*.supabase.co https://cdn.sanity.io https://lh3.googleusercontent.com",
-  // Google Fonts' font files.
-  'font-src \'self\' https://fonts.gstatic.com',
-  // Supabase REST/Auth/Storage calls (fetch/XHR from the browser client).
-  // No `wss://` — grepped: nothing in this codebase uses Supabase Realtime
-  // (`.channel(`) today, so there is nothing to allow a websocket for yet.
-  // Sentry's ingest endpoint (error reporting, `sentry.client.config.ts`):
-  // allowed unconditionally, same as every other directive here — it is
-  // simply unused while PUBLIC_SENTRY_DSN is unset. Both known SaaS ingest
-  // host shapes are covered: the plain `o<id>.ingest.sentry.io` and the
-  // regionalized `o<id>.ingest.<region>.sentry.io` (today: us, de).
-  // Cloudflare Web Analytics' own reporting origin (unused while
-  // PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset, same posture as above).
-  "connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io https://cloudflareinsights.com",
-  // Exercise audio playback streams from Sanity assets and Supabase storage.
-  "media-src 'self' https://cdn.sanity.io https://*.supabase.co",
-  // Course/news embeds (YouTube nocookie, Vimeo) and Turnstile's widget iframe.
-  "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com",
-  // pdf.js's worker is bundled locally (loaded as a same-origin blob: Worker).
-  "worker-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  // Google sign-in: entrar's <form> posts to /api/auth/google, which 303s to
-  // Supabase's own /auth/v1/authorize, which 303s on to accounts.google.com.
-  "form-action 'self' https://*.supabase.co https://accounts.google.com",
-  "frame-ancestors 'self'",
-  // NOT `upgrade-insecure-requests` here: CSP3 §6.2 (and MDN) say browsers
-  // ignore that directive entirely in a Report-Only policy and log a
-  // console error about it on every single page load. It belongs in the
-  // ENFORCED policy (`applySecurityHeaders`'s `content-security-policy`
-  // header, below) once this one is enforced instead of report-only.
-  // Both travel together, pointed at the SAME endpoint: `report-to` is the
-  // modern Reporting API directive (Chromium only), `report-uri` is the
-  // legacy one every browser still honors (Firefox/Safari never shipped
-  // report-to). The `report-to` value names the `Reporting-Endpoints` entry
-  // set below, not a URL directly.
-  'report-to csp-endpoint',
-  'report-uri /api/csp-report',
-].join('; ');
+function reportOnlyCsp(): string {
+  const posthogHost = getPosthogHost();
+  const scriptSrcExtra = posthogHost ? ` ${posthogHost}` : '';
+  const connectSrcExtra = posthogHost ? ` ${posthogHost}` : '';
+
+  return [
+    "default-src 'self'",
+    // Astro's inline per-island hydration bootstrap scripts have no nonce/hash
+    // yet (that's a follow-up); 'unsafe-inline' keeps them working meanwhile.
+    // Cloudflare Turnstile needs its widget script allowed ahead of time.
+    // Cloudflare Web Analytics' beacon script (`BaseLayout.astro`) is allowed
+    // unconditionally too, same posture as every other directive here — it is
+    // simply unused while PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset. PostHog's
+    // host (`posthog-js`, loaded from `config.host` itself) is added only
+    // while it is actually configured — see this function's own header.
+    `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com${scriptSrcExtra}`,
+    // Astro/Tailwind emit inline <style> for component-scoped CSS; Google Fonts
+    // is loaded as a <link> stylesheet.
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    // Sanity-hosted images (course/activity/book covers via @sanity/image-url),
+    // Supabase Storage media (`src/lib/exerciseMedia.ts` allow-lists the
+    // project's storage host alongside Sanity's CDN for the SAME media, so
+    // img-src must allow both, not just Sanity), Google account avatars
+    // (`lh3.googleusercontent.com`), and data:/blob: for inline-encoded and
+    // client-generated images.
+    "img-src 'self' data: blob: https://*.supabase.co https://cdn.sanity.io https://lh3.googleusercontent.com",
+    // Google Fonts' font files.
+    'font-src \'self\' https://fonts.gstatic.com',
+    // Supabase REST/Auth/Storage calls (fetch/XHR from the browser client).
+    // No `wss://` — grepped: nothing in this codebase uses Supabase Realtime
+    // (`.channel(`) today, so there is nothing to allow a websocket for yet.
+    // Sentry's ingest endpoint (error reporting, `sentry.client.config.ts`):
+    // allowed unconditionally, same as every other directive here — it is
+    // simply unused while PUBLIC_SENTRY_DSN is unset. Both known SaaS ingest
+    // host shapes are covered: the plain `o<id>.ingest.sentry.io` and the
+    // regionalized `o<id>.ingest.<region>.sentry.io` (today: us, de).
+    // Cloudflare Web Analytics' own reporting origin (unused while
+    // PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset, same posture as above). PostHog's
+    // host is added only while configured — see this function's own header.
+    `connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io https://cloudflareinsights.com${connectSrcExtra}`,
+    // Exercise audio playback streams from Sanity assets and Supabase storage.
+    "media-src 'self' https://cdn.sanity.io https://*.supabase.co",
+    // Course/news embeds (YouTube nocookie, Vimeo) and Turnstile's widget iframe.
+    "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com",
+    // pdf.js's worker is bundled locally (loaded as a same-origin blob: Worker).
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    // Google sign-in: entrar's <form> posts to /api/auth/google, which 303s to
+    // Supabase's own /auth/v1/authorize, which 303s on to accounts.google.com.
+    "form-action 'self' https://*.supabase.co https://accounts.google.com",
+    "frame-ancestors 'self'",
+    // NOT `upgrade-insecure-requests` here: CSP3 §6.2 (and MDN) say browsers
+    // ignore that directive entirely in a Report-Only policy and log a
+    // console error about it on every single page load. It belongs in the
+    // ENFORCED policy (`applySecurityHeaders`'s `content-security-policy`
+    // header, below) once this one is enforced instead of report-only.
+    // Both travel together, pointed at the SAME endpoint: `report-to` is the
+    // modern Reporting API directive (Chromium only), `report-uri` is the
+    // legacy one every browser still honors (Firefox/Safari never shipped
+    // report-to). The `report-to` value names the `Reporting-Endpoints` entry
+    // set below, not a URL directly.
+    'report-to csp-endpoint',
+    'report-uri /api/csp-report',
+  ].join('; ');
+}
 
 /**
  * Apply the fixed set of security headers to `headers`, in place. Each is
@@ -115,7 +132,7 @@ export function applySecurityHeaders(headers: Headers): void {
     headers.set('content-security-policy', "frame-ancestors 'self'");
   }
   if (!headers.has('content-security-policy-report-only')) {
-    headers.set('content-security-policy-report-only', REPORT_ONLY_CSP);
+    headers.set('content-security-policy-report-only', reportOnlyCsp());
   }
   if (!headers.has('reporting-endpoints')) {
     // Names the `csp-endpoint` the report-only policy's `report-to`

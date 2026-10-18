@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { applySecurityHeaders, withSecurityHeaders } from './securityHeaders';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('applySecurityHeaders', () => {
   it('sets every security header on a fresh Headers instance', () => {
@@ -95,6 +99,27 @@ describe('applySecurityHeaders', () => {
       const csp = reportOnly();
       expect(csp).toMatch(/script-src[^;]*https:\/\/static\.cloudflareinsights\.com/);
       expect(csp).toMatch(/connect-src[^;]*https:\/\/cloudflareinsights\.com/);
+    });
+
+    it('never allows a PostHog host while PUBLIC_POSTHOG_KEY is unset', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', undefined);
+      const csp = reportOnly();
+      expect(csp).not.toContain('posthog');
+    });
+
+    it('allows the configured PostHog host in script-src and connect-src once a key is set', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+      vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://us.i.posthog.com');
+      const csp = reportOnly();
+      expect(csp).toMatch(/script-src[^;]*https:\/\/us\.i\.posthog\.com/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/us\.i\.posthog\.com/);
+    });
+
+    it('allows the default EU PostHog host when only the key is set', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+      vi.stubEnv('PUBLIC_POSTHOG_HOST', undefined);
+      const csp = reportOnly();
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/eu\.i\.posthog\.com/);
     });
 
     it('allows the Google Fonts stylesheet and its gstatic font files', () => {

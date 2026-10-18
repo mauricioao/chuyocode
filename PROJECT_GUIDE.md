@@ -67,6 +67,13 @@ keys, Sentry DSN. `env.ts` merges `import.meta.env` (build) with `process.env`
 (Netlify runtime) — set vars in Netlify with **all scopes** (the SSR runs as a
 Function).
 
+Public, build-time, inert-unless-set toggles (Astro/Vite inlines `PUBLIC_*`
+into the client bundle at BUILD time, not read at request time — set in
+Netlify's build environment): `PUBLIC_SENTRY_DSN`, `PUBLIC_TURNSTILE_SITE_KEY`,
+`PUBLIC_CF_WEB_ANALYTICS_TOKEN`, `PUBLIC_POSTHOG_KEY` +
+`PUBLIC_POSTHOG_HOST` (PostHog analytics/feature flags, defaults to the EU
+region — see `@lib/posthog`'s header).
+
 ---
 
 ## 3. Architecture principles ("the soul")
