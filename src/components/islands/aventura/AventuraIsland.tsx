@@ -302,7 +302,7 @@ export default function AventuraIsland({ scene, lang }: AventuraIslandProps) {
     return (
       <div
         data-testid="aventura-end-screen"
-        className="relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-lg border-4 border-double border-white/80 bg-gradient-to-b from-[#1a2a52] to-[#0c1530] p-6 text-center text-white sm:p-10"
+        className="relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 overflow-clip rounded-lg border-4 border-double border-white/80 bg-gradient-to-b from-[#1a2a52] to-[#0c1530] p-6 text-center text-white sm:p-10"
       >
         <h2 className={cn(PIXEL_FONT, 'text-lg text-accent sm:text-2xl')}>{t.endTitle}</h2>
         {/* `zinc-300` kept literal everywhere in this file (theme-remap-cleanup):
@@ -343,7 +343,7 @@ export default function AventuraIsland({ scene, lang }: AventuraIslandProps) {
         <div
           data-testid="aventura-screen"
           onClick={choicePending ? undefined : advanceOrSkip}
-          className="relative flex aspect-[4/3] w-full cursor-pointer flex-col justify-end overflow-hidden rounded-lg border-4 border-double border-white/80"
+          className="relative flex aspect-[4/3] w-full cursor-pointer flex-col justify-end overflow-clip rounded-lg border-4 border-double border-white/80"
         >
           <SceneBackdrop background={scene.background} />
 

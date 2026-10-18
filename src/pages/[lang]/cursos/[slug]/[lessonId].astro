@@ -207,7 +207,16 @@ const firstLesson = flatLessons[0] ?? null;
               </p>
             )
           ) : activityBlocks ? (
-            <ActivityPracticeIsland client:load lang={lang} blocks={activityBlocks.blocks} />
+            /* Height-bounded frame: the practice island fills its parent
+               (`flex-1 min-h-0` + a `[container-type:size]` scroll area, built
+               for the desk window's fixed body). Under this content-sized
+               column it collapsed to ~90px, showing only the game tabs. */
+            <div
+              data-testid="lesson-activity"
+              class="flex h-[min(80vh,48rem)] min-h-[28rem] flex-col overflow-hidden rounded-(--radius-card) ring-1 ring-foreground/10"
+            >
+              <ActivityPracticeIsland client:load lang={lang} blocks={activityBlocks.blocks} />
+            </div>
           ) : (
             <p data-testid="lesson-activity-unavailable" class="text-sm text-muted-foreground">
               {t.activityUnavailable}

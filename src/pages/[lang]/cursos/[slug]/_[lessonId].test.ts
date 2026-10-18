@@ -197,6 +197,26 @@ describe('GET /[lang]/cursos/[slug]/[lessonId] — activity lesson', () => {
     expect(html).toContain('component-url="@components/islands/activities/ActivityPracticeIsland"');
   });
 
+  it('mounts the practice island inside a height-bounded frame (it sizes itself to its parent, so an unbounded parent collapses it)', async () => {
+    getPlanMock.mockResolvedValue('premium');
+    getPublishedActivityMock.mockResolvedValue({ id: 'a1a1a1a1-0000-4000-8000-000000000001', title: 'Presente simple', blocks: [], authorId: 'u2' });
+    const res = await render('https://chuyocode.test/es/cursos/react-basico/l3', { lang: 'es', slug: 'react-basico', lessonId: 'l3' });
+    const html = await res.text();
+    // jsdom/node cannot compute layout, so assert the rendered contract: the
+    // island sits inside a frame with an explicit height (the island's own
+    // scroll area is `[container-type:size]` + `flex-1 min-h-0`, which
+    // collapses to ~90px under a content-sized parent — seen in the
+    // 2026-10-17 walkthrough).
+    const frameTag = html.match(/<div[^>]*data-testid="lesson-activity"[^>]*>/)?.[0];
+    expect(frameTag).toBeDefined();
+    const frameClass = frameTag!.match(/class="([^"]*)"/)?.[1] ?? '';
+    expect(frameClass).toMatch(/(^|\s)h-\[/);
+    expect(frameClass).toMatch(/(^|\s)min-h-/);
+    const frameStart = html.indexOf(frameTag!);
+    const islandAt = html.indexOf('component-url="@components/islands/activities/ActivityPracticeIsland"');
+    expect(islandAt).toBeGreaterThan(frameStart);
+  });
+
   it('renders the practice island for a ChuyoCode-owned activity (NULL authorId, 0020 account deletion transfer)', async () => {
     getPlanMock.mockResolvedValue('premium');
     getPublishedActivityMock.mockResolvedValue({

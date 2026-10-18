@@ -87,6 +87,37 @@ describe('CourseEditPanel — save button loading', () => {
   });
 });
 
+describe('CourseEditPanel — price field is in USD, stored in cents', () => {
+  it('shows a stored price_cents as dollars in the field labelled "(USD)"', () => {
+    render(<CourseEditPanel lang="es" initialCourse={{ ...COURSE, price_cents: 1999 }} initialOwners={[]} initialModules={[]} />);
+    expect((screen.getByTestId('course-field-price') as HTMLInputElement).value).toBe('19.99');
+  });
+
+  it('saves "19" typed in the USD field as 1900 cents, not 19 cents', async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse({ ok: true }));
+    render(<CourseEditPanel lang="es" initialCourse={COURSE} initialOwners={[]} initialModules={[]} />);
+
+    fireEvent.change(screen.getByTestId('course-field-price'), { target: { value: '19' } });
+    fireEvent.click(screen.getByTestId('course-fields-submit'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const [, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).price_cents).toBe(1900);
+  });
+
+  it('saves a cents amount like "19.99" as an integer 1999', async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse({ ok: true }));
+    render(<CourseEditPanel lang="es" initialCourse={COURSE} initialOwners={[]} initialModules={[]} />);
+
+    fireEvent.change(screen.getByTestId('course-field-price'), { target: { value: '19.99' } });
+    fireEvent.click(screen.getByTestId('course-fields-submit'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const [, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).price_cents).toBe(1999);
+  });
+});
+
 describe('CourseEditPanel — access grant/revoke loading', () => {
   it('shows the grant button as loading/aria-busy while in flight', async () => {
     let release: (() => void) | undefined;
