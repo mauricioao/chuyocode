@@ -258,6 +258,23 @@ describe('GameResult', () => {
       expect(img.className).not.toMatch(/\bobject-cover\b/);
       expect(img.className).not.toMatch(/\bobject-contain\b/);
     });
+
+    // Mortal-Kombat-"Toasty!"-prominence pass (owner: "la imagen crece un
+    // poco" — she reads as a tiny sticker at a flat h-64 everywhere). A
+    // fixed height PER BREAKPOINT, still never a shrink-to-fit crop: 13rem
+    // at the narrowest phones (unchanged), 16rem up to tablet (unchanged),
+    // 20rem at tablet, 26-30rem on desktop.
+    it('grows at tablet (md) and desktop (lg) breakpoints, not just the flat h-64/h-52 pair', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const icon = screen.getByTestId('game-result-icon');
+      const img = icon.querySelector('img')!;
+      for (const el of [icon, img]) {
+        expect(el.className).toMatch(/\bh-64\b/);
+        expect(el.className).toMatch(/\bmd:h-80\b/);
+        expect(el.className).toMatch(/(^|\s)lg:h-\[28rem\](\s|$)/);
+        expect(el.className).toMatch(/max-\[400px\]:h-52/);
+      }
+    });
   });
 
   // Vanina pop-in pass (owner spec: "Vanina sale desde abajo a la izquierda
@@ -287,6 +304,19 @@ describe('GameResult', () => {
       expect(icon.className).toMatch(/\babsolute\b/);
       expect(icon.className).toMatch(/\bbottom-0\b/);
       expect(icon.className).toMatch(/\bleft-/);
+    });
+
+    // Bugfix (owner report: her crop line sat ~12px above the window's
+    // actual bottom edge, not flush with it): `bottom-0` on the Vanina
+    // `<picture>` anchors flush with THIS root's own bottom edge, but every
+    // host renders this component inside the SAME known stage wrapper
+    // (`ActivityPracticeIsland`'s own `overflow-y-auto p-3` quiz-tab
+    // container), whose `p-3` kept the root's own bottom edge 12px short of
+    // the window. `-mb-3` bleeds the root past exactly that padding.
+    it('bleeds the root past the stage wrapper\'s own bottom padding so Vanina crops flush with the window edge', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const root = screen.getByTestId('game-result');
+      expect(root.className).toMatch(/-mb-3\b/);
     });
 
     it('is still decorative only and keeps the right pose per outcome, now from the edge-anchored element', () => {
@@ -330,6 +360,54 @@ describe('GameResult', () => {
       const confetti = screen.getByTestId('game-result-confetti');
       // ~18-24 pieces per side (owner spec) — just a floor, not an exact count.
       expect(confetti.children.length).toBeGreaterThanOrEqual(30);
+    });
+
+    // Bugfix (owner report: the burst reads as two static coloured columns
+    // at the edges, not a burst): `--confetti-dx`/`--confetti-dy` used to be
+    // plain `%`, which `translate()` resolves against the TRANSLATED
+    // element's own box — an 8px piece — so every piece only ever moved a
+    // few px. They must be container-relative length units (`cqw`/`cqh`,
+    // resolving against `.game-result-confetti`'s own `container-type: size`
+    // box in `global.css`) so the burst actually travels across the stage.
+    it('expresses each piece\'s travel as cqw/cqh length units, never %', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const pieces = Array.from(screen.getByTestId('game-result-confetti').children) as HTMLElement[];
+      expect(pieces.length).toBeGreaterThan(0);
+      for (const piece of pieces) {
+        const dx = piece.style.getPropertyValue('--confetti-dx');
+        const dy = piece.style.getPropertyValue('--confetti-dy');
+        expect(dx).toMatch(/^-?\d+(\.\d+)?cqw$/);
+        expect(dy).toMatch(/^-\d+(\.\d+)?cqh$/);
+      }
+    });
+
+    it('keeps each piece\'s travel within the owner-specified range (15-40% of the stage width inward, 20-60% upward)', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const pieces = Array.from(screen.getByTestId('game-result-confetti').children) as HTMLElement[];
+      for (const piece of pieces) {
+        const dx = Math.abs(parseFloat(piece.style.getPropertyValue('--confetti-dx')));
+        const dy = Math.abs(parseFloat(piece.style.getPropertyValue('--confetti-dy')));
+        expect(dx).toBeGreaterThanOrEqual(15);
+        expect(dx).toBeLessThanOrEqual(40);
+        expect(dy).toBeGreaterThanOrEqual(20);
+        expect(dy).toBeLessThanOrEqual(60);
+      }
+    });
+
+    // Owner spec: pieces shoot from each side edge INWARD — left pieces
+    // travel right, right pieces travel left (`buildConfettiPieces` renders
+    // every left piece before any right piece, so the first half/second
+    // half split matches `confettiPieceStyle`'s own `side` argument).
+    it('shoots left-edge pieces inward (positive dx) and right-edge pieces inward (negative dx)', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const pieces = Array.from(screen.getByTestId('game-result-confetti').children) as HTMLElement[];
+      const half = pieces.length / 2;
+      for (const piece of pieces.slice(0, half)) {
+        expect(parseFloat(piece.style.getPropertyValue('--confetti-dx'))).toBeGreaterThan(0);
+      }
+      for (const piece of pieces.slice(half)) {
+        expect(parseFloat(piece.style.getPropertyValue('--confetti-dx'))).toBeLessThan(0);
+      }
     });
   });
 

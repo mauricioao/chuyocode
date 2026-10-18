@@ -153,23 +153,36 @@ const CONFETTI_COLOR_VARS = [
  * custom properties the shared `.game-result-confetti-piece` keyframe reads
  * (same "set a custom property per instance, one shared keyframe" posture
  * `deskWindowManager.ts`'s own `--desk-window-manager-from` already uses).
+ *
+ * BUGFIX: `--confetti-dx`/`--confetti-dy` used to be plain `%`, but
+ * `translate()`'s percentages resolve against the TRANSLATED element's own
+ * box — an 8px piece — so every piece only ever moved a few px and the
+ * burst read as two static edge columns instead of travelling. They're now
+ * `cqw`/`cqh` (container query width/height), which resolve against
+ * `.game-result-confetti`'s own `container-type: size` box (`global.css`)
+ * — i.e. the whole result area — so a piece actually shoots across a real
+ * fraction of the stage. `seed` (side-offset index) keeps every number
+ * still pure arithmetic over `index`, just no longer mirrored left/right at
+ * the same height/size/timing, which used to read as a grid.
  */
 function confettiPieceStyle(index: number, side: 'left' | 'right'): CSSProperties {
-  const travel = 55 + ((index * 17) % 45); // 55-99% — shoots inward, toward the centre.
-  const rise = 55 + ((index * 23) % 70); // 55-124% upward.
-  const rotate = (index % 2 === 0 ? 1 : -1) * (140 + ((index * 59) % 260));
-  const duration = 1500 + ((index * 29) % 500); // 1.5-2s (owner spec).
+  const seed = side === 'left' ? index : index + 37;
+  const travel = 15 + ((seed * 17) % 26); // 15-40% of the stage width, inward (owner spec).
+  const rise = 20 + ((seed * 23) % 41); // 20-60% of the stage height, upward (owner spec).
+  const rotate = (index % 2 === 0 ? 1 : -1) * (140 + ((seed * 59) % 260));
+  const duration = 1500 + ((seed * 29) % 500); // 1.5-2s (owner spec).
   // Slight delay so the burst lands as Vanina pops up (owner spec), staggered per piece.
-  const delay = 220 + (index % CONFETTI_PIECES_PER_SIDE) * 18;
-  const bottom = 4 + ((index * 11) % 28); // 4-31% up the edge.
+  const delay = 220 + ((seed * 47) % (CONFETTI_PIECES_PER_SIDE * 18));
+  const bottom = 6 + ((seed * 13) % 46); // spread vertically — not a neat column.
+  const edgeOffset = 1 + ((seed * 7) % 6); // 1-6% from the edge — not a dead-straight line either.
   const dx = side === 'left' ? travel : -travel;
-  const colorVar = CONFETTI_COLOR_VARS[index % CONFETTI_COLOR_VARS.length];
+  const colorVar = CONFETTI_COLOR_VARS[seed % CONFETTI_COLOR_VARS.length];
   return {
-    [side]: '2%',
+    [side]: `${edgeOffset}%`,
     bottom: `${bottom}%`,
     backgroundColor: `var(${colorVar})`,
-    '--confetti-dx': `${dx}%`,
-    '--confetti-dy': `-${rise}%`,
+    '--confetti-dx': `${dx}cqw`,
+    '--confetti-dy': `-${rise}cqh`,
     '--confetti-rotate': `${rotate}deg`,
     '--confetti-duration': `${duration}ms`,
     '--confetti-delay': `${delay}ms`,
@@ -220,7 +233,15 @@ export default function GameResult({
       role="status"
       aria-live="polite"
       className={cn(
-        'relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden py-10 text-center',
+        // `-mb-3` bleeds this root past the ONE stage wrapper every host
+        // renders it in (`ActivityPracticeIsland`'s own `overflow-y-auto
+        // p-3` quiz-tab container) — bugfix: `bottom-0` on the Vanina
+        // `<picture>` below already anchors flush with THIS box's own
+        // bottom edge, but that box's bottom sat 12px (the stage's own
+        // `p-3`) above the window's actual bottom edge, so her crop line
+        // never reached it. Matches that one known ancestor padding
+        // exactly, not a generic "push to the viewport" trick.
+        'relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden py-10 -mb-3 text-center',
         className,
       )}
     >
@@ -249,14 +270,18 @@ export default function GameResult({
           fixed-SHAPE frame like `DeskHelper.astro`'s own circular avatar;
           this is a free-standing figure, cropped by the edge, not
           squeezed). A fixed HEIGHT per breakpoint, `width: auto`, same
-          "never letterbox or crop by shrinking" posture as before — just a
-          bit LARGER now (h-64, half visible once cropped ≈ h-32) so the
-          peek still reads at a glance. Decorative only: the outcome is
-          already in the headline text below and in `data-outcome` above. */}
+          "never letterbox or crop by shrinking" posture as before.
+          Mortal-Kombat-"Toasty!"-prominent pass (owner: "la imagen crece un
+          poco"): the figure now actually GROWS with the viewport — 13rem
+          visible half at the narrowest phones (`max-[400px]`), 16rem full
+          height up to tablet, 20rem at tablet (`md`), 26-30rem on desktop
+          (`lg`, visible half ≈13-15rem) — not just the old flat h-64
+          everywhere. Decorative only: the outcome is already in the
+          headline text below and in `data-outcome` above. */}
       <picture
         data-testid="game-result-icon"
         data-outcome-pose={pose}
-        className="game-result-vanina pointer-events-none absolute bottom-0 left-4 z-10 block h-64 w-auto sm:left-6 max-[400px]:h-52"
+        className="game-result-vanina pointer-events-none absolute bottom-0 left-4 z-10 block h-64 w-auto sm:left-6 md:h-80 lg:h-[28rem] max-[400px]:h-52"
       >
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
@@ -267,7 +292,7 @@ export default function GameResult({
           width={characterPoseWidth(pose)}
           height={256}
           decoding="async"
-          className="block h-64 w-auto max-[400px]:h-52"
+          className="block h-64 w-auto md:h-80 lg:h-[28rem] max-[400px]:h-52"
         />
       </picture>
       {/* The centred results column — headline/score/buttons — now the
@@ -276,8 +301,10 @@ export default function GameResult({
           2: the success state read a bit narrow), plus enough bottom
           padding that her half-visible figure at bottom-left never
           overlaps "Otra actividad"/"Jugar de nuevo" at a narrow (360-390px)
-          width. */}
-      <div data-testid="game-result-content" className="relative z-20 flex w-full max-w-[30rem] flex-col items-center gap-4 pb-16 sm:pb-4">
+          width — and, now that she grows at wider breakpoints too
+          (`md`/`lg` above), a bit more bottom padding there as well so a
+          taller peek never reaches the guest line at e.g. 1230×740. */}
+      <div data-testid="game-result-content" className="relative z-20 flex w-full max-w-[30rem] flex-col items-center gap-4 pb-16 sm:pb-4 md:pb-6 lg:pb-8">
         <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
         <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
           {correct} {t.of} {total} {word}

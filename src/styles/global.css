@@ -1384,7 +1384,19 @@ h3 {
  * The base rule's `opacity: 0` only ever shows under reduced motion (the
  * animation's own `both` fill otherwise keeps every piece visible from the
  * very start of its delay) — paired with hiding the whole layer outright
- * below, so reduced motion never shows a static, non-animating dot. */
+ * below, so reduced motion never shows a static, non-animating dot.
+ *
+ * `container-type: size` turns THIS layer (not each 8px piece) into the
+ * reference box for the `cqw`/`cqh` units `--confetti-dx`/`--confetti-dy`
+ * use below — bugfix: `translate()`'s percentages resolve against the
+ * translated element's OWN box, so a `%` travel on an 8px piece only ever
+ * moved it a few px and the whole burst read as two static edge columns.
+ * The layer is already `inset-0` on a `position: relative` ancestor, so it
+ * has a definite size to contain on. */
+.game-result-confetti {
+  container-type: size;
+}
+
 .game-result-confetti-piece {
   position: absolute;
   width: 8px;
@@ -1410,7 +1422,7 @@ h3 {
   }
   100% {
     opacity: 0;
-    transform: translate(var(--confetti-dx, 0), var(--confetti-dy, -60%)) rotate(var(--confetti-rotate, 180deg));
+    transform: translate(var(--confetti-dx, 0), var(--confetti-dy, -60cqh)) rotate(var(--confetti-rotate, 180deg));
   }
 }
 
