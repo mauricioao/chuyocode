@@ -21,7 +21,7 @@
 import type { ExerciseResponse, Payload, PoolItem } from './exercisePayload';
 
 /** The mechanic discriminator this module serves. */
-export const DROP_INPUT = 'drop';
+const DROP_INPUT = 'drop';
 
 /**
  * Tile ids held by drop slots OTHER than `exceptSlotId`.

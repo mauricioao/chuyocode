@@ -29,7 +29,7 @@ function isGroupSortSlot(slot: Slot): boolean {
 }
 
 /** One item as the editor shows it: its pool item id plus its resolved text. */
-export interface GroupSortItemInput {
+interface GroupSortItemInput {
   id: string;
   text: string;
 }

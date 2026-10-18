@@ -75,7 +75,7 @@ export const MAX_SLOT_EXPLANATION_LENGTH = 300;
  * it. A column would put a nullable enum on every row to describe a rare case,
  * and would need a migration the first time the shape grows a second hint.
  */
-export interface Layout {
+interface Layout {
   pool: PoolPlacement;
 }
 

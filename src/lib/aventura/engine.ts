@@ -11,7 +11,7 @@
  */
 import type { Line, Scene } from './scene';
 
-export type ChoiceState = 'unanswered' | 'wrong' | 'correct' | null;
+type ChoiceState = 'unanswered' | 'wrong' | 'correct' | null;
 
 export interface AventuraState {
   /** Index into `scene.lines` of the currently shown line. */

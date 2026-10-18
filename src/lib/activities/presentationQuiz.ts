@@ -25,7 +25,7 @@
  * posture `gameSounds.ts`'s own pure tone scheduling keeps for audio).
  */
 
-export type QuizAnswerStatus = 'unanswered' | 'correct' | 'wrong';
+type QuizAnswerStatus = 'unanswered' | 'correct' | 'wrong';
 
 export interface QuizAnswerState {
   status: QuizAnswerStatus;

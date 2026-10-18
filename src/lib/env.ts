@@ -59,17 +59,6 @@ export const REQUIRED_ENV_KEYS = [
   'SUPABASE_ANON_KEY',
 ] as const;
 
-/** Vars consumed by later phases; validated lazily where they are used. */
-export const OPTIONAL_ENV_KEYS = [
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'AD_HMAC_SECRET',
-  'PADDLE_WEBHOOK_SECRET',
-  'LEGAL_OWNER_NAME',
-  'LEGAL_OWNER_RUC',
-  'LEGAL_OWNER_CITY',
-  'LEGAL_OWNER_EMAIL',
-] as const;
-
 /**
  * Raised when one or more required environment variables are absent or blank.
  * The message names every missing variable so misconfiguration is obvious.

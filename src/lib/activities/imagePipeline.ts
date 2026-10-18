@@ -224,7 +224,7 @@ export function pdfThumbnailPageNumbers(numPages: number, maxPages: number = MAX
   return Array.from({ length: count }, (_, i) => i + 1);
 }
 
-export interface PdfPageThumbnail {
+interface PdfPageThumbnail {
   pageNumber: number;
   blob: Blob;
   width: number;
@@ -342,7 +342,7 @@ export async function openPdfForConversion(file: File): Promise<PdfPageConverter
  * validatePageSelection}) to scaled WebP `Blob`s, in the given order. The
  * PDF itself is never uploaded. BROWSER ONLY — see file header.
  */
-export async function convertPdfPagesToWebp(file: File, pages: number[]): Promise<Blob[]> {
+async function convertPdfPagesToWebp(file: File, pages: number[]): Promise<Blob[]> {
   const validated = validatePageSelection(pages);
   if (!validated) {
     throw new RangeError('convertPdfPagesToWebp: invalid page selection');

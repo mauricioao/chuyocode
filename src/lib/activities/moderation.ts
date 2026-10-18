@@ -46,15 +46,15 @@ export function clearModerationClient(): void {
 }
 
 /** Closed taxonomy — must match `activity_reports.reason`'s own check constraint. */
-export const REPORT_REASONS = ['inappropriate', 'off_topic', 'copyright', 'wrong_answers', 'other'] as const;
-export type ReportReason = (typeof REPORT_REASONS)[number];
+const REPORT_REASONS = ['inappropriate', 'off_topic', 'copyright', 'wrong_answers', 'other'] as const;
+type ReportReason = (typeof REPORT_REASONS)[number];
 
-export function isReportReason(value: unknown): value is ReportReason {
+function isReportReason(value: unknown): value is ReportReason {
   return typeof value === 'string' && (REPORT_REASONS as readonly string[]).includes(value);
 }
 
 /** A minimal author identity, resolved from `auth.users` for the queue's display. */
-export interface QueueAuthor {
+interface QueueAuthor {
   id: string;
   email: string | null;
 }
@@ -75,7 +75,7 @@ export interface ReviewQueueItem {
 }
 
 /** One report against an activity, as the moderator queue needs it. */
-export interface ActivityReport {
+interface ActivityReport {
   id: string;
   reporterId: string;
   reason: ReportReason;
@@ -359,7 +359,7 @@ async function loadReportedActivities(client: SupabaseClient): Promise<ReportedA
   }
 }
 
-export type ApproveError =
+type ApproveError =
   | 'not_found'
   | 'not_pending'
   | 'invalid_blocks'
@@ -543,7 +543,7 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
   }
 }
 
-export type RejectError = 'not_found' | 'not_pending' | 'invalid_note' | 'reject_failed';
+type RejectError = 'not_found' | 'not_pending' | 'invalid_note' | 'reject_failed';
 export type RejectResult = { ok: true } | { ok: false; error: RejectError };
 
 /**
@@ -595,7 +595,7 @@ export async function rejectRevision(revisionId: string, reviewerId: string, not
   }
 }
 
-export type RestoreError = 'not_found' | 'not_hidden' | 'restore_failed';
+type RestoreError = 'not_found' | 'not_hidden' | 'restore_failed';
 export type RestoreResult = { ok: true } | { ok: false; error: RestoreError };
 
 /**
@@ -630,7 +630,7 @@ export async function restoreActivity(activityId: string, reviewerId: string): P
   }
 }
 
-export type RemoveError = 'not_found' | 'not_hidden' | 'remove_failed';
+type RemoveError = 'not_found' | 'not_hidden' | 'remove_failed';
 export type RemoveResult = { ok: true } | { ok: false; error: RemoveError };
 
 /**
@@ -688,7 +688,7 @@ async function fetchHiddenActivity(
   return 'ok';
 }
 
-export type ReportError = 'not_found' | 'self_report' | 'invalid_reason' | 'invalid_details' | 'report_failed';
+type ReportError = 'not_found' | 'self_report' | 'invalid_reason' | 'invalid_details' | 'report_failed';
 export type ReportResult = { ok: true; hidden: boolean } | { ok: false; error: ReportError };
 
 /**

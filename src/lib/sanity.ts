@@ -25,7 +25,7 @@ const env = loadEnv();
  * Shared server-side Sanity client. `useCdn` is enabled for read performance;
  * pass-gated reads never rely on Sanity, so CDN staleness is acceptable here.
  */
-export const sanityClient: SanityClient = createClient({
+const sanityClient: SanityClient = createClient({
   projectId: env.SANITY_PROJECT_ID,
   dataset: env.SANITY_DATASET,
   apiVersion: '2024-01-01',
@@ -728,7 +728,7 @@ export const RESERVED_THEMES = ['recomendados'] as const;
  * Editors add a line here only for special-cased titles; plain slugs like
  * `frontend` need nothing.
  */
-export const THEME_TITLE_OVERRIDES: Record<string, string> = {
+const THEME_TITLE_OVERRIDES: Record<string, string> = {
   recomendados: 'Libros Recomendados',
 };
 

@@ -48,12 +48,12 @@ export const MINIMIZED_WINDOWS_STORAGE_KEY = 'ingles-desk-minimized-windows';
 export const MAX_MINIMIZED_WINDOWS = 5;
 
 /** `DeskScene.astro`'s own right-hand folders column — the one other desk item the independent-blocks stack must never grow tall enough to cover, see {@link computeMaxVisibleMinimizedChips}. */
-export const DESK_FOLDERS_SELECTOR = '[data-desk-folders]';
+const DESK_FOLDERS_SELECTOR = '[data-desk-folders]';
 
 /** A chip's own fixed height (`createChip`'s `h-11` class) in pixels. */
-export const MINIMIZED_CHIP_HEIGHT_PX = 44;
+const MINIMIZED_CHIP_HEIGHT_PX = 44;
 /** The gap between stacked chips (`MinimizedWindowsTray.astro`'s own `gap-2.5`) in pixels. */
-export const MINIMIZED_CHIP_GAP_PX = 10;
+const MINIMIZED_CHIP_GAP_PX = 10;
 
 /**
  * Pure: how many of `totalCount` minimized windows can render as their own
@@ -194,7 +194,7 @@ export function removeMinimizedWindow(
   return next;
 }
 
-export const MINIMIZED_TRAY_ATTR = {
+const MINIMIZED_TRAY_ATTR = {
   container: 'data-minimized-tray',
   chip: 'data-minimized-chip',
   /** The "+N" overflow tile's own button — see {@link renderMinimizedWindowsTray}. */

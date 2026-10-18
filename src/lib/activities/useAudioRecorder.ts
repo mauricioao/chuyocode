@@ -37,7 +37,7 @@ function pickSupportedMimeType(): string | null {
   return CANDIDATE_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null;
 }
 
-export type AudioRecorderState =
+type AudioRecorderState =
   | { kind: 'idle' }
   | { kind: 'requesting-permission' }
   | { kind: 'recording'; seconds: number }

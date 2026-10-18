@@ -24,7 +24,7 @@
 export const DISPLAY_NAME_METADATA_KEY = 'display_name';
 
 /** Longest display name {@link normalizeDisplayName} accepts. */
-export const MAX_DISPLAY_NAME_LENGTH = 60;
+const MAX_DISPLAY_NAME_LENGTH = 60;
 
 /**
  * Control characters {@link normalizeDisplayName} rejects outright rather

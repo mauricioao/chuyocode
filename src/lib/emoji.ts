@@ -27,7 +27,7 @@
  */
 
 /** Every slug currently shipped. Extend this (plus the matching assets under `public/images/emoji/`) to add a new sticker. */
-export const EMOJI_NAMES = [
+const EMOJI_NAMES = [
   'party-popper',
   'star-struck',
   'thinking-face',
@@ -49,7 +49,7 @@ export const EMOJI_NAMES = [
 export type EmojiName = (typeof EMOJI_NAMES)[number];
 
 /** Raster widths every slug ships at, in density order (64 -> 1x, 128 -> 2x, 256 -> 4x). */
-export const EMOJI_WIDTHS = [64, 128, 256] as const;
+const EMOJI_WIDTHS = [64, 128, 256] as const;
 
 const EMOJI_DIR = '/images/emoji';
 

@@ -32,7 +32,7 @@ export interface MyActivityStatusEntry {
 
 export type MyActivityStatusSnapshot = Record<string, { title: string; status: string }>;
 
-export type MyActivityStatusToastKind = 'published' | 'rejected';
+type MyActivityStatusToastKind = 'published' | 'rejected';
 
 export interface MyActivityStatusToast {
   id: string;

@@ -32,7 +32,7 @@ export const STAGE_HEIGHT = 1080;
  * a projector/TV routinely overscans or bezels the outer edge of the signal
  * it receives, so nothing load-bearing may render there.
  */
-export const STAGE_SAFE_AREA_FRACTION = 0.05;
+const STAGE_SAFE_AREA_FRACTION = 0.05;
 
 /** The safe-area inset, already resolved to stage pixels — `96`/`54` at the stage's own 1920x1080. */
 export const STAGE_SAFE_AREA_X = STAGE_WIDTH * STAGE_SAFE_AREA_FRACTION;

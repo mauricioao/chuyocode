@@ -28,7 +28,7 @@ export const fieldBase =
  * overrides for contexts that must not resize across breakpoints (e.g. a
  * compact filters row that keeps one height at every size).
  */
-export const fieldHeight = cva('', {
+const fieldHeight = cva('', {
   variants: {
     size: {
       responsive: 'h-(--control-h-lg) md:h-(--control-h-md)',

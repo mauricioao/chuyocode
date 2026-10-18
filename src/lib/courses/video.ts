@@ -12,7 +12,7 @@
  * EXACTLY one of the four recognized shapes, even though `admin.ts` should
  * never have let anything else through.
  */
-export type VideoProvider = 'youtube' | 'vimeo';
+type VideoProvider = 'youtube' | 'vimeo';
 
 export interface VideoEmbed {
   provider: VideoProvider;

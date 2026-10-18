@@ -160,9 +160,9 @@ export type ChromeEvent =
 /** SITE only: cumulative upward scroll (px) that re-shows a hidden header. */
 export const UP_SHOW_THRESHOLD_PX = 8;
 /** Distance (px) from the true bottom still counted as "at the bottom". */
-export const BOTTOM_EPSILON_PX = 2;
+const BOTTOM_EPSILON_PX = 2;
 /** SITE only: mouse distance (px) from the top edge that counts as a hover-to-reveal (desktop, unscrollable-page fallback). Removed for INGLÉS (owner spec 2026-10-05). */
-export const TOP_EDGE_HOVER_PX = 16;
+const TOP_EDGE_HOVER_PX = 16;
 /** SITE only: dwell time (ms) at the bottom before the footer reveals on its own. Removed for INGLÉS (owner spec 2026-10-05). */
 export const FOOTER_DWELL_MS = 1000;
 /**
@@ -400,15 +400,15 @@ function reduceScroll(state: ChromeState, event: Extract<ChromeEvent, { type: 's
 // ---------------------------------------------------------------------------
 
 /** Marks that the behavior is active — see `global.css`'s progressive-enhancement gate. Mirrors the inline head script in `BaseLayout.astro` (which sets this same attribute for the very first paint, before this module has even loaded). */
-export const CHROME_JS_ATTR = 'data-chrome-js';
-export const CHROME_MODE_ATTR = 'data-chrome-mode';
+const CHROME_JS_ATTR = 'data-chrome-js';
+const CHROME_MODE_ATTR = 'data-chrome-mode';
 export const HEADER_VISIBLE_ATTR = 'data-header-visible';
-export const FOOTER_VISIBLE_ATTR = 'data-footer-visible';
+const FOOTER_VISIBLE_ATTR = 'data-footer-visible';
 /** `Header.astro` / `Footer.astro` carry these so CSS and this script can find them without caring where the chrome wrappers put them (a `display:contents` wrapper cannot itself be positioned/faded — see `BaseLayout.astro`'s own header). */
-export const HEADER_SELECTOR = '[data-chrome-header]';
+const HEADER_SELECTOR = '[data-chrome-header]';
 export const FOOTER_SELECTOR = '[data-chrome-footer]';
 /** Custom property `BackButton.astro` reads for its `lg:sticky` offset — see that file's own comment. */
-export const HEADER_OFFSET_VAR = '--chrome-header-offset';
+const HEADER_OFFSET_VAR = '--chrome-header-offset';
 /**
  * INGLÉS only: set momentarily on the header element itself (never on
  * `<html>`) around the one transition that must NOT animate — collapsing it
@@ -417,7 +417,7 @@ export const HEADER_OFFSET_VAR = '--chrome-header-offset';
  * the transition duration while this is present; removed again next frame so
  * every OTHER transition (revealing, tap-to-collapse) keeps animating.
  */
-export const CHROME_INSTANT_ATTR = 'data-chrome-instant';
+const CHROME_INSTANT_ATTR = 'data-chrome-instant';
 /**
  * "Desktop" redesign PART 1 scope extension (owner spec 2026-10-06, item
  * C): server-rendered by `BaseLayout.astro` (true only on the Inglés hub) —

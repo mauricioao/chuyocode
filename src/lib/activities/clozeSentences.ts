@@ -44,7 +44,7 @@ const GAP_MARKER = '___';
 /** Row/slot id fragment marking one blank of one authored sentence — `clozeRowPrefix`'s own inverse. */
 const CLOZE_ID_PATTERN = /-cz-s(\d+)-b(\d+)-/;
 
-export interface ClozeSegment {
+interface ClozeSegment {
   kind: 'text' | 'blank';
   /** Literal text for `'text'`; the trimmed authored word/phrase for `'blank'`. */
   text: string;
@@ -147,12 +147,12 @@ export function reconstructRawText(labels: readonly string[], words: readonly st
 }
 
 /** The row/slot id fragment for one sentence's blank — embedded into `nextId`'s own prefix, never a standalone id. */
-export function clozeRowPrefix(sentenceSeq: number, blankSeq: number): string {
+function clozeRowPrefix(sentenceSeq: number, blankSeq: number): string {
   return `cz-s${sentenceSeq}-b${blankSeq}`;
 }
 
 /** Recover `{ sentenceSeq, blankSeq }` from an id minted via `clozeRowPrefix`, or `null` for any other id. */
-export function sentenceKeyFromId(id: string): { sentenceSeq: number; blankSeq: number } | null {
+function sentenceKeyFromId(id: string): { sentenceSeq: number; blankSeq: number } | null {
   const m = CLOZE_ID_PATTERN.exec(id);
   if (!m) return null;
   return { sentenceSeq: Number(m[1]), blankSeq: Number(m[2]) };

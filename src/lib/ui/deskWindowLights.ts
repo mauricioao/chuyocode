@@ -19,5 +19,3 @@ export const DESK_WINDOW_LIGHT_CLASS = {
   minimize: 'bg-traffic-yellow',
   fullscreen: 'bg-traffic-green',
 } as const;
-
-export type DeskWindowLightKind = keyof typeof DESK_WINDOW_LIGHT_CLASS;

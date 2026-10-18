@@ -24,7 +24,7 @@ import { PLACEMENT_LEVEL_ORDER, type PlacementItem, type PlacementLevel } from '
 export { PLACEMENT_LEVEL_ORDER };
 
 /** The learner's answer to one item: the chosen option index, or `null` for "No lo sé" / unanswered. */
-export type PlacementAnswer = number | null;
+type PlacementAnswer = number | null;
 
 /** Lookup by item id. A missing key counts exactly like an explicit `null` (wrong, not excluded). */
 export type PlacementAnswers = Readonly<Record<string, PlacementAnswer>>;

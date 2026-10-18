@@ -24,7 +24,6 @@ import {
   parseImagePath,
   isOwnUploadPath,
   isPublicImagePath,
-  isQuestionImagePath,
   type ImageKind,
   isUuid,
   AUDIO_UPLOADS_BUCKET,
@@ -45,7 +44,6 @@ export {
   parseImagePath,
   isOwnUploadPath,
   isPublicImagePath,
-  isQuestionImagePath,
   type ImageKind,
   AUDIO_UPLOADS_BUCKET,
   AUDIO_BUCKET,
@@ -58,7 +56,7 @@ export {
 };
 
 /** Signed URL lifetime: long enough for one upload/preview round trip, no longer. */
-export const SIGNED_URL_TTL_SECONDS = 5 * 60;
+const SIGNED_URL_TTL_SECONDS = 5 * 60;
 
 /** The per-user upload cap enforced by the upload endpoint (429 at/above this). */
 export const MAX_UPLOADS_PER_USER = 100;

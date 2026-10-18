@@ -59,14 +59,14 @@ export interface Camera {
 }
 
 /** Context padding around a framed zone, as a fraction of the zone's OWN size on that axis. */
-export const ZONE_PADDING_FRACTION = 0.6;
+const ZONE_PADDING_FRACTION = 0.6;
 
 /**
  * The padding floor, as a fraction of the whole PAGE size on that axis —
  * keeps a tiny zone (a checkbox, a single letter blank) from getting a
  * proportional padding so small it reads as no context at all.
  */
-export const ZONE_PADDING_MIN_PAGE_FRACTION = 0.04;
+const ZONE_PADDING_MIN_PAGE_FRACTION = 0.04;
 
 /**
  * The most a zone-focused camera may ever zoom in, relative to the page's

@@ -28,15 +28,15 @@
  * ever shifts a boundary hour's entry into yesterday/tomorrow's bucket.
  */
 
-export interface MetDetails {
+interface MetDetails {
   air_temperature?: number;
 }
 
-export interface MetSummary {
+interface MetSummary {
   symbol_code?: string;
 }
 
-export interface MetTimePeriod {
+interface MetTimePeriod {
   summary?: MetSummary;
   details?: MetDetails;
 }
@@ -51,14 +51,14 @@ export interface MetTimeseriesEntry {
   };
 }
 
-export interface NowWeather {
+interface NowWeather {
   tempC: number;
   icon: 'sun' | 'partly' | 'cloud' | 'rain';
   labelEn: string;
   labelEs: string;
 }
 
-export interface DayForecast {
+interface DayForecast {
   /** `"YYYY-MM-DD"`, the UTC calendar date this entry represents. */
   date: string;
   /** Three-letter English weekday abbreviation, e.g. `"Tue"`. */

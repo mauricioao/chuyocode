@@ -37,7 +37,7 @@ export function clearHeartsClient(): void {
   serviceClient = null;
 }
 
-export type ToggleHeartError = 'not_found' | 'self_heart' | 'toggle_failed';
+type ToggleHeartError = 'not_found' | 'self_heart' | 'toggle_failed';
 export type ToggleHeartResult =
   | { ok: true; hearted: boolean; heartCount: number }
   | { ok: false; error: ToggleHeartError };

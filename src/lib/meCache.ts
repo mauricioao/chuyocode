@@ -45,7 +45,7 @@ function isProfile(value: unknown): value is Profile {
 }
 
 /** Validate an arbitrary parsed-JSON value into a real {@link CachedMe}, or `undefined` if malformed. */
-export function parseCachedMe(raw: unknown): CachedMe | undefined {
+function parseCachedMe(raw: unknown): CachedMe | undefined {
   if (raw === null || typeof raw !== 'object') return undefined;
   const { profile } = raw as Record<string, unknown>;
   if (profile === null) return { profile: null };

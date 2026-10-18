@@ -8,7 +8,7 @@
  */
 import type { Lang } from './i18n';
 
-export interface SectionImage {
+interface SectionImage {
   asset?: { url?: string; metadata?: { lqip?: string } } | null;
 }
 

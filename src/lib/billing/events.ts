@@ -13,7 +13,7 @@
  */
 
 /** Billing providers this codebase knows how to map. Paddle Billing first. */
-export type BillingProvider = 'paddle';
+type BillingProvider = 'paddle';
 
 /**
  * Mirrors `user_subscriptions.status` (`0019_billing_foundation.sql`):

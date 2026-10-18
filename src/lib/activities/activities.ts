@@ -27,10 +27,10 @@ import {
 } from './discoveryQuery';
 
 /** DB table names — must match `supabase/migrations/0011_activities.sql`. */
-export const ACTIVITIES_TABLE = 'activities';
-export const ACTIVITY_REVISIONS_TABLE = 'activity_revisions';
+const ACTIVITIES_TABLE = 'activities';
+const ACTIVITY_REVISIONS_TABLE = 'activity_revisions';
 /** `supabase/migrations/0012_activity_views.sql` — read here only for the `novistas` filter below. */
-export const ACTIVITY_VIEWS_TABLE = 'activity_views';
+const ACTIVITY_VIEWS_TABLE = 'activity_views';
 
 /** Statuses excluded from an author's own edit surface — see file header. */
 const REMOVED_STATUS = 'removed';
@@ -136,7 +136,7 @@ export async function createActivity(
  * still shows its title (the credit line stays honest about where the
  * content came from) but stops being clickable.
  */
-export interface ActivitySource {
+interface ActivitySource {
   id: string;
   title: string;
   visible: boolean;
