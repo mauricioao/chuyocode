@@ -21,7 +21,7 @@
 import { MAX_SLOT_EXPLANATION_LENGTH, type Slot } from '@/lib/exercisePayload';
 import { Textarea } from '@/components/ui/textarea';
 
-export const COPY = {
+const COPY = {
   es: {
     explanationLabel: '¿Por qué? (explicación)',
     explanationPlaceholder: 'Explicación opcional',

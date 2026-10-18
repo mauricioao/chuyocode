@@ -30,7 +30,7 @@ import type { QuizBlock } from '@/lib/activities/blocks';
 import { conversionOptions, type ConversionReason, type Mold } from '@/lib/activities/templateConversion';
 import { cn } from '@/lib/utils';
 
-export const COPY = {
+const COPY = {
   es: {
     title: 'Cambiar de molde',
     current: 'Actual',

@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { splitLabelAtBlank, type Slot } from '@/lib/exercisePayload';
 import { Textarea } from '@/components/ui/textarea';
 
-export const COPY = {
+const COPY = {
   es: {
     label: 'Enunciado (usa ___ para el espacio en blanco)',
     remove: 'Quitar esta parte del ejercicio',

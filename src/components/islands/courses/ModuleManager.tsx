@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import LessonForm, { type LessonFormValues, type LessonKind } from './LessonForm';
 
-export interface LessonRecord {
+interface LessonRecord {
   id: string;
   position: number;
   title: string;

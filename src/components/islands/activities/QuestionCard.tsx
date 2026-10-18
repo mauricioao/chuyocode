@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
-export const COPY = {
+const COPY = {
   es: {
     questionLabel: 'Pregunta',
     questionPlaceholder: 'Escribe la pregunta',

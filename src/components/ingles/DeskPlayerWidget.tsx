@@ -46,7 +46,7 @@ import { DAILY_PHRASES, pickPhraseIndex } from '@/lib/dailyPhrases';
 import { useSpeech, NORMAL_RATE } from '@/lib/speech/useSpeech';
 import { estimateSpeechMs } from '@/lib/speech/estimateSpeechMs';
 
-export interface DeskPlayerWidgetLabels {
+interface DeskPlayerWidgetLabels {
   title: string;
   prev: string;
   next: string;

@@ -17,7 +17,7 @@ import { WarningCircleIcon } from '@phosphor-icons/react/dist/ssr/WarningCircle'
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-export interface UnsavedChangesModalLabels {
+interface UnsavedChangesModalLabels {
   title: string;
   saveAndLeave: string;
   leaveWithoutSaving: string;
