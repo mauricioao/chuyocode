@@ -1,24 +1,147 @@
 import { test, expect, type Page } from '@playwright/test';
+import { localSupabaseAdmin, localSupabaseRest } from './support/localSupabaseAdmin';
 
 /**
  * Editor mobile layout — night pass 2026-10-18 (recorrido H13–H16), amended
- * after reviewer follow-up on the first pass (row overflow/misalignment at
- * 375px still broken, H13's first finding — Básico preview question/answer
- * alignment — still open, screenshots not proving hydration).
+ * twice after reviewer follow-up: first for row overflow/misalignment at
+ * 375px and H13's first finding (Básico preview question/answer alignment),
+ * then again because the fixture activity this spec needs was hand-seeded
+ * outside the test run and stopped existing — every test here silently
+ * skipped under `pnpm test:e2e:auth`.
  *
- * Fixture: a "Varios juegos" (Básico) activity owned by the `e2e-regular`
- * fixture user, seeded directly in the local Supabase database (see the PR
- * draft for the exact SQL) — `block-1` is the Básico quiz block these tests
- * mostly exercise, `block-2` a "match"-template quiz block (used only to
- * reach `TemplateEditorKit`'s own live-preview stage for the canvas-height
- * check) and `block-3` a worksheet block with an image (used only to reach
- * the mobile toolbar's "Cambiar imagen" scroll region). Needs the local
- * Supabase fixture + this activity row; skips gracefully (same posture as
- * `desk-widgets-part4.spec.ts`) if the signed-in session does not actually
- * reach the editor (anonymous session, or the fixture activity missing).
+ * SELF-SEEDING now (same pattern `desk-minimized-tray-part6b.spec.ts`
+ * already uses, factored into `support/localSupabaseAdmin.ts`): a
+ * `beforeAll` upserts one "Varios juegos" activity owned by the
+ * `e2e-regular` fixture user (`11111111-1111-1111-1111-111111111111`,
+ * `supabase/seed.sql`) via local Supabase's own REST API with the
+ * service-role key, and an `afterAll` deletes it — `localSupabaseAdmin()`
+ * refuses anything that is not `localhost`/`127.0.0.1`, so this never
+ * touches a remote project. `block-1` is the Básico quiz block (4 slots,
+ * one long question, a `promptImages` entry on `slot-1` so "Quitar imagen"
+ * has something to show) these tests mostly exercise, `block-2` a
+ * "match"-template quiz block (used only to reach `TemplateEditorKit`'s own
+ * live-preview stage for the canvas-height check) and `block-3` a worksheet
+ * block with an image ref (used only to reach the mobile toolbar's
+ * "Cambiar imagen" scroll region — a missing storage object at that path is
+ * fine, the editor still shows the change-image trigger from the stored
+ * metadata alone, verified). `test.describe.configure({ mode: 'default' })`
+ * below keeps workers from racing on this shared row. Falls back to
+ * skipping every test gracefully (same posture as `desk-widgets-part4.spec.ts`)
+ * when no local admin access is configured, or when the signed-in session
+ * does not actually reach the editor.
  */
 
-const ACTIVITY_ID = '99999999-0000-0000-0000-000000000001';
+const ACTIVITY_ID = 'e2e0ed17-0000-4000-8000-000000000001';
+const REVISION_ID = 'e2e0ed17-0000-4000-8000-000000000002';
+/** `e2e-regular@chuyocode.test` — `supabase/seed.sql`'s own fixed id. The editor's `getActivityForEdit` requires `author_id` to match the signed-in session, so this must stay the regular fixture, never the moderator one. */
+const AUTHOR_ID = '11111111-1111-1111-1111-111111111111';
+
+/** This block's own question-image path (`slot-1`'s `promptImages` entry) — well-formed (`paths.ts`'s own `FULL_PATH_RE`) but never actually uploaded; the thumbnail is allowed to fail to load, nothing under test depends on the pixels. */
+const QUESTION_IMAGE_PATH = `activity-uploads/${AUTHOR_ID}/question-33333333-3333-3333-3333-333333333333.webp`;
+/** `block-3`'s own worksheet image path, same "well-formed, never uploaded" posture. */
+const WORKSHEET_IMAGE_PATH = `activity-uploads/${AUTHOR_ID}/44444444-4444-4444-4444-444444444444.webp`;
+
+async function deleteSeededEditorActivity(): Promise<void> {
+  const admin = localSupabaseAdmin();
+  if (!admin) return;
+  // Always `draft`/no `published_revision_id` (never published by this
+  // spec), so the revision can be deleted directly — no FK to clear first,
+  // unlike `desk-minimized-tray-part6b.spec.ts`'s own `live` fixture.
+  await localSupabaseRest(admin, `activity_revisions?activity_id=eq.${ACTIVITY_ID}`, { method: 'DELETE' });
+  await localSupabaseRest(admin, `activities?id=eq.${ACTIVITY_ID}`, { method: 'DELETE' });
+}
+
+/** Seeds the editor fixture activity in local Supabase; returns `true` once seeded, `false` when no local admin access (every test below then skips). */
+async function seedEditorActivity(): Promise<boolean> {
+  const admin = localSupabaseAdmin();
+  if (!admin) return false;
+  await deleteSeededEditorActivity();
+  await localSupabaseRest(admin, 'activities', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: ACTIVITY_ID,
+      author_id: AUTHOR_ID,
+      title: 'Night layout check - Varios juegos',
+      level: 'A1',
+      status: 'draft',
+      block_types: ['quiz', 'worksheet'],
+      block_count: 3,
+    }),
+  });
+  await localSupabaseRest(admin, 'activity_revisions', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: REVISION_ID,
+      activity_id: ACTIVITY_ID,
+      status: 'draft',
+      created_by: AUTHOR_ID,
+      blocks: [
+        {
+          id: 'block-1',
+          type: 'quiz',
+          payload: {
+            pools: {},
+            slots: [
+              { id: 'slot-1', label: 'What color is the sky on a clear, cloudless afternoon in summer?', input: 'text', answer: ['blue'] },
+              { id: 'slot-2', label: 'What is 2 + 2?', input: 'text', answer: ['4'] },
+              { id: 'slot-3', label: 'What is the capital city of France?', input: 'text', answer: ['Paris'] },
+              { id: 'slot-4', label: 'What animal says "moo"?', input: 'text', answer: ['cow'] },
+            ],
+            blocks: [
+              { kind: 'row', id: 'row-1', slotId: 'slot-1' },
+              { kind: 'row', id: 'row-2', slotId: 'slot-2' },
+              { kind: 'row', id: 'row-3', slotId: 'slot-3' },
+              { kind: 'row', id: 'row-4', slotId: 'slot-4' },
+            ],
+          },
+          promptImages: {
+            'slot-1': { path: QUESTION_IMAGE_PATH, width: 200, height: 200 },
+          },
+        },
+        {
+          id: 'block-2',
+          type: 'quiz',
+          template: 'match',
+          payload: {
+            pools: {},
+            slots: [
+              { id: 'slot-5', label: 'cat', input: 'text', answer: ['gato'] },
+              { id: 'slot-6', label: 'dog', input: 'text', answer: ['perro'] },
+            ],
+            blocks: [
+              { kind: 'row', id: 'row-5', slotId: 'slot-5' },
+              { kind: 'row', id: 'row-6', slotId: 'slot-6' },
+            ],
+          },
+        },
+        {
+          id: 'block-3',
+          type: 'worksheet',
+          rotation: 0,
+          image: { path: WORKSHEET_IMAGE_PATH, width: 1000, height: 1400 },
+          zones: [],
+        },
+      ],
+    }),
+  });
+  return true;
+}
+
+// One worker, in order: the seeded row is shared, so parallel workers' own
+// beforeAll/afterAll pairs must never race to create/delete it (same
+// reasoning `desk-minimized-tray-part6b.spec.ts` documents for its own
+// fixture).
+test.describe.configure({ mode: 'default' });
+
+let seeded = false;
+
+test.beforeAll(async () => {
+  seeded = await seedEditorActivity();
+});
+
+test.afterAll(async () => {
+  if (seeded) await deleteSeededEditorActivity();
+});
 
 // Night run on a loaded machine: the dev server's first compile of this
 // dynamic route can take well past Playwright's default 30s test timeout
@@ -34,6 +157,7 @@ const ACTIVITY_ID = '99999999-0000-0000-0000-000000000001';
 // `iframe.src` uses renders the window's content directly, no hub, no
 // iframe — the real `ActivityEditorIsland` this spec needs to measure.
 async function gotoEditorOrSkip(page: Page): Promise<boolean> {
+  if (!seeded) return false;
   await page.goto(`/es/crear/${ACTIVITY_ID}?ventana=1`, { waitUntil: 'commit', timeout: 120_000 });
   if (new URL(page.url()).pathname !== `/es/crear/${ACTIVITY_ID}`) return false;
   try {
