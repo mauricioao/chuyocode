@@ -1,4 +1,5 @@
 import { test, expect, type FrameLocator, type Page } from '@playwright/test';
+import { localSupabaseAdmin, localSupabaseRest, type LocalSupabaseAdmin } from './support/localSupabaseAdmin';
 
 /**
  * Minimized-windows tray — "desktop" redesign PART 6b (owner feedback
@@ -23,7 +24,11 @@ import { test, expect, type FrameLocator, type Page } from '@playwright/test';
  * published activity in LOCAL Supabase before the suite and delete it after,
  * so the fixture seed stays users-only. That only ever happens when
  * SUPABASE_URL points at localhost and SUPABASE_SERVICE_ROLE_KEY is set;
- * otherwise the spec falls back to the first activity in /sitemap.xml.
+ * otherwise the spec falls back to the first activity in /sitemap.xml. The
+ * local-admin guard/REST helpers themselves live in
+ * `support/localSupabaseAdmin.ts` (factored out night-of 2026-10-18 so
+ * `editor-mobile-layout.spec.ts` could self-seed the same way) — this file's
+ * own seed/cleanup shape is otherwise unchanged.
  */
 
 const SEEDED_ACTIVITY_ID = 'e2e0b6b0-0000-4000-8000-000000000001';
@@ -31,34 +36,10 @@ const SEEDED_REVISION_ID = 'e2e0b6b0-0000-4000-8000-000000000002';
 /** The moderator fixture user from supabase/seed.sql authors it, so the signed-in regular user sees a community activity. */
 const SEEDED_AUTHOR_ID = '22222222-2222-2222-2222-222222222222';
 
-/** Service-role REST access to LOCAL Supabase only — never a remote project. */
-function localSupabaseAdmin(): { url: string; key: string } | null {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  const host = new URL(url).hostname;
-  if (host !== '127.0.0.1' && host !== 'localhost') return null;
-  return { url, key };
-}
-
-async function rest(admin: { url: string; key: string }, path: string, init: RequestInit): Promise<void> {
-  const res = await fetch(`${admin.url}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      apikey: admin.key,
-      Authorization: `Bearer ${admin.key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
-      ...init.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`Local Supabase ${init.method} ${path}: HTTP ${res.status} ${await res.text()}`);
-}
-
-async function deleteSeededActivity(admin: { url: string; key: string }): Promise<void> {
-  await rest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'PATCH', body: JSON.stringify({ status: 'draft', published_revision_id: null }) });
-  await rest(admin, `activity_revisions?activity_id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'DELETE' });
-  await rest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'DELETE' });
+async function deleteSeededActivity(admin: LocalSupabaseAdmin): Promise<void> {
+  await localSupabaseRest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'PATCH', body: JSON.stringify({ status: 'draft', published_revision_id: null }) });
+  await localSupabaseRest(admin, `activity_revisions?activity_id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'DELETE' });
+  await localSupabaseRest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'DELETE' });
 }
 
 /** Publishes one minimal quiz activity in local Supabase; returns its practice path, or null when no local admin access. */
@@ -66,7 +47,7 @@ async function seedPublishedActivity(): Promise<string | null> {
   const admin = localSupabaseAdmin();
   if (!admin) return null;
   await deleteSeededActivity(admin);
-  await rest(admin, 'activities', {
+  await localSupabaseRest(admin, 'activities', {
     method: 'POST',
     body: JSON.stringify({
       id: SEEDED_ACTIVITY_ID,
@@ -79,7 +60,7 @@ async function seedPublishedActivity(): Promise<string | null> {
       published_at: new Date().toISOString(),
     }),
   });
-  await rest(admin, 'activity_revisions', {
+  await localSupabaseRest(admin, 'activity_revisions', {
     method: 'POST',
     body: JSON.stringify({
       id: SEEDED_REVISION_ID,
@@ -89,7 +70,7 @@ async function seedPublishedActivity(): Promise<string | null> {
       blocks: [{ id: 'b1', type: 'quiz', payload: { pools: {}, slots: [{ id: 's1', label: 'cat', input: 'text', answer: ['cat'] }] } }],
     }),
   });
-  await rest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, {
+  await localSupabaseRest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, {
     method: 'PATCH',
     body: JSON.stringify({ status: 'live', published_revision_id: SEEDED_REVISION_ID }),
   });

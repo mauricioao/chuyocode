@@ -107,7 +107,20 @@ export function TemplateEditorLayout({
         <section
           aria-label={stageLabel}
           data-testid={`template-stage-${blockId}`}
-          className="template-stage flex min-h-[24rem] min-w-0 flex-col overflow-clip lg:min-h-0 lg:flex-1"
+          // CANVAS HEIGHT ON PHONE/TABLET (mobile review 2026-10-18): the old
+          // flat `min-h-[24rem]` (384px) rendered only ~330px of actual
+          // canvas once the stage's own label/padding were subtracted — too
+          // short to work a worksheet image or try a game comfortably at
+          // 375/768. `40rem` (640px) matches the height this codebase
+          // already treats as "enough room for one activity" elsewhere
+          // (`[lessonId].astro`'s own `h-[min(80vh,48rem)]` course-lesson
+          // frame tops out at 48rem, and its phone floor is 650px) — tall
+          // enough to be usable, short enough that the page still scrolls
+          // normally above/below it on a phone (this layout keeps ordinary
+          // document flow below `lg:`, see this component's own header).
+          // `lg:min-h-0` is unchanged: desktop still gets the full
+          // `flex-1` height from the window's own fixed-height focus layout.
+          className="template-stage flex min-h-[40rem] min-w-0 flex-col overflow-clip lg:min-h-0 lg:flex-1"
         >
           <p aria-hidden="true" className="px-5 pt-4 text-xs font-medium text-muted-foreground">
             {stageLabel}

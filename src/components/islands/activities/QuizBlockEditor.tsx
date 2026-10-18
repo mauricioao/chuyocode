@@ -96,7 +96,7 @@ import type { GameMode } from '@/lib/activities/gameModes';
 import ChangeMoldDialog from './ChangeMoldDialog';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
-import VariosJuegosRow, { ROW_GRID } from './VariosJuegosRow';
+import VariosJuegosRow, { ROW_GRID, ROW_GRID_HEADER, ROW_DIVIDER_CLASS } from './VariosJuegosRow';
 import QuizLivePreview from './QuizLivePreview';
 import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
@@ -475,7 +475,7 @@ function SortableQuestionCard({
     <button
       type="button"
       aria-label={dragHandleLabel}
-      className="mt-2 flex max-lg:min-h-11 max-lg:min-w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground active:cursor-grabbing"
+      className="flex max-lg:min-h-11 max-lg:min-w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground active:cursor-grabbing"
       {...attributes}
       {...listeners}
     >
@@ -1104,7 +1104,12 @@ export default function QuizBlockEditor({
           row below only teaches the format, same gating as that file's own
           header). */}
       {hasQuestions && (
-        <div aria-hidden="true" className={ROW_GRID}>
+        <div aria-hidden="true" className={ROW_GRID_HEADER}>
+          {/* Leading blank cell for the handle's own column (col 1) — see
+              `ROW_GRID`'s own header for the full column scheme; keeps
+              "Pregunta"/"Respuesta" lined up over their real columns (2
+              and 4) instead of the handle's and divider's. */}
+          <span />
           <GroupLabel>{t.questionHeader}</GroupLabel>
           <span />
           <GroupLabel>{t.answerHeader}</GroupLabel>
@@ -1121,6 +1126,10 @@ export default function QuizBlockEditor({
           // (`addExampleQuestionRow`), never a separate persisted row of its
           // own.
           <TemplateRow testId={`varios-example-${blockId}`}>
+            {/* No drag handle/delete for a ghost row (nothing real to
+                reorder/remove yet) — just question (col 2) and answer
+                (col 2 row 2 at mobile, stacked under it like a real row;
+                col 4 row 1 at `sm:`, beside it), same columns real rows use. */}
             <div className={ROW_GRID}>
               <TemplateField
                 aria-label={t.addQuestion}
@@ -1129,8 +1138,9 @@ export default function QuizBlockEditor({
                 value=""
                 onChange={(event) => addExampleQuestionRow('question', event.target.value)}
                 onPaste={(event) => handleVariosPaste(null, event)}
+                className="col-start-2 row-start-1 min-w-0"
               />
-              <span aria-hidden="true" className="h-7 w-px bg-foreground/[0.08]" />
+              <span aria-hidden="true" className={ROW_DIVIDER_CLASS} />
               <TemplateField
                 aria-label={t.addQuestion}
                 placeholder={t.exampleAnswer}
@@ -1138,8 +1148,8 @@ export default function QuizBlockEditor({
                 value=""
                 onChange={(event) => addExampleQuestionRow('answer', event.target.value)}
                 onPaste={(event) => handleVariosPaste(null, event)}
+                className="col-start-2 row-start-2 min-w-0 sm:col-start-4 sm:row-start-1"
               />
-              <div />
             </div>
           </TemplateRow>
         ) : (
@@ -1359,12 +1369,18 @@ export default function QuizBlockEditor({
           // (right-center of the window) would never sit on top of this
           // column's own "Comprobar" button — which left a visibly empty
           // gutter down the right edge. FLOATING COMPROBAR (build item 5)
-          // already clears the docked rail on its own (`QuizLivePreview`'s
-          // own `editorOffset`, `FLOATING_CHECK_BAR_EDITOR_OFFSET`), so this
-          // column no longer needs a reserved gutter at all — it now runs
-          // edge to edge like every other column, with the toolbar floating
-          // OVER it instead.
-          className={cn(QUIZ_COLUMN_CLASS, mobileTab === 'questions' && 'max-lg:hidden')}
+          // clears the docked rail on its own for the "Comprobar" capsule
+          // itself (`QuizLivePreview`'s own `editorOffset`,
+          // `FLOATING_CHECK_BAR_EDITOR_OFFSET`) — but the rest of this
+          // column's own LIVE content (the game mode tabs, the board itself)
+          // is real, clickable game UI, not decoration, and the docked rail
+          // still floats on top of its last ~28px (mobile review
+          // 2026-10-17/18, H15). `lg:pr-[70px]` is the SAME gutter
+          // `TemplateEditorLayout` already reserves for the 4 templates
+          // (`TemplateEditorKit.tsx`'s own header: 12px window edge + 42px
+          // rail + 16px gap) — it keeps this column's own content clear of
+          // the rail too, without moving the rail's design at all.
+          className={cn(QUIZ_COLUMN_CLASS, 'lg:pr-[70px]', mobileTab === 'questions' && 'max-lg:hidden')}
         >
           {previewColumn}
         </div>

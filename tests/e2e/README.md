@@ -24,10 +24,16 @@ against local Supabase, never production**.
    export SUPABASE_ANON_KEY=<ANON_KEY from `pnpm db:start`>
    export SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY from `pnpm db:start`>
    ```
-   The service-role key lets `desk-minimized-tray-part6b.spec.ts` publish
-   its own activity before the suite and delete it after; it only does so
-   when `SUPABASE_URL` is localhost. Without it that spec falls back to
-   the first activity in `/sitemap.xml` and skips when there is none.
+   The service-role key lets any self-seeding spec (`support/
+   localSupabaseAdmin.ts`'s own `localSupabaseAdmin()`) create its own
+   row(s) before the suite and delete them after; it only does so when
+   `SUPABASE_URL` is localhost — `desk-minimized-tray-part6b.spec.ts`
+   publishes its own activity (falls back to the first one in
+   `/sitemap.xml`, skipping when there is none) and
+   `editor-mobile-layout.spec.ts` seeds its own draft "Varios juegos"
+   activity owned by the regular fixture user (skips entirely without it —
+   there is no fallback, the editor only ever shows the signed-in author's
+   own activities).
    `SANITY_PROJECT_ID`/`SANITY_DATASET` still need a value (src/lib/env.ts
    requires all four to boot): the public ids from `sanity.config.ts`
    (`z9wkqssq` / `production_`). Export them too rather than relying on a
@@ -50,6 +56,21 @@ Specs already written against a signed-in session (e.g.
 for real: their own `gotoHubOrSkip` helper only skips when the loaded page
 is NOT the hub, which stops happening once a valid session cookie is
 present.
+
+## Self-seeding a spec's own fixture row(s)
+
+A spec that needs a row no fixture/seed covers (an activity, in practice)
+seeds it itself rather than depending on one created by hand outside the
+test run — a hand-seeded row silently stops existing the moment anyone
+cleans up the database, and every test then skips without failing loudly.
+Use `support/localSupabaseAdmin.ts`'s `localSupabaseAdmin()` (`null` unless
+`SUPABASE_URL` is `localhost`/`127.0.0.1` and `SUPABASE_SERVICE_ROLE_KEY` is
+set — never a remote project) and `localSupabaseRest()` in a `test.beforeAll`/
+`test.afterAll` pair, same shape `desk-minimized-tray-part6b.spec.ts` and
+`editor-mobile-layout.spec.ts` both use. Add
+`test.describe.configure({ mode: 'default' })` so parallel workers never race
+to create/delete the same shared row, and keep every test's own `test.skip`
+fallback for when seeding did not run (no local admin access).
 
 ## Adding a newly-passing spec
 
