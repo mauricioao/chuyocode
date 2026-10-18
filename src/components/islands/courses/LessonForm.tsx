@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { renderLessonMarkdown } from '@/lib/courses/markdown';
+import '@styles/lesson-prose.css';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -183,7 +184,7 @@ export default function LessonForm({
             <span className="text-sm font-semibold text-foreground">{fieldsT.markdownPreview}</span>
             <div
               data-testid="lesson-markdown-preview"
-              className="prose prose-sm max-w-none rounded-md border border-border bg-background p-3 text-foreground"
+              className="lesson-prose max-w-none rounded-md border border-border bg-background p-3 text-sm text-foreground"
               // Rendered through `renderLessonMarkdown` — sanitized HTML only, never raw author input.
               dangerouslySetInnerHTML={{ __html: preview ?? '' }}
             />
