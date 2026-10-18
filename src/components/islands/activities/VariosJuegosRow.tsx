@@ -36,7 +36,7 @@ import { FadeImage } from '@/components/ui/fade-image';
 import QuestionCard, { type QuestionCardProps } from './QuestionCard';
 import { RowRemoveButton, TemplateField, TemplateRow } from './TemplateEditorKit';
 
-export const COPY = {
+const COPY = {
   es: {
     questionLabel: 'Pregunta',
     answerLabel: 'Respuesta',

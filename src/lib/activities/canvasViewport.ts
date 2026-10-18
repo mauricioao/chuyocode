@@ -103,8 +103,8 @@ export function fitZoom(viewport: Size, content: Size): number {
  * 25% and at 400%; the per-frame cap keeps a fast trackpad fling from
  * jumping several zoom levels in a single frame.
  */
-export const WHEEL_ZOOM_SENSITIVITY = 0.0015;
-export const MAX_WHEEL_ZOOM_STEP = 0.5;
+const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+const MAX_WHEEL_ZOOM_STEP = 0.5;
 
 /** The content box's rendered CSS pixel size at `zoom` — what the canvas' `style.width/height` are set to. */
 export function contentSize(image: Size, zoom: number): Size {

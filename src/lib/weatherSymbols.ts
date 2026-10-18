@@ -23,7 +23,7 @@
  * least wrong single guess for an unknown condition, and never throws.
  */
 
-export type WeatherIcon = 'sun' | 'partly' | 'cloud' | 'rain';
+type WeatherIcon = 'sun' | 'partly' | 'cloud' | 'rain';
 
 export interface WeatherSymbol {
   icon: WeatherIcon;

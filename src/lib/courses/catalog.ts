@@ -123,7 +123,7 @@ export interface DetailLesson {
   is_preview: boolean;
 }
 
-export interface DetailModule {
+interface DetailModule {
   id: string;
   position: number;
   title: string;

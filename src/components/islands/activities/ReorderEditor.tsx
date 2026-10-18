@@ -35,7 +35,7 @@ import {
   usePasteFeedback,
 } from './TemplateEditorKit';
 
-export const COPY = {
+const COPY = {
   es: {
     title: 'Reordenar',
     instruction: 'Escribe cada oración bien ordenada; el juego mezcla sus palabras.',

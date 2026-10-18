@@ -49,7 +49,7 @@ export const supabaseServer: SupabaseClient = createClient(
  * is not configured. Fails loudly at call time (not module load) so the app
  * still boots for read-only features while the pass work units are pending.
  */
-export class MissingServiceRoleKeyError extends Error {
+class MissingServiceRoleKeyError extends Error {
   constructor() {
     super(
       'SUPABASE_SERVICE_ROLE_KEY is not set. It is required for server-side ' +

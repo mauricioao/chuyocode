@@ -19,7 +19,7 @@ export const DESK_ARRANGE_RESET_EVENT = 'desk:arrange-reset';
 /** Dispatched BY the desk's drag system whenever whether any widget has a saved (non-default) position changes; the header icon listens and shows/hides itself accordingly. */
 export const DESK_ARRANGE_VISIBILITY_EVENT = 'desk:arrange-visibility';
 
-export interface DeskArrangeVisibilityDetail {
+interface DeskArrangeVisibilityDetail {
   visible: boolean;
 }
 

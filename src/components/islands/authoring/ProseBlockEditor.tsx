@@ -14,7 +14,7 @@
 import type { ProseBlock } from '@/lib/exercisePayload';
 import { Textarea } from '@/components/ui/textarea';
 
-export const COPY = {
+const COPY = {
   es: { label: 'Texto de contexto', remove: 'Quitar este bloque de texto' },
   en: { label: 'Context text', remove: 'Remove this text block' },
 } as const;

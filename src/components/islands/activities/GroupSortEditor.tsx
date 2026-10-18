@@ -38,7 +38,7 @@ import {
   usePasteFeedback,
 } from './TemplateEditorKit';
 
-export const COPY = {
+const COPY = {
   es: {
     title: 'Ordenar por grupos',
     instruction: 'Nombra cada grupo y escribe los elementos que le pertenecen.',

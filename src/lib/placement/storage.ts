@@ -30,7 +30,7 @@ function isPlacementLevel(value: unknown): value is PlacementLevel {
 }
 
 /** Parses a raw (possibly `null`/malformed) stored value into a result — never throws. `null` for anything invalid. */
-export function parseStoredPlacementResult(raw: string | null): StoredPlacementResult | null {
+function parseStoredPlacementResult(raw: string | null): StoredPlacementResult | null {
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);

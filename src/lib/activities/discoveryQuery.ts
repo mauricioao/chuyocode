@@ -8,7 +8,7 @@
  */
 
 /** Sort orders the community list understands, in the order the `<select>` offers them. */
-export const SORT_ORDERS = ['recientes', 'gustadas', 'vistas'] as const;
+const SORT_ORDERS = ['recientes', 'gustadas', 'vistas'] as const;
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
 export function isSortOrder(value: unknown): value is SortOrder {
@@ -16,7 +16,7 @@ export function isSortOrder(value: unknown): value is SortOrder {
 }
 
 /** Block-type filters — must match `activities.block_types`' own vocabulary (`blocks.ts`). */
-export const BLOCK_TYPE_FILTERS = ['worksheet', 'quiz'] as const;
+const BLOCK_TYPE_FILTERS = ['worksheet', 'quiz'] as const;
 export type BlockTypeFilter = (typeof BLOCK_TYPE_FILTERS)[number];
 
 export function isBlockTypeFilter(value: unknown): value is BlockTypeFilter {

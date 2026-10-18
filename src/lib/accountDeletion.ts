@@ -62,7 +62,7 @@ export function clearAccountDeletionClient(): void {
   serviceClient = null;
 }
 
-export type DeleteAccountError = 'purge_failed' | 'storage_cleanup_failed' | 'delete_user_failed';
+type DeleteAccountError = 'purge_failed' | 'storage_cleanup_failed' | 'delete_user_failed';
 export type DeleteAccountResult = { ok: true } | { ok: false; error: DeleteAccountError };
 
 /**

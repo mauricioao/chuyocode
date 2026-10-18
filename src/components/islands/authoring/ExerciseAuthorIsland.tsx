@@ -49,7 +49,7 @@ import {
 } from '@/lib/authoringDraft';
 import type { Block, Payload } from '@/lib/exercisePayload';
 
-export const COPY = {
+const COPY = {
   es: {
     addProse: 'Agregar texto de contexto',
     addMedia: 'Agregar imagen o audio',

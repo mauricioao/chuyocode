@@ -47,7 +47,7 @@ import { SpeakerSlashIcon } from '@phosphor-icons/react/dist/ssr/SpeakerSlash';
 import { cn } from '@/lib/utils';
 
 /** How long the eased snap/return takes — the owner's "~180ms ease-out" ask. */
-export const GAME_DROP_ANIMATION_MS = 180;
+const GAME_DROP_ANIMATION_MS = 180;
 
 /** A gentle overshoot ease — a snap with a little life in it, not a linear slide. */
 const GAME_DROP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';

@@ -39,7 +39,7 @@ import { isPublicActivityRoute } from './access';
 export const AGE_CONSENT_VERSION = 'v1';
 
 /** The durable shape recorded at `app_metadata.ageConsent`. */
-export interface AgeConsentRecord {
+interface AgeConsentRecord {
   /** ISO-8601 timestamp of acceptance. */
   acceptedAt: string;
   /** {@link AGE_CONSENT_VERSION} at the moment of acceptance. */

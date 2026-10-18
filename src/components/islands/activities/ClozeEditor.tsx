@@ -36,7 +36,7 @@ import {
   usePasteFeedback,
 } from './TemplateEditorKit';
 
-export const COPY = {
+const COPY = {
   es: {
     title: 'Completar la frase',
     instruction: 'Escribe cada frase y marca los espacios entre corchetes.',

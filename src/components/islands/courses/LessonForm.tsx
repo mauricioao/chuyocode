@@ -33,7 +33,7 @@ export interface LessonFormValues {
   is_preview: boolean;
 }
 
-export interface LessonFormInitial extends LessonFormValues {
+interface LessonFormInitial extends LessonFormValues {
   id: string;
 }
 

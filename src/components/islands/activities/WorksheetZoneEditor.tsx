@@ -157,7 +157,7 @@ import { fieldClasses } from '@/lib/ui/field';
 import AudioMarkerButton from './AudioMarkerButton';
 import AudioMarkerPanel from './AudioMarkerPanel';
 
-export interface ZonesChangeOptions {
+interface ZonesChangeOptions {
   /**
    * `false` while a drag gesture (move/resize) is still in progress — the
    * caller must NOT create an undo step for every pointermove frame.
@@ -167,7 +167,7 @@ export interface ZonesChangeOptions {
   commit?: boolean;
 }
 
-export interface WorksheetZoneEditorProps {
+interface WorksheetZoneEditorProps {
   lang: Lang;
   image: ImageRef;
   imageUrl: string;
@@ -213,10 +213,10 @@ export interface WorksheetZoneEditorProps {
 }
 
 /** The three canvas tools (owner-approved design, "colocar un audio propio" build) — see the file header. */
-export type Tool = 'zone' | 'hand' | 'audio';
+type Tool = 'zone' | 'hand' | 'audio';
 
 /** Imperative handle (one-sheet redesign): lets a caller rendering the tool toggle elsewhere (`sideToolsPortalTarget`) still drive this canvas's own internal tool state. */
-export interface WorksheetZoneEditorHandle {
+interface WorksheetZoneEditorHandle {
   setTool: (tool: Tool) => void;
 }
 

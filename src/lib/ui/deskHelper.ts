@@ -30,7 +30,7 @@ import type { Lang } from '@lib/i18n';
 export const DESK_HELPER_FOLDED_STORAGE_KEY = 'ingles-desk-helper-folded';
 
 /** Below this width the open bubble can collide with the centred levels dock (owner spec: checked across the whole 1100-1440px desktop range) — duplicated as a literal in `DeskHelper.astro`'s own anti-flash script, which cannot import this module. */
-export const DESK_HELPER_OPEN_MIN_WIDTH = 1440;
+const DESK_HELPER_OPEN_MIN_WIDTH = 1440;
 
 /**
  * The SAME `desk:` breakpoint `@lib/ui/deskDrag.ts`/`DeskScene.astro` use

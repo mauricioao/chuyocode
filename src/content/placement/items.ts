@@ -31,9 +31,9 @@ export type PlacementLevel = (typeof PLACEMENT_LEVEL_ORDER)[number];
  * and always includes at least one `reading` item (a short context plus a
  * comprehension question).
  */
-export const PLACEMENT_SKILLS = ['grammar', 'vocabulary', 'reading'] as const;
+const PLACEMENT_SKILLS = ['grammar', 'vocabulary', 'reading'] as const;
 
-export type PlacementSkill = (typeof PLACEMENT_SKILLS)[number];
+type PlacementSkill = (typeof PLACEMENT_SKILLS)[number];
 
 export interface PlacementItem {
   /** Stable id, e.g. `a1-3` — never a position, so reordering this file never

@@ -23,7 +23,7 @@ import type { Zone } from './blocks';
 /** The only fields grading needs from a {@link Zone} — id, kind, accepted answers. */
 export type GradableZone = Pick<Zone, 'id' | 'kind' | 'answers'>;
 
-export interface ZoneResult {
+interface ZoneResult {
   zoneId: string;
   correct: boolean;
 }

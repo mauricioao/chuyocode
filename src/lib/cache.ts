@@ -19,9 +19,6 @@
 /** Plain object mapping header name → value. */
 export type HeaderDict = Record<string, string>;
 
-/** A cache policy is a pure function returning HTTP headers. */
-export type CachePolicy = () => HeaderDict;
-
 /**
  * Public content cache policy.
  *

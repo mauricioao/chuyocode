@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
  * chevron/chrome; a Phosphor `CaretDown` is drawn on top so it matches
  * `input.tsx`/`textarea.tsx` pixel-for-pixel.
  */
-export interface SelectProps extends React.ComponentProps<'select'> {
+interface SelectProps extends React.ComponentProps<'select'> {
   fieldSize?: FieldSize;
   wrapperClassName?: string;
 }

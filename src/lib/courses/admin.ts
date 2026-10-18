@@ -151,14 +151,14 @@ export async function createCourse(input: CourseInput, createdBy: string): Promi
   }
 }
 
-export interface ModuleWithLessons {
+interface ModuleWithLessons {
   id: string;
   position: number;
   title: string;
   lessons: LessonRecord[];
 }
 
-export interface LessonRecord {
+interface LessonRecord {
   id: string;
   position: number;
   title: string;

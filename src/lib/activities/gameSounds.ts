@@ -99,7 +99,7 @@ export function playFinish(ctx: GameAudioContext | null): void {
   ]);
 }
 
-export type GameCue = 'pickUp' | 'drop' | 'correct' | 'wrong' | 'finish';
+type GameCue = 'pickUp' | 'drop' | 'correct' | 'wrong' | 'finish';
 
 const CUE_PLAYERS: Record<GameCue, (ctx: GameAudioContext | null) => void> = {
   pickUp: playPickUp,

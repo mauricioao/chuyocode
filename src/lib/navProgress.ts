@@ -29,7 +29,7 @@
  * never animates its own width in between.
  */
 
-export type NavProgressPhase = 'idle' | 'pending' | 'active' | 'completing' | 'fading';
+type NavProgressPhase = 'idle' | 'pending' | 'active' | 'completing' | 'fading';
 
 export interface NavProgressState {
   phase: NavProgressPhase;

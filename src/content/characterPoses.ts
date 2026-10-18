@@ -37,10 +37,10 @@
  * one side (the window's own left edge).
  */
 
-export type CharacterName = 'vanina' | 'paco';
+type CharacterName = 'vanina' | 'paco';
 
 /** The side that sits flush (zero padding) against whatever UI edge the pose conceptually rests against — `null` when the pose floats free on every side. Mirrors `process.mjs`'s own `flushEdge` entries. */
-export type FlushEdge = 'top' | 'bottom' | 'left' | 'right' | null;
+type FlushEdge = 'top' | 'bottom' | 'left' | 'right' | null;
 
 export interface CharacterPose {
   character: CharacterName;

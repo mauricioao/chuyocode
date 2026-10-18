@@ -91,7 +91,7 @@ export function clearDuplicateClient(): void {
   serviceClient = null;
 }
 
-export type DuplicateError = 'not_found' | 'daily_limit' | 'upload_limit' | 'copy_failed' | 'create_failed';
+type DuplicateError = 'not_found' | 'daily_limit' | 'upload_limit' | 'copy_failed' | 'create_failed';
 export type DuplicateResult = { ok: true; id: string } | { ok: false; error: DuplicateError };
 
 /** `"<original>" + " (copia)"`, truncating the ORIGINAL so the whole thing stays <= 120 chars. */

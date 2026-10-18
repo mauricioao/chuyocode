@@ -64,7 +64,11 @@ export const REQUIRED_ENV_KEYS = [
   'SUPABASE_ANON_KEY',
 ] as const;
 
-/** Vars consumed by later phases; validated lazily where they are used. */
+/**
+ * Vars consumed by later phases; validated lazily where they are used.
+ * @public Documented extension point for new optional secrets (see the
+ * openspec designs), kept even though no module imports it.
+ */
 export const OPTIONAL_ENV_KEYS = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'AD_HMAC_SECRET',

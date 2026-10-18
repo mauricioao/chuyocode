@@ -33,9 +33,9 @@
  */
 export type UploadTaskKind = 'pdf' | 'image' | 'stitch';
 export type UploadTaskStage = 'preparing' | 'converting' | 'uploading';
-export type UploadTaskStatus = 'idle' | 'running' | 'done' | 'error' | 'cancelled';
+type UploadTaskStatus = 'idle' | 'running' | 'done' | 'error' | 'cancelled';
 
-export interface UploadTaskItemResult {
+interface UploadTaskItemResult {
   path: string;
   width: number;
   height: number;
@@ -203,7 +203,7 @@ export function uploadTaskReducer(state: UploadTaskState, event: UploadTaskEvent
   }
 }
 
-export interface UploadTaskRunDeps<Item> {
+interface UploadTaskRunDeps<Item> {
   kind: UploadTaskKind;
   items: Item[];
   /** The 1-based page/item number shown for `item` at `index` — e.g. the PDF's own page number. */

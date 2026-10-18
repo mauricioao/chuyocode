@@ -53,7 +53,7 @@ import {
   type Point,
 } from './canvasViewport';
 
-export type TouchGesturePhase = 'idle' | 'single' | 'pinch' | 'suppressed';
+type TouchGesturePhase = 'idle' | 'single' | 'pinch' | 'suppressed';
 
 export interface TouchGestureState {
   phase: TouchGesturePhase;
@@ -80,7 +80,7 @@ export type TouchGestureAction =
   | { type: 'pointerup'; id: number }
   | { type: 'pointercancel'; id: number };
 
-export type TouchGestureEffect =
+type TouchGestureEffect =
   | { type: 'none' }
   /** The caller's in-progress one-finger action (draw/move/resize) must be discarded, never committed. */
   | { type: 'cancel-single' }

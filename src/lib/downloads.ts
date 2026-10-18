@@ -24,7 +24,7 @@ export const DOWNLOADS_TABLE = 'book_downloads';
 export const INCREMENT_RPC = 'increment_download';
 
 /** How long a "most downloaded" ranking read stays fresh (ms). */
-export const DOWNLOADS_CACHE_TTL_MS = 60_000;
+const DOWNLOADS_CACHE_TTL_MS = 60_000;
 
 /** A single ranking entry: a book slug and its running download count. */
 export interface DownloadCount {

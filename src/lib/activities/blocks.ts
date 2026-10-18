@@ -182,7 +182,7 @@ export const MAX_ZONES_PER_WORKSHEET = 60;
 export const MAX_AUDIO_MARKERS_PER_WORKSHEET = 10;
 
 /** A block's author-editable name may not exceed this many characters. */
-export const MAX_BLOCK_NAME_LENGTH = 60;
+const MAX_BLOCK_NAME_LENGTH = 60;
 
 /** A zone's optional "Escuchar/Listen" text (D4) may not exceed this many characters. */
 export const MAX_ZONE_SPEAK_LENGTH = 200;

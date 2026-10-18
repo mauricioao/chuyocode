@@ -31,7 +31,7 @@ export type MediaVariant = 'poster' | 'wide' | 'ranked';
  * owns. Splitting the unions makes the distinction load-bearing instead of
  * relying on reviewers to remember it.
  */
-export type HeroVariant = 'hero' | 'logo';
+type HeroVariant = 'hero' | 'logo';
 
 /** Every variant {@link buildImage} accepts: cards plus hero-only contexts. */
 export type ImageVariant = MediaVariant | HeroVariant;

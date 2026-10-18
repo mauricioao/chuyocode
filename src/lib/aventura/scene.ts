@@ -12,22 +12,22 @@
  */
 
 /** Backdrops the retro screen can draw (CSS/SVG shapes, no image assets — see `SceneBackdrop`). */
-export const BACKGROUNDS = ['inn', 'forest', 'castle', 'market'] as const;
-export type Background = (typeof BACKGROUNDS)[number];
+const BACKGROUNDS = ['inn', 'forest', 'castle', 'market'] as const;
+type Background = (typeof BACKGROUNDS)[number];
 
-export interface Speaker {
+interface Speaker {
   name: string;
   /** Optional sprite key for `SceneBackdrop`'s portrait box; falls back to a generic silhouette. */
   sprite?: string;
 }
 
-export interface ChoiceOption {
+interface ChoiceOption {
   en: string;
   correct: boolean;
   feedback_es: string;
 }
 
-export interface Choice {
+interface Choice {
   question_es: string;
   options: ChoiceOption[];
 }

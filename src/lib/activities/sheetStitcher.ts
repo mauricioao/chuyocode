@@ -37,7 +37,7 @@ export interface StitchSourceSize {
   height: number;
 }
 
-export interface StitchPlacement extends StitchSourceSize {
+interface StitchPlacement extends StitchSourceSize {
   x: number;
   y: number;
 }
@@ -115,7 +115,7 @@ export interface StitchDrawSource {
  * pure layout math above: this function makes no sizing decisions of its
  * own.
  */
-export async function stitchSourcesToWebp(
+async function stitchSourcesToWebp(
   sources: readonly StitchDrawSource[],
   targetWidth: number = STITCH_TARGET_WIDTH,
   gap: number = STITCH_GAP_PX,

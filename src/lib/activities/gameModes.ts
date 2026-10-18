@@ -238,7 +238,7 @@ export function trueFalseEligibleCount(payload: Payload): number {
  * a `drop`-type gap question is just as eligible, same as `reorder`'s own
  * "any long-enough answer qualifies" rule).
  */
-export function clozeEligibleCount(payload: Payload): number {
+function clozeEligibleCount(payload: Payload): number {
   return payload.slots.filter((slot) => isDropGap(slot.input)).length;
 }
 
@@ -284,7 +284,7 @@ export function groupSortPoolName(payload: Payload): string | undefined {
  * MIN_GROUPSORT_ITEMS_PER_GROUP} items — a lone group, or a 1-item group,
  * would make sorting trivial or meaningless.
  */
-export function groupSortEligible(payload: Payload): boolean {
+function groupSortEligible(payload: Payload): boolean {
   const groups = deriveGroupSortGroups(payload);
   if (groups.length < MIN_GROUPSORT_GROUPS) return false;
   return groups.every((group) => group.itemIds.length >= MIN_GROUPSORT_ITEMS_PER_GROUP);

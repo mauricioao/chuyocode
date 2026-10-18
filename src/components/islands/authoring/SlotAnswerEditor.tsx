@@ -30,7 +30,7 @@ const MECHANICS = ['choice', 'select', 'text', 'drop'] as const;
 /** Mechanics whose answer is one id drawn from a SHARED pool. */
 const POOLED_MECHANICS = new Set<string>(['choice', 'select', 'drop']);
 
-export const COPY = {
+const COPY = {
   es: {
     mechanicLabel: 'Tipo de mecánica',
     textAnswerLabel: 'Respuestas aceptadas',

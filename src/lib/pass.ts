@@ -62,7 +62,7 @@ export function toBase64Url(input: string): string {
 }
 
 /** Base64url-decode to a UTF-8 string. */
-export function fromBase64Url(input: string): string {
+function fromBase64Url(input: string): string {
   return Buffer.from(input, 'base64url').toString('utf8');
 }
 
@@ -75,7 +75,7 @@ export function sign(payloadB64: string, secret: string): string {
  * Constant-time comparison of two base64url signatures. Length mismatch is a
  * fast, safe reject; equal-length strings are compared without early exit.
  */
-export function signaturesMatch(a: string, b: string): boolean {
+function signaturesMatch(a: string, b: string): boolean {
   const bufA = Buffer.from(a, 'base64url');
   const bufB = Buffer.from(b, 'base64url');
   if (bufA.length !== bufB.length) {

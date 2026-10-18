@@ -38,7 +38,7 @@ export interface Rect {
 }
 
 /** The DOM selector for every element inside a title bar that must never be covered by a drag handle — traffic lights, buttons, links, inputs, selects, and the editor's portaled editable title `<input>`. Shared with `@lib/ui/deskWindowDrag`'s own (non-embedded) pointerdown guard. */
-export const TITLEBAR_IGNORE_SELECTOR = 'button, a, input, textarea, select, [contenteditable="true"]';
+const TITLEBAR_IGNORE_SELECTOR = 'button, a, input, textarea, select, [contenteditable="true"]';
 
 function intersect(a: Rect, b: Rect): Rect | null {
   const x = Math.max(a.x, b.x);
@@ -118,7 +118,7 @@ export function subtractRects(outer: Rect, excludes: readonly Rect[]): Rect[] {
 }
 
 /** `DOMRect` -> plain {@link Rect} (never a live/readonly `DOMRect` itself, so callers can freely build fixtures in tests). */
-export function rectFromDomRect(rect: Pick<DOMRect, 'x' | 'y' | 'width' | 'height'>): Rect {
+function rectFromDomRect(rect: Pick<DOMRect, 'x' | 'y' | 'width' | 'height'>): Rect {
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
 }
 

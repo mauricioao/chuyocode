@@ -39,7 +39,7 @@ export const USER_ROLES_TABLE = 'user_roles';
  * enforces the same domain at the database (`check (role in ('moderator'))`),
  * so a role that could never be granted can also never be checked for.
  */
-export const ROLES = ['moderator'] as const;
+const ROLES = ['moderator'] as const;
 export type Role = (typeof ROLES)[number];
 
 function isRole(value: unknown): value is Role {

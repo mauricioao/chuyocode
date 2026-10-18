@@ -41,7 +41,7 @@ import { cn } from '@/lib/utils';
 import QuizBlockPractice from './QuizBlockPractice';
 import { GAME_MODE_ICONS } from './QuizGameModeSwitcher';
 
-export const COPY = {
+const COPY = {
   es: {
     usedInGames: (n: number) => (n === 1 ? 'Estas preguntas se usan en 1 juego' : `Estas preguntas se usan en ${n} juegos`),
     check: 'Comprobar',

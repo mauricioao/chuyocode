@@ -30,7 +30,7 @@ import type { Draft } from '@/lib/authoringDraft';
 import { messageFor } from '@/lib/exerciseValidatorCopy';
 import type { ValidationIssue } from '@/lib/exerciseValidator';
 
-export const COPY = {
+const COPY = {
   es: {
     saved: 'Guardado como borrador.',
     published: (url: string) => `Publicado. Ver el ejercicio: ${url}`,

@@ -18,7 +18,7 @@ import { isAllowedMediaUrl } from '@/lib/exerciseMedia';
 import type { MediaBlock } from '@/lib/exercisePayload';
 import { Input } from '@/components/ui/input';
 
-export const COPY = {
+const COPY = {
   es: {
     image: 'URL de la imagen',
     audio: 'URL del audio',

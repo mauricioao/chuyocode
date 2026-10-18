@@ -47,7 +47,7 @@ import {
   usePasteFeedback,
 } from './TemplateEditorKit';
 
-export const COPY = {
+const COPY = {
   es: {
     title: 'Une las parejas',
     instruction: 'Escribe cada palabra junto a su pareja.',

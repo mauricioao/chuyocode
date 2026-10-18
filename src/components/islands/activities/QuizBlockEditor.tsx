@@ -136,7 +136,7 @@ import {
 /** `cloze`'s own fake "selected slot id" — there is no single slot per sentence (one per blank), so the usual `onSelectSlot(slotId)` focus channel instead carries this sentence sequence number, prefixed so it never collides with a real slot id. */
 const CLOZE_FOCUS_PREFIX = 'cloze-seq-';
 
-export const COPY = {
+const COPY = {
   es: {
     addQuestion: 'Agregar pregunta',
     dragHandle: 'Reordenar pregunta',

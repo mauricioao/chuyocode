@@ -31,7 +31,7 @@ export const EXERCISE_REACTIONS_TABLE = 'exercise_reactions';
 
 /** The closed vocabulary of reaction kinds, mirroring the table's CHECK. */
 export const REACTION_KINDS = ['like', 'dislike'] as const;
-export type ReactionKind = (typeof REACTION_KINDS)[number];
+type ReactionKind = (typeof REACTION_KINDS)[number];
 
 /**
  * The dislike reason taxonomy, mirroring `is_quality_dislike` /
@@ -41,7 +41,7 @@ export type ReactionKind = (typeof REACTION_KINDS)[number];
  * the database.
  */
 export const DISLIKE_REASONS = ['ambiguous', 'wrong_answer', 'too_hard', 'typo'] as const;
-export type DislikeReason = (typeof DISLIKE_REASONS)[number];
+type DislikeReason = (typeof DISLIKE_REASONS)[number];
 
 function isReactionKind(value: unknown): value is ReactionKind {
   return typeof value === 'string' && (REACTION_KINDS as readonly string[]).includes(value);

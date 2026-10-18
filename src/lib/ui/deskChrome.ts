@@ -17,7 +17,7 @@
  * clamp bound (`@lib/deskWindowDragMath`/`@lib/deskDragMath`'s own small
  * edge margin), entirely separate from this default-geometry offset.
  */
-export const DESK_CHROME_ROW_SELECTOR = '[data-desk-chrome-row]';
+const DESK_CHROME_ROW_SELECTOR = '[data-desk-chrome-row]';
 export const DESK_CHROME_OFFSET_VAR = '--desk-chrome-offset';
 
 /** The row's own rendered bottom edge, viewport-relative — `0` when the row is absent (every page except a desk host's). */

@@ -52,7 +52,7 @@ export const NORMAL_RATE = 0.95;
 /** How often (ms) `speak()` nudges Chrome desktop with `pause()`/`resume()` while speech is in flight — comfortably under the ~15s stall window. */
 export const KEEP_ALIVE_INTERVAL_MS = 10_000;
 
-export interface SpeakOptions {
+interface SpeakOptions {
   /** Playback rate, `speechSynthesis` scale. Defaults to {@link NORMAL_RATE}. */
   rate?: number;
 }

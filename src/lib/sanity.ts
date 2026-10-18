@@ -724,7 +724,7 @@ export const RESERVED_THEMES = ['recomendados'] as const;
  * Editors add a line here only for special-cased titles; plain slugs like
  * `frontend` need nothing.
  */
-export const THEME_TITLE_OVERRIDES: Record<string, string> = {
+const THEME_TITLE_OVERRIDES: Record<string, string> = {
   recomendados: 'Libros Recomendados',
 };
 
