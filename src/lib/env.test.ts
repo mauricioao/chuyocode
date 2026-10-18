@@ -29,6 +29,8 @@ describe('loadEnv', () => {
     expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe('');
     expect(env.AD_HMAC_SECRET).toBe('');
     expect(env.PADDLE_WEBHOOK_SECRET).toBe('');
+    // Visual-suite fixture mode is OFF unless explicitly configured.
+    expect(env.SANITY_FIXTURE_API_HOST).toBe('');
   });
 
   it('reads optional vars when present', () => {
@@ -37,10 +39,12 @@ describe('loadEnv', () => {
       SUPABASE_SERVICE_ROLE_KEY: 'service-role',
       AD_HMAC_SECRET: 'hmac-secret',
       PADDLE_WEBHOOK_SECRET: 'paddle-secret',
+      SANITY_FIXTURE_API_HOST: 'http://127.0.0.1:4335',
     });
     expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe('service-role');
     expect(env.AD_HMAC_SECRET).toBe('hmac-secret');
     expect(env.PADDLE_WEBHOOK_SECRET).toBe('paddle-secret');
+    expect(env.SANITY_FIXTURE_API_HOST).toBe('http://127.0.0.1:4335');
   });
 
   it('trims surrounding whitespace from values', () => {

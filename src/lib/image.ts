@@ -12,6 +12,7 @@
  * simply omits the placeholder (design: graceful fallback).
  */
 import { loadEnv } from './env';
+import { sanityImageBuilderConfig } from './sanityConfig';
 import { createImageUrlBuilder } from '@sanity/image-url';
 import type { ImageUrlBuilder } from '@sanity/image-url';
 
@@ -109,11 +110,7 @@ let builder: ImageUrlBuilder | undefined;
 
 function getBuilder(): ImageUrlBuilder {
   if (!builder) {
-    const env = loadEnv();
-    builder = createImageUrlBuilder({
-      projectId: env.SANITY_PROJECT_ID,
-      dataset: env.SANITY_DATASET,
-    });
+    builder = createImageUrlBuilder(sanityImageBuilderConfig(loadEnv()));
   }
   return builder;
 }
