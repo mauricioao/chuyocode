@@ -2,8 +2,11 @@
  * GET /robots.txt (SEO basics pass).
  *
  * Allows public content; disallows the sections that have NO public
- * sub-pages at all: `/api/`, and the admin/auth/crear/mis-actividades trees.
- * Deliberately does NOT disallow `/*\/ingles` or `/*\/cursos`: most of
+ * sub-pages at all: `/api/`, and the
+ * admin/auth/crear/mis-actividades/cursos/perfil trees (`cursos` has no live
+ * pages yet and `perfil` is the signed-in visitor's own account settings —
+ * same posture as `@lib/seo.ts#NOINDEX_SECTIONS`, which this list otherwise
+ * mirrors). Deliberately does NOT disallow `/*\/ingles`: most of
  * `ingles/**` is gated too, but the practice page of every published
  * community activity (`/ingles/actividades/[id]`, and its `/presentar`) is
  * public since guest play — a blanket `ingles` disallow would also block
@@ -19,8 +22,16 @@ import type { APIRoute } from 'astro';
 import { publicCachePolicy } from '@lib/cache';
 
 /** Paths with no public sub-pages at all — see the file header for why
- * `ingles`/`cursos` are deliberately absent from this list. */
-const DISALLOWED_PATHS = ['/api/', '/*/admin', '/*/auth', '/*/crear', '/*/mis-actividades'] as const;
+ * `ingles` is deliberately absent from this list. */
+const DISALLOWED_PATHS = [
+  '/api/',
+  '/*/admin',
+  '/*/auth',
+  '/*/crear',
+  '/*/mis-actividades',
+  '/*/cursos',
+  '/*/perfil',
+] as const;
 
 export const GET: APIRoute = async ({ site }) => {
   const origin = site ?? new URL('https://chuyocode.netlify.app/');

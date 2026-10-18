@@ -24,13 +24,18 @@ describe('GET /robots.txt', () => {
     expect(body).toContain('Disallow: /*/auth');
     expect(body).toContain('Disallow: /*/crear');
     expect(body).toContain('Disallow: /*/mis-actividades');
+    // `cursos` (no live public pages yet, per `@lib/seo.ts#NOINDEX_SECTIONS`'s
+    // own comment) and `perfil` (the signed-in visitor's own account
+    // settings) have no public sub-pages at all — same posture as
+    // admin/auth/crear/mis-actividades above.
+    expect(body).toContain('Disallow: /*/cursos');
+    expect(body).toContain('Disallow: /*/perfil');
   });
 
-  it('does not disallow ingles or cursos, so the public guest-play practice pages stay crawlable', async () => {
+  it('does not disallow ingles, so the public guest-play practice pages stay crawlable', async () => {
     const res = await GET(ctx('https://chuyocode.netlify.app/'));
     const body = await res.text();
     expect(body).not.toContain('/ingles');
-    expect(body).not.toContain('/cursos');
   });
 
   it('points Sitemap: at the absolute sitemap URL built from site', async () => {
