@@ -113,3 +113,20 @@ const userMenuLabels = UI_LABELS[lang].auth.userMenu;
     <UserMenu lang={lang} labels={userMenuLabels} client:load />
   </div>
 </div>
+
+<script>
+  // "Ordenar escritorio" icon wiring. Desk host pages render this row instead
+  // of `Header.astro`, so its script never ships here; without this call the
+  // icon stayed hidden after a widget drag. Same shared logic as the header.
+  import { initDeskArrangeButton } from '@lib/ui/deskArrangeButton';
+
+  const run = (): void => initDeskArrangeButton(document);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+  // A hub-to-hub client navigation can swap in a fresh, unwired button node.
+  document.addEventListener('astro:page-load', run);
+</script>

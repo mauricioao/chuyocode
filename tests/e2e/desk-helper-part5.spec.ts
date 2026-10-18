@@ -35,19 +35,20 @@ test.describe('desk helper (PART 5) — desktop, wide (open by default)', () => 
     await expect(page.getByRole('button', { name: /cerrar ayuda|close help/i })).toBeVisible();
   });
 
-  test('"Otro tip" changes the tip text and which character speaks it', async ({ page }) => {
+  test('"Otro tip" changes the tip text', async ({ page }) => {
     const signedIn = await gotoHubOrSkip(page);
     test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
 
-    const bubble = page.locator('#desk-helper-bubble');
-    const nameBefore = await bubble.locator('[data-desk-helper-name]').textContent();
-    const tipBefore = await bubble.locator('[data-desk-helper-tip]').textContent();
+    // Vanina is the only voice since "Vanina is the one desk-helper voice"
+    // (8256b6e), so only the tip changes. The first click lazily fetches the
+    // full tip list (PART 7, `@lib/ui/deskHelper.ts#handleOtroTip`), so the
+    // new tip lands after a round trip — poll instead of reading right away.
+    const tip = page.locator('#desk-helper-bubble [data-desk-helper-tip]');
+    const tipBefore = await tip.textContent();
 
     await page.getByRole('button', { name: /otro tip|another tip/i }).click();
 
-    const nameAfter = await bubble.locator('[data-desk-helper-name]').textContent();
-    const tipAfter = await bubble.locator('[data-desk-helper-tip]').textContent();
-    expect(`${nameAfter}:${tipAfter}`).not.toBe(`${nameBefore}:${tipBefore}`);
+    await expect.poll(() => tip.textContent()).not.toBe(tipBefore);
   });
 
   test('closing folds it down to just the character, which reopens it on click', async ({ page }) => {
@@ -103,13 +104,21 @@ test.describe('desk helper (PART 5) — desktop collision range (1100-1440px)', 
 test.describe('desk helper (PART 5) — phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('starts folded as a small circular avatar, opening the bubble on tap', async ({ page }) => {
+  test('starts open as the in-flow tip card, folds to a labelled row and reopens on tap', async ({ page }) => {
     const signedIn = await gotoHubOrSkip(page);
     test.skip(!signedIn, 'Hub is sign-in gated; no e2e auth fixture in this repo yet');
 
+    // Owner spec "open by default below desk:" (cbe8ffc, 8153361): on a phone
+    // the helper sits in flow, so it starts open; folded, it keeps a one-line
+    // label next to the avatar instead of a bare circle.
     const avatar = page.locator('#desk-helper-avatar');
+    await expect(avatar).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#desk-helper-bubble')).toBeVisible();
+
+    await page.getByRole('button', { name: /cerrar ayuda|close help/i }).click();
     await expect(avatar).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#desk-helper-bubble')).toBeHidden();
+    await expect(page.locator('#desk-helper-fold-label')).toBeVisible();
 
     await avatar.click();
     await expect(avatar).toHaveAttribute('aria-expanded', 'true');
