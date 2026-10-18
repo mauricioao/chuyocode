@@ -133,11 +133,9 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
-  /* Depth system (design decision #9): layered shadows + a hairline ring
-   * instead of flat borders. */
-  --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --shadow-elevation-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
-  --shadow-elevation-3: 0 12px 32px -4px rgb(0 0 0 / 0.6);
+  /* Depth system (design decision #9): `--shadow-elevation-1/2/3` and
+   * `--shadow-floating` are NOT declared here — see the "Shadow tokens"
+   * section below the shadcn bridge, which keeps their utilities themeable. */
 
   /* Smooth theme transitions (spec 6: CSS transition <= 300ms). Drives
    * `transition-theme` + `duration-theme`. */
@@ -164,11 +162,6 @@
   --radius-field: 0.75rem; /* 12px */
   --radius-card: 1rem; /* 16px */
   --radius-pill: 999px;
-
-  /* Shadow for floating elements (BackButton, ScrollToTop, dropdowns) —
-   * layered like `--shadow-elevation-*` above, but softer/wider for a
-   * glass-like lift off the page rather than a hard drop shadow. */
-  --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 
   /* Glass floating controls (BackButton, ScrollToTop, EditorSideToolbar): the
    * hairline ring that catches light on `.glass-floating`'s translucent
@@ -305,6 +298,43 @@
   --border: #27272a;
   --input: #27272a;
   --ring: #facc15;
+}
+
+/* --- Shadow tokens (depth system, design decision #9) ------------------- *
+ * The VALUES are plain runtime custom properties: the dark brand default on
+ * `:root` here, restated by `[data-theme='brand']` and swapped to the
+ * ink-tinted kit shadows by `[data-theme='ingles']` (DIRECCION-VISUAL §3.2:
+ * never pure black on light).
+ *
+ * Why not a plain `@theme` entry: Tailwind 4 builds `shadow-*` utilities by
+ * parsing the theme value and splicing `--tw-shadow-color` into it, i.e. it
+ * bakes the literal colour into `.shadow-elevation-2` at build time — so the
+ * Inglés override never reached any `shadow-elevation-*`/`shadow-floating`
+ * class (measured `rgba(0,0,0,0.5)` inside Inglés).
+ *
+ * The `@theme inline reference` block below registers the same names so the
+ * utilities still exist, with each value pointing at its own runtime
+ * variable: `inline` puts `var(--shadow-elevation-2)` into the utility, and
+ * `reference` keeps Tailwind from emitting the self-referencing (cyclic)
+ * declaration itself. Result: `--tw-shadow: var(--shadow-elevation-2)`,
+ * resolved on the element, so every scope's override applies. Guarded by
+ * `shadow-utilities.test.ts`. (Trade-off: no `shadow-<color>` recolouring of
+ * these four — a token's colour IS the theme; none is used.) */
+:root {
+  --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-elevation-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-elevation-3: 0 12px 32px -4px rgb(0 0 0 / 0.6);
+  /* Floating elements (BackButton, ScrollToTop, dropdowns): softer/wider
+   * than the elevation levels, a glass-like lift off the page rather than a
+   * hard drop shadow. */
+  --shadow-floating: 0 8px 24px -6px rgb(0 0 0 / 0.5), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+}
+
+@theme inline reference {
+  --shadow-elevation-1: var(--shadow-elevation-1);
+  --shadow-elevation-2: var(--shadow-elevation-2);
+  --shadow-elevation-3: var(--shadow-elevation-3);
+  --shadow-floating: var(--shadow-floating);
 }
 
 /* --- "Dark brand, light product" (visual-theme pass) -------------------- *
