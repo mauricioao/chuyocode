@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type FrameLocator, type Page } from '@playwright/test';
 
 /**
  * Minimized-windows tray — "desktop" redesign PART 6b (owner feedback
@@ -16,14 +16,88 @@ import { test, expect, type Page } from '@playwright/test';
  * `DeskWindow.astro`'s own header) — its minimize falls back to doing
  * exactly what close does, straight to the ChuyoCode home. The real tray
  * behaviour below needs an actual desk, i.e. a signed-in visitor — same
- * posture as `desk-widgets-part4.spec.ts`'s own `gotoHubOrSkip`: this repo
- * has no e2e auth fixture yet, so every test below skips gracefully when no
- * `[data-desk]` renders behind the window, rather than asserting against
- * guest-only behaviour. These become real checks the moment an e2e auth
- * fixture lands, with no change needed here.
+ * posture as `desk-widgets-part4.spec.ts`'s own `gotoHubOrSkip`: every test
+ * skips gracefully when no `[data-desk]` renders behind the window.
+ *
+ * Signed-in runs (`pnpm test:e2e:auth`, tests/e2e/README.md) seed their own
+ * published activity in LOCAL Supabase before the suite and delete it after,
+ * so the fixture seed stays users-only. That only ever happens when
+ * SUPABASE_URL points at localhost and SUPABASE_SERVICE_ROLE_KEY is set;
+ * otherwise the spec falls back to the first activity in /sitemap.xml.
  */
 
+const SEEDED_ACTIVITY_ID = 'e2e0b6b0-0000-4000-8000-000000000001';
+const SEEDED_REVISION_ID = 'e2e0b6b0-0000-4000-8000-000000000002';
+/** The moderator fixture user from supabase/seed.sql authors it, so the signed-in regular user sees a community activity. */
+const SEEDED_AUTHOR_ID = '22222222-2222-2222-2222-222222222222';
+
+/** Service-role REST access to LOCAL Supabase only — never a remote project. */
+function localSupabaseAdmin(): { url: string; key: string } | null {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  const host = new URL(url).hostname;
+  if (host !== '127.0.0.1' && host !== 'localhost') return null;
+  return { url, key };
+}
+
+async function rest(admin: { url: string; key: string }, path: string, init: RequestInit): Promise<void> {
+  const res = await fetch(`${admin.url}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: admin.key,
+      Authorization: `Bearer ${admin.key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+      ...init.headers,
+    },
+  });
+  if (!res.ok) throw new Error(`Local Supabase ${init.method} ${path}: HTTP ${res.status} ${await res.text()}`);
+}
+
+async function deleteSeededActivity(admin: { url: string; key: string }): Promise<void> {
+  await rest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'PATCH', body: JSON.stringify({ status: 'draft', published_revision_id: null }) });
+  await rest(admin, `activity_revisions?activity_id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'DELETE' });
+  await rest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, { method: 'DELETE' });
+}
+
+/** Publishes one minimal quiz activity in local Supabase; returns its practice path, or null when no local admin access. */
+async function seedPublishedActivity(): Promise<string | null> {
+  const admin = localSupabaseAdmin();
+  if (!admin) return null;
+  await deleteSeededActivity(admin);
+  await rest(admin, 'activities', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: SEEDED_ACTIVITY_ID,
+      author_id: SEEDED_AUTHOR_ID,
+      title: 'E2E tray activity',
+      level: 'A1',
+      status: 'draft',
+      block_types: ['quiz'],
+      block_count: 1,
+      published_at: new Date().toISOString(),
+    }),
+  });
+  await rest(admin, 'activity_revisions', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: SEEDED_REVISION_ID,
+      activity_id: SEEDED_ACTIVITY_ID,
+      status: 'approved',
+      created_by: SEEDED_AUTHOR_ID,
+      blocks: [{ id: 'b1', type: 'quiz', payload: { pools: {}, slots: [{ id: 's1', label: 'cat', input: 'text', answer: ['cat'] }] } }],
+    }),
+  });
+  await rest(admin, `activities?id=eq.${SEEDED_ACTIVITY_ID}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'live', published_revision_id: SEEDED_REVISION_ID }),
+  });
+  return `/es/ingles/actividades/${SEEDED_ACTIVITY_ID}`;
+}
+
 async function findInglesActivityPath(page: Page): Promise<string | null> {
+  if (seededPath) return seededPath;
   const res = await page.request.get('/sitemap.xml');
   if (!res.ok()) return null;
   const xml = await res.text();
@@ -31,26 +105,57 @@ async function findInglesActivityPath(page: Page): Promise<string | null> {
   return match ? match[1] : null;
 }
 
+let seededPath: string | null = null;
+
+// One worker, in order: the seeded row is shared, so parallel workers' own
+// beforeAll/afterAll pairs must never race to create/delete it.
+test.describe.configure({ mode: 'default' });
+
+test.beforeAll(async () => {
+  seededPath = await seedPublishedActivity();
+});
+
+test.afterAll(async () => {
+  const admin = localSupabaseAdmin();
+  if (admin && seededPath) await deleteSeededActivity(admin);
+});
+
 /** Visits `path` and reports whether a real desk (signed-in visitor) renders behind the window. */
 async function gotoActivityOrSkip(page: Page, path: string): Promise<boolean> {
   await page.goto(path);
   return (await page.locator('[data-desk]').count()) > 0;
 }
 
+/**
+ * A signed-in visit opens the activity as a desk window: a same-origin
+ * `<iframe>` managed by `@lib/ui/deskWindowManager`, whose traffic lights
+ * (Cerrar/Minimizar) live INSIDE the frame and talk to the host through
+ * `@lib/ui/deskWindowMessaging`.
+ */
+function activityWindow(page: Page): FrameLocator {
+  return page.frameLocator('iframe').first();
+}
+
+const chips = (page: Page) => page.locator('[data-minimized-tray] [data-minimized-chip]');
+
 test.describe('minimized-windows tray (PART 6b), signed-in', () => {
+  // At the default 1280x720 the tray collapses even one chip into "+1" so it
+  // never covers the folders column (`computeMaxVisibleMinimizedChips`);
+  // 1440x900 leaves room for the chip itself.
+  test.use({ viewport: { width: 1440, height: 900 } });
+
   test('minimizing a practice window lands on the hub with a chip for it in the tray', async ({ page }) => {
     const path = await findInglesActivityPath(page);
     test.skip(path === null, 'Need at least one published activity');
 
     const signedIn = await gotoActivityOrSkip(page, path!);
-    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in; no e2e auth fixture in this repo yet');
+    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in');
 
-    await page.getByRole('link', { name: 'Minimizar' }).click();
+    await activityWindow(page).getByRole('link', { name: 'Minimizar' }).click();
     await expect(page).toHaveURL(/\/es\/ingles$/);
 
-    const tray = page.locator('[data-minimized-tray]');
-    await expect(tray).toBeVisible();
-    await expect(tray.locator('[data-desk-window-open]')).toHaveCount(1);
+    await expect(page.locator('[data-minimized-tray]')).toBeVisible();
+    await expect(chips(page)).toHaveCount(1);
   });
 
   test('clicking the chip reopens the exact same activity', async ({ page }) => {
@@ -58,14 +163,14 @@ test.describe('minimized-windows tray (PART 6b), signed-in', () => {
     test.skip(path === null, 'Need at least one published activity');
 
     const signedIn = await gotoActivityOrSkip(page, path!);
-    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in; no e2e auth fixture in this repo yet');
+    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in');
 
-    await page.getByRole('link', { name: 'Minimizar' }).click();
+    await activityWindow(page).getByRole('link', { name: 'Minimizar' }).click();
     await expect(page).toHaveURL(/\/es\/ingles$/);
 
-    await page.locator('[data-minimized-tray] [data-desk-window-open]').first().click();
+    await chips(page).first().click();
     await expect(page).toHaveURL(new RegExp(path!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    await expect(page.locator('[data-desk-window]')).toBeVisible();
+    await expect(activityWindow(page).getByRole('link', { name: 'Minimizar' })).toBeVisible();
   });
 
   test('closing (red light) drops the chip for that activity', async ({ page }) => {
@@ -73,16 +178,16 @@ test.describe('minimized-windows tray (PART 6b), signed-in', () => {
     test.skip(path === null, 'Need at least one published activity');
 
     const signedIn = await gotoActivityOrSkip(page, path!);
-    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in; no e2e auth fixture in this repo yet');
+    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in');
 
-    await page.getByRole('link', { name: 'Minimizar' }).click();
+    await activityWindow(page).getByRole('link', { name: 'Minimizar' }).click();
     await expect(page).toHaveURL(/\/es\/ingles$/);
-    await expect(page.locator('[data-minimized-tray] [data-desk-window-open]')).toHaveCount(1);
+    await expect(chips(page)).toHaveCount(1);
 
-    await page.locator('[data-minimized-tray] [data-desk-window-open]').first().click();
-    await page.getByRole('link', { name: 'Cerrar' }).click();
+    await chips(page).first().click();
+    await activityWindow(page).getByRole('link', { name: 'Cerrar' }).click();
     await expect(page).toHaveURL(/\/es\/ingles$/);
-    await expect(page.locator('[data-minimized-tray] [data-desk-window-open]')).toHaveCount(0);
+    await expect(chips(page)).toHaveCount(0);
   });
 
   test("the chip's own close button removes it from the tray without navigating", async ({ page }) => {
@@ -90,15 +195,15 @@ test.describe('minimized-windows tray (PART 6b), signed-in', () => {
     test.skip(path === null, 'Need at least one published activity');
 
     const signedIn = await gotoActivityOrSkip(page, path!);
-    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in; no e2e auth fixture in this repo yet');
+    test.skip(!signedIn, 'No desk behind the window — guest visit or redirected to sign-in');
 
-    await page.getByRole('link', { name: 'Minimizar' }).click();
+    await activityWindow(page).getByRole('link', { name: 'Minimizar' }).click();
     await expect(page).toHaveURL(/\/es\/ingles$/);
 
-    const chip = page.locator('[data-minimized-tray] [data-desk-window-open]').first();
+    const chip = chips(page).first();
     await chip.hover();
     await chip.getByRole('button').click();
     await expect(page).toHaveURL(/\/es\/ingles$/);
-    await expect(page.locator('[data-minimized-tray] [data-desk-window-open]')).toHaveCount(0);
+    await expect(chips(page)).toHaveCount(0);
   });
 });

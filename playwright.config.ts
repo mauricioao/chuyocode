@@ -32,7 +32,7 @@ export default defineConfig({
       name: 'chromium-signed-in',
       use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/regular.json' },
       dependencies: ['setup'],
-      testMatch: ['**/desk-widgets-part4.spec.ts', '**/desk-helper-part5.spec.ts'],
+      testMatch: ['**/desk-widgets-part4.spec.ts', '**/desk-helper-part5.spec.ts', '**/desk-minimized-tray-part6b.spec.ts'],
     },
     // Visual regression (toHaveScreenshot) — deliberately excluded from the
     // `chromium` project above and from `pnpm test:e2e`. Baselines are
