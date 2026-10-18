@@ -85,6 +85,32 @@ import WorksheetPracticePlayerMobile from './WorksheetPracticePlayerMobile';
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
 /**
+ * Fixed top-only breathing room, in px, between the window's title bar and
+ * the top of the worksheet sheet at FIT zoom (activity window chrome pass,
+ * owner feedback: the sheet read cramped flush against the title bar).
+ * Left, right, and bottom stay exactly where plain `fitCamera` would place
+ * them — see {@link fitCameraWithTopGap}, the only thing that reads this.
+ */
+const FIT_TOP_GAP_PX = 16;
+
+/**
+ * {@link fitCamera}, but with {@link FIT_TOP_GAP_PX} of breathing room
+ * carved out of the TOP only. Reuses `fitCamera` unchanged against a
+ * viewport that is `FIT_TOP_GAP_PX` shorter (same width, so left/right
+ * centering is untouched), then nudges the whole result down by that same
+ * amount — which is also why the gap lands above the sheet instead of
+ * splitting across top and bottom: the sheet still fits entirely inside the
+ * reduced height, and the nudge simply slides that already-fitted box down
+ * into the real (taller) viewport. Scoped to THIS file only — the editor's
+ * own canvas (`WorksheetZoneEditor.tsx`) and the mobile practice viewport
+ * keep calling the shared `fitCamera` directly, unaffected.
+ */
+function fitCameraWithTopGap(image: Size, viewport: Size): Camera {
+  const base = fitCamera(image, { width: viewport.width, height: Math.max(0, viewport.height - FIT_TOP_GAP_PX) });
+  return { ...base, y: base.y + FIT_TOP_GAP_PX };
+}
+
+/**
  * Same short distance threshold `DropRenderer.tsx`/`authoring/BlockList.tsx`
  * use to tell a plain click from a drag — reused here to tell a click on an
  * answer input from a pan, both in px, both pointer types (mouse and touch
@@ -222,7 +248,7 @@ function DesktopWorksheetCamera({
     if (!el) return undefined;
     const reconcile = () => {
       const vp = viewportSize();
-      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
+      setCamera((prev) => (fitMode ? fitCameraWithTopGap(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
     };
     reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -250,7 +276,7 @@ function DesktopWorksheetCamera({
   const zoomOut = useCallback(() => applyZoom(stepZoomInput(cameraRef.current.scale, 'out')), [applyZoom]);
   const zoomFit = useCallback(() => {
     setFitMode(true);
-    setCamera(fitCamera(displaySize, viewportSize()));
+    setCamera(fitCameraWithTopGap(displaySize, viewportSize()));
   }, [displaySize, viewportSize]);
 
   // Wheel always zooms, in either tool — a native, non-passive listener:
