@@ -206,8 +206,32 @@ function QuestionImageField({
   );
 }
 
-/** Pregunta | divider | Respuesta-or-opciones | "×" — same column shape `MatchPairsEditor.tsx`'s own `PAIR_GRID` uses. Exported so `QuizBlockEditor.tsx`'s own column headers line up with these rows. */
-export const ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.25rem] items-start';
+/**
+ * Pregunta | divider | Respuesta-or-opciones | "×" — same column shape
+ * `MatchPairsEditor.tsx`'s own `PAIR_GRID` uses, except RESPONSIVE (mobile
+ * review 2026-10-18, H14): below `sm` (640px) a real activity's question
+ * column measured ~129px wide and cut its own text ("What color is t"), so
+ * the two fields now STACK (question full width, then answer full width)
+ * instead of sharing a cramped 1fr/1fr row — `sm:` and up keeps the
+ * original side-by-side columns unchanged (768px+ already had enough room).
+ * The delete column is `2.75rem` (not the old `2.25rem`): `RowRemoveButton`
+ * itself already grows to `size-10` (40px) on a coarse pointer
+ * (`TemplateEditorKit.tsx`), which the old 36px track was too narrow for —
+ * the "×" rendered 10px into the answer field (H14's second finding). This
+ * widens the TRACK to fit the button that already exists, never the button
+ * itself (owner note: no 44px button resize without sign-off).
+ * Exported so `QuizBlockEditor.tsx`'s own column headers line up with
+ * these rows.
+ */
+export const ROW_GRID =
+  'grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.75rem] sm:gap-0';
+
+/** Column-header-only variant of {@link ROW_GRID} (owner build, H14 follow-up): a stacked mobile row has nothing to pair "Pregunta"/"Respuesta" against, so the header hides entirely below `sm` instead of stacking those two labels with a blank line between — each field's own placeholder/`aria-label` already says what it is. */
+export const ROW_GRID_HEADER =
+  'hidden sm:grid sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.75rem] sm:items-start';
+
+/** The side-by-side divider bar — a stray 1px tick with nothing beside it once the row stacks (H14), so it only renders from `sm` up, same breakpoint as {@link ROW_GRID}'s own column switch. Exported so `QuizBlockEditor.tsx`'s own ghost row matches. */
+export const ROW_DIVIDER_CLASS = 'hidden h-7 w-px bg-foreground/[0.08] sm:block';
 
 export default function VariosJuegosRow(props: VariosJuegosRowProps) {
   const {
@@ -261,20 +285,32 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
         className={cn(ROW_GRID, highlighted && 'ring-2 ring-primary')}
       >
         <div className="flex min-w-0 flex-col gap-1 py-2 pl-4">
-          {dragHandle}
-          <TemplateField
-            aria-label={`${t.questionLabel} ${index}`}
-            placeholder={t.questionPlaceholder}
-            data-testid={`varios-question-${slot.id}`}
-            value={slot.label}
-            onChange={(event) => onLabelChange(event.target.value)}
-            onPaste={onPasteIntoRow}
-          />
+          {/* Drag handle sits BESIDE the question field, not stacked above it
+              (H14 fix): the old layout put `dragHandle` as its own line
+              before `TemplateField`, so the question's own field started
+              36px (1280) / 56px (375) lower than the answer field beside
+              it — exactly the handle's own rendered height, since the
+              answer column has no equivalent element pushing it down.
+              `items-start` keeps `TemplateField`'s own top flush with this
+              column's top (same as the answer column's `py-2`), regardless
+              of the handle's height. */}
+          <div className="flex min-w-0 items-start gap-1">
+            {dragHandle}
+            <TemplateField
+              aria-label={`${t.questionLabel} ${index}`}
+              placeholder={t.questionPlaceholder}
+              data-testid={`varios-question-${slot.id}`}
+              value={slot.label}
+              onChange={(event) => onLabelChange(event.target.value)}
+              onPaste={onPasteIntoRow}
+              className="min-w-0 flex-1"
+            />
+          </div>
           {onPromptImageChange && (
             <QuestionImageField lang={lang} slotId={slot.id} image={promptImage} onChange={onPromptImageChange} />
           )}
         </div>
-        <span aria-hidden="true" className="h-7 w-px bg-foreground/[0.08]" />
+        <span aria-hidden="true" className={ROW_DIVIDER_CLASS} />
         <div className="flex min-w-0 flex-col gap-2 py-2">
           {segment === 'choice' ? (
             <div className="flex flex-wrap gap-2" data-testid={`varios-options-${slot.id}`}>
@@ -376,7 +412,7 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
             </button>
           </div>
         </div>
-        <div className="flex justify-end pr-3 pt-2">
+        <div className="flex justify-end pr-1 pt-2">
           <RowRemoveButton label={`${t.removeRow} ${index}`} testId={`varios-remove-${slot.id}`} onRemove={onDelete} />
         </div>
       </div>

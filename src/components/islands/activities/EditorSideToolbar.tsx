@@ -640,7 +640,19 @@ export default function EditorSideToolbar({
           therefore invisible, `empty:hidden`) for a quiz block or while
           nothing is selected yet. Replaces the old sheet-switcher popover
           and "Agregar bloque" — see this file's own header. */}
-      <div className="min-w-0 flex-1 overflow-x-auto">
+      {/* EDGE FADE (mobile review 2026-10-18): the worksheet tool cluster
+          (Zona/Mano, rotate ×2, "Cambiar imagen") can be wider than this
+          scroll region on a narrow phone, and the ONLY hint that it keeps
+          scrolling used to be a hard-cut icon at the edge ("Cambiar
+          imagen" showing half cut). Same `mask-image` recipe the desk
+          levels dock already uses for the identical problem
+          (`DeskScene.astro`'s own header) — a soft fade reads as "more
+          here", a hard cut reads as broken. `scroll-px-2` keeps a swiped
+          icon from stopping flush against the fade. */}
+      <div
+        data-testid="worksheet-tools-scroll"
+        className="min-w-0 flex-1 overflow-x-auto scroll-px-2 [mask-image:linear-gradient(to_right,black_calc(100%-16px),transparent)]"
+      >
         <div ref={onWorksheetToolsSlotReady} data-testid="worksheet-tools-slot" className="empty:hidden flex items-center gap-1" />
       </div>
 
