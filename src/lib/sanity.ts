@@ -25,7 +25,7 @@ const env = loadEnv();
  * Shared server-side Sanity client. `useCdn` is enabled for read performance;
  * pass-gated reads never rely on Sanity, so CDN staleness is acceptable here.
  */
-const sanityClient: SanityClient = createClient({
+export const sanityClient: SanityClient = createClient({
   projectId: env.SANITY_PROJECT_ID,
   dataset: env.SANITY_DATASET,
   apiVersion: '2024-01-01',
