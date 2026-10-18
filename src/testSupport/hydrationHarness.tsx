@@ -22,7 +22,7 @@
 import { act } from 'react';
 import type { ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { hydrateRoot } from 'react-dom/client';
+import { hydrateRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
 
 export interface BrowserGlobalsOptions {
@@ -152,9 +152,10 @@ export async function renderThenHydrate(
     consoleErrors.push(args);
     originalConsoleError(...args);
   };
+  let root: Root | undefined;
   try {
     await act(async () => {
-      hydrateRoot(container, element(), {
+      root = hydrateRoot(container, element(), {
         onRecoverableError: (error) => {
           recoverableErrors.push(error);
         },
@@ -163,6 +164,20 @@ export async function renderThenHydrate(
   } finally {
     console.error = originalConsoleError;
   }
+
+  // Unmount the hydrated root before detaching the container. `hydrateRoot`
+  // is called directly (not through `@testing-library/react`'s `render`), so
+  // its root is invisible to that library's own `cleanup()` — removing the
+  // container from `document` does NOT run React's unmount effects. Without
+  // this, any hydrated component that registers a `window`/`document`
+  // listener (e.g. `PresentationIsland`'s keydown handler) keeps that
+  // listener alive for the rest of the test FILE (jsdom's `window` is shared
+  // across tests in one file), firing its stale closure on later,
+  // unrelated tests and causing exactly the kind of intermittent failures
+  // this harness exists to catch.
+  act(() => {
+    root?.unmount();
+  });
 
   // Detach right away (a caller can still inspect the returned `container`
   // node itself, just no longer attached to `document`) — this harness is
