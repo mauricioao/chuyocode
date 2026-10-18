@@ -26,7 +26,7 @@ const env = loadEnv();
  * Shared server-side Sanity client (config: `./sanityConfig.ts` — the CDN in
  * every real environment, a local fixture server only for the visual suite).
  */
-export const sanityClient: SanityClient = createClient(sanityClientConfig(env));
+const sanityClient: SanityClient = createClient(sanityClientConfig(env));
 
 // ---------------------------------------------------------------------------
 // Types (design decision: all Sanity types live here, no separate types file).
