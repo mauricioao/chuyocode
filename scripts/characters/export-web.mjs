@@ -25,14 +25,22 @@
  * WebP quality 76, both effort 6) — same visual target, flat hand-drawn line
  * art, just sourced from the processed PNG masters instead of a single large
  * illustration.
+ *
+ * MASTERS_ROOT is resolved via `./paths.mjs` (`resolveOthersRoot`): it reads
+ * the MAIN checkout's `ChuyoCode_others` sibling from git's common dir, so
+ * it still finds the right place when this script runs from a git worktree
+ * (see `paths.mjs` for the full resolution order). PUBLIC_ROOT, by contrast,
+ * stays relative to THIS script's own `__dirname` on purpose — generated
+ * output must land in whichever checkout/worktree you're actually on.
  */
 import { mkdir, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { resolveOthersRoot } from './paths.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MASTERS_ROOT = join(__dirname, '..', '..', '..', 'ChuyoCode_others', 'Personajes', '_procesados');
+const MASTERS_ROOT = join(resolveOthersRoot({ scriptDir: __dirname }), 'Personajes', '_procesados');
 const PUBLIC_ROOT = join(__dirname, '..', '..', 'public', 'images', 'characters');
 
 /**

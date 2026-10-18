@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-const ROOTS = ['src', 'tests/unit'];
+const ROOTS = ['src', 'tests/unit', 'scripts'];
 const TEST_FILE = /\.(test|spec)\.[tj]sx?$/;
 const SKIP_DIRS = new Set(['node_modules', 'dist']);
 
@@ -30,6 +30,9 @@ export interface ProjectSplit {
   node: string[];
 }
 
+// `scripts/` was added so one-off maintenance scripts (e.g.
+// `scripts/characters/paths.mjs`) can carry a sibling `*.test.ts` like
+// everything else, without a separate ad hoc Vitest project.
 function safeReaddir(dir: string) {
   try {
     return readdirSync(dir, { withFileTypes: true });
@@ -48,7 +51,7 @@ function listTestFiles(root: string): string[] {
   });
 }
 
-/** Classifies every unit test file under `src/` and `tests/unit/` by content. */
+/** Classifies every unit test file under `src/`, `tests/unit/` and `scripts/` by content. */
 export function splitTestFiles(cwd: string): ProjectSplit {
   const files = ROOTS.flatMap((root) => listTestFiles(join(cwd, root)));
   const split: ProjectSplit = { astro: [], jsdom: [], node: [] };

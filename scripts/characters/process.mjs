@@ -21,6 +21,12 @@
  * --no-qa) contact sheets to .../_procesados/_qa/ — none of this is
  * committed to the repo. Nothing in public/ or src/ is touched; placement
  * into the site is a separate, later decision.
+ *
+ * SOURCE_ROOT is resolved via `./paths.mjs` (`resolveOthersRoot`): it reads
+ * the MAIN checkout's `ChuyoCode_others` sibling from git's common dir, so
+ * this still finds the right place when the script runs from a git
+ * worktree instead of the main checkout (see `paths.mjs` for the full
+ * resolution order).
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -38,13 +44,14 @@ import {
   stripSupportLines,
   trimFlushResidue,
 } from './chromaKey.mjs';
+import { resolveOthersRoot } from './paths.mjs';
 
 // Collected across the whole run and printed/flagged at the end — see
 // processOne()'s debris-loss guard.
 const debrisWarnings = [];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SOURCE_ROOT = join(__dirname, '..', '..', '..', 'ChuyoCode_others', 'Personajes');
+const SOURCE_ROOT = join(resolveOthersRoot({ scriptDir: __dirname }), 'Personajes');
 const OUT_ROOT = join(SOURCE_ROOT, '_procesados');
 const QA_ROOT = join(OUT_ROOT, '_qa');
 
