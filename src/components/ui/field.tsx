@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * An `error` replaces the `hint` (never shown together) and is announced via
  * `role="alert"`, same convention as the rest of the site's inline errors.
  */
-export interface FieldProps {
+interface FieldProps {
   label: string;
   /** Use an existing id instead of the auto-generated one (e.g. to match a
    * `name` already wired elsewhere). */

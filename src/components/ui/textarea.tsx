@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
  * off by default so existing callers keep their current scroll behavior.
  * `rows` defaults to 3 (the spec's "min 3 rows").
  */
-export interface TextareaProps extends React.ComponentProps<'textarea'> {
+interface TextareaProps extends React.ComponentProps<'textarea'> {
   autoGrow?: boolean;
 }
 

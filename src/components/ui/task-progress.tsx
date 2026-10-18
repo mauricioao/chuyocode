@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
  * `cancel` affordance (normal run) OR an `error` affordance (retry/choose
  * another) — never both at once.
  */
-export interface TaskProgressErrorProps {
+interface TaskProgressErrorProps {
   message: string;
   retryLabel: string;
   onRetry: () => void;
@@ -23,12 +23,12 @@ export interface TaskProgressErrorProps {
   onChooseAnother: () => void;
 }
 
-export interface TaskProgressCancelProps {
+interface TaskProgressCancelProps {
   label: string;
   onCancel: () => void;
 }
 
-export interface TaskProgressProps {
+interface TaskProgressProps {
   /** Already-localized text for the current stage, e.g. "Convirtiendo página 2 de 5". */
   label: string;
   /** 0..1 determinate progress. */

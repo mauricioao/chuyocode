@@ -9,7 +9,7 @@ import { fieldClasses, type FieldSize } from '@/lib/ui/field';
  * means something else: visible character width) opts into a fixed height
  * instead of the default responsive 44px-phone/40px-desktop height.
  */
-export interface InputProps extends React.ComponentProps<'input'> {
+interface InputProps extends React.ComponentProps<'input'> {
   fieldSize?: FieldSize;
 }
 
