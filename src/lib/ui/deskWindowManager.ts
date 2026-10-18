@@ -1220,6 +1220,17 @@ export function initDeskWindowManager(
         return;
       case 'open-window':
         openWindow(message.href, message.title ?? '');
+        // "Otra actividad" bugfix (owner report): the finished activity
+        // window used to sit open, reloading, behind the newly-opened
+        // community window — `closeSelf` (set by `GameResult`'s own
+        // `data-desk-open-window="replace"` anchor via
+        // `deskWindow.ts#initDeskOpenWindowLinks`) asks for this exact
+        // window (the one that just posted `open-window`, resolved as `id`
+        // above) to close right after. `openWindow` above has already
+        // dispatched 'open'/'focus' synchronously, so the target is already
+        // the new topmost/active window by the time this runs — closing
+        // `id` here never disturbs it.
+        if (message.closeSelf) void requestClose(id);
         return;
       case 'title':
         dispatch({ type: 'title', id, title: message.text });

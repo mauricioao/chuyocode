@@ -545,7 +545,13 @@ export function initDeskOpenWindowLinks(doc: Document = document, win: Window = 
 
       event.preventDefault();
       const title = opener.getAttribute('aria-label')?.trim() || opener.textContent?.trim() || '';
-      postDeskWindowMessage(win, { type: 'open-window', href, title: title || null });
+      // "Otra actividad" bugfix (owner report): `data-desk-open-window="replace"`
+      // (as opposed to the plain, valueless attribute every other opener
+      // carries) additionally asks the host to close THIS window right
+      // after it opens/focuses `href` — see `GameResult.tsx`'s own anchor
+      // and `deskWindowMessaging.ts`'s own `closeSelf` doc.
+      const closeSelf = opener.getAttribute(DESK_OPEN_WINDOW_ATTR) === 'replace';
+      postDeskWindowMessage(win, { type: 'open-window', href, title: title || null, ...(closeSelf ? { closeSelf: true } : {}) });
     },
     true,
   );

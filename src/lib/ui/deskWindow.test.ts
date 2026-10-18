@@ -674,4 +674,72 @@ describe('initDeskOpenWindowLinks', () => {
 
     expect(posted).toHaveLength(1); // a double-wired listener would post twice.
   });
+
+  // "Otra actividad" bugfix (owner report: the finished activity window was
+  // never closed — it sat behind the newly-opened community window,
+  // reloading/blank). `data-desk-open-window="replace"` is the attribute
+  // value `GameResult`'s own "Otra actividad" anchor carries — the opener
+  // additionally asks the host to close THIS window right after opening the
+  // target one.
+  describe('data-desk-open-window="replace" (GameResult "Otra actividad")', () => {
+    it('embedded: posts open-window with closeSelf: true', () => {
+      const doc = freshDoc();
+      doc.documentElement.setAttribute('data-desk-window-embedded', '');
+      const anchor = doc.createElement('a');
+      anchor.href = '/es/ingles/actividades?nivel=a1';
+      anchor.setAttribute('data-desk-open-window', 'replace');
+      anchor.textContent = 'Otra actividad';
+      doc.body.appendChild(anchor);
+
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      initDeskOpenWindowLinks(doc, fakeEmbeddedWin(posted));
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      anchor.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(posted).toEqual([
+        {
+          message: {
+            source: 'desk-window',
+            type: 'open-window',
+            href: '/es/ingles/actividades?nivel=a1',
+            title: 'Otra actividad',
+            closeSelf: true,
+          },
+          origin: 'https://example.test',
+        },
+      ]);
+    });
+
+    it('a plain data-desk-open-window (no value, or any value other than "replace") never sets closeSelf', () => {
+      const doc = freshDoc();
+      doc.documentElement.setAttribute('data-desk-window-embedded', '');
+      const anchor = doc.createElement('a');
+      anchor.href = '/es/crear';
+      anchor.setAttribute('data-desk-open-window', '');
+      doc.body.appendChild(anchor);
+
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      initDeskOpenWindowLinks(doc, fakeEmbeddedWin(posted));
+      anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+
+      expect(posted[0].message).not.toHaveProperty('closeSelf');
+    });
+
+    it('a non-embedded click on a "replace" anchor is never intercepted — a plain navigation proceeds', () => {
+      const doc = freshDoc();
+      const anchor = doc.createElement('a');
+      anchor.href = '/es/ingles/actividades?nivel=a1';
+      anchor.setAttribute('data-desk-open-window', 'replace');
+      doc.body.appendChild(anchor);
+
+      const posted: Array<{ message: unknown; origin: string }> = [];
+      initDeskOpenWindowLinks(doc, fakeEmbeddedWin(posted));
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      anchor.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(posted).toEqual([]);
+    });
+  });
 });

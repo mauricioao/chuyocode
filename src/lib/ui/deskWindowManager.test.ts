@@ -358,6 +358,50 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(frameFor('create')).not.toBeNull();
   });
 
+  // "Otra actividad" bugfix (owner report): clicking "Otra actividad" inside
+  // a finished activity window used to leave that window open, reloading
+  // behind the newly-opened community window. `closeSelf: true` on the
+  // open-window message (posted by `GameResult`'s own
+  // `data-desk-open-window="replace"` anchor, via
+  // `deskWindow.ts#initDeskOpenWindowLinks`) asks the host to open/focus the
+  // target AND close the SOURCE window right after.
+  it('open-window with closeSelf: true opens the target and closes the source window', async () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades/abc', 'Present Simple');
+    const activity = frameFor('activity:abc')!;
+
+    win.dispatchMessage(
+      {
+        source: 'desk-window',
+        type: 'open-window',
+        href: '/es/ingles/actividades?nivel=b1',
+        title: 'Actividades de la comunidad',
+        closeSelf: true,
+      },
+      activity.iframe.contentWindow,
+    );
+    await flushMicrotasks(); // requestClose awaits the editor-guard check and the close animation.
+
+    expect(frameFor('community')).not.toBeNull();
+    expect(frameFor('activity:abc')).toBeNull();
+  });
+
+  it('open-window without closeSelf leaves the source window open (today\'s plain open-window behaviour, unchanged)', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades/abc', 'Present Simple');
+    const activity = frameFor('activity:abc')!;
+
+    win.dispatchMessage(
+      { source: 'desk-window', type: 'open-window', href: '/es/crear', title: 'Crear actividad' },
+      activity.iframe.contentWindow,
+    );
+
+    expect(frameFor('create')).not.toBeNull();
+    expect(frameFor('activity:abc')).not.toBeNull();
+  });
+
   it('a message from an unknown source (not a managed iframe) is ignored', () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);

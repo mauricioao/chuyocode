@@ -1344,6 +1344,97 @@ h3 {
   }
 }
 
+/* GameResult — Vanina's "Toasty!"-style pop-in (visual-polish pass, owner
+ * spec: "sale desde abajo a la izquierda de la ventana, se ve solo la mitad
+ * de la imagen... como el Toasty de Mortal Kombat, pero desde el borde
+ * inferior... ella se queda, no vuelve a desaparecer"). `.game-result-
+ * vanina` is the RESTING transform — `translateY(50%)` pushes the bottom
+ * half of her box past `GameResult.tsx`'s own `overflow-hidden` root, so
+ * only the upper half ever paints; this rule applies unconditionally, so
+ * under reduced motion that is simply where she sits, with no entrance to
+ * play at all. `transform-origin: bottom` keeps the pop's own scale
+ * growing up and out of the edge, never off-centre. The `from`-only
+ * keyframe (same idiom as `.template-enter` above) animates FROM fully
+ * hidden below the edge, scaled down a touch, TO this exact resting
+ * transform — easeOutBack's own slight overshoot is the "pop". */
+.game-result-vanina {
+  transform: translateY(50%);
+  transform-origin: bottom;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .game-result-vanina {
+    animation: game-result-vanina-pop 650ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+
+@keyframes game-result-vanina-pop {
+  from {
+    transform: translateY(160%) scale(0.85);
+  }
+}
+
+/* GameResult's one-shot confetti burst (`perfect`/`good` outcomes only,
+ * `GameResult.tsx`'s own `CONFETTI_OUTCOMES`) — small pieces shooting from
+ * the result area's own left/right edges, timed to land as Vanina pops up
+ * above. Deterministic per-piece `--confetti-*` custom properties, set
+ * inline by the component (index-based — never `Math.random()` at render,
+ * same "custom property per instance, one shared keyframe" posture
+ * `deskWindowManager.ts`'s own `--desk-window-manager-from` already uses).
+ * The base rule's `opacity: 0` only ever shows under reduced motion (the
+ * animation's own `both` fill otherwise keeps every piece visible from the
+ * very start of its delay) — paired with hiding the whole layer outright
+ * below, so reduced motion never shows a static, non-animating dot.
+ *
+ * `container-type: size` turns THIS layer (not each 8px piece) into the
+ * reference box for the `cqw`/`cqh` units `--confetti-dx`/`--confetti-dy`
+ * use below — bugfix: `translate()`'s percentages resolve against the
+ * translated element's OWN box, so a `%` travel on an 8px piece only ever
+ * moved it a few px and the whole burst read as two static edge columns.
+ * The layer is already `inset-0` on a `position: relative` ancestor, so it
+ * has a definite size to contain on. */
+.game-result-confetti {
+  container-type: size;
+}
+
+.game-result-confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .game-result-confetti-piece {
+    animation: game-result-confetti-piece var(--confetti-duration, 1700ms) var(--confetti-delay, 300ms)
+      cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+}
+
+@keyframes game-result-confetti-piece {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--confetti-dx, 0), var(--confetti-dy, -60cqh)) rotate(var(--confetti-rotate, 180deg));
+  }
+}
+
+/* Under reduced motion: Vanina simply rests in place (above), no confetti
+ * at all — a static, non-animating dot would read as visual noise, not an
+ * entrance cue. */
+@media (prefers-reduced-motion: reduce) {
+  .game-result-confetti {
+    display: none;
+  }
+}
+
 /* The floating Comprobar (`scale.ts`'s `FLOATING_CHECK_BAR_CLASS`) sits 16px
  * inside the stage card's own bottom-right corner rather than on its edge:
  * the card stops 16px above the window's bottom and 70px before its right

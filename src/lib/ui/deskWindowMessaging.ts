@@ -28,7 +28,16 @@ export type DeskWindowMessage =
   | { type: 'close' }
   | { type: 'minimize' }
   | { type: 'maximize-toggle' }
-  | { type: 'open-window'; href: string; title: string | null }
+  /**
+   * `closeSelf` ("Otra actividad" bugfix, owner report): asks the host to
+   * ALSO close the window that posted this message, right after it opens/
+   * focuses `href` — e.g. `GameResult`'s own `data-desk-open-window="replace"`
+   * anchor, whose embedded-side opener
+   * (`deskWindow.ts#initDeskOpenWindowLinks`) sets this. Omitted (every
+   * other opener) keeps today's behaviour: open the target, leave the
+   * source window exactly where it was.
+   */
+  | { type: 'open-window'; href: string; title: string | null; closeSelf?: boolean }
   | { type: 'title'; text: string }
   | { type: 'navigating' }
   | { type: 'ready' };
