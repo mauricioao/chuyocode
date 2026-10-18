@@ -14,7 +14,7 @@
  * show/hide itself and dispatches `DESK_ARRANGE_RESET_EVENT` on click.
  */
 import { DESK_DRAG_STORAGE_KEY, parseStoredPositions } from '@lib/deskDragMath';
-import { DESK_ARRANGE_VISIBILITY_EVENT, dispatchArrangeReset, type DeskArrangeVisibilityDetail } from './deskArrange';
+import { DESK_ARRANGE_VISIBILITY_EVENT, dispatchArrangeReset } from './deskArrange';
 
 /** The `desk:` breakpoint — dragging (and so this icon) only exists at and above it. */
 const DESK_MEDIA_QUERY = '(min-width: 1100px)';
@@ -46,7 +46,7 @@ export function initDeskArrangeButton(doc: Document = document): void {
   button.hidden = !(isDesktop() && hasStoredPositions());
 
   doc.addEventListener(DESK_ARRANGE_VISIBILITY_EVENT, (event) => {
-    const { visible } = (event as CustomEvent<DeskArrangeVisibilityDetail>).detail;
+    const { visible } = (event as CustomEvent<{ visible: boolean }>).detail;
     button.hidden = !(isDesktop() && visible);
   });
 
