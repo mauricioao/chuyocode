@@ -11,7 +11,10 @@
  * today, Premium billing (Paddle, pending), and account deletion
  * (`src/lib/accountDeletion.ts` / migration 0020). Identifies the data
  * controller, states data collected and purpose, dedicates a section to
- * cookies and local storage (first-party + Google third-party), covers
+ * cookies and local storage (first-party + Google third-party), a section
+ * on PostHog product analytics (each claim backed by `src/lib/posthog.ts` /
+ * `src/lib/posthogClient.ts`, except IP discarding, which is a PostHog
+ * project setting the owner keeps on), covers
  * third-party advertising and opt-out, and lists ARCO rights (acceso,
  * rectificación, cancelación, oposición).
  *
@@ -86,7 +89,8 @@ const isEs = lang === 'es';
           <p>
             Automáticamente podemos recolectar: tu dirección IP,
             identificadores de cookies, el tipo de navegador y dispositivo, y
-            datos de navegación (páginas vistas, descargas realizadas). El
+            datos de navegación (páginas vistas, clics en el Sitio, descargas
+            realizadas; ver la sección 6 sobre la analítica de producto). El
             desafío anti-bots Cloudflare Turnstile puede procesar señales
             técnicas de tu dispositivo para distinguirte de un robot al
             iniciar sesión, registrarte o restablecer tu contraseña. La
@@ -112,7 +116,7 @@ const isEs = lang === 'es';
             recompensado por publicidad a ciertas descargas; (e) mostrar
             publicidad, incluida publicidad personalizada de terceros; (f)
             gestionar tu suscripción Premium, cuando actives los pagos; y (g)
-            obtener métricas agregadas de uso para mejorar el servicio.
+            obtener métricas de uso para mejorar el servicio (ver la sección 6).
           </p>
         </section>
 
@@ -124,10 +128,18 @@ const isEs = lang === 'es';
             Conforme a la Ley N° 29733, tratar datos personales de un menor de
             14 años requiere el consentimiento previo de su padre, madre o
             apoderado. Por eso, un menor de 14 años necesita ese consentimiento
-            para crear una cuenta. Un menor puede, sin necesidad de cuenta ni
+            para crear una cuenta. Al crearla, marcas una casilla declarando
+            que tienes 14 años o más, o que cuentas con ese consentimiento, y
+            aceptas estos documentos; guardamos esa declaración en tu cuenta
+            junto con su fecha. Un menor puede, sin necesidad de cuenta ni
             consentimiento, jugar una actividad que su profesor comparta con
-            él mediante un enlace: en ese caso no recolectamos ningún dato
-            suyo (ver "Juego como invitado" en los Términos y Condiciones).
+            él mediante un enlace: en ese caso no recolectamos datos de cuenta
+            ni datos que lo identifiquen, como su nombre o su correo (ver
+            "Juego como invitado" en los Términos y Condiciones). La analítica
+            de producto de la sección 6 se aplica igual a todos los
+            visitantes, menores incluidos, y nunca se vincula a un nombre, un
+            correo ni una cuenta; puedes evitarla activando «No rastrear» en tu
+            navegador.
           </p>
         </section>
 
@@ -157,6 +169,12 @@ const isEs = lang === 'es';
               sesión, registro, restablecimiento de contraseña).
             </li>
             <li>
+              <strong class="text-foreground">PostHog (ph_*_posthog):</strong>{' '}
+              cookie de analítica, con una copia en el almacenamiento local de
+              tu navegador, que guarda el identificador aleatorio descrito en
+              la sección 6. No se crea si tu navegador envía «No rastrear».
+            </li>
+            <li>
               <strong class="text-foreground">Cookies de terceros:</strong> redes
               publicitarias, principalmente Google, para mostrar y medir
               publicidad, incluida publicidad personalizada. Estas se rigen
@@ -165,13 +183,13 @@ const isEs = lang === 'es';
           </ul>
           <p>
             Además, guardamos en el almacenamiento local de tu navegador
-            (localStorage/sessionStorage, que nunca sale de tu dispositivo ni
-            llega a nuestros servidores) tus preferencias de interfaz: la voz
-            elegida para la lectura en voz alta, la posición de la barra de
+            (localStorage/sessionStorage) tus preferencias de interfaz, que
+            nunca salen de tu dispositivo ni llegan a nuestros servidores: la
+            voz elegida para la lectura en voz alta, la posición de la barra de
             herramientas del editor, qué consejos de primer uso ya viste, y una
-            caché breve de tu estado de sesión. Hoy no usamos ninguna cookie de
-            analítica ni de seguimiento publicitario propio, fuera de la red
-            publicitaria mencionada arriba.
+            caché breve de tu estado de sesión. Fuera de la cookie de analítica
+            de PostHog y de la red publicitaria mencionadas arriba, no usamos
+            cookies de seguimiento.
           </p>
           <p>
             Puedes gestionar o eliminar las cookies desde la configuración de
@@ -182,30 +200,79 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            6. Proveedores que procesan datos por nosotros
+            6. Analítica de producto
+          </h2>
+          <p>
+            Para entender cómo se usa el Sitio y mejorarlo, usamos PostHog,
+            una herramienta de analítica de producto. PostHog registra las
+            páginas que visitas, los clics que haces en los elementos de la
+            página (por ejemplo, el texto del botón o enlace pulsado) y datos
+            técnicos de tu dispositivo y navegador (tipo de navegador, sistema
+            operativo, tamaño de pantalla), junto con un identificador
+            aleatorio guardado en tu navegador (ver la sección 5).
+          </p>
+          <ul class="ml-5 flex list-disc flex-col gap-2">
+            <li>
+              <strong class="text-foreground">No grabamos tus sesiones:</strong>{' '}
+              la grabación de sesiones de PostHog está desactivada.
+            </li>
+            <li>
+              <strong class="text-foreground">Nunca registramos lo que escribes:</strong>{' '}
+              los clics y eventos que se registran no incluyen el contenido de
+              los campos de texto ni de las contraseñas.
+            </li>
+            <li>
+              <strong class="text-foreground">Respetamos «No rastrear»:</strong>{' '}
+              si tu navegador envía la señal «No rastrear» (Do Not Track),
+              PostHog no se inicia y no registramos ninguna analítica de tu
+              visita.
+            </li>
+            <li>
+              <strong class="text-foreground">Sin dirección IP:</strong> nuestro
+              proyecto en PostHog está configurado para descartar la dirección
+              IP de cada evento, por lo que no se almacena.
+            </li>
+            <li>
+              <strong class="text-foreground">Sin perfiles ni vínculo con tu cuenta:</strong>{' '}
+              no creamos perfiles de analítica, y no enviamos a PostHog tu
+              nombre, tu correo ni tu identificador de cuenta, aunque hayas
+              iniciado sesión.
+            </li>
+            <li>
+              <strong class="text-foreground">Alojamiento en la Unión Europea:</strong>{' '}
+              estos datos se envían a la nube de PostHog en la Unión Europea y
+              se procesan allí.
+            </li>
+          </ul>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            7. Proveedores que procesan datos por nosotros
           </h2>
           <p>
             Hoy usamos: Netlify (alojamiento, funciones de servidor y
             registros), Supabase (autenticación, base de datos y
             almacenamiento de archivos), Sanity (contenido de libros y
-            noticias), Cloudflare (el desafío Turnstile) y Google (inicio de
-            sesión). Como estos proveedores operan sus propios servidores, tus
-            datos pueden procesarse fuera del Perú, bajo las medidas de
-            seguridad propias de cada proveedor.
+            noticias), Cloudflare (el desafío Turnstile), Google (inicio de
+            sesión) y PostHog (analítica de producto, alojada en la Unión
+            Europea; ver la sección 6). Como estos proveedores operan sus
+            propios servidores, tus datos pueden procesarse fuera del Perú,
+            bajo las medidas de seguridad propias de cada proveedor.
           </p>
           <p>
             Cuando los activemos, usaremos además: Paddle como comerciante
             registrado para los pagos de Premium (Paddle recibe y procesa los
             datos de tu pago directamente; nosotros no), un proveedor de
             correo para los mensajes relacionados con tu cuenta, una
-            herramienta de analítica respetuosa de la privacidad, y una
+            herramienta de estadísticas web respetuosa de la privacidad, y una
             herramienta de monitoreo de errores.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            7. Publicidad de terceros
+            8. Publicidad de terceros
           </h2>
           <p>
             El Sitio muestra publicidad de redes de terceros, principalmente
@@ -236,7 +303,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            8. Eliminación de tu cuenta y tus datos
+            9. Eliminación de tu cuenta y tus datos
           </h2>
           <p>
             Puedes eliminar tu cuenta tú mismo en cualquier momento, desde sus
@@ -255,7 +322,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            9. Tus derechos (ARCO)
+            10. Tus derechos (ARCO)
           </h2>
           <p>
             Conforme a la Ley N° 29733, tienes derecho de acceso,
@@ -277,7 +344,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            10. Conservación y seguridad
+            11. Conservación y seguridad
           </h2>
           <p>
             Conservamos los datos solo durante el tiempo necesario para las
@@ -291,7 +358,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            11. Cambios en esta política
+            12. Cambios en esta política
           </h2>
           <p>
             Podemos actualizar esta Política de Privacidad en cualquier
@@ -340,8 +407,9 @@ const isEs = lang === 'es';
           </p>
           <p>
             We may automatically collect: your IP address, cookie identifiers,
-            browser and device type, and browsing data (pages viewed,
-            downloads made). The Cloudflare Turnstile anti-bot challenge may
+            browser and device type, and browsing data (pages viewed, clicks
+            on the Site, downloads made; see section 6 on product analytics).
+            The Cloudflare Turnstile anti-bot challenge may
             process technical signals from your device to tell you apart from
             a bot when signing in, signing up, or resetting your password.
             Third-party advertising may collect additional data under its own
@@ -364,7 +432,7 @@ const isEs = lang === 'es';
             rankings; (d) grant ad-rewarded access to certain downloads; (e)
             serve advertising, including personalized third-party ads; (f)
             manage your Premium subscription, once payments are enabled; and
-            (g) obtain aggregate usage metrics to improve the service.
+            (g) obtain usage metrics to improve the service (see section 6).
           </p>
         </section>
 
@@ -376,10 +444,17 @@ const isEs = lang === 'es';
             Under Peru's Law No. 29733, processing the personal data of a
             minor under 14 requires the prior consent of a parent or guardian.
             That is why a minor under 14 needs that consent to create an
-            account. A minor can, with no account and no consent needed, play
+            account. When creating it, you tick a box declaring that you are
+            14 or older, or that you have that consent, and accepting these
+            documents; we store that declaration in your account along with
+            its date. A minor can, with no account and no consent needed, play
             an activity their teacher shares with them by link: in that case
-            we collect no data about them at all (see "Guest play" in the
-            Terms & Conditions).
+            we collect no account data and no data that identifies them, such
+            as their name or email (see "Guest play" in the Terms &
+            Conditions). The product analytics in section 6 applies equally to
+            every visitor, minors included, and is never linked to a name, an
+            email, or an account; you can avoid it by turning on "Do Not
+            Track" in your browser.
           </p>
         </section>
 
@@ -408,6 +483,12 @@ const isEs = lang === 'es';
               password reset).
             </li>
             <li>
+              <strong class="text-foreground">PostHog (ph_*_posthog):</strong>{' '}
+              an analytics cookie, with a copy in your browser's local storage,
+              holding the random identifier described in section 6. It is not
+              created if your browser sends "Do Not Track".
+            </li>
+            <li>
               <strong class="text-foreground">Third-party cookies:</strong>{' '}
               advertising networks, mainly Google, to serve and measure
               advertising, including personalized ads. These are governed by
@@ -416,13 +497,12 @@ const isEs = lang === 'es';
           </ul>
           <p>
             We also store, in your browser's own local storage
-            (localStorage/sessionStorage, which never leaves your device or
-            reaches our servers), your interface preferences: the voice chosen
-            for read-aloud, the editor toolbar's position, which first-run
-            tips you have already seen, and a short-lived cache of your
-            sign-in state. We use no analytics cookie and no first-party
-            advertising-tracking cookie today, beyond the advertising network
-            mentioned above.
+            (localStorage/sessionStorage), your interface preferences, which
+            never leave your device or reach our servers: the voice chosen for
+            read-aloud, the editor toolbar's position, which first-run tips
+            you have already seen, and a short-lived cache of your sign-in
+            state. Beyond the PostHog analytics cookie and the advertising
+            network mentioned above, we use no tracking cookies.
           </p>
           <p>
             You can manage or delete cookies from your browser settings;
@@ -433,28 +513,75 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            6. Providers that process data on our behalf
+            6. Product analytics
+          </h2>
+          <p>
+            To understand how the Site is used and improve it, we use PostHog,
+            a product analytics tool. PostHog records the pages you visit, the
+            clicks you make on page elements (for example, the text of the
+            button or link clicked), and technical data about your device and
+            browser (browser type, operating system, screen size), together
+            with a random identifier stored in your browser (see section 5).
+          </p>
+          <ul class="ml-5 flex list-disc flex-col gap-2">
+            <li>
+              <strong class="text-foreground">We do not record your sessions:</strong>{' '}
+              PostHog's session recording is turned off.
+            </li>
+            <li>
+              <strong class="text-foreground">We never record what you type:</strong>{' '}
+              the clicks and events recorded do not include the contents of
+              text fields or passwords.
+            </li>
+            <li>
+              <strong class="text-foreground">We respect "Do Not Track":</strong>{' '}
+              if your browser sends the "Do Not Track" signal, PostHog does not
+              start and we record no analytics for your visit.
+            </li>
+            <li>
+              <strong class="text-foreground">No IP address:</strong> our
+              PostHog project is configured to discard the IP address of every
+              event, so it is not stored.
+            </li>
+            <li>
+              <strong class="text-foreground">No profiles, no link to your account:</strong>{' '}
+              we create no analytics profiles, and we do not send PostHog your
+              name, your email, or your account identifier, even when you are
+              signed in.
+            </li>
+            <li>
+              <strong class="text-foreground">Hosted in the European Union:</strong>{' '}
+              this data is sent to and processed in PostHog's European Union
+              cloud.
+            </li>
+          </ul>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="font-display text-xl font-semibold text-foreground">
+            7. Providers that process data on our behalf
           </h2>
           <p>
             Today we use: Netlify (hosting, server functions, and logs),
             Supabase (authentication, database, and file storage), Sanity
-            (books/news content), Cloudflare (the Turnstile challenge), and
-            Google (sign-in). Since these providers run their own servers,
-            your data may be processed outside Peru, under each provider's own
-            security safeguards.
+            (books/news content), Cloudflare (the Turnstile challenge), Google
+            (sign-in), and PostHog (product analytics, hosted in the European
+            Union; see section 6). Since these providers run their own
+            servers, your data may be processed outside Peru, under each
+            provider's own security safeguards.
           </p>
           <p>
             Once enabled, we will also use: Paddle as the Merchant of Record
             for Premium payments (Paddle receives and processes your payment
             data directly; we do not), an email provider for account-related
-            messages, a privacy-friendly analytics tool, and an error-
+            messages, a privacy-friendly web statistics tool, and an error-
             monitoring tool.
           </p>
         </section>
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            7. Third-party advertising
+            8. Third-party advertising
           </h2>
           <p>
             The Site shows advertising from third-party networks, mainly Google.
@@ -484,7 +611,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            8. Deleting your account and your data
+            9. Deleting your account and your data
           </h2>
           <p>
             You can delete your account yourself at any time, from its
@@ -503,7 +630,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            9. Your rights
+            10. Your rights
           </h2>
           <p>
             Under Law No. 29733, you have the rights of access, rectification,
@@ -524,7 +651,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            10. Retention and security
+            11. Retention and security
           </h2>
           <p>
             We retain data only for as long as necessary for the purposes
@@ -537,7 +664,7 @@ const isEs = lang === 'es';
 
         <section class="flex flex-col gap-2">
           <h2 class="font-display text-xl font-semibold text-foreground">
-            11. Changes to this policy
+            12. Changes to this policy
           </h2>
           <p>
             We may update this Privacy Policy at any time. Changes take effect upon

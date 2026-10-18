@@ -58,7 +58,14 @@ describe('legal/[page].astro — fixed "last updated" date (SEO basics pass)', (
     const res = await render({ lang: 'en', page: 'privacy' });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('October 4, 2026');
+    expect(html).toContain('October 18, 2026');
+  });
+
+  it('renders the fixed date for privacy, localized in Spanish', async () => {
+    const res = await render({ lang: 'es', page: 'privacy' });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('18 de octubre de 2026');
   });
 
   it('renders the fixed date for reembolsos (refund policy), localized in Spanish', async () => {
@@ -194,6 +201,51 @@ describe('legal/[page].astro — key facts (privacy)', () => {
     expect(html).toContain('access, rectification, cancellation, and objection');
     expect(html).toContain('requires the prior consent of a parent or guardian');
     expect(html).toContain('Doing so deletes your associated personal data');
+  });
+});
+
+// PostHog product analytics disclosure. Each assertion mirrors one thing the
+// code really does (`src/lib/posthog.ts`, `src/lib/posthogClient.ts`): EU
+// default host, session recording off, Do Not Track skips init, typed values
+// never captured, no `identify` call (no profile, no account link), and the
+// first-party `ph_*_posthog` cookie posthog-js sets by default. The IP-discard
+// sentence reflects a PostHog PROJECT setting, not code.
+describe('legal/[page].astro — product analytics disclosure (privacy)', () => {
+  it('discloses PostHog and what it does and does not do, in es', async () => {
+    const res = await render({ lang: 'es', page: 'privacy' });
+    const html = await res.text();
+
+    expect(html).toContain('6. Analítica de producto');
+    expect(html).toContain('PostHog');
+    expect(html).toContain('Unión Europea');
+    expect(html).toContain('No grabamos tus sesiones');
+    expect(html).toContain('Nunca registramos lo que escribes');
+    expect(html).toContain('No rastrear');
+    expect(html).toContain('descartar la dirección IP');
+    expect(html).toContain('no enviamos a PostHog tu nombre, tu correo ni tu identificador de cuenta');
+    expect(html).toContain('ph_*_posthog');
+    expect(html).toContain('12. Cambios en esta política');
+    // Superseded claims that would now be false.
+    expect(html).not.toContain('Hoy no usamos ninguna cookie de analítica');
+    expect(html).not.toContain('no recolectamos ningún dato suyo');
+  });
+
+  it('discloses PostHog and what it does and does not do, in en', async () => {
+    const res = await render({ lang: 'en', page: 'privacy' });
+    const html = await res.text();
+
+    expect(html).toContain('6. Product analytics');
+    expect(html).toContain('PostHog');
+    expect(html).toContain('European Union');
+    expect(html).toContain('We do not record your sessions');
+    expect(html).toContain('We never record what you type');
+    expect(html).toContain('Do Not Track');
+    expect(html).toContain('discard the IP address');
+    expect(html).toContain('we do not send PostHog your name, your email, or your account identifier');
+    expect(html).toContain('ph_*_posthog');
+    expect(html).toContain('12. Changes to this policy');
+    expect(html).not.toContain('We use no analytics cookie');
+    expect(html).not.toContain('we collect no data about them at all');
   });
 });
 
