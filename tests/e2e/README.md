@@ -22,10 +22,16 @@ against local Supabase, never production**.
    ```sh
    export SUPABASE_URL=http://127.0.0.1:54321
    export SUPABASE_ANON_KEY=<ANON_KEY from `pnpm db:start`>
+   export SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY from `pnpm db:start`>
    ```
-   `SANITY_PROJECT_ID`/`SANITY_DATASET` still need a real value (src/lib/
-   env.ts requires all four to boot) — your existing `.env` values work fine
-   here; Sanity content is unrelated to this fixture.
+   The service-role key lets `desk-minimized-tray-part6b.spec.ts` publish
+   its own activity before the suite and delete it after; it only does so
+   when `SUPABASE_URL` is localhost. Without it that spec falls back to
+   the first activity in `/sitemap.xml` and skips when there is none.
+   `SANITY_PROJECT_ID`/`SANITY_DATASET` still need a value (src/lib/env.ts
+   requires all four to boot): the public ids from `sanity.config.ts`
+   (`z9wkqssq` / `production_`). Export them too rather than relying on a
+   `.env`, so nothing in the run points at a production service.
 4. Run the signed-in suite (boots its own `pnpm dev` with the env above):
    ```sh
    pnpm test:e2e:auth
