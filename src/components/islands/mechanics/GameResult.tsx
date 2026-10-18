@@ -50,6 +50,7 @@
  * guest "Crear cuenta" link below keeps its own explicit `text-accent-ink`
  * since it is a plain `<a>`, not a `Button`.
  */
+import type { CSSProperties } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { formatElapsedTime } from '@/lib/formatElapsedTime';
@@ -121,6 +122,75 @@ const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
   retry: 'vanina/casi',
 };
 
+/**
+ * Confetti burst (visual-polish pass, owner spec: "confetti que sale de los
+ * costados" timed to land as Vanina pops up) — `perfect`/`good` only, never
+ * `retry` (a near-miss is not a celebration). Small pieces shooting from the
+ * result area's own left/right edges, inward and up, then falling and
+ * fading — pure CSS (`global.css`'s own `.game-result-confetti-piece`
+ * keyframe), gated behind `prefers-reduced-motion: no-preference` there, no
+ * new dependency.
+ */
+const CONFETTI_OUTCOMES: ReadonlySet<GameResultOutcome> = new Set(['perfect', 'good']);
+
+/** ~20 pieces per side (owner spec: "≈18-24") — a floor, not an exact budget. */
+const CONFETTI_PIECES_PER_SIDE = 20;
+
+/** The 6-colour tray palette (`--color-tile-1..6`, `global.css`) — decorative accents, never the red/green pair reserved for ✓/✕ (`glass-desk-ui` skill). */
+const CONFETTI_COLOR_VARS = [
+  '--color-tile-1',
+  '--color-tile-2',
+  '--color-tile-3',
+  '--color-tile-4',
+  '--color-tile-5',
+  '--color-tile-6',
+] as const;
+
+/**
+ * Deterministic per-piece params, pure arithmetic over `index` — never
+ * `Math.random()` at render, which would mismatch between the server- and
+ * client-rendered markup and break hydration. Expressed as `--confetti-*`
+ * custom properties the shared `.game-result-confetti-piece` keyframe reads
+ * (same "set a custom property per instance, one shared keyframe" posture
+ * `deskWindowManager.ts`'s own `--desk-window-manager-from` already uses).
+ */
+function confettiPieceStyle(index: number, side: 'left' | 'right'): CSSProperties {
+  const travel = 55 + ((index * 17) % 45); // 55-99% — shoots inward, toward the centre.
+  const rise = 55 + ((index * 23) % 70); // 55-124% upward.
+  const rotate = (index % 2 === 0 ? 1 : -1) * (140 + ((index * 59) % 260));
+  const duration = 1500 + ((index * 29) % 500); // 1.5-2s (owner spec).
+  // Slight delay so the burst lands as Vanina pops up (owner spec), staggered per piece.
+  const delay = 220 + (index % CONFETTI_PIECES_PER_SIDE) * 18;
+  const bottom = 4 + ((index * 11) % 28); // 4-31% up the edge.
+  const dx = side === 'left' ? travel : -travel;
+  const colorVar = CONFETTI_COLOR_VARS[index % CONFETTI_COLOR_VARS.length];
+  return {
+    [side]: '2%',
+    bottom: `${bottom}%`,
+    backgroundColor: `var(${colorVar})`,
+    '--confetti-dx': `${dx}%`,
+    '--confetti-dy': `-${rise}%`,
+    '--confetti-rotate': `${rotate}deg`,
+    '--confetti-duration': `${duration}ms`,
+    '--confetti-delay': `${delay}ms`,
+  } as CSSProperties;
+}
+
+interface ConfettiPiece {
+  id: string;
+  style: CSSProperties;
+}
+
+function buildConfettiPieces(): ConfettiPiece[] {
+  const pieces: ConfettiPiece[] = [];
+  for (const side of ['left', 'right'] as const) {
+    for (let i = 0; i < CONFETTI_PIECES_PER_SIDE; i += 1) {
+      pieces.push({ id: `${side}-${i}`, style: confettiPieceStyle(i, side) });
+    }
+  }
+  return pieces;
+}
+
 export default function GameResult({
   lang,
   correct,
@@ -140,6 +210,8 @@ export default function GameResult({
   const word = resultWord ?? t.defaultWord;
   const showReview = correct < total && Boolean(onReviewWrong);
   const pose = OUTCOME_POSE[outcome];
+  const showConfetti = CONFETTI_OUTCOMES.has(outcome);
+  const confettiPieces = showConfetti ? buildConfettiPieces() : [];
 
   return (
     <div
@@ -147,22 +219,45 @@ export default function GameResult({
       data-outcome={outcome}
       role="status"
       aria-live="polite"
-      className={cn('flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center', className)}
+      className={cn(
+        'relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden py-10 text-center',
+        className,
+      )}
     >
-      {/* Vanina's reaction — a fixed HEIGHT per breakpoint, `width: auto`
-          (owner feedback, UI round 2: an `object-cover` box cropped the
-          full-body "celebra" pose's own hands/feet, which read as a
-          mistake — the "never shrink to fit" rule means keeping the WHOLE
-          silhouette, at a consistent height, never letterboxing OR
-          cropping). `object-cover` stays reserved for a fixed-SHAPE frame
-          that is part of the design, like `DeskHelper.astro`'s own circular
-          avatar — this is a free-standing figure, not a portrait crop.
-          176px desktop/laptop, 144px on phones <=400px wide (both exported
-          at 176 @1x/2x — `scripts/characters/export-web.mjs` — so the phone
-          size is only ever downscaled, never upscaled). Decorative only:
-          the outcome is already in the headline text below and in
-          `data-outcome` above. */}
-      <picture data-testid="game-result-icon" data-outcome-pose={pose} className="block h-44 w-auto max-[400px]:h-36">
+      {/* Confetti burst — see `buildConfettiPieces`/`CONFETTI_OUTCOMES` own
+          header above and `.game-result-confetti-piece`'s keyframe in
+          `global.css`. Absolutely positioned over the WHOLE result area
+          (not just the edge Vanina peeks from — the owner spec has it
+          shoot from both sides), `aria-hidden` + `pointer-events-none`:
+          purely decorative, never reachable/blocking. */}
+      {showConfetti && (
+        <div data-testid="game-result-confetti" aria-hidden="true" className="game-result-confetti pointer-events-none absolute inset-0 overflow-hidden">
+          {confettiPieces.map((piece) => (
+            <span key={piece.id} className="game-result-confetti-piece" style={piece.style} />
+          ))}
+        </div>
+      )}
+      {/* Vanina's reaction — "Toasty!"-style pop-in from the result area's
+          OWN bottom-left edge (visual-polish pass, owner spec: "sale desde
+          abajo a la izquierda... la mitad de la imagen visible... se
+          queda", unlike Toasty she never leaves again). Anchored `absolute
+          bottom-0`, then `translateY(50%)` (`.game-result-vanina`,
+          `global.css`) pushes the bottom half past the root's own
+          `overflow-hidden` edge — only the UPPER half stays visible, which
+          is the crop the owner asked for, never a shrink (the "never
+          shrink to fit" rule — `object-cover` stays reserved for a
+          fixed-SHAPE frame like `DeskHelper.astro`'s own circular avatar;
+          this is a free-standing figure, cropped by the edge, not
+          squeezed). A fixed HEIGHT per breakpoint, `width: auto`, same
+          "never letterbox or crop by shrinking" posture as before — just a
+          bit LARGER now (h-64, half visible once cropped ≈ h-32) so the
+          peek still reads at a glance. Decorative only: the outcome is
+          already in the headline text below and in `data-outcome` above. */}
+      <picture
+        data-testid="game-result-icon"
+        data-outcome-pose={pose}
+        className="game-result-vanina pointer-events-none absolute bottom-0 left-4 z-10 block h-64 w-auto sm:left-6 max-[400px]:h-52"
+      >
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
         <img
@@ -170,16 +265,19 @@ export default function GameResult({
           alt=""
           aria-hidden="true"
           width={characterPoseWidth(pose)}
-          height={176}
+          height={256}
           decoding="async"
-          className="block h-44 w-auto max-[400px]:h-36"
+          className="block h-64 w-auto max-[400px]:h-52"
         />
       </picture>
-      {/* Comfortable reading measure for the headline/score/buttons (owner
-          feedback, UI round 2: the success state read a bit narrow) —
-          independent of the character box above, which keeps its own
-          fixed size. */}
-      <div className="flex w-full max-w-[30rem] flex-col items-center gap-4">
+      {/* The centred results column — headline/score/buttons — now the
+          ONLY thing in the middle (Vanina moved to the edge above). Same
+          comfortable reading measure as before (owner feedback, UI round
+          2: the success state read a bit narrow), plus enough bottom
+          padding that her half-visible figure at bottom-left never
+          overlaps "Otra actividad"/"Jugar de nuevo" at a narrow (360-390px)
+          width. */}
+      <div data-testid="game-result-content" className="relative z-20 flex w-full max-w-[30rem] flex-col items-center gap-4 pb-16 sm:pb-4">
         <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
         <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
           {correct} {t.of} {total} {word}

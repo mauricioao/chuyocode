@@ -246,15 +246,90 @@ describe('GameResult', () => {
     // silhouette at the master's own aspect ratio (`object-cover` stays
     // reserved for a fixed-shape frame that is part of the design, like
     // `DeskHelper.astro`'s own circular avatar — not this free-standing
-    // figure).
+    // figure). Vanina pop-in pass: she is now a bit LARGER (h-64, half
+    // visible once cropped by the edge — see the "edge-anchored" describe
+    // below) than the old h-44 centred figure.
     it('keeps its natural aspect ratio (fixed height, width auto, never cropped/letterboxed)', () => {
       render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
       const img = screen.getByTestId('game-result-icon').querySelector('img')!;
-      expect(img.className).toMatch(/\bh-44\b/);
+      expect(img.className).toMatch(/\bh-64\b/);
       expect(img.className).toMatch(/\bw-auto\b/);
-      expect(img.className).toMatch(/max-\[400px\]:h-36/);
+      expect(img.className).toMatch(/max-\[400px\]:h-52/);
       expect(img.className).not.toMatch(/\bobject-cover\b/);
       expect(img.className).not.toMatch(/\bobject-contain\b/);
+    });
+  });
+
+  // Vanina pop-in pass (owner spec: "Vanina sale desde abajo a la izquierda
+  // de la ventana... la mitad de la imagen visible", "como el Toasty de
+  // Mortal Kombat, pero desde el borde inferior... se queda"): she moves
+  // OUT of the centred results column and anchors to the result area's own
+  // bottom-left edge, half-cropped by its `overflow-hidden`. The centred
+  // column (`game-result-content`) now holds only the headline/score/
+  // buttons — nothing new exported, `GameResultProps` stays unchanged.
+  describe('Vanina — edge-anchored pop-in (owner spec: peeking from the bottom-left edge, half visible, stays)', () => {
+    it('renders Vanina OUTSIDE the centred results column, anchored to the result area itself', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const root = screen.getByTestId('game-result');
+      const content = screen.getByTestId('game-result-content');
+      const icon = screen.getByTestId('game-result-icon');
+      expect(root.contains(content)).toBe(true);
+      expect(content.contains(icon)).toBe(false);
+      expect(root.contains(icon)).toBe(true);
+    });
+
+    it('anchors to the bottom-left edge, absolutely positioned, half-cropped by the root\'s own overflow-hidden', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const root = screen.getByTestId('game-result');
+      const icon = screen.getByTestId('game-result-icon');
+      expect(root.className).toMatch(/\brelative\b/);
+      expect(root.className).toMatch(/\boverflow-hidden\b/);
+      expect(icon.className).toMatch(/\babsolute\b/);
+      expect(icon.className).toMatch(/\bbottom-0\b/);
+      expect(icon.className).toMatch(/\bleft-/);
+    });
+
+    it('is still decorative only and keeps the right pose per outcome, now from the edge-anchored element', () => {
+      render(<GameResult lang="es" correct={7} total={10} onPlayAgain={() => {}} />);
+      const icon = screen.getByTestId('game-result-icon');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/pulgar-arriba');
+      const img = icon.querySelector('img')!;
+      expect(img.getAttribute('alt')).toBe('');
+      expect(img.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
+
+  // Confetti burst (owner spec: "confetti que sale de los costados" timed to
+  // Vanina's landing) — perfect/good only, never retry; a decorative,
+  // aria-hidden layer the component owns itself (no new dependency).
+  describe('confetti burst (perfect/good only, never retry)', () => {
+    it('renders the confetti layer for a perfect outcome', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      expect(screen.getByTestId('game-result-confetti')).toBeTruthy();
+    });
+
+    it('renders the confetti layer for a good outcome', () => {
+      render(<GameResult lang="es" correct={7} total={10} onPlayAgain={() => {}} />);
+      expect(screen.getByTestId('game-result-confetti')).toBeTruthy();
+    });
+
+    it('omits the confetti layer entirely for a retry outcome', () => {
+      render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} />);
+      expect(screen.queryByTestId('game-result-confetti')).toBeNull();
+    });
+
+    it('is aria-hidden and never intercepts pointer events', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const confetti = screen.getByTestId('game-result-confetti');
+      expect(confetti.getAttribute('aria-hidden')).toBe('true');
+      expect(confetti.className).toMatch(/\bpointer-events-none\b/);
+    });
+
+    it('renders a non-trivial number of individual pieces', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const confetti = screen.getByTestId('game-result-confetti');
+      // ~18-24 pieces per side (owner spec) — just a floor, not an exact count.
+      expect(confetti.children.length).toBeGreaterThanOrEqual(30);
     });
   });
 
