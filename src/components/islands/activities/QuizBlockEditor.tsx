@@ -475,7 +475,7 @@ function SortableQuestionCard({
     <button
       type="button"
       aria-label={dragHandleLabel}
-      className="mt-2 flex max-lg:min-h-11 max-lg:min-w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground active:cursor-grabbing"
+      className="flex max-lg:min-h-11 max-lg:min-w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded p-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground active:cursor-grabbing"
       {...attributes}
       {...listeners}
     >
@@ -1105,6 +1105,11 @@ export default function QuizBlockEditor({
           header). */}
       {hasQuestions && (
         <div aria-hidden="true" className={ROW_GRID_HEADER}>
+          {/* Leading blank cell for the handle's own column (col 1) — see
+              `ROW_GRID`'s own header for the full column scheme; keeps
+              "Pregunta"/"Respuesta" lined up over their real columns (2
+              and 4) instead of the handle's and divider's. */}
+          <span />
           <GroupLabel>{t.questionHeader}</GroupLabel>
           <span />
           <GroupLabel>{t.answerHeader}</GroupLabel>
@@ -1121,6 +1126,10 @@ export default function QuizBlockEditor({
           // (`addExampleQuestionRow`), never a separate persisted row of its
           // own.
           <TemplateRow testId={`varios-example-${blockId}`}>
+            {/* No drag handle/delete for a ghost row (nothing real to
+                reorder/remove yet) — just question (col 2) and answer
+                (col 2 row 2 at mobile, stacked under it like a real row;
+                col 4 row 1 at `sm:`, beside it), same columns real rows use. */}
             <div className={ROW_GRID}>
               <TemplateField
                 aria-label={t.addQuestion}
@@ -1129,6 +1138,7 @@ export default function QuizBlockEditor({
                 value=""
                 onChange={(event) => addExampleQuestionRow('question', event.target.value)}
                 onPaste={(event) => handleVariosPaste(null, event)}
+                className="col-start-2 row-start-1 min-w-0"
               />
               <span aria-hidden="true" className={ROW_DIVIDER_CLASS} />
               <TemplateField
@@ -1138,8 +1148,8 @@ export default function QuizBlockEditor({
                 value=""
                 onChange={(event) => addExampleQuestionRow('answer', event.target.value)}
                 onPaste={(event) => handleVariosPaste(null, event)}
+                className="col-start-2 row-start-2 min-w-0 sm:col-start-4 sm:row-start-1"
               />
-              <div />
             </div>
           </TemplateRow>
         ) : (

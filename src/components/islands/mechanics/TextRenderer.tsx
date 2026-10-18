@@ -43,8 +43,19 @@ const FIELD_INLINE = `mx-1 inline-block w-[12ch] max-w-full align-baseline ${CON
  * Stacked: there is no sentence to sit inside, so the field is sized directly
  * rather than from its parent. One step below the prompt above it — the answer
  * is not the question.
+ *
+ * `mx-auto` (mobile review 2026-10-18, H13 reviewer follow-up): `PROMPT_MEASURE`
+ * already centres the prompt above this field ("the exercise card centres its
+ * prompt" — that constant's own header), so a left-aligned field under a
+ * centred, often-shorter-than-full-width prompt read as two unrelated columns
+ * (question centred, answer pinned to the left edge — most visible on a long
+ * question, where the gap was largest). Centring the field too keeps that
+ * SAME documented "centre the prompt" rule consistent all the way down to its
+ * own answer, rather than inventing a second, left-aligned rule for just this
+ * one field — the question and field caps differ (`32em` vs `max-w-md`), so
+ * their LEFT edges still won't match, but their centres now do.
  */
-const FIELD_STACKED = 'w-full max-w-md text-xl';
+const FIELD_STACKED = 'mx-auto w-full max-w-md text-xl';
 
 export default function TextRenderer({
   slot,

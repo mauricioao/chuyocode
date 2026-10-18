@@ -207,31 +207,64 @@ function QuestionImageField({
 }
 
 /**
- * Pregunta | divider | Respuesta-or-opciones | "×" — same column shape
- * `MatchPairsEditor.tsx`'s own `PAIR_GRID` uses, except RESPONSIVE (mobile
- * review 2026-10-18, H14): below `sm` (640px) a real activity's question
- * column measured ~129px wide and cut its own text ("What color is t"), so
- * the two fields now STACK (question full width, then answer full width)
- * instead of sharing a cramped 1fr/1fr row — `sm:` and up keeps the
- * original side-by-side columns unchanged (768px+ already had enough room).
- * The delete column is `2.75rem` (not the old `2.25rem`): `RowRemoveButton`
- * itself already grows to `size-10` (40px) on a coarse pointer
- * (`TemplateEditorKit.tsx`), which the old 36px track was too narrow for —
- * the "×" rendered 10px into the answer field (H14's second finding). This
- * widens the TRACK to fit the button that already exists, never the button
- * itself (owner note: no 44px button resize without sign-off).
- * Exported so `QuizBlockEditor.tsx`'s own column headers line up with
- * these rows.
+ * Handle | Pregunta | divider | Respuesta-or-opciones | "×" — a named
+ * CSS-GRID COLUMN SCHEME (mobile review 2026-10-18, H14 + reviewer
+ * follow-up), the same 5 columns at every width so every piece that must
+ * share an edge with another (question text / its own image action /
+ * the answer-and-links block) does so by occupying the SAME grid column,
+ * never by hand-matched padding:
+ *
+ *   col 1 `auto`            — the drag handle (own column at every width,
+ *                              never nested inside the question field's own
+ *                              box — see that reasoning below).
+ *   col 2 `minmax(0,1fr)`   — the question field AND, directly below it in
+ *                              row 2, its own "Agregar/Quitar imagen" — both
+ *                              in this one column, so they share one edge.
+ *   col 3 `1px`             — the side-by-side divider (`sm:` and up only).
+ *   col 4 `minmax(0,1fr)`   — the answer-and-links block (one wrapper: the
+ *                              field/options, then the "Agregar opciones /
+ *                              Editor avanzado" row) — ONE column, so the
+ *                              answer and its links always share an edge
+ *                              with each other for free.
+ *   col 5 `2.75rem`         — the delete "×". `2.75rem`, not the old
+ *                              `2.25rem`: `RowRemoveButton` already grows to
+ *                              `size-10` (40px) on a coarse pointer
+ *                              (`TemplateEditorKit.tsx`), which the old 36px
+ *                              track was too narrow for — the "×" rendered
+ *                              10px into the answer field. This widens the
+ *                              TRACK to fit the button that already exists,
+ *                              never the button itself (owner note: no 44px
+ *                              button resize without sign-off).
+ *
+ * BELOW `sm` (640px, reviewer follow-up on the first H14 pass): a real
+ * activity's question column measured ~129px wide and cut its own text
+ * ("What color is t"), and the first stacked attempt still overflowed the
+ * card (question ran edge to edge with no right padding) and left the
+ * answer/links sharing NEITHER the card's own padding NOR the question's
+ * own text column. `col-start-*`/`row-start-*` on each piece below (not a
+ * second, hand-rolled mobile layout) is what fixes both at once: columns 1
+ * (handle), 2 (question/image/answer/links) and 5 (delete) stay the grid's
+ * own 3 effective tracks (`auto minmax(0,1fr) auto` — divider/answer merge
+ * into column 2's single `1fr` track, delete reuses column 5's own slot),
+ * with the handle+question+delete sharing row 1 (so the "×" stays ON SCREEN
+ * beside the question, never pushed into its own far-right row), the image
+ * action in row 2, and the answer-and-links block in row 3 — all three
+ * still in column 2, so they share the exact same left edge as the question
+ * field above them, by construction, not by matching paddings.
+ *
+ * Exported so `QuizBlockEditor.tsx`'s own column headers and ghost row line
+ * up with these rows.
  */
 export const ROW_GRID =
-  'grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.75rem] sm:gap-0';
+  'grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-3 px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)_1px_minmax(0,1fr)_2.75rem] sm:gap-x-0 sm:gap-y-1';
 
-/** Column-header-only variant of {@link ROW_GRID} (owner build, H14 follow-up): a stacked mobile row has nothing to pair "Pregunta"/"Respuesta" against, so the header hides entirely below `sm` instead of stacking those two labels with a blank line between — each field's own placeholder/`aria-label` already says what it is. */
+/** Column-header-only variant of {@link ROW_GRID} (owner build, H14 follow-up): a stacked mobile row has nothing to pair "Pregunta"/"Respuesta" against, so the header hides entirely below `sm` instead of stacking those two labels with a blank line between — each field's own placeholder/`aria-label` already says what it is. Same `px-4` as a real row, so the labels start over their own columns. */
 export const ROW_GRID_HEADER =
-  'hidden sm:grid sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.75rem] sm:items-start';
+  'hidden sm:grid sm:grid-cols-[auto_minmax(0,1fr)_1px_minmax(0,1fr)_2.75rem] sm:items-start sm:px-4';
 
 /** The side-by-side divider bar — a stray 1px tick with nothing beside it once the row stacks (H14), so it only renders from `sm` up, same breakpoint as {@link ROW_GRID}'s own column switch. Exported so `QuizBlockEditor.tsx`'s own ghost row matches. */
-export const ROW_DIVIDER_CLASS = 'hidden h-7 w-px bg-foreground/[0.08] sm:block';
+export const ROW_DIVIDER_CLASS =
+  'hidden h-7 w-px bg-foreground/[0.08] sm:col-start-3 sm:row-start-1 sm:row-span-2 sm:block';
 
 export default function VariosJuegosRow(props: VariosJuegosRowProps) {
   const {
@@ -284,34 +317,34 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
         data-highlighted={highlighted ? 'true' : undefined}
         className={cn(ROW_GRID, highlighted && 'ring-2 ring-primary')}
       >
-        <div className="flex min-w-0 flex-col gap-1 py-2 pl-4">
-          {/* Drag handle sits BESIDE the question field, not stacked above it
-              (H14 fix): the old layout put `dragHandle` as its own line
-              before `TemplateField`, so the question's own field started
-              36px (1280) / 56px (375) lower than the answer field beside
-              it — exactly the handle's own rendered height, since the
-              answer column has no equivalent element pushing it down.
-              `items-start` keeps `TemplateField`'s own top flush with this
-              column's top (same as the answer column's `py-2`), regardless
-              of the handle's height. */}
-          <div className="flex min-w-0 items-start gap-1">
-            {dragHandle}
-            <TemplateField
-              aria-label={`${t.questionLabel} ${index}`}
-              placeholder={t.questionPlaceholder}
-              data-testid={`varios-question-${slot.id}`}
-              value={slot.label}
-              onChange={(event) => onLabelChange(event.target.value)}
-              onPaste={onPasteIntoRow}
-              className="min-w-0 flex-1"
-            />
-          </div>
-          {onPromptImageChange && (
+        {/* Own grid column (col 1) at every width now — H14 reviewer
+            follow-up: nesting the handle INSIDE the question field's own
+            box (the first H14 pass) pushed the question's "Quitar imagen"
+            action out of line with the answer/links block below, because
+            only the question's own wrapper carried the handle's extra
+            width. A dedicated column means every OTHER piece in column 2
+            (question, image action, answer, links) shares one left edge by
+            construction. `self-center` (overriding the grid's own
+            `items-start`) centers the handle against row 1's own height —
+            the question field's 40px fixed height (`.template-field`,
+            global.css), never a guessed top offset. */}
+        <div className="col-start-1 row-start-1 self-center">{dragHandle}</div>
+        <TemplateField
+          aria-label={`${t.questionLabel} ${index}`}
+          placeholder={t.questionPlaceholder}
+          data-testid={`varios-question-${slot.id}`}
+          value={slot.label}
+          onChange={(event) => onLabelChange(event.target.value)}
+          onPaste={onPasteIntoRow}
+          className="col-start-2 row-start-1 min-w-0"
+        />
+        {onPromptImageChange && (
+          <div className="col-start-2 row-start-2 min-w-0">
             <QuestionImageField lang={lang} slotId={slot.id} image={promptImage} onChange={onPromptImageChange} />
-          )}
-        </div>
+          </div>
+        )}
         <span aria-hidden="true" className={ROW_DIVIDER_CLASS} />
-        <div className="flex min-w-0 flex-col gap-2 py-2">
+        <div className="col-start-2 row-start-3 flex min-w-0 flex-col gap-2 sm:col-start-4 sm:row-start-1 sm:row-span-2">
           {segment === 'choice' ? (
             <div className="flex flex-wrap gap-2" data-testid={`varios-options-${slot.id}`}>
               {poolItems.map((item) => {
@@ -412,7 +445,11 @@ export default function VariosJuegosRow(props: VariosJuegosRowProps) {
             </button>
           </div>
         </div>
-        <div className="flex justify-end pr-1 pt-2">
+        {/* Same row as the handle+question (col 3 at mobile, so the "x"
+            stays ON SCREEN right beside the question instead of its own
+            far-right row below everything else); col 5 spanning both rows
+            at `sm:`, matching the original side-by-side design. */}
+        <div className="col-start-3 row-start-1 flex justify-end self-center sm:col-start-5 sm:row-span-2 sm:self-start">
           <RowRemoveButton label={`${t.removeRow} ${index}`} testId={`varios-remove-${slot.id}`} onRemove={onDelete} />
         </div>
       </div>

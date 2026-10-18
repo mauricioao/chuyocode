@@ -1,7 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Editor mobile layout — night pass 2026-10-18 (recorrido H13–H16).
+ * Editor mobile layout — night pass 2026-10-18 (recorrido H13–H16), amended
+ * after reviewer follow-up on the first pass (row overflow/misalignment at
+ * 375px still broken, H13's first finding — Básico preview question/answer
+ * alignment — still open, screenshots not proving hydration).
  *
  * Fixture: a "Varios juegos" (Básico) activity owned by the `e2e-regular`
  * fixture user, seeded directly in the local Supabase database (see the PR
@@ -42,6 +45,20 @@ async function gotoEditorOrSkip(page: Page): Promise<boolean> {
 }
 
 /**
+ * Proof of actual hydration, not just server-rendered HTML (reviewer
+ * follow-up: the first pass's "after" screenshots showed no window title
+ * bar / no side toolbar rail — an un-hydrated page, which cannot prove
+ * H15). The desktop rail starts at `{0,0}` and only reaches its real docked
+ * position once `EditorSideToolbar.tsx`'s own `useLayoutEffect` has run
+ * post-hydration, so polling its `x` past a plausible docked offset is a
+ * real hydration signal, not just a DOM-presence check.
+ */
+async function waitForHydration(page: Page): Promise<void> {
+  const toolbar = page.getByTestId('editor-side-toolbar');
+  await expect.poll(async () => (await toolbar.boundingBox())?.x ?? 0, { timeout: 60_000 }).toBeGreaterThan(100);
+}
+
+/**
  * Legacy multi-block nav (`BlockList.tsx`'s own `sheet-nav-next`/
  * `sheet-position`) only works once the island has actually HYDRATED — the
  * button already exists (and is enabled) in the server-rendered HTML, so a
@@ -63,6 +80,15 @@ async function goToSheet(page: Page, targetOneBased: number): Promise<void> {
   ).toBe(true);
 }
 
+/** `document.documentElement`/`document.body`'s own horizontal overflow — the page itself must never scroll sideways, at any width. */
+async function hasHorizontalPageOverflow(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    return html.scrollWidth > html.clientWidth + 1 || body.scrollWidth > body.clientWidth + 1;
+  });
+}
+
 test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
   test.describe.configure({ timeout: 300_000 });
 
@@ -70,7 +96,7 @@ test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
     // Side-by-side columns only apply from `sm` (640px) up — below that the
     // row now intentionally STACKS (question above answer), so comparing
     // top offsets only makes sense at 768/1280, not 375 (covered by the
-    // "stacks full-width" test below instead).
+    // "stacks full-width, no overflow" test below instead).
     for (const viewport of [{ width: 768, height: 1024 }, { width: 1280, height: 800 }]) {
       await page.setViewportSize(viewport);
       const reached = await gotoEditorOrSkip(page);
@@ -94,7 +120,7 @@ test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
     }
   });
 
-  test('H14: the "x" delete button never overlaps the answer field (1280px, side-by-side)', async ({ page }) => {
+  test('H14: the "x" delete button never overlaps the answer field and stays on screen (1280px, side-by-side)', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const reached = await gotoEditorOrSkip(page);
     test.skip(!reached, 'Editor is sign-in gated; no fixture activity reachable in this run');
@@ -103,6 +129,7 @@ test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
     const remove = page.getByTestId('varios-remove-slot-2');
     await expect(answer).toBeVisible();
     await expect(remove).toBeVisible();
+    await expect(remove).toBeInViewport();
 
     const aBox = await answer.boundingBox();
     const rBox = await remove.boundingBox();
@@ -116,37 +143,58 @@ test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
     expect(rBox.x).toBeGreaterThanOrEqual(aBox.x + aBox.width - 1);
   });
 
-  test('H14: the question field is not cramped at 375px (stacks full-width instead of a ~129px column)', async ({ page }) => {
+  test('H14: the row stacks full-width at 375px with no horizontal overflow and the "x" stays on screen', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     const reached = await gotoEditorOrSkip(page);
     test.skip(!reached, 'Editor is sign-in gated; no fixture activity reachable in this run');
 
     const question = page.getByTestId('varios-question-slot-1');
+    const answer = page.getByTestId('varios-answer-slot-1');
+    const remove = page.getByTestId('varios-remove-slot-1');
+    const card = page.getByTestId('varios-table-block-1');
     await expect(question).toBeVisible();
-    const box = await question.boundingBox();
-    expect(box).not.toBeNull();
-    if (!box) return;
+    await expect(answer).toBeVisible();
+    await expect(remove).toBeVisible();
 
-    expect(box.width).toBeGreaterThan(250);
+    // Reviewer follow-up: the first stacked attempt ran the question input
+    // edge to edge (no right padding) and pushed the "x" delete button off
+    // screen entirely. Both the card and the page itself must never scroll
+    // sideways, and the delete button — now on the SAME row as the
+    // question, not its own row below everything — must stay reachable.
+    const cardOverflow = await card.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(cardOverflow).toBe(false);
+    expect(await hasHorizontalPageOverflow(page)).toBe(false);
+    await expect(remove).toBeInViewport();
+
+    const questionBox = await question.boundingBox();
+    const answerBox = await answer.boundingBox();
+    const cardBox = await card.boundingBox();
+    expect(questionBox).not.toBeNull();
+    expect(answerBox).not.toBeNull();
+    expect(cardBox).not.toBeNull();
+    if (!questionBox || !answerBox || !cardBox) return;
+
+    // Full-width, not the old ~129px column.
+    expect(questionBox.width).toBeGreaterThan(200);
+    // Inside the card's own padding, never flush against either edge.
+    expect(questionBox.x).toBeGreaterThan(cardBox.x);
+    expect(questionBox.x + questionBox.width).toBeLessThan(cardBox.x + cardBox.width);
+
+    // The answer (and, nested inside the same block, its "Agregar opciones /
+    // Editor avanzado" links) share the QUESTION field's own left edge —
+    // both are the grid's column 2 now, not hand-matched padding.
+    expect(Math.abs(questionBox.x - answerBox.x)).toBeLessThanOrEqual(2);
   });
 
   test('H15: the preview column clears the docked side toolbar at 1280px', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const reached = await gotoEditorOrSkip(page);
     test.skip(!reached, 'Editor is sign-in gated; no fixture activity reachable in this run');
+    await waitForHydration(page);
 
     const toolbar = page.getByTestId('editor-side-toolbar');
     const preview = page.getByTestId('quiz-preview-block-1');
-    await expect(toolbar).toBeVisible();
     await expect(preview).toBeVisible();
-
-    // The rail computes its own docked position via JS AFTER mount
-    // (`EditorSideToolbar.tsx`'s own `useLayoutEffect` sync) — it starts at
-    // `{0,0}` for one frame, gated by an opacity class (not `display`), so
-    // `toBeVisible()` can resolve before the real position lands. Poll for
-    // a plausible docked x (comfortably right of the editor's own columns)
-    // instead of trusting the very first bounding box.
-    await expect.poll(async () => (await toolbar.boundingBox())?.x ?? 0, { timeout: 60_000 }).toBeGreaterThan(100);
 
     const toolbarBox = await toolbar.boundingBox();
     const previewBox = await preview.boundingBox();
@@ -157,6 +205,41 @@ test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
     // Before the fix the rail covered the last ~28px of this column (the
     // game-mode tabs ended 4px before the toolbar's own left edge).
     expect(previewBox.x + previewBox.width).toBeLessThanOrEqual(toolbarBox.x + 1);
+  });
+
+  test('H13: the Básico live-preview question and its answer field share a centre at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const reached = await gotoEditorOrSkip(page);
+    test.skip(!reached, 'Editor is sign-in gated; no fixture activity reachable in this run');
+
+    // slot-2 ("What is 2 + 2?") has no `___` gap, so `TextRenderer` takes
+    // its STACKED layout (prompt `Label` above a plain `input`) — the shape
+    // the reviewer flagged (question centred via `PROMPT_MEASURE`'s own
+    // `mx-auto`, answer field left-aligned with none).
+    const slot = page.getByTestId('quiz-slot-slot-2');
+    await expect(slot).toBeVisible();
+    const label = slot.locator('label');
+    const field = slot.locator('input[type="text"]');
+    await expect(label).toBeVisible();
+    await expect(field).toBeVisible();
+
+    const labelBox = await label.boundingBox();
+    const fieldBox = await field.boundingBox();
+    expect(labelBox).not.toBeNull();
+    expect(fieldBox).not.toBeNull();
+    if (!labelBox || !fieldBox) return;
+
+    // CENTRES, not left edges: the question (`PROMPT_MEASURE`, `max-w-[32em]`)
+    // and the answer field (`max-w-md`) are capped at different widths by
+    // design (a ~64-character prose measure vs. a form-field width), so
+    // their left edges never match even when both are centred — matching
+    // this codebase's own documented "the exercise card centres its prompt"
+    // rule (`scale.ts`'s `PROMPT_MEASURE` header) consistently applied to
+    // the field below it, rather than inventing a second, left-aligned rule
+    // for just this one field.
+    const labelCenter = labelBox.x + labelBox.width / 2;
+    const fieldCenter = fieldBox.x + fieldBox.width / 2;
+    expect(Math.abs(labelCenter - fieldCenter)).toBeLessThanOrEqual(4);
   });
 
   test('canvas min-height: the template live-preview stage is usable on phone and tablet', async ({ page }) => {
