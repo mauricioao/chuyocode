@@ -8,6 +8,12 @@ interface ImportMetaEnv {
   readonly SUPABASE_ANON_KEY: string;
   readonly SUPABASE_SERVICE_ROLE_KEY: string;
   readonly AD_HMAC_SECRET: string;
+  /**
+   * Server-side only (never `PUBLIC_`-prefixed). Only the exact string
+   * `"true"` or `"1"` enforces the full CSP; anything else (including
+   * unset) keeps it report-only. See `src/lib/securityHeaders.ts`'s header.
+   */
+  readonly CSP_ENFORCE?: string;
   /** Public, build-time only. See `src/lib/turnstile.ts`'s header. */
   readonly PUBLIC_TURNSTILE_SITE_KEY: string;
   /** Public, build-time only. See `src/lib/webAnalytics.ts`'s header. */

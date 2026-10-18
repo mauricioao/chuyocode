@@ -510,3 +510,54 @@ describe('BaseLayout — Cloudflare Web Analytics (cookieless)', () => {
     expect(cloudflareScriptTag(html)).not.toBeNull();
   });
 });
+
+// PostHog (product analytics + feature flags): INERT until the owner sets
+// PUBLIC_POSTHOG_KEY at build time, same posture as the Cloudflare beacon
+// block right above — see `@lib/posthog`'s own header.
+describe('BaseLayout — PostHog analytics (inert by default)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /**
+   * Counts this component's own OWN module `<script>` tags (not `is:inline`
+   * ones like the Cloudflare beacon, and not an island's hydration script):
+   * Astro's container renders each as
+   * `<script type="module" src=".../BaseLayout.astro?astro&type=script&index=N...">`.
+   * The always-present reveal-init script is index 0; the PostHog one, when
+   * it renders at all, is the only other one BaseLayout.astro itself emits.
+   */
+  function baseLayoutModuleScriptCount(html: string): number {
+    return (html.match(/BaseLayout\.astro\?astro&type=script&index=\d+/g) ?? []).length;
+  }
+
+  it('renders only its one always-present module script when no key is configured', async () => {
+    vi.stubEnv('PUBLIC_POSTHOG_KEY', undefined);
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(baseLayoutModuleScriptCount(html)).toBe(1);
+  });
+
+  it('renders a second module script (the PostHog bootstrap) once a key is configured', async () => {
+    vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es' },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(baseLayoutModuleScriptCount(html)).toBe(2);
+  });
+
+  it('does not render it on an embedded (iframe) page even with a key set', async () => {
+    vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+    const container = await createContainer();
+    const html = await container.renderToString(BaseLayout, {
+      props: { lang: 'es', embedded: true },
+      slots: { default: '<div>content</div>' },
+    });
+    expect(baseLayoutModuleScriptCount(html)).toBe(1);
+  });
+});

@@ -24,6 +24,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright/
+playwright/.auth/
 
 # Logs
 *.log
@@ -43,7 +44,8 @@ Thumbs.db
 .atl/
 
 # Owner's internal product working document. Deliberately kept out of version
-# control. The versioned technical sources of truth are docs/ and openspec/.
+# control. Internal owner docs (launch plan, business decisions) live outside
+# this repository, in ../ChuyoCode_others/docs.
 PRD-arquitectura.md
 BACKLOG.md
 CLAUDE.md

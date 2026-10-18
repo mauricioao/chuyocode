@@ -16,12 +16,41 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['**/visual.spec.ts', '**/auth.setup.ts'],
+    },
+    // Signed-in e2e (tests/e2e/README.md): `setup` logs in once per role via
+    // the real password sign-in endpoint and saves storageState; the
+    // `chromium-signed-in` project below reuses it instead of signing in per
+    // test. Both need local Supabase running with the e2e fixture seed, so
+    // neither runs under `chromium`/`pnpm test:e2e` — only via
+    // `pnpm test:e2e:auth`.
+    {
+      name: 'setup',
+      testMatch: '**/auth.setup.ts',
+    },
+    {
+      name: 'chromium-signed-in',
+      use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/regular.json' },
+      dependencies: ['setup'],
+      testMatch: ['**/desk-widgets-part4.spec.ts', '**/desk-helper-part5.spec.ts'],
+    },
+    // Visual regression (toHaveScreenshot) — deliberately excluded from the
+    // `chromium` project above and from `pnpm test:e2e`. Baselines are
+    // OS-specific (see tests/e2e/visual.spec.ts header), so this only runs
+    // on request via `pnpm test:visual`, never in CI (CI runs typecheck,
+    // test, build only — see .github/workflows/ci.yml).
+    {
+      name: 'visual',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/visual.spec.ts',
     },
   ],
   webServer: {
     command: 'pnpm dev',
     url: 'http://localhost:4321',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    // A fresh worktree's first `astro dev` re-optimizes dependencies and
+    // took 137 s on this machine, past the old 120 s limit.
+    timeout: 300_000,
   },
 });

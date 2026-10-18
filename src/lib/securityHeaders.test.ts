@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { applySecurityHeaders, withSecurityHeaders } from './securityHeaders';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { applySecurityHeaders, isCspEnforced, withSecurityHeaders } from './securityHeaders';
+import { mergeEnvSources } from './env';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('applySecurityHeaders', () => {
   it('sets every security header on a fresh Headers instance', () => {
@@ -97,6 +102,27 @@ describe('applySecurityHeaders', () => {
       expect(csp).toMatch(/connect-src[^;]*https:\/\/cloudflareinsights\.com/);
     });
 
+    it('never allows a PostHog host while PUBLIC_POSTHOG_KEY is unset', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', undefined);
+      const csp = reportOnly();
+      expect(csp).not.toContain('posthog');
+    });
+
+    it('allows the configured PostHog host in script-src and connect-src once a key is set', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+      vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://us.i.posthog.com');
+      const csp = reportOnly();
+      expect(csp).toMatch(/script-src[^;]*https:\/\/us\.i\.posthog\.com/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/us\.i\.posthog\.com/);
+    });
+
+    it('allows the default EU PostHog host when only the key is set', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+      vi.stubEnv('PUBLIC_POSTHOG_HOST', undefined);
+      const csp = reportOnly();
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/eu\.i\.posthog\.com/);
+    });
+
     it('allows the Google Fonts stylesheet and its gstatic font files', () => {
       const csp = reportOnly();
       expect(csp).toMatch(/style-src[^;]*https:\/\/fonts\.googleapis\.com/);
@@ -139,6 +165,139 @@ describe('applySecurityHeaders', () => {
     const headers = new Headers({ 'reporting-endpoints': 'other-endpoint="/elsewhere"' });
     applySecurityHeaders(headers);
     expect(headers.get('reporting-endpoints')).toBe('other-endpoint="/elsewhere"');
+  });
+});
+
+describe('CSP_ENFORCE (enforce mode toggle)', () => {
+  it('report-only (default/unset) behaviour is unchanged — byte for byte', () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+    expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+    expect(headers.get('content-security-policy-report-only')).not.toBeNull();
+  });
+
+  it.each(['false', 'FALSE', 'enabled', 'yes', '  true  ', ''])(
+    'stays report-only for any value other than exactly "true"/"1" (got %j)',
+    (value) => {
+      vi.stubEnv('CSP_ENFORCE', value);
+      const headers = new Headers();
+      applySecurityHeaders(headers);
+      expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+      expect(headers.has('content-security-policy-report-only')).toBe(true);
+    },
+  );
+
+  it.each(['true', '1'])(
+    'enforces the full policy on content-security-policy and sends no report-only header (CSP_ENFORCE=%s)',
+    (value) => {
+      vi.stubEnv('CSP_ENFORCE', value);
+      const headers = new Headers();
+      applySecurityHeaders(headers);
+
+      const csp = headers.get('content-security-policy') as string;
+      // Same source list as the report-only policy today...
+      expect(csp).toMatch(/img-src[^;]*https:\/\/\*\.supabase\.co/);
+      expect(csp).toMatch(/img-src[^;]*https:\/\/cdn\.sanity\.io/);
+      expect(csp).toContain('https://*.supabase.co');
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).toContain("base-uri 'self'");
+      expect(csp).toContain("frame-ancestors 'self'");
+      // ...plus upgrade-insecure-requests, which only belongs in the
+      // enforced policy (see securityHeaders.ts header).
+      expect(csp).toContain('upgrade-insecure-requests');
+      // Violations are still collected while enforced.
+      expect(csp).toContain('report-to csp-endpoint');
+      expect(csp).toContain('report-uri /api/csp-report');
+
+      expect(headers.has('content-security-policy-report-only')).toBe(false);
+    },
+  );
+
+  it('still sets Reporting-Endpoints while enforced', () => {
+    vi.stubEnv('CSP_ENFORCE', 'true');
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+    expect(headers.get('reporting-endpoints')).toBe('csp-endpoint="/api/csp-report"');
+  });
+
+  it('allows the configured PostHog host in the ENFORCED policy too, not just report-only', () => {
+    vi.stubEnv('CSP_ENFORCE', 'true');
+    vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+    vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://us.i.posthog.com');
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+
+    const csp = headers.get('content-security-policy') as string;
+    expect(csp).toMatch(/script-src[^;]*https:\/\/us\.i\.posthog\.com/);
+    expect(csp).toMatch(/connect-src[^;]*https:\/\/us\.i\.posthog\.com/);
+  });
+
+  it('never overwrites a content-security-policy header a route already set, enforced or not', () => {
+    vi.stubEnv('CSP_ENFORCE', 'true');
+    const headers = new Headers({ 'content-security-policy': "default-src 'none'" });
+    applySecurityHeaders(headers);
+    expect(headers.get('content-security-policy')).toBe("default-src 'none'");
+  });
+});
+
+/**
+ * Netlify UI-configured env vars arrive at runtime through `process.env`,
+ * never `import.meta.env` (only what Vite statically inlined at BUILD time
+ * survives there) — same posture as `src/lib/env.ts`'s own merge, same
+ * header.
+ *
+ * These resolution-order cases pass an explicit `EnvSource` into
+ * {@link isCspEnforced} rather than mutating the ambient `import.meta.env`/
+ * `process.env` globals (the way `src/lib/env.test.ts` does for
+ * `defaultEnvSource`), because Vitest's own `import.meta.env`, in this
+ * project's "node" test environment, transparently falls through to a LIVE
+ * `process.env` read for any key Vite did not statically define — so an
+ * ambient `process.env.CSP_ENFORCE` mutation reads back through
+ * `import.meta.env.CSP_ENFORCE` too regardless of which source the
+ * implementation actually consults, which would make a naive ambient test
+ * pass even against the pre-fix, `import.meta.env`-only implementation (a
+ * false RED-less green, found while writing this — see the fix's own
+ * commit). An explicit `EnvSource` sidesteps that quirk and gives a
+ * deterministic RED against the pre-fix code, same reason `loadEnv`
+ * (`src/lib/env.ts`) takes one too.
+ */
+describe('CSP_ENFORCE resolution order (build-time vs runtime)', () => {
+  it('enforces when CSP_ENFORCE is usable ONLY on the runtime (process.env) side', () => {
+    const source = mergeEnvSources({}, { CSP_ENFORCE: 'true' });
+    expect(isCspEnforced(source)).toBe(true);
+  });
+
+  it('stays off when CSP_ENFORCE is usable on neither side', () => {
+    const source = mergeEnvSources({}, {});
+    expect(isCspEnforced(source)).toBe(false);
+  });
+
+  it('prefers a usable build-time (import.meta.env) value over the runtime one', () => {
+    const source = mergeEnvSources({ CSP_ENFORCE: 'false' }, { CSP_ENFORCE: 'true' });
+    expect(isCspEnforced(source)).toBe(false);
+  });
+
+  it('falls back to the runtime value when the build-time one is blank', () => {
+    const source = mergeEnvSources({ CSP_ENFORCE: '  ' }, { CSP_ENFORCE: 'true' });
+    expect(isCspEnforced(source)).toBe(true);
+  });
+});
+
+/**
+ * End-to-end confirmation that `applySecurityHeaders`'s AMBIENT default
+ * (no explicit source — `defaultEnvSource()`, reading real
+ * `import.meta.env`/`process.env`) still resolves correctly when nothing is
+ * configured at all. This is the one ambient case that genuinely needs no
+ * source override to be meaningful: "neither side set" behaves identically
+ * regardless of the quirk described above.
+ */
+describe('CSP_ENFORCE resolved from the runtime environment (Netlify Function)', () => {
+  it('stays report-only by default (neither import.meta.env nor process.env set it)', () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+
+    expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+    expect(headers.has('content-security-policy-report-only')).toBe(true);
   });
 });
 
