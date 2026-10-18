@@ -85,3 +85,35 @@ describe('DeskWindow.astro — title bar chrome (activity window pass, 2026-10-1
     expect(html).toContain('id="desk-window-title-group"');
   });
 });
+
+// Vertical centring (owner request, 2026-10-18): the window used to open
+// ~30px low — a fixed `desk:bottom-16` (64px) bottom inset against a
+// measured `--chrome-header-offset` top inset is not symmetric. Fix: the
+// SAME offset on both edges, so the window is vertically centred between
+// the header and the viewport's own bottom edge (shorter, never taller).
+describe('DeskWindow.astro — window geometry (vertical centring, 2026-10-18)', () => {
+  async function render() {
+    const container = await createContainer();
+    return container.renderToString(DeskWindow, {
+      props: {
+        lang: 'es',
+        title: 'Can / Cannot - Básico A2',
+        closeHref: '/es/ingles',
+        closeLabel: 'Cerrar',
+        minimizeLabel: 'Minimizar',
+        fullScreenLabel: 'Pantalla completa',
+      },
+      slots: { default: '<p>body</p>' },
+    });
+  }
+
+  it('insets the non-embedded window by the SAME offset on top and bottom, not a fixed bottom-16', async () => {
+    const html = await render();
+    const match = html.match(/data-desk-window[^>]*class="([^"]*)"/);
+    expect(match).not.toBeNull();
+    const tokens = match![1].split(/\s+/);
+    expect(tokens).toContain('desk:top-(--chrome-header-offset)');
+    expect(tokens).toContain('desk:bottom-(--chrome-header-offset)');
+    expect(tokens).not.toContain('desk:bottom-16');
+  });
+});

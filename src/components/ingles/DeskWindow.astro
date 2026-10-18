@@ -18,11 +18,21 @@
  * `BackButton.astro` already reads, `@lib/chromeVisibility.ts`'s own
  * `HEADER_OFFSET_VAR`, kept in sync with the header's REAL rendered height
  * rather than a literal pixel guess that would drift if that height ever
- * changes) with a reserved band at the bottom for the minimized-windows
- * tray (`MinimizedWindowsTray.astro`) — and the desk behind it stays fully
- * visible AND interactive (no veil, no `inert`, no focus trap: see
- * `BaseLayout.astro`'s own header). Below `desk:` it stays the full-screen
- * sheet it always was (no desk visible there regardless, and no drag).
+ * changes) — and the desk behind it stays fully visible AND interactive (no
+ * veil, no `inert`, no focus trap: see `BaseLayout.astro`'s own header).
+ * Below `desk:` it stays the full-screen sheet it always was (no desk
+ * visible there regardless, and no drag).
+ *
+ * VERTICAL CENTRING (owner request, 2026-10-18): the bottom inset used to be
+ * a fixed `bottom-16` (64px) — noticeably less than the measured top offset
+ * above, which sat the window ~30px low. It now reuses the SAME
+ * `--chrome-header-offset` custom property as the top inset, so the window
+ * is vertically centred between the header and the viewport's own bottom
+ * edge; it only ever gets SHORTER than before, never taller, so it can
+ * never grow into the header. The floating minimized-windows tray
+ * (`MinimizedWindowsTray.astro`) is independently `fixed`-positioned at the
+ * viewport level (its own `desk:bottom-[10px]`, `z-[60]` — above this
+ * window's `z-50`), so it was never actually coupled to this inset.
  *
  * Both "close" (red) and "minimize" (yellow) are plain `<a href={closeHref}>`
  * anchors, not buttons — same no-JS-first posture as `BackButton.astro`:
@@ -222,7 +232,7 @@ const {
     // same as the existing below-`desk:`/guest full-screen sheet, never the
     // desktop-inset treatment below. See the `embedded` prop's own doc.
     !embedded && [
-      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-16 desk:rounded-[20px]',
+      'desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--chrome-header-offset) desk:bottom-(--chrome-header-offset) desk:rounded-[20px]',
       'shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]',
     ],
   ]}
