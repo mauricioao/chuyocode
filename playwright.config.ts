@@ -34,16 +34,11 @@ export default defineConfig({
       dependencies: ['setup'],
       testMatch: ['**/desk-widgets-part4.spec.ts', '**/desk-helper-part5.spec.ts', '**/desk-minimized-tray-part6b.spec.ts', '**/editor-mobile-layout.spec.ts'],
     },
-    // Visual regression (toHaveScreenshot) — deliberately excluded from the
-    // `chromium` project above and from `pnpm test:e2e`. Baselines are
-    // OS-specific (see tests/e2e/visual.spec.ts header), so this only runs
-    // on request via `pnpm test:visual`, never in CI (CI runs typecheck,
-    // test, build only — see .github/workflows/ci.yml).
-    {
-      name: 'visual',
-      use: { ...devices['Desktop Chrome'] },
-      testMatch: '**/visual.spec.ts',
-    },
+    // Visual regression (tests/e2e/visual.spec.ts) has its OWN config,
+    // playwright.visual.config.ts (`pnpm test:visual`): it needs its own dev
+    // server on its own port with local Supabase + fixture Sanity data, and
+    // `webServer` is config-wide. It stays out of `chromium` above, and never
+    // runs in CI (CI runs typecheck, test, build only — .github/workflows/ci.yml).
   ],
   webServer: {
     command: 'pnpm dev',

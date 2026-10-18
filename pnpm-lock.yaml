@@ -132,6 +132,9 @@ importers:
       '@types/sanitize-html':
         specifier: ^2.16.2
         version: 2.16.2
+      groq-js:
+        specifier: 1.30.3
+        version: 1.30.3
       jsdom:
         specifier: '25'
         version: 25.0.1

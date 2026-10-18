@@ -78,3 +78,51 @@ Add the file to the `chromium-signed-in` project's `testMatch` in
 `playwright.config.ts`. Keep it off `chromium`'s default run (same file,
 `testIgnore` is not needed there as long as the test itself still calls
 `test.skip` gracefully for an anonymous session).
+
+# Visual snapshots
+
+`tests/e2e/visual.spec.ts` screenshots home (`/es/`), the Inglés catalog
+(`/es/ingles/actividades`) and the news list (`/es/noticias`) at three
+viewports and compares them with the win32 baselines in
+`tests/e2e/visual.spec.ts-snapshots/`. It never reads live content, so a new
+news item, a changed view count or a different "Actividad del día" cannot
+break it.
+
+## Running
+
+1. Docker Desktop running and local Supabase started (`pnpm db:start`, as
+   above).
+2. ```sh
+   pnpm test:visual                      # compare
+   pnpm test:visual --update-snapshots   # re-record after an intended UI change
+   ```
+   That is all: no `.env` and no exported variables are needed. Look at every
+   re-recorded PNG before committing it.
+
+## Where the data comes from
+
+`playwright.visual.config.ts` (its own config, separate from
+`playwright.config.ts`) starts two fresh servers — never reusing one that is
+already running — and sets every data-related env var explicitly:
+
+| Server | Port | What it is |
+| --- | --- | --- |
+| `tests/e2e/visual/sanityFixtureServer.mjs` | 4335 | Stand-in for the Sanity API. Evaluates the app's real GROQ queries (with `groq-js`) against the synthetic, hand-written dataset in `tests/e2e/visual/sanityFixtures.mjs`, and paints a generated SVG for every fixture image. |
+| `astro dev` | 4334 | The app, with `SANITY_FIXTURE_API_HOST=http://127.0.0.1:4335` and the LOCAL Supabase URL/keys. |
+
+- **Sanity** — `SANITY_FIXTURE_API_HOST` (`src/lib/sanityConfig.ts`) points
+  the Sanity client and the image URL builder at the fixture server. It only
+  accepts a loopback origin and is unset everywhere else, where the client
+  config is exactly the production one.
+- **Supabase** — the URL and keys come from `supabase status` (the local
+  Docker stack only); the config, setup and teardown all refuse a
+  non-loopback URL. `tests/e2e/visual/globalSetup.ts` writes 21 published
+  activities with fixed ids, titles and counts
+  (`tests/e2e/visual/activityFixtures.ts`), arranged so the server-side
+  "Actividad del día" pick for today lands on the same card every day;
+  `globalTeardown.ts` deletes them again. `supabase/seed.sql` is untouched.
+- Each test first checks a fixture title on the page, so a run that reached
+  other data fails with a clear message rather than a pixel diff.
+
+To change what the pages show, edit the fixture files and re-record the
+baselines.

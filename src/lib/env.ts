@@ -31,6 +31,9 @@
  *     `src/lib/billing/paddle.ts`). Unset means Paddle billing is INERT: no
  *     Paddle account exists yet, and `src/pages/api/webhooks/[provider].ts`
  *     answers 503 for the `paddle` provider until this is configured.
+ *   - SANITY_FIXTURE_API_HOST (visual snapshot suite ONLY,
+ *     `src/lib/sanityConfig.ts`): a loopback origin serving synthetic Sanity
+ *     fixtures. Unset everywhere else, which keeps the real Sanity API.
  */
 
 export interface Env {
@@ -46,6 +49,8 @@ export interface Env {
   LEGAL_OWNER_RUC: string;
   LEGAL_OWNER_CITY: string;
   LEGAL_OWNER_EMAIL: string;
+  /** Test-only Sanity fixture origin (see `sanityConfig.ts`). Empty → real Sanity API. */
+  SANITY_FIXTURE_API_HOST: string;
 }
 
 /** Source shape: any string-keyed record (import.meta.env or process.env). */
@@ -68,6 +73,7 @@ export const OPTIONAL_ENV_KEYS = [
   'LEGAL_OWNER_RUC',
   'LEGAL_OWNER_CITY',
   'LEGAL_OWNER_EMAIL',
+  'SANITY_FIXTURE_API_HOST',
 ] as const;
 
 /**
@@ -182,5 +188,6 @@ export function loadEnv(source: EnvSource = defaultEnvSource()): Env {
     LEGAL_OWNER_RUC: readString(source, 'LEGAL_OWNER_RUC'),
     LEGAL_OWNER_CITY: readString(source, 'LEGAL_OWNER_CITY'),
     LEGAL_OWNER_EMAIL: readString(source, 'LEGAL_OWNER_EMAIL'),
+    SANITY_FIXTURE_API_HOST: readString(source, 'SANITY_FIXTURE_API_HOST'),
   };
 }

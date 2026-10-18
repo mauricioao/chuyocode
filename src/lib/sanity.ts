@@ -18,19 +18,15 @@
 import { createClient, type SanityClient } from '@sanity/client';
 import { loadEnv } from './env';
 import { DEFAULT_LANG, type Lang } from './i18n';
+import { sanityClientConfig } from './sanityConfig';
 
 const env = loadEnv();
 
 /**
- * Shared server-side Sanity client. `useCdn` is enabled for read performance;
- * pass-gated reads never rely on Sanity, so CDN staleness is acceptable here.
+ * Shared server-side Sanity client (config: `./sanityConfig.ts` — the CDN in
+ * every real environment, a local fixture server only for the visual suite).
  */
-export const sanityClient: SanityClient = createClient({
-  projectId: env.SANITY_PROJECT_ID,
-  dataset: env.SANITY_DATASET,
-  apiVersion: '2024-01-01',
-  useCdn: true,
-});
+const sanityClient: SanityClient = createClient(sanityClientConfig(env));
 
 // ---------------------------------------------------------------------------
 // Types (design decision: all Sanity types live here, no separate types file).
