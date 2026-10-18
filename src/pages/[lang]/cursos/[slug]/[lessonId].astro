@@ -40,6 +40,7 @@ import { getCourseDetailBySlug, type DetailLesson } from '@lib/courses/catalog';
 import { renderLessonMarkdown } from '@lib/courses/markdown';
 import { toVideoEmbed } from '@lib/courses/video';
 import { getPublishedActivity } from '@lib/activities/activities';
+import '@styles/lesson-prose.css';
 
 const routeLang = Astro.params.lang;
 const lang: Lang | undefined =
@@ -122,18 +123,28 @@ const firstLesson = flatLessons[0] ?? null;
           </summary>
           <nav class="mt-2 flex flex-col gap-1" aria-label={t.sidebarToggle}>
             {
-              flatLessons.map((l) => (
-                <a
-                  href={`/${lang}/cursos/${course.slug}/${l.id}`}
-                  aria-current={l.id === lesson.id ? 'page' : undefined}
-                  class:list={[
-                    'rounded-md px-3 py-2 text-sm',
-                    l.id === lesson.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
-                  ]}
-                >
-                  {l.title}
-                </a>
-              ))
+              flatLessons.map((l) => {
+                const lessonViewable = canViewLesson({
+                  lesson: { is_preview: l.is_preview },
+                  course: { included_in_premium: course.includedInPremium },
+                  plan,
+                  owns,
+                  isModerator,
+                });
+                return (
+                  <a
+                    href={`/${lang}/cursos/${course.slug}/${l.id}`}
+                    aria-current={l.id === lesson.id ? 'page' : undefined}
+                    class:list={[
+                      'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                      l.id === lesson.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                    ]}
+                  >
+                    {!lessonViewable && <span aria-hidden="true">🔒</span>}
+                    <span>{l.title}</span>
+                  </a>
+                );
+              })
             }
           </nav>
         </details>
@@ -145,18 +156,28 @@ const firstLesson = flatLessons[0] ?? null;
                 <p class="px-3 py-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   {mod.title}
                 </p>
-                {mod.lessons.map((l) => (
-                  <a
-                    href={`/${lang}/cursos/${course.slug}/${l.id}`}
-                    aria-current={l.id === lesson.id ? 'page' : undefined}
-                    class:list={[
-                      'block rounded-md px-3 py-2 text-sm',
-                      l.id === lesson.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
-                    ]}
-                  >
-                    {l.title}
-                  </a>
-                ))}
+                {mod.lessons.map((l) => {
+                  const lessonViewable = canViewLesson({
+                    lesson: { is_preview: l.is_preview },
+                    course: { included_in_premium: course.includedInPremium },
+                    plan,
+                    owns,
+                    isModerator,
+                  });
+                  return (
+                    <a
+                      href={`/${lang}/cursos/${course.slug}/${l.id}`}
+                      aria-current={l.id === lesson.id ? 'page' : undefined}
+                      class:list={[
+                        'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                        l.id === lesson.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                      ]}
+                    >
+                      {!lessonViewable && <span aria-hidden="true">🔒</span>}
+                      <span>{l.title}</span>
+                    </a>
+                  );
+                })}
               </div>
             ))
           }
@@ -185,7 +206,7 @@ const firstLesson = flatLessons[0] ?? null;
           ) : lesson.kind === 'text' ? (
             <div
               data-testid="lesson-text"
-              class="prose prose-invert max-w-none"
+              class="lesson-prose max-w-none"
               set:html={renderLessonMarkdown(typeof lesson.content.markdown === 'string' ? lesson.content.markdown : '')}
             />
           ) : lesson.kind === 'video' ? (

@@ -122,6 +122,14 @@ describe('GET /[lang]/cursos/[slug]/[lessonId] — text lesson', () => {
     expect(html).toContain('<strong>hola</strong>');
   });
 
+  it('wraps the rendered markdown in the lesson-prose container (H9: @tailwindcss/typography is not installed, so bare "prose" classes rendered as plain text)', async () => {
+    const res = await render('https://chuyocode.test/es/cursos/react-basico/l1', { lang: 'es', slug: 'react-basico', lessonId: 'l1' });
+    const html = await res.text();
+    const textTag = html.match(/<div[^>]*data-testid="lesson-text"[^>]*>/)?.[0];
+    expect(textTag).toBeDefined();
+    expect(textTag).toMatch(/class="[^"]*\blesson-prose\b/);
+  });
+
   it('strips a raw script tag even if it made it into stored markdown', async () => {
     getCourseDetailBySlugMock.mockResolvedValue(
       courseFixture({
@@ -237,6 +245,33 @@ describe('GET /[lang]/cursos/[slug]/[lessonId] — activity lesson', () => {
     const res = await render('https://chuyocode.test/es/cursos/react-basico/l3', { lang: 'es', slug: 'react-basico', lessonId: 'l3' });
     const html = await res.text();
     expect(html).toContain('data-testid="lesson-activity-unavailable"');
+  });
+});
+
+describe('GET /[lang]/cursos/[slug]/[lessonId] — sidebar lock (H10)', () => {
+  it('marks a non-viewable lesson with the same lock icon the landing syllabus uses, and leaves a viewable one unmarked', async () => {
+    const res = await render('https://chuyocode.test/es/cursos/react-basico/l1', { lang: 'es', slug: 'react-basico', lessonId: 'l1' });
+    const html = await res.text();
+    // Scope to the sidebar only — the bottom prev/next nav also links to
+    // l2/l3 and must not be mistaken for the sidebar's own entries.
+    const sidebar = html.match(/data-testid="lesson-sidebar"[\s\S]*?<\/aside>/)?.[0] ?? '';
+    expect(sidebar).not.toBe('');
+    // l1 is a preview lesson (viewable) — no lock in either sidebar list.
+    const l1Links = [...sidebar.matchAll(/<a[^>]*href="\/es\/cursos\/react-basico\/l1"[^>]*>[\s\S]*?<\/a>/g)];
+    expect(l1Links.length).toBeGreaterThan(0);
+    for (const match of l1Links) {
+      expect(match[0]).not.toContain('🔒');
+    }
+    // l2/l3 are not preview and the default fixture visitor is free/not
+    // owning/not moderator: locked, same as the landing syllabus (`🔒`,
+    // `aria-hidden="true"`, see `[slug]/index.astro`).
+    for (const lessonId of ['l2', 'l3']) {
+      const links = [...sidebar.matchAll(new RegExp(`<a[^>]*href="/es/cursos/react-basico/${lessonId}"[^>]*>[\\s\\S]*?<\\/a>`, 'g'))];
+      expect(links.length).toBeGreaterThan(0);
+      for (const match of links) {
+        expect(match[0]).toMatch(/<span aria-hidden="true"[^>]*>🔒<\/span>/);
+      }
+    }
   });
 });
 

@@ -48,6 +48,11 @@ describe('LessonForm — text kind (default)', () => {
     expect(screen.getByTestId('lesson-markdown-preview').innerHTML).not.toContain('<script');
   });
 
+  it('renders the preview through the shared lesson-prose stylesheet (H9: @tailwindcss/typography is not installed, so bare "prose" classes render as plain text)', () => {
+    render(<LessonForm {...submitProps()} />);
+    expect(screen.getByTestId('lesson-markdown-preview').className).toContain('lesson-prose');
+  });
+
   it('submits { markdown } as content', async () => {
     const onSubmit = vi.fn().mockResolvedValue({ ok: true });
     render(<LessonForm {...submitProps({ onSubmit })} />);
