@@ -138,3 +138,22 @@ describe('QuizFlashcards', () => {
     expect(screen.getByTestId('flashcards-progress').textContent).toBe('1 / 3');
   });
 });
+
+describe('QuizFlashcards — single-card kit look', () => {
+  it('stacks both faces in ONE grid cell (never absolutely positioned), so a card with a prompt image grows to fit instead of spilling out of a fixed-height box', () => {
+    render(<QuizFlashcards lang="es" items={items} seed="block-1" />);
+    for (const id of ['flashcard-front', 'flashcard-back']) {
+      const face = screen.getByTestId(id);
+      expect(face.className).toContain('[grid-area:1/1]');
+      expect(face.className).not.toMatch(/(^|\s)absolute(\s|$)/);
+    }
+    expect(screen.getByTestId('flashcard-inner').className).toContain('grid');
+  });
+
+  it('the front face is the shared soft white stage card, not the old hard-bordered box', () => {
+    render(<QuizFlashcards lang="es" items={items} seed="block-1" />);
+    const front = screen.getByTestId('flashcard-front').className;
+    expect(front).toContain('shadow-(--shadow-elevation-2)');
+    expect(front).not.toContain('border-2');
+  });
+});

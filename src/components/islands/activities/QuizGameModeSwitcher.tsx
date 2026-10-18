@@ -123,7 +123,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
         aria-expanded={open}
         data-testid="quiz-game-mode-compact-trigger"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-sm font-medium text-foreground lg:hidden"
+        className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-foreground lg:hidden"
       >
         {ActiveIcon && <ActiveIcon aria-hidden="true" />}
         <span>{activeLabel}</span>
@@ -141,7 +141,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
         className={cn(
           'flex-col gap-0.5',
           open
-            ? 'absolute z-20 mt-1 flex min-w-40 rounded-md border border-border bg-background p-1 shadow-lg'
+            ? 'absolute z-20 mt-1 flex min-w-40 rounded-[16px] border border-border bg-background p-1 shadow-(--shadow-elevation-2)'
             : 'hidden',
           'lg:static lg:z-auto lg:mt-0 lg:flex lg:w-auto lg:min-w-0 lg:flex-row lg:flex-wrap lg:items-center lg:gap-1 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none',
         )}
@@ -166,7 +166,7 @@ export default function QuizGameModeSwitcher({ lang, modes, active, onChange }: 
                 setOpen(false);
               }}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
+                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',

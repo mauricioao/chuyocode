@@ -106,3 +106,31 @@ describe('QuizOpenBox', () => {
     expect(screen.getByTestId('openbox-box-n1').getAttribute('aria-label')).toContain('cerrada');
   });
 });
+
+describe('QuizOpenBox — single-card kit look', () => {
+  it('paints each closed box from the shared position palette, with white text', () => {
+    render(<QuizOpenBox lang="es" items={items} />);
+    expect(screen.getByTestId('openbox-box-s1').className).toContain('bg-tile-1');
+    expect(screen.getByTestId('openbox-box-s2').className).toContain('bg-tile-2');
+    expect(screen.getByTestId('openbox-box-s3').className).toContain('bg-tile-3');
+    expect(screen.getByTestId('openbox-box-s1').className).toContain('text-white');
+  });
+
+  it('an opened box (no longer the active one) turns plain white with a neutral mark — never green, which stays reserved for a correct answer', () => {
+    render(<QuizOpenBox lang="es" items={items} />);
+    fireEvent.click(screen.getByTestId('openbox-box-s1'));
+    fireEvent.click(screen.getByTestId('openbox-box-s2'));
+    const opened = screen.getByTestId('openbox-box-s1');
+    expect(opened.className).toContain('bg-card');
+    expect(opened.className).not.toContain('bg-tile-');
+    expect(opened.innerHTML).not.toMatch(/success/);
+  });
+
+  it('the active box keeps its own colour and gains an ink ring', () => {
+    render(<QuizOpenBox lang="es" items={items} />);
+    fireEvent.click(screen.getByTestId('openbox-box-s2'));
+    const active = screen.getByTestId('openbox-box-s2').className;
+    expect(active).toContain('bg-tile-2');
+    expect(active).toContain('ring-foreground');
+  });
+});

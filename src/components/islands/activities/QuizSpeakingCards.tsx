@@ -19,13 +19,19 @@
  * `QuizFlashcards`'s own `motion-reduce:duration-0` pattern for its flip.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import {
+  AnswerReveal,
+  SINGLE_CARD,
+  SINGLE_CARD_META,
+  SINGLE_CARD_PROMPT,
+} from '@/components/islands/mechanics/singleCard';
 
 export interface QuizSpeakingCardsProps {
   lang: Lang;
@@ -95,10 +101,16 @@ export default function QuizSpeakingCards({ lang, items, seed, promptImages }: Q
     // Nothing dealt yet: the deck visual (a small stack of angled backs) plus "Repartir".
     return (
       <div data-testid="speaking-cards" className="flex flex-col items-center gap-4">
-        <div data-testid="speaking-deck" className="relative h-40 w-28" aria-hidden="true">
-          <div className="absolute inset-0 -rotate-6 rounded-lg border-2 border-border bg-surface-soft" />
-          <div className="absolute inset-0 rotate-3 rounded-lg border-2 border-border bg-surface-soft" />
-          <div className="absolute inset-0 rounded-lg border-2 border-accent-ink bg-accent/10" />
+        {/* Face-down deck: two white kit cards fanned behind a matte
+            sky-deep card back (the kit's own deep sky, with a thin inset
+            frame as the "back of a card" pattern) — no border boxes, no
+            yellow wash, no glow. */}
+        <div data-testid="speaking-deck" className="relative h-48 w-34" aria-hidden="true">
+          <div className="absolute inset-0 -rotate-6 rounded-[20px] bg-card shadow-(--shadow-elevation-1) ring-1 ring-foreground/15" />
+          <div className="absolute inset-0 rotate-3 rounded-[20px] bg-card shadow-(--shadow-elevation-1) ring-1 ring-foreground/15" />
+          <div className="absolute inset-0 rounded-[20px] bg-pop-sky-deep shadow-(--shadow-elevation-2)">
+            <div className="absolute inset-2 rounded-[12px] border-2 border-white/40" />
+          </div>
         </div>
         <Button type="button" data-testid="speaking-deal" onClick={handleDeal} className="h-11 sm:h-8">
           {t.speakDeal}
@@ -109,29 +121,24 @@ export default function QuizSpeakingCards({ lang, items, seed, promptImages }: Q
 
   return (
     <div data-testid="speaking-cards" className="flex flex-col items-center gap-4">
-      <span data-testid="speaking-counter" className="text-sm text-muted-foreground tabular-nums">
+      <span data-testid="speaking-counter" className={SINGLE_CARD_META}>
         {t.speakCounterPrefix} {dealtCount} {t.speakCounterOf} {total}
       </span>
 
       <div
         key={currentId}
         data-testid="speaking-card"
-        className="flex min-h-56 w-full max-w-md flex-col items-center justify-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center transition-all duration-[350ms] ease-out starting:-translate-x-10 starting:rotate-6 starting:opacity-0 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:starting:translate-x-0 motion-reduce:starting:rotate-0"
+        className={cn(
+          SINGLE_CARD,
+          'min-h-56 transition-all duration-[350ms] ease-out starting:-translate-x-10 starting:rotate-6 starting:opacity-0 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:starting:translate-x-0 motion-reduce:starting:rotate-0',
+        )}
       >
         <PromptImage image={promptImages?.[current.id]} />
-        <p className="text-lg font-semibold text-foreground sm:text-xl">{current.prompt}</p>
+        <p className={SINGLE_CARD_PROMPT}>{current.prompt}</p>
         <SpeakButton text={current.prompt} lang={lang} />
 
         {revealed ? (
-          <div data-testid="speaking-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3">
-            <p className="text-lg font-semibold text-foreground">{current.answer}</p>
-            {current.explanation && (
-              <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
-                <p>{current.explanation}</p>
-              </div>
-            )}
-          </div>
+          <AnswerReveal data-testid="speaking-answer" answer={current.answer} explanation={current.explanation} />
         ) : (
           <Button
             type="button"

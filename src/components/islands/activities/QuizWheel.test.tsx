@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GameItem } from '@/lib/activities/gameModes';
-import QuizWheel, { wheelSlicePath, pickLandingIndex } from './QuizWheel';
+import QuizWheel, { wheelSlicePath, pickLandingIndex, wheelSegmentColorIndex } from './QuizWheel';
 
 afterEach(() => {
   cleanup();
@@ -57,6 +57,22 @@ describe('wheelSlicePath', () => {
     const half = wheelSlicePath(100, 100, 90, 0, 2);
     expect(half).toMatch(/A 90 90 0 0 0/);
     void large;
+  });
+});
+
+describe('wheelSegmentColorIndex', () => {
+  it('follows the shared palette by position', () => {
+    expect([0, 1, 2, 3, 4, 5].map((i) => wheelSegmentColorIndex(i, 6))).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('never paints the last slice the same colour as the first one it touches around the circle', () => {
+    for (let total = 2; total <= 20; total += 1) {
+      const last = wheelSegmentColorIndex(total - 1, total) % 6;
+      const first = wheelSegmentColorIndex(0, total) % 6;
+      const beforeLast = wheelSegmentColorIndex(total - 2, total) % 6;
+      expect(last).not.toBe(first);
+      if (total > 2) expect(last).not.toBe(beforeLast);
+    }
   });
 });
 
@@ -238,5 +254,16 @@ describe('QuizWheel', () => {
     expect(screen.getByTestId('wheel-segment-n1')).toBeTruthy();
     expect(screen.getByTestId('wheel-segment-n2')).toBeTruthy();
     vi.useRealTimers();
+  });
+});
+
+describe('QuizWheel — single-card kit look', () => {
+  it("paints each slice from the shared position palette (`palette.ts`), never the old yellow/grey brand fills", () => {
+    render(<QuizWheel lang="es" items={items} seed="block-1" />);
+    expect(screen.getByTestId('wheel-segment-s1').getAttribute('class')).toContain('fill-tile-1');
+    expect(screen.getByTestId('wheel-segment-s2').getAttribute('class')).toContain('fill-tile-2');
+    expect(screen.getByTestId('wheel-segment-s3').getAttribute('class')).toContain('fill-tile-3');
+    expect(screen.getByTestId('wheel-svg').innerHTML).not.toMatch(/fill-(accent|primary|secondary|muted)/);
+    expect(screen.getByTestId('wheel-svg').getAttribute('class')).toContain('shadow-(--shadow-elevation-2)');
   });
 });

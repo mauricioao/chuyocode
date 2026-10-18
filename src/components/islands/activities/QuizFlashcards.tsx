@@ -17,7 +17,6 @@
  * work, not a second combined score.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,6 +24,12 @@ import SpeakButton from '@/lib/speech/SpeakButton';
 import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities/gameModes';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import {
+  AnswerExplanation,
+  SINGLE_CARD,
+  SINGLE_CARD_META,
+  SINGLE_CARD_PROMPT,
+} from '@/components/islands/mechanics/singleCard';
 
 export interface QuizFlashcardsProps {
   lang: Lang;
@@ -132,7 +137,7 @@ export default function QuizFlashcards({ lang, items, seed, promptImages }: Quiz
   if (done || !current) {
     return (
       <div data-testid="flashcards-done" className="flex flex-col items-center gap-4 py-8 text-center">
-        <p className="text-lg font-medium text-foreground">{t.cardsDone}</p>
+        <p className="text-xl font-semibold text-foreground">{t.cardsDone}</p>
         {reviewPile.length > 0 && (
           <Button type="button" data-testid="flashcards-replay-review" onClick={replayReview}>
             {t.cardReplayReview} ({reviewPile.length})
@@ -146,8 +151,8 @@ export default function QuizFlashcards({ lang, items, seed, promptImages }: Quiz
 
   return (
     <div data-testid="quiz-flashcards" className="flex flex-col items-center gap-4">
-      <div className="flex w-full items-center justify-between text-sm text-muted-foreground">
-        <span data-testid="flashcards-progress" className="tabular-nums">
+      <div className="flex w-full max-w-xl items-center justify-between">
+        <span data-testid="flashcards-progress" className={SINGLE_CARD_META}>
           {index + 1} / {total}
         </span>
         <Button type="button" variant="outline" size="sm" data-testid="flashcards-shuffle" onClick={handleShuffle}>
@@ -163,36 +168,42 @@ export default function QuizFlashcards({ lang, items, seed, promptImages }: Quiz
         data-testid="flashcard"
         onClick={handleFlip}
         onKeyDown={handleKeyDown}
-        className="w-full max-w-md cursor-pointer [perspective:1000px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="w-full max-w-xl cursor-pointer rounded-[26px] [perspective:1000px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <div
           data-testid="flashcard-inner"
           data-flipped={flipped}
+          // ONE grid cell for both faces (`[grid-area:1/1]` below), never
+          // `absolute inset-0` over a fixed `min-h-*`: the card then grows
+          // to its taller face, so a prompt image plus the prompt never
+          // spill out of a box sized for text alone.
           className={cn(
-            'relative min-h-56 w-full [transform-style:preserve-3d] transition-transform duration-500 motion-reduce:transition-none motion-reduce:duration-0',
+            'grid min-h-64 w-full [transform-style:preserve-3d] transition-transform duration-500 motion-reduce:transition-none motion-reduce:duration-0',
             flipped && '[transform:rotateY(180deg)]',
           )}
         >
           <div
             data-testid="flashcard-front"
             aria-hidden={flipped}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center [backface-visibility:hidden]"
+            className={cn(SINGLE_CARD, 'max-w-none [grid-area:1/1] [backface-visibility:hidden]')}
           >
             <PromptImage image={promptImages?.[current.id]} />
-            <p className="text-lg font-semibold text-foreground sm:text-xl">{current.prompt}</p>
+            <p className={SINGLE_CARD_PROMPT}>{current.prompt}</p>
           </div>
           <div
             data-testid="flashcard-back"
             aria-hidden={!flipped}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-accent-ink bg-accent/10 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
-          >
-            <p className="text-lg font-semibold text-foreground sm:text-xl">{current.answer}</p>
-            {current.explanation && (
-              <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
-                <p>{current.explanation}</p>
-              </div>
+            // The answer side: the same card, tinted the kit's pale sky
+            // (the shared answer-well tone, `singleCard.tsx`'s own
+            // `AnswerReveal`) so a flipped card reads as "the other side"
+            // at a glance — never the old yellow accent wash.
+            className={cn(
+              SINGLE_CARD,
+              'max-w-none bg-pop-sky/15 [grid-area:1/1] [backface-visibility:hidden] [transform:rotateY(180deg)]',
             )}
+          >
+            <p className={SINGLE_CARD_PROMPT}>{current.answer}</p>
+            {current.explanation && <AnswerExplanation text={current.explanation} />}
           </div>
         </div>
       </div>

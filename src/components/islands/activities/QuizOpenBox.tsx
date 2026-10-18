@@ -14,7 +14,6 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { CheckIcon } from '@phosphor-icons/react/dist/ssr/Check';
-import { LightbulbIcon } from '@phosphor-icons/react/dist/ssr/Lightbulb';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -22,6 +21,13 @@ import SpeakButton from '@/lib/speech/SpeakButton';
 import type { GameItem } from '@/lib/activities/gameModes';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import PromptImage from '@/components/islands/mechanics/PromptImage';
+import { optionColorClass } from '@/components/islands/mechanics/palette';
+import {
+  AnswerReveal,
+  SINGLE_CARD,
+  SINGLE_CARD_META,
+  SINGLE_CARD_PROMPT,
+} from '@/components/islands/mechanics/singleCard';
 
 export interface QuizOpenBoxProps {
   lang: Lang;
@@ -65,9 +71,9 @@ export default function QuizOpenBox({ lang, items, promptImages }: QuizOpenBoxPr
         {active ? active.prompt : ''}
       </div>
 
-      <p className="text-sm text-muted-foreground">{t.openboxHint}</p>
+      <p className={SINGLE_CARD_META}>{t.openboxHint}</p>
 
-      <div data-testid="openbox-grid" className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+      <div data-testid="openbox-grid" className="grid grid-cols-4 gap-3 sm:grid-cols-6">
         {items.map((item, index) => {
           const opened = openedIds.has(item.id);
           const isActive = activeId === item.id;
@@ -78,16 +84,27 @@ export default function QuizOpenBox({ lang, items, promptImages }: QuizOpenBoxPr
               data-testid={`openbox-box-${item.id}`}
               onClick={() => handleOpen(item.id)}
               aria-label={`${t.openboxBoxAriaPrefix} ${index + 1}, ${opened ? t.openboxOpenedSuffix : t.openboxClosedSuffix}`}
+              // A closed (or the active) box is a filled tile in the shared
+              // position palette (`palette.ts` — the box's own place in the
+              // grid, never correctness), the same matte "pressed key" lip
+              // `chip.ts`'s colour chips use; the active one also lifts and
+              // gains an ink ring. An opened box goes plain white — "already
+              // looked inside" — with a neutral slate check, never green
+              // (red/green stay reserved for a graded ✓/✕).
               className={cn(
-                'relative flex size-11 items-center justify-center rounded-md border-2 text-sm font-bold transition-colors',
-                isActive && 'border-accent-ink bg-accent/10 text-foreground',
-                !isActive && opened && 'border-success-strong/60 bg-success-strong/10 text-success-strong-foreground',
-                !isActive && !opened && 'border-border bg-surface-soft text-foreground hover:border-accent-ink/60',
+                'relative flex size-14 items-center justify-center rounded-[12px] text-lg font-bold tabular-nums outline-none transition-[translate,background-color,box-shadow] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground',
+                (isActive || !opened) && [
+                  optionColorClass(index),
+                  'text-white shadow-[inset_0_-3px_0_rgb(0_0_0/0.18)]',
+                ],
+                isActive && '-translate-y-0.5 ring-3 ring-foreground ring-offset-2 ring-offset-card',
+                !isActive && !opened && 'hover:-translate-y-0.5',
+                !isActive && opened && 'bg-card text-muted-foreground shadow-(--shadow-elevation-1) ring-1 ring-foreground/10',
               )}
             >
               {index + 1}
               {opened && !isActive && (
-                <CheckIcon aria-hidden="true" weight="bold" className="absolute -right-1 -top-1 size-4 rounded-full bg-success-strong p-0.5 text-white" />
+                <CheckIcon aria-hidden="true" weight="bold" className="absolute -right-1.5 -top-1.5 size-5 rounded-full bg-pop-slate p-1 text-white shadow-(--shadow-elevation-1)" />
               )}
             </button>
           );
@@ -95,24 +112,13 @@ export default function QuizOpenBox({ lang, items, promptImages }: QuizOpenBoxPr
       </div>
 
       {active && (
-        <div
-          data-testid="openbox-card"
-          className="flex w-full max-w-md flex-col items-center gap-3 rounded-lg border-2 border-border bg-surface-soft p-6 text-center"
-        >
+        <div data-testid="openbox-card" className={SINGLE_CARD}>
           <PromptImage image={promptImages?.[active.id]} />
-          <p className="text-lg font-semibold text-foreground sm:text-xl">{active.prompt}</p>
+          <p className={SINGLE_CARD_PROMPT}>{active.prompt}</p>
           <SpeakButton text={active.prompt} lang={lang} />
 
           {revealed ? (
-            <div data-testid="openbox-answer" className="flex flex-col items-center gap-2 rounded-md border border-accent-ink bg-accent/10 p-3">
-              <p className="text-lg font-semibold text-foreground">{active.answer}</p>
-              {active.explanation && (
-                <div className="flex items-start gap-1.5 text-left text-sm text-foreground">
-                  <LightbulbIcon aria-hidden="true" weight="fill" className="mt-0.5 shrink-0 text-hint" />
-                  <p>{active.explanation}</p>
-                </div>
-              )}
-            </div>
+            <AnswerReveal data-testid="openbox-answer" answer={active.answer} explanation={active.explanation} />
           ) : (
             <Button type="button" variant="outline" data-testid="openbox-reveal" onClick={handleReveal} className="h-11 sm:h-8">
               {t.openboxReveal}

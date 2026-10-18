@@ -132,3 +132,22 @@ describe('QuizTrueFalse', () => {
     expect(screen.getByTestId('truefalse-counter').textContent).toBe('Afirmación 1 de 1');
   });
 });
+
+describe('QuizTrueFalse — single-card kit look', () => {
+  it('shows the two answers as colour capsules from the shared position palette while waiting for a tap', () => {
+    render(<QuizTrueFalse lang="es" items={items} />);
+    expect(screen.getByTestId('truefalse-true').className).toContain('bg-tile-1');
+    expect(screen.getByTestId('truefalse-false').className).toContain('bg-tile-2');
+    expect(screen.getByTestId('truefalse-true').className).toContain('rounded-full');
+  });
+
+  it('marks the feedback with the shared ✓/✕ badges, and never dims the graded buttons while they are disabled', () => {
+    vi.useFakeTimers();
+    render(<QuizTrueFalse lang="es" items={items} />);
+    fireEvent.click(screen.getByTestId('truefalse-false')); // item 1 is true, so this is wrong
+    expect(screen.getByTestId('truefalse-true').querySelector('[data-testid="grade-mark-correct"]')).toBeTruthy();
+    expect(screen.getByTestId('truefalse-false').querySelector('[data-testid="grade-mark-wrong"]')).toBeTruthy();
+    expect(screen.getByTestId('truefalse-true').className).toContain('disabled:opacity-100');
+    expect(screen.getByTestId('truefalse-false').className).toContain('disabled:opacity-100');
+  });
+});

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GameItem } from '@/lib/activities/gameModes';
 import QuizHangman from './QuizHangman';
+import { CHIP_MATERIAL } from '@/components/islands/mechanics/chip';
 
 afterEach(cleanup);
 
@@ -125,5 +126,22 @@ describe('QuizHangman', () => {
     const nextItems: GameItem[] = [{ id: 's9', prompt: 'A cold drink?', answer: 'soda' }];
     rerender(<QuizHangman lang="es" items={nextItems} />);
     expect(screen.getByTestId('hangman-lives').getAttribute('aria-label')).toBe('Vidas: 6 / 6');
+  });
+});
+
+describe('QuizHangman — single-card kit look', () => {
+  const hasAll = (className: string, recipe: string) => recipe.split(' ').every((cls) => className.split(' ').includes(cls));
+
+  it("on-screen keys are the drag games' own grey glass chip (`chip.ts`)", () => {
+    render(<QuizHangman lang="es" items={items} />);
+    expect(hasAll(screen.getByTestId('hangman-key-A').className, CHIP_MATERIAL)).toBe(true);
+  });
+
+  it('a guessed key keeps its hit/miss tint fully legible even though it is disabled', () => {
+    render(<QuizHangman lang="es" items={items} />);
+    fireEvent.click(screen.getByTestId('hangman-key-C'));
+    fireEvent.click(screen.getByTestId('hangman-key-Z'));
+    expect(screen.getByTestId('hangman-key-C').className).toContain('disabled:opacity-100');
+    expect(screen.getByTestId('hangman-key-Z').className).toContain('disabled:opacity-100');
   });
 });

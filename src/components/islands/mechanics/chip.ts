@@ -55,7 +55,7 @@ const CHIP_SHAPE =
  * ring inside the box instead, same fix every other correct/incorrect/
  * selected ring in the big-stage games now uses.
  */
-const CHIP_MATERIAL = cn(
+export const CHIP_MATERIAL = cn(
   CHIP_SHAPE,
   'bg-[#d1d2d6]/80 shadow-elevation-1 text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50',
 );
