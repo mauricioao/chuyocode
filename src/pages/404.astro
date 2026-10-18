@@ -6,10 +6,27 @@
  * on a non-localized URL (where middleware never set `locals.lang`), the
  * language is resolved defensively: prefer a valid `[lang]` URL segment, then
  * the request's `Accept-Language`, then the default (es).
+ *
+ * STATUS (prelaunch SEO audit): Astro's router already forces a real HTTP 404
+ * for a genuinely unmatched route (it merges this page's own response onto
+ * the no-route-matched marker response, and that marker's non-200 status
+ * wins) — but that is an internal implementation detail of the SSR adapter's
+ * error-routing, not something this page can rely on by itself. Astro's own
+ * docs ask a custom SSR 404 page to set `Astro.response.status` explicitly,
+ * so this stays correct on its own terms (e.g. a future direct render).
+ *
+ * NOINDEX (prelaunch SEO audit): `BaseLayout`'s own `isNoindexPath` only
+ * recognizes a FIXED set of gated section slugs (`@lib/seo.ts`), so it does
+ * NOT mark this page noindex for an arbitrary not-found path (e.g.
+ * `/es/some-typo`, which matches no known gated section). A 404 must never
+ * be indexable no matter which URL served it, so this page adds its own
+ * `robots` meta directly rather than depending on the path-based rule.
  */
 import BaseLayout from '@layouts/BaseLayout.astro';
 import { buttonVariants } from '@components/ui/button';
 import { isValidLang, resolveLang, UI_LABELS, type Lang } from '@lib/i18n';
+
+Astro.response.status = 404;
 
 const segment = Astro.url.pathname.split('/')[1] ?? '';
 const lang: Lang = isValidLang(segment)
@@ -23,6 +40,9 @@ const t = UI_LABELS[lang].notFound;
 ---
 
 <BaseLayout lang={lang} title={`404 — ${t.title}`}>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex" />
+  </Fragment>
   <section
     class="flex flex-col items-center gap-6 py-16 text-center sm:py-24"
   >
