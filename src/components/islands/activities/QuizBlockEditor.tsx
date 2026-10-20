@@ -91,6 +91,7 @@ import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizCheckli
 import type { Payload } from '@/lib/exercisePayload';
 import type { QuizBlock, QuizTemplate, PromptImageRef } from '@/lib/activities/blocks';
 import { convertBlock, type DroppedItem } from '@/lib/activities/templateConversion';
+import { CHANGE_MOLD_ENABLED } from '@/lib/activities/flags';
 import { variosJuegosStatus } from '@/lib/activities/variosJuegosStatus';
 import type { GameMode } from '@/lib/activities/gameModes';
 import ChangeMoldDialog from './ChangeMoldDialog';
@@ -574,7 +575,14 @@ export default function QuizBlockEditor({
     moldFeedback.show(parts.join(' · '));
   }
 
-  const changeMoldButton = (
+  // "vamos primero por el único propósito" (owner decision 2026-10-19
+  // follow-up): each activity keeps the single mold it was created with,
+  // for now — `CHANGE_MOLD_ENABLED` (flags.ts) hides this trigger from
+  // every one of its 6 render sites (the 4 sub-editors' own `SheetHeader`
+  // below, plus Básico's own 2 direct renders) from this ONE place.
+  // `ChangeMoldDialog`/`convertBlock` stay intact and unit-tested, just
+  // unreachable with the trigger gone.
+  const changeMoldButton = CHANGE_MOLD_ENABLED ? (
     <button
       type="button"
       data-testid={`change-mold-${blockId}`}
@@ -584,7 +592,7 @@ export default function QuizBlockEditor({
       <ArrowsCounterClockwiseIcon aria-hidden="true" size={14} weight="bold" />
       {t.changeMold}
     </button>
-  );
+  ) : null;
 
   const moldStatusLine = moldFeedback.message ? (
     <StatusNote tone="ready" testId={`mold-status-${blockId}`}>
@@ -592,7 +600,10 @@ export default function QuizBlockEditor({
     </StatusNote>
   ) : null;
 
-  const changeMoldDialog = (
+  // Never reachable without `changeMoldButton` above (nothing else ever
+  // sets `moldDialogOpen`), but not mounted at all while the trigger is
+  // hidden either — no point rendering UI nothing can open.
+  const changeMoldDialog = CHANGE_MOLD_ENABLED ? (
     <ChangeMoldDialog
       lang={lang}
       open={moldDialogOpen}
@@ -600,7 +611,7 @@ export default function QuizBlockEditor({
       onOpenChange={setMoldDialogOpen}
       onChoose={handleChooseMold}
     />
-  );
+  ) : null;
 
   const counterRef = useRef(0);
   function nextId(prefix: string): string {

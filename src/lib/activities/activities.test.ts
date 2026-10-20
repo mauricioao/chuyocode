@@ -25,6 +25,7 @@ const {
   containsMock,
   ilikeMock,
   notMock,
+  filterMock,
   insertMock,
   selectMock,
   fromMock,
@@ -46,6 +47,7 @@ const {
   const containsMock = vi.fn(() => builder);
   const ilikeMock = vi.fn(() => builder);
   const notMock = vi.fn(() => builder);
+  const filterMock = vi.fn(() => builder);
   const selectMock = vi.fn(() => builder);
   const insertMock = vi.fn((_payload: Record<string, unknown>) => builder);
   builder.eq = eqMock;
@@ -57,6 +59,7 @@ const {
   builder.contains = containsMock;
   builder.ilike = ilikeMock;
   builder.not = notMock;
+  builder.filter = filterMock;
   builder.select = selectMock;
   builder.insert = insertMock;
 
@@ -74,6 +77,7 @@ const {
     containsMock,
     ilikeMock,
     notMock,
+    filterMock,
     insertMock,
     selectMock,
     fromMock,
@@ -581,6 +585,12 @@ describe('getPublishedActivities', () => {
     expect(eqMock).toHaveBeenCalledWith('level', 'B1');
   });
 
+  it('excludes "Varios juegos" (basic block_kinds) activities server-side while VARIOS_JUEGOS_ENABLED is false, unconditionally', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1 });
+    expect(filterMock).toHaveBeenCalledWith('block_kinds', 'not.cs', '{basic}');
+  });
+
   it('ranges the first page from 0..PAGE_SIZE-1', async () => {
     awaitResults.push({ data: [], error: null, count: 0 });
     await getPublishedActivities({ level: null, page: 1 });
@@ -599,10 +609,16 @@ describe('getPublishedActivities', () => {
     expect(rangeMock).toHaveBeenCalledWith(0, ACTIVITIES_PAGE_SIZE - 1);
   });
 
-  it('filters by tipo via contains on block_types', async () => {
+  it('filters by tipo via contains on block_kinds', async () => {
     awaitResults.push({ data: [], error: null, count: 0 });
     await getPublishedActivities({ level: null, page: 1, tipo: 'worksheet' });
-    expect(containsMock).toHaveBeenCalledWith('block_types', ['worksheet']);
+    expect(containsMock).toHaveBeenCalledWith('block_kinds', ['worksheet']);
+  });
+
+  it('filters by a quiz mold tipo via contains on block_kinds', async () => {
+    awaitResults.push({ data: [], error: null, count: 0 });
+    await getPublishedActivities({ level: null, page: 1, tipo: 'match' });
+    expect(containsMock).toHaveBeenCalledWith('block_kinds', ['match']);
   });
 
   it('does not filter by tipo when none is given', async () => {
@@ -876,6 +892,14 @@ describe('getActivityCount', () => {
     await getActivityCount();
 
     expect(eqMock).toHaveBeenCalledWith('visible', true);
+  });
+
+  it('excludes "Varios juegos" (basic block_kinds) activities server-side while VARIOS_JUEGOS_ENABLED is false, unconditionally', async () => {
+    awaitResults.push({ data: null, error: null, count: 0 });
+
+    await getActivityCount();
+
+    expect(filterMock).toHaveBeenCalledWith('block_kinds', 'not.cs', '{basic}');
   });
 
   it('is a count-only query — selects no columns of substance', async () => {

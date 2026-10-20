@@ -342,9 +342,52 @@ describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL
   });
 
   it('marks the active type option selected', async () => {
-    const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=quiz', { params: { lang: 'es' } });
+    const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=match', { params: { lang: 'es' } });
     const html = await res.text();
-    expect(html).toMatch(/<option value="quiz" selected/);
+    expect(html).toMatch(/<option value="match" selected/);
+  });
+});
+
+// Owner decision 2026-10-20: hide the "Varios juegos" FILTER OPTION, offering
+// one option per remaining activity type instead (Worksheet + each quiz
+// template mold) — never "Varios juegos"/"Mixed games" while
+// VARIOS_JUEGOS_ENABLED is false (its current value, `flags.ts`).
+describe('GET /[lang]/ingles/actividades — tipo filter options (hide "Varios juegos", owner decision 2026-10-20)', () => {
+  it('offers Todos, Worksheet, and every quiz template mold — never "Varios juegos"', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const html = await res.text();
+    const selectHtml = html.slice(html.indexOf('name="tipo"'), html.indexOf('</select>', html.indexOf('name="tipo"')));
+    expect(selectHtml).toContain('>Todos<');
+    expect(selectHtml).toContain('>Worksheet<');
+    expect(selectHtml).toContain('>Une las parejas<');
+    expect(selectHtml).toContain('>Reordenar<');
+    expect(selectHtml).toContain('>Completar la frase<');
+    expect(selectHtml).toContain('>Ordenar por grupos<');
+    expect(selectHtml).not.toContain('Varios juegos');
+    expect(selectHtml).not.toContain('value="basic"');
+    expect(selectHtml).not.toContain('value="quiz"');
+  });
+
+  it('treats an old generic tipo=quiz as no filter', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades?tipo=quiz', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: null }));
+  });
+
+  it('treats tipo=basic as no filter while VARIOS_JUEGOS_ENABLED is false', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades?tipo=basic', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: null }));
+  });
+
+  it('passes a quiz mold tipo (e.g. match) through to the query', async () => {
+    await render('https://chuyocode.test/es/ingles/actividades?tipo=match', { params: { lang: 'es' } });
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'match' }));
+  });
+
+  it('shows the matching chip label for an active quiz mold tipo', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=match', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(html).toContain('data-testid="filter-chip-tipo"');
+    expect(html).toMatch(/data-testid="filter-chip-tipo"[^>]*>\s*Une las parejas/);
   });
 });
 
@@ -372,7 +415,7 @@ describe('GET /[lang]/ingles/actividades — unified search header (community-se
 
   it('shows a badge with the number of active filters among nivel/tipo/orden/novistas', async () => {
     const res = await render(
-      'https://chuyocode.test/es/ingles/actividades?nivel=A2&tipo=quiz&orden=gustadas&novistas=1',
+      'https://chuyocode.test/es/ingles/actividades?nivel=A2&tipo=match&orden=gustadas&novistas=1',
       { params: { lang: 'es' } },
     );
     const html = await res.text();
@@ -407,12 +450,12 @@ describe('GET /[lang]/ingles/actividades — unified search header (community-se
   });
 
   it('preserves the active filters as hidden inputs on the search form, so a new search never drops them', async () => {
-    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=A2&tipo=quiz', {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=A2&tipo=match', {
       params: { lang: 'es' },
     });
     const html = await res.text();
     expect(html).toMatch(/<input type="hidden" name="nivel" value="A2"/);
-    expect(html).toMatch(/<input type="hidden" name="tipo" value="quiz"/);
+    expect(html).toMatch(/<input type="hidden" name="tipo" value="match"/);
   });
 
   it('hides the "no las he visto" toggle for an anonymous visitor', async () => {
@@ -440,7 +483,7 @@ describe('GET /[lang]/ingles/actividades — active filter chips', () => {
 
   it('renders one chip per active filter, each dropping only its own param', async () => {
     const res = await render(
-      'https://chuyocode.test/es/ingles/actividades?q=present&nivel=A2&tipo=quiz&orden=gustadas&novistas=1',
+      'https://chuyocode.test/es/ingles/actividades?q=present&nivel=A2&tipo=match&orden=gustadas&novistas=1',
       { params: { lang: 'es' } },
     );
     const html = await res.text();
@@ -451,7 +494,7 @@ describe('GET /[lang]/ingles/actividades — active filter chips', () => {
     expect(nivelHref).toBeDefined();
     expect(nivelHref).not.toContain('nivel=');
     expect(nivelHref).toContain('q=present');
-    expect(nivelHref).toContain('tipo=quiz');
+    expect(nivelHref).toContain('tipo=match');
     expect(nivelHref).toContain('orden=gustadas');
     expect(nivelHref).toContain('novistas=1');
 
@@ -487,7 +530,7 @@ describe('GET /[lang]/ingles/actividades — pagination preserves filters', () =
   it('carries q/nivel/tipo/orden/novistas into the next-page link', async () => {
     pageResult.value = { activities: [card()], total: 45 }; // 3 pages at 20/page
     const res = await render(
-      'https://chuyocode.test/es/ingles/actividades?q=abc&nivel=B2&tipo=quiz&orden=vistas&novistas=1',
+      'https://chuyocode.test/es/ingles/actividades?q=abc&nivel=B2&tipo=match&orden=vistas&novistas=1',
       { params: { lang: 'es' } },
     );
     const html = await res.text();
@@ -497,7 +540,7 @@ describe('GET /[lang]/ingles/actividades — pagination preserves filters', () =
     const href = hrefMatch![1];
     expect(href).toContain('q=abc');
     expect(href).toContain('nivel=B2');
-    expect(href).toContain('tipo=quiz');
+    expect(href).toContain('tipo=match');
     expect(href).toContain('orden=vistas');
     expect(href).toContain('novistas=1');
   });

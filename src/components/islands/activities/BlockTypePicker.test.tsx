@@ -16,7 +16,6 @@ function noopHandlers() {
 
 const ALL_CARDS = [
   'picker-worksheet',
-  'picker-questions',
   'picker-match',
   'picker-reorder',
   'picker-cloze',
@@ -24,13 +23,21 @@ const ALL_CARDS = [
 ];
 
 describe('BlockTypePicker', () => {
-  it('renders the worksheet, questions, match, reorder and cloze cards, in Spanish', () => {
+  it('renders the worksheet, match, reorder and cloze cards, in Spanish', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
-    expect(screen.getByTestId('picker-questions').textContent).toContain('Varios juegos');
     expect(screen.getByTestId('picker-match').textContent).toContain('Une las parejas');
     expect(screen.getByTestId('picker-reorder').textContent).toContain('Reordenar');
     expect(screen.getByTestId('picker-cloze').textContent).toContain('Completar la frase');
+  });
+
+  // Owner decision (2026-10-19): "Varios juegos" serves too many purposes
+  // and will get out of hand — hidden from creation while the flag is off
+  // (`VARIOS_JUEGOS_ENABLED` in `lib/activities/flags.ts`).
+  it('does not render the questions card while VARIOS_JUEGOS_ENABLED is false', () => {
+    render(<BlockTypePicker lang="es" {...noopHandlers()} />);
+    expect(screen.queryByTestId('picker-questions')).toBeNull();
+    expect(screen.queryByTestId('card-preview-questions')).toBeNull();
   });
 
   it('clicking the cloze card calls onSelectCloze', () => {
@@ -43,7 +50,6 @@ describe('BlockTypePicker', () => {
   it('renders in English', () => {
     render(<BlockTypePicker lang="en" {...noopHandlers()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain('Worksheet');
-    expect(screen.getByTestId('picker-questions').textContent).toContain('Mixed games');
     expect(screen.getByTestId('picker-match').textContent).toContain('Match the pairs');
     expect(screen.getByTestId('picker-reorder').textContent).toContain('Reorder');
   });
@@ -52,9 +58,6 @@ describe('BlockTypePicker', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     expect(screen.getByTestId('picker-worksheet').textContent).toContain(
       'Sube una hoja o PDF y marca dónde van las respuestas.',
-    );
-    expect(screen.getByTestId('picker-questions').textContent).toContain(
-      'Escribe preguntas y juégalas de muchas formas.',
     );
     expect(screen.getByTestId('picker-match').textContent).toContain('Arrastra cada respuesta junto a su pareja.');
     expect(screen.getByTestId('picker-reorder').textContent).toContain(
@@ -96,13 +99,6 @@ describe('BlockTypePicker', () => {
     expect(handlers.onSelectWorksheet).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onSelectQuestions when the questions card is chosen', () => {
-    const handlers = noopHandlers();
-    render(<BlockTypePicker lang="es" {...handlers} />);
-    fireEvent.click(screen.getByTestId('picker-questions'));
-    expect(handlers.onSelectQuestions).toHaveBeenCalledTimes(1);
-  });
-
   it('calls onSelectMatch when the match card is chosen', () => {
     const handlers = noopHandlers();
     render(<BlockTypePicker lang="es" {...handlers} />);
@@ -120,11 +116,9 @@ describe('BlockTypePicker', () => {
   it('renders a tiny CSS-only animated preview on each card, that only animates under motion-safe', () => {
     render(<BlockTypePicker lang="es" {...noopHandlers()} />);
     const worksheetPreview = screen.getByTestId('card-preview-worksheet');
-    const questionsPreview = screen.getByTestId('card-preview-questions');
     const matchPreview = screen.getByTestId('card-preview-match');
     const reorderPreview = screen.getByTestId('card-preview-reorder');
     expect(worksheetPreview.getAttribute('aria-hidden')).toBe('true');
-    expect(questionsPreview.getAttribute('aria-hidden')).toBe('true');
     expect(matchPreview.getAttribute('aria-hidden')).toBe('true');
     expect(reorderPreview.getAttribute('aria-hidden')).toBe('true');
     // `motion-safe:` means "animate only when the viewer has no
@@ -132,7 +126,6 @@ describe('BlockTypePicker', () => {
     // same markup, just static (the Tailwind variant never applies), so
     // there is nothing JS-side to branch on here.
     expect(worksheetPreview.innerHTML).toContain('motion-safe:animate-pulse');
-    expect(questionsPreview.innerHTML).toContain('motion-safe:animate-pulse');
     expect(matchPreview.innerHTML).toContain('motion-safe:group-hover:');
     // The match preview's own line never leaves `motion-reduce:` to the
     // `motion-safe:` variant's absence alone — it also needs the line
@@ -155,29 +148,23 @@ describe('BlockTypePicker', () => {
       const handlers = noopHandlers();
       render(<BlockTypePicker lang="es" {...handlers} busyCard="worksheet" />);
       const worksheetButton = screen.getByTestId('picker-worksheet') as HTMLButtonElement;
-      const questionsButton = screen.getByTestId('picker-questions') as HTMLButtonElement;
       const matchButton = screen.getByTestId('picker-match') as HTMLButtonElement;
       const reorderButton = screen.getByTestId('picker-reorder') as HTMLButtonElement;
 
       expect(worksheetButton.disabled).toBe(true);
-      expect(questionsButton.disabled).toBe(true);
       expect(matchButton.disabled).toBe(true);
       expect(reorderButton.disabled).toBe(true);
       expect(worksheetButton.getAttribute('aria-busy')).toBe('true');
-      expect(questionsButton.getAttribute('aria-busy')).toBe('false');
       expect(matchButton.getAttribute('aria-busy')).toBe('false');
       expect(reorderButton.getAttribute('aria-busy')).toBe('false');
       expect(worksheetButton.className).not.toContain('opacity-50');
-      expect(questionsButton.className).toContain('opacity-50');
       expect(matchButton.className).toContain('opacity-50');
       expect(reorderButton.className).toContain('opacity-50');
 
       fireEvent.click(worksheetButton);
-      fireEvent.click(questionsButton);
       fireEvent.click(matchButton);
       fireEvent.click(reorderButton);
       expect(handlers.onSelectWorksheet).not.toHaveBeenCalled();
-      expect(handlers.onSelectQuestions).not.toHaveBeenCalled();
       expect(handlers.onSelectMatch).not.toHaveBeenCalled();
       expect(handlers.onSelectReorder).not.toHaveBeenCalled();
     });
@@ -189,40 +176,18 @@ describe('BlockTypePicker', () => {
     });
   });
 
-  describe('busyCard="questions"', () => {
-    it('marks the questions card aria-busy, disables every card, and dims only the others', () => {
-      render(<BlockTypePicker lang="es" {...noopHandlers()} busyCard="questions" />);
-      const worksheetButton = screen.getByTestId('picker-worksheet') as HTMLButtonElement;
-      const questionsButton = screen.getByTestId('picker-questions') as HTMLButtonElement;
-      const matchButton = screen.getByTestId('picker-match') as HTMLButtonElement;
-      const reorderButton = screen.getByTestId('picker-reorder') as HTMLButtonElement;
-
-      expect(questionsButton.getAttribute('aria-busy')).toBe('true');
-      expect(worksheetButton.getAttribute('aria-busy')).toBe('false');
-      expect(matchButton.getAttribute('aria-busy')).toBe('false');
-      expect(reorderButton.getAttribute('aria-busy')).toBe('false');
-      expect(questionsButton.className).not.toContain('opacity-50');
-      expect(worksheetButton.className).toContain('opacity-50');
-      expect(matchButton.className).toContain('opacity-50');
-      expect(reorderButton.className).toContain('opacity-50');
-    });
-  });
-
   describe('busyCard="match"', () => {
     it('marks the match card aria-busy, disables every card, and dims only the others', () => {
       render(<BlockTypePicker lang="es" {...noopHandlers()} busyCard="match" />);
       const worksheetButton = screen.getByTestId('picker-worksheet') as HTMLButtonElement;
-      const questionsButton = screen.getByTestId('picker-questions') as HTMLButtonElement;
       const matchButton = screen.getByTestId('picker-match') as HTMLButtonElement;
       const reorderButton = screen.getByTestId('picker-reorder') as HTMLButtonElement;
 
       expect(matchButton.getAttribute('aria-busy')).toBe('true');
       expect(worksheetButton.getAttribute('aria-busy')).toBe('false');
-      expect(questionsButton.getAttribute('aria-busy')).toBe('false');
       expect(reorderButton.getAttribute('aria-busy')).toBe('false');
       expect(matchButton.className).not.toContain('opacity-50');
       expect(worksheetButton.className).toContain('opacity-50');
-      expect(questionsButton.className).toContain('opacity-50');
       expect(reorderButton.className).toContain('opacity-50');
     });
 
@@ -237,17 +202,14 @@ describe('BlockTypePicker', () => {
     it('marks the reorder card aria-busy, disables every card, and dims only the others', () => {
       render(<BlockTypePicker lang="es" {...noopHandlers()} busyCard="reorder" />);
       const worksheetButton = screen.getByTestId('picker-worksheet') as HTMLButtonElement;
-      const questionsButton = screen.getByTestId('picker-questions') as HTMLButtonElement;
       const matchButton = screen.getByTestId('picker-match') as HTMLButtonElement;
       const reorderButton = screen.getByTestId('picker-reorder') as HTMLButtonElement;
 
       expect(reorderButton.getAttribute('aria-busy')).toBe('true');
       expect(worksheetButton.getAttribute('aria-busy')).toBe('false');
-      expect(questionsButton.getAttribute('aria-busy')).toBe('false');
       expect(matchButton.getAttribute('aria-busy')).toBe('false');
       expect(reorderButton.className).not.toContain('opacity-50');
       expect(worksheetButton.className).toContain('opacity-50');
-      expect(questionsButton.className).toContain('opacity-50');
       expect(matchButton.className).toContain('opacity-50');
     });
 

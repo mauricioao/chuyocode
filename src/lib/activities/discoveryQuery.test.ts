@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isSortOrder,
-  isBlockTypeFilter,
+  isBlockKindFilter,
   normalizeSearchQuery,
   escapeIlikePattern,
   normalizeAccents,
@@ -25,16 +25,32 @@ describe('isSortOrder', () => {
   });
 });
 
-describe('isBlockTypeFilter', () => {
-  it('accepts worksheet and quiz', () => {
-    expect(isBlockTypeFilter('worksheet')).toBe(true);
-    expect(isBlockTypeFilter('quiz')).toBe(true);
+describe('isBlockKindFilter', () => {
+  it('accepts worksheet and every quiz mold', () => {
+    expect(isBlockKindFilter('worksheet')).toBe(true);
+    expect(isBlockKindFilter('match')).toBe(true);
+    expect(isBlockKindFilter('reorder')).toBe(true);
+    expect(isBlockKindFilter('cloze')).toBe(true);
+    expect(isBlockKindFilter('groupsort')).toBe(true);
+  });
+
+  // Owner decision 2026-10-19/-20: "Varios juegos" (the mold-less 'basic'
+  // quiz) is never offered as a community filter while VARIOS_JUEGOS_ENABLED
+  // is false (its current value — `flags.ts`).
+  it("rejects 'basic' while VARIOS_JUEGOS_ENABLED is false", () => {
+    expect(isBlockKindFilter('basic')).toBe(false);
+  });
+
+  // The old pre-mold-awareness generic value — too ambiguous to map to one
+  // kind now, so it is treated like any other unrecognized value.
+  it("rejects the old generic 'quiz' value", () => {
+    expect(isBlockKindFilter('quiz')).toBe(false);
   });
 
   it('rejects anything else', () => {
-    expect(isBlockTypeFilter('video')).toBe(false);
-    expect(isBlockTypeFilter('')).toBe(false);
-    expect(isBlockTypeFilter(null)).toBe(false);
+    expect(isBlockKindFilter('video')).toBe(false);
+    expect(isBlockKindFilter('')).toBe(false);
+    expect(isBlockKindFilter(null)).toBe(false);
   });
 });
 

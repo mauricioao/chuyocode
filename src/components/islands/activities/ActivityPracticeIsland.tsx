@@ -687,6 +687,20 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
               guest={guest}
               elapsedMs={elapsedMs ?? undefined}
               secondaryAction={{ label: t.reviewAnswers, onClick: () => setResultOverlayOpen(false) }}
+              // Bugfix (owner report, production screenshot: Vanina came out
+              // blurred/pixelated AND hidden behind the result text): inside
+              // this small Dialog card over a blurred backdrop, she used to
+              // render INSIDE `GameResult`'s own clipped/blurred subtree.
+              // `'portal'` moves her (and the confetti burst) OUT to the
+              // HOST WINDOW's own bottom-left edge instead — see
+              // `GameResult.tsx`'s own `characterPlacement` header. Same
+              // `container` re-targeting the Dialog itself already does
+              // above for "modo enfoque" (a real Fullscreen API element
+              // that never paints a `document.body`-level sibling at all),
+              // so Vanina keeps rendering in the SAME container as the
+              // dialog she sits above.
+              characterPlacement="portal"
+              characterPortalContainer={focusModeActive ? (focusModeContainer ?? undefined) : undefined}
             />
           </DialogContent>
         </Dialog>

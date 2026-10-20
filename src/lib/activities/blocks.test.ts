@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseBlocks,
   findIncompleteBlock,
+  blockKind,
   MAX_BLOCKS,
   MAX_ZONES_PER_WORKSHEET,
   MAX_ZONE_SPEAK_LENGTH,
@@ -9,6 +10,7 @@ import {
   MAX_AUDIO_MARKERS_PER_WORKSHEET,
   type Block,
   type WorksheetBlock,
+  type QuizBlock,
 } from './blocks';
 import { uploadPath, uploadAudioPath } from './paths';
 
@@ -923,4 +925,21 @@ describe('parseBlocks — quiz promptImages (question context images, owner deci
       ),
     ).toBeNull();
   });
+});
+
+describe('blockKind (0022 migration, activities.block_kinds)', () => {
+  it("is 'worksheet' for a worksheet block", () => {
+    expect(blockKind(worksheetBlock() as unknown as Block)).toBe('worksheet');
+  });
+
+  it("is 'basic' for a mold-less quiz block (template undefined, \"Básico\"/\"Varios juegos\")", () => {
+    expect(blockKind(quizBlock() as unknown as QuizBlock)).toBe('basic');
+  });
+
+  it.each(['match', 'reorder', 'cloze', 'groupsort'] as const)(
+    'is the template itself for a %s-molded quiz block',
+    (template) => {
+      expect(blockKind(quizBlock({ template }) as unknown as QuizBlock)).toBe(template);
+    },
+  );
 });

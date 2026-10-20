@@ -823,17 +823,13 @@ describe('ActivityEditorIsland — adding a worksheet block', () => {
 });
 
 describe('ActivityEditorIsland — adding a quiz block', () => {
-  it('opens the picker and appends an empty, expanded quiz block immediately — no upload step', () => {
+  // Owner decision (2026-10-19): "Varios juegos" is hidden from creation
+  // while `VARIOS_JUEGOS_ENABLED` is false — the questions card no longer
+  // renders in the empty-activity picker, so it cannot be clicked here.
+  it('does not render the questions card while VARIOS_JUEGOS_ENABLED is false', () => {
     renderEditor();
-    // Empty activity: the picker is already open, no "+" click needed first.
     expect(screen.getByTestId('block-type-picker')).toBeTruthy();
-
-    fireEvent.click(screen.getByTestId('picker-questions'));
-
-    expect(screen.queryByTestId('block-type-picker')).toBeNull();
-    expect(screen.getByTestId('block-list')).toBeTruthy();
-    // The new block is selected: its quiz editor is already expanded.
-    expect(screen.getByTestId(/^quiz-editor-/)).toBeTruthy();
+    expect(screen.queryByTestId('picker-questions')).toBeNull();
   });
 });
 

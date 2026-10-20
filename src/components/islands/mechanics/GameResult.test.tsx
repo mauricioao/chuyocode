@@ -433,6 +433,103 @@ describe('GameResult', () => {
     });
   });
 
+  // Dialog placement bugfix (owner report, production screenshot: inside
+  // the worksheet result dialog, Vanina came out blurred/pixelated by the
+  // backdrop blur AND clipped/hidden behind the result text by the small
+  // card). `characterPlacement="portal"` moves Vanina (and confetti) OUT of
+  // this component's own DOM subtree via `createPortal`, so a host that
+  // renders `GameResult` inside a small Dialog card can keep her above its
+  // blurred backdrop and outside its clipped bounds.
+  describe('characterPlacement (dialog placement bugfix)', () => {
+    it('defaults to "inline" (every non-dialog host) when the prop is omitted — no portal at all', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      expect(screen.queryByTestId('game-result-character-portal')).toBeNull();
+      // Unchanged from the existing "edge-anchored" contract above: Vanina
+      // stays INSIDE this component's own root.
+      const root = screen.getByTestId('game-result');
+      const icon = screen.getByTestId('game-result-icon');
+      expect(root.contains(icon)).toBe(true);
+    });
+
+    it('"inline" explicitly behaves exactly like the default (no regression for an explicit value)', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} characterPlacement="inline" />);
+      expect(screen.queryByTestId('game-result-character-portal')).toBeNull();
+      const root = screen.getByTestId('game-result');
+      const icon = screen.getByTestId('game-result-icon');
+      expect(root.contains(icon)).toBe(true);
+    });
+
+    it('"portal" renders Vanina OUTSIDE this component\'s own root, via a portal — not a descendant of the result region at all', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} characterPlacement="portal" />);
+      const root = screen.getByTestId('game-result');
+      const icon = screen.getByTestId('game-result-icon');
+      expect(root.contains(icon)).toBe(false);
+      // Still present in the document — just portaled elsewhere (document.body by default).
+      expect(document.body.contains(icon)).toBe(true);
+    });
+
+    it('"portal" also moves the confetti burst out of this component\'s own root (perfect/good only)', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} characterPlacement="portal" />);
+      const root = screen.getByTestId('game-result');
+      const confetti = screen.getByTestId('game-result-confetti');
+      expect(root.contains(confetti)).toBe(false);
+      expect(document.body.contains(confetti)).toBe(true);
+    });
+
+    it('"portal" still omits confetti for a retry outcome, same as inline', () => {
+      render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} characterPlacement="portal" />);
+      expect(screen.queryByTestId('game-result-confetti')).toBeNull();
+    });
+
+    it('"portal" portals into document.body by default, fixed to the viewport, above a dialog\'s z-50 overlay/content', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} characterPlacement="portal" />);
+      const portalBox = screen.getByTestId('game-result-character-portal');
+      expect(portalBox.parentElement).toBe(document.body);
+      expect(portalBox.className).toMatch(/\bfixed\b/);
+      expect(portalBox.className).toMatch(/\binset-0\b/);
+      expect(portalBox.className).toMatch(/z-\[60\]/);
+      expect(portalBox.getAttribute('aria-hidden')).toBe('true');
+      expect(portalBox.className).toMatch(/\bpointer-events-none\b/);
+    });
+
+    it('"portal" keeps Vanina\'s own bottom-left edge anchoring and pose/accessibility contract unchanged', () => {
+      render(<GameResult lang="es" correct={7} total={10} onPlayAgain={() => {}} characterPlacement="portal" />);
+      const icon = screen.getByTestId('game-result-icon');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/pulgar-arriba');
+      expect(icon.className).toMatch(/\babsolute\b/);
+      expect(icon.className).toMatch(/\bbottom-0\b/);
+      expect(icon.className).toMatch(/\bleft-/);
+      const img = icon.querySelector('img')!;
+      expect(img.getAttribute('alt')).toBe('');
+      expect(img.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('"portal" portals into a given characterPortalContainer instead of document.body when supplied', () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      render(
+        <GameResult
+          lang="es"
+          correct={3}
+          total={3}
+          onPlayAgain={() => {}}
+          characterPlacement="portal"
+          characterPortalContainer={container}
+        />,
+      );
+      const portalBox = screen.getByTestId('game-result-character-portal');
+      expect(portalBox.parentElement).toBe(container);
+      container.remove();
+    });
+
+    it('"portal" leaves the centred results column (headline/score/buttons) right where it always was, inside this component\'s own root', () => {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} characterPlacement="portal" />);
+      const root = screen.getByTestId('game-result');
+      const content = screen.getByTestId('game-result-content');
+      expect(root.contains(content)).toBe(true);
+    });
+  });
+
   describe('accessibility', () => {
     it('exposes the result region as a polite live status', () => {
       render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);

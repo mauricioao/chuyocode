@@ -6,6 +6,8 @@
  * escaping rules are testable without a mocked Supabase client — the same
  * separation `paths.ts` draws from `storage.ts` for activity images.
  */
+import { VARIOS_JUEGOS_ENABLED } from './flags';
+import type { BlockKind } from './blocks';
 
 /** Sort orders the community list understands, in the order the `<select>` offers them. */
 const SORT_ORDERS = ['recientes', 'gustadas', 'vistas'] as const;
@@ -15,12 +17,29 @@ export function isSortOrder(value: unknown): value is SortOrder {
   return typeof value === 'string' && (SORT_ORDERS as readonly string[]).includes(value);
 }
 
-/** Block-type filters — must match `activities.block_types`' own vocabulary (`blocks.ts`). */
-const BLOCK_TYPE_FILTERS = ['worksheet', 'quiz'] as const;
-export type BlockTypeFilter = (typeof BLOCK_TYPE_FILTERS)[number];
+/**
+ * Every `activities.block_kinds` value (0022 migration, `blocks.ts`'s own
+ * {@link BlockKind}) — the FULL vocabulary the column can hold.
+ * {@link isBlockKindFilter} below narrows this to what `?tipo=` actually
+ * ACCEPTS.
+ */
+const ALL_BLOCK_KINDS: readonly BlockKind[] = ['worksheet', 'basic', 'match', 'reorder', 'cloze', 'groupsort'];
 
-export function isBlockTypeFilter(value: unknown): value is BlockTypeFilter {
-  return typeof value === 'string' && (BLOCK_TYPE_FILTERS as readonly string[]).includes(value);
+/**
+ * `?tipo=<kind>` validation (owner decision 2026-10-19/-20: hide "Varios
+ * juegos" from the community filter): every {@link BlockKind} is accepted
+ * EXCEPT `'basic'` ("Varios juegos" — a mold-less quiz block), which this
+ * never offers while `VARIOS_JUEGOS_ENABLED` is `false` (`flags.ts`),
+ * reversible by flipping that flag back to `true`. The OLD generic `'quiz'`
+ * value (pre-mold-awareness) is also rejected now — too ambiguous to map to
+ * one kind — and, like any other unrecognized value, simply means "no
+ * filter" to every caller here (see `activities.ts`'s own `tipo` doc).
+ */
+export function isBlockKindFilter(value: unknown): value is BlockKind {
+  if (typeof value !== 'string') return false;
+  if (!(ALL_BLOCK_KINDS as readonly string[]).includes(value)) return false;
+  if (value === 'basic') return VARIOS_JUEGOS_ENABLED;
+  return true;
 }
 
 /** `?q=`'s cap — long enough for any real title search, short enough to bound the `ilike` scan. */

@@ -55,12 +55,17 @@ const POSES = [
   { character: 'paco', slug: 'avatar', displayHeightCss: 112 }, // desk helper avatar fallback-of-fallback parity
   // GameResult (UI round 2, owner feedback): a fixed HEIGHT per breakpoint,
   // `width: auto` — never `object-fit: cover` (that cropped the full-body
-  // "celebra" pose's own hands/feet). 176 is the TALLEST CSS height any
-  // GameResult breakpoint renders these at (desktop/laptop; phones <=400px
-  // render them at 144 instead, downscaled from this same export).
-  { character: 'vanina', slug: 'celebra', displayHeightCss: 176 }, // GameResult: perfect
-  { character: 'vanina', slug: 'pulgar-arriba', displayHeightCss: 176 }, // GameResult: good ("¡Muy bien!")
-  { character: 'vanina', slug: 'casi', displayHeightCss: 176 }, // GameResult: retry ("¡Casi! Sigue practicando")
+  // "celebra" pose's own hands/feet). 448 is the TALLEST CSS height any
+  // GameResult breakpoint renders these at today (`lg:h-[28rem]`, desktop;
+  // narrower breakpoints render them smaller, downscaled from this same
+  // export). Bugfix (owner report, production screenshot: "sale con blur y
+  // pixeleada"): this used to be 176 — stale from BEFORE the Mortal-Kombat-
+  // "Toasty!"-prominence pass grew the figure to its current, much taller
+  // breakpoint sizes, so the 2x file was only ever ~352px tall against a
+  // ~896px rendered need at `lg`. 448*2 = 896px now covers that.
+  { character: 'vanina', slug: 'celebra', displayHeightCss: 448 }, // GameResult: perfect
+  { character: 'vanina', slug: 'pulgar-arriba', displayHeightCss: 448 }, // GameResult: good ("¡Muy bien!")
+  { character: 'vanina', slug: 'casi', displayHeightCss: 448 }, // GameResult: retry ("¡Casi! Sigue practicando")
   { character: 'vanina', slug: 'asoma-izquierda', displayHeightCss: 100 }, // peeking from the exercise window's outer left edge, desktop only
   { character: 'paco', slug: 'sentado-borde', displayHeightCss: 140 }, // sitting on a desk widget's top edge
 ];

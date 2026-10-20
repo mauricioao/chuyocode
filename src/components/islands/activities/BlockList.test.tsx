@@ -399,104 +399,34 @@ describe('BlockList — quiz question image stays consistent across structural e
   });
 });
 
-describe('BlockList — "Cambiar de molde" keeps or reports question images (owner decision 2026-10-16 follow-up)', () => {
-  // Same shared-`blocks`-array shape as the lost-update fix above — ONE
-  // `onBlocksChange` call per conversion is what this fix is actually
-  // proving, not just DOM text.
-  function HarnessCapturingBlocks({
-    initialBlocks,
-    onBlocks,
-  }: {
-    initialBlocks: Block[];
-    onBlocks: (blocks: Block[]) => void;
-  }) {
-    const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
-    const [activeBlockId, setActiveBlockId] = useState<string | null>(initialBlocks[0]?.id ?? null);
-    const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-    return (
-      <BlockList
-        lang="es"
-        blocks={blocks}
-        activeBlockId={activeBlockId}
-        selectedZoneId={selectedZoneId}
-        resolveImageUrl={(path) => `/preview?path=${path}`}
-        onSetActiveBlock={setActiveBlockId}
-        onSelectZone={setSelectedZoneId}
-        onBlocksChange={(next) => {
-          setBlocks(next);
-          onBlocks(next);
-        }}
-      />
-    );
-  }
-
-  const image = { path: 'activity-images/act-1/question-img.webp', width: 400, height: 300 };
-
-  it('converting Varios juegos -> Une las parejas drops the image, keeps the converted payload, and reports it on the status line', () => {
-    const basicWithImage = quizBlock('b1', {
-      payload: {
-        pools: {},
-        slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
-        blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
-      },
-      promptImages: { s1: image },
-    });
-    let latest: Block[] = [];
-    render(
-      <HarnessCapturingBlocks
-        initialBlocks={[basicWithImage]}
-        onBlocks={(blocks) => {
-          latest = blocks;
-        }}
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-match'));
-
-    const block = latest.find((b) => b.id === 'b1') as QuizBlock;
-    expect(block.template).toBe('match');
-    expect(block.payload.slots).toHaveLength(1); // the payload itself DID convert
-    expect(block.promptImages).toBeUndefined(); // but the image could not follow it
-    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitó 1 imagen de pregunta');
-  });
-
-  it('converting Une las parejas -> Varios juegos keeps the image on the lossless match -> undefined round trip, AND prunes any dangling key through the SAME recomputation (slot ids survive)', () => {
-    const matchWithImage = quizBlock('b1', {
-      template: 'match',
-      payload: {
-        pools: {},
-        slots: [{ id: 's1', label: 'Capital of France', input: 'text', answer: ['Paris'] }],
-        blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
-      },
-      // `stale` names a slot id this block does not have even BEFORE the
-      // conversion (a corrupted/legacy row) — blindly carrying the OLD
-      // `promptImages` object over (today's bug: `handleChooseMold` never
-      // threads `promptImages` through `convertBlock`, so nothing ever
-      // recomputes it) keeps `stale` right alongside `s1`; routing through
-      // `preservePromptImages` must drop it, same as any other dangling key.
-      promptImages: { s1: image, stale: image },
-    });
-    let latest: Block[] = [];
-    render(
-      <HarnessCapturingBlocks
-        initialBlocks={[matchWithImage]}
-        onBlocks={(blocks) => {
-          latest = blocks;
-        }}
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
-
-    const block = latest.find((b) => b.id === 'b1') as QuizBlock;
-    expect(block.template).toBeUndefined();
-    expect(block.payload.slots.map((s) => s.id)).toEqual(['s1']);
-    expect(block.promptImages?.s1).toEqual(image);
-    expect(block.promptImages?.stale).toBeUndefined();
-  });
-});
+// REMOVED: `describe('BlockList — "Cambiar de molde" keeps or reports
+// question images (owner decision 2026-10-16 follow-up)', ...)` — its two
+// tests drove the conversion by clicking `change-mold-b1` then a
+// `change-mold-option-b1-*` option. Owner decision (2026-10-19 follow-up):
+// `CHANGE_MOLD_ENABLED` (flags.ts) is `false`, so `QuizBlockEditor` no
+// longer renders that trigger in any `SheetHeader` — this path is
+// unreachable from any real user action, so these can no longer run as
+// UI-click tests (judgment call documented in the delivering agent's
+// report, same reasoning as `QuizBlockEditor.test.tsx`'s own "Cambiar de
+// molde" describe block).
+//
+// Both tests' actual DATA assertions are already unit-tested directly
+// against `convertBlock` in `src/lib/activities/templateConversion.test.ts`
+// ("convertBlock — promptImages ..." describe): "Varios juegos -> match
+// drops promptImages ... reported losslessly" covers the first test's drop
+// case, and "match -> Varios juegos preserves promptImages keyed by a slot
+// id that survives the reshape" + "... drops (and reports) a promptImages
+// key naming a slot id that no longer exists" together cover the second
+// test's preserve-plus-prune-stale-key case — independent of any UI.
+//
+// What is NOT covered elsewhere, and is therefore a real (accepted) gap
+// while this flag stays off: the full BlockList/QuizBlockEditor wiring that
+// folds the structural change AND the recomputed `promptImages` into ONE
+// `onBlocksChange` call (the "lost update fix" these tests were named
+// for), and the "se quitó 1 imagen de pregunta" status-line text
+// (`QuizBlockEditor.tsx`'s own `droppedPhrase`). Restoring these exact
+// tests (recoverable from git history before this change) alongside
+// un-gating `changeMoldButton` is the intended path back.
 
 describe('BlockList — empty worksheet block (creator polish round 4, owner feedback #2)', () => {
   it('shows the upload drop zone instead of the canvas when the active worksheet block has no image yet', () => {
