@@ -57,7 +57,7 @@ describe('ActivityStartIsland', () => {
     fireEvent.click(screen.getByTestId('picker-worksheet'));
 
     await waitFor(() => expect(screen.getByTestId('picker-worksheet').getAttribute('aria-busy')).toBe('true'));
-    expect((screen.getByTestId('picker-questions') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('picker-match') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByTestId('start-creating')).toBeNull();
 
     resolveFetch({ ok: true, json: async () => ({ id: 'x' }) });
@@ -74,7 +74,7 @@ describe('ActivityStartIsland', () => {
     expect(navigate).not.toHaveBeenCalled();
     await waitFor(() => {
       expect((screen.getByTestId('picker-worksheet') as HTMLButtonElement).disabled).toBe(false);
-      expect((screen.getByTestId('picker-questions') as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByTestId('picker-match') as HTMLButtonElement).disabled).toBe(false);
     });
   });
 
@@ -87,47 +87,12 @@ describe('ActivityStartIsland', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
   });
 
-  it('creates an activity with one empty quiz block already in it, and navigates to its editor', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: 'new-activity-2' }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const navigate = vi.fn();
-
-    render(<ActivityStartIsland lang="es" navigate={navigate} />);
-    fireEvent.click(screen.getByTestId('picker-questions'));
-
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-2'));
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, { method: string; body: string }];
-    expect(url).toBe('/api/actividades');
-    expect(init.method).toBe('POST');
-    const body = JSON.parse(init.body);
-    expect(body.lang).toBe('es');
-    expect(body.blocks).toEqual([
-      expect.objectContaining({ type: 'quiz', payload: { pools: {}, slots: [] } }),
-    ]);
-  });
-
-  it('marks the questions card busy while its request is in flight', async () => {
-    let resolveFetch!: (value: unknown) => void;
-    const fetchMock = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          resolveFetch = resolve;
-        }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
+  // Owner decision (2026-10-19): "Varios juegos" is hidden from creation
+  // while `VARIOS_JUEGOS_ENABLED` is false — the questions card no longer
+  // renders in this picker, so it cannot be clicked to create a quiz block.
+  it('does not render the questions card while VARIOS_JUEGOS_ENABLED is false', () => {
     render(<ActivityStartIsland lang="es" navigate={vi.fn()} />);
-    fireEvent.click(screen.getByTestId('picker-questions'));
-
-    await waitFor(() => expect(screen.getByTestId('picker-questions').getAttribute('aria-busy')).toBe('true'));
-    expect((screen.getByTestId('picker-worksheet') as HTMLButtonElement).disabled).toBe(true);
-
-    resolveFetch({ ok: true, json: async () => ({ id: 'x' }) });
+    expect(screen.queryByTestId('picker-questions')).toBeNull();
   });
 
   // "Une las parejas" (start-gallery redesign, build items 3/4).

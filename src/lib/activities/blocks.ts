@@ -172,6 +172,21 @@ export interface QuizBlock {
 
 export type Block = WorksheetBlock | QuizBlock;
 
+/**
+ * Every derived "kind" `activities.block_kinds` (0022 migration) can hold —
+ * every {@link QuizTemplate} plus `'worksheet'` (a non-quiz block) and
+ * `'basic'` (a mold-less, `template === undefined` quiz block — "Básico"/
+ * "Varios juegos", `../flags.ts`'s `VARIOS_JUEGOS_ENABLED`). Used by
+ * `moderation.ts` to compute the column on approval, and by
+ * `discoveryQuery.ts` to validate the community feed's `?tipo=` filter.
+ */
+export type BlockKind = 'worksheet' | 'basic' | QuizTemplate;
+
+/** One block's own derived {@link BlockKind} — `'worksheet'` for a worksheet block, its mold (or `'basic'` for the mold-less "Básico") for a quiz block. */
+export function blockKind(block: Block): BlockKind {
+  return block.type === 'worksheet' ? 'worksheet' : block.template ?? 'basic';
+}
+
 /** An activity holds at most this many blocks. */
 export const MAX_BLOCKS = 20;
 

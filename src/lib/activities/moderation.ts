@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
-import { parseBlocks, type Block, type PromptImageRef } from './blocks';
+import { parseBlocks, blockKind, type Block, type PromptImageRef } from './blocks';
 import {
   approvedImagePath,
   parseImagePath,
@@ -522,6 +522,12 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
 
     const rewrittenBlocks = rewriteAudioPaths(rewriteImagePaths(blocks, pathMapping), audioPathMapping);
     const blockTypes = Array.from(new Set(rewrittenBlocks.map((b) => b.type)));
+    // Mold-awareness (owner decision 2026-10-19/-20, `flags.ts`'s
+    // `VARIOS_JUEGOS_ENABLED`): one derived kind per block — `blockKind`'s
+    // own doc — deduped, in first-appearance order. `'basic'` means a
+    // mold-less quiz block, `template === undefined` ("Varios juegos") — see
+    // `0022_activity_block_kinds.sql`'s header.
+    const blockKinds = Array.from(new Set(rewrittenBlocks.map(blockKind)));
 
     const { error: rpcError } = await client.rpc('approve_activity_revision', {
       p_revision: revisionId,
@@ -529,6 +535,7 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
       p_blocks: rewrittenBlocks,
       p_block_types: blockTypes,
       p_block_count: rewrittenBlocks.length,
+      p_block_kinds: blockKinds,
     });
 
     if (rpcError) {

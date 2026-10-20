@@ -51,6 +51,7 @@
  * since it is a plain `<a>`, not a `Button`.
  */
 import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { formatElapsedTime } from '@/lib/formatElapsedTime';
@@ -100,6 +101,36 @@ export interface GameResultProps {
   elapsedMs?: number;
   /** One extra secondary action, rendered in the same row as "Jugar de nuevo"/"Repasar las que fallé" — see {@link GameResultSecondaryAction}. */
   secondaryAction?: GameResultSecondaryAction;
+  /**
+   * Where Vanina's reaction figure (and its confetti) renders — bugfix,
+   * owner report: inside a small Dialog/modal card over a blurred backdrop
+   * (the worksheet result overlay, `ActivityPracticeIsland.tsx`), the
+   * figure used to render INSIDE this component's own `overflow-hidden`
+   * root, so the small card clipped her, the backdrop's `backdrop-blur`
+   * blurred her, and she sat behind the centred headline/buttons.
+   *
+   * `'inline'` (default, every other host — the four self-checking drag
+   * templates): unchanged — anchored inside this component's own root,
+   * half-cropped by ITS bottom-left edge.
+   *
+   * `'portal'`: Vanina (and the confetti burst) render OUTSIDE this
+   * component's own DOM subtree instead, via `createPortal` into
+   * `characterPortalContainer` (default `document.body`), `fixed` to the
+   * HOST WINDOW's own viewport bottom-left — above a Dialog's blurred
+   * backdrop (a higher z-index, painted after it) and never clipped by its
+   * small card. The centred results column (headline/score/buttons) is
+   * unaffected either way — it always stays right here, inside this
+   * component's own root.
+   */
+  characterPlacement?: 'inline' | 'portal';
+  /**
+   * Portal target used only when `characterPlacement === 'portal'` —
+   * defaults to `document.body`. Lets a host that re-targets its OWN
+   * dialog portal (e.g. `ActivityPracticeIsland`'s "modo enfoque", a real
+   * Fullscreen API element that never paints a `document.body`-level
+   * sibling at all) keep Vanina inside that SAME container instead.
+   */
+  characterPortalContainer?: Element | DocumentFragment;
   className?: string;
 }
 
@@ -215,6 +246,8 @@ export default function GameResult({
   guest,
   elapsedMs,
   secondaryAction,
+  characterPlacement = 'inline',
+  characterPortalContainer,
   className,
 }: GameResultProps) {
   const t = UI_LABELS[lang].activities.gameResult;
@@ -225,32 +258,22 @@ export default function GameResult({
   const pose = OUTCOME_POSE[outcome];
   const showConfetti = CONFETTI_OUTCOMES.has(outcome);
   const confettiPieces = showConfetti ? buildConfettiPieces() : [];
+  const isPortalPlacement = characterPlacement === 'portal';
 
-  return (
-    <div
-      data-testid="game-result"
-      data-outcome={outcome}
-      role="status"
-      aria-live="polite"
-      className={cn(
-        // `-mb-3` bleeds this root past the ONE stage wrapper every host
-        // renders it in (`ActivityPracticeIsland`'s own `overflow-y-auto
-        // p-3` quiz-tab container) — bugfix: `bottom-0` on the Vanina
-        // `<picture>` below already anchors flush with THIS box's own
-        // bottom edge, but that box's bottom sat 12px (the stage's own
-        // `p-3`) above the window's actual bottom edge, so her crop line
-        // never reached it. Matches that one known ancestor padding
-        // exactly, not a generic "push to the viewport" trick.
-        'relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden py-10 -mb-3 text-center',
-        className,
-      )}
-    >
-      {/* Confetti burst — see `buildConfettiPieces`/`CONFETTI_OUTCOMES` own
-          header above and `.game-result-confetti-piece`'s keyframe in
-          `global.css`. Absolutely positioned over the WHOLE result area
-          (not just the edge Vanina peeks from — the owner spec has it
-          shoot from both sides), `aria-hidden` + `pointer-events-none`:
-          purely decorative, never reachable/blocking. */}
+  // Confetti burst + Vanina's reaction figure — see `buildConfettiPieces`/
+  // `CONFETTI_OUTCOMES`'s own header above and `.game-result-confetti-
+  // piece`'s keyframe in `global.css`. Built ONCE and rendered either
+  // `inline` (the default — absolutely positioned against THIS component's
+  // own root below) or portaled out to `characterPortalContainer` (see
+  // `characterPlacement` above) — same markup either way, only the
+  // ENCLOSING box differs (`game-result` itself vs. the dedicated fixed
+  // viewport box further down).
+  const characterLayer = (
+    <>
+      {/* Confetti — absolutely positioned over the WHOLE enclosing box (not
+          just the edge Vanina peeks from — the owner spec has it shoot from
+          both sides), `aria-hidden` + `pointer-events-none`: purely
+          decorative, never reachable/blocking. */}
       {showConfetti && (
         <div data-testid="game-result-confetti" aria-hidden="true" className="game-result-confetti pointer-events-none absolute inset-0 overflow-hidden">
           {confettiPieces.map((piece) => (
@@ -258,12 +281,12 @@ export default function GameResult({
           ))}
         </div>
       )}
-      {/* Vanina's reaction — "Toasty!"-style pop-in from the result area's
+      {/* Vanina's reaction — "Toasty!"-style pop-in from the enclosing box's
           OWN bottom-left edge (visual-polish pass, owner spec: "sale desde
           abajo a la izquierda... la mitad de la imagen visible... se
           queda", unlike Toasty she never leaves again). Anchored `absolute
           bottom-0`, then `translateY(50%)` (`.game-result-vanina`,
-          `global.css`) pushes the bottom half past the root's own
+          `global.css`) pushes the bottom half past the enclosing box's own
           `overflow-hidden` edge — only the UPPER half stays visible, which
           is the crop the owner asked for, never a shrink (the "never
           shrink to fit" rule — `object-cover` stays reserved for a
@@ -295,7 +318,37 @@ export default function GameResult({
           className="block h-64 w-auto md:h-80 lg:h-[28rem] max-[400px]:h-52"
         />
       </picture>
-      {/* The centred results column — headline/score/buttons — now the
+    </>
+  );
+
+  return (
+    <>
+      <div
+        data-testid="game-result"
+        data-outcome={outcome}
+        role="status"
+        aria-live="polite"
+        className={cn(
+          'relative flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center',
+          // `inline` placement only (every non-dialog host): `overflow-
+          // hidden` crops Vanina/confetti at this root's own edge, and
+          // `-mb-3` bleeds the root past the ONE stage wrapper every such
+          // host renders it in (`ActivityPracticeIsland`'s own
+          // `overflow-y-auto p-3` quiz-tab container) — bugfix: `bottom-0`
+          // on the Vanina `<picture>` above already anchors flush with
+          // THIS box's own bottom edge, but that box's bottom sat 12px (the
+          // stage's own `p-3`) above the window's actual bottom edge, so
+          // her crop line never reached it. `portal` placement needs
+          // neither: Vanina/confetti no longer live in this root at all
+          // (see the fixed viewport box below), and there is no known
+          // ancestor padding to correct for inside an arbitrary host's
+          // own dialog card.
+          !isPortalPlacement && 'overflow-hidden -mb-3',
+          className,
+        )}
+      >
+        {!isPortalPlacement && characterLayer}
+        {/* The centred results column — headline/score/buttons — now the
           ONLY thing in the middle (Vanina moved to the edge above). Same
           comfortable reading measure as before (owner feedback, UI round
           2: the success state read a bit narrow), plus enough bottom
@@ -304,92 +357,118 @@ export default function GameResult({
           width — and, now that she grows at wider breakpoints too
           (`md`/`lg` above), a bit more bottom padding there as well so a
           taller peek never reaches the guest line at e.g. 1230×740. */}
-      <div data-testid="game-result-content" className="relative z-20 flex w-full max-w-[30rem] flex-col items-center gap-4 pb-16 sm:pb-4 md:pb-6 lg:pb-8">
-        <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
-        <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
-          {correct} {t.of} {total} {word}
-        </p>
-        {typeof elapsedMs === 'number' && (
-          <p data-testid="game-result-time" className="text-sm text-muted-foreground">
-            {t.time}: {formatElapsedTime(elapsedMs)}
+        <div data-testid="game-result-content" className="relative z-20 flex w-full max-w-[30rem] flex-col items-center gap-4 pb-16 sm:pb-4 md:pb-6 lg:pb-8">
+          <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{headline}</h2>
+          <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
+            {correct} {t.of} {total} {word}
           </p>
-        )}
-        <div className="flex flex-col items-center gap-2">
-          {nextHref ? (
-            <Button asChild className="min-h-11">
-              {/* "Otra actividad" bugfix (owner report): inside a desk
-                  window, this used to be a plain in-iframe navigation —
-                  the host's own click-race defensive net
-                  (`deskWindowManager.ts`) then opened the community route
-                  as a SEPARATE window and bounced this frame back onto its
-                  own href, leaving the finished activity window open,
-                  reloading, behind it. `data-desk-open-window="replace"`
-                  is the embedded-side opener's own marker
-                  (`@lib/ui/deskWindow.ts#initDeskOpenWindowLinks`): it asks
-                  the host to open/focus the community window AND close
-                  THIS one. Outside a desk window (standalone page, mobile,
-                  guest) the attribute is inert — it stays the exact plain
-                  link it always was. */}
-              <a href={nextHref} data-testid="game-result-next" data-desk-open-window="replace">
-                {t.nextActivity}
-              </a>
-            </Button>
-          ) : (
-            <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
-              {t.playAgain}
-            </Button>
+          {typeof elapsedMs === 'number' && (
+            <p data-testid="game-result-time" className="text-sm text-muted-foreground">
+              {t.time}: {formatElapsedTime(elapsedMs)}
+            </p>
           )}
-          {(showReview || nextHref || secondaryAction) && (
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-              {showReview && (
-                <Button
-                  type="button"
-                  variant="link"
-                  data-testid="game-result-review"
-                  className="min-h-11 px-2"
-                  onClick={onReviewWrong}
-                >
-                  {t.reviewWrong}
-                </Button>
-              )}
-              {nextHref && (
-                <Button
-                  type="button"
-                  variant="link"
-                  data-testid="game-result-play-again"
-                  className="min-h-11 px-2"
-                  onClick={onPlayAgain}
-                >
-                  {t.playAgain}
-                </Button>
-              )}
-              {secondaryAction && (
-                <Button
-                  type="button"
-                  variant="link"
-                  data-testid="game-result-secondary-action"
-                  className="min-h-11 px-2"
-                  onClick={secondaryAction.onClick}
-                >
-                  {secondaryAction.label}
-                </Button>
-              )}
-            </div>
+          <div className="flex flex-col items-center gap-2">
+            {nextHref ? (
+              <Button asChild className="min-h-11">
+                {/* "Otra actividad" bugfix (owner report): inside a desk
+                    window, this used to be a plain in-iframe navigation —
+                    the host's own click-race defensive net
+                    (`deskWindowManager.ts`) then opened the community route
+                    as a SEPARATE window and bounced this frame back onto its
+                    own href, leaving the finished activity window open,
+                    reloading, behind it. `data-desk-open-window="replace"`
+                    is the embedded-side opener's own marker
+                    (`@lib/ui/deskWindow.ts#initDeskOpenWindowLinks`): it asks
+                    the host to open/focus the community window AND close
+                    THIS one. Outside a desk window (standalone page, mobile,
+                    guest) the attribute is inert — it stays the exact plain
+                    link it always was. */}
+                <a href={nextHref} data-testid="game-result-next" data-desk-open-window="replace">
+                  {t.nextActivity}
+                </a>
+              </Button>
+            ) : (
+              <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
+                {t.playAgain}
+              </Button>
+            )}
+            {(showReview || nextHref || secondaryAction) && (
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+                {showReview && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    data-testid="game-result-review"
+                    className="min-h-11 px-2"
+                    onClick={onReviewWrong}
+                  >
+                    {t.reviewWrong}
+                  </Button>
+                )}
+                {nextHref && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    data-testid="game-result-play-again"
+                    className="min-h-11 px-2"
+                    onClick={onPlayAgain}
+                  >
+                    {t.playAgain}
+                  </Button>
+                )}
+                {secondaryAction && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    data-testid="game-result-secondary-action"
+                    className="min-h-11 px-2"
+                    onClick={secondaryAction.onClick}
+                  >
+                    {secondaryAction.label}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          {guest && (
+            <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
+              {t.guestInvite}{' '}
+              <a
+                href={guest.signUpHref}
+                data-testid="game-result-guest-sign-up-link"
+                className="font-medium text-accent-ink hover:underline"
+              >
+                {t.guestSignUp}
+              </a>
+            </p>
           )}
         </div>
-        {guest && (
-          <p data-testid="game-result-guest-banner" className="mt-2 text-xs text-muted-foreground">
-            {t.guestInvite}{' '}
-            <a
-              href={guest.signUpHref}
-              data-testid="game-result-guest-sign-up-link"
-              className="font-medium text-accent-ink hover:underline"
-            >
-              {t.guestSignUp}
-            </a>
-          </p>
-        )}
       </div>
-    </div>
+      {/* `portal` placement: Vanina (and confetti) render OUTSIDE this
+          component's own DOM subtree entirely, via `createPortal` — a
+          `fixed inset-0` box pinned to the HOST WINDOW's own viewport
+          (the iframe's own viewport when embedded, the page's own when
+          standalone — this component never reaches across frames, it only
+          escapes ITS OWN ancestors), so she rises from that window's real
+          bottom-left edge. `z-[60]` is higher than the kit's `Dialog`
+          (`dialog.tsx`'s own overlay + content, both `z-50`) and painted
+          AFTER it, so she sits above the blurred backdrop, sharp, never
+          blurred by its `backdrop-blur` and never clipped by the small
+          card. Guarded for SSR (`typeof document === 'undefined'`, same
+          posture `ActivityPracticeIsland.tsx`'s own `focusModeHost` uses):
+          this component renders once on the server with no DOM at all. */}
+      {isPortalPlacement &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            data-testid="game-result-character-portal"
+            aria-hidden="true"
+            className="pointer-events-none fixed inset-0 z-[60] overflow-hidden"
+          >
+            {characterLayer}
+          </div>,
+          characterPortalContainer ?? document.body,
+        )}
+    </>
   );
 }

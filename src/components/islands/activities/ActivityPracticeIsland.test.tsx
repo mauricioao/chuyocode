@@ -480,6 +480,42 @@ describe('ActivityPracticeIsland — worksheet result overlay (owner bug report:
     fireEvent.click(screen.getByTestId('practice-check-button'));
     expect(screen.getByTestId('game-result-time').textContent).toBe('Tiempo: 10 s');
   });
+
+  // Bugfix (owner report, production screenshot: Vanina came out blurred/
+  // pixelated AND hidden behind the result text inside this small dialog
+  // card). The island wires `GameResult`'s own `characterPlacement="portal"`
+  // here so Vanina (and confetti) render OUTSIDE the dialog card entirely —
+  // see `GameResult.tsx`'s own `characterPlacement` header for the mechanism.
+  it('wires GameResult with characterPlacement="portal" so Vanina renders OUTSIDE the dialog card, not clipped/blurred by it', () => {
+    renderIsland([WORKSHEET]);
+    // Answer both zones correctly (perfect outcome) so the confetti layer
+    // actually renders (confetti is `perfect`/`good` only, never `retry`).
+    const textInput = screen.getByTestId('player-zone-z1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(textInput, { target: { value: 'cat' } });
+    const select = screen.getByTestId('player-zone-z2').querySelector('select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'blue' } });
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    const overlay = screen.getByTestId('practice-result-overlay');
+    const icon = screen.getByTestId('game-result-icon');
+    const confetti = screen.getByTestId('game-result-confetti');
+    expect(overlay.contains(icon)).toBe(false);
+    expect(overlay.contains(confetti)).toBe(false);
+    // Still present in the document, portaled above the dialog.
+    expect(document.body.contains(icon)).toBe(true);
+    const portalBox = screen.getByTestId('game-result-character-portal');
+    expect(portalBox.className).toMatch(/\bfixed\b/);
+    expect(portalBox.className).toMatch(/z-\[60\]/);
+  });
+
+  it('keeps the result text/buttons centred inside the dialog card even with Vanina portaled out', () => {
+    renderIsland([WORKSHEET]);
+    fireEvent.click(screen.getByTestId('practice-check-button'));
+
+    const overlay = screen.getByTestId('practice-result-overlay');
+    expect(overlay.contains(screen.getByTestId('game-result-content'))).toBe(true);
+    expect(overlay.contains(screen.getByTestId('game-result-score'))).toBe(true);
+  });
 });
 
 describe('ActivityPracticeIsland — quiz questions grade into the combined score', () => {

@@ -46,6 +46,7 @@ import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { VARIOS_JUEGOS_ENABLED } from '../../../lib/activities/flags';
 
 /**
  * The left "illustration" column's own fixed width — every card's icon +
@@ -272,30 +273,32 @@ export default function BlockTypePicker({
         </Card>
       </button>
 
-      <button
-        type="button"
-        data-testid="picker-questions"
-        onClick={onSelectQuestions}
-        disabled={disabled}
-        aria-busy={busyCard === 'questions'}
-        className={cn(
-          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
-          disabled && busyCard !== 'questions' && 'opacity-50',
-        )}
-      >
-        <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
-          <CardContent className="flex items-center gap-4">
-            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
-              <CardIcon busy={busyCard === 'questions'} Icon={ListChecksIcon} />
-              <QuestionsCardPreview />
-            </div>
-            <div className="min-w-0 flex-1">
-              <CardTitle className="text-base font-semibold">{t.questions.title}</CardTitle>
-              <CardDescription className="mt-1">{t.questions.description}</CardDescription>
-            </div>
-          </CardContent>
-        </Card>
-      </button>
+      {VARIOS_JUEGOS_ENABLED && (
+        <button
+          type="button"
+          data-testid="picker-questions"
+          onClick={onSelectQuestions}
+          disabled={disabled}
+          aria-busy={busyCard === 'questions'}
+          className={cn(
+            'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+            disabled && busyCard !== 'questions' && 'opacity-50',
+          )}
+        >
+          <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
+            <CardContent className="flex items-center gap-4">
+              <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+                <CardIcon busy={busyCard === 'questions'} Icon={ListChecksIcon} />
+                <QuestionsCardPreview />
+              </div>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-base font-semibold">{t.questions.title}</CardTitle>
+                <CardDescription className="mt-1">{t.questions.description}</CardDescription>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
+      )}
 
       <button
         type="button"

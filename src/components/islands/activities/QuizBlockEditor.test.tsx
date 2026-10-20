@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
+import ChangeMoldDialog from './ChangeMoldDialog';
 import type { Payload } from '@/lib/exercisePayload';
-import type { QuizTemplate, PromptImageRef } from '@/lib/activities/blocks';
+import type { QuizBlock, PromptImageRef } from '@/lib/activities/blocks';
 
 afterEach(() => {
   cleanup();
@@ -144,57 +145,6 @@ function GroupSortHarness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
-/**
- * "Cambiar de molde" (R2) harness — owns BOTH `payload` and `template`
- * (mirroring `BlockList.tsx`'s own `updateQuizTemplate`, the ONE commit a
- * conversion lands as), plus a tiny undo stack to demonstrate that one
- * commit is one step, same as the island's real `pushHistory`.
- */
-function ConvertHarness({
-  initialPayload,
-  initialTemplate,
-  onConvertSpy,
-}: {
-  initialPayload: Payload;
-  initialTemplate?: QuizTemplate;
-  onConvertSpy?: (payload: Payload, template: QuizTemplate | undefined) => void;
-}) {
-  const [state, setState] = useState<{ payload: Payload; template?: QuizTemplate }>(() =>
-    initialTemplate ? { payload: initialPayload, template: initialTemplate } : { payload: initialPayload },
-  );
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  const historyRef = useRef<{ payload: Payload; template?: QuizTemplate }[]>([]);
-
-  return (
-    <>
-      <QuizBlockEditor
-        blockId="b1"
-        lang="es"
-        payload={state.payload}
-        template={state.template}
-        selectedSlotId={selectedSlotId}
-        onSelectSlot={setSelectedSlotId}
-        onPayloadChange={(payload) => setState((s) => ({ ...s, payload }))}
-        onConvert={(payload, template) => {
-          onConvertSpy?.(payload, template);
-          historyRef.current.push(state);
-          setState(template ? { payload, template } : { payload });
-        }}
-      />
-      <button
-        type="button"
-        data-testid="test-undo"
-        onClick={() => {
-          const previous = historyRef.current.pop();
-          if (previous) setState(previous);
-        }}
-      >
-        undo
-      </button>
-    </>
-  );
-}
-
 const MATCH_NO_REPEAT_PAYLOAD: Payload = {
   pools: {},
   slots: [
@@ -225,45 +175,6 @@ const BASIC_MIXED_PAYLOAD: Payload = {
   blocks: [
     { kind: 'row', id: 'row-s1', slotId: 's1' },
     { kind: 'row', id: 'row-s2', slotId: 's2' },
-  ],
-};
-
-/** 2 answers share "Animals", 2 share "Vehicles", 1 ("apple" -> "Fruits") is alone and gets dropped converting to groupsort. */
-const MATCH_WITH_REPEATS_PAYLOAD: Payload = {
-  pools: {},
-  slots: [
-    { id: 's1', label: 'cat', input: 'text', answer: ['Animals'] },
-    { id: 's2', label: 'dog', input: 'text', answer: ['Animals'] },
-    { id: 's3', label: 'car', input: 'text', answer: ['Vehicles'] },
-    { id: 's4', label: 'bike', input: 'text', answer: ['Vehicles'] },
-    { id: 's5', label: 'apple', input: 'text', answer: ['Fruits'] },
-  ],
-  blocks: [
-    { kind: 'row', id: 'row-s1', slotId: 's1' },
-    { kind: 'row', id: 'row-s2', slotId: 's2' },
-    { kind: 'row', id: 'row-s3', slotId: 's3' },
-    { kind: 'row', id: 'row-s4', slotId: 's4' },
-    { kind: 'row', id: 'row-s5', slotId: 's5' },
-  ],
-};
-
-/** Two blanks plus two unclaimed distractor pool items — dropped converting to reorder. */
-const CLOZE_WITH_DISTRACTORS_PAYLOAD: Payload = {
-  pools: {
-    'b1-cloze-pool': [
-      { id: 'w1', text: 'was' },
-      { id: 'w2', text: 'received' },
-      { id: 'd1', text: 'extra1' },
-      { id: 'd2', text: 'extra2' },
-    ],
-  },
-  slots: [
-    { id: 'slot-a', label: 'I ___ travelling when I received a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] },
-    { id: 'slot-b', label: 'I was travelling when I ___ a phone call.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w2'] },
-  ],
-  blocks: [
-    { kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' },
-    { kind: 'row', id: 'row-cz-s0-b1-2', slotId: 'slot-b' },
   ],
 };
 
@@ -1503,30 +1414,43 @@ describe('QuizBlockEditor — "Ordenar por grupos": paste a whole list (N5)', ()
 });
 
 describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
-  it('shows the action in every quiz-based mold (Varios juegos, match, reorder, cloze, groupsort)', () => {
+  // Owner decision (2026-10-19 follow-up): "vamos primero por el único
+  // propósito" — each activity keeps the single mold it was created with,
+  // for now. `CHANGE_MOLD_ENABLED` (flags.ts) is `false`, so QuizBlockEditor
+  // no longer renders the trigger in ANY mold's own SheetHeader — this test
+  // now asserts its absence instead of its presence.
+  it('never shows the "Cambiar de molde" trigger while CHANGE_MOLD_ENABLED is false (Varios juegos, match, reorder, cloze, groupsort)', () => {
     render(<Harness initialPayload={ONE_QUESTION_PAYLOAD} />);
-    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    expect(screen.queryByTestId('change-mold-b1')).toBeNull();
     cleanup();
 
     render(<MatchHarness initialPayload={EMPTY_PAYLOAD} />);
-    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    expect(screen.queryByTestId('change-mold-b1')).toBeNull();
     cleanup();
 
     render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
-    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    expect(screen.queryByTestId('change-mold-b1')).toBeNull();
     cleanup();
 
     render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
-    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    expect(screen.queryByTestId('change-mold-b1')).toBeNull();
     cleanup();
 
     render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
-    expect(screen.getByTestId('change-mold-b1')).toBeTruthy();
+    expect(screen.queryByTestId('change-mold-b1')).toBeNull();
   });
 
-  it('opens a sheet listing the 5 molds — the current one marked, unavailable ones disabled with their reason', () => {
-    render(<MatchHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
+  // The dialog's own rendering (5 options, "Actual"/disabled + reason text)
+  // is `ChangeMoldDialog.tsx`'s own concern, decoupled here from
+  // QuizBlockEditor's now-hidden trigger (there is no longer any UI path
+  // that sets `moldDialogOpen`, so this mounts the dialog directly, exactly
+  // as a future re-enabled trigger would open it with `open` forced true).
+  // `conversionOptions` itself (current/disabled/reason selection) is
+  // already unit-tested in `templateConversion.test.ts`; this test's own
+  // job is only the rendering on top of it.
+  it('ChangeMoldDialog lists the 5 molds — the current one marked, unavailable ones disabled with their reason', () => {
+    const block: QuizBlock = { id: 'b1', type: 'quiz', template: 'match', payload: MATCH_NO_REPEAT_PAYLOAD };
+    render(<ChangeMoldDialog lang="es" open block={block} onOpenChange={() => {}} onChoose={() => {}} />);
 
     expect(screen.getByTestId('change-mold-dialog-b1')).toBeTruthy();
     expect(screen.getAllByTestId(/^change-mold-option-b1-/)).toHaveLength(5);
@@ -1543,73 +1467,30 @@ describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
     expect(basic.disabled).toBe(false);
   });
 
-  it('choosing a mold converts the content, closes the sheet and shows "Cambiado a <molde>" in the status line', () => {
-    const onConvertSpy = vi.fn();
-    render(
-      <ConvertHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} initialTemplate="match" onConvertSpy={onConvertSpy} />,
-    );
-
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
-
-    expect(onConvertSpy).toHaveBeenCalledTimes(1); // ONE commit, ONE undo step upstream
-    expect(screen.queryByTestId('change-mold-dialog-b1')).toBeNull();
-    const status = screen.getByTestId('mold-status-b1');
-    expect(status.textContent).toContain('Cambiado a Varios juegos');
-    expect(status.textContent).toContain('Ctrl+Z para deshacer');
-    // The block now renders as the plain question list, not the match editor.
-    expect(screen.queryByTestId('match-pairs-editor-b1')).toBeNull();
-  });
-
-  it('names dropped options by their real kind — Varios juegos -> match', () => {
-    render(<ConvertHarness initialPayload={BASIC_CHOICE_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-match'));
-
-    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitaron 2 opciones');
-  });
-
-  it('names dropped pairs by their real kind, singular — match -> groupsort', () => {
-    render(<ConvertHarness initialPayload={MATCH_WITH_REPEATS_PAYLOAD} initialTemplate="match" />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-groupsort'));
-
-    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitó 1 pareja');
-  });
-
-  it('names dropped extra words by their real kind — cloze -> reorder', () => {
-    render(<ConvertHarness initialPayload={CLOZE_WITH_DISTRACTORS_PAYLOAD} initialTemplate="cloze" />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-reorder'));
-
-    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitaron 2 palabras extra');
-  });
-
-  it('joins two different dropped kinds naturally in one message', () => {
-    render(<ConvertHarness initialPayload={BASIC_MIXED_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-match'));
-
-    expect(screen.getByTestId('mold-status-b1').textContent).toContain('se quitaron 2 opciones y 1 respuesta extra');
-  });
-
-  it('undoing restores the previous mold and content — one commit is one step', () => {
-    render(<ConvertHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} initialTemplate="match" />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
-    expect(screen.queryByTestId('match-pairs-editor-b1')).toBeNull();
-
-    fireEvent.click(screen.getByTestId('test-undo'));
-    expect(screen.getByTestId('match-pairs-editor-b1')).toBeTruthy();
-  });
-
-  it('the live preview reflects the new game immediately after converting', () => {
-    render(<ConvertHarness initialPayload={MATCH_NO_REPEAT_PAYLOAD} initialTemplate="match" />);
-    fireEvent.click(screen.getByTestId('change-mold-b1'));
-    fireEvent.click(screen.getByTestId('change-mold-option-b1-basic'));
-
-    // Básico has no dedicated template sheet/preview split — its own
-    // question list renders directly, with the live preview beside it.
-    expect(screen.getByTestId('quiz-question-list-b1')).toBeTruthy();
-  });
+  // REMOVED (owner decision 2026-10-19 follow-up, judgment call documented
+  // in the delivering agent's report): the 7 tests that used to live here —
+  // "choosing a mold converts the content, closes the sheet and shows
+  // status", the 4 "names dropped <kind>" tests, "undoing restores the
+  // previous mold", and "the live preview reflects the new game" — all
+  // drove `handleChooseMold` by clicking `change-mold-b1` then a
+  // `change-mold-option-b1-*` button. With the trigger gated to `null`
+  // (`CHANGE_MOLD_ENABLED` false), that path is unreachable from any real
+  // user action, so these can no longer run as UI-click tests.
+  //
+  // The DATA each one ultimately checked (dropped-item kinds/counts,
+  // promptImages preserved/dropped, the lossless "one conversion, one
+  // commit" shape) is already unit-tested directly against `convertBlock`
+  // in `templateConversion.test.ts` ("convertBlock — ..." describes),
+  // independent of any UI.
+  //
+  // What is NOT covered elsewhere, and is therefore a real (accepted) gap
+  // while this flag stays off: this file's own `droppedPhrase`/
+  // `joinNatural`/`DROPPED_NOUNS` — the Spanish/English SENTENCE built from
+  // those dropped-item counts ("se quitaron 2 opciones y 1 respuesta
+  // extra") — and the dialog-close/undo/live-preview wiring around
+  // `handleChooseMold` itself. Both are QuizBlockEditor-internal and only
+  // reachable through the hidden trigger; restoring these exact tests
+  // (recoverable from git history before this change) alongside
+  // un-gating `changeMoldButton` is the intended path back, rather than
+  // keeping them green against a trigger nothing can click.
 });

@@ -1262,7 +1262,18 @@ export const UI_LABELS = {
         typeLabel: 'Tipo',
         typeAll: 'Todos',
         typeWorksheet: 'Worksheet',
-        typeQuiz: 'Varios juegos',
+        // "Varios juegos" (owner decision 2026-10-19, `flags.ts`'s
+        // `VARIOS_JUEGOS_ENABLED`) — never offered while that flag is off
+        // (`index.astro`'s own `TYPE_OPTIONS`), kept here for when it flips
+        // back to `true`.
+        typeBasic: 'Varios juegos',
+        // One option per quiz template mold (owner decision 2026-10-20: the
+        // `?tipo=` filter offers every OTHER activity type) — same exact
+        // names as the create picker's own `start.*` titles.
+        typeMatch: 'Une las parejas',
+        typeReorder: 'Reordenar',
+        typeCloze: 'Completar la frase',
+        typeGroupsort: 'Ordenar por grupos',
         sortLabel: 'Ordenar por',
         sortRecientes: 'Más recientes',
         sortGustadas: 'Más gustadas',
@@ -2726,7 +2737,18 @@ export const UI_LABELS = {
         typeLabel: 'Type',
         typeAll: 'All',
         typeWorksheet: 'Worksheet',
-        typeQuiz: 'Mixed games',
+        // "Mixed games" (owner decision 2026-10-19, `flags.ts`'s
+        // `VARIOS_JUEGOS_ENABLED`) — never offered while that flag is off
+        // (`index.astro`'s own `TYPE_OPTIONS`), kept here for when it flips
+        // back to `true`.
+        typeBasic: 'Mixed games',
+        // One option per quiz template mold (owner decision 2026-10-20: the
+        // `?tipo=` filter offers every OTHER activity type) — same exact
+        // names as the create picker's own `start.*` titles.
+        typeMatch: 'Match the pairs',
+        typeReorder: 'Reorder',
+        typeCloze: 'Complete the sentence',
+        typeGroupsort: 'Group sort',
         sortLabel: 'Sort by',
         sortRecientes: 'Most recent',
         sortGustadas: 'Most liked',

@@ -17,14 +17,10 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
-import { parseBlocks, type Block } from './blocks';
+import { parseBlocks, type Block, type BlockKind } from './blocks';
 import { isLevel, type Level } from '../exerciseTaxonomy';
-import {
-  normalizeSearchQuery,
-  buildTitleIlikePattern,
-  type SortOrder,
-  type BlockTypeFilter,
-} from './discoveryQuery';
+import { normalizeSearchQuery, buildTitleIlikePattern, type SortOrder } from './discoveryQuery';
+import { VARIOS_JUEGOS_ENABLED } from './flags';
 
 /** DB table names — must match `supabase/migrations/0011_activities.sql`. */
 const ACTIVITIES_TABLE = 'activities';
@@ -411,8 +407,8 @@ export interface GetPublishedActivitiesOptions {
   page: number;
   /** Raw `?q=` — normalized/escaped here, never trusted as-is. */
   q?: string | null;
-  /** `?tipo=` — filters on `block_types` (the GIN index from 0011). */
-  tipo?: BlockTypeFilter | null;
+  /** `?tipo=` — filters on `block_kinds` (the GIN index from 0022). */
+  tipo?: BlockKind | null;
   /** `?orden=` — defaults to `recientes`. */
   orden?: SortOrder;
   /** `?novistas=1` — excludes activities `viewerId` has already opened. No-op without a `viewerId`. */
@@ -485,11 +481,19 @@ export async function getPublishedActivities(opts: GetPublishedActivitiesOptions
         count: 'exact',
       })
       .eq('visible', true);
+    // "Varios juegos" (owner decision 2026-10-19, `flags.ts`): a mold-less
+    // ('basic') quiz activity stops being LISTED in public discovery while
+    // the flag is off — still reachable by direct link, still editable by
+    // its author, still visible to moderation (none of those read through
+    // this function). Reversible by flipping the flag back to `true`.
+    if (!VARIOS_JUEGOS_ENABLED) {
+      query = query.filter('block_kinds', 'not.cs', '{basic}');
+    }
     if (opts.level) {
       query = query.eq('level', opts.level);
     }
     if (opts.tipo) {
-      query = query.contains('block_types', [opts.tipo]);
+      query = query.contains('block_kinds', [opts.tipo]);
     }
     if (normalizedQuery) {
       // `title_search` (0015 migration) is a generated, lowercased +
@@ -642,10 +646,17 @@ export async function getActivityCount(): Promise<number | null> {
   if (!client) return null;
 
   try {
-    const { count, error } = await client
+    let query = client
       .from(ACTIVITIES_TABLE)
       .select('id', { count: 'exact', head: true })
       .eq('visible', true);
+    // Same "Varios juegos" exclusion as `getPublishedActivities` — this
+    // count feeds the hub's "(N) actividades" card and the desk folder
+    // badge, both of which must match what the list itself shows.
+    if (!VARIOS_JUEGOS_ENABLED) {
+      query = query.filter('block_kinds', 'not.cs', '{basic}');
+    }
+    const { count, error } = await query;
 
     if (error) {
       console.error('[activities] getActivityCount failed:', error.message);

@@ -73,19 +73,24 @@ export const CHARACTER_POSES = {
   'vanina/celebra': {
     character: 'vanina',
     slug: 'celebra',
-    widths: [99, 198],
+    // Bugfix (owner report: "sale con blur y pixeleada") — re-exported at
+    // `displayHeightCss: 448` (`export-web.mjs`), matching GameResult's own
+    // tallest rendered height (`lg:h-[28rem]`); was [99, 198].
+    widths: [251, 503],
     flushEdge: null,
   }, // GameResult: perfect
   'vanina/pulgar-arriba': {
     character: 'vanina',
     slug: 'pulgar-arriba',
-    widths: [126, 251],
+    // Bugfix, same re-export as `vanina/celebra` above; was [126, 251].
+    widths: [320, 639],
     flushEdge: null,
   }, // GameResult: good ("¡Muy bien!")
   'vanina/casi': {
     character: 'vanina',
     slug: 'casi',
-    widths: [131, 263],
+    // Bugfix, same re-export as `vanina/celebra` above; was [131, 263].
+    widths: [335, 669],
     flushEdge: null,
   }, // GameResult: retry ("¡Casi! Sigue practicando")
   'vanina/asoma-izquierda': {

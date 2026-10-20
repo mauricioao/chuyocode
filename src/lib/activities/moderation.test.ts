@@ -287,6 +287,7 @@ describe('approveRevision', () => {
     expect(args.p_reviewer).toBe(REVIEWER);
     expect(args.p_block_types).toEqual(['worksheet']);
     expect(args.p_block_count).toBe(1);
+    expect(args.p_block_kinds).toEqual(['worksheet']);
     const blocks = args.p_blocks as Block[];
     expect((blocks[0] as { image: { path: string } }).image.path).toBe(`activity-images/${ACTIVITY}/${IMAGE_ID}.webp`);
 
@@ -324,8 +325,42 @@ describe('approveRevision', () => {
     const args = state.rpcCalls[0].args as Record<string, unknown>;
     expect(args.p_block_types).toEqual(['quiz']);
     expect(args.p_block_count).toBe(1);
+    // No `template` on this quiz block: it's the mold-less "Básico"/"Varios
+    // juegos" quiz, so its derived kind is 'basic'.
+    expect(args.p_block_kinds).toEqual(['basic']);
 
     copySpy.mockRestore();
+  });
+
+  it('approves a templated (non-Básico) quiz-only activity — block_kinds carries the mold, not basic', async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            template: 'match',
+            payload: {
+              pools: {},
+              slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    expect(state.rpcCalls).toHaveLength(1);
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_block_types).toEqual(['quiz']);
+    expect(args.p_block_kinds).toEqual(['match']);
   });
 
   it("refuses a quiz question's context image referencing another user's uploads folder", async () => {
@@ -471,6 +506,9 @@ describe('approveRevision', () => {
     const args = state.rpcCalls[0].args as Record<string, unknown>;
     expect(args.p_block_types).toEqual(['worksheet', 'quiz']);
     expect(args.p_block_count).toBe(2);
+    // The quiz block here has no `template` either — mixed worksheet+Básico
+    // quiz carries BOTH derived kinds.
+    expect(args.p_block_kinds).toEqual(['worksheet', 'basic']);
     const blocks = args.p_blocks as Block[];
     const quizBlock = blocks[1] as { payload: { blocks?: { kind: string; image?: string }[] } };
     // The quiz block's own media block is untouched — only worksheet.image.path is ever rewritten.

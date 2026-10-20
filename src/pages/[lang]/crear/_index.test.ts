@@ -157,7 +157,9 @@ describe('GET /[lang]/crear — embedded (the window manager\'s own iframe conte
     const html = await res.text();
     expect(html).toContain('data-testid="activity-start-island"');
     expect(html).toContain('data-testid="picker-worksheet"');
-    expect(html).toContain('data-testid="picker-questions"');
+    // "Varios juegos" is hidden from creation (owner decision 2026-10-19,
+    // `VARIOS_JUEGOS_ENABLED` in `src/lib/activities/flags.ts`).
+    expect(html).not.toContain('data-testid="picker-questions"');
     expect(html).not.toContain('data-desk-window-manager');
     expect(html).not.toContain('data-desk>');
   });

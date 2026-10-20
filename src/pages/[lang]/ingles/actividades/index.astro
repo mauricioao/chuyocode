@@ -91,7 +91,9 @@ import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { LEVELS, isLevel } from '@lib/exerciseTaxonomy';
 import { getPublishedActivities, ACTIVITIES_PAGE_SIZE, type PublishedActivityCard } from '@lib/activities/activities';
-import { isBlockTypeFilter, isSortOrder, type BlockTypeFilter, type SortOrder } from '@lib/activities/discoveryQuery';
+import { isBlockKindFilter, isSortOrder, type SortOrder } from '@lib/activities/discoveryQuery';
+import type { BlockKind } from '@lib/activities/blocks';
+import { VARIOS_JUEGOS_ENABLED } from '@lib/activities/flags';
 import { pickDailyActivity } from '@lib/activities/dailyPick';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@lib/ui/iconTooltip';
@@ -133,7 +135,7 @@ const nivelParam = Astro.url.searchParams.get('nivel');
 const activeLevel = isLevel(nivelParam) ? nivelParam : null;
 
 const tipoParam = Astro.url.searchParams.get('tipo');
-const activeTipo: BlockTypeFilter | null = isBlockTypeFilter(tipoParam) ? tipoParam : null;
+const activeTipo: BlockKind | null = isBlockKindFilter(tipoParam) ? tipoParam : null;
 
 const ordenParam = Astro.url.searchParams.get('orden');
 const orden: SortOrder = isSortOrder(ordenParam) ? ordenParam : 'recientes';
@@ -265,11 +267,23 @@ const panelClearHref = (() => {
   return `${basePath}${qs ? `?${qs}` : ''}`;
 })();
 
-const TYPE_OPTIONS: Array<{ value: BlockTypeFilter | ''; label: string }> = [
+// One option per remaining activity type (owner decision 2026-10-20): never
+// "Varios juegos" (`'basic'`) while `VARIOS_JUEGOS_ENABLED` is `false` —
+// same gallery order as the create picker's own `BlockTypePicker.tsx`
+// (worksheet, [basic], match, reorder, cloze, groupsort).
+const TYPE_OPTIONS: Array<{ value: BlockKind | ''; label: string }> = [
   { value: '', label: t.typeAll },
   { value: 'worksheet', label: t.typeWorksheet },
-  { value: 'quiz', label: t.typeQuiz },
+  ...(VARIOS_JUEGOS_ENABLED ? [{ value: 'basic' as const, label: t.typeBasic }] : []),
+  { value: 'match', label: t.typeMatch },
+  { value: 'reorder', label: t.typeReorder },
+  { value: 'cloze', label: t.typeCloze },
+  { value: 'groupsort', label: t.typeGroupsort },
 ];
+
+/** `activeTipo`'s own display label, for the chip row below — built from
+ * `TYPE_OPTIONS` so it can never drift from what the select itself offers. */
+const typeLabelByValue = new Map(TYPE_OPTIONS.filter((opt) => opt.value).map((opt) => [opt.value, opt.label]));
 
 const levelOptions = [
   { value: '', label: t.allLevels, selected: activeLevel === null },
@@ -301,7 +315,7 @@ if (activeLevel) chips.push({ key: 'nivel', label: activeLevel, href: hrefWithou
 if (activeTipo) {
   chips.push({
     key: 'tipo',
-    label: activeTipo === 'worksheet' ? t.typeWorksheet : t.typeQuiz,
+    label: typeLabelByValue.get(activeTipo) ?? activeTipo,
     href: hrefWithoutFilter('tipo'),
   });
 }
