@@ -399,8 +399,8 @@ function heartsLabel(count: number): string {
       {isAuthorPreview ? null : canHeart ? (
         <HeartButton client:load lang={lang} activityId={activity.id} heartCount={activity.heartCount} hearted={hearted} />
       ) : user ? (
-        <span class="inline-flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="activity-heart-readonly">
-          <HeartIcon aria-hidden="true" />
+        <span class="inline-flex items-center gap-1.5 text-base text-muted-foreground" data-testid="activity-heart-readonly">
+          <HeartIcon aria-hidden="true" size={20} />
           <span class="sr-only">{heartsLabel(activity.heartCount)}</span>
           <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
         </span>
@@ -410,10 +410,10 @@ function heartsLabel(count: number): string {
            page) instead of doing nothing. */
         <a
           href={guestSignInHref}
-          class="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          class="inline-flex items-center gap-1.5 text-base text-muted-foreground transition-colors hover:text-foreground"
           data-testid="activity-heart-guest"
         >
-          <HeartIcon aria-hidden="true" />
+          <HeartIcon aria-hidden="true" size={20} />
           <span class="sr-only">{heartsLabel(activity.heartCount)}</span>
           <span class="tabular-nums" aria-hidden="true">{activity.heartCount}</span>
         </a>
@@ -499,7 +499,10 @@ function heartsLabel(count: number): string {
             class={ICON_TOOLTIP_TRIGGER_CLASS}
             target="_top"
           >
-            <PresentationIcon aria-hidden="true" size={16} />
+            {/* size 20 (was 16) — activity window chrome pass, owner mockup
+                `visor-actividad-franjas-2026-10-17.jpg`: "los íconos son un
+                poco chicos, podrían ser un poco más grandes". */}
+            <PresentationIcon aria-hidden="true" size={20} />
             <span role="tooltip" id="action-present-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
               {t.present}
             </span>
@@ -527,7 +530,9 @@ function heartsLabel(count: number): string {
         aria-describedby="action-focus-mode-tooltip"
         class={ICON_TOOLTIP_TRIGGER_CLASS}
       >
-        <CornersOutIcon aria-hidden="true" size={16} />
+        {/* size 20 (was 16) — activity window chrome pass, see the
+            "Presentar" icon's own comment above. */}
+        <CornersOutIcon aria-hidden="true" size={20} />
         <span role="tooltip" id="action-focus-mode-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
           {t.focusMode}
         </span>
@@ -563,7 +568,9 @@ function heartsLabel(count: number): string {
           data-testid="activity-window-more-trigger"
           class={`${ICON_TOOLTIP_TRIGGER_CLASS} cursor-pointer peer-focus-visible:outline-none peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50`}
         >
-          <DotsThreeIcon aria-hidden="true" size={18} weight="bold" />
+          {/* size 20 (was 18) — activity window chrome pass, see the
+              "Presentar" icon's own comment above. */}
+          <DotsThreeIcon aria-hidden="true" size={20} weight="bold" />
           <span role="tooltip" id="action-more-tooltip" class={ICON_TOOLTIP_BUBBLE_CLASS}>
             {t.windowMore}
           </span>

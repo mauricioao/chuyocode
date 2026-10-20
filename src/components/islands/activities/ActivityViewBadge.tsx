@@ -68,9 +68,12 @@ export default function ActivityViewBadge({ lang, activityId }: ActivityViewBadg
       data-testid="activity-view-badge"
       aria-label={countLabel}
       title={alreadyViewed ? t.viewedBefore : undefined}
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+      className="inline-flex items-center gap-1.5 text-base text-muted-foreground"
     >
-      <EyeIcon aria-hidden="true" />
+      {/* size 20 (activity window chrome pass, owner mockup
+          `visor-actividad-franjas-2026-10-17.jpg`: icons slightly bigger),
+          matching the heart badges right next to it. */}
+      <EyeIcon aria-hidden="true" size={20} />
       <span className="tabular-nums" aria-hidden="true">{viewCount}</span>
     </span>
   );

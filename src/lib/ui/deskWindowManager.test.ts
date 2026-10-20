@@ -160,6 +160,27 @@ describe('initDeskWindowManager — openWindow', () => {
   });
 });
 
+// Vertical centring (owner request, 2026-10-18): the window used to open
+// ~30px low — a fixed `desk:bottom-16` (64px) bottom inset against a
+// measured `--desk-chrome-offset` top inset (~124px) is not symmetric. The
+// owner's chosen fix is the simplest one: use the SAME offset for both
+// edges, so the window is vertically centred between the desk chrome row
+// and the viewport's own bottom edge (the window gets shorter, never taller
+// — it can never grow into the logo/avatar row).
+describe('initDeskWindowManager — window wrapper geometry (vertical centring, 2026-10-18)', () => {
+  it('insets the base window by the SAME offset on top and bottom, not a fixed bottom-16', () => {
+    const win = fakeWin();
+    handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+    handle.openWindow('/es/ingles/actividades', 'Comunidad');
+
+    const { wrapper } = frameFor('community')!;
+    const tokens = wrapper.className.split(/\s+/);
+    expect(tokens).toContain('desk:top-(--desk-chrome-offset)');
+    expect(tokens).toContain('desk:bottom-(--desk-chrome-offset)');
+    expect(tokens).not.toContain('desk:bottom-16');
+  });
+});
+
 describe('initDeskWindowManager — click interception', () => {
   it('intercepts a [data-desk-window-open] anchor resolving to a window route, preventing navigation', () => {
     const win = fakeWin();

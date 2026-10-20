@@ -247,6 +247,30 @@ describe('ActivityPracticeIsland — footer (zoom/score) and the floating Compro
     expect(screen.getByTestId('practice-footer').contains(screen.getByTestId('practice-check-button'))).toBe(false);
   });
 
+  // Activity window chrome pass (owner mockup
+  // `visor-actividad-franjas-2026-10-17.jpg`, 2026-10-17): the footer loses
+  // its own background/border and floats OVER the canvas instead, pinned to
+  // the same bottom inset as the floating Comprobar — never `fixed` (that
+  // assertion is covered above), but a real overlay via `absolute`, with
+  // the row itself inert (`pointer-events-none`) so the bare canvas under
+  // its empty stretch keeps panning/drawing, and only its actual controls
+  // (the zoom slot) catch the pointer.
+  it('floats as a borderless overlay over the canvas, pinned to the same bottom inset as Comprobar', () => {
+    renderIsland([WORKSHEET]);
+    const footer = screen.getByTestId('practice-footer');
+    const tokens = footer.className.split(/\s+/);
+    expect(tokens).toContain('absolute');
+    expect(tokens).toContain('bottom-4');
+    expect(tokens).toContain('pointer-events-none');
+    expect(tokens).not.toContain('border-t');
+    expect(tokens).not.toContain('border-border');
+    expect(tokens).not.toContain('py-3');
+    expect(footer.className).not.toMatch(/\bbg-/);
+
+    const zoomSlot = screen.getByTestId('worksheet-zoom-slot');
+    expect(zoomSlot.className.split(/\s+/)).toContain('pointer-events-auto');
+  });
+
   // Mobile review 2026-10-17: the footer's right-aligned hint/score used to
   // run UNDER the floating Comprobar (cut on both sides at 375px), since the
   // button floats over the bottom-right corner of this very row.

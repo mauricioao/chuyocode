@@ -107,8 +107,10 @@ describe('WorksheetPracticePlayer — camera (practice player redesign)', () => 
   it('starts FIT-scaled to the viewport on mount', () => {
     mockViewportRect();
     renderPlayer();
-    // fitZoom(1000x500, 800x400) = min(1000/800, 500/400) = 1.25.
-    expect(scaleOf(content())).toBeCloseTo(1.25);
+    // fitZoom(1000x500, 800x400) would be min(1000/800, 500/400) = 1.25, but
+    // the top-gap fit carves FIT_TOP_GAP_PX (16) out of the available
+    // height first: min(1000/800, (500-16)/400) = min(1.25, 1.21) = 1.21.
+    expect(scaleOf(content())).toBeCloseTo(1.21);
   });
 
   it('renders no zoom toolbar when no toolbarSlot is given yet', () => {
@@ -127,14 +129,16 @@ describe('WorksheetPracticePlayer — camera (practice player redesign)', () => 
     mockViewportRect();
     renderPlayer();
     fireEvent.click(screen.getByTestId('practice-zoom-in'));
-    expect(scaleOf(content())).toBeCloseTo(1.5);
+    // Fit is now 1.21 (top-gap fit, see the mount test above) + one 0.25 step.
+    expect(scaleOf(content())).toBeCloseTo(1.46);
   });
 
   it('zooms out by one step on click', () => {
     mockViewportRect();
     renderPlayer();
     fireEvent.click(screen.getByTestId('practice-zoom-out'));
-    expect(scaleOf(content())).toBeCloseTo(1.0);
+    // Fit is now 1.21 (top-gap fit, see the mount test above) minus one 0.25 step.
+    expect(scaleOf(content())).toBeCloseTo(0.96);
   });
 
   it('resets to fit via the Ajustar button after zooming', () => {
@@ -143,7 +147,8 @@ describe('WorksheetPracticePlayer — camera (practice player redesign)', () => 
     fireEvent.click(screen.getByTestId('practice-zoom-in'));
     fireEvent.click(screen.getByTestId('practice-zoom-in'));
     fireEvent.click(screen.getByTestId('practice-zoom-fit'));
-    expect(scaleOf(content())).toBeCloseTo(1.25);
+    // Fit is now 1.21, not 1.25 — see the mount test above.
+    expect(scaleOf(content())).toBeCloseTo(1.21);
   });
 
   it('never zooms below the shared camera floor (10%)', () => {
@@ -323,7 +328,35 @@ describe('WorksheetPracticePlayer — free panning (Bug 2, loose camera bound)',
     firePointer(viewport, 'pointermove', 450, 250, { button: 0 });
     firePointer(viewport, 'pointerup', 450, 250, { button: 0 });
     fireEvent.click(screen.getByTestId('practice-zoom-fit'));
-    expect(content().style.transform).toBe('translate(0px, 0px) scale(1.25)');
+    // Top-gap fit at this viewport (1000x500, 800x400 image): scale 1.21
+    // (height-bound once the 16px gap is carved out), centered horizontally
+    // with a 16px margin each side, and nudged down by the 16px gap itself
+    // — see `fitCameraWithTopGap`'s own header.
+    expect(content().style.transform).toBe('translate(16px, 16px) scale(1.21)');
+  });
+});
+
+describe('WorksheetPracticePlayer — top gap at fit (activity window chrome pass)', () => {
+  it('leaves a fixed top gap above the sheet at fit, with 0 left/right/bottom margin', () => {
+    // A 1000x516 viewport against the 800x400 BLOCK image: the fit height
+    // becomes tied with the width ratio again once the 16px gap is carved
+    // out of the available height (516-16=500 => scale 1.25, same as the
+    // width ratio 1000/800), so this isolates the gap's effect cleanly —
+    // full width (0 left/right margin), full post-gap height (0 bottom
+    // margin), and exactly the gap itself pushed in from the top.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 1000,
+      height: 516,
+      top: 0,
+      left: 0,
+      right: 1000,
+      bottom: 516,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    renderPlayer();
+    expect(content().style.transform).toBe('translate(0px, 16px) scale(1.25)');
   });
 });
 

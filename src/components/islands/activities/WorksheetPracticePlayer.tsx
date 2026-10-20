@@ -85,6 +85,32 @@ import WorksheetPracticePlayerMobile from './WorksheetPracticePlayerMobile';
 const IDENTITY_CAMERA: Camera = { scale: 1, x: 0, y: 0 };
 
 /**
+ * Fixed top-only breathing room, in px, between the window's title bar and
+ * the top of the worksheet sheet at FIT zoom (activity window chrome pass,
+ * owner feedback: the sheet read cramped flush against the title bar).
+ * Left, right, and bottom stay exactly where plain `fitCamera` would place
+ * them — see {@link fitCameraWithTopGap}, the only thing that reads this.
+ */
+const FIT_TOP_GAP_PX = 16;
+
+/**
+ * {@link fitCamera}, but with {@link FIT_TOP_GAP_PX} of breathing room
+ * carved out of the TOP only. Reuses `fitCamera` unchanged against a
+ * viewport that is `FIT_TOP_GAP_PX` shorter (same width, so left/right
+ * centering is untouched), then nudges the whole result down by that same
+ * amount — which is also why the gap lands above the sheet instead of
+ * splitting across top and bottom: the sheet still fits entirely inside the
+ * reduced height, and the nudge simply slides that already-fitted box down
+ * into the real (taller) viewport. Scoped to THIS file only — the editor's
+ * own canvas (`WorksheetZoneEditor.tsx`) and the mobile practice viewport
+ * keep calling the shared `fitCamera` directly, unaffected.
+ */
+function fitCameraWithTopGap(image: Size, viewport: Size): Camera {
+  const base = fitCamera(image, { width: viewport.width, height: Math.max(0, viewport.height - FIT_TOP_GAP_PX) });
+  return { ...base, y: base.y + FIT_TOP_GAP_PX };
+}
+
+/**
  * Same short distance threshold `DropRenderer.tsx`/`authoring/BlockList.tsx`
  * use to tell a plain click from a drag — reused here to tell a click on an
  * answer input from a pan, both in px, both pointer types (mouse and touch
@@ -203,12 +229,26 @@ function DesktopWorksheetCamera({
   // (Bug 2, "free panning in the practice player"), same reasoning as every
   // other re-clamp below: only `fitCamera`/"Ajustar" itself stays on the
   // strict bound, since it is the one action that deliberately re-centers.
+  //
+  // FLOATING FOOTER (activity window chrome pass): this viewport now fills
+  // the FULL tab body (the old bordered footer row no longer reserves its
+  // own flex-column height — `ActivityPracticeIsland.tsx`'s own header) —
+  // "Ajustar" fits the whole image into that full height on purpose,
+  // DELIBERATELY not subtracting room for the floating zoom cluster at the
+  // bottom-left: free panning is already unconditional here (the LOOSE
+  // bound above, Bug 2), so if the cluster ever sits over a zone the
+  // learner needs, a small drag reveals it — the same gesture already
+  // needed to see past any screen edge at a tight zoom. Reserving a
+  // permanent blank margin under "Ajustar" for a cluster that is usually
+  // clear of the sheet (it floats over dotted canvas, not the image, at
+  // most zoom levels) would shrink the "worksheet looks bigger on entry"
+  // win the floating footer exists for.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return undefined;
     const reconcile = () => {
       const vp = viewportSize();
-      setCamera((prev) => (fitMode ? fitCamera(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
+      setCamera((prev) => (fitMode ? fitCameraWithTopGap(displaySize, vp) : clampCameraLoose(prev, displaySize, vp)));
     };
     reconcile();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -236,7 +276,7 @@ function DesktopWorksheetCamera({
   const zoomOut = useCallback(() => applyZoom(stepZoomInput(cameraRef.current.scale, 'out')), [applyZoom]);
   const zoomFit = useCallback(() => {
     setFitMode(true);
-    setCamera(fitCamera(displaySize, viewportSize()));
+    setCamera(fitCameraWithTopGap(displaySize, viewportSize()));
   }, [displaySize, viewportSize]);
 
   // Wheel always zooms, in either tool — a native, non-passive listener:
@@ -426,7 +466,16 @@ function DesktopWorksheetCamera({
 
       {toolbarSlot &&
         createPortal(
-          <div className="flex items-center gap-1" role="group" aria-label={t.zoomLevel}>
+          // GLASS CAPSULE (activity window chrome pass): the ONE shared
+          // floating-glass recipe (`global.css`'s own `.glass-floating`,
+          // reused byte-identical from `WorksheetZoneEditor.tsx`'s own
+          // canvas zoom cluster) — never a second, invented glass look, per
+          // the owner's "misma transparencia que la franja de abajo" note.
+          <div
+            className="glass-floating flex h-8 items-center gap-1 rounded-(--radius-pill) px-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating)"
+            role="group"
+            aria-label={t.zoomLevel}
+          >
             <Button
               type="button"
               variant="ghost"

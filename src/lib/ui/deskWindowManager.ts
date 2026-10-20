@@ -83,11 +83,21 @@ type PendingOpen = { kind: 'origin'; x: number; y: number } | { kind: 'cascade' 
  * no longer the old header's own reserved space — it is
  * `--desk-chrome-offset`, the desk-integrated logo/account row's own
  * MEASURED bottom edge (`@lib/ui/deskChrome#initDeskChromeOffset`), so a
- * freshly-opened window starts just below that row, never hard-coded. The
- * bottom/side insets are unchanged.
+ * freshly-opened window starts just below that row, never hard-coded.
+ *
+ * VERTICAL CENTRING (owner request, 2026-10-18): the bottom inset used to be
+ * a fixed `bottom-16` (64px) against that ~124px measured top offset, which
+ * sat the window ~30px low. The bottom inset now reuses the SAME
+ * `--desk-chrome-offset` custom property as the top one, so the window is
+ * vertically centred between the desk chrome row and the viewport's own
+ * bottom edge — it only ever gets SHORTER than before, never taller, so it
+ * can never grow into the logo/avatar row at the bottom either. The cascade
+ * offset for the 2nd+ window (a deliberate feature — `wrapper.style.translate`,
+ * applied on top of this class's own inset) still nudges the BASE position
+ * computed from this class, unchanged.
  */
 const WRAPPER_CLASS =
-  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-16 desk:rounded-[20px] shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]';
+  'fixed inset-0 z-50 overflow-clip rounded-none bg-card desk:inset-x-[max(48px,calc((100vw-1240px)/2))] desk:top-(--desk-chrome-offset) desk:bottom-(--desk-chrome-offset) desk:rounded-[20px] shadow-[0_0_0_1px_rgb(17_18_21_/_0.08),0_30px_80px_rgb(17_18_21_/_0.22)]';
 
 interface ManagedWindow {
   wrapper: HTMLElement;

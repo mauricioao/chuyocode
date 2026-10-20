@@ -692,11 +692,30 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
         </Dialog>
       )}
 
+      {/* FLOATING STRIP (activity window chrome pass, owner mockup
+          `visor-actividad-franjas-2026-10-17.jpg`, 2026-10-17: "replicar la
+          transparencia de la franja de abajo — no hace falta el fondo y es
+          mejor ganar espacio para el lienzo"). The old in-flow row (border,
+          `bg-*`, its own `py-3` of reserved height) is gone — this is now an
+          `absolute` overlay pinned to the SAME bottom inset as the floating
+          Comprobar (`FLOATING_CHECK_BAR_CLASS`'s own `bottom-4`), so the
+          worksheet canvas above (`flex-1` in the same flex column, no
+          sibling claiming height below it any more) stretches all the way
+          down to the window's own bottom edge — "el lienzo se ve más
+          grande al entrar" for free, no extra sizing code needed here.
+          `absolute`, never `fixed` (unlike Comprobar): this row still needs
+          to size/position itself against ITS OWN flex-column ancestor here,
+          not the whole window chrome — see `ActivityPracticeIsland.test.tsx`'s
+          own assertion that this testid is never `fixed`.
+          `pointer-events-none` on the row itself, `pointer-events-auto` on
+          each actual control inside it, so panning/drawing on the bare
+          canvas under the empty stretch of this strip still works — only
+          the zoom cluster and the score text actually catch a pointer. */}
       {showCombinedFooter && (
         <div
           data-testid="practice-footer"
           className={cn(
-            'flex flex-none flex-wrap items-center gap-3 border-t border-border py-3',
+            'pointer-events-none absolute inset-x-0 bottom-4 z-30 flex flex-wrap items-center gap-3',
             ROW_PADDING_X,
             // The floating Comprobar sits over this row's bottom-right
             // corner: keep the right-aligned hint/score clear of it.
@@ -705,19 +724,26 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
         >
           {/* Zoom, left — only for worksheet tabs, but mounted for the whole
               activity's lifetime (see this file's own header) so toggling
-              to/from a quiz tab never changes the footer's own height. */}
+              to/from a quiz tab never changes the footer's own height.
+              The glass capsule material itself lives on the portaled
+              cluster (`WorksheetPracticePlayer.tsx`'s own toolbar render) —
+              this slot is just the anchor point, `pointer-events-auto` so
+              the capsule's buttons stay clickable over the canvas. */}
           {hasWorksheetBlock && (
             <div
               ref={setZoomSlot}
               data-testid="worksheet-zoom-slot"
-              className="hidden shrink-0 items-center gap-1 lg:flex"
+              className="pointer-events-auto hidden shrink-0 items-center gap-1 lg:flex"
             />
           )}
 
           {/* Score + Comprobar/Reintentar, right (owner feedback: "same row
               as Comprobar/Reintentar, which stay on the right; the score
-              sits … next to the buttons"). */}
-          <div className="ml-auto flex flex-wrap items-center gap-3">
+              sits … next to the buttons"). `pointer-events-auto` — plain
+              read-only text, but kept clickable-container-consistent with
+              the zoom cluster rather than silently sitting in the
+              `pointer-events-none` dead zone. */}
+          <div className="pointer-events-auto ml-auto flex flex-wrap items-center gap-3">
             {graded ? (
               <p
                 data-testid="practice-score"
