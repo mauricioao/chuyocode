@@ -643,16 +643,17 @@ export default function PresentationIsland({
   // A2" — i18n.ts's own "band + code" scheme), so this never prefixes it
   // with the bare code again.
   const levelLabel = level ? levelLabels[level] : t.noLevel;
+  // ONE unit for the whole deck — the exact same number the bottom bar's
+  // own "N de M" shows as its `total` (`slides.length`, passed to
+  // `ControlBar` below), so the two can never drift apart again (defect
+  // found live 2026-10-23: a match(3 pairs) + reorder(2 sentences) +
+  // groupsort(2 groups) deck read "7 preguntas" here — 7 quiz SLOTS — while
+  // the bar read "4 de 4" — 4 SLIDES).
   const countLabel = useMemo(() => {
-    const parts: string[] = [];
-    if (questions.length > 0) {
-      parts.push(`${questions.length} ${questions.length === 1 ? t.questionsCountOne : t.questionsCountMany}`);
-    }
-    if (worksheetPages.length > 0) {
-      parts.push(`${worksheetPages.length} ${worksheetPages.length === 1 ? t.worksheetCountOne : t.worksheetCountMany}`);
-    }
-    return parts.join(' · ');
-  }, [questions.length, worksheetPages.length, t]);
+    const n = slides.length;
+    if (n === 0) return '';
+    return `${n} ${n === 1 ? t.slideCountOne : t.slideCountMany}`;
+  }, [slides.length, t]);
 
   return (
     <div
@@ -919,7 +920,7 @@ function CoverSlide({
           {title}
         </h1>
         <p style={{ fontSize: 32 }} className="text-muted-foreground">
-          {levelLabel} · {countLabel}
+          {countLabel ? `${levelLabel} · ${countLabel}` : levelLabel}
         </p>
       </div>
     </div>

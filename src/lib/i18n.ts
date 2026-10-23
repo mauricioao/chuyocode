@@ -1413,13 +1413,16 @@ export const UI_LABELS = {
         pageDescription:
           'Presentación en pantalla completa de esta actividad de inglés, pensada para proyectar en clase.',
         noLevel: 'Sin nivel',
-        questionsCountOne: 'pregunta',
-        questionsCountMany: 'preguntas',
-        // Worksheet zoom tour (sprint week 3): the cover's own count line
-        // composes this alongside `questionsCountOne/Many` when the
-        // activity has presentable worksheet pages too.
-        worksheetCountOne: 'hoja',
-        worksheetCountMany: 'hojas',
+        // The cover's and the final slide's own count — ONE unit for the
+        // WHOLE DECK (`buildPresentationSlides`'s own slide list: a match/
+        // groupsort board is 1 slide, a reorder/cloze sentence is 1 slide
+        // each, a worksheet is an overview + 1 per zone), the exact same
+        // number the bottom bar's own "N de M" shows as its total — never
+        // the old `questionsCountOne/Many` + `worksheetCountOne/Many` pair
+        // (a flat quiz-SLOT count plus a worksheet-PAGE count), which could
+        // read "7 preguntas" while the bar read "4 de 4" for the same deck.
+        slideCountOne: 'diapositiva',
+        slideCountMany: 'diapositivas',
         // N7 (join-by-QR from the start): shown on the overlay whenever it
         // is open, including the FIRST slide's own default-open state —
         // shorter and play-framed, replacing the old generic "open this
@@ -2847,10 +2850,10 @@ export const UI_LABELS = {
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',
         noLevel: 'No level',
-        questionsCountOne: 'question',
-        questionsCountMany: 'questions',
-        worksheetCountOne: 'sheet',
-        worksheetCountMany: 'sheets',
+        // See the `es` block's own comment on this pair — one unit for the
+        // whole deck, the exact same number the bottom bar's own total uses.
+        slideCountOne: 'slide',
+        slideCountMany: 'slides',
         scanHint: 'Scan to play on your phone',
         qrAlt: 'QR code to open this activity on a phone',
         showQr: 'Show QR',
