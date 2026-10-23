@@ -61,3 +61,38 @@ export function getPosthogConfig(): PosthogConfig | null {
 export function getPosthogHost(): string | null {
   return getPosthogConfig()?.host ?? null;
 }
+
+/**
+ * The "-assets" sibling host `posthog-js` itself derives for a recognized
+ * PostHog Cloud region — e.g. `https://us.i.posthog.com` additionally
+ * reaches `https://us-assets.i.posthog.com` for the library's own remote
+ * config/extensions requests, on top of the main ingestion host. A custom/
+ * self-hosted host (anything not in this exact list) has no such sibling:
+ * posthog-js reaches it verbatim.
+ *
+ * `src/lib/securityHeaders.ts` is the one caller: the CSP must allow this
+ * host too, alongside the main one from {@link getPosthogHost}, or
+ * posthog-js's own config/extensions requests get blocked once PostHog is
+ * configured with a Cloud host.
+ *
+ * (PostHog's own CSP docs recommend a `https://*.posthog.com` wildcard
+ * instead of an exact-host table, precisely because they reserve the right
+ * to add subdomains later — but this project already has a test pinning
+ * the NO-wildcard, exact-host posture for a custom/self-hosted host, so a
+ * small exact-match table is the fix that fits here, not the wildcard.)
+ */
+const POSTHOG_CLOUD_ASSETS_HOSTS: Readonly<Record<string, string>> = {
+  'https://us.i.posthog.com': 'https://us-assets.i.posthog.com',
+  'https://eu.i.posthog.com': 'https://eu-assets.i.posthog.com',
+};
+
+export function getPosthogAssetsHost(): string | null {
+  const host = getPosthogHost();
+  if (!host) return null;
+  // Normalize case and a trailing slash before the lookup so a host that is
+  // STILL the same recognized Cloud region (e.g. a stray trailing "/", or
+  // mixed case from a copy-pasted env var) doesn't silently miss its
+  // sibling — `getPosthogHost()` itself only trims surrounding whitespace.
+  const normalized = host.toLowerCase().replace(/\/+$/, '');
+  return POSTHOG_CLOUD_ASSETS_HOSTS[normalized] ?? null;
+}
