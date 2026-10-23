@@ -662,6 +662,10 @@ export default function PresentationIsland({
       data-presentation-viewport=""
       className="fixed inset-0 z-[60] overflow-hidden bg-black"
       onPointerMove={showControls}
+      // A touch tap fires pointerdown/pointerup but no pointermove, so on a
+      // phone/tablet the control bar never came back once idle-hidden —
+      // `onPointerMove` alone only ever caught a MOUSE wake.
+      onPointerDown={showControls}
     >
       <div aria-live="polite" role="status" className="sr-only" data-testid="presentation-live-region">
         {announcement}
@@ -819,7 +823,7 @@ export default function PresentationIsland({
               <h2 style={{ fontSize: 36 }} className="font-display font-bold text-foreground">
                 {t.menuLabel}
               </h2>
-              <ol className="grid w-full grid-cols-2 gap-4 sm:grid-cols-4">
+              <ol className="grid w-full grid-cols-4 gap-4">
                 {Array.from({ length: slides.length }, (_, i) => i + 1).map((slideIndex) => {
                   const answer = quizState.answers[slideIndex - 1];
                   return (
@@ -1041,7 +1045,7 @@ function QuestionSlide({
           data-has-media={hasMedia ? '' : undefined}
           className={cn(
             'grid min-h-0 w-full flex-1 gap-6',
-            hasMedia ? 'my-auto sm:grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1 content-center',
+            hasMedia ? 'my-auto grid-cols-[0.82fr_1.18fr]' : 'grid-cols-1 content-center',
           )}
           style={hasMedia ? { maxHeight: CONTENT_ROW_WITH_MEDIA_MAX_HEIGHT_PX } : undefined}
         >
@@ -1327,7 +1331,7 @@ function GroupSortSlide({
       <p style={{ fontSize: 64 }} className={cn('text-center', PROMPT_TEXT_CLASS)}>
         {t.groupSortTitle}
       </p>
-      <div className="flex w-full flex-col gap-6 sm:flex-row sm:flex-wrap sm:justify-center">
+      <div className="flex w-full flex-row flex-wrap justify-center gap-6">
         {slide.groups.map((group) => (
           <div
             key={group.id}

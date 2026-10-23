@@ -405,7 +405,10 @@ describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', 
     // UI kit pass (mockup `.content.with-image`): the media column runs
     // narrower than the tiles column, both scaled by the SAME 0.82fr/1.18fr
     // split, and the media box itself picks up the kit's own 26px radius.
-    expect(row.className).toContain('sm:grid-cols-[0.82fr_1.18fr]');
+    // Unconditional (no `sm:` prefix) — the stage is always 1920 virtual
+    // px wide, so this composition never follows the real viewport width.
+    expect(row.className).toContain('grid-cols-[0.82fr_1.18fr]');
+    expect(row.className).not.toMatch(/\bsm:/);
     const mediaBox = screen.getByTestId('presentation-question-media');
     expect(mediaBox.className).toContain('rounded-[26px]');
     const img = mediaBox.querySelector('img');
@@ -549,6 +552,14 @@ describe('PresentationIsland — the question-list menu', () => {
     fireEvent.click(screen.getByTestId('presentation-menu-item-2'));
     expect(screen.queryByTestId('presentation-menu-panel')).toBeNull();
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
+  });
+
+  it('the grid runs 4 columns unconditionally — the stage composition never follows the viewport width, so no sm: breakpoint is left live', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    const grid = screen.getByTestId('presentation-menu-panel').querySelector('ol');
+    expect(grid?.className).toContain('grid-cols-4');
+    expect(grid?.className).not.toMatch(/\bsm:/);
   });
 
   it('each question number fills its own grid cell (a full-width pill, not a 1-character chip pinned left)', () => {
@@ -979,6 +990,19 @@ describe('PresentationIsland — control bar idle-hide', () => {
     expect(bar.className).toContain('opacity-100');
   });
 
+  it('reappears on a tap too — a touch tap fires pointerdown/up with no pointermove, so onPointerMove alone never wakes it on a phone/tablet', () => {
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    const bar = screen.getByTestId('presentation-controls');
+    expect(bar.className).toContain('opacity-100');
+
+    act(() => vi.advanceTimersByTime(2000));
+    expect(bar.className).toContain('opacity-0');
+
+    fireEvent.pointerDown(screen.getByTestId('presentation-viewport'));
+    expect(bar.className).toContain('opacity-100');
+  });
+
   it('stays visible while a control inside it has keyboard focus', () => {
     vi.useFakeTimers();
     render(<PresentationIsland {...BASE_PROPS} />);
@@ -1045,6 +1069,13 @@ describe('PresentationIsland — "Ordenar por grupos" (one combined slide for th
     expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('dog');
     expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('cat');
     expect(screen.getByTestId('presentation-groupsort-group-g2').textContent).toContain('bread');
+  });
+
+  it('lays its columns out in a row unconditionally — the stage composition never follows the viewport width, so no sm: breakpoint is left live', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={GROUPSORT_BLOCKS} />);
+    const container = screen.getByTestId('presentation-groupsort-group-g1').parentElement;
+    expect(container?.className).toContain('flex-row');
+    expect(container?.className).not.toMatch(/\bsm:/);
   });
 });
 
