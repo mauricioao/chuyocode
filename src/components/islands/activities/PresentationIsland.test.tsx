@@ -146,7 +146,7 @@ describe('PresentationIsland — cover slide (title/level/count "title card")', 
     const cover = screen.getByTestId('presentation-slide-cover');
     expect(cover.textContent).toContain('Animales y capitales');
     expect(cover.textContent).toContain('A2');
-    expect(cover.textContent).toContain('2 preguntas');
+    expect(cover.textContent).toContain('2 diapositivas');
     expect(screen.queryByTestId('presentation-cover-qr')).toBeNull();
   });
 
@@ -156,19 +156,18 @@ describe('PresentationIsland — cover slide (title/level/count "title card")', 
     expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('Sin nivel');
   });
 
-  it('combines quiz and worksheet counts when the activity has both', () => {
+  it('counts the deck\'s own slides (not a quiz-count plus a worksheet-count) when the activity has both', () => {
     render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK, ...QUIZ_BLOCKS]} />);
     prev();
     const cover = screen.getByTestId('presentation-slide-cover');
-    expect(cover.textContent).toContain('2 preguntas');
-    expect(cover.textContent).toContain('1 hoja');
+    expect(cover.textContent).toContain('5 diapositivas');
   });
 
-  it('shows only the worksheet count for a worksheet-only activity', () => {
+  it('counts a worksheet-only deck by its own slides (overview + one per zone), never "pregunta"', () => {
     render(<PresentationIsland {...BASE_PROPS} blocks={[WORKSHEET_BLOCK]} />);
     prev();
     const cover = screen.getByTestId('presentation-slide-cover');
-    expect(cover.textContent).toContain('1 hoja');
+    expect(cover.textContent).toContain('3 diapositivas');
     expect(cover.textContent).not.toContain('pregunta');
   });
 });
@@ -406,7 +405,10 @@ describe('PresentationIsland — multiple-choice tiles (P1, live-quiz rhythm)', 
     // UI kit pass (mockup `.content.with-image`): the media column runs
     // narrower than the tiles column, both scaled by the SAME 0.82fr/1.18fr
     // split, and the media box itself picks up the kit's own 26px radius.
-    expect(row.className).toContain('sm:grid-cols-[0.82fr_1.18fr]');
+    // Unconditional (no `sm:` prefix) — the stage is always 1920 virtual
+    // px wide, so this composition never follows the real viewport width.
+    expect(row.className).toContain('grid-cols-[0.82fr_1.18fr]');
+    expect(row.className).not.toMatch(/\bsm:/);
     const mediaBox = screen.getByTestId('presentation-question-media');
     expect(mediaBox.className).toContain('rounded-[26px]');
     const img = mediaBox.querySelector('img');
@@ -552,6 +554,14 @@ describe('PresentationIsland — the question-list menu', () => {
     expect(screen.getByTestId('presentation-question-s2')).toBeTruthy();
   });
 
+  it('the grid runs 4 columns unconditionally — the stage composition never follows the viewport width, so no sm: breakpoint is left live', () => {
+    render(<PresentationIsland {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('presentation-menu'));
+    const grid = screen.getByTestId('presentation-menu-panel').querySelector('ol');
+    expect(grid?.className).toContain('grid-cols-4');
+    expect(grid?.className).not.toMatch(/\bsm:/);
+  });
+
   it('each question number fills its own grid cell (a full-width pill, not a 1-character chip pinned left)', () => {
     render(<PresentationIsland {...BASE_PROPS} />);
     fireEvent.click(screen.getByTestId('presentation-menu'));
@@ -625,7 +635,7 @@ describe('PresentationIsland — the full flow (quiz-only deck)', () => {
     next();
     const summary = screen.getByTestId('presentation-slide-summary');
     expect(summary.textContent).toContain('¡Listo!');
-    expect(summary.textContent).toContain('2 preguntas');
+    expect(summary.textContent).toContain('2 diapositivas');
     // Emoji sticker accent (visual-identity decision, 2026-10-04).
     const emojiImg = screen.getByTestId('presentation-summary-emoji').querySelector('img') as HTMLImageElement;
     expect(emojiImg.getAttribute('src')).toContain('trophy');
@@ -980,6 +990,19 @@ describe('PresentationIsland — control bar idle-hide', () => {
     expect(bar.className).toContain('opacity-100');
   });
 
+  it('reappears on a tap too — a touch tap fires pointerdown/up with no pointermove, so onPointerMove alone never wakes it on a phone/tablet', () => {
+    vi.useFakeTimers();
+    render(<PresentationIsland {...BASE_PROPS} />);
+    const bar = screen.getByTestId('presentation-controls');
+    expect(bar.className).toContain('opacity-100');
+
+    act(() => vi.advanceTimersByTime(2000));
+    expect(bar.className).toContain('opacity-0');
+
+    fireEvent.pointerDown(screen.getByTestId('presentation-viewport'));
+    expect(bar.className).toContain('opacity-100');
+  });
+
   it('stays visible while a control inside it has keyboard focus', () => {
     vi.useFakeTimers();
     render(<PresentationIsland {...BASE_PROPS} />);
@@ -1046,6 +1069,98 @@ describe('PresentationIsland — "Ordenar por grupos" (one combined slide for th
     expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('dog');
     expect(screen.getByTestId('presentation-groupsort-group-g1').textContent).toContain('cat');
     expect(screen.getByTestId('presentation-groupsort-group-g2').textContent).toContain('bread');
+  });
+
+  it('lays its columns out in a row unconditionally — the stage composition never follows the viewport width, so no sm: breakpoint is left live', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={GROUPSORT_BLOCKS} />);
+    const container = screen.getByTestId('presentation-groupsort-group-g1').parentElement;
+    expect(container?.className).toContain('flex-row');
+    expect(container?.className).not.toMatch(/\bsm:/);
+  });
+});
+
+/**
+ * Tonight's real deck (defect found live, 2026-10-23): a match block (3
+ * pairs), a reorder block (2 sentences) and a groupsort block (2 groups)
+ * read "7 preguntas" on the cover/summary — one quiz SLOT per pair/
+ * sentence/group — while the control bar's own "N de M" read "4 de 4" —
+ * `buildPresentationSlides`'s own SLIDE count (match/groupsort = 1 slide
+ * per block, reorder = 1 slide per sentence). Shapes match
+ * `presentationSlides.test.ts`'s own match/reorder/groupsort fixtures.
+ */
+const MOLD_BLOCKS: Block[] = [
+  {
+    id: 'q1',
+    type: 'quiz',
+    template: 'match',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+        { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+        { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+      ],
+    },
+  },
+  {
+    id: 'q2',
+    type: 'quiz',
+    template: 'reorder',
+    payload: {
+      pools: {},
+      slots: [
+        { id: 's1', label: 'What are you doing', input: 'text', answer: ['What are you doing'] },
+        { id: 's2', label: 'She goes to school', input: 'text', answer: ['She goes to school'] },
+      ],
+    },
+  },
+  {
+    id: 'q3',
+    type: 'quiz',
+    template: 'groupsort',
+    payload: {
+      pools: { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }, { id: 'bread', text: 'bread' }] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['bread'] },
+      ],
+    },
+  },
+];
+
+describe('PresentationIsland — cover/summary count the deck\'s own slides, never quiz slots (defect found live 2026-10-23)', () => {
+  const cases: Array<[string, Block[], number]> = [
+    ['quiz-only (2 questions)', QUIZ_BLOCKS, 2],
+    ['worksheet-only (1 page, 2 zones)', [WORKSHEET_BLOCK], 3],
+    ['worksheet + quiz', [WORKSHEET_BLOCK, ...QUIZ_BLOCKS], 5],
+    ['match + reorder + groupsort (tonight\'s deck — not "7 preguntas")', MOLD_BLOCKS, 4],
+  ];
+
+  it.each(cases)('%s: the cover count equals the bar total', (_label, blocks, total) => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={blocks} />);
+    prev();
+    const cover = screen.getByTestId('presentation-slide-cover');
+    expect(cover.textContent).toContain(`${total} ${total === 1 ? 'diapositiva' : 'diapositivas'}`);
+    expect(screen.getByTestId('presentation-count').textContent).toBe(`0 de ${total}`);
+  });
+
+  it('the summary heading reads "¡Listo! 4 diapositivas" for a deck mixing match, reorder and groupsort — not "7 preguntas"', () => {
+    render(<PresentationIsland {...BASE_PROPS} blocks={MOLD_BLOCKS} />);
+    // Every slide here is revealable (match/reorder/groupsort), so "next"
+    // reveals then advances — walk forward until the summary shows up,
+    // rather than hardcoding how many presses that takes.
+    let guard = 0;
+    while (!screen.queryByTestId('presentation-slide-summary') && guard < 20) {
+      next();
+      guard += 1;
+    }
+    expect(screen.getByTestId('presentation-slide-summary').textContent).toContain('¡Listo! 4 diapositivas');
+  });
+
+  it('reads the English wording ("slides"), never "questions"', () => {
+    render(<PresentationIsland {...BASE_PROPS} lang="en" blocks={QUIZ_BLOCKS} />);
+    prev();
+    expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('2 slides');
   });
 });
 

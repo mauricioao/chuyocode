@@ -28,7 +28,7 @@
  * for byte.
  */
 import { defaultEnvSource, type EnvSource } from './env';
-import { getPosthogHost } from './posthog';
+import { getPosthogHost, getPosthogAssetsHost } from './posthog';
 
 /**
  * Whether the full CSP should be ENFORCED (`content-security-policy`, no
@@ -83,11 +83,15 @@ export function isCspEnforced(source: EnvSource = defaultEnvSource()): boolean {
  * `getPosthogHost()` returns one — i.e. only once `PUBLIC_POSTHOG_KEY` is
  * actually set (owner decision: PostHog reaches a different kind of data —
  * product analytics on a minors-used site — than the others, so its CSP
- * footprint stays zero rather than merely unused until configured).
+ * footprint stays zero rather than merely unused until configured). Its
+ * `-assets` sibling (`getPosthogAssetsHost()`, only non-null for a
+ * recognized Cloud region) is added alongside it, same posture.
  */
 function cspSourceDirectives(): string[] {
   const posthogHost = getPosthogHost();
+  const posthogAssetsHost = getPosthogAssetsHost();
   const posthogExtra = posthogHost ? ` ${posthogHost}` : '';
+  const posthogAssetsExtra = posthogAssetsHost ? ` ${posthogAssetsHost}` : '';
 
   return [
     "default-src 'self'",
@@ -99,7 +103,7 @@ function cspSourceDirectives(): string[] {
     // simply unused while PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset. PostHog's
     // host (`posthog-js`, loaded from `config.host` itself) is added only
     // while it is actually configured — see this function's own header.
-    `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com${posthogExtra}`,
+    `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com${posthogExtra}${posthogAssetsExtra}`,
     // Astro/Tailwind emit inline <style> for component-scoped CSS; Google Fonts
     // is loaded as a <link> stylesheet.
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -123,9 +127,13 @@ function cspSourceDirectives(): string[] {
     // Cloudflare Web Analytics' own reporting origin (unused while
     // PUBLIC_CF_WEB_ANALYTICS_TOKEN is unset, same posture as above). PostHog's
     // host is added only while configured — see this function's own header.
-    `connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io https://cloudflareinsights.com${posthogExtra}`,
-    // Exercise audio playback streams from Sanity assets and Supabase storage.
-    "media-src 'self' https://cdn.sanity.io https://*.supabase.co",
+    `connect-src 'self' https://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io https://cloudflareinsights.com${posthogExtra}${posthogAssetsExtra}`,
+    // Exercise audio playback streams from Sanity assets and Supabase
+    // storage; `blob:` is for the editor's OWN recorded-audio preview
+    // (AudioMarkerPanel.tsx renders `<audio src={blobUrl}>` from
+    // useAudioRecorder.ts's own `URL.createObjectURL(blob)`), never an
+    // http(s) source.
+    "media-src 'self' blob: https://cdn.sanity.io https://*.supabase.co",
     // Course/news embeds (YouTube nocookie, Vimeo) and Turnstile's widget iframe.
     "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com https://challenges.cloudflare.com",
     // pdf.js's worker is bundled locally (loaded as a same-origin blob: Worker).

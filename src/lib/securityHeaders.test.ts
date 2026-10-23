@@ -79,10 +79,14 @@ describe('applySecurityHeaders', () => {
       expect(csp).toMatch(/img-src[^;]*blob:/);
     });
 
-    it('allows Sanity and Supabase in media-src for exercise audio playback', () => {
+    it("allows Sanity and Supabase in media-src for exercise audio playback, plus blob: for the editor's own recorded-audio preview", () => {
       const csp = reportOnly();
       expect(csp).toMatch(/media-src[^;]*https:\/\/cdn\.sanity\.io/);
       expect(csp).toMatch(/media-src[^;]*https:\/\/\*\.supabase\.co/);
+      // AudioMarkerPanel.tsx renders `<audio src={blobUrl}>` from
+      // useAudioRecorder.ts's own `URL.createObjectURL(blob)` — a
+      // `blob:` URL, never an http(s) one.
+      expect(csp).toMatch(/media-src[^;]*blob:/);
     });
 
     it('allows YouTube (nocookie) and Vimeo embeds, and Cloudflare Turnstile, in frame-src', () => {
@@ -108,19 +112,36 @@ describe('applySecurityHeaders', () => {
       expect(csp).not.toContain('posthog');
     });
 
-    it('allows the configured PostHog host in script-src and connect-src once a key is set', () => {
+    it('allows the configured PostHog host AND its assets sibling in script-src and connect-src once a key is set (posthog-js loads its remote config/extensions from the assets host too)', () => {
       vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
       vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://us.i.posthog.com');
       const csp = reportOnly();
       expect(csp).toMatch(/script-src[^;]*https:\/\/us\.i\.posthog\.com/);
+      expect(csp).toMatch(/script-src[^;]*https:\/\/us-assets\.i\.posthog\.com/);
       expect(csp).toMatch(/connect-src[^;]*https:\/\/us\.i\.posthog\.com/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/us-assets\.i\.posthog\.com/);
     });
 
-    it('allows the default EU PostHog host when only the key is set', () => {
+    it('allows the default EU PostHog host, and its assets sibling, in both script-src and connect-src when only the key is set', () => {
       vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
       vi.stubEnv('PUBLIC_POSTHOG_HOST', undefined);
       const csp = reportOnly();
+      expect(csp).toMatch(/script-src[^;]*https:\/\/eu\.i\.posthog\.com/);
+      expect(csp).toMatch(/script-src[^;]*https:\/\/eu-assets\.i\.posthog\.com/);
       expect(csp).toMatch(/connect-src[^;]*https:\/\/eu\.i\.posthog\.com/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/eu-assets\.i\.posthog\.com/);
+    });
+
+    it('allows a custom/self-hosted PostHog host verbatim, with NO -assets sibling (posthog-js only derives one for a recognized Cloud region)', () => {
+      vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
+      vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://ph.example.com');
+      const csp = reportOnly();
+      expect(csp).toMatch(/script-src[^;]*https:\/\/ph\.example\.com/);
+      expect(csp).toMatch(/connect-src[^;]*https:\/\/ph\.example\.com/);
+      expect(csp).not.toContain('-assets');
+      // No wildcard either — only the exact configured host (plus its
+      // sibling for a recognized Cloud region, covered above).
+      expect(csp).not.toContain('*.posthog.com');
     });
 
     it('allows the Google Fonts stylesheet and its gstatic font files', () => {
@@ -220,7 +241,7 @@ describe('CSP_ENFORCE (enforce mode toggle)', () => {
     expect(headers.get('reporting-endpoints')).toBe('csp-endpoint="/api/csp-report"');
   });
 
-  it('allows the configured PostHog host in the ENFORCED policy too, not just report-only', () => {
+  it('allows the configured PostHog host AND its assets sibling in the ENFORCED policy too, not just report-only', () => {
     vi.stubEnv('CSP_ENFORCE', 'true');
     vi.stubEnv('PUBLIC_POSTHOG_KEY', 'phc_abc123');
     vi.stubEnv('PUBLIC_POSTHOG_HOST', 'https://us.i.posthog.com');
@@ -229,7 +250,9 @@ describe('CSP_ENFORCE (enforce mode toggle)', () => {
 
     const csp = headers.get('content-security-policy') as string;
     expect(csp).toMatch(/script-src[^;]*https:\/\/us\.i\.posthog\.com/);
+    expect(csp).toMatch(/script-src[^;]*https:\/\/us-assets\.i\.posthog\.com/);
     expect(csp).toMatch(/connect-src[^;]*https:\/\/us\.i\.posthog\.com/);
+    expect(csp).toMatch(/connect-src[^;]*https:\/\/us-assets\.i\.posthog\.com/);
   });
 
   it('never overwrites a content-security-policy header a route already set, enforced or not', () => {
