@@ -18,38 +18,25 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
+import type { BlockBackground, QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import type { Lang } from '@/lib/i18n';
 import type { ExerciseResponse, Payload } from '@/lib/exercisePayload';
-import {
-  availableGameModes,
-  deriveGameItems,
-  initialGameMode,
-  modesForBlock,
-  SELF_CHECKING_GAME_MODES,
-  TEMPLATE_GAME_SWITCHING_ENABLED,
-  type GameMode,
-} from '@/lib/activities/gameModes';
-import {
-  FLOATING_CHECK_BAR_CLASS,
-  FLOATING_CHECK_BAR_EDITOR_OFFSET,
-  STAGE_BOTTOM_RESERVE_CLASS,
-  STAGE_CONTAINER,
-} from '@/components/islands/mechanics/scale';
+import { deriveGameItems, initialGameMode, SELF_CHECKING_GAME_MODES, type GameMode } from '@/lib/activities/gameModes';
+import { FLOATING_CHECK_BAR_CLASS, STAGE_BOTTOM_RESERVE_CLASS, STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
 import { cn } from '@/lib/utils';
+import ActivityPreviewFrame from './ActivityPreviewFrame';
 import QuizBlockPractice from './QuizBlockPractice';
-import { GAME_MODE_ICONS } from './QuizGameModeSwitcher';
 
 const COPY = {
   es: {
-    usedInGames: (n: number) => (n === 1 ? 'Estas preguntas se usan en 1 juego' : `Estas preguntas se usan en ${n} juegos`),
+    previewTitle: 'Vista previa',
     check: 'Comprobar',
     retry: 'Reintentar',
     score: 'Puntaje',
   },
   en: {
-    usedInGames: (n: number) => (n === 1 ? 'These questions are used in 1 game' : `These questions are used in ${n} games`),
+    previewTitle: 'Preview',
     check: 'Check',
     retry: 'Try again',
     score: 'Score',
@@ -69,6 +56,18 @@ export interface QuizLivePreviewProps {
   payload: Payload;
   /** The block's own authoring preset (`blocks.ts`'s `QuizTemplate`) — this preview must open in the TEMPLATE's own game (`match`/`reorder`), not always "Básico". `undefined` keeps the previous "Básico" default. */
   template?: QuizTemplate;
+  /** The block's own decorative background (plantillas: fondo, `blocks.ts`'s own `BlockBackground`) — painted by the inner `ActivityStage` via `ActivityPreviewFrame`. `undefined` keeps its plain grey canvas. */
+  background?: BlockBackground;
+  /**
+   * The REAL activity title and level, exactly as the student's own window
+   * shows them (`[id].astro`'s own `levelChip`) — owner audit §c: this
+   * preview is "try it as a learner would", so its own chrome should read
+   * like the window it actually sits inside, not a placeholder. Falls back
+   * to the placeholder "Vista previa"/"Preview" copy only while
+   * `activityTitle` is empty/omitted (a brand-new, untitled activity).
+   */
+  activityTitle?: string;
+  activityLevelChip?: string | null;
 }
 
 /** The question set's own shape — same slot ids, in the same order. Changes only when a question is added, removed, or reordered, never on a plain text/option edit. */
@@ -76,7 +75,15 @@ function structuralKey(payload: Payload): string {
   return payload.slots.map((slot) => slot.id).join('|');
 }
 
-export default function QuizLivePreview({ blockId, lang, payload, template }: QuizLivePreviewProps) {
+export default function QuizLivePreview({
+  blockId,
+  lang,
+  payload,
+  template,
+  background,
+  activityTitle,
+  activityLevelChip,
+}: QuizLivePreviewProps) {
   const t = copyFor(lang);
   const gameItems = deriveGameItems(payload);
   // Opens in the TEMPLATE's own game when eligible (owner review of the
@@ -104,85 +111,91 @@ export default function QuizLivePreview({ blockId, lang, payload, template }: Qu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, template]);
 
-  const modes = modesForBlock(availableGameModes(gameItems, payload), template);
-  // ONE TEMPLATE, ONE GAME (owner spec, build item 1): "Estas preguntas se
-  // usan en N juegos" is a BÁSICO-only affordance — a templated block only
-  // ever plays its own single game (see `gameModes.ts`'s own
-  // `TEMPLATE_GAME_SWITCHING_ENABLED`), so a count of games would be
-  // meaningless, misleading clutter right above it. Restored automatically
-  // if that switch is ever turned back on.
-  const showGamesBadge = TEMPLATE_GAME_SWITCHING_ENABLED || !template;
-
   const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
+  const frameTitle = activityTitle && activityTitle.trim() !== '' ? activityTitle : t.previewTitle;
 
   return (
-    <div
-      data-testid={`quiz-preview-${blockId}`}
-      className={cn('flex flex-col gap-3', STAGE_CONTAINER, STAGE_BOTTOM_RESERVE_CLASS)}
-    >
-      {showGamesBadge && (
-        <div data-testid={`quiz-preview-games-badge-${blockId}`} className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-          <span>{t.usedInGames(modes.length)}</span>
-          {modes.map((m) => {
-            const Icon = GAME_MODE_ICONS[m];
-            return Icon ? <Icon key={m} aria-hidden="true" /> : null;
-          })}
-        </div>
-      )}
+    <ActivityPreviewFrame title={frameTitle} levelChip={activityLevelChip} background={background}>
+      <div
+        data-testid={`quiz-preview-${blockId}`}
+        // Owner bug (result screen squeezed into a short band at the top of
+        // the frame): `ActivityStage` (tonight's `contain: layout` pass)
+        // only stretches a flex child that itself opts into `min-h-0
+        // flex-1` — this column used to be a plain `flex flex-col`, so it
+        // sized to its own CONTENT height instead of the stage's, and
+        // `GameResult` (down inside a self-checking mold) collapsed with
+        // it. `pb-3` matches the 12px bottom gap the real player's own
+        // stage wrapper reserves (`ActivityPracticeIsland.tsx`'s `p-3`),
+        // which `GameResult`'s own `-mb-3` crop-line bleed assumes; the
+        // bigger `STAGE_BOTTOM_RESERVE_CLASS` gap only applies while THIS
+        // preview's own floating Comprobar below can render — a
+        // self-checking mold (match/reorder/cloze/groupsort) shows its own
+        // instead, same condition `ActivityPracticeIsland`'s own
+        // `showCombinedFooter` already uses for the real player.
+        className={cn(
+          'flex min-h-0 flex-1 flex-col gap-3 pb-3',
+          STAGE_CONTAINER,
+          !SELF_CHECKING_GAME_MODES.has(mode) && STAGE_BOTTOM_RESERVE_CLASS,
+        )}
+      >
+        <QuizBlockPractice
+          lang={lang as Lang}
+          block={block}
+          response={response}
+          onChange={(slotId, value) => setResponse((r) => ({ ...r, [slotId]: value }))}
+          outcomes={result?.slots}
+          disabled={false}
+          mode={mode}
+          onModeChange={setMode}
+          // Preview-only, deliberately non-empty (owner audit §c): makes a
+          // self-checking mold's own `GameResult` render "Otra actividad" —
+          // inert via `ActivityPreviewContext` (`ActivityPreviewFrame.tsx`),
+          // never a real navigation — the same chrome the student sees,
+          // instead of only ever falling back to "Jugar de nuevo" here.
+          nextHref="#"
+        />
 
-      <QuizBlockPractice
-        lang={lang as Lang}
-        block={block}
-        response={response}
-        onChange={(slotId, value) => setResponse((r) => ({ ...r, [slotId]: value }))}
-        outcomes={result?.slots}
-        disabled={false}
-        mode={mode}
-        onModeChange={setMode}
-        editorOffset
-      />
-
-      {/* ONE "COMPROBAR" (build item 2): a self-checking game (today:
-          `match`) already shows its own FLOATING board-level Comprobar —
-          this editor-only preview must not add a second one, same rule
-          `ActivityPracticeIsland`'s own footer follows. FLOATING COMPROBAR
-          (build item 5): same bottom-right spot, `editorOffset` always on
-          (this preview only ever renders inside the editor) — see
-          `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
-      {!SELF_CHECKING_GAME_MODES.has(mode) && (
-        <div
-          data-testid={`quiz-preview-actions-${blockId}`}
-          className={cn(FLOATING_CHECK_BAR_CLASS, FLOATING_CHECK_BAR_EDITOR_OFFSET)}
-        >
-          <Button
-            type="button"
-            size="sm"
-            data-testid={`quiz-preview-check-${blockId}`}
-            onClick={() => setResult(check(payload, response))}
-          >
-            {t.check}
-          </Button>
-          {result && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid={`quiz-preview-retry-${blockId}`}
-                onClick={() => {
-                  setResponse({});
-                  setResult(undefined);
-                }}
-              >
-                {t.retry}
-              </Button>
-              <span data-testid={`quiz-preview-score-${blockId}`} className="text-sm text-muted-foreground">
-                {t.score}: {Object.values(result.slots).filter((o) => o === 'correct').length} / {payload.slots.length}
-              </span>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+        {/* ONE "COMPROBAR" (build item 2): a self-checking game (today:
+            `match`) already shows its own FLOATING board-level Comprobar —
+            this editor-only preview must not add a second one, same rule
+            `ActivityPracticeIsland`'s own footer follows. FLOATING COMPROBAR
+            (build item 5): same bottom-right spot — `ActivityPreviewFrame`'s
+            own `ActivityStage` is now this bar's containing block (owner
+            audit §c), so it no longer needs to dodge the editor's side
+            toolbar, which sits OUTSIDE this scaled frame entirely — see
+            `scale.ts`'s own `FLOATING_CHECK_BAR_CLASS` header. */}
+        {!SELF_CHECKING_GAME_MODES.has(mode) && (
+          <div data-testid={`quiz-preview-actions-${blockId}`} className={FLOATING_CHECK_BAR_CLASS}>
+            <Button
+              type="button"
+              size="sm"
+              data-testid={`quiz-preview-check-${blockId}`}
+              onClick={() => setResult(check(payload, response))}
+            >
+              {t.check}
+            </Button>
+            {result && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid={`quiz-preview-retry-${blockId}`}
+                  onClick={() => {
+                    setResponse({});
+                    setResult(undefined);
+                  }}
+                >
+                  {t.retry}
+                </Button>
+                <span data-testid={`quiz-preview-score-${blockId}`} className="text-sm text-muted-foreground">
+                  {t.score}: {Object.values(result.slots).filter((o) => o === 'correct').length} / {payload.slots.length}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </ActivityPreviewFrame>
   );
 }

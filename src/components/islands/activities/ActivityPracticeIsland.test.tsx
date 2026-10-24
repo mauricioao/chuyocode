@@ -247,6 +247,18 @@ describe('ActivityPracticeIsland — footer (zoom/score) and the floating Compro
     expect(screen.getByTestId('practice-footer').contains(screen.getByTestId('practice-check-button'))).toBe(false);
   });
 
+  // Owner audit (`PROPUESTA-PLANTILLAS-2026-10-23.md` §c, LANZAMIENTO H13
+  // part 2): the floating Comprobar used to resolve against the PAGE's own
+  // bottom-right corner wherever this island sat several frames deep (the
+  // course-lesson frame, the editor preview) — `ActivityStage`'s own
+  // `contain: layout` now makes it the containing block instead.
+  it('keeps the floating Comprobar inside its own activity-stage (the containing block fix)', () => {
+    renderIsland([QUIZ]);
+    const stage = screen.getByTestId('activity-stage');
+    expect(stage.className).toContain('[contain:layout]');
+    expect(stage.contains(screen.getByTestId('practice-actions'))).toBe(true);
+  });
+
   // Activity window chrome pass (owner mockup
   // `visor-actividad-franjas-2026-10-17.jpg`, 2026-10-17): the footer loses
   // its own background/border and floats OVER the canvas instead, pinned to

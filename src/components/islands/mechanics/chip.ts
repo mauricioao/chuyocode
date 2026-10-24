@@ -46,7 +46,20 @@ const CHIP_SHAPE =
   'inline-flex items-center justify-center gap-2 rounded-full border border-transparent backdrop-blur-sm outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
- * The REST material on top of {@link CHIP_SHAPE} — a grey glass capsule.
+ * The REST material on top of {@link CHIP_SHAPE} — a top-lit grey glass
+ * capsule (activity-templates-polish pass, owner spec: "premium, tipo
+ * Apple... mate, en tonos tinta" — proposal
+ * `docs/PROPUESTA-PLANTILLAS-2026-10-23.md` §d): a two-stop gradient
+ * (`--chip-rest-bg`, `global.css`'s `[data-theme='ingles']` block) plus a
+ * matte layered shadow (`--shadow-chip-rest`) — one light direction, never a
+ * flat fill. Deliberately no hover lift/transition of its OWN here: every
+ * caller that wants one already appends its own (`gameTileTransitionClassName`
+ * in the four big-stage games, or a one-off `hover:-translate-y-0.5` in
+ * `QuizAnagram`/`QuizHangman`) — `tailwind-merge` treats a shared
+ * `hover:-translate-y-*`/`transition-*` here as the SAME utility group as a
+ * caller's own and silently drops whichever one is listed first, which used
+ * to be this constant's (caught by `QuizAnagram.test.tsx`'s/
+ * `QuizHangman.test.tsx`'s own "single-card kit look" checks).
  *
  * `focus-visible:ring-inset` (visual-polish pass, safe-inset system — see
  * `scale.ts`'s own `STAGE_SAFE_INSET_CLASS` header): a plain `ring-*` is a
@@ -57,7 +70,8 @@ const CHIP_SHAPE =
  */
 export const CHIP_MATERIAL = cn(
   CHIP_SHAPE,
-  'bg-[#d1d2d6]/80 shadow-elevation-1 text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50',
+  'bg-[image:var(--chip-rest-bg)] shadow-[var(--shadow-chip-rest)] text-foreground',
+  'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50',
 );
 
 /** The four big-stage games' shared chip SIZE, layered on either {@link CHIP_MATERIAL} ({@link CHIP_STAGE}) or straight onto {@link CHIP_SHAPE} ({@link stageChipColorClass}) — see {@link CHIP_STAGE}'s own header for the exact values. */
@@ -87,8 +101,8 @@ export const CHIP_INLINE = cn(CHIP_MATERIAL, 'min-h-14 px-4 py-3', CONTROL_SCALE
  */
 export const CHIP_STAGE = cn(CHIP_MATERIAL, CHIP_STAGE_SIZE);
 
-/** White, raised — a tile placed in a box/blank/group, or picked/tap-selected in its own tray. Never a new palette: just the rest material's own more-raised sibling. */
-export const CHIP_PLACED = 'bg-card shadow-elevation-2';
+/** White, raised — a tile placed in a box/blank/group, or picked/tap-selected in its own tray. Never a new palette: just the rest material's own more-raised sibling (`--shadow-chip-raised`, activity-templates-polish pass — was the generic `shadow-elevation-2`). */
+export const CHIP_PLACED = 'bg-card shadow-[var(--shadow-chip-raised)]';
 
 /**
  * The colour-filled variant of {@link CHIP_STAGE} — "Une las parejas" and
@@ -102,34 +116,58 @@ export const CHIP_PLACED = 'bg-card shadow-elevation-2';
  * Composed from {@link CHIP_SHAPE} directly (never {@link CHIP_STAGE}/
  * {@link CHIP_MATERIAL} — see {@link CHIP_SHAPE}'s own header for why): white
  * text (never the rest material's own ink `text-foreground`), a matte
- * "pressed-key" lip shadow instead of the grey-glass `shadow-elevation-1`,
- * and a visible ink `outline` for focus instead of the usual sky `ring-*`
- * (which all but vanishes against a saturated fill). Never red/green — see
- * `palette.ts`'s own header; the ✓/✕ mark stays the one semantic signal for
- * correctness, never this fill.
+ * "pressed-key" lip shadow (`--shadow-chip-color`, activity-templates-polish
+ * pass — was a flat literal inset border) instead of the grey-glass
+ * `shadow-elevation-1`, and a visible ink `outline` for focus instead of the
+ * usual sky `ring-*` (which all but vanishes against a saturated fill).
+ * Hover keeps the same lip and adds a touch more ambient lift
+ * (`global.css`'s own `.chip-color:hover` rule — a plain CSS rule, not a
+ * Tailwind arbitrary value, since that shadow is two comma-separated
+ * layers). Never red/green — see `palette.ts`'s own header; the ✓/✕ mark
+ * stays the one semantic signal for correctness, never this fill.
  */
 export function stageChipColorClass(index: number): string {
   return cn(
     CHIP_SHAPE,
     CHIP_STAGE_SIZE,
-    'text-white',
+    'chip-color text-white',
     optionColorClass(index),
-    'shadow-[inset_0_-3px_0_rgb(0_0_0/0.18)]',
+    'shadow-[var(--shadow-chip-color)]',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground',
   );
 }
 
 /**
- * An empty drop target: a dashed capsule outline at ~50% ink, no box — the
- * only affordance for "something goes here" (same reasoning `DropRenderer`'s
- * own former `BOX_EMPTY` header gave: the dashes are the affordance, so they
- * are the one thing {@link BLANK_FILLED} below gives up, never this one).
+ * An empty drop target: a dashed capsule outline (activity-templates-polish
+ * pass, proposal §d — a thinner 1.5px `border-input` dash, a faint ink wash
+ * `--well-bg`, and a soft inset `--well-shadow`, rather than the flat
+ * `border-foreground/50` this replaces) — the dashes stay the one
+ * affordance for "something goes here" (same reasoning `DropRenderer`'s own
+ * former `BOX_EMPTY` header gave: they are the one thing {@link BLANK_FILLED}
+ * below gives up, never this one). `border-input` already clears 3:1 non-text
+ * contrast on both `--background` and `--card` (`ingles-theme-contrast.test.ts`).
  */
-export const BLANK_EMPTY = 'rounded-full border-2 border-dashed border-foreground/50 transition-colors';
+export const BLANK_EMPTY =
+  'rounded-full border-[1.5px] border-dashed border-input bg-[var(--well-bg)] shadow-[var(--well-shadow)] transition-colors';
 
 /**
  * Filled: the border goes solid-transparent rather than disappearing, so a
  * landing tile never changes the target's own footprint — see
- * `DropRenderer`'s own former `BOX_FILLED` header.
+ * `DropRenderer`'s own former `BOX_FILLED` header. Same 1.5px width as
+ * {@link BLANK_EMPTY} (activity-templates-polish pass) so a well's own box
+ * never shifts size the moment it is filled.
  */
-export const BLANK_FILLED = 'rounded-full border-2 border-solid border-transparent transition-colors';
+export const BLANK_FILLED = 'rounded-full border-[1.5px] border-solid border-transparent transition-colors';
+
+/**
+ * The one white "sheet" every big-stage mould's own board (tray + targets)
+ * sits on (activity-templates-polish pass, proposal
+ * `docs/PROPUESTA-PLANTILLAS-2026-10-23.md` §d) — the underlying class name
+ * for `QuizBlockPractice.tsx`'s own `ActivitySheet` wrapper AND for each
+ * mould's (`QuizMatching`/`QuizReorder`/`QuizCloze`/`QuizGroupSort`) own
+ * inline wrapper div. Lives here, never imported component-to-component
+ * between those files, to avoid a circular import — `QuizBlockPractice`
+ * already imports every mould to render it. Styled in `global.css`'s
+ * `.activity-sheet` rule.
+ */
+export const ACTIVITY_SHEET_CLASS = 'activity-sheet';

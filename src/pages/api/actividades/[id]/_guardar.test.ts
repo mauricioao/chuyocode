@@ -87,6 +87,12 @@ const OTHER_QUESTION_UPLOAD_PATH =
   'activity-uploads/44444444-4444-4444-4444-444444444444/question-33333333-3333-3333-3333-333333333333.webp';
 const THIS_ACTIVITY_QUESTION_IMAGE_PATH = `activity-images/${ACTIVITY_ID}/question-33333333-3333-3333-3333-333333333333.webp`;
 
+const OWN_BACKGROUND_UPLOAD_PATH = `activity-uploads/${AUTHOR.id}/background-33333333-3333-3333-3333-333333333333.webp`;
+const OTHER_BACKGROUND_UPLOAD_PATH =
+  'activity-uploads/44444444-4444-4444-4444-444444444444/background-33333333-3333-3333-3333-333333333333.webp';
+const THIS_ACTIVITY_BACKGROUND_IMAGE_PATH = `activity-images/${ACTIVITY_ID}/background-33333333-3333-3333-3333-333333333333.webp`;
+const OTHER_ACTIVITY_BACKGROUND_IMAGE_PATH = `activity-images/${OTHER_ACTIVITY_ID}/background-33333333-3333-3333-3333-333333333333.webp`;
+
 function quizBlockWithPromptImage(path: string) {
   return {
     id: 'block-quiz-1',
@@ -109,6 +115,28 @@ function quizBlockWithTwoSlotsSharingPromptImage(path: string) {
       ],
     },
     promptImages: { s1: { path, width: 400, height: 300 }, s2: { path, width: 400, height: 300 } },
+  };
+}
+
+/** A molded quiz block with a decorative background IMAGE (plantillas: fondo, owner decision 2026-10-23) — `background` only parses on a MOLDED block, so `template` must be set alongside it (`blocks.ts`'s `parseQuizBlock`). */
+function quizBlockWithBackgroundImage(path: string) {
+  return {
+    id: 'block-quiz-bg-1',
+    type: 'quiz',
+    template: 'match',
+    payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+    background: { kind: 'image', path, width: 800, height: 600 },
+  };
+}
+
+/** A molded quiz block with a preset (CSS gradient) background — no `path`, nothing for the ownership checks to reject. */
+function quizBlockWithPresetBackground() {
+  return {
+    id: 'block-quiz-bg-2',
+    type: 'quiz',
+    template: 'match',
+    payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+    background: { kind: 'preset', preset: 'sky' },
   };
 }
 
@@ -397,6 +425,43 @@ describe('POST /api/actividades/[id]/guardar — quiz question image (promptImag
     const res = await POST(
       ctx({ body: saveInput({ blocks: [quizBlockWithTwoSlotsSharingPromptImage(OWN_QUESTION_UPLOAD_PATH)] }) }),
     );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/actividades/[id]/guardar — quiz background image ownership, plantillas: fondo owner decision 2026-10-23', () => {
+  it("422s a background image that is neither the caller's own upload nor this activity's own images path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithBackgroundImage(OTHER_BACKGROUND_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_image_path');
+  });
+
+  it("422s an activity-images background path that belongs to a DIFFERENT activity", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithBackgroundImage(OTHER_ACTIVITY_BACKGROUND_IMAGE_PATH)] }) }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('invalid_image_path');
+  });
+
+  it("accepts the caller's own background-kind upload path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithBackgroundImage(OWN_BACKGROUND_UPLOAD_PATH)] }) }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts THIS activity's own background-kind activity-images path", async () => {
+    const res = await POST(
+      ctx({ body: saveInput({ blocks: [quizBlockWithBackgroundImage(THIS_ACTIVITY_BACKGROUND_IMAGE_PATH)] }) }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts a preset background (nothing to check)', async () => {
+    const res = await POST(ctx({ body: saveInput({ blocks: [quizBlockWithPresetBackground()] }) }));
     expect(res.status).toBe(200);
   });
 });

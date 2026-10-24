@@ -498,6 +498,10 @@ export const UI_LABELS = {
         levelNone: 'Sin nivel',
         previewOn: 'Vista previa',
         previewOff: 'Volver a editar',
+        // Phone-only "Ver vista previa" capsule at the top of the template
+        // editor sheet (`TemplateEditorKit.tsx`'s own `previewButtonLabel`)
+        // — scrolls the live preview into view below `lg`.
+        previewScrollButton: 'Ver vista previa',
         save: 'Guardar',
         saving: 'Guardando…',
         saved: 'Cambios guardados',
@@ -850,6 +854,27 @@ export const UI_LABELS = {
         add: 'Agregar imagen',
         remove: 'Quitar imagen',
         uploading: 'Subiendo…',
+      },
+      // Fondo de la actividad (plantillas: fondo, owner decision 2026-10-23,
+      // `PROPUESTA-PLANTILLAS-2026-10-23.md` §b): the editor's "Fondo"
+      // capsule button + its panel (`BackgroundPicker.tsx`). Upload errors
+      // reuse `worksheet.errors` above — same codes `/api/actividades/imagen`
+      // returns regardless of `?purpose=`. Preset keys are STABLE ENGLISH
+      // strings persisted in `blocks.ts`'s own `BackdropPreset` — these are
+      // only ever their on-screen Spanish/English labels.
+      background: {
+        button: 'Fondo',
+        panelTitle: 'Fondo de la actividad',
+        none: 'Ninguno',
+        presetSky: 'Cielo',
+        presetMint: 'Menta',
+        presetSun: 'Sol',
+        presetLavender: 'Lavanda',
+        presetSlate: 'Pizarra',
+        uploadImage: 'Subir imagen',
+        uploading: 'Subiendo…',
+        change: 'Cambiar',
+        remove: 'Quitar',
       },
       player: {
         notGraded: 'Vista previa: esta vista no corrige respuestas.',
@@ -1338,6 +1363,10 @@ export const UI_LABELS = {
         // 2026-10-16) — shown to the moderator with this explicit label so
         // it is reviewed as display-only context, never as a worksheet.
         questionImageLabel: 'Imagen de la pregunta',
+        // Fondo de la actividad (plantillas: fondo, owner decision
+        // 2026-10-23) — shown at el principio del bloque con molde, antes de
+        // su contenido: nadie aprueba un fondo que no vio.
+        backgroundLabel: 'Fondo de la actividad',
         approve: 'Aprobar',
         approveConfirmTitle: '¿Aprobar esta actividad?',
         approveConfirmBody: 'Va a quedar publicada de inmediato.',
@@ -2242,6 +2271,10 @@ export const UI_LABELS = {
         levelNone: 'No level',
         previewOn: 'Preview',
         previewOff: 'Back to editing',
+        // Phone-only "Ver vista previa" capsule at the top of the template
+        // editor sheet (`TemplateEditorKit.tsx`'s own `previewButtonLabel`)
+        // — scrolls the live preview into view below `lg`.
+        previewScrollButton: 'See preview',
         save: 'Save',
         saving: 'Saving…',
         saved: 'Changes saved',
@@ -2473,6 +2506,20 @@ export const UI_LABELS = {
         add: 'Add image',
         remove: 'Remove image',
         uploading: 'Uploading…',
+      },
+      background: {
+        button: 'Background',
+        panelTitle: 'Activity background',
+        none: 'None',
+        presetSky: 'Sky',
+        presetMint: 'Mint',
+        presetSun: 'Sun',
+        presetLavender: 'Lavender',
+        presetSlate: 'Slate',
+        uploadImage: 'Upload image',
+        uploading: 'Uploading…',
+        change: 'Change',
+        remove: 'Remove',
       },
       player: {
         notGraded: 'Preview: this view does not grade answers.',
@@ -2791,6 +2838,7 @@ export const UI_LABELS = {
         clozeDistractorsLabel: 'Distractors',
         explanationLabel: 'Explanation',
         questionImageLabel: 'Question image',
+        backgroundLabel: 'Activity background',
         approve: 'Approve',
         approveConfirmTitle: 'Approve this activity?',
         approveConfirmBody: 'It will be published immediately.',

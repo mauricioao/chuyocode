@@ -467,6 +467,98 @@ describe('approveRevision', () => {
     copySpy.mockRestore();
   });
 
+  it("refuses a quiz block's own background image referencing another user's uploads folder (plantillas: fondo, owner decision 2026-10-23)", async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            template: 'match',
+            payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+            background: { kind: 'image', path: `${UPLOADS_BUCKET}/${OTHER_USER}/background-${IMAGE_ID}.webp`, width: 1200, height: 800 },
+          },
+        ],
+      },
+      error: null,
+    });
+    const result = await approveRevision(REVISION, REVIEWER);
+    expect(result).toEqual({ ok: false, error: 'foreign_upload' });
+  });
+
+  it("approves: copies the own-uploaded background image, keeping its background- prefix in the public path", async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            template: 'match',
+            payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+            background: { kind: 'image', path: `${UPLOADS_BUCKET}/${AUTHOR}/background-${IMAGE_ID}.webp`, width: 1200, height: 800 },
+          },
+        ],
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const copySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    expect(copySpy).toHaveBeenCalledWith(
+      `${UPLOADS_BUCKET}/${AUTHOR}/background-${IMAGE_ID}.webp`,
+      `activity-images/${ACTIVITY}/background-${IMAGE_ID}.webp`,
+    );
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    const blocks = args.p_blocks as Array<{ background?: { path: string } }>;
+    expect(blocks[0].background?.path).toBe(`activity-images/${ACTIVITY}/background-${IMAGE_ID}.webp`);
+
+    copySpy.mockRestore();
+  });
+
+  it('approves a preset background with no storage copy at all (nothing uploaded to copy)', async () => {
+    push('activity_revisions', {
+      data: {
+        id: REVISION,
+        activity_id: ACTIVITY,
+        status: 'pending_review',
+        created_by: AUTHOR,
+        blocks: [
+          {
+            id: 'q1',
+            type: 'quiz',
+            template: 'match',
+            payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+            background: { kind: 'preset', preset: 'sky' },
+          },
+        ],
+      },
+      error: null,
+    });
+    const storageModule = await import('./storage');
+    const copySpy = vi.spyOn(storageModule, 'copyToImagesBucket').mockResolvedValue(true);
+
+    const result = await approveRevision(REVISION, REVIEWER);
+
+    expect(result).toEqual({ ok: true });
+    expect(copySpy).not.toHaveBeenCalled();
+    const args = state.rpcCalls[0].args as Record<string, unknown>;
+    const blocks = args.p_blocks as Array<{ background?: { kind: string; preset: string } }>;
+    expect(blocks[0].background).toEqual({ kind: 'preset', preset: 'sky' });
+
+    copySpy.mockRestore();
+  });
+
   it('approves a mixed worksheet+quiz activity: copies only the worksheet image, leaves the quiz\'s allow-listed media URL untouched, and reports both block types', async () => {
     push('activity_revisions', {
       data: {

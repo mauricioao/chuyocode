@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient } from '../supabase';
-import { parseBlocks, blockKind, type Block, type PromptImageRef } from './blocks';
+import { parseBlocks, blockKind, type Block, type QuizBlock, type PromptImageRef } from './blocks';
 import {
   approvedImagePath,
   parseImagePath,
@@ -387,10 +387,24 @@ function quizPromptImagePaths(blocks: Block[]): string[] {
 }
 
 /**
- * Rewrite every worksheet image's path AND every quiz question's own
- * context image path via `mapping`, rebuilding each block field by field —
- * never spread — same posture as `blocks.ts`'s own parse functions: an
- * unknown key cannot survive this boundary either.
+ * Every quiz block's own background IMAGE path in `blocks`, in order — the
+ * background counterpart of {@link quizPromptImagePaths} (plantillas: fondo,
+ * owner decision 2026-10-23). A `{kind: 'preset'}` background names nothing
+ * to copy or moderate (it is a CSS gradient, not an upload) — only
+ * `{kind: 'image'}` contributes a path here.
+ */
+function quizBackgroundImagePaths(blocks: Block[]): string[] {
+  return blocks.flatMap((block) =>
+    block.type === 'quiz' && block.background?.kind === 'image' ? [block.background.path] : [],
+  );
+}
+
+/**
+ * Rewrite every worksheet image's path, every quiz question's own context
+ * image path, AND every quiz block's own background image path via
+ * `mapping`, rebuilding each block field by field — never spread — same
+ * posture as `blocks.ts`'s own parse functions: an unknown key cannot
+ * survive this boundary either.
  */
 function rewriteImagePaths(blocks: Block[], mapping: ReadonlyMap<string, string>): Block[] {
   return blocks.map((block) => {
@@ -399,12 +413,20 @@ function rewriteImagePaths(blocks: Block[], mapping: ReadonlyMap<string, string>
       const newPath = mapping.get(block.image.path) ?? block.image.path;
       return { ...block, image: { ...block.image, path: newPath } };
     }
-    if (!block.promptImages) return block;
-    const rewritten: Record<string, PromptImageRef> = {};
-    for (const [slotId, image] of Object.entries(block.promptImages)) {
-      rewritten[slotId] = { ...image, path: mapping.get(image.path) ?? image.path };
+
+    let next: QuizBlock = block;
+    if (block.promptImages) {
+      const rewritten: Record<string, PromptImageRef> = {};
+      for (const [slotId, image] of Object.entries(block.promptImages)) {
+        rewritten[slotId] = { ...image, path: mapping.get(image.path) ?? image.path };
+      }
+      next = { ...next, promptImages: rewritten };
     }
-    return { ...block, promptImages: rewritten };
+    if (block.background?.kind === 'image') {
+      const newPath = mapping.get(block.background.path) ?? block.background.path;
+      next = { ...next, background: { ...block.background, path: newPath } };
+    }
+    return next;
   });
 }
 
@@ -472,16 +494,21 @@ export async function approveRevision(revisionId: string, reviewerId: string): P
     const blocks = parseBlocks(row.blocks, 'submit');
     if (!blocks) return { ok: false, error: 'invalid_blocks' };
 
-    // Every worksheet image AND every quiz question's own context image
-    // must be either already-public (a prior approval's own copy, reused
-    // unchanged by this edit) or an upload owned by THIS revision's own
-    // author — never a path guessed into another user's private uploads
-    // folder. See file header, mandatory security test. The target path's
-    // own KIND follows the source path's kind (`approvedImagePath`'s own
-    // `kind` param) — a question image is re-pointed into the public bucket
-    // under the SAME `question-` prefix, never silently reshaped into a
-    // worksheet-looking path.
-    const imagePaths = [...worksheetImagePaths(blocks), ...quizPromptImagePaths(blocks)];
+    // Every worksheet image, every quiz question's own context image, AND
+    // every quiz block's own background image must be either already-public
+    // (a prior approval's own copy, reused unchanged by this edit) or an
+    // upload owned by THIS revision's own author — never a path guessed
+    // into another user's private uploads folder. See file header,
+    // mandatory security test. The target path's own KIND follows the
+    // source path's kind (`approvedImagePath`'s own `kind` param) — a
+    // question or background image is re-pointed into the public bucket
+    // under its OWN prefix, never silently reshaped into a worksheet-looking
+    // path.
+    const imagePaths = [
+      ...worksheetImagePaths(blocks),
+      ...quizPromptImagePaths(blocks),
+      ...quizBackgroundImagePaths(blocks),
+    ];
     const pathMapping = new Map<string, string>();
     for (const path of imagePaths) {
       const parsed = parseImagePath(path);

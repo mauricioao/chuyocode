@@ -11,31 +11,6 @@ const ONE_QUESTION: Payload = {
   slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
 };
 
-const THREE_QUESTIONS: Payload = {
-  pools: { opts: [{ id: 'a', text: 'cat' }, { id: 'b', text: 'dog' }] },
-  slots: [
-    { id: 's1', label: 'First ___', input: 'text', answer: ['one'] },
-    { id: 's2', label: 'Second ___', input: 'text', answer: ['two'] },
-    { id: 's3', label: 'Third?', input: 'choice', pool: 'opts', answer: ['a'] },
-  ],
-};
-
-describe('QuizLivePreview — games badge', () => {
-  it('shows the count and an icon per available mode', () => {
-    render(<QuizLivePreview blockId="b1" lang="es" payload={THREE_QUESTIONS} />);
-    const badge = screen.getByTestId('quiz-preview-games-badge-b1');
-    expect(badge.textContent).toContain('juegos');
-    expect(badge.querySelectorAll('svg').length).toBeGreaterThan(0);
-  });
-
-  it('uses singular wording for exactly one available mode', () => {
-    render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
-    // A single text-only question only ever offers 'quiz' (no pool, not enough items for others needing >=1 besides quiz+cards+speak — still check singular path exists via es copy function).
-    const badge = screen.getByTestId('quiz-preview-games-badge-b1');
-    expect(badge.textContent).toMatch(/\d+ juego/);
-  });
-});
-
 describe('QuizLivePreview — renders the real practice component', () => {
   it('mounts QuizBlockPractice for this block', () => {
     render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
@@ -132,14 +107,59 @@ describe('QuizLivePreview — ONE TEMPLATE, ONE GAME (owner spec, build item 1)'
     expect(screen.queryByTestId('quiz-game-mode-switcher')).toBeNull();
   });
 
-  it('removes the "Estas preguntas se usan en N juegos" badge entirely for a templated block', () => {
+  // Owner audit (`PROPUESTA-PLANTILLAS-2026-10-23.md` §c): the editor-only
+  // "Estas preguntas se usan en N juegos" badge is gone entirely now that
+  // the preview is the real activity frame — never shown, templated or not.
+  it('never shows the "used in N games" badge, templated or Básico', () => {
     render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
     expect(screen.queryByTestId('quiz-preview-games-badge-b1')).toBeNull();
+
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} />);
+    expect(screen.queryByTestId('quiz-preview-games-badge-b1')).toBeNull();
+  });
+});
+
+describe('QuizLivePreview — one activity frame (owner audit §c)', () => {
+  it('renders inside the real activity frame, with the floating Comprobar contained by its own activity-stage', () => {
+    const ONE_QUESTION_LOCAL: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
+    };
+    render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION_LOCAL} />);
+    const stage = screen.getByTestId('activity-stage');
+    expect(stage.contains(screen.getByTestId('quiz-preview-actions-b1'))).toBe(true);
+    expect(screen.getByTestId('window-title-bar')).toBeTruthy();
   });
 
-  it('keeps the games badge for Básico (no template)', () => {
-    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} />);
-    expect(screen.getByTestId('quiz-preview-games-badge-b1')).toBeTruthy();
+  it('shows the real activity title and level, as the student\'s own window shows them', () => {
+    render(
+      <QuizLivePreview
+        blockId="b1"
+        lang="es"
+        payload={ONE_QUESTION}
+        activityTitle="Animales de la granja"
+        activityLevelChip="Básico A2"
+      />,
+    );
+    expect(screen.getByTestId('window-title-bar-title').textContent).toBe('Animales de la granja');
+    expect(screen.getByTestId('window-title-bar-level').textContent).toBe('Básico A2');
+  });
+
+  it('falls back to the placeholder title while the activity has no title yet', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} activityTitle="" />);
+    expect(screen.getByTestId('window-title-bar-title').textContent).toBe('Vista previa');
+  });
+
+  it('paints the block\'s own background behind the preview', () => {
+    render(
+      <QuizLivePreview
+        blockId="b1"
+        lang="es"
+        payload={ONE_QUESTION}
+        background={{ kind: 'preset', preset: 'sun' }}
+      />,
+    );
+    expect(screen.getByTestId('activity-stage-backdrop-preset').style.background).toContain('var(--backdrop-sun)');
   });
 });
 
@@ -175,5 +195,48 @@ describe('QuizLivePreview — resets on structural change', () => {
     expect((screen.getByTestId('quiz-slot-s1').querySelector('input, textarea') as HTMLInputElement).value).toBe(
       'sits',
     );
+  });
+});
+
+describe('QuizLivePreview — fills the activity stage (owner bug: result screen squeezed into a short top band)', () => {
+  const MATCH_PAYLOAD: Payload = {
+    pools: {},
+    slots: [
+      { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+      { id: 's2', label: 'cat', input: 'text', answer: ['gato'] },
+      { id: 's3', label: 'bird', input: 'text', answer: ['pájaro'] },
+    ],
+  };
+
+  it("stretches to fill ActivityStage, so a self-checking mold's GameResult can fill it too", () => {
+    // `ActivityStage` (tonight's `contain: layout` pass) only reserves space
+    // for a flex child that itself opts into `flex-1`/`min-h-0` — this
+    // column used to be a plain `flex flex-col`, so it sized to its own
+    // CONTENT instead of the stage, and `GameResult` (further down, inside
+    // the mold) collapsed to a short band instead of filling the activity
+    // body.
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    const className = screen.getByTestId('quiz-preview-b1').className;
+    expect(className).toMatch(/\bflex-1\b/);
+    expect(className).toMatch(/\bmin-h-0\b/);
+  });
+
+  it("reserves the same baseline bottom gap GameResult's own crop-line bleed assumes", () => {
+    // `GameResult.tsx`'s `-mb-3` bleed is sized for a 12px ambient bottom
+    // padding (the real player's own stage wrapper uses `p-3`) — this
+    // column had none at all, so the bleed overshot past the true stage
+    // edge instead of landing flush on it.
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    expect(screen.getByTestId('quiz-preview-b1').className).toMatch(/\bpb-3\b/);
+  });
+
+  it('does not reserve the floating-Comprobar gap for a self-checking mold, which renders its own', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={MATCH_PAYLOAD} template="match" />);
+    expect(screen.getByTestId('quiz-preview-b1').className).not.toMatch(/\bpb-20\b/);
+  });
+
+  it('keeps the floating-Comprobar gap for Básico, where this preview shows its own', () => {
+    render(<QuizLivePreview blockId="b1" lang="es" payload={ONE_QUESTION} />);
+    expect(screen.getByTestId('quiz-preview-b1').className).toMatch(/\bpb-20\b/);
   });
 });

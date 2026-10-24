@@ -927,6 +927,114 @@ describe('parseBlocks — quiz promptImages (question context images, owner deci
   });
 });
 
+describe('parseBlocks — quiz background (plantillas: fondo, owner decision 2026-10-23)', () => {
+  const BACKGROUND_OBJECT = 'c3d4e5f6-0000-4000-8000-0000000000cc';
+  const BACKGROUND_PATH = uploadPath(USER, BACKGROUND_OBJECT, 'background');
+
+  it('absent entirely is fine — the common case, every quiz block saved before this field existed', () => {
+    const result = parseBlocks([quizBlock({ template: 'match' })]);
+    expect(result).toEqual([{ id: 'b1', type: 'quiz', payload: expect.any(Object), template: 'match' }]);
+  });
+
+  it('accepts a preset background on a molded block', () => {
+    const result = parseBlocks([quizBlock({ template: 'match', background: { kind: 'preset', preset: 'sky' } })]);
+    expect(result).toEqual([
+      {
+        id: 'b1',
+        type: 'quiz',
+        payload: expect.any(Object),
+        template: 'match',
+        background: { kind: 'preset', preset: 'sky' },
+      },
+    ]);
+  });
+
+  it.each(['sky', 'mint', 'sun', 'lavender', 'slate'] as const)('accepts the %s preset', (preset) => {
+    expect(
+      parseBlocks([quizBlock({ template: 'reorder', background: { kind: 'preset', preset } })]),
+    ).toEqual([expect.objectContaining({ background: { kind: 'preset', preset } })]);
+  });
+
+  it('rejects an unknown preset key', () => {
+    expect(
+      parseBlocks([quizBlock({ template: 'match', background: { kind: 'preset', preset: 'rainbow' } })]),
+    ).toBeNull();
+  });
+
+  it('accepts an image background whose path is the background kind', () => {
+    const result = parseBlocks([
+      quizBlock({
+        template: 'cloze',
+        background: { kind: 'image', path: BACKGROUND_PATH, width: 1200, height: 800 },
+      }),
+    ]);
+    expect(result).toEqual([
+      expect.objectContaining({
+        background: { kind: 'image', path: BACKGROUND_PATH, width: 1200, height: 800 },
+      }),
+    ]);
+  });
+
+  it('rejects a WORKSHEET-kind path for an image background (never interchangeable)', () => {
+    expect(
+      parseBlocks([
+        quizBlock({
+          template: 'match',
+          background: { kind: 'image', path: uploadPath(USER, BACKGROUND_OBJECT), width: 1200, height: 800 },
+        }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('rejects a QUESTION-kind path for an image background (never interchangeable)', () => {
+    expect(
+      parseBlocks([
+        quizBlock({
+          template: 'match',
+          background: {
+            kind: 'image',
+            path: uploadPath(USER, BACKGROUND_OBJECT, 'question'),
+            width: 1200,
+            height: 800,
+          },
+        }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('rejects an image background missing width/height', () => {
+    expect(
+      parseBlocks([quizBlock({ template: 'match', background: { kind: 'image', path: BACKGROUND_PATH } })]),
+    ).toBeNull();
+  });
+
+  it('rejects an unrecognized kind', () => {
+    expect(parseBlocks([quizBlock({ template: 'match', background: { kind: 'video', path: 'x' } })])).toBeNull();
+  });
+
+  it('rejects a non-object background value', () => {
+    expect(parseBlocks([quizBlock({ template: 'match', background: 'sky' })])).toBeNull();
+  });
+
+  it('rejects a background on the hidden, mold-less "Varios juegos" block (no template)', () => {
+    expect(
+      parseBlocks([quizBlock({ background: { kind: 'preset', preset: 'sky' } })]),
+    ).toBeNull();
+  });
+
+  it('rejects a background on a mold-less block even in draft mode (no legacy data to stay lenient for)', () => {
+    expect(
+      parseBlocks([quizBlock({ background: { kind: 'preset', preset: 'sky' } })], 'draft'),
+    ).toBeNull();
+  });
+
+  it('a worksheet block never carries a background at all (type-level: the field only exists on QuizBlock)', () => {
+    const result = parseBlocks([worksheetBlock()]);
+    expect(result).toEqual([expect.objectContaining({ type: 'worksheet' })]);
+    expect((result as Block[])[0]).not.toHaveProperty('background');
+  });
+});
+
 describe('blockKind (0022 migration, activities.block_kinds)', () => {
   it("is 'worksheet' for a worksheet block", () => {
     expect(blockKind(worksheetBlock() as unknown as Block)).toBe('worksheet');

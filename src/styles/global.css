@@ -558,6 +558,112 @@
    * -right-1.5` (6px) plus half its `size-5` icon overlapping the corner,
    * and the widest `shadow-elevation-2` blur (≤12px) riding a row's edge. */
   --stage-safe-inset: 16px;
+
+  /* Template board polish (activity-templates-polish pass, owner spec:
+   * "premium, tipo Apple, mate, en tonos tinta") — proposal
+   * `docs/PROPUESTA-PLANTILLAS-2026-10-23.md` §d. One more shadow level for
+   * the player board's own white "sheet" (`.activity-sheet`, below), plus
+   * the chip rest/raised/colour-fill shadows (`mechanics/chip.ts`) and the
+   * well tokens every drop target now shares. One light direction (top),
+   * matte, no glow halos — `DIRECCION-VISUAL.md` §3.4 discards. */
+  --shadow-stage-premium: 0 1px 1px rgb(17 18 21 / .04), 0 2px 2px rgb(17 18 21 / .04),
+    0 4px 6px rgb(17 18 21 / .05), 0 8px 12px rgb(17 18 21 / .06), 0 16px 24px rgb(17 18 21 / .07);
+  --chip-rest-bg: linear-gradient(180deg, #e7e8ec 0%, #d9dbe0 100%);
+  --shadow-chip-rest: inset 0 1px 0 rgb(255 255 255 / .65), inset 0 -1.5px 0 rgb(17 18 21 / .08),
+    0 1px 2px rgb(17 18 21 / .08), 0 2px 6px rgb(17 18 21 / .06);
+  --shadow-chip-raised: 0 0 0 .5px rgb(17 18 21 / .08), 0 1px 1px rgb(17 18 21 / .05),
+    0 2px 4px rgb(17 18 21 / .06), 0 6px 14px rgb(17 18 21 / .09);
+  --shadow-chip-color: inset 0 -3px 0 rgb(0 0 0 / .16), 0 1px 2px rgb(17 18 21 / .12),
+    0 4px 10px rgb(17 18 21 / .10);
+  --well-bg: rgb(17 18 21 / .035);
+  --well-shadow: inset 0 1px 2px rgb(17 18 21 / .06);
+  --well-active-bg: rgb(97 194 245 / .14);
+}
+
+/* The one white "sheet" every big-stage mould's own board (tray + targets)
+ * sits on (`QuizBlockPractice.tsx`'s `ActivitySheet`, shared by
+ * `QuizMatching`/`QuizReorder`/`QuizCloze`/`QuizGroupSort` — proposal §d).
+ * Centred with `margin-block: auto`, never `justify-content: center` (which
+ * clips the board's own top edge when it overflows a short stage — no "safe"
+ * alignment exists for `justify-content` in Chromium). Must read correctly on
+ * both the plain grey canvas and a chosen backdrop (S1/S2's own stage work),
+ * so it is its own small opaque card rather than part of the stage chrome. */
+.activity-sheet {
+  width: 100%;
+  max-width: 760px;
+  margin-block: auto;
+  /* Fix-round (2026-10-23, visual bug audit): the sheet had NO horizontal
+   * centring at all — `width: 100%` only matters once `max-width` caps it
+   * below the stage's own width, and a flex column's default "stretch" then
+   * falls back to flex-start (never centred) the moment an item can't
+   * actually fill the cross axis. `margin-inline: auto` is the fix, same
+   * `auto`-margin idiom `margin-block` already uses above, and it stays
+   * correct regardless of the parent's own `align-items`. */
+  margin-inline: auto;
+  background: var(--card);
+  border-radius: 26px;
+  padding: clamp(16px, 2.5cqw, 32px);
+  box-shadow: var(--ingles-glass-ring), var(--shadow-stage-premium);
+}
+
+@supports (corner-shape: squircle) {
+  .activity-sheet {
+    border-radius: 34px;
+    corner-shape: squircle;
+  }
+}
+
+/* Widens the sheet past its default cap — `QuizMatching`'s own many-pairs
+ * 2-column board (fix-round, visual bug audit): the default 760px left each
+ * of the 2 pair-columns too narrow for its own `[prompt | well]` row,
+ * colliding with its neighbour. Chained onto `.activity-sheet` itself
+ * (never standalone) so its specificity reliably wins over the plain rule
+ * above regardless of source order — both are plain rules in this file, not
+ * Tailwind utilities, so a same-specificity utility class could not have
+ * overridden it. */
+.activity-sheet.activity-sheet--wide {
+  max-width: 960px;
+}
+
+/* "Une las parejas" player board (`QuizMatching.tsx`): a grouped list of
+ * pairs inside the sheet, never a card per row — the same inset-hairline
+ * idiom `.template-row` gives the editor's own authoring list
+ * (`TemplateEditorKit.tsx`), restated here since that file lives outside the
+ * editor's own `[data-template-canvas]` scope. Proposal §d. */
+.pair-row + .pair-row {
+  position: relative;
+}
+.pair-row + .pair-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: rgb(17 18 21 / 0.08);
+}
+/* Two-column boards (many pairs, `QuizMatching.tsx`'s own `STAGE_TWO_COL_GRID`,
+ * `@lg` container breakpoint): row 2 is the TOP of the right column, not
+ * underneath row 1 — the sibling rule above cannot tell the two apart (both
+ * are simply "a `.pair-row` preceded by another"), so once the grid is
+ * actually laid out in 2 columns (`.activity-sheet--wide`, same container
+ * query the grid itself switches on) row 2 must not inherit that hairline.
+ * `32rem` mirrors Tailwind's default `@lg` container size — the SAME value
+ * `grid-cols-1 @lg:grid-cols-2` compiles to. */
+@container (min-width: 32rem) {
+  .activity-sheet--wide .pair-row:nth-child(2)::before {
+    content: none;
+  }
+}
+
+/* `stageChipColorClass`'s own hover (`mechanics/chip.ts`): keeps the colour
+ * fill's inset lip (`--shadow-chip-color`) and adds a touch more ambient
+ * lift on top, rather than swapping to the grey rest material's own
+ * `--shadow-chip-raised` recipe, which would mismatch a saturated fill.
+ * Plain CSS (unlayered, so it reliably wins over the Tailwind utilities
+ * layer) rather than a comma-bearing arbitrary-value utility class. */
+[data-theme='ingles'] .chip-color:hover {
+  box-shadow: var(--shadow-chip-color), 0 6px 14px rgb(17 18 21 / 0.1);
 }
 
 /* The light Inglés scope cannot change what a STATIC Tailwind utility
@@ -1435,33 +1541,6 @@ h3 {
   }
 }
 
-/* The floating Comprobar (`scale.ts`'s `FLOATING_CHECK_BAR_CLASS`) sits 16px
- * inside the stage card's own bottom-right corner rather than on its edge:
- * the card stops 16px above the window's bottom and 70px before its right
- * edge (`TemplateEditorLayout`'s `lg:pr-[70px]` — the side toolbar's docked
- * rail, 12px + 42px, plus a 16px gap). */
-@media (width >= 64rem) {
-  [data-template-canvas] .floating-check-bar {
-    right: calc(70px + 1rem);
-    bottom: 2rem;
-  }
-}
-
-/* Phones stack the sheet above the stage, so a window-fixed Comprobar would
- * float over the sheet while the author types, half under the side
- * toolbar's bottom bar (~40px). It sticks to the bottom of the stage's own
- * game instead, just above that bar — reachable whenever the game is on
- * screen, never on top of the sheet. `order` moves it after the board: every
- * game renders it as a direct child of its own flex-column root, some
- * before the board in source order. */
-@media (width < 64rem) {
-  [data-template-canvas] .floating-check-bar {
-    position: sticky;
-    bottom: calc(3.25rem + env(safe-area-inset-bottom));
-    order: 99;
-  }
-}
-
 /* --- Smart header/footer visibility (chrome-visibility feature) ---------- *
  * Rules live in `src/lib/chromeVisibility.ts`; this is only the CSS those
  * rules drive, keyed off attributes that module (and the no-flash inline
@@ -1956,4 +2035,32 @@ html[data-chrome-js][data-chrome-mode='ingles'] [data-chrome-header][data-chrome
 [data-desk-window-more]:has(input:checked) [role='tooltip'] {
   opacity: 0;
   pointer-events: none;
+}
+
+/* ── Activity backdrops (S2) ── */
+/* Plantillas: fondo (owner decision 2026-10-23,
+ * `PROPUESTA-PLANTILLAS-2026-10-23.md` §b/§d/§f2) — the five backdrop
+ * presets a molded quiz block's background may use, plus the veil painted
+ * over an uploaded photo so the white `.activity-sheet` lámina still reads
+ * clearly on top of it (§b: "el texto nunca va sobre la foto").
+ *
+ * KEYS ARE STABLE ENGLISH STRINGS ON PURPOSE (§f2): they are the exact
+ * persisted values of `blocks.ts`'s own `BackdropPreset` — never rename one.
+ * `src/lib/activities/backgrounds.ts`'s `backdropCssVar` is the one place
+ * that turns a preset key into `var(--backdrop-<key>)`; its own
+ * `backdropLabelKey` maps the SAME key to its on-screen Spanish/English
+ * label (Cielo/Menta/Sol/Lavanda/Pizarra), kept in `i18n.ts` instead — never
+ * here. Ingles-scoped only, same as every other token in this file's
+ * `[data-theme='ingles']` override. */
+[data-theme='ingles'] {
+  --backdrop-sky: linear-gradient(135deg, #cfe9fb 0%, #dcdcf7 55%, #ead9f4 100%);
+  --backdrop-mint: linear-gradient(135deg, #d4f4e8 0%, #e2eff8 100%);
+  --backdrop-sun: linear-gradient(135deg, #fff0bf 0%, #fde0d6 100%);
+  --backdrop-lavender: linear-gradient(135deg, #e5e0fa 0%, #f3e5f3 100%);
+  --backdrop-slate: linear-gradient(135deg, #dfe3ea 0%, #c8d0db 100%);
+  /* Tint over an uploaded photo background only — never over a preset
+   * gradient, and never blurred (§b: "sin desenfoque"). `ActivityStage.tsx`
+   * (S1) is expected to paint this as its own overlay layer on top of a
+   * `{kind: 'image'}` background, behind the sheet. */
+  --backdrop-veil: rgb(17 18 21 / 0.08);
 }

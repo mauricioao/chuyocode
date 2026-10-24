@@ -91,6 +91,7 @@ import {
 } from '@/components/islands/mechanics/scale';
 import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import ActivityStage, { ActivityBackdropLayer } from './ActivityStage';
 import WorksheetPracticePlayer from './WorksheetPracticePlayer';
 import QuizBlockPractice from './QuizBlockPractice';
 
@@ -560,6 +561,13 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
         </div>
       )}
 
+      {/* ActivityStage (owner audit §c, LANZAMIENTO H13 part 2): the ONE
+          shared containing block for the floating Comprobar just below —
+          `contain: layout` keeps it anchored to THIS card's own bottom-right
+          corner in every context (desk window, full screen below, the
+          course-lesson frame), never the page's. */}
+      {(activeBlock || showCombinedFooter) && (
+      <ActivityStage background={activeBlock?.type === 'quiz' ? activeBlock.background : undefined}>
       {activeBlock && (
         <div
           key={activeBlock.id}
@@ -648,6 +656,8 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
             </Button>
           ) : null}
         </div>
+      )}
+      </ActivityStage>
       )}
 
       {/* The result dialog itself — centred over a blurred backdrop,
@@ -805,8 +815,26 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
           <div
             ref={setFocusModeContainer}
             data-testid="practice-focus-mode"
-            className="fixed inset-0 z-[80] flex flex-col bg-background"
+            // `[contain:layout]` (owner audit §c, same guarantee as
+            // `ActivityStage`): makes this the EXPLICIT containing block for
+            // `practice-focus-mode-actions` below, rather than relying on
+            // "this box happens to be `inset-0`, same as the viewport" —
+            // harmless since this view has no Vanina/confetti paint bleed of
+            // its own to protect (`GameResult`'s own portal placement here
+            // already escapes to `focusModeHost` directly, see its own
+            // `characterPortalContainer` header).
+            className="fixed inset-0 z-[80] flex flex-col bg-background [contain:layout]"
           >
+            {/* Plantillas: fondo (owner audit §c): "modo enfoque" is a
+                separate fixed overlay, not an `ActivityStage`, but the
+                active block's own background still paints here — same
+                layer `ActivityStage` itself uses internally, see
+                `ActivityStage.tsx`'s own `ActivityBackdropLayer` header. */}
+            {activeBlock.type === 'quiz' && activeBlock.background && (
+              <div aria-hidden="true" className="absolute inset-0 -z-10">
+                <ActivityBackdropLayer background={activeBlock.background} />
+              </div>
+            )}
             <button
               type="button"
               data-testid="practice-focus-mode-exit"

@@ -57,11 +57,10 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { BLANK_EMPTY, BLANK_FILLED, stageChipColorClass } from '@/components/islands/mechanics/chip';
+import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, stageChipColorClass } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  FLOATING_CHECK_BAR_EDITOR_OFFSET,
   PROMPT_SCALE,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTENT_MEASURE,
@@ -79,8 +78,6 @@ export interface QuizMatchingProps {
   items: readonly GameItem[];
   /** Stable per-block seed (the block id) — `shuffleWithSeed`'s own input for the tray and "Reiniciar". */
   seed: string;
-  /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
-  editorOffset?: boolean;
   /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
   nextHref?: string;
   /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
@@ -197,7 +194,14 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
       aria-label={ariaLabel}
       className={cn(
         stageChipColorClass(colorIndex),
-        'touch-none',
+        // Fix-round (visual bug audit): once grading starts every tile goes
+        // `disabled` (no more interaction) — the shared `CHIP_SHAPE` also
+        // ties a pale `disabled:opacity-50` to that same native state, which
+        // read as "turned off" instead of graded. `disabled:opacity-100`
+        // keeps every chip at full tray colour; the 2px ring + ✓/✕ mark
+        // stay the only correctness signal (same idiom `QuizHangman.tsx`/
+        // `QuizTrueFalse.tsx` already use for their own graded chips).
+        'touch-none disabled:opacity-100',
         dragging && 'opacity-40',
         // Picked (tap-selected, not yet placed): a ring only — never
         // `CHIP_PLACED`'s white fill, which would hide the chip's own
@@ -267,10 +271,19 @@ function MatchSlot({
         'relative inline-flex min-w-32 flex-1 sm:min-w-48',
         TILE_MIN_HEIGHT_SCALE,
         tile ? cn('items-stretch', BLANK_FILLED) : cn('items-center justify-center', BLANK_EMPTY),
-        isOver && !locked && 'border-ring bg-accent/30',
-        !tile && canPlacePicked && 'border-ring bg-accent/20',
-        locked && 'border-success-strong bg-success-strong/10',
-        wrong && 'animate-pulse border-destructive bg-destructive/10 motion-reduce:animate-none',
+        // Active (activity-templates-polish pass, proposal §d: "hueco con
+        // ficha encima" — the one active-well treatment, used both mid-drag
+        // and for "this slot would receive the picked tile"): solid
+        // sky-deep border + `--well-active-bg`, replacing the old ad-hoc
+        // `border-ring`/`bg-accent/*` opacities.
+        ((isOver && !locked) || (!tile && canPlacePicked)) &&
+          'border-solid border-pop-sky-deep bg-[var(--well-active-bg)]',
+        // Correct/incorrect: a 2px INSET ring (never a literal border, which
+        // would nudge the box) in `--success`/`--destructive`, over the
+        // matching pastel `--color-pop-green`/`--color-pop-red` tint
+        // (proposal §d's own table).
+        locked && 'ring-2 ring-inset ring-success bg-pop-green/28',
+        wrong && 'animate-pulse ring-2 ring-inset ring-destructive bg-pop-red/10 motion-reduce:animate-none',
         highlightEmpty && 'animate-pulse border-ring ring-2 ring-ring/40 motion-reduce:animate-none',
       )}
     >
@@ -318,7 +331,7 @@ function MatchSlot({
   );
 }
 
-export default function QuizMatching({ lang, items, seed, editorOffset = false, nextHref, guest }: QuizMatchingProps) {
+export default function QuizMatching({ lang, items, seed, nextHref, guest }: QuizMatchingProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -617,7 +630,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
       {phase !== 'done' && (
         <div
           data-testid="matching-actions"
-          className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+          className={FLOATING_CHECK_BAR_CLASS}
         >
           {/* Coordinator follow-up to UX audit finding 3: `missingNotice`
               used to reach ONLY the sr-only `matching-live-region` — a
@@ -684,13 +697,26 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                 pairs is the authored ceiling). */}
             <div
               data-testid="matching-stage-scroll"
-              className={cn(
-                'flex min-h-0 flex-col overflow-y-auto',
-                manyPairs ? 'gap-4' : 'gap-6',
-                STAGE_BOTTOM_RESERVE_CLASS,
-                STAGE_SAFE_INSET_CLASS,
-              )}
+              className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
             >
+              {/* THE SHEET (activity-templates-polish pass, proposal §d):
+                  one white card holding tray + board, shared material with
+                  the other three moulds (`ACTIVITY_SHEET_CLASS`,
+                  `mechanics/chip.ts`) — see that token's own header for why
+                  this is an inline div rather than an imported component. */}
+              <div
+                data-testid="activity-sheet"
+                // `activity-sheet--wide` only past the many-pairs threshold
+                // (visual bug audit: the 2-column board below collided with
+                // itself inside the default 760px cap — see
+                // `.activity-sheet--wide`, `global.css`).
+                className={cn(
+                  ACTIVITY_SHEET_CLASS,
+                  manyPairs && 'activity-sheet--wide',
+                  'flex flex-col',
+                  manyPairs ? 'gap-4' : 'gap-6',
+                )}
+              >
               {/* THE TRAY, ABOVE THE PAIRS (UI pass, owner spec: "mover las
                   opciones arriba" — the owner's own screenshot drew it moved
                   into the empty space above the board). A DOM-order move,
@@ -711,7 +737,13 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                 // every width down to 320px once each tile hugs its own
                 // label instead of sharing one fixed basis — see
                 // `stageChipColorClass`'s own header (`chip.ts`).
-                className={cn('flex list-none flex-wrap gap-3 p-0 pb-2', STAGE_CONTENT_MEASURE)}
+                className={cn(
+                  'flex list-none flex-wrap gap-3 p-0 pb-2',
+                  // Matches the wider `activity-sheet--wide` cap above once
+                  // many-paired, so the tray stays centred over the SAME
+                  // board width as the (also widened) pairs grid below.
+                  manyPairs ? 'mx-auto w-full max-w-[960px]' : STAGE_CONTENT_MEASURE,
+                )}
               >
                 {trayIds.map((id) => {
                   const item = byId.get(id);
@@ -737,9 +769,18 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                 data-testid="matching-prompts"
                 className={cn(
                   'grid',
-                  manyPairs ? 'gap-2' : 'gap-3',
+                  // Visual bug audit: `gap-2` (8px) was BOTH the row gap and
+                  // the gap between the 2 pair-columns — too tight for the
+                  // latter, read as a collision rather than a column break.
+                  // Split so the column gap gets its own, clearly bigger
+                  // value; `gap-x-*` is a no-op until `@lg:grid-cols-2`
+                  // above actually lays out 2 columns.
+                  manyPairs ? 'gap-y-2 gap-x-6' : 'gap-3',
                   manyPairs ? STAGE_TWO_COL_GRID : 'grid-cols-1',
-                  STAGE_CONTENT_MEASURE,
+                  // Same widened cap as `activity-sheet--wide` above — the
+                  // default 760px measure left each of the 2 pair-columns
+                  // too narrow for its own `[prompt | well]` row.
+                  manyPairs ? 'mx-auto w-full max-w-[960px]' : STAGE_CONTENT_MEASURE,
                 )}
               >
               {items.map((item) => {
@@ -751,29 +792,21 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                   <div
                     key={item.id}
                     data-testid={`matching-prompt-${item.id}`}
-                    // ROW ANATOMY (visual-polish pass, owner bug: "el borde
-                    // de cada ejercicio se corta y es muy ancho"). A CSS
-                    // grid, not flex-wrap: two EQUAL columns (term | slot),
-                    // `gap-4` (16px) between them, `py-3 px-4` (12px/16px)
-                    // row padding, `min-h-16` (64px) floor — the fixed
-                    // anatomy the owner asked for, not a scale that drifts
-                    // with pair count. Below the row's own 420px container
-                    // width (`@max-[420px]:`, reading the SAME `@container`
-                    // ancestor `STAGE_TWO_COL_GRID` above does, not the
-                    // viewport) the term stacks above the slot instead of
-                    // squeezing two columns into a phone-width row. Soft
-                    // surface, never a hard-bordered card (UI-kit refactor,
-                    // owner spec: "muy cuadrada") — `bg-card` +
-                    // `shadow-elevation-1` at radius 20, same material the
-                    // desk's own flat (non-glass) surfaces use. Correct
-                    // settles as an INSET tint ring (visual-polish pass —
-                    // plain `ring-*` paints OUTSIDE the border box and was
-                    // what clipped at the stage's own edge), never a border,
-                    // so the shape itself never grows a visible edge.
-                    className={cn(
-                      'grid grid-cols-1 @[420px]:grid-cols-2 items-center gap-4 rounded-[20px] bg-card shadow-elevation-1 py-3 px-4 min-h-16',
-                      locked && 'ring-2 ring-inset ring-success-strong bg-success-strong/10',
-                    )}
+                    // ROW ANATOMY (activity-templates-polish pass, proposal
+                    // §d: "lista agrupada en la lámina... sin tarjeta por
+                    // fila" — replaces the UI-kit refactor's own per-row
+                    // card). A CSS grid, not flex-wrap: two EQUAL columns
+                    // (term | slot), `gap-4` (16px) between them. Below the
+                    // row's own 420px container width (`@[420px]:`, reading
+                    // the SAME `@container` ancestor `STAGE_TWO_COL_GRID`
+                    // above does, not the viewport) the term stacks above the
+                    // slot instead of squeezing two columns into a
+                    // phone-width row. No card/shadow/radius any more — every
+                    // row now floats directly on the shared `.activity-sheet`
+                    // (below), separated by `.pair-row`'s own inset hairline
+                    // (`global.css`) instead; correct/incorrect now settles
+                    // on the SLOT itself ({@link MatchSlot}), never the row.
+                    className="pair-row grid grid-cols-1 @[420px]:grid-cols-2 items-center gap-4 py-3 pr-2 pl-4"
                   >
                     <p className={cn('min-w-0 font-medium text-foreground', PROMPT_SCALE)}>{item.prompt}</p>
                     <MatchSlot
@@ -796,6 +829,7 @@ export default function QuizMatching({ lang, items, seed, editorOffset = false, 
                   </div>
                 );
               })}
+              </div>
               </div>
             </div>
           </div>

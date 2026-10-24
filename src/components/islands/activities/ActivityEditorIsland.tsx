@@ -222,6 +222,11 @@ export default function ActivityEditorIsland({
   );
   const doc = history.present;
   const { title, level, blocks } = doc;
+  // The REAL preview chrome (owner audit §c): the same "Básico A2"/no-level
+  // copy the student's own window shows (`[id].astro`'s own `levelChip`),
+  // so `QuizLivePreview`'s own title bar reads exactly like the window the
+  // board will actually sit inside, instead of a placeholder.
+  const previewLevelChip = level ? levelLabels[level] : tPractice.noLevel;
 
   const [saveState, setSaveState] = useState<AutosaveStatus | 'idle'>('idle');
   // Review-state badge (PR D, "Activities practice"). Updated OPTIMISTICALLY
@@ -1440,6 +1445,8 @@ export default function ActivityEditorIsland({
                 selectedZoneId={selectedZoneId}
                 resolveImageUrl={resolveImageUrl}
                 resolveAudioUrl={resolveAudioUrl}
+                activityTitle={title}
+                activityLevelChip={previewLevelChip}
                 onSetActiveBlock={setActiveBlockId}
                 onSelectZone={setSelectedZoneId}
                 onBlocksChange={changeBlocks}
@@ -1483,6 +1490,8 @@ export default function ActivityEditorIsland({
             selectedZoneId={selectedZoneId}
             resolveImageUrl={resolveImageUrl}
             resolveAudioUrl={resolveAudioUrl}
+            activityTitle={title}
+            activityLevelChip={previewLevelChip}
             onSetActiveBlock={setActiveBlockId}
             onSelectZone={setSelectedZoneId}
             onBlocksChange={changeBlocks}

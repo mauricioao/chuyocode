@@ -149,6 +149,39 @@ export interface WorksheetBlock {
  */
 export type QuizTemplate = 'match' | 'reorder' | 'cloze' | 'groupsort';
 
+/**
+ * The five backdrop gradient presets a quiz block's background may use
+ * (plantillas: fondo, owner decision 2026-10-23,
+ * `PROPUESTA-PLANTILLAS-2026-10-23.md` §b/§f2) — STABLE, PERSISTED STRINGS:
+ * these exact English keys live in the `blocks` jsonb, never the Spanish
+ * display label. Each one's own gradient (`--backdrop-<key>`) lives in
+ * `global.css`'s `[data-theme='ingles']` block; its display label
+ * (Cielo/Menta/Sol/Lavanda/Pizarra) lives in `i18n.ts`'s
+ * `activities.background.preset*` — see `./backgrounds`'s own
+ * `backdropCssVar`/`backdropLabelKey` for the one place that maps between
+ * the three.
+ */
+export type BackdropPreset = 'sky' | 'mint' | 'sun' | 'lavender' | 'slate';
+
+/**
+ * A quiz block's optional decorative background (plantillas: fondo, owner
+ * decision 2026-10-23, §b of the proposal) — either one of five preset
+ * gradients, or an uploaded photo. Never where the activity's own text
+ * sits (that stays on the white `.activity-sheet` lámina, §d) — this is
+ * only ever painted BEHIND it, with `--backdrop-veil` over a photo so the
+ * sheet still reads clearly. ONLY VALID ON A MOLDED BLOCK (`template` set,
+ * one of the four `QuizTemplate`s) — never on the hidden, mold-less "Varios
+ * juegos" block — see {@link parseQuizBlock}'s own enforcement.
+ *
+ * `{kind: 'image'}`'s `path` is validated by {@link parseImagePath}
+ * requiring the `'background'` kind specifically (see `./paths`'s own "KIND
+ * PREFIX" header) — same posture as {@link PromptImageRef}'s own `path`,
+ * never interchangeable with a worksheet or question image.
+ */
+export type BlockBackground =
+  | { kind: 'preset'; preset: BackdropPreset }
+  | { kind: 'image'; path: string; width: number; height: number };
+
 /** The existing traditional exercise payload, as one activity block. */
 export interface QuizBlock {
   id: string;
@@ -168,6 +201,13 @@ export interface QuizBlock {
    * own validation below.
    */
   promptImages?: Record<string, PromptImageRef>;
+  /**
+   * See {@link BlockBackground}. `undefined`/absent = no background, the
+   * common case and every quiz block saved before this field existed —
+   * every molded template's own CSS default (the desk's own grey, §g.1 of
+   * the proposal) applies instead.
+   */
+  background?: BlockBackground;
 }
 
 export type Block = WorksheetBlock | QuizBlock;
@@ -229,6 +269,7 @@ export type BlocksParseMode = 'draft' | 'submit';
 const ZONE_KINDS: ReadonlySet<string> = new Set(['text', 'choice']);
 const ROTATIONS: ReadonlySet<number> = new Set([0, 90, 180, 270]);
 const QUIZ_TEMPLATES: ReadonlySet<string> = new Set(['match', 'reorder', 'cloze', 'groupsort']);
+const BACKDROP_PRESETS: ReadonlySet<string> = new Set(['sky', 'mint', 'sun', 'lavender', 'slate']);
 
 /** Narrow `unknown` to a plain object without trusting its keys. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -328,6 +369,43 @@ function parsePromptImages(
     result[slotId] = ref;
   }
   return result;
+}
+
+/**
+ * Parse a quiz block's optional `background`, or `null` if it is present
+ * but unusable — `undefined` for "absent entirely", the common case (see
+ * {@link BlockBackground}'s own header). Does NOT enforce "only on a molded
+ * block" — that depends on the block's own `template`, decided by this
+ * file's one caller, {@link parseQuizBlock}, after both are parsed.
+ *
+ * A preset must be one of the five stable keys; an image's `path` must
+ * match the storage layout exactly AND be the `'background'` kind
+ * specifically (never a worksheet or question image's own path, same
+ * reasoning {@link parsePromptImageRef}'s own header gives for `'question'`).
+ */
+function parseBlockBackground(value: unknown): BlockBackground | null | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return null;
+
+  if (value.kind === 'preset') {
+    if (typeof value.preset !== 'string' || !BACKDROP_PRESETS.has(value.preset)) return null;
+    return { kind: 'preset', preset: value.preset as BackdropPreset };
+  }
+
+  if (value.kind === 'image') {
+    if (typeof value.path !== 'string') return null;
+    const parsed = parseImagePath(value.path);
+    if (!parsed || parsed.kind !== 'background') return null;
+    if (typeof value.width !== 'number' || !Number.isFinite(value.width) || value.width <= 0) {
+      return null;
+    }
+    if (typeof value.height !== 'number' || !Number.isFinite(value.height) || value.height <= 0) {
+      return null;
+    }
+    return { kind: 'image', path: value.path, width: value.width, height: value.height };
+  }
+
+  return null;
 }
 
 /**
@@ -585,9 +663,20 @@ function parseQuizBlock(
   const promptImages = parsePromptImages(value.promptImages, slotIds);
   if (promptImages === null) return null;
 
+  // Plantillas: fondo (owner decision 2026-10-23, §b): only ever valid on a
+  // MOLDED block — the hidden, mold-less "Varios juegos" block has no
+  // `ActivityStage`/sheet of its own to paint it behind. Rejected in EITHER
+  // mode (unlike `template`'s own draft leniency above): this is a brand-new
+  // field with no pre-existing data to stay lenient for, so a background
+  // without a recognized template can only be a forged or buggy payload.
+  const background = parseBlockBackground(value.background);
+  if (background === null) return null;
+  if (background && !template) return null;
+
   const block: QuizBlock = { id, type: 'quiz', name, payload };
   if (template) block.template = template;
   if (promptImages) block.promptImages = promptImages;
+  if (background) block.background = background;
   return block;
 }
 

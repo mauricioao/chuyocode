@@ -63,11 +63,10 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTENT_MEASURE,
@@ -81,8 +80,6 @@ export interface QuizReorderProps {
   items: readonly GameItem[];
   /** Stable per-block seed (the block id) — the tray's own shuffle and "Reiniciar". */
   seed: string;
-  /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
-  editorOffset?: boolean;
   /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
   nextHref?: string;
   /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
@@ -185,6 +182,10 @@ function WordTileButton({ id, label, disabled, dragging, wrong, grade, reducedMo
       className={cn(
         'relative',
         TILE_BASE,
+        // Fix-round (visual bug audit): see `QuizMatching.tsx`'s own tile —
+        // same shared `CHIP_SHAPE` `disabled:opacity-50`, same fix, so a
+        // graded chip here keeps its full tray colour too.
+        'disabled:opacity-100',
         placed && CHIP_PLACED,
         draggable && 'touch-none',
         dragging && 'opacity-40',
@@ -198,7 +199,7 @@ function WordTileButton({ id, label, disabled, dragging, wrong, grade, reducedMo
   );
 }
 
-export default function QuizReorder({ lang, items, seed, editorOffset = false, nextHref, guest }: QuizReorderProps) {
+export default function QuizReorder({ lang, items, seed, nextHref, guest }: QuizReorderProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -493,7 +494,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
           `FLOATING_CHECK_BAR_CLASS` header. */}
       <div
         data-testid="reorder-actions"
-        className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+        className={FLOATING_CHECK_BAR_CLASS}
       >
         <Button
           type="button"
@@ -524,12 +525,13 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="reorder-stage"
-            className={cn(
-              'flex min-h-0 flex-col gap-6 overflow-y-auto',
-              STAGE_BOTTOM_RESERVE_CLASS,
-              STAGE_SAFE_INSET_CLASS,
-            )}
+            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
           >
+          {/* THE SHEET (activity-templates-polish pass, proposal §d): one
+              white card holding the sentence line + tray, shared material
+              with the other three moulds (`ACTIVITY_SHEET_CLASS`,
+              `mechanics/chip.ts`). */}
+          <div data-testid="activity-sheet" className={cn(ACTIVITY_SHEET_CLASS, 'flex flex-col gap-6')}>
           <ol
             ref={setLineRef}
             data-testid={`reorder-line-${index}`}
@@ -546,12 +548,14 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
               currentPlacements.length === 0 ? BLANK_EMPTY : BLANK_FILLED,
               STAGE_BOX_MIN_HEIGHT_SCALE,
               STAGE_CONTENT_MEASURE,
-              isOver && !locked && 'border-ring bg-accent/20',
-              isSolved && 'border-success-strong bg-success-strong/10',
+              // Active/correct — activity-templates-polish pass, proposal §d
+              // (same tokens `QuizMatching`'s own `MatchSlot` uses).
+              isOver && !locked && 'border-solid border-pop-sky-deep bg-[var(--well-active-bg)]',
+              isSolved && 'ring-2 ring-inset ring-success bg-pop-green/28',
             )}
           >
             {currentPlacements.length === 0 && (
-              <li aria-hidden="true" className="text-sm text-muted-foreground">
+              <li aria-hidden="true" className="w-full text-[17px]/[22px] text-center text-muted-foreground">
                 {t.reorderLineEmpty}
               </li>
             )}
@@ -612,6 +616,7 @@ export default function QuizReorder({ lang, items, seed, editorOffset = false, n
               );
             })}
           </ul>
+          </div>
           </div>
         </div>
 

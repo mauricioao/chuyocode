@@ -9,6 +9,7 @@ import {
   isOwnUploadPath,
   isPublicImagePath,
   isQuestionImagePath,
+  isBackgroundImagePath,
   AUDIO_UPLOADS_BUCKET,
   AUDIO_BUCKET,
   uploadAudioPath,
@@ -115,6 +116,33 @@ describe('parseImagePath', () => {
     });
   });
 
+  it('parses a well-formed background-kind uploads path', () => {
+    expect(parseImagePath(uploadPath(USER, OBJECT, 'background'))).toEqual({
+      bucket: UPLOADS_BUCKET,
+      ownerId: USER,
+      objectId: OBJECT,
+      kind: 'background',
+      fileName: `background-${OBJECT}.webp`,
+      objectPath: `${USER}/background-${OBJECT}.webp`,
+    });
+  });
+
+  it('parses a well-formed background-kind images path', () => {
+    expect(parseImagePath(approvedImagePath(ACTIVITY, OBJECT, 'background'))).toEqual({
+      bucket: IMAGES_BUCKET,
+      ownerId: ACTIVITY,
+      objectId: OBJECT,
+      kind: 'background',
+      fileName: `background-${OBJECT}.webp`,
+      objectPath: `${ACTIVITY}/background-${OBJECT}.webp`,
+    });
+  });
+
+  it('never confuses a question-kind path for a background-kind one, or vice versa', () => {
+    expect(parseImagePath(uploadPath(USER, OBJECT, 'question'))?.kind).toBe('question');
+    expect(parseImagePath(uploadPath(USER, OBJECT, 'background'))?.kind).toBe('background');
+  });
+
   it.each([
     ['a bare URL', `https://evil.example/${UPLOADS_BUCKET}/${USER}/${OBJECT}.webp`],
     ['an unknown bucket', `other-bucket/${USER}/${OBJECT}.webp`],
@@ -148,6 +176,28 @@ describe('isQuestionImagePath', () => {
 
   it('rejects garbage', () => {
     expect(isQuestionImagePath('../../etc/passwd')).toBe(false);
+  });
+});
+
+describe('isBackgroundImagePath', () => {
+  it('accepts a background-kind uploads path', () => {
+    expect(isBackgroundImagePath(uploadPath(USER, OBJECT, 'background'))).toBe(true);
+  });
+
+  it('accepts a background-kind images path', () => {
+    expect(isBackgroundImagePath(approvedImagePath(ACTIVITY, OBJECT, 'background'))).toBe(true);
+  });
+
+  it('rejects a worksheet-kind (unprefixed) path', () => {
+    expect(isBackgroundImagePath(uploadPath(USER, OBJECT))).toBe(false);
+  });
+
+  it('rejects a question-kind path (never interchangeable)', () => {
+    expect(isBackgroundImagePath(uploadPath(USER, OBJECT, 'question'))).toBe(false);
+  });
+
+  it('rejects garbage', () => {
+    expect(isBackgroundImagePath('../../etc/passwd')).toBe(false);
   });
 });
 

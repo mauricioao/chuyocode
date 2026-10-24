@@ -53,11 +53,10 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { BLANK_EMPTY, BLANK_FILLED, stageChipColorClass } from '@/components/islands/mechanics/chip';
+import { ACTIVITY_SHEET_CLASS, stageChipColorClass } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTENT_MEASURE,
@@ -72,8 +71,6 @@ export interface QuizGroupSortProps {
   payload: Payload;
   /** Stable per-block seed (the block id) — the tray's own shuffle and "Reintentar". */
   seed: string;
-  /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
-  editorOffset?: boolean;
   /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
   nextHref?: string;
   /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
@@ -124,6 +121,42 @@ const GROUPSORT_COPY: Record<'es' | 'en', GroupSortCopy> = {
   },
 };
 
+/** Each group's own dot, by its stable order — the same 4-colour sequence
+ * the editor's own group list uses (`GroupSortEditor.tsx`'s own, private
+ * `GROUP_DOT_CLASS`, not exported — duplicated here rather than imported, to
+ * keep the practice board independent of the editor module), so a group's
+ * colour matches between authoring and play. */
+const GROUP_DOT_CLASS = ['bg-pop-sky', 'bg-pop-yellow', 'bg-pop-red', 'bg-pop-green'] as const;
+
+/**
+ * The group box's own empty/filled well recipe (activity-templates-polish
+ * pass, proposal §d: "grupos: radio 26px (no cápsula)") — the same
+ * `--well-bg`/`--well-shadow`/`border-input` material `mechanics/chip.ts`'s
+ * {@link BLANK_EMPTY}/{@link BLANK_FILLED} give every other mould's drop
+ * target, at the group's own larger, rounded-RECTANGLE radius instead of the
+ * shared capsule (a group is a box holding several tiles, never a single-slot
+ * capsule). Kept local rather than added to `chip.ts`, which only ever gives
+ * out the capsule shape. Unlike a single-tile well, a group box stays
+ * visible (keeps `--well-bg`) once filled too — it is a persistent
+ * container, not a one-shot target that disappears behind its own tile.
+ */
+const GROUP_BOX_EMPTY =
+  'rounded-[26px] border-[1.5px] border-dashed border-input bg-[var(--well-bg)] shadow-[var(--well-shadow)] transition-colors';
+const GROUP_BOX_FILLED =
+  'rounded-[26px] border-[1.5px] border-solid border-transparent bg-[var(--well-bg)] shadow-[var(--well-shadow)] transition-colors';
+
+/**
+ * The board's own column count by group count (activity-templates-polish
+ * pass, proposal §d: "grilla 2 → 2, 3 → 3, 4 → 2 × 2; 1 columna en el
+ * celular" — replaces the old `flex-wrap` layout, which is what let 4
+ * groups read as 3 + 1 instead of an intentional 2×2). Always 1 column on
+ * phones; `sm:` and up switches to the grid.
+ */
+function groupGridColsClass(count: number): string {
+  if (count === 3) return 'grid-cols-1 sm:grid-cols-3';
+  return 'grid-cols-1 sm:grid-cols-2'; // 2 groups, or 4 (2×2) — the two even cases share one column count.
+}
+
 /**
  * Shared colour-filled capsule tile, `mechanics/chip.ts`'s own
  * `stageChipColorClass` — coloured from the shared tile palette by the
@@ -173,6 +206,10 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, locked, wr
       className={cn(
         'relative',
         stageChipColorClass(colorIndex),
+        // Fix-round (visual bug audit): see `QuizMatching.tsx`'s own tile —
+        // same shared `CHIP_SHAPE` `disabled:opacity-50`, same fix, so a
+        // graded chip here keeps its full tray colour too.
+        'disabled:opacity-100',
         draggable && 'touch-none',
         dragging && 'opacity-40',
         // Picked (tap-selected, not yet placed): a ring only — never a
@@ -197,6 +234,8 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, locked, wr
 
 interface GroupBoxProps {
   groupId: string;
+  /** This group's own stable position among its siblings — drives its title dot's colour ({@link GROUP_DOT_CLASS}), never its correctness. */
+  groupIndex: number;
   label: string;
   items: PoolItem[];
   lockedIds: ReadonlySet<string>;
@@ -217,6 +256,7 @@ interface GroupBoxProps {
 /** One group's own big labelled box — a drop target that holds EVERY tile currently placed in it, not just one. */
 function GroupBox({
   groupId,
+  groupIndex,
   label,
   items,
   lockedIds,
@@ -238,19 +278,25 @@ function GroupBox({
     <div
       ref={setNodeRef}
       data-testid={`groupsort-board-group-${groupId}`}
-      // Dashed capsule outline while empty ({@link BLANK_EMPTY}); border
+      // Dashed capsule outline while empty ({@link GROUP_BOX_EMPTY}); border
       // goes solid-transparent once the group holds items ({@link
-      // BLANK_FILLED}) — same shared blank the other mechanics' drop
-      // targets use, never a hard-bordered box.
+      // GROUP_BOX_FILLED}) — own rounded-rectangle recipe (proposal §d: "no
+      // cápsula"), not the shared capsule `BLANK_EMPTY`/`BLANK_FILLED` every
+      // single-tile well uses.
       className={cn(
         'flex flex-1 flex-col gap-2 p-3 sm:min-w-48',
-        items.length === 0 ? BLANK_EMPTY : BLANK_FILLED,
+        items.length === 0 ? GROUP_BOX_EMPTY : GROUP_BOX_FILLED,
         STAGE_BOX_MIN_HEIGHT_SCALE,
-        isOver && !disabled && 'border-ring bg-accent/20',
-        canPlacePicked && !disabled && 'border-ring',
+        (isOver || canPlacePicked) && !disabled && 'border-solid border-pop-sky-deep bg-[var(--well-active-bg)]',
       )}
     >
-      <p className={cn('text-center font-semibold text-foreground', TILE_TEXT_SCALE)}>{label}</p>
+      <p className={cn('flex items-center justify-center gap-2 text-center font-semibold text-foreground', TILE_TEXT_SCALE)}>
+        <span
+          aria-hidden="true"
+          className={cn('inline-block size-2.5 shrink-0 rounded-full', GROUP_DOT_CLASS[groupIndex % GROUP_DOT_CLASS.length])}
+        />
+        {label}
+      </p>
       <div className="flex min-h-11 flex-1 flex-wrap content-start items-start gap-2">
         {items.length === 0 && (
           <button
@@ -304,7 +350,7 @@ function GroupBox({
   );
 }
 
-export default function QuizGroupSort({ lang, payload, seed, editorOffset = false, nextHref, guest }: QuizGroupSortProps) {
+export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: QuizGroupSortProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -598,7 +644,7 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
           `FLOATING_CHECK_BAR_CLASS` header. */}
       <div
         data-testid="groupsort-actions"
-        className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+        className={FLOATING_CHECK_BAR_CLASS}
       >
         <Button
           type="button"
@@ -629,12 +675,12 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="groupsort-stage"
-            className={cn(
-              'flex min-h-0 flex-col gap-6 overflow-y-auto',
-              STAGE_BOTTOM_RESERVE_CLASS,
-              STAGE_SAFE_INSET_CLASS,
-            )}
+            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
           >
+          {/* THE SHEET (activity-templates-polish pass, proposal §d): one
+              white card holding tray + board, shared material with the
+              other three moulds (`ACTIVITY_SHEET_CLASS`, `mechanics/chip.ts`). */}
+          <div data-testid="activity-sheet" className={cn(ACTIVITY_SHEET_CLASS, 'flex flex-col gap-6')}>
           {/* THE TRAY, ABOVE THE BOARD (UI pass, owner spec: "mover las
               opciones arriba" — same DOM-order move `QuizMatching.tsx`
               documents for "Une las parejas", applied here too for
@@ -677,9 +723,9 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
 
           <div
             data-testid="groupsort-board"
-            className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap', STAGE_CONTENT_MEASURE)}
+            className={cn('grid gap-3', groupGridColsClass(groups.length), STAGE_CONTENT_MEASURE)}
           >
-            {groups.map((group) => {
+            {groups.map((group, groupIndex) => {
               // Every item CURRENTLY sitting in this group box: `placements`
               // keeps its entry even once an item is locked correct (`handleCheck`
               // only ever ADDS to `lockedIds`, it never removes the placement),
@@ -693,6 +739,7 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
                 <GroupBox
                   key={group.id}
                   groupId={group.id}
+                  groupIndex={groupIndex}
                   label={group.label}
                   items={items}
                   lockedIds={lockedIds}
@@ -710,6 +757,7 @@ export default function QuizGroupSort({ lang, payload, seed, editorOffset = fals
                 />
               );
             })}
+          </div>
           </div>
           </div>
         </div>

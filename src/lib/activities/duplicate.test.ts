@@ -365,6 +365,72 @@ describe('duplicateActivity', () => {
     });
   });
 
+  describe('quiz background image (plantillas: fondo, owner decision 2026-10-23)', () => {
+    const BACKGROUND_PATH = `activity-images/${ORIGINAL_ID}/background-f1f1f1f1-0000-4000-8000-0000000000f1.webp`;
+
+    function quizWithBackgroundImage() {
+      return originalActivity({
+        blocks: [
+          {
+            id: 'quiz-1',
+            type: 'quiz',
+            template: 'match',
+            payload: { slots: [{ id: 'slot-1', input: 'text', label: 'x', answer: ['y'] }], pools: {} },
+            background: { kind: 'image', path: BACKGROUND_PATH, width: 800, height: 600 },
+          },
+        ],
+      });
+    }
+
+    it("copies the background image into the caller's own uploads folder, keeping its background- prefix", async () => {
+      getPublishedActivityMock.mockResolvedValue(quizWithBackgroundImage());
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(copyToUploadsBucketMock).toHaveBeenCalledTimes(1);
+      const [fromPath, toPath] = copyToUploadsBucketMock.mock.calls[0] as [string, string];
+      expect(fromPath).toBe(BACKGROUND_PATH);
+      expect(toPath.startsWith(`activity-uploads/${CALLER_ID}/background-`)).toBe(true);
+    });
+
+    it('rewrites the background path in the new blocks to the copy destination', async () => {
+      getPublishedActivityMock.mockResolvedValue(quizWithBackgroundImage());
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      const newBlocks = createActivityMock.mock.calls[0][1].blocks as Block[];
+      const quiz = newBlocks[0] as Extract<Block, { type: 'quiz' }>;
+      expect(quiz.background?.kind).toBe('image');
+      const background = quiz.background as Extract<NonNullable<typeof quiz.background>, { kind: 'image' }>;
+      expect(background.path.startsWith(`activity-uploads/${CALLER_ID}/background-`)).toBe(true);
+    });
+
+    it('returns upload_limit when copying the background image would exceed the per-user cap (shares the SAME cap as worksheet/question images)', async () => {
+      getPublishedActivityMock.mockResolvedValue(quizWithBackgroundImage());
+      countUserUploadsMock.mockResolvedValue(MAX_UPLOADS_PER_USER);
+      const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(result).toEqual({ ok: false, error: 'upload_limit' });
+      expect(copyToUploadsBucketMock).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the uploads bucket for a preset background (nothing to copy), and preserves it unchanged', async () => {
+      getPublishedActivityMock.mockResolvedValue(
+        originalActivity({
+          blocks: [
+            {
+              id: 'quiz-1',
+              type: 'quiz',
+              template: 'match',
+              payload: { slots: [{ id: 'slot-1', input: 'text', label: 'x', answer: ['y'] }], pools: {} },
+              background: { kind: 'preset', preset: 'sky' },
+            },
+          ],
+        }),
+      );
+      await duplicateActivity(ORIGINAL_ID, CALLER_ID);
+      expect(copyToUploadsBucketMock).not.toHaveBeenCalled();
+      const newBlocks = createActivityMock.mock.calls[0][1].blocks as Block[];
+      const quiz = newBlocks[0] as Extract<Block, { type: 'quiz' }>;
+      expect(quiz.background).toEqual({ kind: 'preset', preset: 'sky' });
+    });
+  });
+
   it('returns not_found without touching storage/create when the service client is unavailable', async () => {
     countState.available = false;
     const result = await duplicateActivity(ORIGINAL_ID, CALLER_ID);

@@ -73,7 +73,7 @@ import { DotsSixVerticalIcon } from '@phosphor-icons/react/dist/ssr/DotsSixVerti
 import { ListChecksIcon } from '@phosphor-icons/react/dist/ssr/ListChecks';
 import { LockSimpleIcon } from '@phosphor-icons/react/dist/ssr/LockSimple';
 import { ArrowsCounterClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowsCounterClockwise';
-import { UI_LABELS } from '@/lib/i18n';
+import { UI_LABELS, type Lang } from '@/lib/i18n';
 import type { PoolItem, RowBlock, Slot } from '@/lib/exercisePayload';
 import {
   addRowBlock,
@@ -89,16 +89,17 @@ import {
 import { changeQuestionSegment, type QuestionSegment } from '@/lib/quizQuestionType';
 import { listIncompleteQuestions, type ChecklistReason } from '@/lib/quizChecklist';
 import type { Payload } from '@/lib/exercisePayload';
-import type { QuizBlock, QuizTemplate, PromptImageRef } from '@/lib/activities/blocks';
+import type { BlockBackground, QuizBlock, QuizTemplate, PromptImageRef } from '@/lib/activities/blocks';
 import { convertBlock, type DroppedItem } from '@/lib/activities/templateConversion';
 import { CHANGE_MOLD_ENABLED } from '@/lib/activities/flags';
 import { variosJuegosStatus } from '@/lib/activities/variosJuegosStatus';
-import type { GameMode } from '@/lib/activities/gameModes';
+import { groupSortPoolName as groupSortPoolNameFromPayload, type GameMode } from '@/lib/activities/gameModes';
 import ChangeMoldDialog from './ChangeMoldDialog';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
 import VariosJuegosRow, { ROW_GRID, ROW_GRID_HEADER, ROW_DIVIDER_CLASS } from './VariosJuegosRow';
 import QuizLivePreview from './QuizLivePreview';
+import BackgroundPicker from './BackgroundPicker';
 import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
 import ClozeEditor, { type ClozeSentenceInput } from './ClozeEditor';
@@ -284,6 +285,29 @@ export interface QuizBlockEditorProps {
    * always sets it.
    */
   imagesEnabled?: boolean;
+  /**
+   * This block's own decorative background (plantillas: fondo, owner
+   * decision 2026-10-23) — molded blocks only (`template !== undefined`,
+   * `blocks.ts`'s own `parseQuizBlock` enforcement). `undefined` = no
+   * background, the common case and every quiz block saved before this
+   * field existed.
+   */
+  background?: BlockBackground;
+  /**
+   * The author changed this block's own background via `BackgroundPicker`
+   * — `undefined` clears it ("Ninguno"). Optional only so every existing
+   * render site keeps compiling unchanged; the real mount (`BlockList.tsx`)
+   * always wires it for a molded block.
+   */
+  onBackgroundChange?: (next: BlockBackground | undefined) => void;
+  /**
+   * The REAL activity title/level, as the student's own window shows them
+   * (owner audit §c) — threaded straight to `QuizLivePreview`'s own
+   * `ActivityPreviewFrame` chrome, falling back to the placeholder copy
+   * there while `activityTitle` is empty/omitted.
+   */
+  activityTitle?: string;
+  activityLevelChip?: string | null;
 }
 
 /** `UI_LABELS[lang].activities.start`'s own title for a mold — the SAME name `BlockTypePicker.tsx`'s gallery and `ChangeMoldDialog.tsx` use (rule 6, §6.1: "a mold's name means the same thing everywhere"). */
@@ -515,14 +539,27 @@ export default function QuizBlockEditor({
   incompleteMessage = null,
   promptImages,
   imagesEnabled = false,
+  background,
+  onBackgroundChange = () => {},
+  activityTitle,
+  activityLevelChip,
 }: QuizBlockEditorProps) {
   const t = copyFor(lang);
   const isMatch = template === 'match';
   const isReorder = template === 'reorder';
   const isCloze = template === 'cloze';
   const isGroupSort = template === 'groupsort';
-  const clozePoolName = `${blockId}-cloze-pool`;
-  const groupSortPoolName = `${blockId}-groupsort-pool`;
+  // Bug S0 (owner audit, `PROPUESTA-PLANTILLAS-2026-10-23.md` §e): a
+  // duplicated/copied block's payload keeps whatever pool name its slots
+  // were ACTUALLY given when they were created — minting a fresh name from
+  // only the current `blockId` ignored that, so a block whose id changed
+  // after its content was authored (duplicate, paste) pointed every lookup
+  // at an empty pool. Reading the content's own pool name first (falling
+  // back to the `blockId` convention only when there is no group/blank yet
+  // to read it from) keeps every write landing in the SAME pool the content
+  // already uses, instead of splitting it into a second, orphaned one.
+  const clozePoolName = payload.slots.find((slot) => slot.input === 'drop')?.pool ?? `${blockId}-cloze-pool`;
+  const groupSortPoolName = groupSortPoolNameFromPayload(payload) ?? `${blockId}-groupsort-pool`;
   const draft = payloadToDraft(payload);
   const questions = draft.blocks.filter((b): b is RowBlock => b.kind === 'row');
   const checklist = listIncompleteQuestions(draft);
@@ -1249,7 +1286,26 @@ export default function QuizBlockEditor({
   // there is something to try (`QuizLivePreview` itself assumes >=1 slot
   // for its "Comprobar" score denominator).
   const previewColumn = hasQuestions ? (
-    <QuizLivePreview blockId={blockId} lang={lang} payload={debouncedPayload} template={template} />
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      {/* "Fondo" (plantillas: fondo, owner decision 2026-10-23): only a
+          MOLDED block has an `ActivityStage`/sheet of its own to paint a
+          background behind (`blocks.ts`'s own `parseQuizBlock` enforcement)
+          — "Varios juegos" (no `template`) never shows this trigger. */}
+      {template && (
+        <div data-testid={`quiz-preview-toolbar-${blockId}`} className="flex items-center justify-end">
+          <BackgroundPicker lang={lang as Lang} value={background} onChange={onBackgroundChange} />
+        </div>
+      )}
+      <QuizLivePreview
+        blockId={blockId}
+        lang={lang}
+        payload={debouncedPayload}
+        template={template}
+        background={background}
+        activityTitle={activityTitle}
+        activityLevelChip={activityLevelChip}
+      />
+    </div>
   ) : null;
 
   // TEMPLATE EDITORS (owner report: "no va a juego con los sombreados y
@@ -1280,6 +1336,7 @@ export default function QuizBlockEditor({
           preview={previewColumn}
           stageLabel={t.tabPreview}
           stageEmptyText={t.previewEmpty}
+          previewButtonLabel={UI_LABELS[lang === 'en' ? 'en' : 'es'].activities.editor.previewScrollButton}
           onKeyDownCapture={handleContainerKeyDown}
         />
         {changeMoldDialog}
@@ -1381,16 +1438,15 @@ export default function QuizBlockEditor({
           // column's own "Comprobar" button — which left a visibly empty
           // gutter down the right edge. FLOATING COMPROBAR (build item 5)
           // clears the docked rail on its own for the "Comprobar" capsule
-          // itself (`QuizLivePreview`'s own `editorOffset`,
-          // `FLOATING_CHECK_BAR_EDITOR_OFFSET`) — but the rest of this
-          // column's own LIVE content (the game mode tabs, the board itself)
-          // is real, clickable game UI, not decoration, and the docked rail
-          // still floats on top of its last ~28px (mobile review
-          // 2026-10-17/18, H15). `lg:pr-[70px]` is the SAME gutter
-          // `TemplateEditorLayout` already reserves for the 4 templates
-          // (`TemplateEditorKit.tsx`'s own header: 12px window edge + 42px
-          // rail + 16px gap) — it keeps this column's own content clear of
-          // the rail too, without moving the rail's design at all.
+          // itself — but the rest of this column's own LIVE content (the
+          // game mode tabs, the board itself) is real, clickable game UI,
+          // not decoration, and the docked rail still floats on top of its
+          // last ~28px (mobile review 2026-10-17/18, H15). `lg:pr-[70px]`
+          // is the SAME gutter `TemplateEditorLayout` already reserves for
+          // the 4 templates (`TemplateEditorKit.tsx`'s own header: 12px
+          // window edge + 42px rail + 16px gap) — it keeps this column's
+          // own content clear of the rail too, without moving the rail's
+          // design at all.
           className={cn(QUIZ_COLUMN_CLASS, 'lg:pr-[70px]', mobileTab === 'questions' && 'max-lg:hidden')}
         >
           {previewColumn}

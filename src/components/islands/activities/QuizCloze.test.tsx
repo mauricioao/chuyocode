@@ -114,7 +114,10 @@ describe('QuizCloze', () => {
     fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
     fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
 
-    expect(screen.getByTestId('cloze-blank-slot-s0b0').textContent).toBe('___');
+    // No "___" placeholder text any more (activity-templates-polish pass) —
+    // the dashed capsule is the affordance; the accessible name is unchanged.
+    expect(screen.getByTestId('cloze-blank-slot-s0b0').textContent).toBe('');
+    expect(screen.getByTestId('cloze-blank-slot-s0b0').getAttribute('aria-label')).toBeTruthy();
     expect(screen.getByTestId('cloze-tile-w-sleep')).toBeTruthy();
   });
 
@@ -141,11 +144,10 @@ describe('QuizCloze', () => {
       fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
       fireEvent.click(screen.getByTestId('cloze-check'));
 
-      // Mid-settle: the sentence card itself flags correct with an INSET
-      // ring (visual-polish pass — a plain `ring-*` paints outside the
-      // border box and was what clipped at the stage's own edge).
-      const sentence = screen.getByTestId('cloze-stage').querySelector('[data-testid^="cloze-game-sentence-"]');
-      expect(sentence!.className).toContain('ring-inset');
+      // Mid-settle: the BLANK itself flags correct with an INSET ring
+      // (activity-templates-polish pass — the sentence card is now part of
+      // the shared sheet and carries no correctness colour of its own).
+      expect(screen.getByTestId('cloze-blank-slot-s0b0').className).toContain('ring-inset');
 
       act(() => vi.advanceTimersByTime(1000));
 
@@ -162,8 +164,8 @@ describe('QuizCloze', () => {
       fireEvent.click(screen.getByTestId('cloze-check'));
 
       expect(screen.getByTestId('cloze-position').textContent).toBe('1 de 1');
-      expect(screen.getByTestId('cloze-blank-slot-s0b0').className).toContain('border-destructive');
-      expect(screen.getByTestId('cloze-blank-slot-s0b1').className).toContain('border-destructive');
+      expect(screen.getByTestId('cloze-blank-slot-s0b0').className).toContain('ring-destructive');
+      expect(screen.getByTestId('cloze-blank-slot-s0b1').className).toContain('ring-destructive');
 
       // Fixable: clear both wrong blanks, then place the right words.
       fireEvent.click(screen.getByTestId('cloze-blank-slot-s0b0'));
@@ -326,11 +328,6 @@ describe('QuizCloze', () => {
       expect(screen.getByTestId('cloze-stage').contains(screen.getByTestId('cloze-check'))).toBe(false);
       expect(screen.getByTestId('cloze-actions').className).toContain('fixed');
     });
-
-    it('offsets the floating Comprobar further left when rendered inside the editor', () => {
-      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" editorOffset />);
-      expect(screen.getByTestId('cloze-actions').className).toContain('lg:right-20');
-    });
   });
 
   // Stage layout system (visual-polish pass, owner bug: "el borde de cada
@@ -347,6 +344,13 @@ describe('QuizCloze', () => {
       expect(sentence).toBeTruthy();
       expect(sentence!.className).toContain('max-w-[760px]');
       expect(sentence!.className).toContain('mx-auto');
+    });
+
+    it('wraps the sentence + tray in exactly one shared "sheet" (activity-templates-polish pass)', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      expect(screen.getAllByTestId('activity-sheet')).toHaveLength(1);
+      const sentence = screen.getByTestId('cloze-stage').querySelector('[data-testid^="cloze-game-sentence-"]');
+      expect(screen.getByTestId('activity-sheet').contains(sentence)).toBe(true);
     });
   });
 });

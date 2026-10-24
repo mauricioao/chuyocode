@@ -268,3 +268,57 @@ describe('ModerationBlockPreview — "Ordenar por grupos" (group list)', () => {
     expect(screen.getByTestId('moderation-group-g1').textContent).toContain('dog');
   });
 });
+
+describe('ModerationBlockPreview — background (plantillas: fondo, owner decision 2026-10-23)', () => {
+  const MATCH: Block = {
+    id: 'q2',
+    type: 'quiz',
+    template: 'match',
+    payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+  };
+
+  it('shows nothing when the molded block has no background', () => {
+    render(<ModerationBlockPreview lang="es" block={MATCH} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.queryByTestId('moderation-block-background')).toBeNull();
+  });
+
+  it('shows a preset swatch and its Spanish label at the top of the block', () => {
+    const block: Block = { ...MATCH, background: { kind: 'preset', preset: 'sky' } };
+    render(<ModerationBlockPreview lang="es" block={block} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-background-swatch-sky')).toBeTruthy();
+    expect(screen.getByTestId('moderation-block-background').textContent).toContain('Cielo');
+  });
+
+  it('uses the English preset label under lang="en"', () => {
+    const block: Block = { ...MATCH, background: { kind: 'preset', preset: 'sky' } };
+    render(<ModerationBlockPreview lang="en" block={block} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.getByTestId('moderation-block-background').textContent).toContain('Sky');
+  });
+
+  it('shows a thumbnail, resolved via resolveImageUrl, for an uploaded background image', () => {
+    const block: Block = {
+      ...MATCH,
+      background: { kind: 'image', path: 'activity-images/q2/background-img.webp', width: 1200, height: 800 },
+    };
+    render(<ModerationBlockPreview lang="es" block={block} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    const img = screen.getByTestId('moderation-background-image') as HTMLImageElement;
+    expect(img.src).toContain(encodeURIComponent('activity-images/q2/background-img.webp'));
+    expect(img.alt).toBe('');
+  });
+
+  it('shows the background regardless of showAnswers (it is content, not a hidden answer)', () => {
+    const block: Block = { ...MATCH, background: { kind: 'preset', preset: 'mint' } };
+    render(<ModerationBlockPreview lang="es" block={block} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers />);
+    expect(screen.getByTestId('moderation-block-background')).toBeTruthy();
+  });
+
+  it('a worksheet block never shows a background section (the field only exists on a molded QuizBlock)', () => {
+    render(<ModerationBlockPreview lang="es" block={WORKSHEET} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.queryByTestId('moderation-block-background')).toBeNull();
+  });
+
+  it('the mold-less "Varios juegos" block never shows a background section', () => {
+    render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
+    expect(screen.queryByTestId('moderation-block-background')).toBeNull();
+  });
+});
