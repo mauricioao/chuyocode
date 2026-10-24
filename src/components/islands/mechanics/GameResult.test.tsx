@@ -164,6 +164,36 @@ describe('GameResult', () => {
       const next = screen.getByTestId('game-result-next');
       expect(next.getAttribute('data-desk-open-window')).toBe('replace');
     });
+
+    // Owner audit (`PROPUESTA-PLANTILLAS-2026-10-23.md` §c): the template
+    // editor's own preview has no real next activity to go to, but must
+    // still show the REAL result screen — `nextHrefInert` keeps "Otra
+    // actividad" visibly present, just never navigating.
+    it('keeps "Otra actividad" visible but inert when `nextHrefInert` is set', () => {
+      render(
+        <GameResult
+          lang="es"
+          correct={3}
+          total={3}
+          nextHref="/es/ingles/actividades?nivel=a1"
+          nextHrefInert
+          onPlayAgain={() => {}}
+        />,
+      );
+      const next = screen.getByTestId('game-result-next');
+      expect(next.textContent).toBe('Otra actividad');
+      const event = fireEvent.click(next);
+      // `fireEvent.click` returns `false` when a handler called `preventDefault()`.
+      expect(event).toBe(false);
+    });
+
+    it('leaves "Otra actividad" a normal navigation when `nextHrefInert` is omitted', () => {
+      render(
+        <GameResult lang="es" correct={3} total={3} nextHref="/es/ingles/actividades?nivel=a1" onPlayAgain={() => {}} />,
+      );
+      const event = fireEvent.click(screen.getByTestId('game-result-next'));
+      expect(event).toBe(true);
+    });
   });
 
   describe('"Repasar las que fallé"', () => {

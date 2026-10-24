@@ -280,11 +280,6 @@ describe('QuizReorder', () => {
       expect(screen.getByTestId('reorder-actions').className).toContain('fixed');
       expect(screen.getByTestId('reorder-stage').contains(checkButton)).toBe(false);
     });
-
-    it('offsets the floating Comprobar further left when rendered inside the editor', () => {
-      render(<QuizReorder lang="es" items={items} seed="block-1" editorOffset />);
-      expect(screen.getByTestId('reorder-actions').className).toContain('lg:right-20');
-    });
   });
 
   // Stage layout system (visual-polish pass, owner bug: "el borde de cada

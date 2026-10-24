@@ -14,21 +14,23 @@
  * 4. body > 2 MB (mirrors the bucket's own cap) -> 413
  * 5. not really WebP (bad magic bytes/header)   -> 422
  * 6. width/height outside [200, 2400] px        -> 422
- * 7. ?purpose= is present but neither           -> 400 { error: 'bad_request' }
- *    'worksheet' nor 'question'
+ * 7. ?purpose= is present but none of            -> 400 { error: 'bad_request' }
+ *    'worksheet'/'question'/'background'
  * 8. caller already has >= 100 uploads          -> 429
  * 9. storage write fails                        -> 500
  * 10. success                                   -> 200 { path, width, height }
  * ```
  *
  * `?purpose=question` (owner decision 2026-10-16, "Varios juegos" question
- * context images): same endpoint, same validation above, UNCHANGED —
- * only the STORED PATH differs, under a distinct `question-` filename
- * prefix (`@lib/activities/paths`'s own "KIND PREFIX" header) so every
- * consumer can tell a question's own context image apart from a worksheet
- * one. `?purpose=worksheet`, or no `?purpose=` at all, is the original
- * worksheet shape — every call site written before question images existed
- * keeps producing exactly the same path it always did.
+ * context images) and `?purpose=background` (plantillas: fondo, owner
+ * decision 2026-10-23, molded blocks' own decorative background): same
+ * endpoint, same validation above, UNCHANGED — only the STORED PATH
+ * differs, under a distinct `question-`/`background-` filename prefix
+ * (`@lib/activities/paths`'s own "KIND PREFIX" header) so every consumer can
+ * tell each kind of image apart from a worksheet one. `?purpose=worksheet`,
+ * or no `?purpose=` at all, is the original worksheet shape — every call
+ * site written before question/background images existed keeps producing
+ * exactly the same path it always did.
  *
  * `GET /api/actividades/imagen?path=…` — preview/read-back for a stored
  * path. A well-formed `activity-images/…` path is PUBLIC already (a
@@ -81,7 +83,7 @@ function redirect(location: string): Response {
 }
 
 /** `?purpose=` values this endpoint accepts — anything else is a 400 (see this file's own header). */
-const PURPOSE_KINDS: ReadonlySet<string> = new Set(['worksheet', 'question']);
+const PURPOSE_KINDS: ReadonlySet<string> = new Set(['worksheet', 'question', 'background']);
 
 export const POST: APIRoute = async ({ request, locals }) => {
   // Checked before anything else, same rule as every identity-gated write in
@@ -93,7 +95,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (purposeParam !== null && !PURPOSE_KINDS.has(purposeParam)) {
     return jsonResponse({ error: 'bad_request' }, 400);
   }
-  const kind: ImageKind = purposeParam === 'question' ? 'question' : 'worksheet';
+  const kind: ImageKind =
+    purposeParam === 'question' ? 'question' : purposeParam === 'background' ? 'background' : 'worksheet';
 
   const contentType = (request.headers.get('content-type') ?? '').toLowerCase();
   if (!contentType.startsWith('image/webp')) {

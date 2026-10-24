@@ -257,6 +257,17 @@ describe('POST /api/actividades/imagen — ?purpose= (question context images, o
     );
   });
 
+  it('accepts ?purpose=background and uploads with the background kind (plantillas: fondo, owner decision 2026-10-23)', async () => {
+    const res = await POST(postCtx({ purpose: 'background' }));
+    expect(res.status).toBe(200);
+    expect(storageMocks.uploadToUploadsBucket).toHaveBeenCalledWith(
+      USER.id,
+      expect.any(String),
+      expect.any(Uint8Array),
+      'background',
+    );
+  });
+
   it('400s an unrecognized ?purpose= value, and nothing is uploaded', async () => {
     const res = await POST(postCtx({ purpose: 'worksheet-nope' }));
     expect(res.status).toBe(400);

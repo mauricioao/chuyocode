@@ -33,6 +33,7 @@ import type { Icon } from '@phosphor-icons/react';
 import { useHydrated } from '@/hooks/useHydrated';
 import { REDUCED_MOTION_QUERY } from '@/hooks/usePrefersReducedMotion';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 /** How long a removed row/card takes to fold away — matches `global.css`'s `template-row-out`. */
 export const ITEM_EXIT_MS = 160;
@@ -66,6 +67,15 @@ export interface TemplateEditorLayoutProps {
   stageLabel: string;
   /** Shown in the stage while `preview` is `null`. */
   stageEmptyText: string;
+  /**
+   * Phone-only "Ver vista previa" capsule (phone review 2026-10-23): below
+   * `lg` the sheet and the stage stack in normal document flow, so the live
+   * preview sits further down the page while authoring, out of sight —
+   * this scrolls straight to it instead of making the author find it by
+   * hand. Pre-resolved by the caller (same pattern as `stageLabel`); the
+   * button is omitted entirely while this is `undefined`.
+   */
+  previewButtonLabel?: string;
   onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>;
 }
 
@@ -85,9 +95,16 @@ export function TemplateEditorLayout({
   preview,
   stageLabel,
   stageEmptyText,
+  previewButtonLabel,
   onKeyDownCapture,
 }: TemplateEditorLayoutProps) {
   const hydrated = useHydrated();
+  const stageRef = useRef<HTMLElement | null>(null);
+  /** Scrolls the live preview into view — see `previewButtonLabel`'s own header. Falls back to the stage section itself if the preview hasn't rendered its own pane yet (e.g. still empty). */
+  function scrollToPreview() {
+    const pane = stageRef.current?.querySelector('[data-testid="activity-preview-pane"]');
+    (pane ?? stageRef.current)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   return (
     <AnimateNewItemsContext.Provider value={hydrated}>
       <div
@@ -100,11 +117,26 @@ export function TemplateEditorLayout({
           data-testid={`template-sheet-${blockId}`}
           className="ingles-glass template-sheet flex flex-col lg:min-h-0 lg:w-[clamp(360px,44%,520px)] lg:shrink-0 lg:overflow-clip"
         >
-          <div className="template-scroll p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">{sheet}</div>
+          <div className="template-scroll p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {previewButtonLabel && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid={`template-preview-button-${blockId}`}
+                onClick={scrollToPreview}
+                className="mb-3 lg:hidden"
+              >
+                {previewButtonLabel}
+              </Button>
+            )}
+            {sheet}
+          </div>
           {/* The floating status pill's own footer zone — content scrolls above it, never under it. */}
           <div aria-hidden="true" className="hidden h-14 shrink-0 lg:block" />
         </div>
         <section
+          ref={stageRef}
           aria-label={stageLabel}
           data-testid={`template-stage-${blockId}`}
           // CANVAS HEIGHT ON PHONE/TABLET (mobile review 2026-10-18): the old

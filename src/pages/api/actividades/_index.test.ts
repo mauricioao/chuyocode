@@ -22,6 +22,10 @@ const OWN_QUESTION_PATH = `activity-uploads/${USER.id}/question-33333333-3333-33
 const OTHER_QUESTION_PATH =
   'activity-uploads/44444444-4444-4444-4444-444444444444/question-33333333-3333-3333-3333-333333333333.webp';
 
+const OWN_BACKGROUND_PATH = `activity-uploads/${USER.id}/background-33333333-3333-3333-3333-333333333333.webp`;
+const OTHER_BACKGROUND_PATH =
+  'activity-uploads/44444444-4444-4444-4444-444444444444/background-33333333-3333-3333-3333-333333333333.webp';
+
 function worksheetBlock(path: string) {
   return {
     id: 'block-1',
@@ -37,6 +41,17 @@ function quizBlockWithPromptImage(path: string) {
     type: 'quiz',
     payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
     promptImages: { s1: { path, width: 400, height: 300 } },
+  };
+}
+
+/** A molded quiz block with a decorative background IMAGE (plantillas: fondo, owner decision 2026-10-23) — `background` only parses on a MOLDED block, so `template` must be set alongside it (`blocks.ts`'s `parseQuizBlock`). */
+function quizBlockWithBackgroundImage(path: string) {
+  return {
+    id: 'block-quiz-bg-1',
+    type: 'quiz',
+    template: 'match',
+    payload: { pools: {}, slots: [{ id: 's1', label: 'x', input: 'text', answer: ['cat'] }] },
+    background: { kind: 'image', path, width: 800, height: 600 },
   };
 }
 
@@ -180,6 +195,25 @@ describe('POST /api/actividades — quiz question image (promptImages) ownership
   it("accepts the caller's own question-kind upload path", async () => {
     const res = await POST(
       ctx({ body: { lang: 'es', blocks: [quizBlockWithPromptImage(OWN_QUESTION_PATH)] } }),
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/actividades — quiz background image ownership, plantillas: fondo owner decision 2026-10-23', () => {
+  it("422s when a background image is not the caller's own upload (no activity id exists yet, so there is no second allowed shape)", async () => {
+    const res = await POST(
+      ctx({ body: { lang: 'es', blocks: [quizBlockWithBackgroundImage(OTHER_BACKGROUND_PATH)] } }),
+    );
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error).toBe('invalid_image_path');
+    expect(createActivityMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts the caller's own background-kind upload path", async () => {
+    const res = await POST(
+      ctx({ body: { lang: 'es', blocks: [quizBlockWithBackgroundImage(OWN_BACKGROUND_PATH)] } }),
     );
     expect(res.status).toBe(200);
   });

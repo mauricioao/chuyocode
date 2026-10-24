@@ -10,11 +10,67 @@
  * to see the CONTENT first, unprimed by the key.
  */
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block } from '@/lib/activities/blocks';
+import type { Block, BlockBackground } from '@/lib/activities/blocks';
 import { zoneAnswerSummary, zoneOptionsSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import { deriveClozeGameSentences } from '@/lib/activities/clozeSentences';
 import { deriveGroupSortGroups } from '@/lib/activities/gameModes';
+import { backdropCssVar, backdropLabelKey } from '@/lib/activities/backgrounds';
 import { FadeImage } from '@/components/ui/fade-image';
+
+/**
+ * This block's own decorative background (plantillas: fondo, owner
+ * decision 2026-10-23) — a preset swatch+name, or a thumbnail of the
+ * uploaded photo, shown at the TOP of every MOLDED quiz block's moderation
+ * preview (never the worksheet branch above, never the mold-less "Varios
+ * juegos" fallback below: `parseQuizBlock` only ever allows a background on
+ * a block with a `template`). Nobody approves a background they did not
+ * see.
+ */
+function ModerationBlockBackground({
+  lang,
+  background,
+  resolveImageUrl,
+}: {
+  lang: Lang;
+  background: BlockBackground | undefined;
+  resolveImageUrl: (path: string) => string;
+}) {
+  if (!background) return null;
+  const t = UI_LABELS[lang].activities.moderation;
+  const presetLabels = UI_LABELS[lang].activities.background;
+
+  if (background.kind === 'preset') {
+    return (
+      <div
+        data-testid="moderation-block-background"
+        className="flex items-center gap-2 rounded-md border border-border p-2 text-sm"
+      >
+        <span
+          aria-hidden="true"
+          data-testid={`moderation-background-swatch-${background.preset}`}
+          className="size-6 shrink-0 rounded-full border border-border/40"
+          style={{ background: backdropCssVar(background.preset) }}
+        />
+        <span className="font-medium text-foreground">
+          {t.backgroundLabel}: {presetLabels[backdropLabelKey(background.preset)]}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="moderation-block-background" className="rounded-md border border-border p-2">
+      <span className="text-sm font-medium text-foreground">{t.backgroundLabel}</span>
+      <FadeImage
+        data-testid="moderation-background-image"
+        src={resolveImageUrl(background.path)}
+        alt=""
+        className="mt-1 max-h-32 w-full max-w-xs rounded-md object-cover"
+        placeholderClassName="mt-1 h-20 w-full max-w-xs rounded-md"
+      />
+    </div>
+  );
+}
 
 export interface ModerationBlockPreviewProps {
   lang: Lang;
@@ -115,6 +171,7 @@ export default function ModerationBlockPreview({
   if (block.template === 'match') {
     return (
       <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ModerationBlockBackground lang={lang} background={block.background} resolveImageUrl={resolveImageUrl} />
         <ul className="flex flex-col gap-2">
           {block.payload.slots.map((slot) => (
             <li key={slot.id} data-testid={`moderation-pair-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
@@ -136,6 +193,7 @@ export default function ModerationBlockPreview({
   if (block.template === 'reorder') {
     return (
       <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ModerationBlockBackground lang={lang} background={block.background} resolveImageUrl={resolveImageUrl} />
         <ul className="flex flex-col gap-2">
           {block.payload.slots.map((slot) => (
             <li key={slot.id} data-testid={`moderation-sentence-${slot.id}`} className="rounded-md border border-border p-2 text-sm">
@@ -159,6 +217,7 @@ export default function ModerationBlockPreview({
 
     return (
       <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ModerationBlockBackground lang={lang} background={block.background} resolveImageUrl={resolveImageUrl} />
         <ul className="flex flex-col gap-2">
           {deriveClozeGameSentences(block.payload).map((sentence) => (
             <li
@@ -195,6 +254,7 @@ export default function ModerationBlockPreview({
   if (block.template === 'groupsort') {
     return (
       <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ModerationBlockBackground lang={lang} background={block.background} resolveImageUrl={resolveImageUrl} />
         <ul className="flex flex-col gap-2">
           {deriveGroupSortGroups(block.payload).map((group) => (
             <li

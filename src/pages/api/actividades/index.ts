@@ -71,6 +71,20 @@ function everyPromptImageOwnedByCaller(blocks: Block[], userId: string): boolean
   });
 }
 
+/**
+ * Same rule as {@link everyPromptImageOwnedByCaller}, over a quiz block's
+ * own `background` IMAGE (plantillas: fondo, owner decision 2026-10-23) — no
+ * activity id exists yet at creation time, so every background image path
+ * must be the caller's own upload. A `{kind: 'preset'}` background has
+ * nothing to check.
+ */
+function everyBackgroundImageOwnedByCaller(blocks: Block[], userId: string): boolean {
+  return blocks.every((block) => {
+    if (block.type !== 'quiz' || block.background?.kind !== 'image') return true;
+    return isOwnUploadPath(block.background.path, userId);
+  });
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const user = locals.user;
   if (!user) return requireUser();
@@ -100,7 +114,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
 
-  if (!everyImageOwnedByCaller(blocks, user.id) || !everyPromptImageOwnedByCaller(blocks, user.id)) {
+  if (
+    !everyImageOwnedByCaller(blocks, user.id) ||
+    !everyPromptImageOwnedByCaller(blocks, user.id) ||
+    !everyBackgroundImageOwnedByCaller(blocks, user.id)
+  ) {
     return jsonResponse({ error: 'invalid_image_path' }, 422);
   }
 

@@ -262,3 +262,37 @@ describe('scrollbar (creator polish round 3 — no layout jump)', () => {
     expect(css).toMatch(/::-webkit-scrollbar-thumb:hover\s*{\s*background-color:\s*var\(--muted-foreground\);/);
   });
 });
+
+// Template board polish (activity-templates-polish pass, proposal
+// `docs/PROPUESTA-PLANTILLAS-2026-10-23.md` §d) — the premium stage shadow,
+// the chip rest/raised/colour-fill shadows (`mechanics/chip.ts`), and the
+// well tokens every drop target (`BLANK_EMPTY`/`BLANK_FILLED`) now shares.
+describe('[data-theme="ingles"] — template board polish tokens (activity-templates-polish pass)', () => {
+  it.each([
+    '--shadow-stage-premium',
+    '--chip-rest-bg',
+    '--shadow-chip-rest',
+    '--shadow-chip-raised',
+    '--shadow-chip-color',
+    '--well-bg',
+    '--well-shadow',
+    '--well-active-bg',
+  ])('defines %s with a non-empty value', (name) => {
+    const value = token(name);
+    expect(value).toBeDefined();
+    expect(value).not.toBe('');
+  });
+
+  it('the chip rest background is a gradient, never a flat fill (one light direction, matte)', () => {
+    expect(token('--chip-rest-bg')).toContain('linear-gradient');
+  });
+
+  it('the well active background is the sky accent at low opacity', () => {
+    expect(token('--well-active-bg')).toContain('97 194 245');
+  });
+
+  it('defines the .activity-sheet board wrapper, with the premium shadow + glass ring', () => {
+    expect(css).toContain('.activity-sheet {');
+    expect(css).toMatch(/\.activity-sheet\s*{[^}]*box-shadow:\s*var\(--ingles-glass-ring\),\s*var\(--shadow-stage-premium\);/);
+  });
+});

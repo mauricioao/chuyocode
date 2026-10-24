@@ -180,14 +180,6 @@ export const STAGE_TWO_COL_GRID = 'grid-cols-1 @lg:grid-cols-2';
  * worksheets; practice, full-screen focus mode, preview, the editor's own
  * live preview), never the in-flow bottom of a scrolling board any more.
  *
- * Offset left of the DOCKED side toolbar at `lg:` (`EditorSideToolbar`'s own
- * default docked slot, right-center of the window) only where that toolbar
- * can actually be present — the editor's own live preview
- * (`QuizLivePreview`, via its `editorOffset` prop) — see
- * {@link FLOATING_CHECK_BAR_EDITOR_OFFSET}. Every other context (practice,
- * full-screen, standalone preview) has no such toolbar and uses the plain
- * value below unchanged.
- *
  * Every caller that renders this inside a SCROLLABLE stage must also give
  * that scroll container `STAGE_BOTTOM_RESERVE_CLASS` (below), so the
  * floating bar can never cover the last visible row/tile.
@@ -201,9 +193,6 @@ export const STAGE_TWO_COL_GRID = 'grid-cols-1 @lg:grid-cols-2';
  */
 export const FLOATING_CHECK_BAR_CLASS =
   'floating-check-bar fixed bottom-4 right-4 z-40 flex flex-wrap items-center justify-end gap-2';
-
-/** Added to {@link FLOATING_CHECK_BAR_CLASS} only inside the activity editor — see that token's own header. */
-export const FLOATING_CHECK_BAR_EDITOR_OFFSET = 'lg:right-20';
 
 /** Bottom padding reserved on a scrollable stage so {@link FLOATING_CHECK_BAR_CLASS} can never cover its last visible row/tile. */
 export const STAGE_BOTTOM_RESERVE_CLASS = 'pb-20';

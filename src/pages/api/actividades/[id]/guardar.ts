@@ -107,6 +107,20 @@ function everyPromptImageAllowed(blocks: Block[], userId: string, activityId: st
   });
 }
 
+/**
+ * Same ownership rule as {@link everyImageAllowed}, over a quiz block's own
+ * `background` IMAGE (plantillas: fondo, owner decision 2026-10-23) — the
+ * background counterpart of {@link everyPromptImageAllowed}. A `{kind:
+ * 'preset'}` background names nothing to check (a CSS gradient, not an
+ * upload); only `{kind: 'image'}` carries a `path`.
+ */
+function everyBackgroundImageAllowed(blocks: Block[], userId: string, activityId: string): boolean {
+  return blocks.every((block) => {
+    if (block.type !== 'quiz' || block.background?.kind !== 'image') return true;
+    return isAllowedImagePath(block.background.path, userId, activityId);
+  });
+}
+
 /** Is `path` a worksheet audio marker this activity's save may legally reference? Mirrors {@link isAllowedImagePath}. */
 function isAllowedAudioPath(path: string, userId: string, activityId: string): boolean {
   if (isOwnAudioUploadPath(path, userId)) return true;
@@ -196,7 +210,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return jsonResponse({ error: 'invalid_blocks' }, 422);
   }
 
-  if (!everyImageAllowed(blocks, user.id, id) || !everyPromptImageAllowed(blocks, user.id, id)) {
+  if (
+    !everyImageAllowed(blocks, user.id, id) ||
+    !everyPromptImageAllowed(blocks, user.id, id) ||
+    !everyBackgroundImageAllowed(blocks, user.id, id)
+  ) {
     return jsonResponse({ error: 'invalid_image_path' }, 422);
   }
 

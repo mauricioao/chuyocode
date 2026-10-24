@@ -234,6 +234,17 @@ function buildBlock(block: QuizBlock, to: Mold, draft: Draft): QuizBlock {
   if (to) next.template = to;
   else delete next.template;
   delete next.promptImages;
+  // Plantillas: fondo (owner decision 2026-10-23): a `background` is a
+  // block-level field, not keyed by slot id — unlike `promptImages`, the
+  // `...block` spread above already carries it over UNCHANGED across a
+  // mold-to-mold switch ("Cambiar de molde... lo conservan", §b of the
+  // proposal), no reshape needed. Only dropped when `to` is mold-less
+  // (`undefined`, "Varios juegos") — `parseQuizBlock` only ever allows a
+  // background on a molded block, so a background can never have reached
+  // here in the first place unless `from` already had a template, meaning
+  // this is the ONLY lossy direction. Silently, same as `template` itself
+  // losing no `dropped` entry on this exact transition.
+  if (!to) delete next.background;
   return next;
 }
 

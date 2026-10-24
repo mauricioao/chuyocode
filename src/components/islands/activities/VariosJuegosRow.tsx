@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { CHIP_INLINE } from '@/components/islands/mechanics/chip';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { imagePreviewUrl } from '@/lib/activities/paths';
-import { convertImageToWebp } from '@/lib/activities/imagePipeline';
+import { uploadActivityImage, ACCEPTED_IMAGE_TYPES } from '@/lib/activities/imageUpload';
 import type { PromptImageRef } from '@/lib/activities/blocks';
 import { FadeImage } from '@/components/ui/fade-image';
 import QuestionCard, { type QuestionCardProps } from './QuestionCard';
@@ -88,9 +88,6 @@ export interface VariosJuegosRowProps extends QuestionCardProps {
   onPromptImageChange?: (image: PromptImageRef | undefined) => void;
 }
 
-/** `?purpose=question`'s own accepted source types — images only, never a PDF (no stitching/rotation for a question's context image, owner spec). */
-const ACCEPTED_IMAGE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
 type QuestionImageStatus = { kind: 'idle' } | { kind: 'uploading' } | { kind: 'error'; message: string };
 
 /**
@@ -98,12 +95,13 @@ type QuestionImageStatus = { kind: 'idle' } | { kind: 'uploading' } | { kind: 'e
  * 2026-10-16) — a small, self-contained uploader, deliberately NOT
  * `uploadTask.ts`'s multi-page state machine (`WorksheetUploader.tsx`'s
  * own): there is at most one image, no PDF, no stitching, so a single
- * idle/uploading/error state is the whole story. Reuses
- * `imagePipeline.ts`'s own `convertImageToWebp` (resize + strip EXIF +
- * encode) and the SAME `/api/actividades/imagen` endpoint, with
- * `?purpose=question` so the server stores it under the distinct
- * `question-` prefix (`@lib/activities/paths`'s own "KIND PREFIX" header) —
- * never a worksheet image anywhere downstream.
+ * idle/uploading/error state is the whole story. The actual convert+upload
+ * call is `@lib/activities/imageUpload`'s own shared `uploadActivityImage`
+ * (plantillas: fondo, owner decision 2026-10-23 — factored out here so
+ * `BackgroundPicker.tsx` reuses it too), with `purpose: 'question'` so the
+ * server stores it under the distinct `question-` prefix
+ * (`@lib/activities/paths`'s own "KIND PREFIX" header) — never a worksheet
+ * image anywhere downstream.
  */
 function QuestionImageField({
   lang,
@@ -128,28 +126,13 @@ function QuestionImageField({
       return;
     }
     setStatus({ kind: 'uploading' });
-    try {
-      const blob = await convertImageToWebp(file);
-      const res = await fetch('/api/actividades/imagen?purpose=question', {
-        method: 'POST',
-        headers: { 'content-type': 'image/webp' },
-        body: blob,
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        path?: string;
-        width?: number;
-        height?: number;
-        error?: string;
-      };
-      if (!res.ok || !data.path || !data.width || !data.height) {
-        setStatus({ kind: 'error', message: errors[data.error ?? ''] ?? errors.upload_failed });
-        return;
-      }
-      setStatus({ kind: 'idle' });
-      onChange({ path: data.path, width: data.width, height: data.height });
-    } catch {
-      setStatus({ kind: 'error', message: errors.upload_failed });
+    const result = await uploadActivityImage(file, 'question');
+    if (!result.ok) {
+      setStatus({ kind: 'error', message: errors[result.errorCode] ?? errors.upload_failed });
+      return;
     }
+    setStatus({ kind: 'idle' });
+    onChange(result.image);
   }
 
   return (

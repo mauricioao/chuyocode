@@ -64,11 +64,10 @@ import {
   useFlip,
   useGameDndSensors,
 } from '@/components/islands/mechanics/gameFeel';
-import { BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
+import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  FLOATING_CHECK_BAR_EDITOR_OFFSET,
   STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTENT_MEASURE,
   STAGE_SAFE_INSET_CLASS,
@@ -85,8 +84,6 @@ export interface QuizClozeProps {
   payload: Payload;
   /** Stable per-block seed (the block id) — the tray's own shuffle and "Reiniciar". */
   seed: string;
-  /** True only inside the activity editor's own live preview (`QuizLivePreview`) — offsets the floating Comprobar/Reintentar further left so it clears `EditorSideToolbar`'s docked rail (build item 5). Defaults to `false` for every practice/full-screen caller, which has no such toolbar. */
-  editorOffset?: boolean;
   /** Threaded straight through to `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
   nextHref?: string;
   /** Threaded straight through to `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
@@ -160,7 +157,10 @@ function ClozeTileButton({ id, label, disabled, dragging, picked, reducedMotion,
       aria-pressed={dragging || picked}
       className={cn(
         TILE_BASE,
-        'touch-none',
+        // Fix-round (visual bug audit): see `QuizMatching.tsx`'s own tile —
+        // same shared `CHIP_SHAPE` `disabled:opacity-50`, same fix, so a
+        // graded chip here keeps its full tray colour too.
+        'touch-none disabled:opacity-100',
         dragging && 'opacity-40',
         picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
         gameTileTransitionClassName(reducedMotion),
@@ -212,7 +212,11 @@ function ClozeBlankBox({
       // Dashed capsule outline while empty ({@link BLANK_EMPTY}); filled,
       // it becomes the same white-raised chip every placed tile gets
       // ({@link BLANK_FILLED} + {@link CHIP_PLACED}) — the shared blank,
-      // never a hand-rolled bordered box.
+      // never a hand-rolled bordered box. No "___" placeholder text
+      // (activity-templates-polish pass, proposal §d) — the dashed capsule
+      // is already the affordance ({@link BLANK_EMPTY}'s own header), and
+      // the accessible name (`aria-label` above) already names the blank
+      // either way, so dropping the glyph loses nothing for a screen reader.
       className={cn(
         // `my-1`: the blank is as tall as the line, so without it two
         // wrapped lines' blanks touched on a phone.
@@ -222,19 +226,22 @@ function ClozeBlankBox({
         TILE_PADDING_Y_SCALE,
         TILE_TEXT_SCALE,
         tile ? cn(BLANK_FILLED, CHIP_PLACED, 'text-foreground') : cn(BLANK_EMPTY, 'text-muted-foreground'),
-        isOver && !disabled && 'border-ring bg-accent/20',
-        !tile && canPlacePicked && !disabled && 'border-ring bg-accent/10',
-        wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
+        // Active/correct/incorrect — activity-templates-polish pass,
+        // proposal §d (same tokens `QuizMatching`'s own `MatchSlot` uses).
+        ((isOver && !disabled) || (!tile && canPlacePicked && !disabled)) &&
+          'border-solid border-pop-sky-deep bg-[var(--well-active-bg)]',
+        grade === 'correct' && 'ring-2 ring-inset ring-success bg-pop-green/28',
+        wrong && 'animate-pulse ring-2 ring-inset ring-destructive bg-pop-red/10 text-destructive motion-reduce:animate-none',
         gameTileTransitionClassName(reducedMotion),
       )}
     >
-      {tile ? (tile.text ?? tile.id) : '___'}
+      {tile ? (tile.text ?? tile.id) : null}
       {grade && <GradeMark state={grade} />}
     </button>
   );
 }
 
-export default function QuizCloze({ lang, payload, seed, editorOffset = false, nextHref, guest }: QuizClozeProps) {
+export default function QuizCloze({ lang, payload, seed, nextHref, guest }: QuizClozeProps) {
   const t = UI_LABELS[lang].activities.gameModes;
   const reducedMotion = usePrefersReducedMotion();
   const sound = useGameSound();
@@ -550,7 +557,7 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
           `FLOATING_CHECK_BAR_CLASS` header. */}
       <div
         data-testid="cloze-actions"
-        className={cn(FLOATING_CHECK_BAR_CLASS, editorOffset && FLOATING_CHECK_BAR_EDITOR_OFFSET)}
+        className={FLOATING_CHECK_BAR_CLASS}
       >
         <Button
           type="button"
@@ -581,12 +588,14 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="cloze-stage"
-            className={cn(
-              'flex min-h-0 flex-col gap-6 overflow-y-auto',
-              STAGE_BOTTOM_RESERVE_CLASS,
-              STAGE_SAFE_INSET_CLASS,
-            )}
+            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
           >
+          {/* THE SHEET (activity-templates-polish pass, proposal §d): one
+              white card holding the sentence + tray, shared material with
+              the other three moulds (`ACTIVITY_SHEET_CLASS`,
+              `mechanics/chip.ts`). The sentence is now PART of the sheet
+              (proposal §d, per-mould table) rather than its own card. */}
+          <div data-testid="activity-sheet" className={cn(ACTIVITY_SHEET_CLASS, 'flex flex-col gap-6')}>
           <p
             // `cloze-game-sentence-*`, not `cloze-sentence-*`: `ClozeEditor.tsx`'s
             // own authoring row already owns that prefix (its bracket-text
@@ -594,19 +603,13 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
             // `QuizLivePreview` — two different elements must never share one
             // test id.
             data-testid={`cloze-game-sentence-${sentence.seq}`}
-            // Soft surface, never a hard-bordered card — same material
-            // `QuizMatching`'s own prompt row uses (UI-kit refactor, owner
-            // spec: "muy cuadrada"). Correct settles as a tint + INSET ring
-            // (visual-polish pass — a plain `ring-*` paints outside the
-            // border box and clips at the stage's own edge), not a border.
-            // Capped at the shared readable measure, centred in the stage —
-            // same recipe `QuizMatching`'s own prompt column uses.
-            className={cn(
-              'rounded-[20px] bg-card shadow-elevation-1 p-4 leading-loose font-medium text-foreground',
-              TILE_TEXT_SCALE,
-              STAGE_CONTENT_MEASURE,
-              isSolved && 'ring-2 ring-inset ring-success-strong bg-success-strong/10',
-            )}
+            // Part of the sheet now, not its own card (activity-templates-
+            // polish pass, proposal §d: "cloze — sentence card becomes part
+            // of the sheet"); correct/incorrect settles per BLANK now
+            // ({@link ClozeBlankBox}), never on the sentence itself. Capped
+            // at the shared readable measure, centred — same recipe
+            // `QuizMatching`'s own prompt column uses.
+            className={cn('leading-loose font-medium text-foreground', TILE_TEXT_SCALE, STAGE_CONTENT_MEASURE)}
           >
             {sentence.segments.map((seg, i) => {
               if (seg.kind === 'text') return <span key={i}>{seg.text}</span>;
@@ -661,6 +664,7 @@ export default function QuizCloze({ lang, payload, seed, editorOffset = false, n
               );
             })}
           </ul>
+          </div>
           </div>
         </div>
 

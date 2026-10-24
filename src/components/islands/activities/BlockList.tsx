@@ -48,7 +48,7 @@ import { ArrowClockwiseIcon } from '@phosphor-icons/react/dist/ssr/ArrowClockwis
 import { ImageIcon } from '@phosphor-icons/react/dist/ssr/Image';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import type { Block, QuizBlock, WorksheetBlock, Zone, AudioMarker, PromptImageRef } from '@/lib/activities/blocks';
+import type { Block, BlockBackground, QuizBlock, WorksheetBlock, Zone, AudioMarker, PromptImageRef } from '@/lib/activities/blocks';
 import type { Payload } from '@/lib/exercisePayload';
 import { rotateRects, turnRotation, type TurnDirection } from '@/lib/activities/zoneGeometry';
 import { moveBlockLeft, moveBlockRight, removeBlock } from '@/lib/activities/sheetOrder';
@@ -103,6 +103,15 @@ export interface BlockListProps {
    * rotate/"Cambiar imagen" cluster inline instead.
    */
   sideToolsPortalTarget?: HTMLElement | null;
+  /**
+   * The REAL activity title/level, as the student's own window shows them
+   * (owner audit §c) — threaded straight through to a `quiz` block's own
+   * `QuizBlockEditor` -> `QuizLivePreview` chrome. `undefined`/omitted
+   * everywhere this editor has no such context (every existing call site
+   * before this pass).
+   */
+  activityTitle?: string;
+  activityLevelChip?: string | null;
 }
 
 function isWorksheet(block: Block): block is WorksheetBlock {
@@ -209,6 +218,8 @@ export default function BlockList({
   incompleteZoneId = null,
   incompleteMessage = null,
   sideToolsPortalTarget = null,
+  activityTitle,
+  activityLevelChip,
 }: BlockListProps) {
   const t = UI_LABELS[lang].activities.editor;
   const hydrated = useHydrated();
@@ -281,6 +292,27 @@ export default function BlockList({
           return { ...rest, payload };
         }
         return { ...b, payload, promptImages };
+      }),
+    );
+  };
+
+  /**
+   * "Fondo" (plantillas: fondo, owner decision 2026-10-23): a plain,
+   * discrete commit — unlike `updateQuiz` above, a background edit never
+   * races a payload/`promptImages` edit from the same `BackgroundPicker`
+   * popover action, so there is no lost-update risk here to guard against.
+   * `undefined` clears it entirely ("Ninguno"), same convention every other
+   * optional quiz-block field here follows.
+   */
+  const updateQuizBackground = (blockId: string, background: BlockBackground | undefined) => {
+    onBlocksChange(
+      blocks.map((b) => {
+        if (b.id !== blockId || !isQuiz(b)) return b;
+        if (!background) {
+          const { background: _dropped, ...rest } = b;
+          return rest;
+        }
+        return { ...b, background };
       }),
     );
   };
@@ -627,6 +659,10 @@ export default function BlockList({
             incompleteMessage={activeBlock.id === incompleteBlockId ? incompleteMessage : null}
             promptImages={quiz.promptImages}
             imagesEnabled
+            background={quiz.background}
+            onBackgroundChange={(next) => updateQuizBackground(activeBlock.id, next)}
+            activityTitle={activityTitle}
+            activityLevelChip={activityLevelChip}
           />
         )}
       </div>

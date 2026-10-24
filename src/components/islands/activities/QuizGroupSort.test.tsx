@@ -267,11 +267,6 @@ describe('QuizGroupSort', () => {
       expect(screen.getByTestId('groupsort-stage').contains(screen.getByTestId('groupsort-check'))).toBe(false);
       expect(screen.getByTestId('groupsort-actions').className).toContain('fixed');
     });
-
-    it('offsets the floating Comprobar further left when rendered inside the editor', () => {
-      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" editorOffset />);
-      expect(screen.getByTestId('groupsort-actions').className).toContain('lg:right-20');
-    });
   });
 
   // Stage layout system (visual-polish pass, owner bug: "el borde de cada
@@ -294,15 +289,21 @@ describe('QuizGroupSort', () => {
   // tray-below-board structure "Une las parejas" shares — `QuizMatching.
   // test.tsx`'s own header on the same describe block).
   describe('the tray, moved above the board and coloured (UI pass, consistency with QuizMatching)', () => {
-    it('renders the tray of options above the group board, in DOM order', () => {
+    it('renders the tray of options above the group board, in DOM order, inside the shared sheet', () => {
       render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
-      const stage = screen.getByTestId('groupsort-stage');
+      const sheet = screen.getByTestId('activity-sheet');
       const trayEl = screen.getByTestId('groupsort-tray');
       const board = screen.getByTestId('groupsort-board');
-      const children = Array.from(stage.children);
+      const children = Array.from(sheet.children);
 
       expect(children.indexOf(trayEl)).toBeGreaterThanOrEqual(0);
       expect(children.indexOf(trayEl)).toBeLessThan(children.indexOf(board));
+    });
+
+    it('wraps the board in exactly one shared "sheet" (activity-templates-polish pass)', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getAllByTestId('activity-sheet')).toHaveLength(1);
+      expect(screen.getByTestId('activity-sheet').contains(screen.getByTestId('groupsort-board'))).toBe(true);
     });
 
     it('centres the tray over the same board width as the group board', () => {
@@ -351,6 +352,79 @@ describe('QuizGroupSort', () => {
       expect(cls).toContain('text-[clamp(1.125rem,');
       expect(cls).toContain('font-semibold');
       expect(cls).toContain('px-[clamp(1.25rem,');
+    });
+  });
+
+  // Activity-templates-polish pass, proposal §d: "grilla 2 → 2, 3 → 3, 4 →
+  // 2 × 2; 1 columna en el celular" — the old `flex-wrap` board let 4 groups
+  // read as 3 + 1 instead of an intentional 2×2.
+  describe('the board grid (one column count per group count)', () => {
+    const threeGroupPayload: Payload = {
+      pools: {
+        p1: [
+          { id: 'red', text: 'red' },
+          { id: 'blue', text: 'blue' },
+          { id: 'rice', text: 'rice' },
+          { id: 'bread', text: 'bread' },
+          { id: 'one', text: 'one' },
+          { id: 'two', text: 'two' },
+        ],
+      },
+      slots: [
+        { id: 'g1', label: 'Colors', input: 'group', pool: 'p1', answer: ['red', 'blue'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['rice', 'bread'] },
+        { id: 'g3', label: 'Numbers', input: 'group', pool: 'p1', answer: ['one', 'two'] },
+      ],
+    };
+
+    const fourGroupPayload: Payload = {
+      pools: {
+        p1: [
+          { id: 'red', text: 'red' },
+          { id: 'blue', text: 'blue' },
+          { id: 'rice', text: 'rice' },
+          { id: 'bread', text: 'bread' },
+          { id: 'one', text: 'one' },
+          { id: 'two', text: 'two' },
+          { id: 'dog', text: 'dog' },
+          { id: 'cat', text: 'cat' },
+        ],
+      },
+      slots: [
+        { id: 'g1', label: 'Colors', input: 'group', pool: 'p1', answer: ['red', 'blue'] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: ['rice', 'bread'] },
+        { id: 'g3', label: 'Numbers', input: 'group', pool: 'p1', answer: ['one', 'two'] },
+        { id: 'g4', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] },
+      ],
+    };
+
+    it('uses a 1-column grid on phones, regardless of group count', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-board').className).toContain('grid-cols-1');
+    });
+
+    it('2 groups -> 2 columns from sm up', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-board').className).toContain('sm:grid-cols-2');
+    });
+
+    it('3 groups -> 3 columns from sm up', () => {
+      render(<QuizGroupSort lang="es" payload={threeGroupPayload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-board').className).toContain('sm:grid-cols-3');
+    });
+
+    it('4 groups -> a 2-column grid (reads as 2x2), never 3 + 1', () => {
+      render(<QuizGroupSort lang="es" payload={fourGroupPayload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-board').className).toContain('sm:grid-cols-2');
+      expect(screen.getByTestId('groupsort-board').className).not.toContain('sm:grid-cols-3');
+    });
+
+    it("gives each group title a colour dot matching the editor's own group-dot sequence", () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const g1Dot = screen.getByTestId('groupsort-board-group-g1').querySelector('[aria-hidden="true"]');
+      const g2Dot = screen.getByTestId('groupsort-board-group-g2').querySelector('[aria-hidden="true"]');
+      expect(g1Dot?.className).toContain('bg-pop-sky');
+      expect(g2Dot?.className).toContain('bg-pop-yellow');
     });
   });
 });

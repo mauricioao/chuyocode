@@ -50,13 +50,14 @@
  * guest "Crear cuenta" link below keeps its own explicit `text-accent-ink`
  * since it is a plain `<a>`, not a `Button`.
  */
-import type { CSSProperties } from 'react';
+import { useContext, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { formatElapsedTime } from '@/lib/formatElapsedTime';
 import { Button } from '@/components/ui/button';
 import { characterPoseFallbackSrc, characterPoseSrcSet, characterPoseWidth, type CharacterPoseKey } from '@/content/characterPoses';
+import { ActivityPreviewContext } from '@/components/islands/activities/ActivityPreviewFrame';
 
 export type GameResultOutcome = 'perfect' | 'good' | 'retry';
 
@@ -132,6 +133,15 @@ export interface GameResultProps {
    */
   characterPortalContainer?: Element | DocumentFragment;
   className?: string;
+  /**
+   * Preview-only (`ActivityPreviewFrame`, owner audit
+   * `PROPUESTA-PLANTILLAS-2026-10-23.md` §c): true keeps "Otra actividad"
+   * visibly present — the real result screen, unchanged — but INERT
+   * (`preventDefault` on click), since the editor's own preview has no real
+   * next activity to navigate to. Omitted/false everywhere else (every real
+   * host) leaves the link a normal navigation, byte-identical to before.
+   */
+  nextHrefInert?: boolean;
 }
 
 /** All correct -> "perfect"; at least 70% -> "good"; otherwise -> "retry" (owner spec, build item N1). */
@@ -249,8 +259,15 @@ export default function GameResult({
   characterPlacement = 'inline',
   characterPortalContainer,
   className,
+  nextHrefInert = false,
 }: GameResultProps) {
   const t = UI_LABELS[lang].activities.gameResult;
+  // Plantillas: fondo / editor preview (owner audit §c): `true` for every
+  // mold's own `GameResult` render while inside an `ActivityPreviewFrame` —
+  // see that context's own header for why this reads it instead of each of
+  // the four drag templates needing to pass `nextHrefInert` down by hand.
+  const insidePreview = useContext(ActivityPreviewContext);
+  const inert = nextHrefInert || insidePreview;
   const outcome = outcomeFor(correct, total);
   const headline = outcome === 'perfect' ? t.perfect : outcome === 'good' ? t.good : t.retry;
   const word = resultWord ?? t.defaultWord;
@@ -383,7 +400,12 @@ export default function GameResult({
                     THIS one. Outside a desk window (standalone page, mobile,
                     guest) the attribute is inert — it stays the exact plain
                     link it always was. */}
-                <a href={nextHref} data-testid="game-result-next" data-desk-open-window="replace">
+                <a
+                  href={nextHref}
+                  data-testid="game-result-next"
+                  data-desk-open-window="replace"
+                  onClick={inert ? (event) => event.preventDefault() : undefined}
+                >
                   {t.nextActivity}
                 </a>
               </Button>

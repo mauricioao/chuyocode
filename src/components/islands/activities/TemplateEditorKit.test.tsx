@@ -84,6 +84,40 @@ describe('TemplateEditorLayout', () => {
   });
 });
 
+describe('TemplateEditorLayout — phone "Ver vista previa" button', () => {
+  it('is omitted when no label is given', () => {
+    render(<List />);
+    expect(screen.queryByTestId('template-preview-button-b1')).toBeNull();
+  });
+
+  it('is hidden at lg and up, shows the given label, and scrolls the preview pane into view when tapped', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(
+        <TemplateEditorLayout
+          blockId="b1"
+          stageLabel="Vista previa"
+          stageEmptyText="Nada todavía"
+          previewButtonLabel="Ver vista previa"
+          sheet={<p>sheet</p>}
+          preview={<div data-testid="activity-preview-pane">preview</div>}
+        />,
+      );
+      const button = screen.getByTestId('template-preview-button-b1');
+      expect(button.className).toContain('lg:hidden');
+      expect(button.textContent).toBe('Ver vista previa');
+
+      fireEvent.click(button);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth', block: 'start' }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});
+
 describe('row entry animation', () => {
   it('does not animate rows already there on the first render, only rows added afterwards', () => {
     render(<List />);

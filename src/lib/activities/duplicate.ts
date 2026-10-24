@@ -146,6 +146,29 @@ function uniqueQuizPromptImagePaths(blocks: Block[]): string[] {
   return paths;
 }
 
+/**
+ * Every unique quiz block's own background IMAGE path in `blocks`, in
+ * first-seen order — the background counterpart of
+ * {@link uniqueQuizPromptImagePaths} (plantillas: fondo, owner decision
+ * 2026-10-23). Re-homed on duplicate exactly like a promptImage (file
+ * header): the original's own `background` points at
+ * `activity-images/<originalId>/background-…`, public but owned by the
+ * ORIGINAL activity's approval, never a path this caller's own fresh draft
+ * may reference directly. A `{kind: 'preset'}` background names nothing to
+ * copy (a CSS gradient, not an upload).
+ */
+function uniqueQuizBackgroundImagePaths(blocks: Block[]): string[] {
+  const seen = new Set<string>();
+  const paths: string[] = [];
+  for (const block of blocks) {
+    if (block.type !== 'quiz' || block.background?.kind !== 'image') continue;
+    if (seen.has(block.background.path)) continue;
+    seen.add(block.background.path);
+    paths.push(block.background.path);
+  }
+  return paths;
+}
+
 /** Every unique worksheet audio marker path in `blocks`, in first-seen order — the audio counterpart of {@link uniqueWorksheetImagePaths}. */
 function uniqueWorksheetAudioPaths(blocks: Block[]): string[] {
   const seen = new Set<string>();
@@ -176,18 +199,28 @@ function rebuildBlocksForDuplicate(
     if (block.type !== 'worksheet') {
       const quiz = block as QuizBlock;
       // Quiz slot/pool ids are left untouched (file header) — only the
-      // block's own id is fresh, plus every promptImage path re-homed
-      // through `pathMapping`, same rewrite `rewriteImagePaths`
-      // (`moderation.ts`) applies on approve. The map's KEYS (slot ids)
-      // never change here.
-      if (!quiz.promptImages) {
-        return { ...quiz, id };
+      // block's own id is fresh, plus every promptImage path AND the
+      // block's own background image path (plantillas: fondo, owner
+      // decision 2026-10-23) re-homed through `pathMapping`, same rewrite
+      // `rewriteImagePaths` (`moderation.ts`) applies on approve. The map's
+      // KEYS (slot ids) never change here. A `{kind: 'preset'}` background
+      // carries no path, so it is carried over unchanged by the spread
+      // below — nothing to rewrite.
+      let next: QuizBlock = { ...quiz, id };
+      if (quiz.promptImages) {
+        const promptImages: Record<string, PromptImageRef> = {};
+        for (const [slotId, image] of Object.entries(quiz.promptImages)) {
+          promptImages[slotId] = { ...image, path: pathMapping.get(image.path) ?? image.path };
+        }
+        next = { ...next, promptImages };
       }
-      const promptImages: Record<string, PromptImageRef> = {};
-      for (const [slotId, image] of Object.entries(quiz.promptImages)) {
-        promptImages[slotId] = { ...image, path: pathMapping.get(image.path) ?? image.path };
+      if (quiz.background?.kind === 'image') {
+        next = {
+          ...next,
+          background: { ...quiz.background, path: pathMapping.get(quiz.background.path) ?? quiz.background.path },
+        };
       }
-      return { ...quiz, id, promptImages };
+      return next;
     }
     const worksheet = block as WorksheetBlock;
     const zones = worksheet.zones.map((zone) => ({ ...zone, id: crypto.randomUUID() }));
@@ -258,7 +291,11 @@ export async function duplicateActivity(originalId: string, callerId: string): P
     return { ok: false, error: 'daily_limit' };
   }
 
-  const imagePaths = [...uniqueWorksheetImagePaths(original.blocks), ...uniqueQuizPromptImagePaths(original.blocks)];
+  const imagePaths = [
+    ...uniqueWorksheetImagePaths(original.blocks),
+    ...uniqueQuizPromptImagePaths(original.blocks),
+    ...uniqueQuizBackgroundImagePaths(original.blocks),
+  ];
   const audioPaths = uniqueWorksheetAudioPaths(original.blocks);
 
   // FAILS CLOSED: an unreadable count is treated as "at the cap", same

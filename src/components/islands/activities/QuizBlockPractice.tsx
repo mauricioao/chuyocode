@@ -30,7 +30,7 @@
  * Switching AWAY from `quiz` never touches `response`: the quiz-mode inputs
  * below simply stop mounting, and the alternate games never write into it.
  */
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { FadeImage } from '@/components/ui/fade-image';
@@ -68,6 +68,33 @@ import QuizOpenBox from './QuizOpenBox';
 import QuizCloze from './QuizCloze';
 import QuizGroupSort from './QuizGroupSort';
 import type { GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
+import { ACTIVITY_SHEET_CLASS } from '@/components/islands/mechanics/chip';
+
+/**
+ * The one white "sheet" every big-stage mould's own board (tray + targets)
+ * sits on (activity-templates-polish pass, design doc
+ * `docs/PROPUESTA-PLANTILLAS-2026-10-23.md` §d). The actual class name
+ * (`ACTIVITY_SHEET_CLASS`) lives in `mechanics/chip.ts` and each mould
+ * applies it to its own inline wrapper div directly — NOT by importing this
+ * component, which would be circular (this file already imports every
+ * mould to render it). This component exists for the one caller that sits
+ * above that cycle (documentation/parity only today).
+ *
+ * Deliberately wraps ONLY the board/tray content, never the chrome row or
+ * the floating Comprobar (`scale.ts`'s `FLOATING_CHECK_BAR_CLASS`, still
+ * `position: fixed` against the stage, unaffected by this wrapper since it
+ * sets no `transform`/`contain`/`filter` of its own) — it must read
+ * correctly on both the plain grey canvas and a chosen backdrop (S1/S2's own
+ * stage work), so it is its own small opaque card rather than part of the
+ * stage chrome.
+ */
+export function ActivitySheet({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div data-testid="activity-sheet" className={cn(ACTIVITY_SHEET_CLASS, className)}>
+      {children}
+    </div>
+  );
+}
 
 export interface QuizBlockPracticeProps {
   lang: Lang;
@@ -82,8 +109,6 @@ export interface QuizBlockPracticeProps {
   mode?: GameMode;
   /** Report a new mode for this block. Defaults to a no-op, matching `mode`'s own default. */
   onModeChange?: (mode: GameMode) => void;
-  /** Threaded straight through to every self-checking game's own floating Comprobar (build item 5) — true only from `QuizLivePreview` (the activity editor). Defaults to `false`. */
-  editorOffset?: boolean;
   /** Threaded straight through to the four drag templates' own `GameResult` — set only by the practice page, never by the editor preview (build item N1). */
   nextHref?: string;
   /** Threaded straight through to the four drag templates' own `GameResult` — set only by the practice page, for an anonymous visitor (build item N1). */
@@ -115,7 +140,6 @@ export default function QuizBlockPractice({
   disabled,
   mode = 'quiz',
   onModeChange = () => {},
-  editorOffset = false,
   nextHref,
   guest,
 }: QuizBlockPracticeProps) {
@@ -219,7 +243,6 @@ export default function QuizBlockPractice({
             lang={lang}
             items={gameItems}
             seed={block.id}
-            editorOffset={editorOffset}
             nextHref={nextHref}
             guest={guest}
           />
@@ -229,7 +252,6 @@ export default function QuizBlockPractice({
             lang={lang}
             items={reorderEligible(gameItems)}
             seed={block.id}
-            editorOffset={editorOffset}
             nextHref={nextHref}
             guest={guest}
           />
@@ -239,7 +261,6 @@ export default function QuizBlockPractice({
             lang={lang}
             payload={payload}
             seed={block.id}
-            editorOffset={editorOffset}
             nextHref={nextHref}
             guest={guest}
           />
@@ -249,7 +270,6 @@ export default function QuizBlockPractice({
             lang={lang}
             payload={payload}
             seed={block.id}
-            editorOffset={editorOffset}
             nextHref={nextHref}
             guest={guest}
           />

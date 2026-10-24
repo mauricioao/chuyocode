@@ -17,39 +17,46 @@
  * nor `/` is a legal uuid character, so `../../x` can never match.
  *
  * KIND PREFIX (question context images, `activities/blocks.ts`'s own
- * `QuizBlock.promptImages`): a DISPLAY-ONLY image attached to a "Varios
- * juegos" question is never a worksheet image, and every consumer must be
- * able to tell the two apart from the path alone — so its filename carries
- * a `question-` prefix the worksheet shape never has:
+ * `QuizBlock.promptImages`; background images, `QuizBlock.background`'s own
+ * `{kind: 'image'}`): a DISPLAY-ONLY image attached to a "Varios juegos"
+ * question, or to a molded block's own decorative background, is never a
+ * worksheet image, and every consumer must be able to tell the three apart
+ * from the path alone — so each non-worksheet kind's filename carries its
+ * own prefix the worksheet shape never has:
  *
  *   `activity-uploads/<userId>/question-<uuid>.webp`
  *   `activity-images/<activityId>/question-<uuid>.webp`
+ *   `activity-uploads/<userId>/background-<uuid>.webp`
+ *   `activity-images/<activityId>/background-<uuid>.webp`
  *
  * A flat FILENAME prefix, not a subfolder: Supabase Storage's own `.list()`
  * is non-recursive, and `countUserUploads`/`removeAllUserUploads`
  * (`storage.ts`) both list a user's folder ONE level deep — a subfolder
- * would hide every question image from the per-user upload cap and from
- * account-deletion cleanup. A filename prefix keeps both working unchanged:
- * a question image counts against the SAME per-user cap as a worksheet one
- * (same bucket, same owner folder) and is still listed/removed by the
- * existing whole-folder sweep.
+ * would hide every question/background image from the per-user upload cap
+ * and from account-deletion cleanup. A filename prefix keeps both working
+ * unchanged: a question or background image counts against the SAME
+ * per-user cap as a worksheet one (same bucket, same owner folder) and is
+ * still listed/removed by the existing whole-folder sweep.
  */
 
 export const UPLOADS_BUCKET = 'activity-uploads';
 export const IMAGES_BUCKET = 'activity-images';
 
 /** Which shape of image a path names — see this file's own "KIND PREFIX" header. `'worksheet'` is the original, unprefixed shape; every path stored before this kind existed is one. */
-export type ImageKind = 'worksheet' | 'question';
+export type ImageKind = 'worksheet' | 'question' | 'background';
 
 /** The filename prefix for a `'question'`-kind object — absent entirely for `'worksheet'`. */
 const QUESTION_PREFIX = 'question-';
+
+/** The filename prefix for a `'background'`-kind object (plantillas: fondo, owner decision 2026-10-23) — same posture as {@link QUESTION_PREFIX}. */
+const BACKGROUND_PREFIX = 'background-';
 
 /** Canonical 8-4-4-4-12 hex form — what `gen_random_uuid()`/`crypto.randomUUID()` produce. */
 const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const UUID_RE = new RegExp(`^${UUID_SOURCE}$`, 'i');
 
 const FULL_PATH_RE = new RegExp(
-  `^(${UPLOADS_BUCKET}|${IMAGES_BUCKET})/(${UUID_SOURCE})/(?:(${QUESTION_PREFIX}))?(${UUID_SOURCE})\\.webp$`,
+  `^(${UPLOADS_BUCKET}|${IMAGES_BUCKET})/(${UUID_SOURCE})/(?:(${QUESTION_PREFIX})|(${BACKGROUND_PREFIX}))?(${UUID_SOURCE})\\.webp$`,
   'i',
 );
 
@@ -60,7 +67,9 @@ export function isUuid(value: string): boolean {
 
 /** This kind's own filename, given its object id (no owner/bucket prefix). */
 function imageFileName(id: string, kind: ImageKind): string {
-  return kind === 'question' ? `${QUESTION_PREFIX}${id}.webp` : `${id}.webp`;
+  if (kind === 'question') return `${QUESTION_PREFIX}${id}.webp`;
+  if (kind === 'background') return `${BACKGROUND_PREFIX}${id}.webp`;
+  return `${id}.webp`;
 }
 
 /** The uploads-bucket path for one user's fresh upload. `kind` defaults to `'worksheet'` — every call site written before question images existed keeps producing exactly the same path. */
@@ -94,8 +103,8 @@ export interface ParsedImagePath {
 export function parseImagePath(path: string): ParsedImagePath | null {
   const match = FULL_PATH_RE.exec(path);
   if (!match) return null;
-  const [, bucket, ownerId, questionPrefix, objectId] = match;
-  const kind: ImageKind = questionPrefix ? 'question' : 'worksheet';
+  const [, bucket, ownerId, questionPrefix, backgroundPrefix, objectId] = match;
+  const kind: ImageKind = questionPrefix ? 'question' : backgroundPrefix ? 'background' : 'worksheet';
   const lowerOwnerId = ownerId.toLowerCase();
   const lowerObjectId = objectId.toLowerCase();
   const fileName = imageFileName(lowerObjectId, kind);
@@ -112,6 +121,11 @@ export function parseImagePath(path: string): ParsedImagePath | null {
 /** Is `path` a well-formed, already-approved `'question'`-kind path (either bucket)? Mirrors {@link isPublicImagePath}'s own shape but keyed on kind rather than bucket — used where a caller must tell a question image apart from a worksheet one regardless of moderation stage. */
 export function isQuestionImagePath(path: string): boolean {
   return parseImagePath(path)?.kind === 'question';
+}
+
+/** Is `path` a well-formed `'background'`-kind path (either bucket)? Same shape as {@link isQuestionImagePath}, for a molded block's own decorative background image (plantillas: fondo, owner decision 2026-10-23). */
+export function isBackgroundImagePath(path: string): boolean {
+  return parseImagePath(path)?.kind === 'background';
 }
 
 /** Is `path` a well-formed upload path, owned by `userId`? */

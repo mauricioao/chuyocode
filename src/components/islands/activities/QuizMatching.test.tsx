@@ -56,6 +56,16 @@ describe('QuizMatching', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  // Fix-round (visual bug audit): once graded, every tile goes `disabled`
+  // (no more interaction) — the shared chip shape also ties a pale
+  // `disabled:opacity-50` to that same native state, which read as "turned
+  // off" instead of graded. Every tile (tray AND placed) must override it
+  // back to full tray colour; correctness stays the ring + ✓/✕ mark's job.
+  it('keeps every tile at full tray colour once disabled by grading (never the pale disabled look)', () => {
+    render(<QuizMatching lang="es" items={items} seed="block-1" />);
+    expect(screen.getByTestId('matching-tile-s1').className).toContain('disabled:opacity-100');
+  });
+
   it('places a tray tile into a slot by tapping the tile then the slot', () => {
     render(<QuizMatching lang="es" items={items} seed="block-1" />);
     place('s1', 's1');
@@ -125,8 +135,10 @@ describe('QuizMatching', () => {
       place('s3', 's3'); // correct
 
       fireEvent.click(screen.getByTestId('matching-check'));
-      // Mid-settle: the wrong tile still visibly flags red in its slot.
-      expect(screen.getByTestId('matching-slot-s2').className).toContain('border-destructive');
+      // Mid-settle: the wrong tile's slot flags red with an INSET ring
+      // (activity-templates-polish pass — a literal border would nudge the
+      // well's own box).
+      expect(screen.getByTestId('matching-slot-s2').className).toContain('ring-destructive');
 
       act(() => vi.advanceTimersByTime(1000));
 
@@ -474,11 +486,6 @@ describe('QuizMatching', () => {
       expect(screen.getByTestId('matching-prompts').contains(screen.getByTestId('matching-check'))).toBe(false);
     });
 
-    it('offsets the floating Comprobar further left when rendered inside the editor (clears the docked side toolbar)', () => {
-      render(<QuizMatching lang="es" items={items} seed="block-1" editorOffset />);
-      expect(screen.getByTestId('matching-actions').className).toContain('lg:right-20');
-    });
-
     it('stays one column for a short board (3 pairs, at/under the many-pairs threshold)', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       const grid = screen.getByTestId('matching-prompts').className;
@@ -494,6 +501,27 @@ describe('QuizMatching', () => {
       ];
       render(<QuizMatching lang="es" items={manyItems} seed="block-1" />);
       expect(screen.getByTestId('matching-prompts').className).toContain('@lg:grid-cols-2');
+    });
+
+    // Fix-round (visual bug audit): the 2-column board used to collide with
+    // itself inside the default 760px sheet — widened past the threshold,
+    // with a clearly bigger gap between the 2 columns than between rows.
+    it('widens the sheet and gives the 2 pair-columns their own clear gap once many-paired', () => {
+      const manyItems: GameItem[] = [
+        ...items,
+        { id: 's4', prompt: 'Prompt 4', answer: 'four' },
+        { id: 's5', prompt: 'Prompt 5', answer: 'five' },
+      ];
+      render(<QuizMatching lang="es" items={manyItems} seed="block-1" />);
+      expect(screen.getByTestId('activity-sheet').className).toContain('activity-sheet--wide');
+      expect(screen.getByTestId('matching-prompts').className).toContain('gap-x-6');
+      expect(screen.getByTestId('matching-prompts').className).toContain('max-w-[960px]');
+    });
+
+    it('never widens the sheet for a short board (3 pairs, at/under the many-pairs threshold)', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('activity-sheet').className).not.toContain('activity-sheet--wide');
+      expect(screen.getByTestId('matching-prompts').className).toContain('max-w-[760px]');
     });
   });
 
@@ -512,20 +540,19 @@ describe('QuizMatching', () => {
       expect(grid).toContain('mx-auto');
     });
 
-    it('lays out a prompt row as a two-equal-column grid (term | slot) with the kit\'s row anatomy, stacking under a narrow container', () => {
+    it('lays out a prompt row as a two-equal-column grid (term | slot), stacking under a narrow container, with no card chrome of its own (activity-templates-polish pass: it floats directly on the shared sheet)', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       const row = screen.getByTestId('matching-prompt-s1').className;
+      expect(row).toContain('pair-row');
       expect(row).toContain('grid');
       expect(row).toContain('grid-cols-1');
       expect(row).toContain('@[420px]:grid-cols-2');
       expect(row).toContain('gap-4');
-      expect(row).toContain('py-3');
-      expect(row).toContain('px-4');
-      expect(row).toContain('min-h-16');
-      expect(row).toContain('rounded-[20px]');
+      expect(row).not.toContain('bg-card');
+      expect(row).not.toContain('rounded-[20px]');
     });
 
-    it('settles a correct row with an INSET ring, never a plain ring that would paint outside the row\'s own box', () => {
+    it('settles a correct SLOT with an INSET ring + pastel tint, never the row (activity-templates-polish pass: the row itself carries no correctness colour any more)', () => {
       vi.useFakeTimers();
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
       place('s1', 's1');
@@ -533,7 +560,9 @@ describe('QuizMatching', () => {
       place('s3', 's3');
       fireEvent.click(screen.getByTestId('matching-check'));
 
-      expect(screen.getByTestId('matching-prompt-s1').className).toContain('ring-inset');
+      expect(screen.getByTestId('matching-slot-s1').className).toContain('ring-inset');
+      expect(screen.getByTestId('matching-slot-s1').className).toContain('ring-success');
+      expect(screen.getByTestId('matching-prompt-s1').className).not.toContain('ring-inset');
       vi.useRealTimers();
     });
   });
@@ -542,15 +571,22 @@ describe('QuizMatching', () => {
   // cápsulas que sean de colores de nuestra paleta y siempre variadas,
   // aumentar un poco el tamaño y centrar dentro de las cápsulas el texto").
   describe('the tray, moved above the board and coloured (UI pass)', () => {
-    it('renders the tray of options above the pairs list, in DOM order', () => {
+    it('renders the tray of options above the pairs list, in DOM order, inside the shared sheet', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
-      const scroll = screen.getByTestId('matching-stage-scroll');
+      const sheet = screen.getByTestId('activity-sheet');
       const tray = screen.getByTestId('matching-tray');
       const prompts = screen.getByTestId('matching-prompts');
-      const children = Array.from(scroll.children);
+      const children = Array.from(sheet.children);
 
       expect(children.indexOf(tray)).toBeGreaterThanOrEqual(0);
       expect(children.indexOf(tray)).toBeLessThan(children.indexOf(prompts));
+    });
+
+    it('wraps the board in exactly one shared "sheet" (activity-templates-polish pass)', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getAllByTestId('activity-sheet')).toHaveLength(1);
+      expect(screen.getByTestId('activity-sheet').className).toContain('activity-sheet');
+      expect(screen.getByTestId('activity-sheet').contains(screen.getByTestId('matching-prompts'))).toBe(true);
     });
 
     it('centres the tray over the same board width as the pairs list', () => {

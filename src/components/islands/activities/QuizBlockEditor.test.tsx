@@ -489,8 +489,8 @@ describe('QuizBlockEditor — fits the focus block and scrolls inside it', () =>
   // NO WHITE STRIP ON THE RIGHT (build item 6): the preview column used to
   // reserve `lg:pr-16` so the floating side toolbar's docked slot would
   // never cover the preview's own Comprobar button — replaced by
-  // `QuizLivePreview`'s own floating Comprobar (build item 5, `editorOffset`),
-  // which clears that same toolbar on its own. The column now runs edge to
+  // `QuizLivePreview`'s own floating Comprobar (build item 5), which
+  // clears that same toolbar on its own. The column now runs edge to
   // edge, same as the questions column beside it.
   it('runs the preview column edge to edge — no reserved gutter for the docked toolbar any more', () => {
     render(<Harness initialPayload={TWO_QUESTION_PAYLOAD} />);
@@ -838,6 +838,59 @@ describe('QuizBlockEditor — "Completar la frase" (cloze authoring)', () => {
     fireEvent.change(screen.getByTestId('cloze-distractors-b1'), { target: { value: 'is, went' } });
     expect((screen.getByTestId('cloze-distractors-b1') as HTMLInputElement).value).toBe('is, went');
   });
+
+  // Bug S0 (owner audit, `PROPUESTA-PLANTILLAS-2026-10-23.md` §e): a
+  // duplicated/copied block keeps its payload's own `slot.pool` name from
+  // wherever it came from, but this file used to re-derive the pool name
+  // from ONLY the current `blockId` (`${blockId}-cloze-pool`) — the instant
+  // that disagrees with what the content actually stored, every lookup
+  // keyed by the wrong name comes back empty.
+  it('shows existing distractor chips (not nothing) when the payload\'s own pool name does not match the "${blockId}-cloze-pool" convention', () => {
+    const payload: Payload = {
+      pools: {
+        'old-block-cloze-pool': [
+          { id: 'w1', text: 'goes' },
+          { id: 'w2', text: 'extra' },
+        ],
+      },
+      slots: [{ id: 'slot-a', label: 'She ___ to school.', input: 'drop', pool: 'old-block-cloze-pool', answer: ['w1'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-a', slotId: 'slot-a' }],
+    };
+    render(<ClozeHarness initialPayload={payload} />);
+    expect(screen.getByTestId('cloze-distractor-chips-b1').textContent).toContain('extra');
+  });
+
+  it('a new distractor on a mismatched-pool-name block lands in the SAME existing pool, not a fresh one keyed by the block id', () => {
+    const payload: Payload = {
+      pools: { 'old-block-cloze-pool': [{ id: 'w1', text: 'goes' }] },
+      slots: [{ id: 'slot-a', label: 'She ___ to school.', input: 'drop', pool: 'old-block-cloze-pool', answer: ['w1'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-a', slotId: 'slot-a' }],
+    };
+    function Host() {
+      const [current, setCurrent] = useState<Payload>(payload);
+      return (
+        <>
+          <QuizBlockEditor
+            blockId="b1"
+            lang="es"
+            payload={current}
+            template="cloze"
+            selectedSlotId={null}
+            onSelectSlot={() => {}}
+            onPayloadChange={setCurrent}
+          />
+          <div data-testid="pool-keys">{Object.keys(current.pools).sort().join(',')}</div>
+        </>
+      );
+    }
+    render(<Host />);
+    const distractorInput = screen.getByTestId('cloze-distractors-b1') as HTMLInputElement;
+    fireEvent.change(distractorInput, { target: { value: 'went' } });
+    fireEvent.keyDown(distractorInput, { key: 'Enter' });
+
+    expect(screen.getByTestId('pool-keys').textContent).toBe('old-block-cloze-pool');
+    expect(screen.getByTestId('cloze-distractor-chips-b1').textContent).toContain('went');
+  });
 });
 
 describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () => {
@@ -981,6 +1034,70 @@ describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () =>
     expect(screen.getByTestId('groupsort-item-i1').textContent).toContain('dog');
     expect(screen.getByTestId('groupsort-item-i4').textContent).toContain('rice');
     expect(screen.queryByTestId('groupsort-min-groups-hint-b1')).toBeNull();
+  });
+
+  // Bug S0 (owner audit, `PROPUESTA-PLANTILLAS-2026-10-23.md` §e, screenshot
+  // `editor-groupsort-1440x900.png`): a duplicated/copied block keeps its
+  // payload's own `slot.pool` name from wherever it came from, but this file
+  // used to re-derive the pool name from ONLY the current `blockId`
+  // (`${blockId}-groupsort-pool`) — the instant that disagrees with what the
+  // content actually stored, `deriveGroupSortRows` looks up the WRONG pool,
+  // finds nothing, and every item renders with empty text (just its "×"
+  // remove button, nothing to remove next to it).
+  it('shows item text (not just the "×" remove button) when the payload\'s own pool name does not match the "${blockId}-groupsort-pool" convention', () => {
+    const payload: Payload = {
+      pools: {
+        'old-block-groupsort-pool': [
+          { id: 'i1', text: 'dog' },
+          { id: 'i2', text: 'cat' },
+        ],
+      },
+      slots: [{ id: 'g1', label: 'Animals', input: 'group', pool: 'old-block-groupsort-pool', answer: ['i1', 'i2'] }],
+      blocks: [{ kind: 'row', id: 'row-g1', slotId: 'g1' }],
+    };
+    render(<GroupSortHarness initialPayload={payload} />);
+
+    expect(screen.getByTestId('groupsort-item-i1').textContent).toContain('dog');
+    expect(screen.getByTestId('groupsort-item-i2').textContent).toContain('cat');
+  });
+
+  it('a new item on a mismatched-pool-name block lands in the SAME existing pool, not a fresh one keyed by the block id', () => {
+    const payload: Payload = {
+      pools: { 'old-block-groupsort-pool': [{ id: 'i1', text: 'dog' }] },
+      slots: [{ id: 'g1', label: 'Animals', input: 'group', pool: 'old-block-groupsort-pool', answer: ['i1'] }],
+      blocks: [{ kind: 'row', id: 'row-g1', slotId: 'g1' }],
+    };
+    function Host() {
+      const [current, setCurrent] = useState<Payload>(payload);
+      return (
+        <>
+          <QuizBlockEditor
+            blockId="b1"
+            lang="es"
+            payload={current}
+            template="groupsort"
+            selectedSlotId={null}
+            onSelectSlot={() => {}}
+            onPayloadChange={setCurrent}
+          />
+          <div data-testid="pool-keys">{Object.keys(current.pools).sort().join(',')}</div>
+        </>
+      );
+    }
+    render(<Host />);
+
+    const itemInput = screen.getByTestId('groupsort-item-input-g1') as HTMLInputElement;
+    fireEvent.change(itemInput, { target: { value: 'horse' } });
+    fireEvent.keyDown(itemInput, { key: 'Enter' });
+
+    // Still ONE pool — "horse" joined the existing "old-block-groupsort-pool",
+    // never a stray second "b1-groupsort-pool".
+    expect(screen.getByTestId('pool-keys').textContent).toBe('old-block-groupsort-pool');
+    const items = within(screen.getByTestId('groupsort-items-g1')).getAllByTestId(/^groupsort-item-/);
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
+      expect.stringContaining('dog'),
+      expect.stringContaining('horse'),
+    ]);
   });
 });
 

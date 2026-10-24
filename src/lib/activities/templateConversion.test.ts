@@ -338,6 +338,50 @@ describe('convertBlock — promptImages (question context images, owner decision
   });
 });
 
+describe('convertBlock — background (plantillas: fondo, owner decision 2026-10-23)', () => {
+  it('a no-op (same mold) carries background over unchanged', () => {
+    const block: QuizBlock = {
+      ...quizBlock('match', MATCH_NO_REPEATS_PAYLOAD),
+      background: { kind: 'preset', preset: 'sky' },
+    };
+    const result = convertBlock(block, 'match');
+    expect(result.block).toBe(block);
+    expect(result.block.background).toEqual({ kind: 'preset', preset: 'sky' });
+  });
+
+  it('a mold-to-mold switch (match -> groupsort) carries background over unchanged — never keyed by slot id, nothing to reshape', () => {
+    const block: QuizBlock = {
+      ...quizBlock('match', MATCH_WITH_REPEATS_PAYLOAD),
+      background: { kind: 'preset', preset: 'mint' },
+    };
+    const { block: result } = convertBlock(block, 'groupsort');
+    expect(result.background).toEqual({ kind: 'preset', preset: 'mint' });
+  });
+
+  it('another mold-to-mold switch (reorder -> cloze) also carries background over unchanged', () => {
+    const block: QuizBlock = {
+      ...quizBlock('reorder', REORDER_PAYLOAD),
+      background: { kind: 'preset', preset: 'sun' },
+    };
+    const { block: result } = convertBlock(block, 'cloze');
+    expect(result.background).toEqual({ kind: 'preset', preset: 'sun' });
+  });
+
+  it('match -> Varios juegos drops background (only ever valid on a molded block)', () => {
+    const block: QuizBlock = {
+      ...quizBlock('match', MATCH_NO_REPEATS_PAYLOAD),
+      background: { kind: 'preset', preset: 'slate' },
+    };
+    const { block: result } = convertBlock(block, undefined);
+    expect(result.background).toBeUndefined();
+  });
+
+  it('a block with no background at all is unaffected (absent stays absent)', () => {
+    const { block } = convertBlock(quizBlock(undefined, BASIC_TEXT_PAYLOAD), 'match');
+    expect(block.background).toBeUndefined();
+  });
+});
+
 describe('convertBlock — groupsort -> match', () => {
   it('pairs every item with its own group name, in group then item order', () => {
     const { block, dropped } = convertBlock(quizBlock('groupsort', GROUPSORT_PAYLOAD), 'match');
