@@ -1457,6 +1457,40 @@ h3 {
  * bottom` keeps the pop's own scale growing up and out of the edge, never
  * off-centre.
  *
+ * "EQUAL HEAD SIZE" SIZING (owner follow-up bugfix: her size on a win must
+ * match her size on a loss — a flat height per breakpoint used to crop each
+ * of the 3 outcome poses at a DIFFERENT point on her body, since they frame
+ * her at different proportions/zoom levels: a full-body jump for `celebra`
+ * vs. tight bust shots for `pulgar-arriba`/`casi`). An earlier pass here
+ * equalized the visible HEAD-TO-ABDOMEN slice instead, but that inflated
+ * `pulgar-arriba`'s whole image — head included, ~25% bigger on screen than
+ * the other two (owner report, `vanina-v2/good-*.png`) — because that
+ * master's own "abdomen" is an extrapolated guess with no real feature
+ * behind it, sitting unusually close under her chin (bust shot, canvas ends
+ * at mid-torso, never reaching a real abdomen): stretching that short slice
+ * up to match the other poses' own taller one scaled everything, not just
+ * the crop.
+ *
+ * `--pose-head`/`--pose-chin`/`--pose-abdomen` are set INLINE per pose by
+ * `GameResult.tsx`, from that pose's own `characterPoseFraming`
+ * (`characterPoses.ts`) — the fraction of ITS OWN master image that's
+ * hair-top, chin, and abdomen-line respectively. `--vanina-head` below is
+ * the TARGET visible HEAD height, per breakpoint (derived from `celebra`'s
+ * and `casi`'s own on-screen head size under the PREVIOUS formula — the two
+ * outcomes that already looked right — so neither changes size here; only
+ * `pulgar-arriba` shrinks back down to match). `height` divides the target
+ * by a pose's own head-top-to-chin fraction, which cancels back out to
+ * EXACTLY `--vanina-head` on screen for every pose (immune to the
+ * extrapolation failure above — no pose's own head-to-chin fraction can be
+ * a guess past its canvas, since both land well inside every master) —
+ * `width: auto` (`GameResult.tsx`) then keeps that pose's own natural
+ * aspect ratio, never squashed, however wide that makes the box. The
+ * crop/rest line below is still driven by `--pose-abdomen`, clamped to the
+ * image's own bottom edge with `min()`: a bust master with no real abdomen
+ * (`pulgar-arriba`) sets it to exactly `1` in the registry (no crop at all —
+ * her own bottom edge rests on the window edge), rather than an
+ * extrapolated guess.
+ *
  * GATED ON REAL DECODE (bugfix, owner report: "aparece de golpe" — she
  * appeared abruptly; verified diagnosis: this used to animate
  * unconditionally on mount, but the pose `<img>` only became paintable
@@ -1469,9 +1503,52 @@ h3 {
  * SAME element (the `<img>` itself reported `complete`, its own
  * `img.decode()` settled either way, or a fixed fallback elapsed). */
 .game-result-vanina {
+  /* Phone target head height (bugfix, owner report, `vanina-v3/
+   * perfect-390x844.png`: her head read ~47px — far too small, with ~250px
+   * of dead space below the content column). 4.375rem = 70px; verified by
+   * real rendering across all 3 outcome poses at 360x800 and 390x844 that
+   * her TOP edge still clears the lowest text/button by >=16px either way
+   * (`vanina-clearance.js`, scratchpad — see this task's own report for the
+   * measured numbers). md/lg below are untouched. */
+  --vanina-head: 4.375rem;
+  /* Safe fallback only — every real caller sets these three inline from its
+   * own pose's `characterPoseFraming`; 0/0.5/1 would still render something
+   * sane (never divide by zero or crash). */
+  --pose-head: 0;
+  --pose-chin: 0.5;
+  --pose-abdomen: 1;
+  /* Defensive clamp backstopping the registry's own "abdomen is always
+   * <= 1" invariant (`characterPoses.ts`) — a bust master with no real
+   * abdomen sets `--pose-abdomen` to exactly `1` (its own bottom edge)
+   * rather than relying on this `min()` to catch an extrapolated guess
+   * past it. */
+  --vanina-abdomen-line: min(var(--pose-abdomen), 1);
+  /* The resting (post-entrance) translateY, as a PERCENTAGE so it scales
+   * with THIS element's own computed height automatically (CSS `%` on
+   * `transform` resolves against the element's own box): the fraction of
+   * the box that sits BELOW the abdomen line, pushed past the enclosing
+   * box's own `overflow-hidden` edge so the abdomen line itself lands
+   * exactly on it (or, when it's the image's own bottom edge, nothing is
+   * pushed past at all — no crop) — replaces the old fixed
+   * `translateY(50%)`, which cropped every pose at the same arbitrary
+   * halfway point regardless of where its own abdomen actually was. */
+  --vanina-rest-y: calc((1 - var(--vanina-abdomen-line)) * 100%);
+  height: calc(var(--vanina-head) / (var(--pose-chin) - var(--pose-head)));
   opacity: 0;
-  transform: translateY(160%) scale(0.85);
+  transform: translateY(calc(var(--vanina-rest-y) + 110%)) scale(0.85);
   transform-origin: bottom;
+}
+
+@media (min-width: 768px) {
+  .game-result-vanina {
+    --vanina-head: 4.15rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .game-result-vanina {
+    --vanina-head: 5.19rem;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1499,11 +1576,11 @@ h3 {
 @keyframes game-result-vanina-pop {
   from {
     opacity: 0;
-    transform: translateY(160%) scale(0.85);
+    transform: translateY(calc(var(--vanina-rest-y) + 110%)) scale(0.85);
   }
   to {
     opacity: 1;
-    transform: translateY(50%) scale(1);
+    transform: translateY(var(--vanina-rest-y)) scale(1);
   }
 }
 
@@ -1513,7 +1590,7 @@ h3 {
  * resting crop rather than playing the full rise. */
 @media (prefers-reduced-motion: reduce) {
   .game-result-vanina {
-    transform: translateY(50%);
+    transform: translateY(var(--vanina-rest-y));
     transition: opacity 250ms var(--ease-control);
   }
   .game-result-vanina[data-ready='true'] {
@@ -1602,10 +1679,25 @@ h3 {
 }
 
 @keyframes game-result-confetti-piece {
+  /* Invisible at the spawn point (bugfix, owner report: ~40 pieces sat
+   * motionless in two static edge columns before bursting,
+   * `reorder-390-result.png`/`groupsort-390-result.png`) — `animation: …
+   * var(--confetti-delay, 300ms) … both` fills BACKWARDS during that delay,
+   * painting this 0% stop's own values at the piece's spawn point for the
+   * whole delay, before the animation itself starts. This used to be
+   * `opacity: 1` here, so every piece was fully visible and frozen at
+   * `translate(0, 0)` — its own edge spawn point — until ITS OWN delay
+   * elapsed. The next stop, a few steps into the explosive-overshoot
+   * segment, snaps it back to fully opaque well before that segment ends —
+   * a pop, not a fade — so the burst still reads as explosive the instant
+   * each piece's own delay is over. */
   0% {
-    opacity: 1;
+    opacity: 0;
     transform: translate(0, 0) rotate(0deg);
     animation-timing-function: cubic-bezier(0.17, 0.89, 0.32, 1.25); /* phase 1: explosive overshoot */
+  }
+  3% {
+    opacity: 1;
   }
   12% {
     /* phase 2 (12% -> 100%) falls back to the gravity ease-in set on the

@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import GameResult, { OUTCOME_POSE } from './GameResult';
-import { GAME_RESULT_OUTCOME_POSES } from '@/content/characterPoses';
+import { GAME_RESULT_OUTCOME_POSES, characterPoseFraming } from '@/content/characterPoses';
 
 afterEach(cleanup);
 
@@ -280,30 +280,51 @@ describe('GameResult', () => {
     // figure). Vanina pop-in pass: she is now a bit LARGER (h-64, half
     // visible once cropped by the edge — see the "edge-anchored" describe
     // below) than the old h-44 centred figure.
-    it('keeps its natural aspect ratio (fixed height, width auto, never cropped/letterboxed)', () => {
+    it('keeps its natural aspect ratio (width auto, never cropped/letterboxed/squashed)', () => {
       render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
       const img = screen.getByTestId('game-result-icon').querySelector('img')!;
-      expect(img.className).toMatch(/\bh-64\b/);
       expect(img.className).toMatch(/\bw-auto\b/);
-      expect(img.className).toMatch(/max-\[400px\]:h-52/);
       expect(img.className).not.toMatch(/\bobject-cover\b/);
       expect(img.className).not.toMatch(/\bobject-contain\b/);
     });
+  });
 
-    // Mortal-Kombat-"Toasty!"-prominence pass (owner: "la imagen crece un
-    // poco" — she reads as a tiny sticker at a flat h-64 everywhere). A
-    // fixed height PER BREAKPOINT, still never a shrink-to-fit crop: 13rem
-    // at the narrowest phones (unchanged), 16rem up to tablet (unchanged),
-    // 20rem at tablet, 26-30rem on desktop.
-    it('grows at tablet (md) and desktop (lg) breakpoints, not just the flat h-64/h-52 pair', () => {
-      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+  // "Equal head size" sizing (owner follow-up bugfix: her size when you do
+  // well must be the SAME as when you lose — the original "abdomen up"
+  // formula this replaces cropped at the abdomen, but that inflated
+  // `pulgar-arriba`'s whole image, head included, ~25% bigger than the
+  // other two outcomes, since that master's own abdomen is an extrapolated
+  // guess with no real feature behind it). Replaces the old flat
+  // `h-64`/`md:h-80`/`lg:h-[28rem]` box: the actual height now comes from
+  // `.game-result-vanina`'s own formula in `global.css` (`--vanina-head`
+  // per breakpoint, divided by this pose's own `--pose-chin - --pose-head`)
+  // — this component's only job is wiring the right per-pose fractions onto
+  // the element as inline custom properties, which is what these tests
+  // actually exercise (the CSS math itself is verified against real
+  // screenshots, not jsdom).
+  describe('Vanina — per-pose "equal head size" sizing (owner spec: same apparent size for every outcome)', () => {
+    it.each([
+      ['perfect', 3, 3, 'vanina/celebra'],
+      ['good', 7, 10, 'vanina/pulgar-arriba'],
+      ['retry', 2, 10, 'vanina/casi'],
+    ] as const)('sets --pose-head/--pose-chin/--pose-abdomen inline for the "%s" outcome, matching %s\'s own registry framing', (_outcome, correct, total, poseKey) => {
+      render(<GameResult lang="es" correct={correct} total={total} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
-      const img = icon.querySelector('img')!;
-      for (const el of [icon, img]) {
-        expect(el.className).toMatch(/\bh-64\b/);
-        expect(el.className).toMatch(/\bmd:h-80\b/);
-        expect(el.className).toMatch(/(^|\s)lg:h-\[28rem\](\s|$)/);
-        expect(el.className).toMatch(/max-\[400px\]:h-52/);
+      const framing = characterPoseFraming(poseKey);
+      expect(icon.style.getPropertyValue('--pose-head')).toBe(String(framing.headTop));
+      expect(icon.style.getPropertyValue('--pose-chin')).toBe(String(framing.chin));
+      expect(icon.style.getPropertyValue('--pose-abdomen')).toBe(String(framing.abdomen));
+    });
+
+    it('uses the SAME sizing class (and so the same CSS formula) for all 3 outcome poses — only the inline fractions differ', () => {
+      for (const [correct, total] of [
+        [3, 3],
+        [7, 10],
+        [2, 10],
+      ] as const) {
+        const { unmount } = render(<GameResult lang="es" correct={correct} total={total} onPlayAgain={() => {}} />);
+        expect(screen.getByTestId('game-result-icon').className).toMatch(/\bgame-result-vanina\b/);
+        unmount();
       }
     });
   });

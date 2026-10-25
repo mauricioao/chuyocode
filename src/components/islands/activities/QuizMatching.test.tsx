@@ -583,9 +583,20 @@ describe('QuizMatching', () => {
   // Stage layout system (visual-polish pass, owner bug: "el borde de cada
   // ejercicio se corta y es muy ancho el ejercicio").
   describe('stage layout system', () => {
-    it('reserves the safe inset as padding on the scrollable stage, so a row\'s own decorations never touch a clipping edge', () => {
+    // BLOCKER bugfix (mobile pass): the old `p-[var(--stage-safe-inset)]`
+    // (all sides) + `pb-20` (bottom reserve) combo silently lost the
+    // reserve to a `tailwind-merge` conflict — confirmed live on THIS
+    // mould's own 6-pair board at a phone viewport, the floating Comprobar
+    // clipping the last pair row's own ring. `STAGE_SCROLL_PADDING_CLASS`
+    // (`scale.ts`) expresses both as four separate per-side utilities so
+    // neither can ever out-conflict the other again.
+    it('reserves the safe inset on three sides AND the floating-Comprobar bottom reserve on the fourth, as four separate utilities', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
-      expect(screen.getByTestId('matching-stage-scroll').className).toContain('p-[var(--stage-safe-inset)]');
+      const classes = screen.getByTestId('matching-stage-scroll').className;
+      expect(classes).toContain('pt-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pr-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pl-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pb-20');
     });
 
     it('caps the prompts column at a readable measure, centred in the stage', () => {

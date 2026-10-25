@@ -56,7 +56,13 @@ import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { formatElapsedTime } from '@/lib/formatElapsedTime';
 import { Button } from '@/components/ui/button';
-import { characterPoseFallbackSrc, characterPoseSrcSet, characterPoseWidth, type CharacterPoseKey } from '@/content/characterPoses';
+import {
+  characterPoseFallbackSrc,
+  characterPoseFraming,
+  characterPoseSrcSet,
+  characterPoseWidth,
+  type CharacterPoseKey,
+} from '@/content/characterPoses';
 import { ActivityPreviewContext } from '@/components/islands/activities/ActivityPreviewFrame';
 
 export type GameResultOutcome = 'perfect' | 'good' | 'retry';
@@ -304,6 +310,7 @@ export default function GameResult({
   const word = resultWord ?? t.defaultWord;
   const showReview = correct < total && Boolean(onReviewWrong);
   const pose = OUTCOME_POSE[outcome];
+  const poseFraming = characterPoseFraming(pose);
   const showConfetti = CONFETTI_OUTCOMES.has(outcome);
   const confettiPieces = showConfetti ? buildConfettiPieces() : [];
   const isPortalPlacement = characterPlacement === 'portal';
@@ -388,27 +395,49 @@ export default function GameResult({
           OWN bottom-left edge (visual-polish pass, owner spec: "sale desde
           abajo a la izquierda... la mitad de la imagen visible... se
           queda", unlike Toasty she never leaves again). Anchored `absolute
-          bottom-0`, then `translateY(50%)` (`.game-result-vanina`,
-          `global.css`) pushes the bottom half past the enclosing box's own
-          `overflow-hidden` edge — only the UPPER half stays visible, which
-          is the crop the owner asked for, never a shrink (the "never
-          shrink to fit" rule — `object-cover` stays reserved for a
+          bottom-0`; `.game-result-vanina` (`global.css`) then translates her
+          down by a per-POSE amount so the ABDOMEN line (not a fixed 50%)
+          sits on the enclosing box's own `overflow-hidden` edge.
+
+          "EQUAL HEAD SIZE" SIZING (owner follow-up bugfix: her size on a win
+          must match her size on a loss — a fixed height per breakpoint used
+          to crop each of the 3 outcome poses at a DIFFERENT point on her
+          body, since they frame her at different proportions/zoom levels: a
+          full-body jump for `celebra` vs. tight bust shots for the other
+          two). An earlier pass equalized the visible HEAD-TO-ABDOMEN slice
+          instead, but that inflated `pulgar-arriba`'s whole image — head
+          included, ~25% bigger on screen than the other two — because that
+          master's own "abdomen" is an extrapolated guess sitting unusually
+          close under her chin (bust shot, canvas ends at mid-torso, never
+          reaching a real abdomen); stretching that short slice up to match
+          the other poses' own taller one scaled everything, not just the
+          crop. `--pose-head`/`--pose-chin`/`--pose-abdomen` below are THIS
+          pose's own {@link characterPoseFraming} — set inline so
+          `global.css`'s one shared formula (`--vanina-head` per breakpoint,
+          divided by `--pose-chin - --pose-head`) derives a box height that
+          cancels back out to EXACTLY `--vanina-head` on screen for every
+          pose, immune to that failure mode (no extrapolation can inflate
+          the whole image — only the crop/rest line, still driven by
+          `--pose-abdomen`, moves). Still never a shrink-to-fit crop (the
+          "never shrink to fit" rule — `object-cover` stays reserved for a
           fixed-SHAPE frame like `DeskHelper.astro`'s own circular avatar;
           this is a free-standing figure, cropped by the edge, not
-          squeezed). A fixed HEIGHT per breakpoint, `width: auto`, same
-          "never letterbox or crop by shrinking" posture as before.
-          Mortal-Kombat-"Toasty!"-prominent pass (owner: "la imagen crece un
-          poco"): the figure now actually GROWS with the viewport — 13rem
-          visible half at the narrowest phones (`max-[400px]`), 16rem full
-          height up to tablet, 20rem at tablet (`md`), 26-30rem on desktop
-          (`lg`, visible half ≈13-15rem) — not just the old flat h-64
-          everywhere. Decorative only: the outcome is already in the
-          headline text below and in `data-outcome` above. */}
+          squeezed): `width: auto` on both elements keeps the pose's own
+          natural aspect ratio, however wide that makes the box. Decorative
+          only: the outcome is already in the headline text below and in
+          `data-outcome` above. */}
       <picture
         data-testid="game-result-icon"
         data-outcome-pose={pose}
         data-ready={poseReady ? 'true' : undefined}
-        className="game-result-vanina pointer-events-none absolute bottom-0 left-4 z-10 block h-64 w-auto sm:left-6 md:h-80 lg:h-[28rem] max-[400px]:h-52"
+        style={
+          {
+            '--pose-head': String(poseFraming.headTop),
+            '--pose-chin': String(poseFraming.chin),
+            '--pose-abdomen': String(poseFraming.abdomen),
+          } as CSSProperties
+        }
+        className="game-result-vanina pointer-events-none absolute bottom-0 left-4 z-10 block w-auto sm:left-6"
       >
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
@@ -420,7 +449,7 @@ export default function GameResult({
           width={characterPoseWidth(pose)}
           height={256}
           decoding="async"
-          className="block h-64 w-auto md:h-80 lg:h-[28rem] max-[400px]:h-52"
+          className="block h-full w-auto"
         />
       </picture>
     </>

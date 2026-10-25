@@ -76,6 +76,19 @@ describe('QuizCloze', () => {
     for (const token of STAGE_CONTENT_MEASURE.split(' ')) expect(trayClasses).toContain(token);
   });
 
+  // Mobile pass finding: `size="icon-sm"` alone is a 28px box (`size-7`) —
+  // well under the owner's own "≥44px tap target" bar every OTHER well/
+  // slot/Comprobar button in this file already floors to (same `min-h-11`
+  // fix `MatchSlot`'s own empty-slot button documents, `QuizMatching.tsx`).
+  it('keeps the ‹ › pagination arrows at a real 44px tap target, not just their 28px icon-sm visual size', () => {
+    render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+    for (const id of ['cloze-prev', 'cloze-next']) {
+      const classes = screen.getByTestId(id).className.split(' ');
+      expect(classes).toContain('min-h-11');
+      expect(classes).toContain('min-w-11');
+    }
+  });
+
   it('renders nothing when the payload has no playable sentence', () => {
     const { container } = render(<QuizCloze lang="es" payload={{ pools: {}, slots: [] }} seed="block-1" />);
     expect(container.firstChild).toBeNull();
@@ -333,9 +346,18 @@ describe('QuizCloze', () => {
   // Stage layout system (visual-polish pass, owner bug: "el borde de cada
   // ejercicio se corta y es muy ancho el ejercicio").
   describe('stage layout system', () => {
-    it('reserves the safe inset as padding on the scrollable stage', () => {
+    // BLOCKER bugfix (mobile pass): the old `p-[var(--stage-safe-inset)]`
+    // (all sides) + `pb-20` (bottom reserve) combo silently lost the
+    // reserve to a `tailwind-merge` conflict — `STAGE_SCROLL_PADDING_CLASS`
+    // (`scale.ts`) expresses both as four separate per-side utilities so
+    // neither can ever out-conflict the other again.
+    it('reserves the safe inset on three sides AND the floating-Comprobar bottom reserve on the fourth, as four separate utilities', () => {
       render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
-      expect(screen.getByTestId('cloze-stage').className).toContain('p-[var(--stage-safe-inset)]');
+      const classes = screen.getByTestId('cloze-stage').className;
+      expect(classes).toContain('pt-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pr-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pl-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pb-20');
     });
 
     it('caps the sentence card at a readable measure, centred in the stage', () => {

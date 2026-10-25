@@ -64,9 +64,8 @@ import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/com
 import {
   FLOATING_CHECK_BAR_CLASS,
   PROMPT_SCALE,
-  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTENT_MEASURE,
-  STAGE_SAFE_INSET_CLASS,
+  STAGE_SCROLL_PADDING_CLASS,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
 } from '@/components/islands/mechanics/scale';
@@ -722,7 +721,7 @@ export default function QuizMatching({ lang, items, seed, nextHref, guest }: Qui
                 pairs is the authored ceiling). */}
             <div
               data-testid="matching-stage-scroll"
-              className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
+              className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_SCROLL_PADDING_CLASS)}
             >
               {/* THE SHEET (activity-templates-polish pass, proposal §d):
                   one white card holding tray + board, shared material with

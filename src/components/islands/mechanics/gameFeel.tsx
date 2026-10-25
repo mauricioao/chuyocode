@@ -182,6 +182,31 @@ export function useDragSourceMetrics(activeId: string | null): DragSourceMetrics
 }
 
 /**
+ * The drag-overlay layer — kept ABOVE every other positioned layer the app
+ * currently has, walked bottom-up: ordinary positioned chrome (badges,
+ * dropdowns, tooltips…) sits at `z-10`–`z-30`; the sticky header and
+ * `BottomSheet`'s own bar/overlay at `z-40`; the kit's `Dialog`, the desk
+ * window itself (`DeskWindow.astro`'s own `.ingles-window`) and
+ * `NavProgressBar` at `z-50`; the minimized-windows tray, the editor's own
+ * side dock and `GameResult`'s own confetti/medal portal at `z-[60]`; the
+ * focus-mode shell (`ActivityPracticeIsland.tsx`'s own fullscreen div) at
+ * `z-[80]`, the highest of the rest. `90` clears all of them with room to
+ * spare.
+ *
+ * Kept as ONE named constant — used for `insetHost`'s own class below AND
+ * repeated as a literal number on the inner `<DragOverlay>`'s own `zIndex`
+ * prop (dnd-kit's prop takes a plain number, never a class), so both read as
+ * the SAME deliberate layer instead of two independently-chosen ones.
+ * `z-index-layer-budget.test.ts` (`src/styles/`) statically scans every
+ * OTHER `z-*`/`zIndex` value in `src/**` and fails if one climbs to or past
+ * this same number without an explicit, reasoned allowlist entry — so a
+ * future layer can never silently hide this one again the way `insetHost`'s
+ * own MISSING z-index just did (see this component's own "LAYER" header
+ * below).
+ */
+export const DRAG_LAYER_CLASS = 'z-[90]';
+
+/**
  * The shared `DragOverlay` for every drag-based game template — ALWAYS
  * portals its content to `document.body` (or, see FULLSCREEN below, the
  * real Fullscreen API element) rather than letting it render inline inside
@@ -312,9 +337,34 @@ export function useDragSourceMetrics(activeId: string | null): DragSourceMetrics
  * fullscreenElement` itself and portals into IT whenever one is set, falling
  * back to `document.body` otherwise — including the CSS-fallback "modo
  * enfoque" (no real Fullscreen API, just a `fixed`, high-z-index overlay),
- * where `document.body` paints normally and this overlay's own `zIndex={60}`
+ * where `document.body` paints normally and this overlay's own `zIndex={90}`
  * already layers above it (same convention `GameResult`'s own character
  * portal uses).
+ *
+ * LAYER (BLOCKER bugfix — the dragged chip was invisible on every real
+ * activity page): `insetHost` itself used to carry NO z-index at all
+ * (`fixed inset-0 pointer-events-none`, i.e. `z-index: auto`), so it painted
+ * BELOW every OTHER positioned sibling `document.body` already has with an
+ * explicit z-index — the activity window itself (`DeskWindow.astro`'s own
+ * `.ingles-window`, `z-50`) chief among them. The INNER `<DragOverlay>`
+ * below never got a chance to compete: z-index only resolves against
+ * SIBLINGS within the same stacking context, and `insetHost` (this
+ * component's own portal target) is the sibling that actually matters here
+ * — once it loses, nothing portaled inside it can still win. Only caught in
+ * the real app: the TEMP dev harness (`/dev-plantillas`) has no window
+ * chrome at all, so it never reproduced there. Confirmed live by giving the
+ * host an explicit z-index and watching the chip reappear instantly, mouse
+ * and touch alike. {@link DRAG_LAYER_CLASS} (see its own header just above
+ * this component) now carries the host comfortably above every other layer
+ * in the app, and the inner `<DragOverlay>` repeats the same number for the
+ * reason given there.
+ *
+ * Deliberately NOT a ceiling this constant has to clear: `UserMenu.tsx`'s
+ * own dropdown and `deskWindowManager.ts`'s own window-wrapper tokens sit
+ * intentionally even higher, but only on the desk HOST page — a different
+ * same-origin IFRAME document from the activity page this overlay renders
+ * in, where z-index can never cross that boundary (see each file's own
+ * comment for its exact value).
  *
  * SSR-safe: `typeof document === 'undefined'` on the server, so `insetHost`
  * itself is `null` there and this renders nothing (same guard
@@ -339,7 +389,12 @@ export function GameDragOverlay({ dropAnimation, children, activeId }: GameDragO
     if (typeof document === 'undefined') return null;
     const el = document.createElement('div');
     el.setAttribute('data-testid', 'game-drag-overlay-inset');
-    el.className = 'fixed inset-0 pointer-events-none';
+    // `DRAG_LAYER_CLASS` (see this file's own header just above this
+    // component) — without it this host paints at `z-index: auto`, BELOW
+    // every positioned sibling `document.body` already has with an
+    // explicit one (the real bug this fixes, see this component's own
+    // "LAYER" header).
+    el.className = `fixed inset-0 pointer-events-none ${DRAG_LAYER_CLASS}`;
     return el;
   });
 
@@ -375,18 +430,28 @@ export function GameDragOverlay({ dropAnimation, children, activeId }: GameDragO
 
   if (!insetHost) return null;
 
+  // Outside any `transform: scale(s)` ancestor (the ordinary player) `scale`
+  // is exactly `1` — a no-op `transform` that would still force the browser
+  // to promote this wrapper to its own compositing layer for nothing, so
+  // it's omitted entirely rather than left in as the literal `scale(1)`.
+  const scale = metrics?.scale ?? 1;
+  const scaleWrapperStyle: CSSProperties =
+    scale === 1 ? { transformOrigin: 'top left' } : { transform: `scale(${scale})`, transformOrigin: 'top left' };
+
   return createPortal(
-    <DragOverlay dropAnimation={dropAnimation} zIndex={60}>
+    // `zIndex={90}` repeats {@link DRAG_LAYER_CLASS}'s own number literally
+    // — dnd-kit's own prop takes a plain number, not a class — so both read
+    // as the SAME deliberate layer. See this component's own "LAYER" header
+    // above for why `insetHost` itself (not just this inner overlay) needs
+    // one too.
+    <DragOverlay dropAnimation={dropAnimation} zIndex={90}>
       {chip ? (
         // Shrinks the (now native-sized) chip down to match the editor's
-        // own scaled live preview — `1` (a no-op) everywhere else, see
-        // this component's own "SIZE" header. Deliberately nothing here
-        // clips: the chip's own lift (scale, tilt, shadow) must stay fully
-        // visible, never cut to this wrapper's own box.
-        <div
-          data-testid="game-drag-overlay-chip"
-          style={{ transform: `scale(${metrics?.scale ?? 1})`, transformOrigin: 'top left' }}
-        >
+        // own scaled live preview — see this component's own "SIZE" header.
+        // Deliberately nothing here clips: the chip's own lift (scale,
+        // tilt, shadow) must stay fully visible, never cut to this
+        // wrapper's own box.
+        <div data-testid="game-drag-overlay-chip" style={scaleWrapperStyle}>
           {chip}
         </div>
       ) : null}

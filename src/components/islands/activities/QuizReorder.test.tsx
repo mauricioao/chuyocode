@@ -60,6 +60,19 @@ describe('QuizReorder', () => {
     expect(screen.getByTestId('reorder-line-0').textContent).toContain('Toca o arrastra una palabra para empezar');
   });
 
+  // Mobile pass finding: `size="icon-sm"` alone is a 28px box (`size-7`) —
+  // well under the owner's own "≥44px tap target" bar every OTHER well/
+  // slot/Comprobar button in this file already floors to (same `min-h-11`
+  // fix `MatchSlot`'s own empty-slot button documents, `QuizMatching.tsx`).
+  it('keeps the ‹ › pagination arrows at a real 44px tap target, not just their 28px icon-sm visual size', () => {
+    render(<QuizReorder lang="es" items={items} seed="block-1" />);
+    for (const id of ['reorder-prev', 'reorder-next']) {
+      const classes = screen.getByTestId(id).className.split(' ');
+      expect(classes).toContain('min-h-11');
+      expect(classes).toContain('min-w-11');
+    }
+  });
+
   it('appends a tray word to the line by tapping it, in tap order', () => {
     render(<QuizReorder lang="es" items={items} seed="block-1" />);
     fireEvent.click(screen.getByTestId('reorder-tile-0-w1')); // "sleep"
@@ -285,9 +298,18 @@ describe('QuizReorder', () => {
   // Stage layout system (visual-polish pass, owner bug: "el borde de cada
   // ejercicio se corta y es muy ancho el ejercicio").
   describe('stage layout system', () => {
-    it('reserves the safe inset as padding on the scrollable stage', () => {
+    // BLOCKER bugfix (mobile pass): the old `p-[var(--stage-safe-inset)]`
+    // (all sides) + `pb-20` (bottom reserve) combo silently lost the
+    // reserve to a `tailwind-merge` conflict — `STAGE_SCROLL_PADDING_CLASS`
+    // (`scale.ts`) expresses both as four separate per-side utilities so
+    // neither can ever out-conflict the other again.
+    it('reserves the safe inset on three sides AND the floating-Comprobar bottom reserve on the fourth, as four separate utilities', () => {
       render(<QuizReorder lang="es" items={items} seed="block-1" />);
-      expect(screen.getByTestId('reorder-stage').className).toContain('p-[var(--stage-safe-inset)]');
+      const classes = screen.getByTestId('reorder-stage').className;
+      expect(classes).toContain('pt-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pr-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pl-[var(--stage-safe-inset)]');
+      expect(classes).toContain('pb-20');
     });
 
     it('caps the sentence line at a readable measure, centred in the stage', () => {
@@ -295,6 +317,45 @@ describe('QuizReorder', () => {
       const line = screen.getByTestId('reorder-line-0').className;
       expect(line).toContain('max-w-[760px]');
       expect(line).toContain('mx-auto');
+    });
+  });
+
+  // Visual bug audit: a fully filled line used to lose BLANK_FILLED's own
+  // border-color entirely (`border-transparent`, with nothing else to
+  // replace it) and read like loose chips floating on the sheet, never "the
+  // sentence" — unlike every other BLANK_FILLED caller (QuizCloze et al),
+  // where each individual filled blank still gets CHIP_PLACED's own white/
+  // raised look. Reorder applies BLANK_FILLED to the LINE itself, not per
+  // word, so it needs its own frame back.
+  describe('filled line keeps a frame (visual bug audit: "se ve como fichas sueltas, no como la oración")', () => {
+    it('stays dashed, in the well wash, while still empty', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      const classes = screen.getByTestId('reorder-line-0').className;
+      expect(classes).toContain('border-dashed');
+      expect(classes).toContain('bg-[var(--well-bg)]');
+    });
+
+    it('keeps a solid hairline + the well wash once every word is placed, never a fully transparent border', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      const classes = screen.getByTestId('reorder-line-0').className;
+      expect(classes).toContain('border-input');
+      expect(classes).toContain('bg-[var(--well-bg)]');
+      expect(classes).not.toContain('border-transparent');
+    });
+
+    // The line is a multi-row box (words wrap onto 2-3 rows on phones), so a
+    // capsule `rounded-full` turns it into an oval the chips spill out of.
+    // It takes the same rounded-rect radius as QuizGroupSort's own zones.
+    it('is a rounded rectangle, never a capsule, empty or filled', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('reorder-line-0').className).toContain('rounded-[26px]');
+      expect(screen.getByTestId('reorder-line-0').className).not.toContain('rounded-full');
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w0'));
+      expect(screen.getByTestId('reorder-line-0').className).toContain('rounded-[26px]');
+      expect(screen.getByTestId('reorder-line-0').className).not.toContain('rounded-full');
     });
   });
 
