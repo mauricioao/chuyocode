@@ -35,7 +35,7 @@
  * drop, tray reflow, and five sound cues, gated by the same shared mute
  * toggle.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
   useDraggable,
@@ -69,10 +69,9 @@ import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAG
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTENT_MEASURE,
-  STAGE_SAFE_INSET_CLASS,
+  STAGE_SCROLL_PADDING_CLASS,
 } from '@/components/islands/mechanics/scale';
 import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 
@@ -199,6 +198,89 @@ function WordTileButton({ id, label, disabled, dragging, wrong, grade, reducedMo
       {label}
       {grade && <GradeMark state={grade} />}
     </button>
+  );
+}
+
+interface ReorderLineProps {
+  dropId: string;
+  index: number;
+  ariaLabel: string;
+  locked: boolean;
+  isSolved: boolean;
+  isEmpty: boolean;
+  emptyText: string;
+  children: ReactNode;
+}
+
+/**
+ * The sentence line's own droppable (BLOCKER bugfix — a real drag onto the
+ * line never landed, mouse or touch: `useDroppable` used to be called at
+ * the TOP of `QuizReorder` itself, BEFORE/OUTSIDE the `<DndContext>` this
+ * same function renders further down in its own return statement. React
+ * context follows the COMPONENT tree, not the eventual DOM nesting — a hook
+ * call earlier in the SAME component function that later returns a
+ * `<DndContext>` element runs in whatever context wraps THAT component
+ * (here, none), never inside the provider that element itself creates. So
+ * this registered with no `DndContext` at all and never once appeared in
+ * `pointerWithin`'s own `droppableContainers` (confirmed live by logging
+ * it: always `[], for every pointer position, mouse and touch alike) —
+ * tap-to-place never broke, since `appendTile`'s own `onClick` has nothing
+ * to do with dnd-kit's registry. Every sibling mould already avoids this:
+ * `MatchSlot`/`ClozeBlankBox`/`GroupBox` each call their OWN `useDroppable`
+ * from inside a component that is rendered AS A CHILD of their own
+ * `<DndContext>` — this mirrors that same shape for the line.
+ */
+function ReorderLine({ dropId, index, ariaLabel, locked, isSolved, isEmpty, emptyText, children }: ReorderLineProps) {
+  const { isOver, setNodeRef } = useDroppable({ id: dropId, disabled: locked });
+  return (
+    <ol
+      ref={setNodeRef}
+      data-testid={`reorder-line-${index}`}
+      aria-label={ariaLabel}
+      // Dashed capsule outline while empty (the shared blank affordance,
+      // `mechanics/chip.ts`'s {@link BLANK_EMPTY}); once the line holds
+      // words the border goes solid-transparent ({@link BLANK_FILLED}).
+      // Capped at the shared readable measure, centred in the stage — same
+      // recipe `QuizMatching`'s own prompt column uses.
+      //
+      // FILLED-LINE FRAME (visual bug audit: "se ve como fichas sueltas, no
+      // como la oración" — {@link BLANK_FILLED}'s own border-color is
+      // `transparent`, with nothing else here to replace it, so a fully
+      // placed line read as loose chips with no frame at all). Every OTHER
+      // {@link BLANK_FILLED} caller (`QuizCloze`/`QuizAnagram`) applies it
+      // PER BLANK, alongside {@link CHIP_PLACED}'s own white/raised look —
+      // but this is the one LINE holding every word, not a single blank, so
+      // it needs its own frame back: a solid hairline in the same
+      // `--input` colour the dashed empty state already uses, plus the
+      // shared `--well-bg` wash — never a new colour, same "well" identity
+      // as {@link BLANK_EMPTY}, just solid instead of dashed. Listed AFTER
+      // `BLANK_FILLED` so `tailwind-merge` drops its `border-transparent`
+      // for this; listed BEFORE the active/solved states below so THEIR own
+      // border/background still win while hovering or settled correct.
+      className={cn(
+        'flex list-none flex-wrap items-center gap-2 p-3 sm:gap-3',
+        isEmpty ? BLANK_EMPTY : BLANK_FILLED,
+        !isEmpty && 'border-input bg-[var(--well-bg)]',
+        // The line wraps onto several rows (always on phones), so the shared
+        // blank's capsule `rounded-full` would bend it into an oval the
+        // chips spill out of — same rounded-rect radius as QuizGroupSort's
+        // own multi-row zones instead.
+        'rounded-[26px]',
+        STAGE_BOX_MIN_HEIGHT_SCALE,
+        STAGE_CONTENT_MEASURE,
+        // Active/correct — activity-templates-polish pass, proposal §d
+        // (same tokens `QuizMatching`'s own `MatchSlot` uses).
+        isOver && !locked && 'border-solid border-pop-sky-deep bg-[var(--well-active-bg)]',
+        isSolved && 'ring-2 ring-inset ring-success bg-pop-green/28',
+      )}
+    >
+      {isEmpty && (
+        <li aria-hidden="true" className="w-full text-[17px]/[22px] text-center text-muted-foreground">
+          {emptyText}
+        </li>
+      )}
+      {children}
+    </ol>
   );
 }
 
@@ -422,8 +504,6 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
     }, settleMs);
   }
 
-  const { isOver, setNodeRef: setLineRef } = useDroppable({ id: LINE_DROP_ID, disabled: locked });
-
   if (phase === 'done') {
     // Never with eventual mistakes (build item N1): a sentence only ever
     // advances once fully correct, so `solved.size` always equals `total`
@@ -471,6 +551,12 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
           type="button"
           variant="outline"
           size="icon-sm"
+          // Mobile pass finding: `icon-sm` alone is a 28px box (`size-7`) —
+          // under the owner's own "≥44px tap target" bar, same `min-h-11`
+          // FLOOR fix `MatchSlot`'s own empty-slot button documents
+          // (`QuizMatching.tsx`). `min-w-11` too: this is a square icon
+          // button, not a text one with its own natural width to hug.
+          className="min-h-11 min-w-11"
           data-testid="reorder-prev"
           aria-label={t.reorderPrev}
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
@@ -488,7 +574,16 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
             labelMute={t.reorderSoundMute}
             labelUnmute={t.reorderSoundUnmute}
           />
-          <Button type="button" variant="outline" size="icon-sm" data-testid="reorder-next" aria-label={t.reorderNext} onClick={() => setIndex((i) => Math.min(total - 1, i + 1))} disabled={index === total - 1}>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className="min-h-11 min-w-11"
+            data-testid="reorder-next"
+            aria-label={t.reorderNext}
+            onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
+            disabled={index === total - 1}
+          >
             <CaretRightIcon aria-hidden="true" />
           </Button>
         </div>
@@ -529,40 +624,22 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="reorder-stage"
-            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
+            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_SCROLL_PADDING_CLASS)}
           >
           {/* THE SHEET (activity-templates-polish pass, proposal §d): one
               white card holding the sentence line + tray, shared material
               with the other three moulds (`ACTIVITY_SHEET_CLASS`,
               `mechanics/chip.ts`). */}
           <div data-testid="activity-sheet" className={cn(ACTIVITY_SHEET_CLASS, 'flex flex-col gap-6')}>
-          <ol
-            ref={setLineRef}
-            data-testid={`reorder-line-${index}`}
-            aria-label={t.reorderLineLabel}
-            // Dashed capsule outline while empty (the shared blank
-            // affordance, `mechanics/chip.ts`'s {@link BLANK_EMPTY}); once
-            // the line holds words the border goes solid-transparent
-            // ({@link BLANK_FILLED}) — "no box" once filled, same as a
-            // single-tile blank, the row of chips speaks for itself. Capped
-            // at the shared readable measure, centred in the stage — same
-            // recipe `QuizMatching`'s own prompt column uses.
-            className={cn(
-              'flex list-none flex-wrap items-center gap-2 p-3 sm:gap-3',
-              currentPlacements.length === 0 ? BLANK_EMPTY : BLANK_FILLED,
-              STAGE_BOX_MIN_HEIGHT_SCALE,
-              STAGE_CONTENT_MEASURE,
-              // Active/correct — activity-templates-polish pass, proposal §d
-              // (same tokens `QuizMatching`'s own `MatchSlot` uses).
-              isOver && !locked && 'border-solid border-pop-sky-deep bg-[var(--well-active-bg)]',
-              isSolved && 'ring-2 ring-inset ring-success bg-pop-green/28',
-            )}
+          <ReorderLine
+            dropId={LINE_DROP_ID}
+            index={index}
+            ariaLabel={t.reorderLineLabel}
+            locked={locked}
+            isSolved={isSolved}
+            isEmpty={currentPlacements.length === 0}
+            emptyText={t.reorderLineEmpty}
           >
-            {currentPlacements.length === 0 && (
-              <li aria-hidden="true" className="w-full text-[17px]/[22px] text-center text-muted-foreground">
-                {t.reorderLineEmpty}
-              </li>
-            )}
             {currentPlacements.map((tileId) => {
               const tile = tileById.get(tileId);
               if (!tile) return null;
@@ -592,7 +669,7 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
                 </li>
               );
             })}
-          </ol>
+          </ReorderLine>
 
           <ul
             ref={trayRef}

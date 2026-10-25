@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CHARACTER_POSES,
+  GAME_RESULT_OUTCOME_POSES,
   characterPoseFallbackSrc,
+  characterPoseFraming,
   characterPoseSrcSet,
   characterPoseWidth,
   type CharacterPoseKey,
@@ -33,6 +35,47 @@ describe('CHARACTER_POSES registry', () => {
     for (const pose of Object.values(CHARACTER_POSES)) {
       expect([null, 'top', 'bottom', 'left', 'right']).toContain(pose.flushEdge);
     }
+  });
+});
+
+describe('pose framing (GameResult "equal head size" sizing)', () => {
+  it('gives every GameResult outcome pose a framing with headTop/chin/abdomen fractions, in that order down the body', () => {
+    for (const pose of GAME_RESULT_OUTCOME_POSES) {
+      // Goes through the public `characterPoseFraming` (never reaches into
+      // `RESULT_POSE_FRAMING` directly) — it's typed to exactly the 3
+      // outcome-pose keys, so every `GAME_RESULT_OUTCOME_POSES` entry
+      // resolving without throwing already proves the map covers all 3.
+      const framing = characterPoseFraming(pose);
+      expect(framing.headTop).toBeGreaterThanOrEqual(0);
+      expect(framing.headTop).toBeLessThan(1);
+      // `abdomen` is `<= 1` always — a bust master whose canvas never
+      // reaches a real abdomen sets it to exactly `1` (its own bottom edge,
+      // never an extrapolated guess past it — `global.css`'s own
+      // `min(var(--pose-abdomen), 1)` is the defensive CSS-side backstop
+      // for this same invariant).
+      expect(framing.abdomen).toBeGreaterThan(0);
+      expect(framing.abdomen).toBeLessThanOrEqual(1);
+      // The chin sits strictly between the head top and the abdomen line —
+      // enough of a head-top-to-chin gap to actually show a meaningful
+      // head slice (never near-zero), and never past the abdomen/bottom
+      // edge.
+      expect(framing.chin - framing.headTop).toBeGreaterThan(0.1);
+      expect(framing.chin).toBeLessThanOrEqual(framing.abdomen);
+    }
+  });
+
+  it('characterPoseFraming returns the same values as the registry', () => {
+    expect(characterPoseFraming('vanina/celebra')).toEqual({ headTop: 0.067, chin: 0.27, abdomen: 0.47 });
+    expect(characterPoseFraming('vanina/pulgar-arriba')).toEqual({ headTop: 0.019, chin: 0.285, abdomen: 1 });
+    expect(characterPoseFraming('vanina/casi')).toEqual({ headTop: 0.019, chin: 0.3, abdomen: 0.78 });
+  });
+
+  it('gives pulgar-arriba an abdomen of exactly 1 — its bust-shot canvas never reaches a real abdomen, so the crop rests on its own bottom edge instead of an extrapolated guess (bugfix: that guess used to inflate her whole image, head included, ~25% bigger than the other two outcome poses)', () => {
+    expect(characterPoseFraming('vanina/pulgar-arriba').abdomen).toBe(1);
+  });
+
+  it('characterPoseFraming throws for a pose with no framing metadata, instead of silently sizing it wrong', () => {
+    expect(() => characterPoseFraming('vanina/avatar')).toThrow(/no framing metadata/);
   });
 });
 

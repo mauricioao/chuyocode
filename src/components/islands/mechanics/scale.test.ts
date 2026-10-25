@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import { cn } from '@/lib/utils';
 import {
   PROMPT_SCALE,
+  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTAINER,
   STAGE_CONTAINER_SIZE,
+  STAGE_SAFE_INSET_CLASS,
+  STAGE_SCROLL_PADDING_CLASS,
   STAGE_TWO_COL_GRID,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
@@ -62,5 +66,26 @@ describe('scale — shared game-stage sizing tokens (visual-polish pass)', () =>
       return Number(match[1]);
     };
     expect(floorOf(STAGE_BOX_MIN_HEIGHT_SCALE)).toBeGreaterThan(floorOf(TILE_MIN_HEIGHT_SCALE));
+  });
+});
+
+describe('STAGE_SCROLL_PADDING_CLASS — mobile-pass BLOCKER bugfix (floating Comprobar clipped the last row)', () => {
+  // Documents the actual bug: every big-stage mould used to combine these
+  // two tokens directly, and `cn` (tailwind-merge) silently keeps only the
+  // LATER one of a conflicting "all sides" vs "one side" padding pair —
+  // regardless of which is more specific — so the 80px bottom reserve never
+  // actually rendered, only the 16px safe inset.
+  it('the OLD combo (STAGE_BOTTOM_RESERVE_CLASS then STAGE_SAFE_INSET_CLASS) silently drops the bottom reserve', () => {
+    const merged = cn(STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS).split(' ');
+    expect(merged).not.toContain('pb-20');
+    expect(merged).toContain('p-[var(--stage-safe-inset)]');
+  });
+
+  it('keeps the 80px bottom reserve AND the 16px safe inset on the other three sides, together, regardless of argument order', () => {
+    const tokens = cn('overflow-y-auto', STAGE_SCROLL_PADDING_CLASS).split(' ');
+    expect(tokens).toContain('pb-20');
+    expect(tokens).toContain('pt-[var(--stage-safe-inset)]');
+    expect(tokens).toContain('pr-[var(--stage-safe-inset)]');
+    expect(tokens).toContain('pl-[var(--stage-safe-inset)]');
   });
 });

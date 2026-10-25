@@ -78,21 +78,21 @@ export const CHARACTER_POSES = {
     // tallest rendered height (`lg:h-[28rem]`); was [99, 198].
     widths: [251, 503],
     flushEdge: null,
-  }, // GameResult: perfect
+  }, // GameResult: perfect — framing: RESULT_POSE_FRAMING below
   'vanina/pulgar-arriba': {
     character: 'vanina',
     slug: 'pulgar-arriba',
     // Bugfix, same re-export as `vanina/celebra` above; was [126, 251].
     widths: [320, 639],
     flushEdge: null,
-  }, // GameResult: good ("¡Muy bien!")
+  }, // GameResult: good ("¡Muy bien!") — framing: RESULT_POSE_FRAMING below
   'vanina/casi': {
     character: 'vanina',
     slug: 'casi',
     // Bugfix, same re-export as `vanina/celebra` above; was [131, 263].
     widths: [335, 669],
     flushEdge: null,
-  }, // GameResult: retry ("¡Casi! Sigue practicando")
+  }, // GameResult: retry ("¡Casi! Sigue practicando") — framing: RESULT_POSE_FRAMING below
   'vanina/asoma-izquierda': {
     character: 'vanina',
     slug: 'asoma-izquierda',
@@ -142,6 +142,140 @@ export const GAME_RESULT_OUTCOME_POSES: readonly CharacterPoseKey[] = [
   'vanina/pulgar-arriba',
   'vanina/casi',
 ];
+
+/**
+ * Framing metadata for `GameResult`'s "equal head size" sizing (owner
+ * follow-up bugfix: her size when you do well must be the SAME as when you
+ * lose). A pose's box used to be a flat height per breakpoint (`h-64`/
+ * `md:h-80`/`lg:h-[28rem]`), cropped by a fixed `translateY(50%)` — then an
+ * earlier pass here equalized the visible HEAD-TO-ABDOMEN slice instead
+ * (owner spec: "que siempre se la vea desde el ABDOMEN para arriba"). That
+ * fixed `pulgar-arriba`'s crop point but broke her SIZE: her master is a
+ * tight bust shot whose canvas ends at mid-torso, never reaching a real
+ * abdomen, so her `abdomen` fraction was an extrapolated guess sitting
+ * unusually CLOSE under her chin — equalizing that short head-to-abdomen
+ * slice against the other two poses' own (much taller, real-hem-to-head)
+ * slice scaled her WHOLE image up far more than it should have, inflating
+ * her head too (owner report, screenshots `vanina-v2/good-*.png`: ~25%
+ * bigger than `celebra`/`casi`).
+ *
+ * This pass equalizes the HEAD itself instead (`headTop` to `chin`), which
+ * is immune to that failure mode: `GameResult.tsx` wires `headTop`/`chin`
+ * onto `.game-result-vanina` as `--pose-head`/`--pose-chin`, and
+ * `global.css`'s own `height: calc(var(--vanina-head) / (var(--pose-chin) -
+ * var(--pose-head)))` cancels back out to EXACTLY `--vanina-head` on screen
+ * for every pose, regardless of how short or tall its own head-to-chin
+ * fraction is — no extrapolation can inflate the whole image anymore. The
+ * crop/rest line still comes from `abdomen` (now wired as `--pose-abdomen`
+ * and clamped in CSS with `min(var(--pose-abdomen), 1)`): a REAL feature
+ * (the sweater's own hem) for `celebra`/`casi`, or a literal `1` — the
+ * master's own bottom edge, no crop at all — for `pulgar-arriba`, which has
+ * no real abdomen to point at (see that pose's own comment below).
+ *
+ * All three fractions are 0 = this pose's master PNG's own top row, 1 = its
+ * own bottom row. Measured by looking directly at the processed master
+ * (`ChuyoCode_others/Personajes/_procesados/vanina/<slug>.png`, outside the
+ * repo) and cross-checked with a throwaway `sharp` pixel scan (not a
+ * committed script): `headTop` is the first non-transparent row within the
+ * image's own horizontal center (30%-70% of its width, clear of a raised
+ * arm at the sides); `chin` is the bottom-most point of the jaw, read off a
+ * 2x-zoomed gridlined crop and cross-checked against a dark-pixel-fraction
+ * row scan of the neck column (the LAST face-ink row before a clean,
+ * near-zero "bare neck" gap that precedes the collar); `abdomen` is read off
+ * the sweater's own ribbed hem where the master actually shows it, else `1`.
+ */
+export interface PoseFraming {
+  /** Top of the hair, EXCLUDING a raised arm/hand above it. */
+  headTop: number;
+  /** Bottom of the chin — the bottom-most point of the face/jaw, before the neck. Drives the box-height formula (equal on-screen HEAD size for every outcome pose); see this const's own header above. */
+  chin: number;
+  /**
+   * The abdomen line — just below the chest/ribs, above the waist — where
+   * the master actually shows one. Always `<= 1`: a bust-shot master whose
+   * canvas never reaches that far down sets this to exactly `1` (its own
+   * bottom edge) instead of an extrapolated guess past it — `global.css`'s
+   * own `min(var(--pose-abdomen), 1)` is the defensive CSS-side backstop
+   * for this same invariant, not the primary mechanism.
+   */
+  abdomen: number;
+}
+
+/**
+ * {@link PoseFraming} for exactly the 3 {@link GAME_RESULT_OUTCOME_POSES} —
+ * a separate map, not a field on `CharacterPose` itself: `CHARACTER_POSES`
+ * is `as const satisfies Record<string, CharacterPose>`, which keeps each
+ * entry's own NARROWEST literal type; an optional field present on only 3 of
+ * the 7 entries makes `CHARACTER_POSES[key].framing` a type error for a
+ * generic `CharacterPoseKey` (TypeScript refuses a property access that's
+ * entirely ABSENT — not just `undefined` — from part of a union). Keyed on
+ * exactly those 3 string literals (not derived from `GAME_RESULT_OUTCOME_
+ * POSES`, which is typed as a plain `readonly CharacterPoseKey[]`) so a 4th
+ * key here would be a compile error, not a silently-ignored entry.
+ */
+export const RESULT_POSE_FRAMING: Record<'vanina/celebra' | 'vanina/pulgar-arriba' | 'vanina/casi', PoseFraming> = {
+  'vanina/celebra': {
+    // Master is 1336x2380 (full-body jump, arms up). headTop=0.067: first
+    // opaque row within columns 30%-70% (y=160) — well clear of the raised
+    // arms, which sit outside that band. chin=0.27: the bottom of the open-
+    // mouth laugh's jaw (y≈642), right before the turtleneck collar's own
+    // ribbed top edge (~0.29) — confirmed against the real 1440x900
+    // `vanina-v2/perfect-*.png` screenshot's own on-screen head span too.
+    // abdomen=0.47: the sweater's own ribbed hem starts at y=1190 (0.498 —
+    // confirmed with a luma scan: its dark-pixel fraction jumps from the
+    // cable-knit's ~0.11 baseline to 0.20+ right at that row); 0.47 sits
+    // just above it, in the hem's own last plain stretch.
+    headTop: 0.067,
+    chin: 0.27,
+    abdomen: 0.47,
+  },
+  'vanina/pulgar-arriba': {
+    // Master is 1636x2293 (tight bust shot, one thumbs-up hand). headTop=
+    // 0.019: first opaque row within columns 30%-70%. chin=0.285: confirmed
+    // TWO ways — a 2x-zoomed gridlined crop read, and a dark-pixel-fraction
+    // row scan of the neck column (x 42%-62%) showing a clean 7-row ZERO
+    // gap (bare neck, no ink at all) from y=0.287 to y=0.308 — chin is the
+    // last face-ink row (0.284, darkFrac 0.162) right before that gap.
+    // abdomen=1: this master's own canvas ends at mid-torso — it never
+    // reaches a real abdomen/hem, so the crop instead rests on the
+    // master's OWN bottom edge. Bugfix: the previous value here (0.73) was
+    // an extrapolated GUESS with no real feature behind it, sitting
+    // unusually close under the chin — equalizing that short head-to-
+    // abdomen slice against the other two poses' own taller one is exactly
+    // what inflated her whole image, head included, ~25% bigger (owner
+    // report, `vanina-v2/good-*.png`); the "equal head size" formula this
+    // pose framing now feeds does not have that failure mode, so `abdomen`
+    // only ever affects the crop/rest line, never the head's own size.
+    headTop: 0.019,
+    chin: 0.285,
+    abdomen: 1,
+  },
+  'vanina/casi': {
+    // Master is 1776x2378 (tight bust shot, hand on head). headTop=0.019:
+    // first opaque row within columns 30%-70%. chin=0.3: 2x-zoomed
+    // gridlined crop read, just below the smiling mouth and before the
+    // turtleneck collar begins (~0.32-0.34) — confirmed against the real
+    // 1440x900 `vanina-v2/retry-*.png` screenshot's own on-screen head span
+    // too. abdomen=0.78: unchanged — the sweater's own ribbed hem starts at
+    // y=1966 (0.827 — same luma-jump signal as `celebra`'s own, baseline
+    // ~0.11 to 0.20+); 0.78 sits just above it, a REAL feature this master
+    // actually shows (never an extrapolated guess, unlike `pulgar-arriba`'s
+    // own above).
+    headTop: 0.019,
+    chin: 0.3,
+    abdomen: 0.78,
+  },
+};
+
+/**
+ * `pose`'s own {@link PoseFraming} — every caller today only ever asks for
+ * one of the 3 `GameResult` outcome poses, which all carry one; throws for
+ * any other pose rather than silently sizing it wrong.
+ */
+export function characterPoseFraming(pose: CharacterPoseKey): PoseFraming {
+  const framing = (RESULT_POSE_FRAMING as Partial<Record<CharacterPoseKey, PoseFraming>>)[pose];
+  if (!framing) throw new Error(`characterPoseFraming: "${pose}" has no framing metadata`);
+  return framing;
+}
 
 /** Sentinel for {@link preloadCharacterPoses} — see that function's own header for why it is module-level, not a per-call guard. */
 let gameResultPosesPreloaded = false;

@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library
 import { DndContext, useDraggable } from '@dnd-kit/core';
 import type { Active, ClientRect, CollisionDetection, DroppableContainer } from '@dnd-kit/core';
 import {
+  DRAG_LAYER_CLASS,
   dragCursorClassName,
   gameCollisionDetection,
   gameDropAnimation,
@@ -297,7 +298,7 @@ describe('GameDragOverlay', () => {
     expect(scaleWrapper.style.transformOrigin).toBe('top left');
   });
 
-  it('scales by exactly 1 (a no-op) outside any transform:scale ancestor — the ordinary player', () => {
+  it('omits the transform entirely at scale 1 (a no-op) outside any transform:scale ancestor — the ordinary player', () => {
     render(<Harness />);
     const source = screen.getByTestId('draggable-tile');
     Object.defineProperty(source, 'offsetWidth', { value: 96, configurable: true });
@@ -306,7 +307,10 @@ describe('GameDragOverlay', () => {
     startDrag();
 
     const scaleWrapper = screen.getByTestId('overlay-chip').parentElement as HTMLElement;
-    expect(scaleWrapper.style.transform).toBe('scale(1)');
+    // Was the literal string 'scale(1)' — a no-op transform that still cost
+    // a compositing layer promotion for nothing. Omitted entirely now.
+    expect(scaleWrapper.style.transform).toBe('');
+    expect(scaleWrapper.style.transformOrigin).toBe('top left');
   });
 
   it('portals into the real Fullscreen API element instead of document.body when one is set', () => {
@@ -342,6 +346,20 @@ describe('GameDragOverlay', () => {
       expect(insetContainer.className).toContain('inset-0');
       expect(insetContainer.className).toContain('pointer-events-none');
       expect(insetContainer.contains(screen.getByTestId('overlay-chip'))).toBe(true);
+    });
+
+    // Regression guard (BLOCKER bugfix): this host used to carry NO z-index
+    // at all, so it painted BELOW every positioned sibling `document.body`
+    // already has with an explicit one (the real activity window chief
+    // among them) — see `GameDragOverlay`'s own "LAYER" header for the full
+    // story. `z-index-layer-budget.test.ts` (`src/styles/`) is the other
+    // half of this guard: it fails if any OTHER value in `src/**` climbs to
+    // or past this same layer without an explicit allowlist entry.
+    it('carries the drag layer class, so it never again paints below a positioned sibling (the real activity window chief among them)', () => {
+      render(<Harness />);
+      startDrag();
+      const insetContainer = screen.getByTestId('game-drag-overlay-inset');
+      expect(insetContainer.className).toContain(DRAG_LAYER_CLASS);
     });
 
     it('cancels a measured ICB offset with an equal, opposite translateX — no magic constant', () => {

@@ -70,9 +70,8 @@ import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAG
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_CONTENT_MEASURE,
-  STAGE_SAFE_INSET_CLASS,
+  STAGE_SCROLL_PADDING_CLASS,
   TILE_MIN_HEIGHT_SCALE,
   TILE_PADDING_X_SCALE,
   TILE_PADDING_Y_SCALE,
@@ -526,6 +525,12 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
           type="button"
           variant="outline"
           size="icon-sm"
+          // Mobile pass finding: `icon-sm` alone is a 28px box (`size-7`) —
+          // under the owner's own "≥44px tap target" bar, same `min-h-11`
+          // FLOOR fix `MatchSlot`'s own empty-slot button documents
+          // (`QuizMatching.tsx`). `min-w-11` too: this is a square icon
+          // button, not a text one with its own natural width to hug.
+          className="min-h-11 min-w-11"
           data-testid="cloze-prev"
           aria-label={t.clozePrev}
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
@@ -547,6 +552,7 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
             type="button"
             variant="outline"
             size="icon-sm"
+            className="min-h-11 min-w-11"
             data-testid="cloze-next"
             aria-label={t.clozeNext}
             onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
@@ -592,7 +598,7 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="cloze-stage"
-            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
+            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_SCROLL_PADDING_CLASS)}
           >
           {/* THE SHEET (activity-templates-polish pass, proposal §d): one
               white card holding the sentence + tray, shared material with

@@ -59,10 +59,9 @@ import { ACTIVITY_SHEET_CLASS, stageChipColorClass } from '@/components/islands/
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
 import {
   FLOATING_CHECK_BAR_CLASS,
-  STAGE_BOTTOM_RESERVE_CLASS,
   STAGE_BOX_MIN_HEIGHT_SCALE,
   STAGE_CONTENT_MEASURE,
-  STAGE_SAFE_INSET_CLASS,
+  STAGE_SCROLL_PADDING_CLASS,
   TILE_TEXT_SCALE,
 } from '@/components/islands/mechanics/scale';
 import GameResult, { type GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
@@ -694,7 +693,7 @@ export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: 
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
           <div
             data-testid="groupsort-stage"
-            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)}
+            className={cn('flex min-h-0 flex-col overflow-y-auto', STAGE_SCROLL_PADDING_CLASS)}
           >
           {/* THE SHEET (activity-templates-polish pass, proposal §d): one
               white card holding tray + board, shared material with the

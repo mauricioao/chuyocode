@@ -229,6 +229,31 @@ export const FLOATING_CHECK_BAR_RESERVE_END = 'pr-44';
 export const STAGE_SAFE_INSET_CLASS = 'p-[var(--stage-safe-inset)]';
 
 /**
+ * {@link STAGE_SAFE_INSET_CLASS} + {@link STAGE_BOTTOM_RESERVE_CLASS}
+ * TOGETHER, for the one scrollable stage container every big-stage mould
+ * (`QuizMatching`/`QuizReorder`/`QuizCloze`/`QuizGroupSort`) needs BOTH on
+ * (mobile-pass BLOCKER bugfix): every one of the four used to compose them
+ * as `cn(…, STAGE_BOTTOM_RESERVE_CLASS, STAGE_SAFE_INSET_CLASS)` — a plain
+ * `pb-20` next to the all-sides shorthand `p-[var(--stage-safe-inset)]`.
+ * `tailwind-merge` treats `p-*` and `pb-*` as the SAME conflicting group and
+ * keeps only the LATER one of the two REGARDLESS of which is more specific
+ * — confirmed live (`getComputedStyle`): the rendered box's own
+ * `padding-bottom` was always `16px`, the plain safe-inset value, NEVER the
+ * intended `80px` reserve, on all four. Only caught visually on "Une las
+ * parejas"' own 6-pair board at a phone viewport (390×844) — tall enough
+ * there for the floating Comprobar to actually clip the last pair row's own
+ * ring; the other three moulds' shorter fixture content still happened to
+ * clear it with room to spare, same silently-dropped reserve underneath.
+ * FOUR EXPLICIT PER-SIDE UTILITIES instead of one shorthand plus one
+ * override class: `pt-*`/`pr-*`/`pl-*` (the safe inset) and `pb-*` (the
+ * reserve, wide enough that it is never also read as "the safe inset" by
+ * anyone) are four DIFFERENT merge groups, so nothing here can silently
+ * out-conflict anything else ever again, independent of argument order.
+ */
+export const STAGE_SCROLL_PADDING_CLASS =
+  'pt-[var(--stage-safe-inset)] pr-[var(--stage-safe-inset)] pl-[var(--stage-safe-inset)] pb-20';
+
+/**
  * Readable measure for the exercise CONTENT column (visual-polish pass,
  * owner bug: "es muy ancho el ejercicio" — a Matching/GroupSort/Reorder/
  * Cloze row used to stretch across the whole ~1400px stage). Centres the
