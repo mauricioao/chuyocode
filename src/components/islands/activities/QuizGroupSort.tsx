@@ -453,17 +453,29 @@ export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: 
     return colorIndexById.get(id) ?? 0;
   }
 
-  if (total === 0 || groups.length === 0) return null;
-
   // `placements` keeps a locked item's entry forever (see `handleCheck`'s own
   // comment), so its own key count already covers every item placed
-  // SOMEWHERE, locked or not — nothing to add.
-  const isComplete = Object.keys(placements).length === total;
+  // SOMEWHERE, locked or not — nothing to add. Guarded by `total > 0`
+  // (hook-order / crash fix-round, T1): an empty pool must never read as
+  // "complete" just because `Object.keys(placements).length` (0) happens to
+  // equal `total` (also 0) — named groups with nothing in them yet stay
+  // incomplete, `groupsort-check` disabled, same as every other empty board.
+  const isComplete = total > 0 && Object.keys(placements).length === total;
   const trayIds = trayOrder.filter((id) => !placements[id] && !lockedIds.has(id));
   useFlip(trayRef, trayIds.join(','), reducedMotion);
   const sensors = useGameDndSensors();
   useGrabCursor(activeId !== null);
   const locked = phase === 'done';
+
+  // Moved below the three hooks just called, and narrowed to `groups.length
+  // === 0` alone (hook-order / crash fix-round, T1, "molded previews show
+  // the real board"): named groups with no items yet still have something
+  // to show (both boxes, each with its own empty placeholder) — only the
+  // complete absence of any group leaves nothing to render. A board that
+  // GAINS its first group after starting empty used to call the three
+  // hooks above for the first time on a LATER render, throwing "Rendered
+  // fewer hooks than expected".
+  if (groups.length === 0) return null;
 
   function itemLabel(id: string | number): string | null {
     return itemById.get(String(id))?.text ?? itemById.get(String(id))?.id ?? null;

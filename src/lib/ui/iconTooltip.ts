@@ -28,24 +28,33 @@
  */
 
 /**
- * The trigger's own box — a ≥44px (`size-11`) touch target, matching
- * `variant="outline" size="icon-lg"` from `@/components/ui/button` (the
- * house icon-button look) wherever a caller renders a plain element instead
- * of that shared component. `group` + `relative` are load-bearing: the
- * bubble below anchors to, and reveals on hover/focus of, exactly this
- * element.
+ * The trigger's own box — a flat 36px (`size-9`) touch target at every
+ * width, the same dimensions as `variant="outline" size="icon-lg"` from
+ * `@/components/ui/button` (also `size-9` there — see that file's own
+ * `size` variants). This trigger just cannot BE that shared component
+ * wherever a caller renders a plain `<a>`/`<button>`/`<label>` acting as a
+ * button instead (every consumer here is one of those, not a real
+ * `<Button>`). `group` + `relative` are load-bearing: the bubble below
+ * anchors to, and reveals on hover/focus of, exactly this element.
  *
- * PART 6a phone layout fix (owner spec 2026-10-06): every caller of this
- * class lives in the practice page's own window title bar, which has no
- * room for six 44px squares below the `desk:` breakpoint — `size-9` (36px)
- * there, back to the full `size-11` touch target at `desk:` and up where
- * the title bar has the width to spare. The narrower size is a deliberate,
- * scoped trade against the usual ≥44px touch-target guideline (every
+ * T2 titlebar polish (owner report, 2026-10-25: "quita los bordes de esos
+ * íconos; no aportan nada salvo hacer más alta la barra superior"): this
+ * used to step UP to `desk:size-11` (44px) at the `desk:` breakpoint and up
+ * (PART 6a phone layout fix, 2026-10-06) — the owner's own report is a
+ * request to shrink the bar, not just the phone layout, so 36px is now the
+ * floor everywhere, not only below `desk:`. Still below the usual ≥44px
+ * touch-target guideline, same deliberate, scoped trade as before (every
  * trigger still carries its own tooltip + `aria-label`, so the ACCESSIBLE
  * NAME never shrinks, only the hit box).
+ *
+ * `border border-transparent` (not `border-border`): the `border` utility
+ * stays, so the box model never shifts on focus, but it paints nothing at
+ * rest — the visible square around every icon button added height and
+ * visual weight the owner never asked for. `focus-visible:border-ring`
+ * still shows a real, meaningful border on keyboard focus.
  */
 export const ICON_TOOLTIP_TRIGGER_CLASS =
-  'group relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 desk:size-11';
+  'group relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent bg-background text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** The tooltip bubble itself — a sibling/child of the trigger, shown via `group-hover`/`group-focus-within` (never `group-focus`, which would skip touch/click focus-without-:focus-visible-support edge cases this codebase already favors elsewhere — see `WorksheetPlayer`'s own explanation popover). */
 export const ICON_TOOLTIP_BUBBLE_CLASS =

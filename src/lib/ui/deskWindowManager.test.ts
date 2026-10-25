@@ -466,6 +466,58 @@ describe('initDeskWindowManager — postMessage bridge', () => {
     expect(frameFor('community')).not.toBeNull(); // still open — the guard refused to close it
   });
 
+  // T4, "offer to discard": `requestClose` passes `{interactive}` so the
+  // editor's own `canCloseNow` knows whether this window can actually show
+  // (and have answered) a dialog right now — a VISIBLE window can, a
+  // minimized one (hidden + `inert`, `deskWindow.ts`'s own header) cannot.
+  // `requestClose` is the ONE function behind both the red light's own
+  // `close` message AND the tray chip's own "×" (same function, same
+  // `managed`/`state` lookup — see its own header) — computed from the
+  // manager's live `state`, not from which call site happened to trigger it.
+  // The chip's "×" sits inside the chip's opener anchor, so the capture-phase
+  // opener restores the window first; by the time `requestClose` asks, the
+  // window is visible again and a dialog there can be answered.
+  describe('requestClose passes {interactive} to window.deskWindowCanClose (T4, empty-draft discard prompt)', () => {
+    it('a red light (close message) on a VISIBLE window passes {interactive: true}', async () => {
+      const win = fakeWin();
+      handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+      handle.openWindow('/es/ingles/actividades', 'Comunidad');
+      const frame = frameFor('community')!;
+      const calls: unknown[] = [];
+      (frame.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async (o?: unknown) => {
+        calls.push(o);
+        return true;
+      };
+
+      win.dispatchMessage({ source: 'desk-window', type: 'close' }, frame.iframe.contentWindow);
+      await flushMicrotasks();
+
+      expect(calls).toEqual([{ interactive: true }]);
+    });
+
+    it("the tray chip's own × restores its minimized window first, so the close asks with {interactive: true}", async () => {
+      const win = fakeWin();
+      handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);
+      handle.openWindow('/es/ingles/actividades', 'Comunidad');
+      const frame = frameFor('community')!;
+      const calls: unknown[] = [];
+      (frame.iframe.contentWindow as unknown as Record<string, unknown>).deskWindowCanClose = async (o?: unknown) => {
+        calls.push(o);
+        return true;
+      };
+      win.dispatchMessage({ source: 'desk-window', type: 'minimize' }, frame.iframe.contentWindow);
+      await flushMicrotasks(); // the exit animation is awaited before the dispatch commits.
+
+      const chipRemove = tray.querySelector<HTMLElement>('[data-minimized-chip="community"] button')!;
+      chipRemove.click();
+      await flushMicrotasks();
+
+      // Never `{interactive: false}` here: a dialog opened inside the still
+      // hidden, `inert` frame could never be answered and would hang the close.
+      expect(calls).toEqual([{ interactive: true }]);
+    });
+  });
+
   it('an in-iframe navigation that lands on a DIFFERENT window route opens it as its own window instead of staying in place (click-race defensive net)', () => {
     const win = fakeWin();
     handle = initDeskWindowManager(container, tray, 'Quitar', null, document, win);

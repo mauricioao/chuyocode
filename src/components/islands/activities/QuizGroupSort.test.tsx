@@ -504,4 +504,41 @@ describe('QuizGroupSort', () => {
       expect(emptyButton.tabIndex).toBe(0);
     });
   });
+
+  // Hook-order / crash fix-round (T1, "molded previews show the real
+  // board"): the board used to `return null` for an empty POOL (`total ===
+  // 0`) BEFORE its own `useFlip`/`useGameDndSensors`/`useGrabCursor` calls —
+  // fine while a board is created already-empty-and-staying-empty, but a
+  // board that GAINS content (groups named before any item is added to
+  // them) called those three hooks for the first time on a LATER render,
+  // throwing "Rendered fewer hooks than expected". Two NAMED groups with
+  // nothing in them yet is also the real authoring moment right after
+  // `GroupSortEditor`'s own "+ Agregar grupo" — the board must already show
+  // both boxes, not disappear until the first item lands.
+  describe('empty board (groups exist, nothing placed in them yet)', () => {
+    const namedEmptyGroupsPayload: Payload = {
+      pools: { p1: [] },
+      slots: [
+        { id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: [] },
+        { id: 'g2', label: 'Food', input: 'group', pool: 'p1', answer: [] },
+      ],
+    };
+
+    it('renders both named group boxes, each with its own empty placeholder, and a disabled "Comprobar"', () => {
+      render(<QuizGroupSort lang="es" payload={namedEmptyGroupsPayload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-board-group-g1')).toBeTruthy();
+      expect(screen.getByTestId('groupsort-board-group-g2')).toBeTruthy();
+      expect(screen.getByTestId('groupsort-group-empty-g1')).toBeTruthy();
+      expect(screen.getByTestId('groupsort-group-empty-g2')).toBeTruthy();
+      expect((screen.getByTestId('groupsort-check') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('does not throw across a 0 -> 2 -> 0 item rerender (every hook stays unconditional)', () => {
+      const { rerender } = render(<QuizGroupSort lang="es" payload={namedEmptyGroupsPayload} seed="block-1" />);
+      expect(() => rerender(<QuizGroupSort lang="es" payload={payload} seed="block-1" />)).not.toThrow();
+      expect(() =>
+        rerender(<QuizGroupSort lang="es" payload={namedEmptyGroupsPayload} seed="block-1" />),
+      ).not.toThrow();
+    });
+  });
 });

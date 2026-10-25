@@ -601,10 +601,16 @@ export const UI_LABELS = {
         incompleteQuizNoAnswer: 'Escribe la respuesta de esta pregunta.',
         incompleteQuizTooFewOptions: 'Agrega al menos dos opciones a esta pregunta.',
         incompleteQuizAnswerNotInPool: 'Marca cuál de las opciones es la correcta.',
-        unsavedModalTitle: 'El ejercicio tiene cambios sin guardar',
+        unsavedModalTitle: 'La actividad tiene cambios sin guardar',
         unsavedModalSaveAndLeave: 'Guardar y salir',
         unsavedModalLeaveWithoutSaving: 'Salir sin guardar',
         unsavedModalCancel: 'Cancelar',
+        // Discard-an-empty-draft prompt (T4, "offer to discard"): shown
+        // INSTEAD of the unsaved-changes copy above when the window closes
+        // on a still-`draft` activity with no real content yet.
+        discardModalTitle: '¿Descartar esta actividad?',
+        discardModalBody: 'Todavía no tiene contenido. Si la descartas, no quedará en Mis actividades.',
+        discardModalDiscard: 'Descartar',
         // Review-state badge (PR D, "Activities practice") — mirrors
         // `activities.status` exactly (draft/pending_review/live/rejected);
         // `removed` never reaches the editor (excluded from the author's own
@@ -2350,10 +2356,16 @@ export const UI_LABELS = {
         incompleteQuizAnswerNotInPool: 'Mark which option is the correct one.',
         incompleteTooFewOptions: 'Add at least two options to this zone.',
         incompleteAnswerNotInOptions: 'Mark which option is the correct one.',
-        unsavedModalTitle: 'This exercise has unsaved changes',
+        unsavedModalTitle: 'This activity has unsaved changes',
         unsavedModalSaveAndLeave: 'Save and leave',
         unsavedModalLeaveWithoutSaving: 'Leave without saving',
         unsavedModalCancel: 'Cancel',
+        // Discard-an-empty-draft prompt (T4, "offer to discard"): shown
+        // INSTEAD of the unsaved-changes copy above when the window closes
+        // on a still-`draft` activity with no real content yet.
+        discardModalTitle: 'Discard this activity?',
+        discardModalBody: "It has no content yet. If you discard it, it won't appear in My activities.",
+        discardModalDiscard: 'Discard',
         statusDraft: 'Draft',
         statusPendingReview: 'In review',
         statusLive: 'Published',

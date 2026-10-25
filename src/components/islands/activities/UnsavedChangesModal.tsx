@@ -12,10 +12,17 @@
  * A failed save-and-leave never navigates anyway — the whole point is not
  * losing work — so it shows an inline error and leaves both the modal and
  * the choice to retry or leave without saving.
+ *
+ * T4, "offer to discard": the optional `discard` prop swaps this into a
+ * DIFFERENT proposal — "this draft has no content yet, discard it?" — over
+ * the SAME three-capsule stack. "Descartar" REUSES `onLeaveWithoutSaving`
+ * (same outcome: leave, nothing saved) — only its copy, weight and position
+ * change; `ActivityEditorIsland` is the one that knows, from the variant IT
+ * itself requested, to also call the discard endpoint once that resolves.
  */
 import { WarningCircleIcon } from '@phosphor-icons/react/dist/ssr/WarningCircle';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface UnsavedChangesModalLabels {
   title: string;
@@ -23,6 +30,14 @@ interface UnsavedChangesModalLabels {
   leaveWithoutSaving: string;
   cancel: string;
   saveError: string;
+}
+
+/** T4: the discard proposal's own copy — see this file's own header. */
+interface DiscardLabels {
+  title: string;
+  body: string;
+  /** The "Descartar" button's own label. */
+  action: string;
 }
 
 export interface UnsavedChangesModalProps {
@@ -33,6 +48,8 @@ export interface UnsavedChangesModalProps {
   onSaveAndLeave: () => void;
   onLeaveWithoutSaving: () => void;
   onCancel: () => void;
+  /** `undefined` (default) renders today's markup unchanged — see this file's own header. */
+  discard?: DiscardLabels;
 }
 
 export default function UnsavedChangesModal({
@@ -43,12 +60,14 @@ export default function UnsavedChangesModal({
   onSaveAndLeave,
   onLeaveWithoutSaving,
   onCancel,
+  discard,
 }: UnsavedChangesModalProps) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent data-testid="unsaved-changes-modal" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>{labels.title}</DialogTitle>
+          <DialogTitle>{discard ? discard.title : labels.title}</DialogTitle>
+          {discard && <DialogDescription>{discard.body}</DialogDescription>}
         </DialogHeader>
         {error && (
           <p className="flex items-center gap-1.5 text-sm text-destructive" data-testid="unsaved-modal-error">
@@ -67,10 +86,26 @@ export default function UnsavedChangesModal({
             full-width button can never spill past its own `max-w-sm`
             dialog's edge, at any label length/locale — no `sm:` row, no
             wrap needed. DOM order IS visual order (top to bottom, primary
-            first) — no `flex-col-reverse` trick required either. */}
+            first) — no `flex-col-reverse` trick required either.
+
+            T4: the discard variant reorders this to discard (now primary,
+            first, so it gets initial focus) / save-and-leave (now
+            secondary) / cancel — dropping the plain "leave" button
+            entirely, since "Descartar" already covers that outcome. */}
         <div className="flex flex-col gap-2">
+          {discard && (
+            <Button
+              type="button"
+              className="w-full rounded-full"
+              data-testid="unsaved-modal-discard"
+              onClick={onLeaveWithoutSaving}
+            >
+              {discard.action}
+            </Button>
+          )}
           <Button
             type="button"
+            variant={discard ? 'secondary' : 'default'}
             className="w-full rounded-full"
             data-testid="unsaved-modal-save-and-leave"
             disabled={saving}
@@ -79,15 +114,17 @@ export default function UnsavedChangesModal({
           >
             {labels.saveAndLeave}
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full rounded-full"
-            data-testid="unsaved-modal-leave"
-            onClick={onLeaveWithoutSaving}
-          >
-            {labels.leaveWithoutSaving}
-          </Button>
+          {!discard && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full rounded-full"
+              data-testid="unsaved-modal-leave"
+              onClick={onLeaveWithoutSaving}
+            >
+              {labels.leaveWithoutSaving}
+            </Button>
+          )}
           <Button type="button" variant="ghost" className="w-full rounded-full" data-testid="unsaved-modal-cancel" onClick={onCancel}>
             {labels.cancel}
           </Button>

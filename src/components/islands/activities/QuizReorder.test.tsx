@@ -51,6 +51,18 @@ describe('QuizReorder', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  // Hook-order / crash fix-round (T1, "molded previews show the real
+  // board"): the early `if (total === 0) return null` used to sit BEFORE
+  // this board's own `useFlip`/`useGameDndSensors`/`useGrabCursor` calls —
+  // a board that GAINS its first sentence after starting empty called those
+  // three hooks for the first time on a LATER render, throwing "Rendered
+  // fewer hooks than expected".
+  it('does not throw across an [] -> one sentence -> [] rerender (every hook stays unconditional)', () => {
+    const { rerender } = render(<QuizReorder lang="es" items={[]} seed="block-1" />);
+    expect(() => rerender(<QuizReorder lang="es" items={[items[0]!]} seed="block-1" />)).not.toThrow();
+    expect(() => rerender(<QuizReorder lang="es" items={[]} seed="block-1" />)).not.toThrow();
+  });
+
   it('shows the sentence stepper and the scrambled tray, never in the correct order', () => {
     render(<QuizReorder lang="es" items={items} seed="block-1" />);
     expect(screen.getByTestId('reorder-position').textContent).toBe('1 de 2');

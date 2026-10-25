@@ -81,8 +81,13 @@ function renderToolbar(overrides: Partial<Parameters<typeof EditorSideToolbar>[0
     saveLabels: SAVE_LABELS,
     ...overrides,
   };
-  render(<EditorSideToolbar {...props} />);
-  return props;
+  const view = render(<EditorSideToolbar {...props} />);
+  return {
+    ...props,
+    /** Re-renders with the SAME base props, overridden by `next` — e.g. a `dockMargin` prop change (T3 dock pass). */
+    rerender: (next: Partial<Parameters<typeof EditorSideToolbar>[0]> = {}) =>
+      view.rerender(<EditorSideToolbar {...props} {...next} />),
+  };
 }
 
 describe('EditorSideToolbar — basic controls', () => {
@@ -826,5 +831,243 @@ describe('EditorSideToolbar — no flash of the wrong docked position before the
     const rail = screen.getByTestId('editor-side-toolbar');
     expect(rail.className).toMatch(/\btransition-opacity\b/);
     expect(rail.className).toMatch(/\bmotion-reduce:transition-none\b/);
+  });
+});
+
+// T3 toolbar-dock pass: while the ACTIVE block is a templated quiz block,
+// `ActivityEditorIsland.tsx` passes `dockMargin={TEMPLATE_TOOLBAR_DOCK_MARGIN}`
+// (16px canvas padding + this component's own `DOCK_MARGIN`) so the rail
+// docks INSIDE the stage card instead of the window's default right edge —
+// every `dockTargetPosition` call site (dock sync, snap-back, keyboard
+// nudge, ghost) must forward it. Same {0,1000,0,700} mocked bounds as every
+// other describe block above.
+describe('EditorSideToolbar — dockMargin prop (template-canvas dock pass, T3)', () => {
+  it('docks at the default position without dockMargin, 16px further left with dockMargin={28}', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const defaultTarget = dockTargetPosition({ width: 0, height: 0 }, { left: 0, right: 1000, top: 0, bottom: 700 });
+    expect(rail.style.left).toBe(`${defaultTarget.x}px`);
+    cleanup();
+
+    renderToolbar({ dockMargin: 28 });
+    const rail2 = screen.getByTestId('editor-side-toolbar');
+    const marginedTarget = dockTargetPosition(
+      { width: 0, height: 0 },
+      { left: 0, right: 1000, top: 0, bottom: 700 },
+      28,
+    );
+    expect(marginedTarget.x).toBe(defaultTarget.x - 16);
+    expect(rail2.style.left).toBe(`${marginedTarget.x}px`);
+  });
+
+  it('resyncs when dockMargin changes, without toggling docked', () => {
+    const toolbar = renderToolbar({ dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const marginedTarget = dockTargetPosition(
+      { width: 0, height: 0 },
+      { left: 0, right: 1000, top: 0, bottom: 700 },
+      28,
+    );
+    expect(rail.style.left).toBe(`${marginedTarget.x}px`);
+
+    toolbar.rerender({ dockMargin: undefined });
+
+    const defaultTarget = dockTargetPosition({ width: 0, height: 0 }, { left: 0, right: 1000, top: 0, bottom: 700 });
+    expect(rail.getAttribute('data-docked')).toBe('true'); // never toggled, only resynced.
+    expect(rail.style.left).toBe(`${defaultTarget.x}px`);
+  });
+
+  it('an ArrowLeft nudge from docked undocks from the MARGINED dock position', () => {
+    renderToolbar({ dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    const size = { width: 0, height: 0 };
+    const bounds = { left: 0, right: 1000, top: 0, bottom: 700 };
+    const target = dockTargetPosition(size, bounds, 28);
+
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+
+    expect(rail.getAttribute('data-docked')).toBe('false');
+    expect(rail.style.left).toBe(`${target.x - 16}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
+  });
+
+  it('the undock ghost (dock target) renders at the MARGINED position too', () => {
+    renderToolbar({ dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+
+    const ghost = screen.getByTestId('toolbar-dock-target');
+    const target = dockTargetPosition({ width: 56, height: 300 }, { left: 0, right: 1000, top: 0, bottom: 700 }, 28);
+    const DOCK_TARGET_SIZE = 32; // the ghost's own rendered size (`h-8 w-8`) — EditorSideToolbar.tsx's own constant.
+    expect(ghost.style.left).toBe(`${target.x + (56 - DOCK_TARGET_SIZE) / 2}px`);
+    expect(ghost.style.top).toBe(`${target.y + (300 - DOCK_TARGET_SIZE) / 2}px`);
+  });
+
+  // Copy of "releasing within the snap distance of the dock target re-docks
+  // automatically" above, with `dockMargin={28}` — the target shifts 16px
+  // left (916 instead of 932) and the drag must land there instead to snap.
+  it('releasing within the snap distance of the MARGINED dock target re-docks automatically', () => {
+    renderToolbar({ dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 250, width: 56, height: 300 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    // dockTargetPosition({56,300}, {0,1000,0,700}, 28) = (916, 200) — 16px
+    // left of the default-margin target (932, 200) the sibling test above
+    // snaps to. A (16, -50) delta from the captured (900, 250) start lands
+    // EXACTLY there.
+    firePointer(handle, 'pointerdown', 920, 300);
+    firePointer(handle, 'pointermove', 936, 250);
+    firePointer(handle, 'pointerup', 936, 250);
+
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    expect(rail.style.left).toBe('916px');
+    expect(rail.style.top).toBe('200px');
+    expect(screen.queryByTestId('toolbar-dock-target')).toBeNull();
+  });
+});
+
+// Horizontal toolbar pass ("gain space, use the white bottom part"): while
+// `orientation="horizontal"` (set by `ActivityEditorIsland.tsx` while a
+// templated quiz block is active), the rail docks along the BOTTOM-RIGHT of
+// its host surface instead of the right-center, and lays its icons out in a
+// row instead of a column. Same {0,1000,0,700} mocked bounds as every other
+// describe block above.
+describe('EditorSideToolbar — orientation="horizontal" (horizontal toolbar pass)', () => {
+  it('marks the rail with data-orientation="horizontal" and lays its icons out in a row', () => {
+    renderToolbar({ orientation: 'horizontal', dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.getAttribute('data-orientation')).toBe('horizontal');
+    expect(rail.className).toContain('flex-row');
+    expect(rail.className).not.toContain('flex-col');
+  });
+
+  it('defaults data-orientation to "vertical" and keeps the column layout when the prop is omitted', () => {
+    renderToolbar();
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.getAttribute('data-orientation')).toBe('vertical');
+    expect(rail.className).toContain('flex-col');
+    expect(rail.className).not.toContain('flex-row');
+  });
+
+  it('docks at the bottom-right target instead of right-center', () => {
+    renderToolbar({ orientation: 'horizontal', dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const target = dockTargetPosition(
+      { width: 0, height: 0 },
+      { left: 0, right: 1000, top: 0, bottom: 700 },
+      28,
+      'bottom-right',
+    );
+    expect(rail.style.left).toBe(`${target.x}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
+  });
+
+  it('the undock ghost and drag snap-back both use the bottom-right target', () => {
+    renderToolbar({ orientation: 'horizontal', dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    mockRect(rail, { left: 900, top: 600, width: 300, height: 42 });
+    const handle = screen.getByTestId('toolbar-drag-handle');
+
+    firePointer(handle, 'pointerdown', 920, 610);
+    firePointer(handle, 'pointermove', 500, 150);
+    firePointer(handle, 'pointerup', 500, 150);
+
+    const ghost = screen.getByTestId('toolbar-dock-target');
+    const target = dockTargetPosition(
+      { width: 300, height: 42 },
+      { left: 0, right: 1000, top: 0, bottom: 700 },
+      28,
+      'bottom-right',
+    );
+    const DOCK_TARGET_SIZE = 32;
+    expect(ghost.style.left).toBe(`${target.x + (300 - DOCK_TARGET_SIZE) / 2}px`);
+    expect(ghost.style.top).toBe(`${target.y + (42 - DOCK_TARGET_SIZE) / 2}px`);
+
+    // Drag back onto the ghost target exactly -> re-docks there too.
+    firePointer(handle, 'pointerdown', 500, 150);
+    firePointer(
+      handle,
+      'pointermove',
+      500 + (target.x - 500),
+      150 + (target.y - 150),
+    );
+    firePointer(handle, 'pointerup', 500 + (target.x - 500), 150 + (target.y - 150));
+    expect(rail.getAttribute('data-docked')).toBe('true');
+    expect(rail.style.left).toBe(`${target.x}px`);
+    expect(rail.style.top).toBe(`${target.y}px`);
+  });
+
+  it('a nudge from docked undocks from the bottom-right dock position', () => {
+    renderToolbar({ orientation: 'horizontal', dockMargin: 28 });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const handle = screen.getByTestId('toolbar-drag-handle');
+    const size = { width: 0, height: 0 };
+    const bounds = { left: 0, right: 1000, top: 0, bottom: 700 };
+    const target = dockTargetPosition(size, bounds, 28, 'bottom-right');
+
+    fireEvent.keyDown(handle, { key: 'ArrowUp' });
+
+    expect(rail.getAttribute('data-docked')).toBe('false');
+    expect(rail.style.left).toBe(`${target.x}px`);
+    expect(rail.style.top).toBe(`${target.y - 16}px`);
+  });
+
+  // A saved position from the vertical era (e.g. a tall rail docked near the
+  // right-center) could leave a now-wide horizontal rail far off-screen once
+  // orientation flips — re-clamping on the orientation change (not just on
+  // resize) keeps it visible.
+  it('re-clamps an undocked saved position when the orientation flips (vertical-era position, now a wide horizontal rail)', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ docked: false, x: 950, y: 300 }));
+    const toolbar = renderToolbar({ orientation: 'vertical' });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    // Unmocked rail rect is 0x0 on first mount, so the restore itself doesn't
+    // clamp away (950, 300) yet — flip orientation and re-measure the rail
+    // at its now-wide horizontal size (320x42) to trigger the re-clamp.
+    mockRect(rail, { left: 950, top: 300, width: 320, height: 42 });
+    toolbar.rerender({ orientation: 'horizontal' });
+
+    // maxX = 1000 - 320 = 680; the saved x (950) is now out of bounds.
+    expect(Number(rail.style.left.replace('px', ''))).toBeLessThanOrEqual(680);
+  });
+
+  it('peer-empty:hidden collapses the separator right after the (empty) worksheet-tools slot, in horizontal orientation too', () => {
+    renderToolbar({ orientation: 'horizontal' });
+    const slot = screen.getByTestId('worksheet-tools-slot');
+    expect(slot.className).toContain('peer');
+    const separator = slot.nextElementSibling as HTMLElement;
+    expect(separator.className).toContain('peer-empty:hidden');
+  });
+
+  it('wraps the save-status indicator in a fixed size-7 slot so a retry button never shifts the bar', () => {
+    renderToolbar({ orientation: 'horizontal', saveState: 'error' });
+    const status = screen.getByTestId('save-status');
+    const slot = status.closest('[data-testid="save-status-slot"]') ?? status.parentElement;
+    expect(slot!.className).toContain('size-7');
+  });
+
+  it('gives the horizontal rail the same testid order as the vertical rail', () => {
+    renderToolbar({ orientation: 'vertical' });
+    const verticalOrder = Array.from(screen.getByTestId('editor-side-toolbar').querySelectorAll('[data-testid]')).map(
+      (el) => el.getAttribute('data-testid'),
+    );
+    cleanup();
+    renderToolbar({ orientation: 'horizontal' });
+    const horizontalOrder = Array.from(
+      screen.getByTestId('editor-side-toolbar').querySelectorAll('[data-testid]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(horizontalOrder).toEqual(verticalOrder);
+  });
+
+  it('never sets data-orientation on the mobile bar', () => {
+    stubMobileViewport();
+    renderToolbar({ orientation: 'horizontal' });
+    expect(screen.getByTestId('editor-side-toolbar-mobile').hasAttribute('data-orientation')).toBe(false);
   });
 });

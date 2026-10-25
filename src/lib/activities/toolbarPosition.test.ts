@@ -46,6 +46,31 @@ describe('dockTargetPosition', () => {
     expect(target.x).toBe(1000 - 50 - DOCK_MARGIN);
     expect(target.y).toBe(500 - 100); // (100+900)/2 - 200/2 = 500 - 100 = 400
   });
+
+  it('defaults to the right-center anchor when none is given', () => {
+    const bounds = { left: 0, right: 1000, top: 100, bottom: 900 };
+    const size = { width: 50, height: 200 };
+    expect(dockTargetPosition(size, bounds)).toEqual(dockTargetPosition(size, bounds, DOCK_MARGIN, 'right-center'));
+  });
+
+  // Horizontal toolbar pass: the "bottom-right" anchor keeps the SAME right
+  // edge x as right-center (both anchors dock against the right edge), but
+  // y sits at the BOTTOM edge minus the margin instead of vertically centered.
+  it('sits at the bottom-right corner (minus the margin on both axes) with the bottom-right anchor', () => {
+    const bounds = { left: 0, right: 1000, top: 100, bottom: 900 };
+    const size = { width: 50, height: 42 };
+    const target = dockTargetPosition(size, bounds, DOCK_MARGIN, 'bottom-right');
+    expect(target.x).toBe(1000 - 50 - DOCK_MARGIN);
+    expect(target.y).toBe(900 - 42 - DOCK_MARGIN);
+  });
+
+  it('honors a custom margin with the bottom-right anchor, same as right-center', () => {
+    const bounds = { left: 0, right: 1000, top: 100, bottom: 900 };
+    const size = { width: 50, height: 42 };
+    const target = dockTargetPosition(size, bounds, 28, 'bottom-right');
+    expect(target.x).toBe(1000 - 50 - 28);
+    expect(target.y).toBe(900 - 42 - 28);
+  });
 });
 
 describe('distance / shouldSnapToDock', () => {

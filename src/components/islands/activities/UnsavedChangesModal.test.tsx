@@ -6,7 +6,7 @@ import UnsavedChangesModal from './UnsavedChangesModal';
 afterEach(() => cleanup());
 
 const LABELS = {
-  title: 'El ejercicio tiene cambios sin guardar',
+  title: 'La actividad tiene cambios sin guardar',
   saveAndLeave: 'Guardar y salir',
   leaveWithoutSaving: 'Salir sin guardar',
   cancel: 'Cancelar',
@@ -187,5 +187,147 @@ describe('UnsavedChangesModal', () => {
     );
     fireEvent.keyDown(screen.getByTestId('unsaved-changes-modal'), { key: 'Escape' });
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+// T4, "offer to discard": the `discard` prop swaps the copy and button
+// order/weight for the discard-an-empty-draft proposal — same component,
+// same three-capsule stack, nothing else about the markup changes.
+const DISCARD = {
+  title: '¿Descartar esta actividad?',
+  body: 'Todavía no tiene contenido. Si la descartas, no quedará en Mis actividades.',
+  action: 'Descartar',
+};
+
+describe('UnsavedChangesModal — discard variant (T4)', () => {
+  it('renders the discard title and body', () => {
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        discard={DISCARD}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    const modal = screen.getByTestId('unsaved-changes-modal');
+    expect(modal.textContent).toContain(DISCARD.title);
+    expect(modal.textContent).toContain(DISCARD.body);
+    expect(modal.textContent).not.toContain(LABELS.title);
+  });
+
+  it('orders the actions discard first, then save-and-leave, then cancel — and drops the plain "leave" button', () => {
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        discard={DISCARD}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    const actions = screen.getByTestId('unsaved-modal-discard').closest('div') as HTMLElement;
+    const testIds = Array.from(actions.children).map((child) => child.getAttribute('data-testid'));
+    expect(testIds).toEqual(['unsaved-modal-discard', 'unsaved-modal-save-and-leave', 'unsaved-modal-cancel']);
+    expect(screen.queryByTestId('unsaved-modal-leave')).toBeNull();
+  });
+
+  it('gives "Descartar" the primary weight (default variant), "Guardar y salir" secondary', () => {
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        discard={DISCARD}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('unsaved-modal-discard').getAttribute('data-variant')).toBe('default');
+    expect(screen.getByTestId('unsaved-modal-discard').textContent).toBe(DISCARD.action);
+    expect(screen.getByTestId('unsaved-modal-save-and-leave').getAttribute('data-variant')).toBe('secondary');
+  });
+
+  it('"Descartar" calls the leave handler, and never the save handler', () => {
+    const onSaveAndLeave = vi.fn();
+    const onLeaveWithoutSaving = vi.fn();
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        discard={DISCARD}
+        onSaveAndLeave={onSaveAndLeave}
+        onLeaveWithoutSaving={onLeaveWithoutSaving}
+        onCancel={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('unsaved-modal-discard'));
+    expect(onLeaveWithoutSaving).toHaveBeenCalledTimes(1);
+    expect(onSaveAndLeave).not.toHaveBeenCalled();
+  });
+
+  it('"Guardar y salir" shows loading while saving, same as the default variant', () => {
+    render(
+      <UnsavedChangesModal
+        open
+        saving
+        error={false}
+        labels={LABELS}
+        discard={DISCARD}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    const saveAndLeave = screen.getByTestId('unsaved-modal-save-and-leave') as HTMLButtonElement;
+    expect(saveAndLeave.disabled).toBe(true);
+    expect(saveAndLeave.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('Escape calls onCancel, never onLeaveWithoutSaving/the discard handler', () => {
+    const onCancel = vi.fn();
+    const onLeaveWithoutSaving = vi.fn();
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        discard={DISCARD}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={onLeaveWithoutSaving}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('unsaved-changes-modal'), { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalled();
+    expect(onLeaveWithoutSaving).not.toHaveBeenCalled();
+  });
+
+  it('leaving `discard` unset renders exactly today\'s default markup (unchanged)', () => {
+    render(
+      <UnsavedChangesModal
+        open
+        saving={false}
+        error={false}
+        labels={LABELS}
+        onSaveAndLeave={() => {}}
+        onLeaveWithoutSaving={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('unsaved-modal-discard')).toBeNull();
+    expect(screen.getByTestId('unsaved-modal-leave')).toBeTruthy();
+    expect(screen.getByTestId('unsaved-modal-save-and-leave').getAttribute('data-variant')).toBe('default');
   });
 });

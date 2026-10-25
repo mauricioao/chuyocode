@@ -15,10 +15,19 @@
  * e.g. moderation) and `slot.answer[0]` (what `gameModes.ts`'s
  * `deriveGameItems`/`reorderEligible` actually reorder). `QuizBlockEditor`
  * keeps both in sync on every keystroke — see its own `onSentenceChange`.
+ *
+ * READINESS NEVER CONTRADICTS THE PREVIEW (polish follow-up): the amber
+ * "not ready yet" hint is driven ENTIRELY by `playable` — the exact same
+ * `boardHasContent('reorder', …)` call the live preview's own empty
+ * placeholder is gated on — never by this sheet's own local word count. The
+ * ready line stays gated on BOTH `playable` and the live
+ * `playableCount` (which still only counts a sentence once it reaches
+ * {@link MIN_REORDER_WORDS} words) — see `MatchPairsEditor.tsx`'s own header
+ * for why this split exists.
  */
 import { useEffect, useRef } from 'react';
 import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
-import { seedFromString, shuffleWithSeed } from '@/lib/activities/gameModes';
+import { MIN_REORDER_WORDS, seedFromString, shuffleWithSeed } from '@/lib/activities/gameModes';
 import { isMultilinePaste, parseSentencesPaste } from '@/lib/activities/pasteLines';
 import {
   AddRow,
@@ -83,7 +92,7 @@ function wordsOf(text: string): string[] {
  */
 function shuffledWords(sentence: string): string[] {
   const words = wordsOf(sentence);
-  if (words.length < 2) return words;
+  if (words.length < MIN_REORDER_WORDS) return words;
   const order = shuffleWithSeed(
     words.map((_, i) => i),
     seedFromString(sentence),
@@ -102,6 +111,13 @@ export interface ReorderEditorProps {
   blockId: string;
   lang: string;
   sentences: ReorderSentence[];
+  /**
+   * Does the LIVE PREVIEW'S own board actually have something to show right
+   * now (`boardHasContent('reorder', …)`, the SAME debounced payload the
+   * preview itself reads) — see `MatchPairsEditor.tsx`'s own `playable` doc
+   * for the full reasoning.
+   */
+  playable: boolean;
   /** The sentence whose field should take focus next (a freshly added row) — `null` for none. */
   focusSlotId?: string | null;
   onSentenceChange: (slotId: string, sentence: string) => void;
@@ -129,6 +145,7 @@ export default function ReorderEditor({
   blockId,
   lang,
   sentences,
+  playable,
   focusSlotId = null,
   onSentenceChange,
   onAdd,
@@ -147,7 +164,7 @@ export default function ReorderEditor({
     fieldRefs.current[focusSlotId]?.focus();
   }, [focusSlotId]);
 
-  const playableCount = sentences.filter((s) => wordsOf(s.sentence).length >= 2).length;
+  const playableCount = sentences.filter((s) => wordsOf(s.sentence).length >= MIN_REORDER_WORDS).length;
 
   const soleEmptyRow = sentences.length === 1 && sentences[0]!.sentence.trim() === '';
   const showTeachingPlaceholder = sentences.length === 0 || soleEmptyRow;
@@ -226,7 +243,7 @@ export default function ReorderEditor({
                   />
                 </div>
               </div>
-              {preview.length >= 2 && (
+              {preview.length >= MIN_REORDER_WORDS && (
                 <div
                   aria-hidden="true"
                   data-testid={`reorder-preview-${item.slotId}`}
@@ -247,15 +264,15 @@ export default function ReorderEditor({
         <StatusNote tone="ready" testId={`reorder-paste-feedback-${blockId}`}>
           {feedback.message}
         </StatusNote>
-      ) : playableCount > 0 ? (
+      ) : playable && playableCount > 0 ? (
         <StatusNote tone="ready" testId={`reorder-ready-${blockId}`}>
           {t.ready(playableCount)}
         </StatusNote>
-      ) : (
+      ) : !playable ? (
         <StatusNote tone="warn" testId={`reorder-hint-${blockId}`}>
           {t.minSentenceHint}
         </StatusNote>
-      )}
+      ) : null}
       {showPasteHint && <Footnote testId={`reorder-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
     </div>
   );

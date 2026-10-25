@@ -19,10 +19,20 @@ describe('iconTooltip', () => {
     expect(ICON_TOOLTIP_BUBBLE_CLASS).toContain('max-w-[min(12rem,calc(100vw-2rem))]');
   });
 
-  it('the trigger is a real group root (load-bearing for the bubble above), compact below `desk:` (PART 6a phone layout fix) and a full >=44px touch target at `desk:` and up', () => {
+  it('the trigger is a real group root (load-bearing for the bubble above) and a flat 36px touch target at every width (T2 titlebar polish — no more desk:size-11 step-up)', () => {
     expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('group');
     expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('relative');
     expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('size-9');
-    expect(ICON_TOOLTIP_TRIGGER_CLASS).toContain('desk:size-11');
+    expect(ICON_TOOLTIP_TRIGGER_CLASS).not.toContain('desk:size-11');
+  });
+
+  // T2 titlebar polish (owner report: "quita los bordes de esos íconos...
+  // no aportan nada salvo hacer más alta la barra superior"): the trigger
+  // keeps its `border` utility (box model, and a real border still shows on
+  // `focus-visible:border-ring`) but is transparent at rest — never
+  // `border-border`, which painted a visible square around every icon
+  // button for no reason the owner wanted.
+  it('never shows a visible border at rest', () => {
+    expect(ICON_TOOLTIP_TRIGGER_CLASS).not.toContain('border-border');
   });
 });

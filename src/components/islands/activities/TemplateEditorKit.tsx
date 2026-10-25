@@ -32,6 +32,7 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr/X';
 import type { Icon } from '@phosphor-icons/react';
 import { useHydrated } from '@/hooks/useHydrated';
 import { REDUCED_MOTION_QUERY } from '@/hooks/usePrefersReducedMotion';
+import { DOCK_MARGIN } from '@/lib/activities/toolbarPosition';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -56,6 +57,19 @@ function motionAllowed(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return !window.matchMedia(REDUCED_MOTION_QUERY).matches;
 }
+
+/**
+ * The docked side toolbar's own edge margin while it floats OVER this
+ * layout's stage card (T3 toolbar-dock pass, then the horizontal-bar pass)
+ * instead of reserving a gutter beside/below it — the canvas's own `p-4`
+ * (16px) plus the rail's ordinary `DOCK_MARGIN` (12px), so it lands 12px
+ * from the STAGE CARD's edge, the same visual inset `DOCK_MARGIN` gives it
+ * against the window edge normally. `ActivityEditorIsland.tsx` passes this
+ * as `EditorSideToolbar`'s own `dockMargin` prop while the active block is a
+ * templated quiz block, along with `orientation="horizontal"` so the rail
+ * docks along the stage's BOTTOM edge instead of its right edge.
+ */
+export const TEMPLATE_TOOLBAR_DOCK_MARGIN = 16 + DOCK_MARGIN;
 
 export interface TemplateEditorLayoutProps {
   blockId: string;
@@ -82,12 +96,23 @@ export interface TemplateEditorLayoutProps {
 /**
  * The template editor's work area. `data-template-canvas` is what turns the
  * window body behind it into the dotted canvas, edge to edge (`global.css`).
- * Desktop: the sheet keeps ~44% of the width (360–520px) and scrolls on its
- * own; `lg:pr-[70px]` keeps the stage 16px clear of the side toolbar's
- * docked rail (12px from the window edge, 42px wide — `global.css` places
- * the floating Comprobar from the same number); the sheet's last 56px are a
- * footer zone its content scrolls above, where the floating status pill
- * (`ActivityEditorIsland`'s own) sits.
+ * Desktop: the sheet keeps ~36% of the width (360–440px) and scrolls on its
+ * own; the sheet's last 56px are a footer zone its content scrolls above,
+ * where the floating status pill (`ActivityEditorIsland`'s own) sits.
+ *
+ * TOOLBAR DOCK (T3 toolbar-dock pass, "gain space, no reserved gutter";
+ * horizontal-bar pass, "gain space, use the white bottom part"): the side
+ * toolbar now docks INSIDE the STAGE card, along its BOTTOM edge (see
+ * `TEMPLATE_TOOLBAR_DOCK_MARGIN`'s own header above) instead of this work
+ * area reserving a gutter beside OR below it — so this wrapper itself
+ * carries no `lg:pr-*`/`lg:pb-*` of its own any more. The stage's own scroll
+ * area below gets a STATIC `lg:pb-[66px]` instead (12px gap + 42px rail +
+ * 12px inset — the old `lg:pr-[66px]` right-gutter reservation is gone, the
+ * preview frame now uses the full card WIDTH, only losing room at the
+ * bottom), so the preview FRAME stays clear of the rail floating over the
+ * card. `ActivityEditorIsland.tsx` (not this file, and not `global.css`)
+ * positions the floating Comprobar/status pill and the preview column's own
+ * cap from those same numbers.
  */
 export function TemplateEditorLayout({
   blockId,
@@ -111,11 +136,11 @@ export function TemplateEditorLayout({
         data-testid={`quiz-editor-${blockId}`}
         data-template-canvas=""
         onKeyDownCapture={onKeyDownCapture}
-        className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:flex-row lg:pr-[70px]"
+        className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:flex-row"
       >
         <div
           data-testid={`template-sheet-${blockId}`}
-          className="ingles-glass template-sheet flex flex-col lg:min-h-0 lg:w-[clamp(360px,44%,520px)] lg:shrink-0 lg:overflow-clip"
+          className="ingles-glass template-sheet flex flex-col lg:min-h-0 lg:w-[clamp(360px,36%,440px)] lg:shrink-0 lg:overflow-clip"
         >
           <div className="template-scroll p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {previewButtonLabel && (
@@ -157,7 +182,7 @@ export function TemplateEditorLayout({
           <p aria-hidden="true" className="px-5 pt-4 text-xs font-medium text-muted-foreground">
             {stageLabel}
           </p>
-          <div className="template-scroll flex min-h-0 flex-1 flex-col px-5 pb-5 pt-3 lg:overflow-y-auto">
+          <div className="template-scroll flex min-h-0 flex-1 flex-col px-5 pb-5 pt-3 lg:overflow-y-auto lg:pb-[66px]">
             {preview ?? (
               <p
                 data-testid={`template-stage-empty-${blockId}`}
@@ -209,8 +234,8 @@ export function SheetHeader({
         <IconComponent size={20} weight="bold" />
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className="text-[17px] font-semibold leading-[22px] tracking-[-0.01em] text-foreground">{title}</h2>
-        <p className="text-[13px] leading-[18px] text-muted-foreground">{instruction}</p>
+        <h2 className="text-[17px] font-semibold leading-[22px] tracking-[-0.01em] text-foreground lg:text-[16px]">{title}</h2>
+        <p className="text-[13px] leading-[18px] text-muted-foreground lg:text-[12px]">{instruction}</p>
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </header>
@@ -219,7 +244,7 @@ export function SheetHeader({
 
 /** The small sentence-case label above a group (or a column of one). */
 export function GroupLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('px-4 pb-1.5 text-[13px] font-medium text-muted-foreground', className)}>{children}</p>;
+  return <p className={cn('px-4 pb-1.5 text-[13px] font-medium text-muted-foreground lg:text-[12px]', className)}>{children}</p>;
 }
 
 /** One white grouped-list container. `role="group"` + a name so its rows read as one set. */
@@ -291,7 +316,13 @@ export function TemplateRow({
   );
 }
 
-/** A borderless grouped-list field (17px, muted placeholder, sky ring on focus). Every caller passes its own `aria-label`. */
+/**
+ * A borderless grouped-list field (muted placeholder, sky ring on focus).
+ * 17px on the phone (kept there on purpose — iOS Safari zooms into any
+ * input under 16px); `global.css`'s own `(min-width: 1024px) and
+ * (pointer: fine)` media query shrinks it to 15px at desktop. Every caller
+ * passes its own `aria-label`.
+ */
 export function TemplateField({ className, ...props }: React.ComponentProps<'input'>) {
   return <input type="text" {...props} className={cn('template-field', className)} />;
 }
@@ -343,7 +374,7 @@ export function AddRow({ label, testId, onClick }: { label: string; testId?: str
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="template-row flex min-h-[52px] w-full items-center gap-3 px-4 text-left text-[17px] text-accent-ink hover:bg-foreground/[0.03] active:bg-foreground/[0.06] focus-visible:shadow-[inset_0_0_0_2px_var(--color-pop-sky-deep)] focus-visible:outline-none"
+      className="template-row flex min-h-[52px] w-full items-center gap-3 px-4 text-left text-[17px] text-accent-ink hover:bg-foreground/[0.03] active:bg-foreground/[0.06] focus-visible:shadow-[inset_0_0_0_2px_var(--color-pop-sky-deep)] focus-visible:outline-none lg:text-[15px]"
     >
       <PlusMark />
       {label}
@@ -358,7 +389,7 @@ export function AddCard({ label, testId, onClick }: { label: string; testId?: st
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="template-ghost flex min-h-[52px] w-full items-center gap-3 border border-dashed border-foreground/20 px-4 text-left text-[17px] text-accent-ink hover:bg-card/60 focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-sky-deep"
+      className="template-ghost flex min-h-[52px] w-full items-center gap-3 border border-dashed border-foreground/20 px-4 text-left text-[17px] text-accent-ink hover:bg-card/60 focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-sky-deep lg:text-[15px]"
     >
       <PlusMark />
       {label}
@@ -380,7 +411,7 @@ export function StatusNote({ tone, testId, children }: { tone: StatusTone; testI
       role="status"
       data-testid={testId}
       data-tone={tone}
-      className="flex items-center gap-2 px-4 pt-2 text-[13px] leading-[18px]"
+      className="flex items-center gap-2 px-4 pt-2 text-[13px] leading-[18px] lg:text-[12px]"
     >
       <span
         aria-hidden="true"
@@ -394,7 +425,7 @@ export function StatusNote({ tone, testId, children }: { tone: StatusTone; testI
 /** A plain muted footnote under a group (hints, examples). */
 export function Footnote({ testId, children }: { testId?: string; children: ReactNode }) {
   return (
-    <p data-testid={testId} className="px-4 pt-2 text-[13px] leading-[18px] text-muted-foreground">
+    <p data-testid={testId} className="px-4 pt-2 text-[13px] leading-[18px] text-muted-foreground lg:text-[12px]">
       {children}
     </p>
   );

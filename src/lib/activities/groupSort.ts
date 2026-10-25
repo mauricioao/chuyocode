@@ -21,9 +21,6 @@ import type { PoolItem, RowBlock, Slot } from '../exercisePayload';
 /** A board stays big and readable with at most this many groups (owner spec, "keep it to 4 max"). */
 export const MAX_GROUPSORT_GROUPS = 4;
 
-/** A group needs at least this many items to be worth playing — mirrors `gameModes.ts`'s own `MIN_GROUPSORT_ITEMS_PER_GROUP`. */
-export const MIN_GROUPSORT_ITEMS_PER_GROUP = 2;
-
 function isGroupSortSlot(slot: Slot): boolean {
   return slot.input === 'group';
 }

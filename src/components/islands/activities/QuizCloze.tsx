@@ -332,13 +332,28 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
     [poolItems, seed, round],
   );
 
-  if (total === 0) return null;
-
-  const sentence = sentences[index]!;
-  const isSolved = solved.has(index);
-  const isSettling = settling.has(index);
+  // `displayIndex` is the SINGLE source of truth for "which sentence is on
+  // screen right now", never a bare `index` (display-index bug fix-round):
+  // a rerender can land with `index` pointing past the end of a now-shorter
+  // `sentences` (the author deletes the current sentence, or edits it back
+  // down to zero blanks) a whole render BEFORE the `[payload]` effect above
+  // gets a chance to reset `index` to 0. `sentence` itself already fell
+  // back to `sentences[0]` on that stale render, but every OTHER reader of
+  // `index` (the position counter, `isSolved`/`isSettling`, `handleCheck`
+  // and its settle timeout, the prev/next buttons) used to read the raw,
+  // stale value directly — committing a position like "2 de 1" that can
+  // never exist, one render before the effect corrected it. Deriving every
+  // one of them from `displayIndex` instead keeps that whole render
+  // internally consistent.
+  const displayIndex = index < total ? index : 0;
+  const sentence = sentences[displayIndex];
+  const isSolved = solved.has(displayIndex);
+  const isSettling = settling.has(displayIndex);
   const locked = isSolved || isSettling;
-  const isComplete = sentence.blankSlotIds.every((slotId) => (response[slotId]?.length ?? 0) > 0);
+  // `false` with no sentence at all (see the early return below) — never
+  // read as "complete" just because `.every(...)` on an empty list is
+  // vacuously true.
+  const isComplete = sentence ? sentence.blankSlotIds.every((slotId) => (response[slotId]?.length ?? 0) > 0) : false;
 
   const availableIds = new Set(
     availableTiles(poolItems, [], claimedTileIds(payload, response, '')).map((item) => item.id),
@@ -348,6 +363,13 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
   useFlip(trayRef, trayIds.join(','), reducedMotion);
   const sensors = useGameDndSensors();
   useGrabCursor(activeId !== null);
+
+  // Moved below the three hooks just called (hook-order / crash fix-round,
+  // T1, "molded previews show the real board"): a board that GAINS its
+  // first sentence after starting empty (the live preview, the
+  // whole-activity eye-button preview) used to call them for the first
+  // time on a LATER render, throwing "Rendered fewer hooks than expected".
+  if (!sentence) return null;
 
   function wordFor(id: string | number): string | null {
     return itemById.get(String(id))?.text ?? null;
@@ -448,8 +470,8 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
     // `attempted` is updated below — a later retry can still fix the
     // sentence (and `solved` will reflect that), but it can never turn into
     // a first-try correct one after the fact.
-    const firstAttempt = !attempted.has(index);
-    if (firstAttempt) setAttempted((prev) => new Set(prev).add(index));
+    const firstAttempt = !attempted.has(displayIndex);
+    if (firstAttempt) setAttempted((prev) => new Set(prev).add(displayIndex));
 
     if (wrong.size > 0) {
       setWrongSlots(wrong);
@@ -458,21 +480,21 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
       return;
     }
 
-    if (firstAttempt) setFirstTryCorrect((prev) => new Set(prev).add(index));
+    if (firstAttempt) setFirstTryCorrect((prev) => new Set(prev).add(displayIndex));
     setAnnouncement(gradeSummary(lang, sentence.blankSlotIds.length, 0) ?? '');
     sound.play('correct');
-    setSolved((prev) => new Set(prev).add(index));
-    setSettling((prev) => new Set(prev).add(index));
+    setSolved((prev) => new Set(prev).add(displayIndex));
+    setSettling((prev) => new Set(prev).add(displayIndex));
 
     const settleMs = reducedMotion ? 0 : SETTLE_MS;
     settleTimeout.current = setTimeout(() => {
       setSettling((prev) => {
         const next = new Set(prev);
-        next.delete(index);
+        next.delete(displayIndex);
         return next;
       });
-      if (index + 1 < total) {
-        setIndex(index + 1);
+      if (displayIndex + 1 < total) {
+        setIndex(displayIndex + 1);
       } else {
         setPhase('done');
         sound.play('finish');
@@ -533,13 +555,13 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
           className="min-h-11 min-w-11"
           data-testid="cloze-prev"
           aria-label={t.clozePrev}
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
-          disabled={index === 0}
+          onClick={() => setIndex(displayIndex - 1)}
+          disabled={displayIndex === 0}
         >
           <CaretLeftIcon aria-hidden="true" />
         </Button>
         <span data-testid="cloze-position" className="text-sm font-medium text-muted-foreground">
-          {index + 1} {t.clozeSentenceOf} {total}
+          {displayIndex + 1} {t.clozeSentenceOf} {total}
         </span>
         <div className="flex items-center gap-1">
           <GameSoundToggle
@@ -555,8 +577,8 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
             className="min-h-11 min-w-11"
             data-testid="cloze-next"
             aria-label={t.clozeNext}
-            onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
-            disabled={index === total - 1}
+            onClick={() => setIndex(displayIndex + 1)}
+            disabled={displayIndex === total - 1}
           >
             <CaretRightIcon aria-hidden="true" />
           </Button>

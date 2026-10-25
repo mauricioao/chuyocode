@@ -431,8 +431,10 @@ const {
     {/* `justify-self-end` (activity window chrome pass) — pins this column's
         own content to the grid column's right edge, replacing the old
         `ml-auto` flex push now that this is its own grid column rather than
-        a trailing flex item. */}
-    <div class="flex flex-none items-center justify-self-end gap-3" id="desk-window-actions">
+        a trailing flex item. `min-w-0 max-w-full` caps it at the column's
+        width, so a child allowed to shrink (the editor's submit button)
+        ellipsizes instead of spilling past the window's edge. */}
+    <div class="flex min-w-0 max-w-full flex-none items-center justify-self-end gap-3" id="desk-window-actions">
       <slot name="actions" />
     </div>
   </div>

@@ -93,7 +93,12 @@ import type { BlockBackground, QuizBlock, QuizTemplate, PromptImageRef } from '@
 import { convertBlock, type DroppedItem } from '@/lib/activities/templateConversion';
 import { CHANGE_MOLD_ENABLED } from '@/lib/activities/flags';
 import { variosJuegosStatus } from '@/lib/activities/variosJuegosStatus';
-import { groupSortPoolName as groupSortPoolNameFromPayload, type GameMode } from '@/lib/activities/gameModes';
+import {
+  groupSortPoolName as groupSortPoolNameFromPayload,
+  boardHasContent,
+  deriveGameItems,
+  type GameMode,
+} from '@/lib/activities/gameModes';
 import ChangeMoldDialog from './ChangeMoldDialog';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
@@ -799,6 +804,20 @@ export default function QuizBlockEditor({
 
   const hasQuestions = questions.length > 0;
 
+  // Does a MOLDED block's own board actually have something to show RIGHT
+  // NOW (T1, "molded previews show the real board, never Básico") — moved up
+  // here (polish follow-up) so every template sub-editor below can read the
+  // SAME value as its own `playable` prop that gates its amber hint/ready
+  // line, never a second, possibly-stale computation of its own. Reads the
+  // SAME debounced payload `QuizLivePreview` itself receives further down —
+  // reading the live `payload` instead would flip this a full 300ms before
+  // the preview's own re-render, desynchronizing a sub-editor's hint from
+  // the stage it describes. Básico (no `template`) has no "board" of its
+  // own to ask this of, so it stays plain `hasQuestions` there.
+  const previewHasContent = template
+    ? boardHasContent(template, deriveGameItems(debouncedPayload), debouncedPayload)
+    : hasQuestions;
+
   // MATCH AUTHORING, SIMPLE (build item 1): a `match` block is a list of
   // PAIRS, not questions — `MatchPairsEditor` renders the same `row`+`Slot`
   // storage as a minimal "Pregunta | Respuesta" table instead of the full
@@ -847,6 +866,7 @@ export default function QuizBlockEditor({
       blockId={blockId}
       lang={lang}
       pairs={matchPairs}
+      playable={previewHasContent}
       focusSlotId={selectedSlotId}
       onQuestionChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
       onAnswerChange={(slotId, answer) => commit(setSlotAnswer(draft, slotId, answer.trim() === '' ? [] : [answer]))}
@@ -895,6 +915,7 @@ export default function QuizBlockEditor({
       blockId={blockId}
       lang={lang}
       sentences={reorderSentences}
+      playable={previewHasContent}
       focusSlotId={selectedSlotId}
       onSentenceChange={(slotId, sentence) => {
         const trimmed = sentence.trim();
@@ -973,6 +994,7 @@ export default function QuizBlockEditor({
       blockId={blockId}
       lang={lang}
       sentences={clozeRows}
+      playable={previewHasContent}
       distractorsText={isCloze ? deriveDistractorsText(draft, clozePoolName) : ''}
       focusSeq={clozeFocusSeq}
       onSentenceChange={(seq, text) => commit(applyClozeSentenceText(draft, seq, text, clozePoolName, nextId))}
@@ -1080,6 +1102,7 @@ export default function QuizBlockEditor({
       blockId={blockId}
       lang={lang}
       groups={groupSortRows}
+      playable={previewHasContent}
       focusSlotId={selectedSlotId}
       onLabelChange={(slotId, label) => commit(setRowLabel(draft, slotId, label))}
       onAddItems={(slotId, text) => commit(addGroupSortItems(draft, slotId, groupSortPoolName, text, nextId))}
@@ -1282,10 +1305,12 @@ export default function QuizBlockEditor({
     </div>
   );
 
-  // No preview beside/behind an empty block — item 3/8 only apply once
-  // there is something to try (`QuizLivePreview` itself assumes >=1 slot
-  // for its "Comprobar" score denominator).
-  const previewColumn = hasQuestions ? (
+  // No preview beside/behind a block with nothing playable yet — item 3/8
+  // only apply once there is something to try (`QuizLivePreview` itself
+  // assumes >=1 slot for its "Comprobar" score denominator). `previewHasContent`
+  // itself is computed up above, right alongside `hasQuestions` — see that
+  // computation's own header.
+  const previewColumn = previewHasContent ? (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       {/* "Fondo" (plantillas: fondo, owner decision 2026-10-23): only a
           MOLDED block has an `ActivityStage`/sheet of its own to paint a

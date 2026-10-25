@@ -14,6 +14,13 @@
  * removable chips. Storage is unchanged — still the same comma-separated
  * text `clozeSentences.ts`'s `deriveDistractorsText`/`applyDistractorsText`
  * read and write; the chips only split and re-join it.
+ *
+ * READINESS NEVER CONTRADICTS THE PREVIEW (polish follow-up): the amber
+ * "not ready yet" hint is driven ENTIRELY by `playable` — the exact same
+ * `boardHasContent('cloze', …)` call the live preview's own empty
+ * placeholder is gated on — see `MatchPairsEditor.tsx`'s own `playable` doc
+ * for the full reasoning. The ready line stays gated on BOTH `playable` and
+ * the live `playableCount`.
  */
 import { useEffect, useRef } from 'react';
 import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquare';
@@ -115,6 +122,13 @@ export interface ClozeEditorProps {
   blockId: string;
   lang: string;
   sentences: ClozeSentenceInput[];
+  /**
+   * Does the LIVE PREVIEW'S own board actually have something to show right
+   * now (`boardHasContent('cloze', …)`, the SAME debounced payload the
+   * preview itself reads) — see `MatchPairsEditor.tsx`'s own `playable` doc
+   * for the full reasoning.
+   */
+  playable: boolean;
   distractorsText: string;
   /** The sentence whose field should take focus next (a freshly added row) — `null` for none. */
   focusSeq?: number | null;
@@ -144,6 +158,7 @@ export default function ClozeEditor({
   blockId,
   lang,
   sentences,
+  playable,
   distractorsText,
   focusSeq = null,
   onSentenceChange,
@@ -247,7 +262,7 @@ export default function ClozeEditor({
                 <p
                   aria-hidden="true"
                   data-testid={`cloze-preview-${item.seq}`}
-                  className="-mt-1 pb-3 pl-4 pr-12 text-[13px] leading-7 text-muted-foreground"
+                  className="-mt-1 pb-3 pl-4 pr-12 text-[13px] leading-7 text-muted-foreground lg:text-[12px]"
                 >
                   {item.blankCount > 0
                     ? parseClozeText(item.text).segments.map((seg, i) =>
@@ -271,15 +286,15 @@ export default function ClozeEditor({
           <StatusNote tone="ready" testId={`cloze-paste-feedback-${blockId}`}>
             {feedback.message}
           </StatusNote>
-        ) : playableCount > 0 ? (
+        ) : playable && playableCount > 0 ? (
           <StatusNote tone="ready" testId={`cloze-ready-${blockId}`}>
             {t.ready(playableCount)}
           </StatusNote>
-        ) : (
+        ) : !playable ? (
           <StatusNote tone="warn" testId={`cloze-hint-${blockId}`}>
             {t.minSentenceHint}
           </StatusNote>
-        )}
+        ) : null}
         <Footnote testId={`cloze-bracket-hint-${blockId}`}>{t.bracketHint}</Footnote>
         {showPasteHint && <Footnote testId={`cloze-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
       </section>

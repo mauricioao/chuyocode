@@ -423,4 +423,71 @@ test.describe('editor mobile layout (recorrido 2026-10-17/18, H13-H16)', () => {
     expect(triggerBox.x).toBeGreaterThanOrEqual(scrollBox.x - 1);
     expect(triggerBox.x + triggerBox.width).toBeLessThanOrEqual(scrollBox.x + scrollBox.width + 1);
   });
+
+  // Horizontal toolbar pass (owner request: "la barra podría pasar a la
+  // parte blanca inferior, en modo horizontal, al pie del bloque de
+  // preview"). Signed-in only, so it cannot run tonight — kept simple and
+  // robust (one viewport, generous tolerances, the existing fixture's own
+  // match block/worksheet block) rather than exhaustive; the full geometry
+  // sweep across viewports/molds is a separate scratchpad Playwright script,
+  // not this suite.
+  test('horizontal toolbar pass: the rail docks bottom-right inside the stage for a templated block, stays vertical for a worksheet', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const reached = await gotoEditorOrSkip(page);
+    test.skip(!reached, 'Editor is sign-in gated; no fixture activity reachable in this run');
+    await waitForHydration(page);
+
+    // block-2 is the "match"-template block — the only one that docks the
+    // rail horizontally.
+    await goToSheet(page, 2);
+    const toolbar = page.getByTestId('editor-side-toolbar');
+    const stage = page.getByTestId('template-stage-block-2');
+    const frame = page.getByTestId('quiz-preview-block-2');
+    await expect(toolbar).toBeVisible();
+    await expect(stage).toBeVisible();
+    await expect(frame).toBeVisible();
+    expect(await toolbar.getAttribute('data-orientation')).toBe('horizontal');
+
+    const toolbarBox = await toolbar.boundingBox();
+    const stageBox = await stage.boundingBox();
+    const frameBox = await frame.boundingBox();
+    expect(toolbarBox).not.toBeNull();
+    expect(stageBox).not.toBeNull();
+    expect(frameBox).not.toBeNull();
+    if (!toolbarBox || !stageBox || !frameBox) return;
+
+    // A horizontal bar is wider than it is tall (the vertical rail is the
+    // opposite shape).
+    expect(toolbarBox.width).toBeGreaterThan(toolbarBox.height);
+
+    // Inside the stage card's own bottom-right corner, within 8-16px on
+    // both axes (12px inset + the rail's own ~12-16px margin).
+    const rightGap = stageBox.x + stageBox.width - (toolbarBox.x + toolbarBox.width);
+    const bottomGap = stageBox.y + stageBox.height - (toolbarBox.y + toolbarBox.height);
+    expect(rightGap).toBeGreaterThanOrEqual(8);
+    expect(rightGap).toBeLessThanOrEqual(16);
+    expect(bottomGap).toBeGreaterThanOrEqual(8);
+    expect(bottomGap).toBeLessThanOrEqual(16);
+
+    // The preview frame stays entirely above the bar.
+    expect(frameBox.y + frameBox.height).toBeLessThanOrEqual(toolbarBox.y);
+
+    // The frame now reaches the stage's own right edge (no more reserved
+    // right gutter) — within 21px (the old gutter was 66px).
+    expect(frameBox.x + frameBox.width).toBeGreaterThanOrEqual(stageBox.x + stageBox.width - 21);
+
+    // Toggling the eye (preview mode) twice must leave the toolbar exactly
+    // where it was — keyed on the active block, never on preview mode.
+    await page.getByTestId('preview-toggle').click();
+    await page.getByTestId('preview-toggle').click();
+    const toolbarBoxAfter = await toolbar.boundingBox();
+    expect(toolbarBoxAfter).not.toBeNull();
+    if (!toolbarBoxAfter) return;
+    expect(Math.abs(toolbarBoxAfter.x - toolbarBox.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(toolbarBoxAfter.y - toolbarBox.y)).toBeLessThanOrEqual(1);
+
+    // block-3 is the worksheet block — the rail reverts to vertical.
+    await goToSheet(page, 3);
+    expect(await toolbar.getAttribute('data-orientation')).toBe('vertical');
+  });
 });

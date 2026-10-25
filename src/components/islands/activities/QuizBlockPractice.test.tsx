@@ -532,7 +532,18 @@ describe('QuizBlockPractice — "Ordenar por grupos" (groupsort) restricts its o
     expect(screen.getByTestId('quiz-groupsort')).toBeTruthy();
   });
 
-  it('degrades Básico to an "unavailable" placeholder per group, instead of crashing on the unknown "group" mechanic', () => {
+  // Stale-mode fix (T1, "molded previews show the real board, never
+  // Básico"): a groupsort block's own `mode` can go stale at `'quiz'`
+  // (e.g. the default before any mode was ever lifted/chosen, or state left
+  // over from before this board had content) — it must never keep forcing
+  // the generic Básico degrade-to-"unavailable" layout once the board
+  // actually HAS something to show. `GROUPSORT_BLOCK` above has 2 real
+  // groups, so its board always has content; there is no longer a way to
+  // reach the old Básico-degrades-a-"group"-slot path for a groupsort
+  // TEMPLATE specifically (every group slot now always renders its own
+  // board instead) — `UnavailableRenderer`'s own coverage for a genuinely
+  // unknown mechanic on a Básico (untemplated) block lives elsewhere.
+  it('a groupsort block with a stale mode="quiz" renders quiz-groupsort, never the Básico "group"-mechanic degrade', () => {
     render(
       <QuizBlockPractice
         lang="es"
@@ -544,8 +555,8 @@ describe('QuizBlockPractice — "Ordenar por grupos" (groupsort) restricts its o
         onModeChange={vi.fn()}
       />,
     );
-    expect(screen.getByTestId('quiz-slot-g1')).toBeTruthy();
-    expect(screen.queryByTestId('quiz-groupsort')).toBeNull();
+    expect(screen.getByTestId('quiz-groupsort')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-slot-g1')).toBeNull();
   });
 });
 

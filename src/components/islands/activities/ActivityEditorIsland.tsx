@@ -46,6 +46,7 @@ import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
+import { hasContent } from '@/lib/activities/draftContent';
 import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
 import { growSmallZonesToLegibleHeight } from '@/lib/activities/presentationCamera';
 import { rotatedSize } from '@/lib/activities/canvasViewport';
@@ -70,6 +71,7 @@ import BlockList, { type BlocksChangeOptions } from './BlockList';
 import WorksheetPlayer from './WorksheetPlayer';
 import QuizLivePreview from './QuizLivePreview';
 import EditorSideToolbar from './EditorSideToolbar';
+import { TEMPLATE_TOOLBAR_DOCK_MARGIN } from './TemplateEditorKit';
 import UnsavedChangesModal from './UnsavedChangesModal';
 import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
@@ -441,6 +443,11 @@ export default function ActivityEditorIsland({
   isDirtyRef.current = isDirty;
   const docRef = useRef(doc);
   docRef.current = doc;
+  // T4, "offer to discard": `isEmptyDraft` below needs the LIVE `status`
+  // the same way `isDirtyRef`/`docRef` already give `isDirty`/`doc` to
+  // code that runs outside React's render cycle.
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   // Warn before a tab close/reload while anything is unsaved — the browser's
   // own (unthemeable) confirmation dialog. No browser lets a page customize
@@ -507,11 +514,18 @@ export default function ActivityEditorIsland({
     saving: false,
     error: false,
   });
+  // T4, "offer to discard": which copy/button-order the SAME modal shows —
+  // set ONLY when `requestNavGuardDecision` opens it (never on close/resolve,
+  // including `handleCancelNavGuard`'s own reset below), so the modal's
+  // fade-OUT transition keeps showing whatever it just asked, instead of
+  // flipping back to the plain "unsaved changes" copy mid-animation.
+  const [discardVariant, setDiscardVariant] = useState(false);
   const navGuardResolveRef = useRef<((action: 'save' | 'discard' | 'cancel') => void) | null>(null);
 
-  const requestNavGuardDecision = useCallback((): Promise<'save' | 'discard' | 'cancel'> => {
+  const requestNavGuardDecision = useCallback((variant?: 'discard'): Promise<'save' | 'discard' | 'cancel'> => {
     return new Promise((resolve) => {
       navGuardResolveRef.current = resolve;
+      setDiscardVariant(variant === 'discard');
       setNavGuard({ open: true, saving: false, error: false });
     });
   }, []);
@@ -632,16 +646,55 @@ export default function ActivityEditorIsland({
     }
   }, [activityId, removeBeforeUnloadGuard]);
 
-  const confirmCloseForWindow = useCallback(async (): Promise<'saved' | 'discarded' | 'cancelled'> => {
-    const action = await requestNavGuardDecision();
-    if (action === 'save') return 'saved';
-    if (action === 'discard') return 'discarded';
-    return 'cancelled';
-  }, [requestNavGuardDecision]);
+  // T4, "offer to discard": disposes the autosave scheduler FIRST — a
+  // pending/in-flight autosave firing right as this window closes would
+  // only waste a request and risk a confusing error toast (`guardar.ts`
+  // can't resurrect a `removed` row either way, see its own header) — then
+  // fires the actual discard, `keepalive: true` so the request survives
+  // this frame being torn down right after (same posture browsers give a
+  // `beforeunload`-time `fetch`). Best-effort: nothing here is awaited by
+  // the caller, and a failure is silently swallowed — the author already
+  // made their choice, and a hung "Mis actividades" row is a far smaller
+  // problem than blocking the window on a network call.
+  const discardDraft = useCallback(() => {
+    schedulerRef.current?.dispose();
+    void fetch(`/api/actividades/${activityId}/descartar`, { method: 'POST', keepalive: true }).catch(() => {});
+  }, [activityId]);
+
+  const confirmCloseForWindow = useCallback(
+    async (variant?: 'discard'): Promise<'saved' | 'discarded' | 'cancelled'> => {
+      const action = await requestNavGuardDecision(variant);
+      if (action === 'save') return 'saved';
+      if (action === 'discard') {
+        // "Leave without saving" and the discard variant's own "Descartar"
+        // share this SAME outcome (`handleLeaveWithoutSaving` resolves
+        // 'discard' either way) — only when THIS call itself asked for the
+        // discard variant does leaving also mean "and actually discard it".
+        if (variant === 'discard') discardDraft();
+        return 'discarded';
+      }
+      return 'cancelled';
+    },
+    [requestNavGuardDecision, discardDraft],
+  );
+
+  /**
+   * True while this is still a `'draft'` activity with no real content yet
+   * (T4, "offer to discard") — `@lib/activities/draftContent`'s own
+   * `hasContent`, over the LIVE `blocks`, via `docRef` the same way
+   * `isDirty` reads through `isDirtyRef`. Independent of `isDirty`: a
+   * title-only edit leaves this `true` (the title never counts as content —
+   * see `hasContent`'s own header), even though it DOES flip `isDirty`.
+   */
+  const isEmptyDraft = useCallback(
+    () => statusRef.current === 'draft' && !hasContent(docRef.current.blocks),
+    [],
+  );
 
   useEffect(() => {
     const guard: EditorWindowGuard = {
       isDirty: () => isDirtyRef.current,
+      isEmptyDraft,
       flush: flushForMinimize,
       confirmClose: confirmCloseForWindow,
     };
@@ -649,7 +702,7 @@ export default function ActivityEditorIsland({
     return () => {
       delete (window as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY];
     };
-  }, [flushForMinimize, confirmCloseForWindow]);
+  }, [isEmptyDraft, flushForMinimize, confirmCloseForWindow]);
 
   // The window title bar's own live title (PART 6b) — see
   // `DESK_WINDOW_TITLE_ID`'s own doc above for why this is a direct
@@ -966,6 +1019,16 @@ export default function ActivityEditorIsland({
     [t],
   );
 
+  // T4, "offer to discard" — the SAME modal's discard-variant copy.
+  const discardLabels = useMemo(
+    () => ({
+      title: t.discardModalTitle,
+      body: t.discardModalBody,
+      action: t.discardModalDiscard,
+    }),
+    [t],
+  );
+
   // The scoped `ScrollToTop`'s target — PREVIEW ONLY now (owner decision
   // 2026-10-07, "Barra fina debajo"): the editor body shows exactly the one
   // active block, full-bleed, with no outer list to scroll past any more —
@@ -975,19 +1038,21 @@ export default function ActivityEditorIsland({
   // block in sequence, so it keeps this unchanged.
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
-  // The level select, exactly as it renders on desktop today (byte-identical
-  // markup/testid) — inline in the title bar's own editable title group,
-  // right after the title input. See `isDesktop`/`hydrated`'s own header
-  // above for why this (and the two variables below) is a real structural
-  // branch, not a CSS media query.
+  // The level select, same controlled markup/testid as always — portaled
+  // into the title bar's own far-right ACTIONS slot as of the T2 titlebar
+  // polish (it used to render inline in the title group, right after the
+  // title input; see `desktopActions`'s own header for why it moved out).
+  // See `isDesktop`/`hydrated`'s own header above for why this (and the two
+  // variables below) is a real structural branch, not a CSS media query.
   //
   // TITLE BAR ORDER (owner spec, build item 3 — "arriba ordena primero
-  // 'Nivel | íconos | botón de enviar'"): the review-status badge used to
-  // ride along right after the level select here, inside this very group —
-  // moved OUT (see `statusPill` below) so desktop's title bar now reads
-  // exactly title | Nivel | [icon actions | Enviar a revisión] (the actions
-  // portal, `DESK_WINDOW_ACTIONS_ID`), with nothing competing for that row
-  // in between.
+  // 'Nivel | íconos | botón de enviar'"; T2 polish keeps the same reading
+  // order, just relocated): the review-status badge used to ride along
+  // right after the level select here, inside this very group — moved OUT
+  // (see `statusPill` below) so desktop's title bar now reads exactly
+  // title | [Nivel | icon actions | Enviar a revisión] (the actions portal,
+  // `DESK_WINDOW_ACTIONS_ID`), with nothing at all competing for the
+  // title's own row any more.
   const desktopLevelAndStatus = (
     <label className="flex shrink-0 items-center gap-1 text-sm">
       <span className="sr-only">{t.levelLabel}</span>
@@ -1052,7 +1117,11 @@ export default function ActivityEditorIsland({
   // content edge (16px margin + 20px padding) and level with the stage's
   // floating Comprobar on the right — instead of straddling the sheet's edge.
   const activeBlock = blocks.find((b) => b.id === activeBlockId) ?? blocks[0];
-  const onTemplateCanvas = !preview && !showAddFlow && activeBlock?.type === 'quiz' && Boolean(activeBlock.template);
+  // Shared by `onTemplateCanvas` below AND the side toolbar's own
+  // `dockMargin` (T3 toolbar-dock pass) — see that prop's own header for why
+  // the toolbar needs this exact condition, not `onTemplateCanvas` itself.
+  const templateBlockActive = activeBlock?.type === 'quiz' && Boolean(activeBlock.template);
+  const onTemplateCanvas = !preview && !showAddFlow && templateBlockActive;
 
   // The pill's own derivation (gap fix: a published activity's edits used
   // to leave it stuck on "Publicada" forever, since `status` alone never
@@ -1151,22 +1220,37 @@ export default function ActivityEditorIsland({
       // three different states, the SAME submit dialog (with its own
       // incomplete-content handling) and the SAME stable testid; only the
       // label changes with the state.
+      //
+      // `min-w-0 shrink` + the truncating span: since the level select shares
+      // the actions slot (T2), a ~1000-1150px window leaves less room than
+      // the two longer labels need. The button ellipsizes instead of spilling
+      // past the window's edge; `title` keeps the full label as a tooltip.
       <Button
         type="button"
         size="sm"
         data-testid="submit-for-review-button"
-        className={PRIMARY_BUTTON_CLASS}
+        className={`${PRIMARY_BUTTON_CLASS} min-w-0 shrink`}
+        title={primaryActionLabel}
         onClick={openSubmitDialog}
       >
-        {primaryActionLabel}
+        <span className="truncate">{primaryActionLabel}</span>
       </Button>
     );
 
-  // "Ver como presentación" + the one primary action above, exactly as they
-  // render on desktop today — ghost icon button + tooltip, yellow primary
-  // button — portaled into the title bar's own far-right `actions` slot.
+  // The level select, then "Ver como presentación", then the one primary
+  // action above — portaled into the title bar's own far-right `actions`
+  // slot. T2 titlebar polish (owner report: "el combo de nivel queda
+  // desplazado a la izquierda... quita el espacio que ocupan para que el
+  // título también se vea centrado"): `desktopLevelAndStatus` moved here,
+  // as the first child, FROM the title group (see that portal's own
+  // header below) — it now docks against the bar's right edge with the
+  // other icon/button controls instead of sitting beside the title, which
+  // both frees the title group to actually center the title and gives the
+  // level select a real right edge to dock to once these actions are the
+  // only thing sharing the row with it.
   const desktopActions = (
     <>
+      {desktopLevelAndStatus}
       <button
         type="button"
         data-testid="view-as-presentation-button"
@@ -1378,7 +1462,16 @@ export default function ActivityEditorIsland({
             // No `lg:px-*` of its own any more (PART 6b polish, "double
             // framing" fix): the ~16px side inset now lives once, on
             // `[id].astro`'s own section — this would only double it.
-            className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-3"
+            // Horizontal toolbar pass: while the ACTIVE block is templated,
+            // the side rail docks along THIS column's own bottom edge, so it
+            // gets the same `lg:pb-[66px]` reservation the stage card itself
+            // uses (12 gap + 42 rail + 12 inset), plus `container-type:
+            // size` so every `QuizLivePreview` below can cap its own width
+            // against this column's height via `cqh` units (see the cap
+            // wrapper right below).
+            className={`flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:py-3${
+              templateBlockActive ? ' lg:[container-type:size] lg:pb-[66px]' : ''
+            }`}
           >
             {/* IMMEDIATE PREVIEW (owner spec, build item 2: "para los demás
                 modelos no se ve el preview hasta que se envía a revisión y
@@ -1411,14 +1504,23 @@ export default function ActivityEditorIsland({
                   />
                 );
               }
+              // Horizontal toolbar pass: EVERY quiz block's own
+              // `QuizLivePreview` gets this container-relative width cap
+              // while a templated block is active (not only template ones —
+              // a Básico block can sit alongside a match block in the same
+              // activity) — `100cqh` reads the preview COLUMN's own height
+              // (its `lg:[container-type:size]` right above), scaled by the
+              // template stage's own 1240×748 aspect ratio, so the frame and
+              // its "Comprobar" action never grow wide enough to run under
+              // the bottom-docked rail.
               return (
-                <QuizLivePreview
+                <div
                   key={block.id}
-                  blockId={block.id}
-                  lang={lang}
-                  payload={block.payload}
-                  template={block.template}
-                />
+                  data-testid={`quiz-preview-cap-${block.id}`}
+                  className={templateBlockActive ? 'mx-auto w-full lg:max-w-[calc(100cqh*1240/748)]' : undefined}
+                >
+                  <QuizLivePreview blockId={block.id} lang={lang} payload={block.payload} template={block.template} />
+                </div>
               );
             })}
           </div>
@@ -1504,8 +1606,18 @@ export default function ActivityEditorIsland({
 
         {/* Scoped "back to top" — PREVIEW ONLY (see `previewScrollRef`'s own
             header above); only mounted while preview is, so it never floats
-            over the add-flow or the full-bleed active block either. */}
-        {preview && <ScrollToTop labels={{ scrollToTop: tCommon.scrollToTop }} targetRef={previewScrollRef} />}
+            over the add-flow or the full-bleed active block either.
+            Horizontal toolbar pass: raised above the bottom-docked rail
+            (same `66px` figure as the preview column's own `lg:pb-[66px]`)
+            while a templated block is active — its default `bottom-4`
+            would otherwise sit right under the rail. */}
+        {preview && (
+          <ScrollToTop
+            labels={{ scrollToTop: tCommon.scrollToTop }}
+            targetRef={previewScrollRef}
+            className={templateBlockActive ? 'bottom-[66px]' : undefined}
+          />
+        )}
       </div>
 
       {/* Polish pass 2026-10-06 (owner report, `editor-window-1440.png`): the
@@ -1528,6 +1640,16 @@ export default function ActivityEditorIsland({
           saveState={saveState}
           saveLabels={saveLabels}
           onWorksheetToolsSlotReady={setWorksheetToolsSlot}
+          // Keyed on `templateBlockActive`, NOT `onTemplateCanvas`: the
+          // latter also depends on `preview`, and the rail must stay put
+          // when the eye/preview toggle is clicked (owner report: it used
+          // to jump 16px, making a second click on the same spot miss).
+          // `orientation` rides the SAME condition (horizontal toolbar
+          // pass, owner request: "la barra podría pasar a la parte blanca
+          // inferior ... al pie del bloque de preview") — see
+          // `EditorSideToolbar.tsx`'s own header's "ORIENTATION" section.
+          dockMargin={templateBlockActive ? TEMPLATE_TOOLBAR_DOCK_MARGIN : undefined}
+          orientation={templateBlockActive ? 'horizontal' : 'vertical'}
         />
       )}
 
@@ -1536,6 +1658,7 @@ export default function ActivityEditorIsland({
         saving={navGuard.saving}
         error={navGuard.error}
         labels={navGuardLabels}
+        discard={discardVariant ? discardLabels : undefined}
         onSaveAndLeave={() => void handleSaveAndLeave()}
         onLeaveWithoutSaving={handleLeaveWithoutSaving}
         onCancel={handleCancelNavGuard}
@@ -1626,10 +1749,15 @@ export default function ActivityEditorIsland({
           EDITABLE title group — the SAME controlled title `<input>` (value/
           onChange/validation/autosave unchanged, just relocated out of the
           card's own old header row). See `DESK_WINDOW_TITLE_GROUP_ID`'s own
-          doc above for why this is a portal. Mobile bug fix: the level
-          select/status badge (desktop) collapse into the "⋯" menu (mobile)
-          right after the title input — see `desktopLevelAndStatus`/
-          `mobileMenu`'s own headers above. */}
+          doc above for why this is a portal. Mobile bug fix: the "⋯" menu
+          (mobile only, holding the level select/status badge/actions) still
+          renders right after the title input on a phone — see
+          `mobileMenu`'s own header above. T2 titlebar polish: on desktop
+          this group's own only child is the title input now, `null`
+          otherwise (`desktopLevelAndStatus` moved into `desktopActions`
+          instead, see its own header above) — so the SSR fallback below no
+          longer needs its own `hidden lg:contents` wrapper for it, only the
+          mobile menu's `inert` one. */}
       {titleGroupPortalTarget &&
         createPortal(
           <>
@@ -1646,22 +1774,23 @@ export default function ActivityEditorIsland({
                 // (`DeskWindow.astro`) when idle — transparent, no border —
                 // and only reveals a field-like border on hover/focus, the
                 // click/keyboard-focus affordance for "this is editable now".
-                className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground outline-none placeholder:font-semibold placeholder:text-muted-foreground hover:border-border focus-visible:border-border focus-visible:bg-(--color-field) focus-visible:outline-none focus-visible:ring-0"
+                // `text-center` (T2 titlebar polish): now that the level
+                // select/icon actions no longer share this group on desktop,
+                // this input is its only child — centering its own text
+                // keeps the title visually centered in the bar instead of
+                // reading as left-aligned inside the now-empty remainder of
+                // the group's `flex-1` width.
+                className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-center font-display text-[19px] font-extrabold tracking-[-0.01em] text-foreground outline-none placeholder:font-semibold placeholder:text-muted-foreground hover:border-border focus-visible:border-border focus-visible:bg-(--color-field) focus-visible:outline-none focus-visible:ring-0"
               />
             </label>
             {hydrated ? (
-              isDesktop ? (
-                desktopLevelAndStatus
-              ) : (
+              isDesktop ? null : (
                 mobileMenu
               )
             ) : (
-              <>
-                <div className="hidden lg:contents">{desktopLevelAndStatus}</div>
-                <div className="contents lg:hidden" inert>
-                  {mobileMenu}
-                </div>
-              </>
+              <div className="contents lg:hidden" inert>
+                {mobileMenu}
+              </div>
             )}
           </>,
           titleGroupPortalTarget,

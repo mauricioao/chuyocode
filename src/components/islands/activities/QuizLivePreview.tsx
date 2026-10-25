@@ -9,12 +9,25 @@
  * OWNS A SMALL AMOUNT OF LOCAL STATE, deliberately NOT lifted to
  * `QuizBlockEditor`: the learner-facing `response`/`mode`/grading the author
  * tries here must never leak into the AUTHORED payload (`onPayloadChange`
- * never fires from anything in this file). It resets whenever the question
- * SET changes shape (a question added/removed — `structuralKey` below), so a
- * stale answer never sits against a question that no longer matches it; it
- * deliberately does NOT reset on every keystroke edit to an existing
- * question's text, since `payload` itself already arrives pre-debounced from
- * `QuizBlockEditor`.
+ * never fires from anything in this file). `response`/`result` reset
+ * whenever the question SET changes shape (a question added/removed —
+ * `structuralKey` below), so a stale answer never sits against a question
+ * that no longer matches it; they deliberately do NOT reset on every
+ * keystroke edit to an existing question's text, since `payload` itself
+ * already arrives pre-debounced from `QuizBlockEditor`.
+ *
+ * `mode` IS NOT CACHED (T1 bugfix, "molded previews show the real board,
+ * never the generic Básico layout"): it used to be `useState(() =>
+ * initialGameMode(...))`, re-derived only when `structuralKey` changed —
+ * but typing into an EXISTING sentence/pair, or adding items to an EXISTING
+ * group, never changes that key, so the cached mode stayed stuck at
+ * whatever it was on the very FIRST render even once the board's own
+ * content became eligible (owner report: typing fast enough hid it behind
+ * the 300ms debounce, but pausing after the first word surfaced it). `mode`
+ * is now a plain derivation every render — `chosenMode ?? initialGameMode(
+ * ...)` — so it always reflects the CURRENT payload; only the Básico
+ * multi-mode switcher (template === undefined) ever sets `chosenMode`, via
+ * `onModeChange`, same as before.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -22,8 +35,14 @@ import type { BlockBackground, QuizBlock, QuizTemplate } from '@/lib/activities/
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import type { Lang } from '@/lib/i18n';
 import type { ExerciseResponse, Payload } from '@/lib/exercisePayload';
-import { deriveGameItems, initialGameMode, SELF_CHECKING_GAME_MODES, type GameMode } from '@/lib/activities/gameModes';
-import { FLOATING_CHECK_BAR_CLASS, STAGE_BOTTOM_RESERVE_CLASS, STAGE_CONTAINER } from '@/components/islands/mechanics/scale';
+import {
+  boardHasContent,
+  deriveGameItems,
+  initialGameMode,
+  SELF_CHECKING_GAME_MODES,
+  type GameMode,
+} from '@/lib/activities/gameModes';
+import { FLOATING_CHECK_BAR_CLASS, STAGE_BOTTOM_RESERVE_CLASS, STAGE_CONTAINER_SIZE } from '@/components/islands/mechanics/scale';
 import { cn } from '@/lib/utils';
 import ActivityPreviewFrame from './ActivityPreviewFrame';
 import QuizBlockPractice from './QuizBlockPractice';
@@ -86,13 +105,11 @@ export default function QuizLivePreview({
 }: QuizLivePreviewProps) {
   const t = copyFor(lang);
   const gameItems = deriveGameItems(payload);
-  // Opens in the TEMPLATE's own game when eligible (owner review of the
-  // match stage, build item "QuizLivePreview opens in the template's own
-  // game"): a "Une las parejas"/"Reordenar" block previously always opened
-  // in Básico here, unlike the real practice page which already honored
-  // `initialGameMode` — this preview is "try it as a learner would", so it
-  // must start where a learner actually would.
-  const [mode, setMode] = useState<GameMode>(() => initialGameMode(template, gameItems, payload));
+  // Only the Básico multi-mode switcher below ever calls `onModeChange` —
+  // everywhere else `mode` (right below) is simply DERIVED from the current
+  // content every render, never cached (this file's own header, T1 bugfix).
+  const [chosenMode, setChosenMode] = useState<GameMode | null>(null);
+  const mode = chosenMode ?? initialGameMode(template, gameItems, payload);
   const [response, setResponse] = useState<ExerciseResponse>({});
   const [result, setResult] = useState<GradeResult | undefined>(undefined);
 
@@ -103,16 +120,25 @@ export default function QuizLivePreview({
     prevKeyRef.current = key;
     setResponse({});
     setResult(undefined);
-    setMode(initialGameMode(template, gameItems, payload));
-    // `gameItems`/`payload` are re-derived every render from the same
-    // debounced `payload` this effect already depends on via `key` — only
-    // `key`'s own CHANGE (a question added/removed/reordered) should ever
-    // re-pick the template's starting mode, never a plain text edit.
+    setChosenMode(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, template]);
 
   const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
   const frameTitle = activityTitle && activityTitle.trim() !== '' ? activityTitle : t.previewTitle;
+
+  // NEVER THE GENERIC BÁSICO LAYOUT FOR A MOLDED BLOCK (T1 decision,
+  // "molded activity previews show the real board, never Básico"): a
+  // template plays ONLY its own game — once its own board has nothing to
+  // show yet ({@link boardHasContent}), this preview shows NOTHING rather
+  // than falling back to Básico. The caller decides what to show instead:
+  // `QuizBlockEditor`'s own template stage keeps its placeholder text (its
+  // `previewHasContent` reads the exact same `boardHasContent` call before
+  // even mounting this component); the whole-activity eye-button preview
+  // (`ActivityEditorIsland.tsx`) simply renders nothing for this block.
+  // After ALL hooks above, so a board that gains its first bit of content
+  // never changes this component's own hook count between renders.
+  if (template && !boardHasContent(template, gameItems, payload)) return null;
 
   return (
     <ActivityPreviewFrame title={frameTitle} levelChip={activityLevelChip} background={background}>
@@ -127,14 +153,20 @@ export default function QuizLivePreview({
         // it. `pb-3` matches the 12px bottom gap the real player's own
         // stage wrapper reserves (`ActivityPracticeIsland.tsx`'s `p-3`),
         // which `GameResult`'s own `-mb-3` crop-line bleed assumes; the
-        // bigger `STAGE_BOTTOM_RESERVE_CLASS` gap only applies while THIS
-        // preview's own floating Comprobar below can render — a
-        // self-checking mold (match/reorder/cloze/groupsort) shows its own
-        // instead, same condition `ActivityPracticeIsland`'s own
-        // `showCombinedFooter` already uses for the real player.
+        // bigger `STAGE_BOTTOM_RESERVE_CLASS` gap OVERRIDES just the bottom
+        // (listed after `p-3`, so `tailwind-merge` keeps the later one for
+        // that one side) only while THIS preview's own floating Comprobar
+        // below can render — a self-checking mold (match/reorder/cloze/
+        // groupsort) shows its own instead, same condition
+        // `ActivityPracticeIsland`'s own `showCombinedFooter` already uses
+        // for the real player. `STAGE_CONTAINER_SIZE` (both `cqw` AND
+        // `cqh`), not the old width-only `STAGE_CONTAINER`: this column is
+        // now bounded by `ActivityPreviewFrame`'s own fixed 1240x748
+        // viewport (`scale.ts`'s own header on why that makes full size
+        // containment safe here).
         className={cn(
-          'flex min-h-0 flex-1 flex-col gap-3 pb-3',
-          STAGE_CONTAINER,
+          'flex min-h-0 flex-1 flex-col gap-3 p-3',
+          STAGE_CONTAINER_SIZE,
           !SELF_CHECKING_GAME_MODES.has(mode) && STAGE_BOTTOM_RESERVE_CLASS,
         )}
       >
@@ -146,7 +178,7 @@ export default function QuizLivePreview({
           outcomes={result?.slots}
           disabled={false}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={setChosenMode}
           // Preview-only, deliberately non-empty (owner audit §c): makes a
           // self-checking mold's own `GameResult` render "Otra actividad" —
           // inert via `ActivityPreviewContext` (`ActivityPreviewFrame.tsx`),
