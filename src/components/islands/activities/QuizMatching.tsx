@@ -34,8 +34,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
-  DragOverlay,
-  closestCenter,
   useDraggable,
   useDroppable,
   type Announcements,
@@ -50,12 +48,16 @@ import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities
 import { useGameSound } from '@/lib/activities/gameSounds';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import {
+  GameDragOverlay,
   GameSoundToggle,
+  dragCursorClassName,
+  gameCollisionDetection,
   gameDropAnimation,
   gameTileTransitionClassName,
   liftedTileClassName,
   useFlip,
   useGameDndSensors,
+  useGrabCursor,
 } from '@/components/islands/mechanics/gameFeel';
 import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, stageChipColorClass } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
@@ -202,6 +204,7 @@ function MatchTile({ id, label, disabled, picked, dragging, reducedMotion, onCli
         // stay the only correctness signal (same idiom `QuizHangman.tsx`/
         // `QuizTrueFalse.tsx` already use for their own graded chips).
         'touch-none disabled:opacity-100',
+        dragCursorClassName(true, dragging),
         dragging && 'opacity-40',
         // Picked (tap-selected, not yet placed): a ring only — never
         // `CHIP_PLACED`'s white fill, which would hide the chip's own
@@ -312,7 +315,28 @@ function MatchSlot({
           data-testid={`matching-slot-button-${promptId}`}
           aria-label={emptyLabel}
           onClick={onPlacePicked}
-          disabled={disabled || !canPlacePicked}
+          // Drag-feel pass, real-browser finding: NEVER the native
+          // `disabled` attribute for "nothing picked" (`!canPlacePicked`) —
+          // only `disabled` itself (grading in progress) still disables it
+          // natively, which is fine since no drag is possible by then. A
+          // browser refuses to dispatch `mousedown`/`mouseup`/`click` to a
+          // `disabled` form control AT ALL, even one the pointer happens to
+          // release over mid-drag — so a real mouse/touch drag released
+          // squarely on an empty slot (the ordinary case: `pickedId`, tap-
+          // to-place's own state, is never set by a drag) silently never
+          // reached `onDragEnd`, leaving the tile stuck mid-drag. `aria-
+          // disabled` keeps the same "unavailable" signal for assistive
+          // tech and `handleSlotPlace` already no-ops when `pickedId` is
+          // null, so a tap here still safely does nothing either way.
+          disabled={disabled}
+          aria-disabled={!canPlacePicked || undefined}
+          // Tab order (MINOR a11y finding): `aria-disabled` alone does not
+          // drop a button out of the tab sequence the way the native
+          // `disabled` attribute above would have, so this stayed a tab
+          // stop even with nothing picked to place. `-1` only while that's
+          // true; `0` (the ordinary tab stop) the instant `canPlacePicked`
+          // flips, matching `aria-disabled` itself.
+          tabIndex={canPlacePicked ? 0 : -1}
           // `min-h-11` (44px) is a FLOOR, not decoration (bug found while
           // auditing tap-to-place): `h-full` on a flex item with no own
           // content percentage-resolves to 0 against this span's own
@@ -409,6 +433,7 @@ export default function QuizMatching({ lang, items, seed, nextHref, guest }: Qui
   }
 
   const sensors = useGameDndSensors();
+  useGrabCursor(activeId !== null);
   const playing = phase === 'playing';
 
   function itemFor(id: string | number): GameItem | null {
@@ -673,7 +698,7 @@ export default function QuizMatching({ lang, items, seed, nextHref, guest }: Qui
         <DndContext
           id={`dnd-matching-${seed}`}
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={gameCollisionDetection}
           accessibility={{ announcements, screenReaderInstructions }}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
@@ -834,7 +859,7 @@ export default function QuizMatching({ lang, items, seed, nextHref, guest }: Qui
             </div>
           </div>
 
-          <DragOverlay dropAnimation={gameDropAnimation(reducedMotion)}>
+          <GameDragOverlay dropAnimation={gameDropAnimation(reducedMotion)} activeId={activeId}>
             {activeItem ? (
               <div
                 className={cn(
@@ -846,7 +871,7 @@ export default function QuizMatching({ lang, items, seed, nextHref, guest }: Qui
                 {activeItem.answer}
               </div>
             ) : null}
-          </DragOverlay>
+          </GameDragOverlay>
         </DndContext>
       )}
     </div>

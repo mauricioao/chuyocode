@@ -30,11 +30,12 @@
  * Switching AWAY from `quiz` never touches `response`: the quiz-mode inputs
  * below simply stop mounting, and the alternate games never write into it.
  */
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { FadeImage } from '@/components/ui/fade-image';
 import SpeakButton from '@/lib/speech/SpeakButton';
+import { preloadCharacterPoses } from '@/content/characterPoses';
 import type { QuizBlock } from '@/lib/activities/blocks';
 import type { SlotOutcome } from '@/lib/exerciseGrading';
 import { claimedTileIds } from '@/lib/exerciseDrop';
@@ -146,6 +147,18 @@ export default function QuizBlockPractice({
   const t = UI_LABELS[lang].activities.player;
   const payload = block.payload;
   const placement = poolPlacement(payload);
+
+  // Warms the 3 GameResult outcome poses the instant a template activity
+  // mounts (bugfix; owner report: "Vanina aparece de golpe") — long before
+  // any round actually ends, regardless of which game mode this block
+  // starts in. This component renders all four drag templates (below), so
+  // mounting it once already covers both the player and the editor
+  // preview (`ActivityPreviewFrame`); `preloadCharacterPoses` is itself
+  // idempotent, so multiple quiz blocks on one page each calling this is a
+  // no-op after the first.
+  useEffect(() => {
+    preloadCharacterPoses();
+  }, []);
 
   const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
   const modes = useMemo(

@@ -4,6 +4,18 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import QuizBlockPractice from './QuizBlockPractice';
 import type { QuizBlock } from '@/lib/activities/blocks';
 
+// Pose preload wiring (owner report: "Vanina aparece de golpe") — the real
+// `preloadCharacterPoses` mechanics (avif+webp srcset, idempotency,
+// SSR-safety) are `characterPoses.test.ts`'s own contract; this file only
+// proves QuizBlockPractice actually CALLS it on mount, same "actual module,
+// one export swapped" shape the sibling activity islands' own tests already
+// use for `imagePipeline`/`imageUpload`.
+const { preloadCharacterPosesMock } = vi.hoisted(() => ({ preloadCharacterPosesMock: vi.fn() }));
+vi.mock('@/content/characterPoses', async () => {
+  const actual = await vi.importActual<typeof import('@/content/characterPoses')>('@/content/characterPoses');
+  return { ...actual, preloadCharacterPoses: preloadCharacterPosesMock };
+});
+
 afterEach(() => cleanup());
 
 const TEXT_BLOCK: QuizBlock = {
@@ -534,5 +546,15 @@ describe('QuizBlockPractice — "Ordenar por grupos" (groupsort) restricts its o
     );
     expect(screen.getByTestId('quiz-slot-g1')).toBeTruthy();
     expect(screen.queryByTestId('quiz-groupsort')).toBeNull();
+  });
+});
+
+describe('QuizBlockPractice — pose preload (owner report: "Vanina aparece de golpe")', () => {
+  it('preloads the GameResult outcome poses once this block mounts, regardless of the starting game mode', () => {
+    preloadCharacterPosesMock.mockClear();
+    render(
+      <QuizBlockPractice lang="es" block={TEXT_BLOCK} response={{}} onChange={vi.fn()} disabled={false} />,
+    );
+    expect(preloadCharacterPosesMock).toHaveBeenCalledTimes(1);
   });
 });

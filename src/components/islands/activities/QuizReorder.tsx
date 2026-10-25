@@ -38,8 +38,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
-  DragOverlay,
-  closestCenter,
   useDraggable,
   useDroppable,
   type Announcements,
@@ -56,12 +54,16 @@ import { seedFromString, shuffleWithSeed, type GameItem } from '@/lib/activities
 import { useGameSound } from '@/lib/activities/gameSounds';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import {
+  GameDragOverlay,
   GameSoundToggle,
+  dragCursorClassName,
+  gameCollisionDetection,
   gameDropAnimation,
   gameTileTransitionClassName,
   liftedTileClassName,
   useFlip,
   useGameDndSensors,
+  useGrabCursor,
 } from '@/components/islands/mechanics/gameFeel';
 import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
@@ -188,6 +190,7 @@ function WordTileButton({ id, label, disabled, dragging, wrong, grade, reducedMo
         'disabled:opacity-100',
         placed && CHIP_PLACED,
         draggable && 'touch-none',
+        dragCursorClassName(draggable, dragging),
         dragging && 'opacity-40',
         wrong && 'animate-pulse border-destructive bg-destructive/10 text-destructive motion-reduce:animate-none',
         gameTileTransitionClassName(reducedMotion),
@@ -306,6 +309,7 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
 
   useFlip(trayRef, trayIds.join(','), reducedMotion);
   const sensors = useGameDndSensors();
+  useGrabCursor(activeId !== null);
 
   function itemWord(id: string | number): string | null {
     return tileById.get(String(id))?.word ?? null;
@@ -510,7 +514,7 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
       <DndContext
         id={`dnd-reorder-${seed}`}
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={gameCollisionDetection}
         accessibility={{ announcements, screenReaderInstructions }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -620,11 +624,11 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
           </div>
         </div>
 
-        <DragOverlay dropAnimation={gameDropAnimation(reducedMotion)}>
+        <GameDragOverlay dropAnimation={gameDropAnimation(reducedMotion)} activeId={activeId}>
           {activeWord ? (
             <div className={cn(TILE_BASE, 'pointer-events-none', liftedTileClassName(reducedMotion))}>{activeWord}</div>
           ) : null}
-        </DragOverlay>
+        </GameDragOverlay>
       </DndContext>
     </div>
   );

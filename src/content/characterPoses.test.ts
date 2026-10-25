@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CHARACTER_POSES,
   characterPoseFallbackSrc,
@@ -76,4 +76,68 @@ describe('generated character pose assets on disk', () => {
       }
     });
   }
+});
+
+/**
+ * preloadCharacterPoses — bugfix (owner report: "Vanina aparece de golpe";
+ * verified diagnosis: nothing ever preloaded the 3 outcome poses, so the
+ * `<img>` only became paintable well after `GameResult`'s own CSS entrance
+ * had already finished playing). Each test gets a FRESH module instance
+ * (`vi.resetModules` + a dynamic re-import) so the function's own one-shot
+ * guard never leaks between tests — this module has no React/JSX, so a
+ * fresh instance per test is safe (no risk of a second React copy).
+ */
+describe('preloadCharacterPoses', () => {
+  function stubImageConstructor() {
+    class MockImage {
+      src = '';
+      srcset = '';
+    }
+    const instances: MockImage[] = [];
+    vi.stubGlobal(
+      'Image',
+      class extends MockImage {
+        constructor() {
+          super();
+          instances.push(this);
+        }
+      },
+    );
+    return instances;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('does nothing on the server, where there is no global Image constructor at all', async () => {
+    vi.resetModules();
+    const fresh = await import('./characterPoses');
+    expect(() => fresh.preloadCharacterPoses()).not.toThrow();
+  });
+
+  it('warms both avif and webp srcset candidates for all 3 GameResult outcome poses', async () => {
+    vi.resetModules();
+    const instances = stubImageConstructor();
+    const fresh = await import('./characterPoses');
+    fresh.preloadCharacterPoses();
+    expect(instances).toHaveLength(fresh.GAME_RESULT_OUTCOME_POSES.length * 2);
+    for (const pose of fresh.GAME_RESULT_OUTCOME_POSES) {
+      for (const format of ['avif', 'webp'] as const) {
+        const expectedSrcset = fresh.characterPoseSrcSet(pose, format);
+        const match = instances.find((img) => img.srcset === expectedSrcset);
+        expect(match, `expected a preloaded Image for ${pose} (${format})`).toBeTruthy();
+        expect(match!.src).toBe(fresh.characterPoseFallbackSrc(pose));
+      }
+    }
+  });
+
+  it('is idempotent for the page\'s whole life — a second call issues no further requests', async () => {
+    vi.resetModules();
+    const instances = stubImageConstructor();
+    const fresh = await import('./characterPoses');
+    fresh.preloadCharacterPoses();
+    fresh.preloadCharacterPoses();
+    expect(instances).toHaveLength(fresh.GAME_RESULT_OUTCOME_POSES.length * 2);
+  });
 });
